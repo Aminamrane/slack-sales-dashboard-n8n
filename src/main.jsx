@@ -12,18 +12,19 @@ const supabase = createClient(
 function App() {
   const [sales, setSales] = useState([]);
 
-  useEffect(() => {
-    async function fetchSales() {
-      const { data, error } = await supabase.from("Info").select("*");
-      if (error) {
-        console.error("Error fetching sales:", error);
-      } else {
-        setSales(data);
-      }
+useEffect(() => {
+  async function fetchSales() {
+    const { data, error } = await supabase.from("Info").select("*");
+    if (error) {
+      console.error("Error fetching sales:", error);
+    } else {
+      console.log("Fetched sales:", data); 
+      setSales(data);
     }
+  }
 
-    fetchSales();
-  }, []);
+  fetchSales();
+}, []);
 
   return (
     <div style={{ padding: "2rem", fontFamily: "sans-serif" }}>
