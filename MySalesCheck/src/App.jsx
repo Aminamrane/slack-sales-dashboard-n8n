@@ -13,3 +13,5 @@ function App() {
 }
 
 export default App;
+import Contrat from "./pages/Contrat";
+<Route path="/contrat/new" element={<Contrat />} />
