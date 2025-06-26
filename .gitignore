@@ -1,3 +1,2 @@
-# Frontend build & dépendances
-MySalesCheck/node_modules/
-MySalesCheck/.env
+node_modules/
+**/node_modules/
