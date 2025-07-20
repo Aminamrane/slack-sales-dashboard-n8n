@@ -13,5 +13,9 @@ function App() {
 }
 
 export default App;
-import Contrat from "./pages/Contrat";
+import Contrat     from "./pages/Contrat";
 <Route path="/contrat/new" element={<Contrat />} />
+import Signature from "./pages/Signature";
+
+<Route path="/signature/:id" element={<Signature />} />
+
