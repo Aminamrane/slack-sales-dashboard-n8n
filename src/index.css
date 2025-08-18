@@ -2,9 +2,6 @@
 #root { position: relative; }
 
 /*════════════════  TABLEAU  ════════════════*/
-body {
-  background: #27273e; /* <-- page background */
-}
 .leaderboard {
   width: 100%;
   max-width: 1100px;
@@ -19,12 +16,11 @@ body {
   transition: background-color .2s ease-in-out;
 }
 .leaderboard thead th {
-  border-bottom: 1px solid #1b1b31;
+  border-bottom: 1px solid #e5e5e5;
   font-weight: 600;
-  color: #fff;
 }
 .leaderboard thead tr:hover th {
-  background-color: #1b1b31;
+  background-color: #f2f2f5;
 }
 .leaderboard thead tr:hover th:first-child {
   border-top-left-radius: .5rem;
@@ -35,17 +31,17 @@ body {
 
 /* première ligne en surbrillance */
 .leaderboard tbody tr:first-child {
-  background: #2d2d4f;
+  background: #fefce8;
   font-weight: 600;
 }
 .leaderboard tbody tr:nth-child(n+3):nth-child(odd) {
-  background: #1b1b31;
+  background: #f9fafb;
 }
 .leaderboard tbody tr {
-  border-bottom: 1px solid #1b1b31;
+  border-bottom: 1px solid #e5e5e5;
 }
 .leaderboard tbody tr:hover td {
-  background-color: #142d5f;
+  background-color: #f3f4f6;
 }
 .leaderboard tbody tr:hover td:first-child {
   border-top-left-radius: .5rem;
@@ -64,13 +60,11 @@ body {
   width: 3.5rem;
   text-align: center;
   padding-left: 0;
-  color: #ffffff; 
 }
 .name-cell {
   display: flex;
   align-items: center;
   gap: .6rem;
-  color: #ffffff; 
 }
 .avatar {
   width: 36px;
@@ -91,10 +85,10 @@ body {
   padding: 1rem 1.5rem;
   padding-top: 10rem;
   padding-bottom: 2.5rem;
-  background: #27273e;
-  border: 1px solid #1f1f36;
+  background: #fff;
+  border: 1px solid #e5e5e5;
   border-radius: 1rem;
-  box-shadow: 0 6px 18px #171729;
+  box-shadow: 0 6px 18px rgba(0,0,0,.06);
   box-sizing: border-box;
 }
 @media (max-width: 600px) {
@@ -118,7 +112,6 @@ body {
   font-size: clamp(1.2rem,3.2vw,1.8rem);
   margin: 0;
   line-height: 1;
-  color: #ffffff;
 }
 
 /*══════════  TOTAUX GLOBAUX  ════════════*/
@@ -133,7 +126,7 @@ body {
   flex-wrap: wrap;
 }
 .totals-label {
-  color: #ffffff;
+  color: #666;
   font-size: clamp(.75rem,2vw,.9rem);
   font-weight: 400;
 }
@@ -188,15 +181,14 @@ body {
   align-items: center;
   gap: 0.4rem;
   padding: 0.4rem 0.8rem;
-  background: #1f1f36;
-  border: 1px solid #1b1b31;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
   border-radius: 0.5rem;
   font-size: 0.9rem;
   cursor: pointer;
   transition: background-color 0.2s ease;
-  color: #fff;
 }
-.export-btn:hover { background: #1b1b31; }
+.export-btn:hover { background: #e5e7eb; }
 
 /*──────────  Toggle ─────────────────────*/
 .view-toggle {
@@ -209,15 +201,14 @@ body {
 }
 .toggle-btn {
   padding: .4rem .8rem;
-  background: #1f1f36;
-  border: 1px solid #1b1b31;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
   border-radius: .5rem;
   cursor: pointer;
   transition: background-color .2s;
-  color: #fff;
 }
 .toggle-btn:hover,
-.toggle-btn.active { background: #1b1b31; }
+.toggle-btn.active { background: #e5e7eb; }
 
 /*══════════  CHART LAYOUT ONLY  ════════════*/
 .charts-wrapper {
@@ -254,20 +245,4 @@ body {
   min-height: 300px;
   position: relative;
   overflow: visible;
-}
-
-.leaderboard td:nth-child(3) {
-  color: #ffffff;   /* blanc */
-  font-weight: 600;
-}
-
-.leaderboard td:nth-child(4) {
-  color: #ffffff;   /* blanc */
-  font-weight: 600;
-}
-
-/* Colonne Revenu */
-.leaderboard td:nth-child(5) {
-  color: #ffffff;   /* blanc */
-  font-weight: 600;
 }
