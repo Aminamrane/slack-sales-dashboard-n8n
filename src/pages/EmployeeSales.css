@@ -1,66 +1,82 @@
-/* ——— scope page ——— */
+/* ===== Page wrapper ===== */
 .employee-page { padding: 20px; }
 @media (max-width: 480px) { .employee-page { padding: 12px; } }
 
-/* ——— back button ——— */
-.employee-page .emp-back {
-  display: inline-block; margin-bottom: 12px; text-decoration: none;
-  font-weight: 600; color: #111827; background: #f3f4f6;
-  padding: 8px 12px; border-radius: 10px;
+/* ===== Back button ===== */
+.employee-page .emp-back{
+  display:inline-block;margin-bottom:12px;text-decoration:none;
+  font-weight:600;color:#111827;background:#f3f4f6;
+  padding:10px 14px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.04);
 }
 
-/* ——— header card ——— */
-.employee-page .emp-header-card {
-  display: flex; justify-content: space-between; align-items: center;
-  gap: 16px; padding: 18px; border: 1px solid #eef2f7; border-radius: 16px;
-  background: #fff; box-shadow: 0 8px 28px rgba(0,0,0,.06);
-  max-width: 1100px; margin: 0 auto;
+/* ===== Header card ===== */
+.employee-page .emp-header-card{
+  display:flex;justify-content:space-between;align-items:center;
+  gap:16px;padding:22px;border:1px solid #eef2f7;border-radius:18px;
+  background:#fff;box-shadow:0 12px 40px rgba(0,0,0,.06);
+  max-width:1100px;margin:0 auto;
 }
-.employee-page .emp-left {
-  display: flex; align-items: center; gap: 12px; min-width: 0;
-}
+.employee-page .emp-left{display:flex;align-items:center;gap:14px;min-width:0;}
 
-/* ——— avatar (renommé pour éviter toute collision) ——— */
-.employee-page .emp-avatar-wrap {
-  width: clamp(56px, 8vw, 64px); height: clamp(56px, 8vw, 64px);
-}
-.employee-page .emp-avatar {
-  width: 100%; height: 100%; border-radius: 12px; object-fit: cover; display: block;
-}
-.employee-page .emp-avatar.emp-placeholder { background: #e5e7eb; }
+.employee-page .emp-avatar-wrap{width:72px;height:72px;}
+.employee-page .emp-avatar{width:100%;height:100%;border-radius:14px;object-fit:cover;display:block;}
+.employee-page .emp-avatar.emp-placeholder{background:#e5e7eb;}
 
-/* ——— identity block ——— */
-.employee-page .emp-id-block { display: flex; flex-direction: column; min-width: 0; }
-.employee-page .emp-name {
-  margin: 0; font-weight: 800; color: #111827;
-  font-size: clamp(18px, 4vw, 24px);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 68vw;
+.employee-page .emp-id-block{display:flex;flex-direction:column;min-width:0;}
+.employee-page .emp-name{
+  margin:0;font-weight:800;color:#111827;font-size:clamp(22px,4vw,32px);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:68vw;
 }
-.employee-page .emp-id { font-size: 12px; color: #6b7280; }
+.employee-page .emp-id{font-size:12px;color:#6b7280;margin-top:4px;}
 
-/* ——— right select (factice) ——— */
-.employee-page .emp-right { margin-left: auto; display: flex; align-items: center; }
-.employee-page .emp-fake-select {
-  padding: 10px 40px 10px 14px;
-  border: 1px solid #e5e7eb; border-radius: 12px; background: #f9fafb;
-  font-weight: 600; color: #111827; cursor: not-allowed;
-  appearance: none; line-height: 1.1;
+.employee-page .emp-right{margin-left:auto;display:flex;align-items:center;}
+.employee-page .emp-fake-select{
+  padding:12px 44px 12px 16px;border:1px solid #e5e7eb;border-radius:14px;background:#f9fafb;
+  font-weight:700;color:#111827;cursor:not-allowed;appearance:none;line-height:1.1;
   background-image:
-    linear-gradient(45deg, transparent 50%, #9ca3af 50%),
-    linear-gradient(135deg, #9ca3af 50%, transparent 50%);
-  background-position: calc(100% - 22px) 55%, calc(100% - 16px) 55%;
-  background-size: 6px 6px, 6px 6px; background-repeat: no-repeat;
+    linear-gradient(45deg,transparent 50%,#9ca3af 50%),
+    linear-gradient(135deg,#9ca3af 50%,transparent 50%);
+  background-position:calc(100% - 22px) 55%,calc(100% - 16px) 55%;
+  background-size:6px 6px,6px 6px;background-repeat:no-repeat;
 }
-.employee-page .emp-fake-select:disabled { opacity: 1; }
+.employee-page .emp-fake-select:disabled{opacity:1;}
 
-/* ——— placeholder panel for next steps ——— */
-.employee-page .emp-panel-placeholder {
-  max-width: 1100px; margin: 16px auto 0; padding: 18px;
-  border: 1px solid #eef2f7; border-radius: 16px; background: #fff; color: #9ca3af;
+@media (max-width: 760px){
+  .employee-page .emp-header-card{flex-direction:column;align-items:flex-start;}
+  .employee-page .emp-right{margin-left:0;}
 }
 
-/* ——— responsive stack ——— */
-@media (max-width: 720px) {
-  .employee-page .emp-header-card { align-items: flex-start; flex-direction: column; }
-  .employee-page .emp-right { margin-left: 0; }
+/* ===== Stats title ===== */
+.employee-page .emp-stats-title{
+  max-width:1100px;margin:18px auto 8px;text-align:center;color:#374151;
+  font-size:14px;
+}
+.employee-page .emp-stats-title a{color:#2563eb;text-decoration:none;font-weight:700;}
+
+/* ===== Stats grid ===== */
+.employee-page .emp-stats{
+  max-width:1100px;margin:8px auto 0;
+  display:grid;grid-template-columns:repeat(3,1fr);gap:16px;
+}
+.employee-page .stat-card{
+  border-radius:18px;padding:22px;text-align:center;font-weight:600;
+  box-shadow:0 10px 34px rgba(0,0,0,.06);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:110px;
+}
+.employee-page .stat-value{font-size:clamp(22px,4vw,30px);font-weight:800;line-height:1.1;}
+.employee-page .stat-label{margin-top:8px;font-size:15px;color:#6b7280}
+
+/* color themes (comme ton modèle) */
+.employee-page .stat-card.ventes{ background:#ECFDF5; color:#16A34A; }
+.employee-page .stat-card.cash  { background:#EFF6FF; color:#2563EB; }
+.employee-page .stat-card.revenu{ background:#FFF7ED; color:#EA580C; }
+
+/* breakpoints: 3 -> 2 -> 1 colonnes */
+@media (max-width: 1024px){ .employee-page .emp-stats{ grid-template-columns:repeat(2,1fr); } }
+@media (max-width: 640px) { .employee-page .emp-stats{ grid-template-columns:1fr; } }
+
+/* ===== Placeholder panel (table à venir) ===== */
+.employee-page .emp-panel-placeholder{
+  max-width:1100px;margin:16px auto 0;padding:18px;
+  border:1px solid #eef2f7;border-radius:16px;background:#fff;color:#9ca3af;
 }

@@ -225,9 +225,14 @@ export default function Leaderboard() {
               key={r.name}
               onClick={() =>
               navigate(`/employee/${encodeURIComponent(r.name)}`, {
-              state: { avatar: r.avatar }
-              })
-               }
+              state: {
+      avatar: r.avatar,
+      ventes: r.sales,
+      cash:   r.cash,
+      revenu: r.revenu
+    }
+  })
+}
               >
                     <td>{["🥇","🥈","🥉"][i]||i+1}</td>
                     <td className="name-cell"><img src={r.avatar} className="avatar" alt=""/> {r.name}</td>
