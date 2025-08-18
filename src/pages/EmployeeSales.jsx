@@ -4,7 +4,12 @@ import "./EmployeeSales.css";
 export default function EmployeeSales() {
   const { name } = useParams();
   const location = useLocation();
-  const avatar = location.state?.avatar || ""; // URL passée depuis le leaderboard
+
+  // reçus depuis le leaderboard (avec navigate(..., { state: { ... } }))
+  const avatar = location.state?.avatar || "";
+  const ventes = location.state?.ventes ?? 0;
+  const cash   = location.state?.cash   ?? 0;
+  const revenu = location.state?.revenu ?? 0;
 
   return (
     <div className="employee-page">
@@ -22,7 +27,7 @@ export default function EmployeeSales() {
 
           <div className="emp-id-block">
             <h1 className="emp-name">{name}</h1>
-            <div className="emp-id">ID : —</div>
+            <div className="emp-id">ID : </div>
           </div>
         </div>
 
@@ -34,8 +39,27 @@ export default function EmployeeSales() {
         </div>
       </div>
 
+      {/* — Stats alignées sous la carte — */}
+      <div className="emp-stats">
+        <div className="stat-card ventes">
+          <div className="stat-value">{ventes}</div>
+          <div className="stat-label">Total Ventes</div>
+        </div>
+
+        <div className="stat-card cash">
+          <div className="stat-value">{cash.toLocaleString("fr-FR")} €</div>
+          <div className="stat-label">Cash Collecté</div>
+        </div>
+
+        <div className="stat-card revenu">
+          <div className="stat-value">{revenu.toLocaleString("fr-FR")} €</div>
+          <div className="stat-label">Revenu Total</div>
+        </div>
+      </div>
+
+      {/* placeholder pour l'historique qu'on fera après */}
       <div className="emp-panel-placeholder">
-        Zone stats & historique (prochain step)
+        Zone stats & historique 
       </div>
     </div>
   );
