@@ -1,83 +1,42 @@
-// ─────────────────────────────────────────────
-// src/pages/EmployeeSales.jsx
-// ─────────────────────────────────────────────
-import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+import { Link, useLocation, useParams } from "react-router-dom";
+import "./EmployeeSales.css";
 
 export default function EmployeeSales() {
-  const { name } = useParams();              // « :name » dans l’URL
-  const [rows, setRows]   = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  /* ─── charge uniquement les ventes de cet employé ─── */
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-
-      const { data, error } = await supabase
-        .from("Info")
-        .select("created_at, client_name, amount, comment")  // ⇢ colonnes utiles
-        .eq("employee_name", name)                           // filtre
-        .gt("amount", 0)                                     // vraies ventes
-        .order("created_at", { ascending: false });          // plus récentes 1ʳᵉ
-
-      if (error) { console.error(error); setLoading(false); return; }
-      setRows(data);
-      setLoading(false);
-    }
-
-    load();
-  }, [name]);
+  const { name } = useParams();
+  const location = useLocation();
+  const avatar = location.state?.avatar || ""; // URL passée depuis le leaderboard
 
   return (
-    <div style={{ padding: "2rem", fontFamily: "sans-serif" }}>
-      <Link to="/">← Back</Link>
+    <div className="employee-page">
+      <Link to="/" className="emp-back">← Retour au leaderboard</Link>
 
-      <h1 style={{ margin: "0 0 1rem", textAlign: "center" }}>
-        Sales history for <em>{name}</em>
-      </h1>
+      <div className="emp-header-card">
+        <div className="emp-left">
+          <div className="emp-avatar-wrap">
+            {avatar ? (
+              <img className="emp-avatar" src={avatar} alt={name} />
+            ) : (
+              <div className="emp-avatar emp-placeholder" aria-label="placeholder" />
+            )}
+          </div>
 
-      {loading && <p>Loading…</p>}
-      {!loading && rows.length === 0 && <p>No sales yet.</p>}
+          <div className="emp-id-block">
+            <h1 className="emp-name">{name}</h1>
+            <div className="emp-id">ID : —</div>
+          </div>
+        </div>
 
-      {!loading && rows.length > 0 && (
-        <table
-          style={{
-            borderCollapse: "collapse",
-            width: "100%",
-            maxWidth: "800px",
-            margin: "0 auto",
-            fontSize: "0.9rem",
-          }}
-        >
-          <thead>
-            <tr>
-              <th align="left">Date</th>
-              <th align="left">Client</th>
-              <th align="left">Mode</th>
-              <th align="right">€</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.created_at}>
-                <td>{new Date(r.created_at).toLocaleDateString()}</td>
-                <td>{r.client_name || "—"}</td>
-                <td>{r.comment || "—"}</td>
-                <td align="right">
-                  {Number(r.amount).toLocaleString("fr-FR")} €
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+        {/* Sélecteur non interactif comme sur ton screen */}
+        <div className="emp-right">
+          <select className="emp-fake-select" disabled>
+            <option>Tous les challenges</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="emp-panel-placeholder">
+        Zone stats & historique (prochain step)
+      </div>
     </div>
   );
 }
