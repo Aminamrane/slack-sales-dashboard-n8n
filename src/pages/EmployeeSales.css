@@ -80,3 +80,64 @@
   max-width:1100px;margin:16px auto 0;padding:18px;
   border:1px solid #eef2f7;border-radius:16px;background:#fff;color:#9ca3af;
 }
+
+/* ===== Sales history card ===== */
+.employee-page .emp-history-card{
+  max-width:1100px;
+  margin:16px auto 0;
+  padding:18px;
+  border:1px solid #eef2f7;
+  border-radius:16px;
+  background:#fff;
+  box-shadow:0 10px 34px rgba(0,0,0,.06);
+}
+
+.employee-page .emp-history-head{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:10px;
+}
+.employee-page .emp-history-head h2{
+  font-size:18px;margin:0;color:#111827;font-weight:800;
+}
+
+.employee-page .emp-history-empty{
+  margin:8px 0 0; color:#9ca3af; font-size:14px;
+}
+
+/* Table wrapper to allow horizontal scroll on mobile */
+.employee-page .emp-history-table-wrap{
+  width:100%; overflow:auto;
+}
+
+/* Table styles */
+.employee-page .emp-history{
+  width:100%; border-collapse:collapse; font-size:14px;
+  min-width: 640px; /* so columns keep shape on small screens */
+}
+.employee-page .emp-history th,
+.employee-page .emp-history td{
+  padding:10px 8px; background-clip:padding-box;
+}
+.employee-page .emp-history thead th{
+  border-bottom:1px solid #e5e7eb; font-weight:700; color:#374151;
+}
+.employee-page .emp-history tbody tr{
+  border-bottom:1px solid #f0f2f5;
+}
+.employee-page .emp-history tbody tr:nth-child(odd){
+  background:#fafafa;
+}
+.employee-page .emp-history tbody tr:hover td{
+  background:#f5f7fa;
+}
+
+/* comment cell can wrap */
+.employee-page .emp-history td.emp-history-comment{
+  max-width:420px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+
+/* Responsive tweaks */
+@media (max-width: 720px){
+  .employee-page .emp-history-head h2{ font-size:16px; }
+  .employee-page .emp-history { font-size:13px; }
+}
