@@ -9,7 +9,7 @@ import myLogo                   from "../assets/my_image.png";
 import Chart from "chart.js/auto";
 import ChartDataLabels from "chartjs-plugin-datalabels";
 import { Doughnut, Pie, Bar }  from "react-chartjs-2";
-import "../index.css"; // or wherever your global styles live
+import "../index.css";
 
 Chart.register(ChartDataLabels);
 
@@ -19,18 +19,35 @@ const supabase = createClient(
 );
 
 export default function Leaderboard() {
-  const navigate            = useNavigate();
-  const [rows, setRows]     = useState([]);
+  const navigate                  = useNavigate();
+  const [rows, setRows]           = useState([]);
   const [dailyData, setDailyData] = useState([]);
   const [tunnelStats, setTunnelStats] = useState({});
-  const [totals, setTotals] = useState({ cash: 0, revenu: 0, ventes: 0 });
-  const [loading, setLoading] = useState(true);
-  const [view, setView]       = useState("table");
+  const [totals, setTotals]       = useState({ cash: 0, revenu: 0, ventes: 0 });
+  const [loading, setLoading]     = useState(true);
+  const [view, setView]           = useState("table");
+
+  // NEW: range selector ("all" | "month")
+  const [range, setRange]         = useState("all");
 
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const { data, error } = await supabase.from("Info").select("*");
+
+      // Base query
+      let query = supabase.from("Info").select("*");
+
+      // If "This month" → filter from 1st of current month to 1st of next month
+      if (range === "month") {
+        const now   = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const next  = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        query = query
+          .gte("created_at", start.toISOString())
+          .lt("created_at",  next.toISOString());
+      }
+
+      const { data, error } = await query;
       if (error) { console.error(error); setLoading(false); return; }
 
       const cleaned = data.filter(r =>
@@ -44,16 +61,34 @@ export default function Leaderboard() {
       const totalRev  = cleaned.reduce((sum, r) => sum + Number(r.amount),      0);
       setTotals({ cash: totalCash, revenu: totalRev, ventes: cleaned.length });
 
-      // Stats par employé
+      // ── Stats par employé (avatar = dernière vente) ──────────────────────────
       const stats = {};
-      cleaned.forEach(r => {
-        const name = r.employee_name?.trim() || "Unknown";
-        stats[name] ??= { name, sales:0, cash:0, revenu:0, avatar:r.avatar_url||"" };
-        stats[name].sales++;
-        stats[name].cash   += Number(r.mensualite);
-        stats[name].revenu += Number(r.amount);
+      cleaned.forEach((r) => {
+        const name   = r.employee_name?.trim() || "Unknown";
+        const amount = Number(r.amount) || 0;
+        const mensu  = Number(r.mensualite) || 0;
+        const t      = new Date(r.created_at).getTime() || 0;
+
+        if (!stats[name]) {
+          stats[name] = { name, sales: 0, cash: 0, revenu: 0, avatar: "", _last: 0 };
+        }
+
+        stats[name].sales  += 1;
+        stats[name].cash   += mensu;
+        stats[name].revenu += amount;
+
+        // avatar = celui de la vente la plus récente
+        if (t >= stats[name]._last && r.avatar_url) {
+          stats[name].avatar = r.avatar_url;
+          stats[name]._last  = t;
+        }
       });
-      setRows(Object.values(stats).sort((a,b)=>b.sales-a.sales||b.cash-a.cash));
+
+      setRows(
+        Object.values(stats)
+          .map(({ _last, ...rest }) => rest)
+          .sort((a, b) => b.sales - a.sales || b.cash - a.cash)
+      );
 
       // Tunnel
       const tunnel = {};
@@ -78,7 +113,7 @@ export default function Leaderboard() {
 
       setLoading(false);
     })();
-  }, []);
+  }, [range]); // re-fetch when range changes
 
   const exportToExcel = () => {
     const wsData = rows.map((r,i)=>({
@@ -141,7 +176,7 @@ export default function Leaderboard() {
     maintainAspectRatio:false,
     responsive:true,
     plugins:{
-      title:{ ...commonTitle, text:"Cash & Revenu sur 6 derniers jours ouvrés" },
+      title:{ ...commonTitle, text:"Cash & Revenu" },
       legend:{ position:"bottom" },
       tooltip:{ callbacks:{ label:ctx=>`${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString("fr-FR")} €` } }
     },
@@ -181,15 +216,37 @@ export default function Leaderboard() {
     <div style={{ padding:0, fontFamily:"sans-serif" }}>
       <div className="board-frame">
         <button className="export-btn" onClick={exportToExcel}>📥 Excel</button>
+
         <div className="view-toggle">
-          <button className={`toggle-btn ${view==="table"?"active":""}`} onClick={()=>setView("table")}>Tableaux</button>
-          <button className={`toggle-btn ${view==="charts"?"active":""}`} onClick={()=>setView("charts")}>Charts</button>
+          <button
+            className={`toggle-btn ${view==="table"?"active":""}`}
+            onClick={()=>setView("table")}
+          >
+            Tableaux
+          </button>
+          <button
+            className={`toggle-btn ${view==="charts"?"active":""}`}
+            onClick={()=>setView("charts")}
+          >
+            Charts
+          </button>
+
+          {/* NEW: range selector */}
+          <select
+            value={range}
+            onChange={(e)=>setRange(e.target.value)}
+            style={{ marginLeft: '1rem', padding: '.35rem .6rem', borderRadius: '.5rem', border: '1px solid #d1d5db' }}
+          >
+            <option value="all">All time</option>
+            <option value="month">This month</option>
+          </select>
         </div>
 
         <div className="title-bar">
           <img src={myLogo} className="title-logo" alt="logo"/>
           <h1 className="leaderboard-title">Suivi des ventes</h1>
         </div>
+
         <div className="totals-block">
           <div className="totals-row">
             <div>
@@ -221,19 +278,14 @@ export default function Leaderboard() {
               </thead>
               <tbody>
                 {rows.map((r,i)=>(
-              <tr
-              key={r.name}
-              onClick={() =>
-              navigate(`/employee/${encodeURIComponent(r.name)}`, {
-              state: {
-      avatar: r.avatar,
-      ventes: r.sales,
-      cash:   r.cash,
-      revenu: r.revenu
-    }
-  })
-}
-              >
+                  <tr
+                    key={r.name}
+                    onClick={() =>
+                      navigate(`/employee/${encodeURIComponent(r.name)}`, {
+                        state: { avatar: r.avatar, ventes: r.sales, cash: r.cash, revenu: r.revenu }
+                      })
+                    }
+                  >
                     <td>{["🥇","🥈","🥉"][i]||i+1}</td>
                     <td className="name-cell"><img src={r.avatar} className="avatar" alt=""/> {r.name}</td>
                     <td align="right">{r.sales}</td>
