@@ -26,8 +26,6 @@ export default function EmployeeSales() {
     (async () => {
       setLoading(true);
 
-      // 1) on récupère toutes les ventes de cette personne (filtre souple)
-      // 2) on garde celles qui ont un montant utile (amount>0 ou mensualite>0)
       const { data, error } = await supabase
         .from("Info")
         .select("created_at, client_name, tunnel, amount, mensualite, comment, payment_mode")
@@ -97,7 +95,12 @@ export default function EmployeeSales() {
 
       {/* Historique */}
       <div className="emp-history-card">
-        <h3>Historique des ventes</h3>
+        <div className="emp-history-head">
+          <h2>Historique des ventes</h2>
+          {!loading && (
+            <div className="emp-history-count">{rows.length} ventes trouvées</div>
+          )}
+        </div>
 
         {loading && <div className="emp-history-empty">Chargement…</div>}
 
@@ -107,40 +110,47 @@ export default function EmployeeSales() {
 
         {!loading && rows.length > 0 && (
           <div className="emp-history-table-wrap">
-            <table className="emp-history-table">
+            <table className="emp-history">
               <thead>
                 <tr>
-                  <th>Date</th>
                   <th>Client</th>
-                  <th>Tunnel</th>
+                  <th>Email</th>
+                  <th align="right">Revenu</th>
                   <th align="right">Cash €/mois</th>
-                  <th align="right">Revenu €</th>
-                  <th>Mode</th>
-                  <th>Commentaire</th>
+                  <th>Modalité</th>
+                  <th>Funnel</th>
+                  <th>Partage</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r, idx) => (
                   <tr key={idx}>
-                    <td>
-                      {new Date(r.created_at).toLocaleDateString("fr-FR", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </td>
                     <td>{r.client_name || "—"}</td>
-                    <td>{r.tunnel || "—"}</td>
-                    <td align="right">
-                      {(Number(r.mensualite) || 0).toLocaleString("fr-FR")} €
-                    </td>
+                    <td className="muted">—</td>
                     <td align="right">
                       {(Number(r.amount) || 0).toLocaleString("fr-FR")} €
                     </td>
-                    <td>
-                      <span className="emp-chip">{r.payment_mode || "—"}</span>
+                    <td align="right">
+                      {(Number(r.mensualite) || 0).toLocaleString("fr-FR")} €
                     </td>
-                    <td className="emp-comment">{r.comment || "—"}</td>
+                 <td>
+  <span
+    className={`emp-chip ${
+      r.payment_mode === "M"
+        ? "mode-m"
+        : r.payment_mode === "A"
+        ? "mode-a"
+        : ""
+    }`}
+  >
+    {r.payment_mode || "—"}
+  </span>
+</td>
+
+                    <td>
+                      <span className="emp-chip light">{r.tunnel || "—"}</span>
+                    </td>
+                    <td className="emp-history-comment">{r.comment || "—"}</td>
                   </tr>
                 ))}
               </tbody>

@@ -144,6 +144,39 @@
   color: #e64b00;
 }
 
+/* smoother zoom with easing */
+.totals-value,
+.totals-sales {
+  display: inline-block;
+  transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1),
+              text-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1),
+              filter 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+/* Green: Total Cash */
+.totals-value.cash:hover {
+  transform: scale(1.08);
+  text-shadow: 0 8px 16px rgba(16,185,129,.3);
+  filter: saturate(1.15);
+}
+
+/* Blue: Total Revenu */
+.totals-value.revenu:hover {
+  transform: scale(1.08);
+  text-shadow: 0 8px 16px rgba(37,99,235,.3);
+  filter: saturate(1.15);
+}
+
+/* Orange: Total ventes */
+.totals-sales:hover {
+  transform: scale(1.08);
+  text-shadow: 0 8px 16px rgba(234,88,12,.3);
+  filter: saturate(1.1);
+}
+
+
+
 /*══════════  TABLEAU WRAPPER  ════════════*/
 .leaderboard-wrapper {
   margin-top: 0;

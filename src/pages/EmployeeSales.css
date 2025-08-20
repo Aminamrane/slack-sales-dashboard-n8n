@@ -141,3 +141,82 @@
   .employee-page .emp-history-head h2{ font-size:16px; }
   .employee-page .emp-history { font-size:13px; }
 }
+
+/* Small count on the right of the title */
+.employee-page .emp-history-count {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+/* subtle text */
+.employee-page .muted {
+  color: #9ca3af;
+}
+
+/* Pills for mode & tunnel */
+.employee-page .emp-chip {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #eef2f7;
+  color: #374151;
+}
+
+/* lighter pill variant (tunnel) */
+.employee-page .emp-chip.light {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+/* optional color hints by mode text */
+.employee-page .emp-chip.cb {         /* CB */
+  background: #e6f0ff;
+  color: #1d4ed8;
+}
+.employee-page .emp-chip.virement {   /* virement */
+  background: #e8fff3;
+  color: #16a34a;
+}
+.employee-page .emp-chip.espèces,
+.employee-page .emp-chip.especes {    /* espèces */
+  background: #fff7ed;
+  color: #ea580c;
+}
+
+/* Client column: force left align and a bit more padding */
+.emp-history th:first-child,
+.emp-history td:first-child {
+  text-align: left;
+  padding-left: 1rem; /* adjust as needed */
+}
+
+/* Email column: center align */
+.emp-history th:nth-child(2),
+.emp-history td:nth-child(2) {
+  text-align: center;
+  width: 200px; /* optional: reserve space for future email addresses */
+}
+
+/* Default chip style (already present probably) */
+.emp-chip {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #f3f4f6;
+  color: #374151;
+}
+
+/* Mode-specific colors */
+.emp-chip.mode-m {
+  background: #dcfce7; /* soft green */
+  color: #166534;      /* darker green text */
+}
+
+.emp-chip.mode-a {
+  background: #ede9fe; /* soft purple */
+  color: #5b21b6;      /* darker purple text */
+}
