@@ -244,7 +244,7 @@ export default function Leaderboard() {
 
         <div className="title-bar">
           <img src={myLogo} className="title-logo" alt="logo"/>
-          <h1 className="leaderboard-title">Suivi des ventes</h1>
+          <h1 className="leaderboard-title">OWNER</h1>
         </div>
 
         <div className="totals-block">
