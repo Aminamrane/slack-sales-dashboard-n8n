@@ -28,7 +28,7 @@ export default function Leaderboard() {
   const [view, setView]           = useState("table");
 
   // NEW: range selector ("all" | "month")
-  const [range, setRange]         = useState("all");
+  const [range, setRange]         = useState("month");
 
   useEffect(() => {
     (async () => {
@@ -237,8 +237,8 @@ export default function Leaderboard() {
             onChange={(e)=>setRange(e.target.value)}
             style={{ marginLeft: '1rem', padding: '.35rem .6rem', borderRadius: '.5rem', border: '1px solid #d1d5db' }}
           >
-            <option value="all">All time</option>
             <option value="month">This month</option>
+            <option value="all">All time</option>
           </select>
         </div>
 
