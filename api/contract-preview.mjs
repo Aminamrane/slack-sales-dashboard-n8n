@@ -15,7 +15,7 @@ async function readJson(req) {
   });
 }
 
-// ---- util: image centrée (contrôle y / width / height)
+// ---- util: image centrée
 function drawCenteredImage(doc, absPath, { y, width, height } = {}) {
   try {
     if (!absPath || !fs.existsSync(absPath)) return null;
@@ -26,18 +26,16 @@ function drawCenteredImage(doc, absPath, { y, width, height } = {}) {
     const x = doc.page.margins.left + (availW - w) / 2;
     const opts = (width && height) ? { fit: [w, h] } : (width ? { width: w } : { height: h });
     doc.image(absPath, x, topY, opts);
-    return topY + h; // approx bas de l'image
+    return topY + h;
   } catch {
     return null;
   }
 }
 
 // ---- util: envoi non-bloquant vers n8n
-console.log("N8N configured:", !!process.env.N8N_WEBHOOK_URL);
 async function sendToWebhook(payload) {
-  const url = process.env.N8N_WEBHOOK_URL; // ex: https://ton-n8n.tld/webhook/contract-log
+  const url = process.env.N8N_WEBHOOK_URL;
   if (!url) return;
-  // on n'attend pas (fire-and-forget) → pas d'impact sur le PDF
   fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -56,10 +54,9 @@ export default async function handler(req, res) {
     const parsed = CompanySchema.safeParse(body.company);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.format() });
 
-    // Données validées pour la clause
     const coyParsed = parsed.data;
 
-    // Conserver email/phone même si non définis dans le schéma
+    // infos extra pour Google Sheet (email/téléphone même si hors schéma)
     const coyForSheet = {
       ...coyParsed,
       email: body.company?.email || "",
@@ -71,11 +68,10 @@ export default async function handler(req, res) {
 
     const clause = companyClause({ company: coyParsed });
 
-    // --- Envoi non-bloquant vers n8n (pour Google Sheets) ---
-    // Par défaut: "Contrat envoyé" et "Général" (tu peux changer)
+    // Webhook n8n (fire-and-forget)
     sendToWebhook({
       company: coyForSheet,
-      clause, // colonne "Informations"
+      clause,
       meta: {
         clientProspect: "Contrat envoyé",
         typeEntreprise: "Général",
@@ -85,7 +81,7 @@ export default async function handler(req, res) {
 
     // --- PDF ---
     const buffers = [];
-    const doc = new PDFDocument({ size: "A4", margin: 56 }); // ≈ 2 cm
+    const doc = new PDFDocument({ size: "A4", margin: 56 });
     doc.on("data", (ch) => buffers.push(ch));
     doc.on("end", () => {
       const pdfBuffer = Buffer.concat(buffers);
@@ -95,42 +91,104 @@ export default async function handler(req, res) {
     });
 
     // ===== POLICES: Arial si dispo, sinon Helvetica =====
-    let bodyFont = "Helvetica", boldFont = "Helvetica-Bold";
+    let bodyFont = "Helvetica", boldFont = "Helvetica-Bold", italicFont = "Helvetica-Oblique";
     try {
       const regularPath = path.join(process.cwd(), "public", "fonts", "Arial.ttf");
       const boldPath    = path.join(process.cwd(), "public", "fonts", "Arial-Bold.ttf");
-      if (fs.existsSync(regularPath) && fs.existsSync(boldPath)) {
-        doc.registerFont("ArialRegular", regularPath);
-        doc.registerFont("ArialBold",    boldPath);
-        bodyFont = "ArialRegular";
-        boldFont = "ArialBold";
-      }
-    } catch { /* fallback Helvetica */ }
+      const italicPath  = path.join(process.cwd(), "public", "fonts", "Arial-Italic.ttf");
+      if (fs.existsSync(regularPath)) { doc.registerFont("ArialRegular", regularPath); bodyFont = "ArialRegular"; }
+      if (fs.existsSync(boldPath))    { doc.registerFont("ArialBold",    boldPath);    boldFont = "ArialBold";    }
+      if (fs.existsSync(italicPath))  { doc.registerFont("ArialItalic",  italicPath);  italicFont = "ArialItalic"; }
+    } catch {}
 
     const H1 = 16, H2 = 13, P = 12;
     const writeH2 = (t) => { doc.font(boldFont).fontSize(H2).text(t, { align: "left" }); };
     const para    = (t, opts={}) => { doc.font(bodyFont).fontSize(P).text(t, { align: "justify", lineGap: 2, ...opts }); };
 
-    // -------- Page 1 --------
-    const logoPath = path.join(process.cwd(), "public", "contract-logo.png");
-    const bottomOfLogoY = drawCenteredImage(doc, logoPath, { y: 30, width: 180 });
-
-    const SPACE_AFTER_LOGO = 32;
-    if (bottomOfLogoY) doc.y = bottomOfLogoY + SPACE_AFTER_LOGO;
-
-    doc.font(boldFont).fontSize(H1).text("Engagement unilatéral", { align: "center" });
-    doc.moveDown(0.2);
-    doc.font(boldFont).fontSize(H1).text("Accord de confidentialité et d'audit gratuit", { align: "center" });
-
+    // ----------------------------------------------------
+    // TES RÉGLAGES D’ESPACEMENT (inchangés) + nouveaux
+    // ----------------------------------------------------
+    const SPACE_AFTER_LOGO          = 32;
     const SPACE_BEFORE_ENTRE        = 100;
     const SPACE_AFTER_ENTRE_HEADING = 25;
     const SPACE_AFTER_CLAUSE        = 24;
 
+    // bloc “client/owner” (tes valeurs)
+    const BLOC_GAP_BEFORE_CLIENT_ALIAS = 10;
+    const BLOC_GAP_AFTER_CLIENT_ALIAS  = 30;
+    const BLOC_GAP_AFTER_ET            = 10;
+    const BLOC_GAP_AFTER_OWNER_NAME    = 6;
+    const BLOC_GAP_BEFORE_OWNER_ALIAS  = 18;
+
+    // préambule / article 1 (tu peux jouer avec)
+    const GAP_BEFORE_PREAMBULE_TITLE   = 70;
+    const GAP_AFTER_PREAMBULE_TITLE    = 8;
+    const GAP_AFTER_PREAMBULE_TEXT     = 70;
+    const GAP_BEFORE_ART1_TITLE        = 8;
+    const GAP_AFTER_ART1_TITLE         = 8;
+    // ----------------------------------------------------
+
+    // -------- Page 1 --------
+    const logoPath = path.join(process.cwd(), "public", "contract-logo.png");
+    const bottomOfLogoY = drawCenteredImage(doc, logoPath, { y: 30, width: 180 });
+    if (bottomOfLogoY) doc.y = bottomOfLogoY + SPACE_AFTER_LOGO;
+
+    // titres
+    doc.font(boldFont).fontSize(H1).text("Engagement unilatéral", { align: "center" });
+    doc.moveDown(0.2);
+    doc.font(boldFont).fontSize(H1).text("Accord de confidentialité et d'audit gratuit", { align: "center" });
+
+    // “Entre :” + clause société
     doc.y += SPACE_BEFORE_ENTRE;
     writeH2("Entre :");
     doc.y += SPACE_AFTER_ENTRE_HEADING;
     para(clause);
     doc.y += SPACE_AFTER_CLAUSE;
+
+    // ------ bloc client/owner ------
+    doc.y += BLOC_GAP_BEFORE_CLIENT_ALIAS;
+    doc.font(italicFont).fontSize(P).text('Ci-après dénommée “Le client”', { align: "left", lineBreak: true });
+
+    doc.y += BLOC_GAP_AFTER_CLIENT_ALIAS;
+    doc.font(boldFont).fontSize(H2).text("Et", { align: "left" });
+
+    doc.y += BLOC_GAP_AFTER_ET;
+    doc.font(bodyFont).fontSize(H2).text("OWNER TECHNOLOGY - FZCO", { align: "left" });
+
+    doc.y += BLOC_GAP_AFTER_OWNER_NAME;
+    doc.font(bodyFont).fontSize(P).text(
+      "Freezone Company dont le siège social est situé Building A1, IFZA, Silicon Oasis (UAE)\n" +
+      "immatriculée au sein de Silicon Oasis représentée par Paul Faucomprez, en qualité de\n" +
+      "Director General Manager",
+      { align: "left" }
+    );
+
+    doc.y += BLOC_GAP_BEFORE_OWNER_ALIAS;
+    doc.font(italicFont).fontSize(P).text('Ci-après dénommée “Owner”', { align: "left", lineBreak: true });
+    // ------ fin bloc client/owner ------
+
+    // ------ PRÉAMBULE + ARTICLE 1 (ajout) ------
+    doc.y += GAP_BEFORE_PREAMBULE_TITLE;
+    doc.font(boldFont).fontSize(H1).text("Préambule", { align: "center" });
+
+    doc.y += GAP_AFTER_PREAMBULE_TITLE;
+    para(
+      "Owner, spécialisée dans l’optimisation sociale et fiscale pour les TPE/PME, propose un " +
+      "service d’audit gratuit permettant d’identifier des opportunités d’optimisation. Dans ce cadre, " +
+      "des documents et informations confidentiels sont susceptibles d’être transmis à Owner. Ce " +
+      "document formalise l’engagement unilatéral de Owner à protéger ces données."
+    );
+
+    doc.y += GAP_AFTER_PREAMBULE_TEXT;
+    writeH2("Article 1 : Objet de l’engagement");
+
+    doc.y += GAP_AFTER_ART1_TITLE;
+    para(
+      "Owner s’engage à assurer la confidentialité des documents et informations transmis dans le " +
+      "cadre de la réalisation de l’audit, ainsi qu’à respecter les principes énoncés dans le présent " +
+      "document."
+    );
+    // ------ fin PRÉAMBULE + ARTICLE 1 ------
 
     // -------- Page 2 : date en bas --------
     doc.addPage();
