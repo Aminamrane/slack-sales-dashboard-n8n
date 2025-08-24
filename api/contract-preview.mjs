@@ -33,6 +33,7 @@ function drawCenteredImage(doc, absPath, { y, width, height } = {}) {
 }
 
 // ---- util: envoi non-bloquant vers n8n
+console.log("N8N configured:", !!process.env.N8N_WEBHOOK_URL);
 async function sendToWebhook(payload) {
   const url = process.env.N8N_WEBHOOK_URL; // ex: https://ton-n8n.tld/webhook/contract-log
   if (!url) return;
