@@ -217,11 +217,17 @@ export default function Leaderboard() {
       <div className="board-frame">
         <button className="export-btn" onClick={exportToExcel}>📥 Excel</button>
 
+        {/* NEW bouton contract */}
+      <button className="export-btn" onClick={() => navigate("/contracts/new")}>
+        📄 Contract
+      </button>
+
         <div className="view-toggle">
           <button
             className={`toggle-btn ${view==="table"?"active":""}`}
             onClick={()=>setView("table")}
           >
+            
             Tableaux
           </button>
           <button
