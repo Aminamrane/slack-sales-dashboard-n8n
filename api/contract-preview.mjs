@@ -26,7 +26,21 @@ function drawCenteredImage(doc, absPath, { y, width, height } = {}) {
     const x = doc.page.margins.left + (availW - w) / 2;
     const opts = (width && height) ? { fit: [w, h] } : (width ? { width: w } : { height: h });
     doc.image(absPath, x, topY, opts);
-    return topY + h;
+    return topY + (opts.fit ? opts.fit[1] : (h || 0)); // approx bas
+  } catch {
+    return null;
+  }
+}
+
+// ---- util: image alignée à gauche (pour signature)
+function drawLeftImage(doc, absPath, { y, width, height } = {}) {
+  try {
+    if (!absPath || !fs.existsSync(absPath)) return null;
+    const topY  = y ?? doc.y;
+    const xLeft = doc.page.margins.left;
+    const opts  = (width && height) ? { fit: [width, height] } : (width ? { width } : { height });
+    doc.image(absPath, xLeft, topY, opts);
+    return topY + (opts.fit ? opts.fit[1] : (opts.height ?? 0)); // approx bas
   } catch {
     return null;
   }
@@ -106,26 +120,52 @@ export default async function handler(req, res) {
     const para    = (t, opts={}) => { doc.font(bodyFont).fontSize(P).text(t, { align: "justify", lineGap: 2, ...opts }); };
 
     // ----------------------------------------------------
-    // TES RÉGLAGES D’ESPACEMENT (inchangés) + nouveaux
+    // TES RÉGLAGES D’ESPACEMENT (inchangés)
     // ----------------------------------------------------
     const SPACE_AFTER_LOGO          = 32;
     const SPACE_BEFORE_ENTRE        = 100;
     const SPACE_AFTER_ENTRE_HEADING = 25;
     const SPACE_AFTER_CLAUSE        = 24;
 
-    // bloc “client/owner” (tes valeurs)
     const BLOC_GAP_BEFORE_CLIENT_ALIAS = 10;
     const BLOC_GAP_AFTER_CLIENT_ALIAS  = 30;
     const BLOC_GAP_AFTER_ET            = 10;
     const BLOC_GAP_AFTER_OWNER_NAME    = 6;
     const BLOC_GAP_BEFORE_OWNER_ALIAS  = 18;
 
-    // préambule / article 1 (tu peux jouer avec)
     const GAP_BEFORE_PREAMBULE_TITLE   = 70;
     const GAP_AFTER_PREAMBULE_TITLE    = 8;
     const GAP_AFTER_PREAMBULE_TEXT     = 70;
     const GAP_BEFORE_ART1_TITLE        = 8;
     const GAP_AFTER_ART1_TITLE         = 8;
+
+    const GAP_BEFORE_ART2_TITLE        = 16;
+    const GAP_AFTER_ART2_TITLE         = 8;
+    const GAP_AFTER_ART2_LIST          = 16;
+
+    const GAP_BEFORE_ART3_TITLE        = 8;
+    const GAP_AFTER_ART3_TITLE         = 8;
+
+    const GAP_BEFORE_ART4_TITLE        = 8;
+    const GAP_AFTER_ART4_TITLE         = 8;
+
+    const GAP_BEFORE_ART5_TITLE        = 8;
+    const GAP_AFTER_ART5_TITLE         = 8;
+
+    const GAP_BEFORE_ART6_TITLE        = 8;
+    const GAP_AFTER_ART6_TITLE         = 8;
+
+    // --- Signature / lieu & date / image ---
+    const GAP_BEFORE_PLACE_DATE        = 12;
+    const GAP_AFTER_PLACE_DATE         = 10;
+    const GAP_AFTER_SIGNATURE_HEADING  = 6;
+    const GAP_AFTER_SIGN_NAME          = 4;
+
+    // Image de signature
+    const SIGN_IMAGE_PATH              = path.join(process.cwd(), "public", "signature-owner.png");
+    const GAP_BEFORE_SIGNATURE_IMAGE   = 8;   // espace avant l’image
+    const SIGN_IMAGE_WIDTH             = 100; // ajuste librement (ou mets null et définis HEIGHT)
+    const SIGN_IMAGE_HEIGHT            = null;  // si tu veux forcer une hauteur
     // ----------------------------------------------------
 
     // -------- Page 1 --------
@@ -145,7 +185,7 @@ export default async function handler(req, res) {
     para(clause);
     doc.y += SPACE_AFTER_CLAUSE;
 
-    // ------ bloc client/owner ------
+    // bloc client/owner
     doc.y += BLOC_GAP_BEFORE_CLIENT_ALIAS;
     doc.font(italicFont).fontSize(P).text('Ci-après dénommée “Le client”', { align: "left", lineBreak: true });
 
@@ -165,9 +205,8 @@ export default async function handler(req, res) {
 
     doc.y += BLOC_GAP_BEFORE_OWNER_ALIAS;
     doc.font(italicFont).fontSize(P).text('Ci-après dénommée “Owner”', { align: "left", lineBreak: true });
-    // ------ fin bloc client/owner ------
 
-    // ------ PRÉAMBULE + ARTICLE 1 (ajout) ------
+    // PRÉAMBULE + Art.1
     doc.y += GAP_BEFORE_PREAMBULE_TITLE;
     doc.font(boldFont).fontSize(H1).text("Préambule", { align: "center" });
 
@@ -188,23 +227,96 @@ export default async function handler(req, res) {
       "cadre de la réalisation de l’audit, ainsi qu’à respecter les principes énoncés dans le présent " +
       "document."
     );
-    // ------ fin PRÉAMBULE + ARTICLE 1 ------
 
-    // -------- Page 2 : date en bas --------
-    doc.addPage();
+    // ARTICLE 2
+    doc.y += GAP_BEFORE_ART2_TITLE;
+    writeH2("Article 2 : Confidentialité des données");
+
+    doc.y += GAP_AFTER_ART2_TITLE;
+    para("Owner s’engage à :");
+
+    doc.font(bodyFont).fontSize(P).text(
+      "1. Ne pas divulguer, directement ou indirectement, les documents ou informations transmis, " +
+      "sauf accord écrit préalable de la partie concernée ou si leur divulgation est exigée par la loi " +
+      "ou une autorité compétente.\n" +
+      "2. Utiliser les données exclusivement aux fins de réalisation de l’audit et dans le respect des " +
+      "réglementations en vigueur, notamment le Règlement (UE) 2016/679 (RGPD).\n" +
+      "3. Prendre toutes les mesures nécessaires pour garantir la sécurité des informations, en évitant " +
+      "tout accès non autorisé.",
+      { align: "justify", indent: 12, lineGap: 2 }
+    );
+
+    doc.y += GAP_AFTER_ART2_LIST;
+
+    // ARTICLE 3
+    doc.y += GAP_BEFORE_ART3_TITLE;
+    writeH2("Article 3 : Durée de conservation des données");
+
+    doc.y += GAP_AFTER_ART3_TITLE;
+    para(
+      "Owner s’engage à détruire toutes copies des documents et informations transmis dans un " +
+      "délai de 15 jours suivant la réalisation de l’audit."
+    );
+
+    // ARTICLE 4
+    doc.y += GAP_BEFORE_ART4_TITLE;
+    writeH2("Article 4 : Non-utilisation à d’autres fins");
+
+    doc.y += GAP_AFTER_ART4_TITLE;
+    para(
+      "Owner garantit que les documents et informations transmis ne seront pas utilisés à des fins " +
+      "autres que celles strictement nécessaires à la réalisation de l’audit."
+    );
+
+    // ARTICLE 5
+    doc.y += GAP_BEFORE_ART5_TITLE;
+    writeH2("Article 5 : Responsabilité");
+
+    doc.y += GAP_AFTER_ART5_TITLE;
+    para(
+      "En cas de non-respect des engagements prévus au présent document, Owner reconnaît sa " +
+      "responsabilité et s’engage à prendre les mesures nécessaires pour remédier à la situation et " +
+      "limiter les conséquences pour les parties concernées."
+    );
+
+    // ARTICLE 6
+    doc.y += GAP_BEFORE_ART6_TITLE;
+    writeH2("Article 6 : Droit applicable");
+
+    doc.y += GAP_AFTER_ART6_TITLE;
+    para(
+      "Le présent engagement est régi par le droit français. Tout litige relatif à son interprétation ou " +
+      "à son exécution sera soumis aux juridictions compétentes."
+    );
+
+    // ------ BLOC SIGNATURE : lieu/date + signataire + image ------
     const genDate  = new Date().toLocaleDateString("fr-FR");
-    const pageW    = doc.page.width;
-    const leftM    = doc.page.margins.left;
-    const rightM   = doc.page.margins.right;
-    const bottomY  = doc.page.height - doc.page.margins.bottom - P - 2;
 
-    doc.font(bodyFont).fontSize(P);
-    doc.text(genDate, leftM, bottomY, {
-      width: pageW - leftM - rightM,
-      align: "center",
-      lineBreak: false,
+    doc.y += GAP_BEFORE_PLACE_DATE;
+    doc.font(bodyFont).fontSize(P).text(
+      `Fait à Silicon Oasis (UAE), le ${genDate}.`,
+      { align: "left" }
+    );
+
+    doc.y += GAP_AFTER_PLACE_DATE;
+    doc.font(boldFont).fontSize(H2).text("Pour Owner", { align: "left" });
+
+    doc.y += GAP_AFTER_SIGNATURE_HEADING;
+    doc.font(bodyFont).fontSize(P).text("Monsieur Paul FAUCOMPREZ", { align: "left" });
+
+    doc.y += GAP_AFTER_SIGN_NAME;
+    doc.font(bodyFont).fontSize(P).text("En sa qualité de Président", { align: "left" });
+
+    // Image de signature (PNG) juste après
+    doc.y += GAP_BEFORE_SIGNATURE_IMAGE;
+    drawLeftImage(doc, SIGN_IMAGE_PATH, {
+      y: doc.y,
+      width: SIGN_IMAGE_WIDTH,
+      height: SIGN_IMAGE_HEIGHT,
     });
+    // ------ FIN BLOC SIGNATURE ------
 
+    // ✅ PAS DE PAGE SUPPLÉMENTAIRE : on termine ici
     doc.end();
   } catch (e) {
     console.error(e);
