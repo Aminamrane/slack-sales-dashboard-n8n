@@ -215,11 +215,10 @@ export default function Leaderboard() {
   return (
     <div style={{ padding:0, fontFamily:"sans-serif" }}>
       <div className="board-frame">
-        <button className="export-btn" onClick={exportToExcel}>📥 Excel</button>
 
         {/* NEW bouton contract */}
       <button className="export-btn" onClick={() => navigate("/contracts/new")}>
-        📄 Contract
+        📄 NDA
       </button>
 
         <div className="view-toggle">

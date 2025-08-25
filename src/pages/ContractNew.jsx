@@ -1,7 +1,7 @@
-// src/pages/ContractNew.jsx
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CompanySchema, normalizeSiren, isValidSiren } from "../contracts/schemas.js";
 import { companyClause } from "../contracts/format.js";
+import "./contract.css";
 
 const LEGAL_FORMS = ["SARL", "SAS", "SASU", "SA", "EURL", "SCI", "Autre"];
 
@@ -11,14 +11,20 @@ export default function ContractNew() {
     legalForm: "SARL",
     siren: "",
     rcsCity: "",
-    email: "",            // NEW
-    phone: "",            // NEW (Numéro)
+    email: "",
+    phone: "",
     headOffice: { line1: "", postalCode: "", city: "", country: "France" },
-    representatives: [{ fullName: "", role: "" }], // facultatif V1
+    representatives: [{ fullName: "", role: "" }],
   });
 
   const [errors, setErrors] = useState({});
   const [preview, setPreview] = useState("");
+  const [touched, setTouched] = useState({});      // ← what the user has interacted with
+  const [showAllErrors, setShowAllErrors] = useState(false); // ← after failed PDF generation
+
+  // helpers
+  const markTouched = (path) =>
+    setTouched((t) => (t[path] ? t : { ...t, [path]: true }));
 
   const setField = (path, value) => {
     setCompany((prev) => {
@@ -49,19 +55,18 @@ export default function ContractNew() {
       representatives: prev.representatives.filter((_, i) => i !== idx),
     }));
 
+  // validation + aperçu (background)
   const validateAndPreview = () => {
     const flat = {};
 
-    // email simple (requis + format)
+    // email
     const email = (company.email || "").trim();
     if (!email) flat["email"] = "Email requis";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) flat["email"] = "Email invalide";
 
-    // phone léger (autoriser +, espace, chiffres)
+    // phone léger
     const phone = (company.phone || "").trim();
-    if (phone && !/^[\d+\s().-]{6,}$/.test(phone)) {
-      flat["phone"] = "Numéro invalide";
-    }
+    if (phone && !/^[\d+\s().-]{6,}$/.test(phone)) flat["phone"] = "Numéro invalide";
 
     const res = CompanySchema.safeParse(company);
     if (!res.success) {
@@ -69,32 +74,33 @@ export default function ContractNew() {
         const key = issue.path.join(".");
         if (!flat[key]) flat[key] = issue.message;
       }
-    }
-
-    if (Object.keys(flat).length) {
       setErrors(flat);
-      setPreview("");
+      setPreview(""); // on n'affiche l'aperçu que si tout est ok
       return false;
     }
 
     setErrors({});
-    setPreview(companyClause({ company: res.success ? res.data : company }));
+    setPreview(companyClause({ company: res.data }));
     return true;
   };
 
-  const onSubmit = (e) => {
-    e.preventDefault();
-    if (validateAndPreview()) alert("Société validée ✔️");
-  };
+  useEffect(() => {
+    validateAndPreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [company]);
 
   const generatePdfDraft = async () => {
     const ok = validateAndPreview();
-    if (!ok) { alert("Corrige les erreurs."); return; }
+    if (!ok) {
+      setShowAllErrors(true); // révèle toutes les erreurs si l'utilisateur tente de générer
+      alert("Corrige les erreurs avant de générer le PDF.");
+      return;
+    }
     try {
       const resp = await fetch("/api/contract-preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company }), // l’API enverra à n8n pour Google Sheets
+        body: JSON.stringify({ company }),
       });
       if (!resp.ok) {
         const msg = await resp.text();
@@ -110,231 +116,239 @@ export default function ContractNew() {
     }
   };
 
+  const showErr = (key) => errors[key] && (touched[key] || showAllErrors);
+
   const normalizedSiren = normalizeSiren(company.siren);
   const showSirenWarning =
-    normalizedSiren.length === 9 && !isValidSiren(normalizedSiren) && !errors["siren"];
-
-  const inputStyle = { width: "100%", padding: ".5rem", border: "1px solid #ddd", borderRadius: 8 };
+    (touched["siren"] || showAllErrors) &&
+    normalizedSiren.length === 9 &&
+    !isValidSiren(normalizedSiren) &&
+    !errors["siren"];
 
   return (
-    <div style={{ padding: "1rem", fontFamily: "sans-serif", maxWidth: 900, margin: "0 auto" }}>
-      <h1 style={{ margin: 0, fontSize: "1.6rem" }}>Nouveau contrat</h1>
-      <p style={{ color: "#555" }}>Renseigne les infos de l’entreprise.</p>
+    <div className="contract-page">
+      <h1 className="contract-title">Nouveau contrat</h1>
+      <p className="contract-subtitle">Renseigne les infos de l’entreprise.</p>
 
-      <form onSubmit={onSubmit} onBlur={validateAndPreview}>
+      <form>
         {/* Raison sociale */}
-        <label style={{ display: "block", marginTop: "1rem" }}>
+        <label className="field">
           Raison sociale *
           <input
             value={company.legalName}
             onChange={(e) => setField("legalName", e.target.value)}
-            style={inputStyle}
+            onBlur={() => markTouched("legalName")}
+            className="input"
             placeholder="OWNER"
           />
-          {errors["legalName"] && <span style={{ color: "crimson" }}>{errors["legalName"]}</span>}
+          {showErr("legalName") && <span className="error">{errors["legalName"]}</span>}
         </label>
 
-        {/* Forme juridique */}
-        <label style={{ display: "block", marginTop: "1rem" }}>
-          Forme juridique *
-          <select
-            value={company.legalForm}
-            onChange={(e) => setField("legalForm", e.target.value)}
-            style={inputStyle}
-          >
-            {LEGAL_FORMS.map((f) => (
-              <option key={f} value={f}>{f}</option>
-            ))}
-          </select>
-          {errors["legalForm"] && <span style={{ color: "crimson" }}>{errors["legalForm"]}</span>}
-        </label>
+        {/* Forme juridique + SIREN */}
+        <div className="grid2">
+          <label className="field">
+            Forme juridique *
+            <select
+              value={company.legalForm}
+              onChange={(e) => setField("legalForm", e.target.value)}
+              onBlur={() => markTouched("legalForm")}
+              className="input"
+            >
+              {LEGAL_FORMS.map((f) => (
+                <option key={f} value={f}>{f}</option>
+              ))}
+            </select>
+            {showErr("legalForm") && <span className="error">{errors["legalForm"]}</span>}
+          </label>
 
-        {/* Email */}
-        <label style={{ display: "block", marginTop: "1rem" }}>
-          Email (contact) *
-          <input
-            type="email"
-            value={company.email}
-            onChange={(e) => setField("email", e.target.value)}
-            style={inputStyle}
-            placeholder="contact@domaine.com"
-          />
-          {errors["email"] && <span style={{ color: "crimson" }}>{errors["email"]}</span>}
-        </label>
+          <label className="field">
+            SIREN (9 chiffres) *
+            <input
+              value={company.siren}
+              onChange={(e) => setField("siren", e.target.value)}
+              onBlur={() => markTouched("siren")}
+              className="input"
+              placeholder="981 817 166"
+            />
+            {showErr("siren") && <span className="error">{errors["siren"]}</span>}
+            {showSirenWarning && <span className="warn">⚠️ SIREN non valide.</span>}
+          </label>
+        </div>
 
-        {/* Numéro */}
-        <label style={{ display: "block", marginTop: "1rem" }}>
-          Numéro (téléphone)
-          <input
-            value={company.phone}
-            onChange={(e) => setField("phone", e.target.value)}
-            style={inputStyle}
-            placeholder="+33 6 12 34 56 78"
-          />
-          {errors["phone"] && <span style={{ color: "crimson" }}>{errors["phone"]}</span>}
-        </label>
+        {/* Email + Téléphone */}
+        <div className="grid2">
+          <label className="field">
+            Email (contact) *
+            <input
+              type="email"
+              value={company.email}
+              onChange={(e) => setField("email", e.target.value)}
+              onBlur={() => markTouched("email")}
+              className="input"
+              placeholder="contact@domaine.com"
+            />
+            {showErr("email") && <span className="error">{errors["email"]}</span>}
+          </label>
 
-        {/* SIREN */}
-        <label style={{ display: "block", marginTop: "1rem" }}>
-          SIREN (9 chiffres) *
-          <input
-            value={company.siren}
-            onChange={(e) => setField("siren", e.target.value)}
-            style={inputStyle}
-            placeholder="981 817 166"
-          />
-        </label>
-        {errors["siren"] && <span style={{ color: "crimson" }}>{errors["siren"]}</span>}
-        {showSirenWarning && (
-          <span style={{ color: "#8a6d3b", display: "block", marginTop: ".25rem" }}>
-            ⚠️ SIREN non valide.
-          </span>
-        )}
+          <label className="field">
+            Numéro (téléphone)
+            <input
+              value={company.phone}
+              onChange={(e) => setField("phone", e.target.value)}
+              onBlur={() => markTouched("phone")}
+              className="input"
+              placeholder="+33 6 12 34 56 78"
+            />
+            {showErr("phone") && <span className="error">{errors["phone"]}</span>}
+          </label>
+        </div>
 
         {/* Ville RCS */}
-        <label style={{ display: "block", marginTop: "1rem" }}>
+        <label className="field">
           Ville du RCS *
           <input
             value={company.rcsCity}
             onChange={(e) => setField("rcsCity", e.target.value)}
-            style={inputStyle}
+            onBlur={() => markTouched("rcsCity")}
+            className="input"
             placeholder="Lille"
           />
-          {errors["rcsCity"] && <span style={{ color: "crimson" }}>{errors["rcsCity"]}</span>}
+          {showErr("rcsCity") && <span className="error">{errors["rcsCity"]}</span>}
         </label>
 
         {/* Siège */}
-        <fieldset style={{ marginTop: "1rem", border: "1px solid #eee", borderRadius: 10, padding: "1rem" }}>
-          <legend style={{ padding: "0 .4rem", color: "#333" }}>Siège social *</legend>
+        <fieldset className="card">
+          <legend>Siège social *</legend>
 
-          <label style={{ display: "block", marginTop: ".5rem" }}>
+          <label className="field">
             Adresse (ligne 1)
             <input
               value={company.headOffice.line1}
               onChange={(e) => setField("headOffice.line1", e.target.value)}
-              style={inputStyle}
+              onBlur={() => markTouched("headOffice.line1")}
+              className="input"
               placeholder="18 rue du commerce"
             />
-            {errors["headOffice.line1"] && (
-              <span style={{ color: "crimson" }}>{errors["headOffice.line1"]}</span>
+            {showErr("headOffice.line1") && (
+              <span className="error">{errors["headOffice.line1"]}</span>
             )}
           </label>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginTop: ".5rem" }}>
-            <label>
+          <div className="grid2">
+            <label className="field">
               Code postal
               <input
                 value={company.headOffice.postalCode}
                 onChange={(e) => setField("headOffice.postalCode", e.target.value)}
-                style={inputStyle}
+                onBlur={() => markTouched("headOffice.postalCode")}
+                className="input"
                 placeholder="59000"
               />
-              {errors["headOffice.postalCode"] && (
-                <span style={{ color: "crimson" }}>{errors["headOffice.postalCode"]}</span>
+              {showErr("headOffice.postalCode") && (
+                <span className="error">{errors["headOffice.postalCode"]}</span>
               )}
             </label>
 
-            <label>
+            <label className="field">
               Ville
               <input
                 value={company.headOffice.city}
                 onChange={(e) => setField("headOffice.city", e.target.value)}
-                style={inputStyle}
+                onBlur={() => markTouched("headOffice.city")}
+                className="input"
                 placeholder="Lille"
               />
-              {errors["headOffice.city"] && (
-                <span style={{ color: "crimson" }}>{errors["headOffice.city"]}</span>
+              {showErr("headOffice.city") && (
+                <span className="error">{errors["headOffice.city"]}</span>
               )}
             </label>
           </div>
 
-          <label style={{ display: "block", marginTop: ".5rem" }}>
+          <label className="field">
             Pays
             <input
               value={company.headOffice.country}
               onChange={(e) => setField("headOffice.country", e.target.value)}
-              style={inputStyle}
+              onBlur={() => markTouched("headOffice.country")}
+              className="input"
               placeholder="France"
             />
           </label>
         </fieldset>
 
         {/* Représentants (facultatif) */}
-        <fieldset style={{ marginTop: "1rem", border: "1px solid #eee", borderRadius: 10, padding: "1rem" }}>
-          <legend style={{ padding: "0 .4rem", color: "#333" }}>Représentant(s) légal(aux)</legend>
+        <fieldset className="card">
+          <legend>Représentant(s) légal(aux)</legend>
 
-          {company.representatives.map((rep, idx) => (
-            <div
-              key={idx}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "2fr 1fr auto",
-                gap: "1rem",
-                alignItems: "end",
-                marginBottom: ".5rem",
-              }}
-            >
-              <label>
-                Nom complet
-                <input
-                  value={rep.fullName}
-                  onChange={(e) => setRep(idx, "fullName", e.target.value)}
-                  style={inputStyle}
-                  placeholder="Ismah"
-                />
-              </label>
+          {company.representatives.map((rep, idx) => {
+            const fullKey = `representatives.${idx}.fullName`;
+            const roleKey = `representatives.${idx}.role`;
+            return (
+              <div key={idx} className="reps-row">
+                <label className="field">
+                  Nom complet
+                  <input
+                    value={rep.fullName}
+                    onChange={(e) => setRep(idx, "fullName", e.target.value)}
+                    onBlur={() => markTouched(fullKey)}
+                    className="input"
+                    placeholder="Ismah"
+                  />
+                  {showErr(fullKey) && (
+                    <span className="error">{errors[fullKey]}</span>
+                  )}
+                </label>
 
-              <label>
-                Fonction (facultatif)
-                <input
-                  value={rep.role || ""}
-                  onChange={(e) => setRep(idx, "role", e.target.value)}
-                  style={inputStyle}
-                  placeholder="Gérant"
-                />
-              </label>
+                <label className="field">
+                  Fonction (facultatif)
+                  <input
+                    value={rep.role || ""}
+                    onChange={(e) => setRep(idx, "role", e.target.value)}
+                    onBlur={() => markTouched(roleKey)}
+                    className="input"
+                    placeholder="Gérant"
+                  />
+                </label>
 
-              <button
-                type="button"
-                onClick={() => removeRep(idx)}
-                style={{ padding: ".5rem .8rem", borderRadius: 8, border: "1px solid #ddd" }}
-                disabled={company.representatives.length === 1}
-              >
-                Suppr
-              </button>
-            </div>
-          ))}
+                <button
+                  type="button"
+                  onClick={() => removeRep(idx)}
+                  className="btn-ghost"
+                  disabled={company.representatives.length === 1}
+                >
+                  Suppr
+                </button>
+              </div>
+            );
+          })}
 
           <button
             type="button"
             onClick={addRep}
-            style={{ padding: ".5rem .8rem", borderRadius: 8, border: "1px solid #ddd" }}
+            className="btn-ghost"
           >
             + Ajouter un représentant
           </button>
         </fieldset>
-
-        <div style={{ marginTop: "1.5rem", display: "flex", gap: ".6rem", flexWrap: "wrap" }}>
-          <button type="submit" className="export-btn">Valider la société</button>
-          <button type="button" className="export-btn" onClick={validateAndPreview}>Aperçu</button>
-          <button type="button" className="export-btn" onClick={generatePdfDraft}>Générer PDF (brouillon)</button>
-        </div>
       </form>
 
-      {/* Aperçu clause */}
-      <div
-        style={{
-          marginTop: "1.5rem",
-          padding: "1rem",
-          border: "1px dashed #bbb",
-          borderRadius: 10,
-          background: "#fafafa",
-        }}
-      >
-        <div style={{ fontWeight: 600, marginBottom: ".5rem" }}>Aperçu</div>
-        <div style={{ whiteSpace: "pre-wrap" }}>
-          {preview || "Vérifie l’aperçu avant de générer le PDF."}
+      {/* Aperçu auto */}
+      <div className="preview card">
+        <div className="preview-title">Aperçu</div>
+        <div className="preview-body">
+          {preview || "Complète les champs."}
         </div>
+      </div>
+
+      {/* Bouton PDF centré sous l’aperçu */}
+      <div className="actions-bottom">
+        <button
+          type="button"
+          className="export-btn"
+          onClick={generatePdfDraft}
+        >
+          Générer PDF
+        </button>
       </div>
     </div>
   );
