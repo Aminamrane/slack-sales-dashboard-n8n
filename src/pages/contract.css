@@ -1,4 +1,4 @@
-/* scope page contrat */
+/* scope page contrat uniquement */
 .contract-page {
   padding: 1rem;
   font-family: sans-serif;
@@ -30,7 +30,9 @@
   outline: none;
 }
 
-.input:focus { border-color: #bbb; }
+.input:focus {
+  border-color: #bbb;
+}
 
 .error {
   color: crimson;
@@ -42,7 +44,7 @@
 .warn {
   color: #8a6d3b;
   display: block;
-  margin-top: .25rem;
+  margin: .25rem 0 0;
   font-size: .9rem;
 }
 
@@ -65,7 +67,9 @@
   margin-bottom: .5rem;
 }
 
-.preview-body { white-space: pre-wrap; }
+.preview-body {
+  white-space: pre-wrap;
+}
 
 /* grilles */
 .grid2 {
@@ -96,16 +100,28 @@
   cursor: pointer;
 }
 
-.btn-ghost:disabled { opacity: .6; cursor: not-allowed; }
+.btn-ghost:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
 
-/* Bouton PDF centré sous l’aperçu */
+/* haut de formulaire */
+.actions-top {
+  margin-top: 1.5rem;
+  display: flex;
+  gap: .6rem;
+  flex-wrap: wrap;
+}
+
+/* bouton PDF centré sous l’aperçu */
 .actions-bottom {
   margin-top: 1.25rem;
   display: flex;
   justify-content: center;
 }
 
-/* Neutraliser l’absolu de .export-btn uniquement ici */
+/* IMPORTANT : neutraliser l'absolu de .export-btn (hérité du leaderboard)
+   uniquement dans la page contrat */
 .contract-page .export-btn {
   position: static !important;
   top: auto !important;
