@@ -32,7 +32,7 @@ export default function ContractNew() {
     const repName = c?.representatives?.[0]?.fullName?.trim();
     const display = repName || c?.legalName || "Document";
     const base = `${display} - Clause de confidentialité`;
-    return `${safeAscii(base) || "Clause de confidentialite"}.pdf`;
+    return `${safeAscii(base) || "Clause de confidentialité"}.pdf`;
   };
 
   // --- touches / setters ---
