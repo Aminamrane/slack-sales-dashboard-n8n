@@ -5,30 +5,29 @@ import PDFDocument from "pdfkit";
 import { CompanySchema } from "../src/contracts/schemas.js";
 import { companyClause } from "../src/contracts/format.js";
 
-// ---------- Helpers nom de fichier ----------
+/* -------------------------- Helpers nom de fichier ------------------------- */
 const stripDiacritics = (s = "") =>
   s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 const safeAscii = (s = "") =>
   stripDiacritics(s).replace(/[^a-zA-Z0-9 _.\-]+/g, "").replace(/\s+/g, " ").trim();
 
 const makePdfFilename = ({ body, company }) => {
-  // 1er représentant -> "Nom complet"
-  const full = (body?.company?.representatives?.[0]?.fullName || "").trim().replace(/\s+/g, " ");
+  const full = (body?.company?.representatives?.[0]?.fullName || "")
+    .trim()
+    .replace(/\s+/g, " ");
   let displayName = full;
 
-  // Si "Prénom Nom", on génère "Nom Prénom"
+  // "Prénom Nom" → "Nom Prénom"
   if (full) {
     const parts = full.split(" ");
     if (parts.length >= 2) {
       const prenom = parts[0];
       const nom = parts.slice(1).join(" ");
-      displayName = `${nom} ${prenom}`; // ordre demandé: Nom puis Prénom
+      displayName = `${nom} ${prenom}`;
     }
   }
 
-  // fallback : raison sociale
   if (!displayName) displayName = company?.legalName || "Document";
-
   const base = `${displayName} - Clause de confidentialité`;
   return {
     utf8: `${base}.pdf`,
@@ -36,7 +35,7 @@ const makePdfFilename = ({ body, company }) => {
   };
 };
 
-// ---- util: parse JSON body (Vercel dev/serverless)
+/* ------------------------------ Body parsing ------------------------------- */
 async function readJson(req) {
   return await new Promise((resolve, reject) => {
     let data = "";
@@ -46,7 +45,7 @@ async function readJson(req) {
   });
 }
 
-// ---- util: image centrée
+/* --------------------------------- Images --------------------------------- */
 function drawCenteredImage(doc, absPath, { y, width, height } = {}) {
   try {
     if (!absPath || !fs.existsSync(absPath)) return null;
@@ -57,13 +56,12 @@ function drawCenteredImage(doc, absPath, { y, width, height } = {}) {
     const x = doc.page.margins.left + (availW - w) / 2;
     const opts = (width && height) ? { fit: [w, h] } : (width ? { width: w } : { height: h });
     doc.image(absPath, x, topY, opts);
-    return topY + (opts.fit ? opts.fit[1] : (h || 0)); // approx bas
+    return topY + (opts.fit ? opts.fit[1] : (h || 0));
   } catch {
     return null;
   }
 }
 
-// ---- util: image alignée à gauche (pour signature)
 function drawLeftImage(doc, absPath, { y, width, height } = {}) {
   try {
     if (!absPath || !fs.existsSync(absPath)) return null;
@@ -71,23 +69,60 @@ function drawLeftImage(doc, absPath, { y, width, height } = {}) {
     const xLeft = doc.page.margins.left;
     const opts  = (width && height) ? { fit: [width, height] } : (width ? { width } : { height });
     doc.image(absPath, xLeft, topY, opts);
-    return topY + (opts.fit ? opts.fit[1] : (opts.height ?? 0)); // approx bas
+    return topY + (opts.fit ? opts.fit[1] : (opts.height ?? 0));
   } catch {
     return null;
   }
 }
 
-// ---- util: envoi non-bloquant vers n8n
-async function sendToWebhook(payload) {
-  const url = process.env.N8N_WEBHOOK_URL;
-  if (!url) return;
-  fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  }).catch((err) => console.error("n8n webhook error:", err));
+/* ------------------------- Webhook fiable (Option 1) ----------------------- */
+// Réglages (tu peux ajuster)
+const WEBHOOK_TIMEOUT_MS = 4500;
+const WEBHOOK_RETRIES    = 2;
+const WEBHOOK_BACKOFF_MS = 800;
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: ctrl.signal });
+    return res;
+  } finally {
+    clearTimeout(id);
+  }
 }
 
+async function sendToWebhookReliable(payload, {
+  timeoutMs = WEBHOOK_TIMEOUT_MS,
+  retries   = WEBHOOK_RETRIES,
+  backoffMs = WEBHOOK_BACKOFF_MS,
+} = {}) {
+  const url = process.env.N8N_WEBHOOK_URL;
+  if (!url) return false;
+
+  let attempt = 0;
+  while (attempt <= retries) {
+    try {
+      const res = await fetchWithTimeout(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }, timeoutMs);
+
+      if (res.ok) return true;
+      console.warn(`Webhook HTTP ${res.status} (attempt ${attempt + 1}/${retries + 1})`);
+    } catch (err) {
+      console.warn(`Webhook error (attempt ${attempt + 1}/${retries + 1}):`, err?.message || err);
+    }
+    attempt++;
+    if (attempt <= retries) await sleep(backoffMs * Math.pow(2, attempt - 1));
+  }
+  return false;
+}
+
+/* --------------------------------- Handler -------------------------------- */
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -101,7 +136,7 @@ export default async function handler(req, res) {
 
     const coyParsed = parsed.data;
 
-    // infos extra pour Google Sheet (email/téléphone même si hors schéma)
+    // Infos extra pour Sheet (email/tél même si hors schéma)
     const coyForSheet = {
       ...coyParsed,
       email: body.company?.email || "",
@@ -113,8 +148,8 @@ export default async function handler(req, res) {
 
     const clause = companyClause({ company: coyParsed });
 
-    // Webhook n8n (fire-and-forget)
-    sendToWebhook({
+    // --- Envoi webhook FIABLE (attendu avec timeout + retries) ---
+    const webhookOk = await sendToWebhookReliable({
       company: coyForSheet,
       clause,
       meta: {
@@ -123,12 +158,14 @@ export default async function handler(req, res) {
         generatedAt: new Date().toISOString(),
       },
     });
+    res.setHeader("X-Webhook-Status", webhookOk ? "ok" : "failed");
 
     // --- PDF ---
     const buffers = [];
     const doc = new PDFDocument({ size: "A4", margin: 56 });
+    doc.on("data", (ch) => buffers.push(ch));
 
-    // ===== POLICES: Arial si dispo, sinon Helvetica =====
+    // Polices : Arial si dispo, sinon Helvetica
     let bodyFont = "Helvetica", boldFont = "Helvetica-Bold", italicFont = "Helvetica-Oblique";
     try {
       const regularPath = path.join(process.cwd(), "public", "fonts", "Arial.ttf");
@@ -143,7 +180,7 @@ export default async function handler(req, res) {
     const writeH2 = (t) => { doc.font(boldFont).fontSize(H2).text(t, { align: "left" }); };
     const para    = (t, opts={}) => { doc.font(bodyFont).fontSize(P).text(t, { align: "justify", lineGap: 2, ...opts }); };
 
-    // ---------- ESPACEMENTS ----------
+    // Espacements (tes valeurs conservées)
     const SPACE_AFTER_LOGO          = 32;
     const SPACE_BEFORE_ENTRE        = 100;
     const SPACE_AFTER_ENTRE_HEADING = 25;
@@ -177,23 +214,18 @@ export default async function handler(req, res) {
     const GAP_BEFORE_ART6_TITLE        = 8;
     const GAP_AFTER_ART6_TITLE         = 8;
 
-    // --- Signature / lieu & date / image ---
+    // Signature / lieu & date / image
     const GAP_BEFORE_PLACE_DATE        = 12;
     const GAP_AFTER_PLACE_DATE         = 10;
     const GAP_AFTER_SIGNATURE_HEADING  = 6;
     const GAP_AFTER_SIGN_NAME          = 4;
 
-    // Image de signature
     const SIGN_IMAGE_PATH              = path.join(process.cwd(), "public", "signature-owner.png");
     const GAP_BEFORE_SIGNATURE_IMAGE   = 8;
     const SIGN_IMAGE_WIDTH             = 100;
     const SIGN_IMAGE_HEIGHT            = null;
-    // ---------------------------------------
 
-    // -------- Contenu PDF --------
-    doc.on("data", (ch) => buffers.push(ch));
-
-    // Titre + logo
+    // ---- Contenu PDF
     const logoPath = path.join(process.cwd(), "public", "contract-logo.png");
     const bottomOfLogoY = drawCenteredImage(doc, logoPath, { y: 30, width: 180 });
     if (bottomOfLogoY) doc.y = bottomOfLogoY + SPACE_AFTER_LOGO;
@@ -202,14 +234,12 @@ export default async function handler(req, res) {
     doc.moveDown(0.2);
     doc.font(boldFont).fontSize(H1).text("Accord de confidentialité et d'audit gratuit", { align: "center" });
 
-    // “Entre :” + clause société
     doc.y += SPACE_BEFORE_ENTRE;
     writeH2("Entre :");
     doc.y += SPACE_AFTER_ENTRE_HEADING;
     para(clause);
     doc.y += SPACE_AFTER_CLAUSE;
 
-    // Bloc client/owner
     doc.y += BLOC_GAP_BEFORE_CLIENT_ALIAS;
     doc.font(italicFont).fontSize(P).text('Ci-après dénommée “Le client”', { align: "left", lineBreak: true });
 
@@ -230,7 +260,7 @@ export default async function handler(req, res) {
     doc.y += BLOC_GAP_BEFORE_OWNER_ALIAS;
     doc.font(italicFont).fontSize(P).text('Ci-après dénommée “Owner”', { align: "left", lineBreak: true });
 
-    // PRÉAMBULE + Article 1
+    // Préambule + Article 1
     doc.y += GAP_BEFORE_PREAMBULE_TITLE;
     doc.font(boldFont).fontSize(H1).text("Préambule", { align: "center" });
 
@@ -252,7 +282,7 @@ export default async function handler(req, res) {
       "document."
     );
 
-    // Article 2
+    // Articles 2 → 6
     doc.y += GAP_BEFORE_ART2_TITLE;
     writeH2("Article 2 : Confidentialité des données");
 
@@ -272,7 +302,6 @@ export default async function handler(req, res) {
 
     doc.y += GAP_AFTER_ART2_LIST;
 
-    // Article 3
     doc.y += GAP_BEFORE_ART3_TITLE;
     writeH2("Article 3 : Durée de conservation des données");
 
@@ -282,7 +311,6 @@ export default async function handler(req, res) {
       "délai de 15 jours suivant la réalisation de l’audit."
     );
 
-    // Article 4
     doc.y += GAP_BEFORE_ART4_TITLE;
     writeH2("Article 4 : Non-utilisation à d’autres fins");
 
@@ -292,7 +320,6 @@ export default async function handler(req, res) {
       "autres que celles strictement nécessaires à la réalisation de l’audit."
     );
 
-    // Article 5
     doc.y += GAP_BEFORE_ART5_TITLE;
     writeH2("Article 5 : Responsabilité");
 
@@ -303,7 +330,6 @@ export default async function handler(req, res) {
       "limiter les conséquences pour les parties concernées."
     );
 
-    // Article 6
     doc.y += GAP_BEFORE_ART6_TITLE;
     writeH2("Article 6 : Droit applicable");
 
@@ -313,14 +339,11 @@ export default async function handler(req, res) {
       "à son exécution sera soumis aux juridictions compétentes."
     );
 
-    // Bloc signature
+    // Signature
     const genDate  = new Date().toLocaleDateString("fr-FR");
 
     doc.y += GAP_BEFORE_PLACE_DATE;
-    doc.font(bodyFont).fontSize(P).text(
-      `Fait à Silicon Oasis (UAE), le ${genDate}.`,
-      { align: "left" }
-    );
+    doc.font(bodyFont).fontSize(P).text(`Fait à Silicon Oasis (UAE), le ${genDate}.`, { align: "left" });
 
     doc.y += GAP_AFTER_PLACE_DATE;
     doc.font(boldFont).fontSize(H2).text("Pour Owner", { align: "left" });
@@ -332,19 +355,13 @@ export default async function handler(req, res) {
     doc.font(bodyFont).fontSize(P).text("En sa qualité de Président", { align: "left" });
 
     doc.y += GAP_BEFORE_SIGNATURE_IMAGE;
-    drawLeftImage(doc, SIGN_IMAGE_PATH, {
-      y: doc.y,
-      width: SIGN_IMAGE_WIDTH,
-      height: SIGN_IMAGE_HEIGHT,
-    });
+    drawLeftImage(doc, SIGN_IMAGE_PATH, { y: doc.y, width: SIGN_IMAGE_WIDTH, height: SIGN_IMAGE_HEIGHT });
 
-    // ---------- Nom de fichier dynamique ----------
+    // Envoi du PDF
     const filename = makePdfFilename({ body, company: coyParsed });
-
     doc.on("end", () => {
       const pdfBuffer = Buffer.concat(buffers);
       res.setHeader("Content-Type", "application/pdf");
-      // UTF-8 + fallback ASCII (compat navigateurs)
       res.setHeader(
         "Content-Disposition",
         `inline; filename="${filename.ascii}"; filename*=UTF-8''${encodeURIComponent(filename.utf8)}`
@@ -352,7 +369,6 @@ export default async function handler(req, res) {
       res.status(200).send(pdfBuffer);
     });
 
-    // Terminer (pas de page supplémentaire)
     doc.end();
   } catch (e) {
     console.error(e);
