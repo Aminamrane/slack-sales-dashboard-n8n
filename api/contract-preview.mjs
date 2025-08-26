@@ -87,7 +87,7 @@ export default async function handler(req, res) {
       company: coyForSheet,
       clause,
       meta: {
-        clientProspect: "Audit Prévu",
+        clientProspect: "Contrat envoyé",
         typeEntreprise: "Général",
         generatedAt: new Date().toISOString(),
       },
