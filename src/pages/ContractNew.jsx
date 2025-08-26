@@ -19,10 +19,23 @@ export default function ContractNew() {
 
   const [errors, setErrors] = useState({});
   const [preview, setPreview] = useState("");
-  const [touched, setTouched] = useState({});      // ← what the user has interacted with
-  const [showAllErrors, setShowAllErrors] = useState(false); // ← after failed PDF generation
+  const [touched, setTouched] = useState({});
+  const [showAllErrors, setShowAllErrors] = useState(false);
 
-  // helpers
+  // --- helpers pour le nom du fichier ---
+  const stripDiacritics = (s = "") =>
+    s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const safeAscii = (s = "") =>
+    stripDiacritics(s).replace(/[^a-zA-Z0-9 _.\-]+/g, "").replace(/\s+/g, " ").trim();
+
+  const computePdfFilename = (c) => {
+    const repName = c?.representatives?.[0]?.fullName?.trim();
+    const display = repName || c?.legalName || "Document";
+    const base = `${display} - Clause de confidentialité`;
+    return `${safeAscii(base) || "Clause de confidentialite"}.pdf`;
+  };
+
+  // --- touches / setters ---
   const markTouched = (path) =>
     setTouched((t) => (t[path] ? t : { ...t, [path]: true }));
 
@@ -55,7 +68,7 @@ export default function ContractNew() {
       representatives: prev.representatives.filter((_, i) => i !== idx),
     }));
 
-  // validation + aperçu (background)
+  // --- validation + aperçu ---
   const validateAndPreview = () => {
     const flat = {};
 
@@ -75,7 +88,7 @@ export default function ContractNew() {
         if (!flat[key]) flat[key] = issue.message;
       }
       setErrors(flat);
-      setPreview(""); // on n'affiche l'aperçu que si tout est ok
+      setPreview("");
       return false;
     }
 
@@ -89,10 +102,11 @@ export default function ContractNew() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [company]);
 
+  // --- Génération PDF (Option A: téléchargement avec nom custom) ---
   const generatePdfDraft = async () => {
     const ok = validateAndPreview();
     if (!ok) {
-      setShowAllErrors(true); // révèle toutes les erreurs si l'utilisateur tente de générer
+      setShowAllErrors(true);
       alert("Corrige les erreurs avant de générer le PDF.");
       return;
     }
@@ -109,7 +123,14 @@ export default function ContractNew() {
       }
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
-      window.open(url, "_blank");
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = computePdfFilename(company); // ← forcer le nom du fichier
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
     } catch (err) {
       console.error(err);
       alert("Erreur réseau lors de la génération du PDF.");
@@ -322,11 +343,7 @@ export default function ContractNew() {
             );
           })}
 
-          <button
-            type="button"
-            onClick={addRep}
-            className="btn-ghost"
-          >
+          <button type="button" onClick={addRep} className="btn-ghost">
             + Ajouter un représentant
           </button>
         </fieldset>
