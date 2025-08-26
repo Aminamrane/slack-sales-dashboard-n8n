@@ -152,7 +152,7 @@ export default function Leaderboard() {
     responsive:true,
     plugins:{
       title:{ ...commonTitle, text:"Répartition tunnel d'acquisition" },
-      legend:{ display:true, position:"left", align:"start", labels:{ boxWidth:12, padding:8, font:{size:12,weight:"500"} } },
+      legend:{ display:true, position:"centered", align:"start", labels:{ boxWidth:12, padding:8, font:{size:12,weight:"500"} } },
       datalabels:{
         color:"#fff", font:{size:12,weight:"600"},
         textStrokeColor:"#000", textStrokeWidth:2,
@@ -200,7 +200,7 @@ export default function Leaderboard() {
     responsive:true,
     plugins:{
       title:{ ...commonTitle, text:"% de ventes par commercial" },
-      legend:{ display:true, position:"left", align:"start", labels:{ boxWidth:12, padding:8 } },
+      legend:{ display:true, position:"centered", align:"start", labels:{ boxWidth:12, padding:8 } },
       datalabels:{
         color:"#fff", font:{size:12,weight:"600"},
         textStrokeColor:"#000", textStrokeWidth:2,
