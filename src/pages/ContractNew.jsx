@@ -292,7 +292,7 @@ export default function ContractNew() {
                     onChange={(e) => setRep(idx, "fullName", e.target.value)}
                     onBlur={() => markTouched(fullKey)}
                     className="input"
-                    placeholder="Ismah"
+                    placeholder="Le nom et le prénom"
                   />
                   {showErr(fullKey) && (
                     <span className="error">{errors[fullKey]}</span>
