@@ -5,6 +5,37 @@ import PDFDocument from "pdfkit";
 import { CompanySchema } from "../src/contracts/schemas.js";
 import { companyClause } from "../src/contracts/format.js";
 
+// ---------- Helpers nom de fichier ----------
+const stripDiacritics = (s = "") =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+const safeAscii = (s = "") =>
+  stripDiacritics(s).replace(/[^a-zA-Z0-9 _.\-]+/g, "").replace(/\s+/g, " ").trim();
+
+const makePdfFilename = ({ body, company }) => {
+  // 1er représentant -> "Nom complet"
+  const full = (body?.company?.representatives?.[0]?.fullName || "").trim().replace(/\s+/g, " ");
+  let displayName = full;
+
+  // Si "Prénom Nom", on génère "Nom Prénom"
+  if (full) {
+    const parts = full.split(" ");
+    if (parts.length >= 2) {
+      const prenom = parts[0];
+      const nom = parts.slice(1).join(" ");
+      displayName = `${nom} ${prenom}`; // ordre demandé: Nom puis Prénom
+    }
+  }
+
+  // fallback : raison sociale
+  if (!displayName) displayName = company?.legalName || "Document";
+
+  const base = `${displayName} - Clause de confidentialité`;
+  return {
+    utf8: `${base}.pdf`,
+    ascii: `${safeAscii(base) || "Clause de confidentialite"}.pdf`,
+  };
+};
+
 // ---- util: parse JSON body (Vercel dev/serverless)
 async function readJson(req) {
   return await new Promise((resolve, reject) => {
@@ -96,13 +127,6 @@ export default async function handler(req, res) {
     // --- PDF ---
     const buffers = [];
     const doc = new PDFDocument({ size: "A4", margin: 56 });
-    doc.on("data", (ch) => buffers.push(ch));
-    doc.on("end", () => {
-      const pdfBuffer = Buffer.concat(buffers);
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", 'inline; filename="contract-draft.pdf"');
-      res.status(200).send(pdfBuffer);
-    });
 
     // ===== POLICES: Arial si dispo, sinon Helvetica =====
     let bodyFont = "Helvetica", boldFont = "Helvetica-Bold", italicFont = "Helvetica-Oblique";
@@ -119,9 +143,7 @@ export default async function handler(req, res) {
     const writeH2 = (t) => { doc.font(boldFont).fontSize(H2).text(t, { align: "left" }); };
     const para    = (t, opts={}) => { doc.font(bodyFont).fontSize(P).text(t, { align: "justify", lineGap: 2, ...opts }); };
 
-    // ----------------------------------------------------
-    // TES RÉGLAGES D’ESPACEMENT (inchangés)
-    // ----------------------------------------------------
+    // ---------- ESPACEMENTS ----------
     const SPACE_AFTER_LOGO          = 32;
     const SPACE_BEFORE_ENTRE        = 100;
     const SPACE_AFTER_ENTRE_HEADING = 25;
@@ -163,17 +185,19 @@ export default async function handler(req, res) {
 
     // Image de signature
     const SIGN_IMAGE_PATH              = path.join(process.cwd(), "public", "signature-owner.png");
-    const GAP_BEFORE_SIGNATURE_IMAGE   = 8;   // espace avant l’image
-    const SIGN_IMAGE_WIDTH             = 100; // ajuste librement (ou mets null et définis HEIGHT)
-    const SIGN_IMAGE_HEIGHT            = null;  // si tu veux forcer une hauteur
-    // ----------------------------------------------------
+    const GAP_BEFORE_SIGNATURE_IMAGE   = 8;
+    const SIGN_IMAGE_WIDTH             = 100;
+    const SIGN_IMAGE_HEIGHT            = null;
+    // ---------------------------------------
 
-    // -------- Page 1 --------
+    // -------- Contenu PDF --------
+    doc.on("data", (ch) => buffers.push(ch));
+
+    // Titre + logo
     const logoPath = path.join(process.cwd(), "public", "contract-logo.png");
     const bottomOfLogoY = drawCenteredImage(doc, logoPath, { y: 30, width: 180 });
     if (bottomOfLogoY) doc.y = bottomOfLogoY + SPACE_AFTER_LOGO;
 
-    // titres
     doc.font(boldFont).fontSize(H1).text("Engagement unilatéral", { align: "center" });
     doc.moveDown(0.2);
     doc.font(boldFont).fontSize(H1).text("Accord de confidentialité et d'audit gratuit", { align: "center" });
@@ -185,7 +209,7 @@ export default async function handler(req, res) {
     para(clause);
     doc.y += SPACE_AFTER_CLAUSE;
 
-    // bloc client/owner
+    // Bloc client/owner
     doc.y += BLOC_GAP_BEFORE_CLIENT_ALIAS;
     doc.font(italicFont).fontSize(P).text('Ci-après dénommée “Le client”', { align: "left", lineBreak: true });
 
@@ -206,7 +230,7 @@ export default async function handler(req, res) {
     doc.y += BLOC_GAP_BEFORE_OWNER_ALIAS;
     doc.font(italicFont).fontSize(P).text('Ci-après dénommée “Owner”', { align: "left", lineBreak: true });
 
-    // PRÉAMBULE + Art.1
+    // PRÉAMBULE + Article 1
     doc.y += GAP_BEFORE_PREAMBULE_TITLE;
     doc.font(boldFont).fontSize(H1).text("Préambule", { align: "center" });
 
@@ -228,7 +252,7 @@ export default async function handler(req, res) {
       "document."
     );
 
-    // ARTICLE 2
+    // Article 2
     doc.y += GAP_BEFORE_ART2_TITLE;
     writeH2("Article 2 : Confidentialité des données");
 
@@ -248,7 +272,7 @@ export default async function handler(req, res) {
 
     doc.y += GAP_AFTER_ART2_LIST;
 
-    // ARTICLE 3
+    // Article 3
     doc.y += GAP_BEFORE_ART3_TITLE;
     writeH2("Article 3 : Durée de conservation des données");
 
@@ -258,7 +282,7 @@ export default async function handler(req, res) {
       "délai de 15 jours suivant la réalisation de l’audit."
     );
 
-    // ARTICLE 4
+    // Article 4
     doc.y += GAP_BEFORE_ART4_TITLE;
     writeH2("Article 4 : Non-utilisation à d’autres fins");
 
@@ -268,7 +292,7 @@ export default async function handler(req, res) {
       "autres que celles strictement nécessaires à la réalisation de l’audit."
     );
 
-    // ARTICLE 5
+    // Article 5
     doc.y += GAP_BEFORE_ART5_TITLE;
     writeH2("Article 5 : Responsabilité");
 
@@ -279,7 +303,7 @@ export default async function handler(req, res) {
       "limiter les conséquences pour les parties concernées."
     );
 
-    // ARTICLE 6
+    // Article 6
     doc.y += GAP_BEFORE_ART6_TITLE;
     writeH2("Article 6 : Droit applicable");
 
@@ -289,7 +313,7 @@ export default async function handler(req, res) {
       "à son exécution sera soumis aux juridictions compétentes."
     );
 
-    // ------ BLOC SIGNATURE : lieu/date + signataire + image ------
+    // Bloc signature
     const genDate  = new Date().toLocaleDateString("fr-FR");
 
     doc.y += GAP_BEFORE_PLACE_DATE;
@@ -307,16 +331,28 @@ export default async function handler(req, res) {
     doc.y += GAP_AFTER_SIGN_NAME;
     doc.font(bodyFont).fontSize(P).text("En sa qualité de Président", { align: "left" });
 
-    // Image de signature (PNG) juste après
     doc.y += GAP_BEFORE_SIGNATURE_IMAGE;
     drawLeftImage(doc, SIGN_IMAGE_PATH, {
       y: doc.y,
       width: SIGN_IMAGE_WIDTH,
       height: SIGN_IMAGE_HEIGHT,
     });
-    // ------ FIN BLOC SIGNATURE ------
 
-    // ✅ PAS DE PAGE SUPPLÉMENTAIRE : on termine ici
+    // ---------- Nom de fichier dynamique ----------
+    const filename = makePdfFilename({ body, company: coyParsed });
+
+    doc.on("end", () => {
+      const pdfBuffer = Buffer.concat(buffers);
+      res.setHeader("Content-Type", "application/pdf");
+      // UTF-8 + fallback ASCII (compat navigateurs)
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="${filename.ascii}"; filename*=UTF-8''${encodeURIComponent(filename.utf8)}`
+      );
+      res.status(200).send(pdfBuffer);
+    });
+
+    // Terminer (pas de page supplémentaire)
     doc.end();
   } catch (e) {
     console.error(e);
