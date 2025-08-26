@@ -127,7 +127,7 @@ export default function ContractNew() {
 
   return (
     <div className="contract-page">
-      <h1 className="contract-title">Nouveau contrat</h1>
+      <h1 className="contract-title">Clause de confidentialité</h1>
       <p className="contract-subtitle">Renseigne les infos de l’entreprise.</p>
 
       <form>
