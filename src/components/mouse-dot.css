@@ -1,0 +1,12 @@
+.mouse-dot{
+  position: fixed;
+  left: 0; top: 0;
+  background: var(--dot-color, #041221);
+  border-radius: 9999px;
+  pointer-events: none;
+  z-index: 999999;
+  will-change: transform, width, height, opacity;
+}
+@media (pointer: coarse), (hover: none) {
+  .mouse-dot { display: none; }
+}
