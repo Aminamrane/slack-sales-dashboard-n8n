@@ -15,7 +15,7 @@ function App() {
   return (
     <BrowserRouter>
       {/* Global tiny blue dot following the cursor */}
-      <MouseDot size={10} lag={0.15} color="#2b8cff" /> 
+      <MouseDot size={10} lag={0.15} color="#071a31ff" /> 
       
       <Routes>
         <Route path="/" element={<Leaderboard />} />

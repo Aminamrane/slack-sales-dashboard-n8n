@@ -2,9 +2,21 @@
 import { useEffect, useRef } from "react";
 import "./mouse-dot.css";
 
+// Convert #RRGGBBAA → rgba(r,g,b,a)
+function hex8ToRgba(hex) {
+  const m = /^#?([A-Fa-f0-9]{8})$/.exec(hex);
+  if (!m) return null;
+  const v = parseInt(m[1], 16);
+  const r = (v >> 24) & 255;
+  const g = (v >> 16) & 255;
+  const b = (v >> 8) & 255;
+  const a = (v & 255) / 255;
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
 export default function MouseDot({
   size = 10,
-  color = "rgba(25, 37, 122, 1)",   // << safer than #RRGGBBAA
+  color = "rgba(14,20,62,1)", // safe default
   speed = 0.14,
   boostScale = 4,
   boostOpacity = 0.25,
@@ -21,21 +33,29 @@ export default function MouseDot({
   const raf = useRef(0);
   const currentBoostEl = useRef(null);
 
-  // Mount once
+  // Create or reuse a single global dot
   useEffect(() => {
     if (!enabled) return;
     if ("ontouchstart" in window && matchMedia("(pointer: coarse)").matches) return;
 
-    const dot = document.createElement("div");
-    dot.className = "mouse-dot";
+    let dot = document.getElementById("mouse-dot");
+    if (!dot) {
+      dot = document.createElement("div");
+      dot.id = "mouse-dot";
+      dot.className = "mouse-dot";
+      document.body.appendChild(dot);
+    }
+    dot.style.position = "fixed";
     dot.style.width = `${size}px`;
     dot.style.height = `${size}px`;
-    document.body.appendChild(dot);
+    dot.style.zIndex = "999999";
+    dot.style.pointerEvents = "none";
     dotRef.current = dot;
 
     const onMove = (e) => {
       target.current.x = e.clientX;
       target.current.y = e.clientY;
+
       const boostEl = (e.target instanceof Element) ? e.target.closest(".dot-boost") : null;
       if (boostEl && currentBoostEl.current !== boostEl) {
         currentBoostEl.current = boostEl;
@@ -47,6 +67,7 @@ export default function MouseDot({
         tOpacity.current = 1;
       }
     };
+
     const onMouseOver = (e) => {
       const boostEl = (e.target instanceof Element) ? e.target.closest(".dot-boost") : null;
       if (boostEl) {
@@ -70,8 +91,11 @@ export default function MouseDot({
     document.addEventListener("mouseout", onMouseOut, true);
 
     const tick = () => {
+      // position easing
       pos.current.x += (target.current.x - pos.current.x) * speed;
       pos.current.y += (target.current.y - pos.current.y) * speed;
+
+      // grow/fade easing
       scale.current += (tScale.current - scale.current) * growSpeed;
       opacity.current += (tOpacity.current - opacity.current) * growSpeed;
 
@@ -93,16 +117,20 @@ export default function MouseDot({
       window.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseover", onMouseOver, true);
       document.removeEventListener("mouseout", onMouseOut, true);
-      dot.remove();
+      // Do NOT remove the element here (we reuse the single #mouse-dot)
     };
   }, [enabled, size, speed, boostScale, boostOpacity, growSpeed]);
 
-  // ⬇️ Update color live whenever the prop changes
+  // Update color live whenever the prop changes (with hex8 support)
   useEffect(() => {
-    if (dotRef.current) {
-      dotRef.current.style.setProperty("--dot-color", color);
-      dotRef.current.style.backgroundColor = color; // direct, bypasses var()/fallback issues
+    const dot = dotRef.current || document.getElementById("mouse-dot");
+    if (!dot) return;
+    let resolved = color;
+    if (/^#([0-9a-f]{8})$/i.test(color)) {
+      const rgba = hex8ToRgba(color);
+      if (rgba) resolved = rgba;
     }
+    dot.style.backgroundColor = resolved;
   }, [color]);
 
   return null;
