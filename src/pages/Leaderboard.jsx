@@ -1,4 +1,3 @@
-// src/pages/Leaderboard.jsx
 import { useEffect, useState } from "react";
 import { useNavigate }          from "react-router-dom";
 import { createClient }         from "@supabase/supabase-js";
@@ -27,7 +26,7 @@ export default function Leaderboard() {
   const [loading, setLoading]     = useState(true);
   const [view, setView]           = useState("table");
 
-  // NEW: range selector ("all" | "month")
+  // Range selector ("all" | "month")
   const [range, setRange]         = useState("month");
 
   useEffect(() => {
@@ -113,7 +112,7 @@ export default function Leaderboard() {
 
       setLoading(false);
     })();
-  }, [range]); // re-fetch when range changes
+  }, [range]);
 
   const exportToExcel = () => {
     const wsData = rows.map((r,i)=>({
@@ -216,17 +215,16 @@ export default function Leaderboard() {
     <div style={{ padding:0, fontFamily:"sans-serif" }}>
       <div className="board-frame">
 
-        {/* NEW bouton contract */}
-      <button className="export-btn" onClick={() => navigate("/contracts/new")}>
-        📄 NDA
-      </button>
+        {/* bouton contract */}
+        <button className="export-btn" onClick={() => navigate("/contracts/new")}>
+          📄 NDA
+        </button>
 
         <div className="view-toggle">
           <button
             className={`toggle-btn ${view==="table"?"active":""}`}
             onClick={()=>setView("table")}
           >
-            
             Tableaux
           </button>
           <button
@@ -236,7 +234,7 @@ export default function Leaderboard() {
             Charts
           </button>
 
-          {/* NEW: range selector */}
+          {/* range selector */}
           <select
             value={range}
             onChange={(e)=>setRange(e.target.value)}
@@ -252,18 +250,27 @@ export default function Leaderboard() {
           <h1 className="leaderboard-title">Suivi des ventes</h1>
         </div>
 
+        {/* KPIs — add .dot-boost to the zones we want to enlarge the dot */}
         <div className="totals-block">
           <div className="totals-row">
             <div>
               <span className="totals-label">Total Cash</span><br/>
-              <span className="totals-value cash">{totals.cash.toLocaleString("fr-FR")} €</span>
+              <span className="totals-value cash dot-boost">
+                {totals.cash.toLocaleString("fr-FR")} €
+              </span>
             </div>
             <div>
               <span className="totals-label">Total Revenu</span><br/>
-              <span className="totals-value revenu">{totals.revenu.toLocaleString("fr-FR")} €</span>
+              <span className="totals-value revenu dot-boost">
+                {totals.revenu.toLocaleString("fr-FR")} €
+              </span>
             </div>
           </div>
-          <div className="totals-sales">Total ventes: {totals.ventes}</div>
+
+          {/* Make the WHOLE line (label + number) a boost zone */}
+          <div className="totals-sales dot-boost">
+            Total ventes: {totals.ventes}
+          </div>
         </div>
 
         {loading && <p>Loading…</p>}
