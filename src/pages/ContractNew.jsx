@@ -23,7 +23,7 @@ export default function ContractNew() {
   const [preview, setPreview] = useState("");
   const [step, setStep] = useState(0); // 0..4
 
-  // ----- helpers filename -----
+  // ----- filename helpers -----
   const stripDiacritics = (s = "") => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const safeAscii = (s = "") =>
     stripDiacritics(s).replace(/[^a-zA-Z0-9 _.\-]+/g, "").replace(/\s+/g, " ").trim();
@@ -66,31 +66,37 @@ export default function ContractNew() {
       representatives: prev.representatives.filter((_, i) => i !== idx),
     }));
 
-  // ----- validation & preview -----
-  const validateAndPreview = () => {
+  // ----- central synchronous validation -----
+  const buildValidation = (c) => {
     const flat = {};
 
-    const email = (company.email || "").trim();
+    // light email / phone checks
+    const email = (c.email || "").trim();
     if (!email) flat["email"] = "Email requis";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) flat["email"] = "Email invalide";
 
-    const phone = (company.phone || "").trim();
+    const phone = (c.phone || "").trim();
     if (phone && !/^[\d+\s().-]{6,}$/.test(phone)) flat["phone"] = "Numéro invalide";
 
-    const res = CompanySchema.safeParse(company);
+    const res = CompanySchema.safeParse(c);
     if (!res.success) {
       for (const issue of res.error.issues) {
         const key = issue.path.join(".");
         if (!flat[key]) flat[key] = issue.message;
       }
-      setErrors(flat);
-      setPreview("");
-      return false;
     }
 
-    setErrors({});
-    setPreview(companyClause({ company: res.data }));
-    return true;
+    const ok = Object.keys(flat).length === 0;
+    const previewText = ok && res.success ? companyClause({ company: res.data }) : "";
+    return { ok, flat, previewText };
+  };
+
+  // keep state (errors + preview) in sync while typing
+  const validateAndPreview = () => {
+    const { ok, flat, previewText } = buildValidation(company);
+    setErrors(flat);
+    setPreview(previewText);
+    return ok;
   };
 
   useEffect(() => { validateAndPreview(); /* eslint-disable-next-line */ }, [company]);
@@ -118,11 +124,11 @@ export default function ContractNew() {
     !isValidSiren(normalizedSiren) &&
     !errors["siren"];
 
+  // use synchronous validation result here (no stale state)
   const isCurrentStepValid = () => {
-    const ok = validateAndPreview();
-    if (!ok) return false;
-    if (!stepFields.length) return true;
-    return !stepFields.some((k) => errors[k]);
+    const { flat } = buildValidation(company);
+    if (!stepFields.length) return true;                // reps / preview steps
+    return !stepFields.some((k) => flat[k]);            // only block on this step's fields
   };
 
   const goNext = () => {
@@ -182,7 +188,6 @@ export default function ContractNew() {
           <h1 className="contract-title">Clause de confidentialité</h1>
           <p className="contract-subtitle">Renseigne les infos de l’entreprise.</p>
 
-          {/* PANEL (changes per step) */}
           {/* STEP 0 — Identité */}
           {step === 0 && (
             <form>
@@ -405,7 +410,7 @@ export default function ContractNew() {
             </>
           )}
 
-          {/* Bottom nav (fixed at card bottom) */}
+          {/* Bottom nav */}
           <div className="wizard-nav">
             <button type="button" className="btn-ghost" onClick={goBack} disabled={step === 0}>
               ← Précédent
