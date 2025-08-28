@@ -240,7 +240,7 @@ export default function Leaderboard() {
             onChange={(e)=>setRange(e.target.value)}
             style={{ marginLeft: '1rem', padding: '.35rem .6rem', borderRadius: '.5rem', border: '1px solid #d1d5db' }}
           >
-            <option value="month">This month</option>
+            <option value="month">Ce mois-ci</option>
             <option value="all">All time</option>
           </select>
         </div>
