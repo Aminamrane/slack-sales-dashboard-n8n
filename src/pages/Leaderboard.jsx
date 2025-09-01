@@ -252,15 +252,10 @@ export default function Leaderboard() {
           <h1 className="leaderboard-title">Suivi des ventes</h1>
         </div>
 
-        {/* KPIs — zones boost pour le curseur */}
+        {/* KPIs — CASH removed */}
         <div className="totals-block">
           <div className="totals-row">
-            <div>
-              <span className="totals-label">Total Cash</span><br/>
-              <span className="totals-value cash dot-boost">
-                {totals.cash.toLocaleString("fr-FR")} €
-              </span>
-            </div>
+            {/* Total Cash removed intentionally */}
             <div>
               <span className="totals-label">Total Revenu</span><br/>
               <span className="totals-value revenu dot-boost">
@@ -285,7 +280,7 @@ export default function Leaderboard() {
                   <th>#</th>
                   <th>Name</th>
                   <th align="right">Sales</th>
-                  <th align="right">Cash €/mois</th>
+                  {/* Cash €/mois column removed */}
                   <th align="right">Revenu €</th>
                 </tr>
               </thead>
@@ -302,7 +297,7 @@ export default function Leaderboard() {
                     <td>{["🥇","🥈","🥉"][i]||i+1}</td>
                     <td className="name-cell"><img src={r.avatar} className="avatar" alt=""/> {r.name}</td>
                     <td align="right">{r.sales}</td>
-                    <td align="right">{r.cash.toLocaleString("fr-FR")} €</td>
+                    {/* Cash €/mois cell removed */}
                     <td align="right">{r.revenu.toLocaleString("fr-FR")} €</td>
                   </tr>
                 ))}
@@ -328,3 +323,4 @@ export default function Leaderboard() {
     </div>
   );
 }
+
