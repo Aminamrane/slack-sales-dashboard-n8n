@@ -5,6 +5,7 @@ import * as XLSX                from "xlsx";
 import { saveAs }               from "file-saver";
 import myLogo                   from "../assets/my_image.png";
 
+
 import Chart from "chart.js/auto";
 import ChartDataLabels from "chartjs-plugin-datalabels";
 import { Doughnut, Pie, Bar }  from "react-chartjs-2";
@@ -215,7 +216,8 @@ export default function Leaderboard() {
     <div style={{ padding:0, fontFamily:"sans-serif" }}>
       <div className="board-frame">
 
-        {/* bouton contract */}
+
+        {/* bouton contract (NDA) */}
         <button className="export-btn" onClick={() => navigate("/contracts/new")}>
           📄 NDA
         </button>
@@ -250,7 +252,7 @@ export default function Leaderboard() {
           <h1 className="leaderboard-title">Suivi des ventes</h1>
         </div>
 
-        {/* KPIs — add .dot-boost to the zones we want to enlarge the dot */}
+        {/* KPIs — zones boost pour le curseur */}
         <div className="totals-block">
           <div className="totals-row">
             <div>
@@ -267,14 +269,13 @@ export default function Leaderboard() {
             </div>
           </div>
 
-          {/* Make the WHOLE line (label + number) a boost zone */}
           <div className="totals-sales dot-boost">
             Total ventes: {totals.ventes}
           </div>
         </div>
 
         {loading && <p>Loading…</p>}
-        {!loading && rows.length===0 && <p>No sales yet.</p>}
+        {!loading && rows.length===0 && <p>Aucune vente ce mois-ci pour l’instant.</p>}
 
         {view==="table" && !loading && rows.length>0 && (
           <div className="leaderboard-wrapper">
