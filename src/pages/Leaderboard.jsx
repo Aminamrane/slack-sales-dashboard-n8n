@@ -83,11 +83,12 @@ export default function Leaderboard() {
         }
       });
 
-      setRows(
-        Object.values(stats)
-          .map(({ _last, ...rest }) => rest)
-          .sort((a, b) => b.sales - a.sales || b.cash - a.cash)
-      );
+   setRows(
+  Object.values(stats)
+    .map(({ _last, ...rest }) => rest)
+    // primary: sales desc, tiebreaker: revenu desc, then (optional) cash desc
+    .sort((a, b) => (b.sales - a.sales) || (b.revenu - a.revenu) || (b.cash - a.cash))
+);
 
       // Tunnel
       const tunnel = {};
