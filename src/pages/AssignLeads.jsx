@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import "./assign.css";
 
-const API   = import.meta.env.VITE_ASSIGN_API;      // MUST be .../exec
-const TOKEN = import.meta.env.VITE_ASSIGN_TOKEN;
+const API   = import.meta.env.VITE_ASSIGN_API;      // e.g. https://script.google.com/macros/s/XXX/exec
+const TOKEN = import.meta.env.VITE_ASSIGN_TOKEN;    // must match API_TOKEN in Apps Script
 
 export default function AssignLeads() {
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError]     = useState("");
   const [employees, setEmployees] = useState([]);   // [{key,label}]
-  const [leads, setLeads] = useState([]);           // last 50, newest first
+  const [leads, setLeads] = useState([]);           // last 50
   const [q, setQ] = useState("");
 
   useEffect(() => { fetchList(); }, []);
@@ -16,7 +16,7 @@ export default function AssignLeads() {
   async function fetchList() {
     setLoading(true); setError("");
     try {
-      const url = `${API}?action=list&token=${encodeURIComponent(TOKEN)}&rows=50`;
+      const url = `${API}?action=list&token=${encodeURIComponent(TOKEN)}`;
       const res = await fetch(url);
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || res.statusText);
@@ -42,13 +42,13 @@ export default function AssignLeads() {
     return list;
   }, [q, leads]);
 
-  // Helper: POST JSON without triggering CORS preflight
-  async function postJsonNoPreflight(url, payload, timeoutMs = 15000) {
+  // POST without preflight (text/plain)
+  async function postJsonNoPreflight(payload, timeoutMs = 15000) {
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), timeoutMs);
-    const res = await fetch(url, {
+    const res = await fetch(API, {
       method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" }, // <-- key change
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
@@ -59,31 +59,23 @@ export default function AssignLeads() {
   }
 
   async function onAssignChange(key, newAssignee) {
-    // optimistic UI
+    // optimistic
     setLeads(prev =>
-      prev.map(l => l.key === key ? { ...l, assignee: newAssignee, _status: "saving", _err: "" } : l)
+      prev.map(l => l.key === key ? { ...l, assignee: newAssignee, _status:"saving", _err:"" } : l)
     );
-
     try {
-      await postJsonNoPreflight(API, {
-        token: TOKEN,
-        action: "assign",
-        key,
-        assignee: newAssignee,
-      });
-
-      setLeads(prev => prev.map(l => l.key === key ? { ...l, _status: "saved" } : l));
+      await postJsonNoPreflight({ token:TOKEN, action:"assign", key, assignee:newAssignee });
+      setLeads(prev => prev.map(l => l.key === key ? { ...l, _status:"saved" } : l));
       setTimeout(() => {
-        setLeads(prev => prev.map(l => l.key === key ? { ...l, _status: "idle" } : l));
-      }, 800);
-      // optional: refresh from server if you want to re-pull everything
-      // await fetchList();
+        setLeads(prev => prev.map(l => l.key === key ? { ...l, _status:"idle" } : l));
+      }, 700);
+      // Optionally re-sync from server: await fetchList();
     } catch (e) {
-      console.error("Assign failed:", e?.message || e);
+      const msg = e?.message || "Assign failed";
       setLeads(prev =>
-        prev.map(l => l.key === key ? { ...l, _status: "error", _err: e?.message || "Failed to fetch" } : l)
+        prev.map(l => l.key === key ? { ...l, _status:"error", _err: msg } : l)
       );
-      alert(`Assign failed:\n${e?.message || e}`);
+      alert(`Assign failed:\n${msg}`);
     }
   }
 
@@ -154,16 +146,13 @@ export default function AssignLeads() {
       </div>
 
       <p className="helper" style={{marginTop:12}}>
-        Ce tableau affiche <b>les 50 dernières lignes</b>.  
         Pour mettre un lead de côté, choisissez <b>0 (parqué)</b>.
       </p>
     </div>
   );
 }
 
-function cleanTel(t) {
-  return String(t).replace(/[^\d+]/g, "");
-}
+function cleanTel(t){ return String(t).replace(/[^\d+]/g,''); }
 
 function AssignSelect({ current, employees, onChange, status, err }) {
   return (
