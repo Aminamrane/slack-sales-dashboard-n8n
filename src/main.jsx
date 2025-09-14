@@ -1,3 +1,4 @@
+// src/main.jsx
 import "./index.css";
 import React from "react";
 import ReactDOM from "react-dom/client";
@@ -8,26 +9,72 @@ import EmployeeSales from "./pages/EmployeeSales.jsx";
 import Contrat       from "./pages/Contrat.jsx";
 import Signature     from "./pages/Signature.jsx";
 import ContractNew   from "./pages/ContractNew.jsx";
-import ClientNew from "./pages/ClientNew.jsx";
-import AssignLeads from './pages/AssignLeads.jsx';
+import ClientNew     from "./pages/ClientNew.jsx";
+import AssignLeads   from "./pages/AssignLeads.jsx";
+import AuthCallback  from "./pages/AuthCallback.jsx";
 
-import MouseDot from "./components/MouseDot.jsx"; // 👈 add this
+import ProtectedRoute from "./routes/ProtectedRoute.jsx";
+import MouseDot from "./components/MouseDot.jsx";
 
 function App() {
   return (
     <BrowserRouter>
-      {/* Global tiny blue dot following the cursor */}
-      <MouseDot size={10} lag={0.15} color="#071a31ff" /> 
-      
-      <Routes>
-        <Route path="/assign" element={<AssignLeads />} />
+      <MouseDot size={10} lag={0.15} color="#071a31ff" />
 
-        <Route path="/client/new" element={<ClientNew />} />
+      <Routes>
+        {/* Public routes */}
         <Route path="/" element={<Leaderboard />} />
-        <Route path="/employee/:name" element={<EmployeeSales />} />
-        <Route path="/contrat" element={<Contrat />} />
-        <Route path="/contracts/new" element={<ContractNew />} />
-        <Route path="/signature/:id" element={<Signature />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+
+        {/* Everything below is protected */}
+        <Route
+          path="/employee/:name"
+          element={
+            <ProtectedRoute>
+              <EmployeeSales />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/contrat"
+          element={
+            <ProtectedRoute>
+              <Contrat />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/contracts/new"
+          element={
+            <ProtectedRoute>
+              <ContractNew />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/signature/:id"
+          element={
+            <ProtectedRoute>
+              <Signature />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/client/new"
+          element={
+            <ProtectedRoute>
+              <ClientNew />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/assign"
+          element={
+            <ProtectedRoute>
+              <AssignLeads />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );
