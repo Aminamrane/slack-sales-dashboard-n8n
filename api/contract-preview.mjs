@@ -123,7 +123,7 @@ export default async function handler(req, res) {
     const typeEntreprise =
       body?.meta?.typeEntreprise ??
       body?.company?.businessType ??
-      "Générale";
+      "Général";
 
     // --- Detect EI from payload (either client sends "EI", or legacy "Autre" + empty rcsCity)
     const isEI =
