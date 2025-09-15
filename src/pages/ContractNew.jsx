@@ -216,7 +216,10 @@ export default function ContractNew() {
       const resp = await fetch("/api/contract-preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company: payloadCompany }),
+        body: JSON.stringify({
+          company: payloadCompany,
+          meta: { typeEntreprise: company.businessType || "Générale" },
+          }),
       });
       if (!resp.ok) {
         alert("Erreur génération PDF: " + (await resp.text()));
