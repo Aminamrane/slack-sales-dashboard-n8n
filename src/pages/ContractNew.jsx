@@ -16,7 +16,7 @@ const BUSINESS_TYPES = [
   "Esthétique",
   "Batiment",
   "Tech",
-  "Générale",
+  "Général",
 ];
 
 // Map UI value to what the schema expects
@@ -33,7 +33,7 @@ export default function ContractNew() {
     headOffice: { line1: "", postalCode: "", city: "", country: "France" },
     representatives: [{ fullName: "", role: "" }],
     // New: default business type
-    businessType: "Générale",
+    businessType: "Général",
   });
 
   const [errors, setErrors] = useState({});
@@ -218,7 +218,7 @@ export default function ContractNew() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           company: payloadCompany,
-          meta: { typeEntreprise: company.businessType || "Générale" },
+          meta: { typeEntreprise: company.businessType || "Général" },
           }),
       });
       if (!resp.ok) {
