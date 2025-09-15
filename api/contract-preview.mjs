@@ -6,15 +6,11 @@ import { CompanySchema } from "../src/contracts/schemas.js";
 import { companyClause } from "../src/contracts/format.js";
 
 /* -------------------------- Helpers nom de fichier ------------------------- */
-const stripDiacritics = (s = "") =>
-  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-const safeAscii = (s = "") =>
-  stripDiacritics(s).replace(/[^a-zA-Z0-9 _.\-]+/g, "").replace(/\s+/g, " ").trim();
+const stripDiacritics = (s = "") => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+const safeAscii = (s = "") => stripDiacritics(s).replace(/[^a-zA-Z0-9 _.\-]+/g, "").replace(/\s+/g, " ").trim();
 
 const makePdfFilename = ({ body, company }) => {
-  const full = (body?.company?.representatives?.[0]?.fullName || "")
-    .trim()
-    .replace(/\s+/g, " ");
+  const full = (body?.company?.representatives?.[0]?.fullName || "").trim().replace(/\s+/g, " ");
   let displayName = full;
 
   // "Prénom Nom" → "Nom Prénom"
@@ -40,7 +36,9 @@ async function readJson(req) {
   return await new Promise((resolve, reject) => {
     let data = "";
     req.on("data", (c) => (data += c));
-    req.on("end", () => { try { resolve(data ? JSON.parse(data) : {}); } catch (e) { reject(e); } });
+    req.on("end", () => {
+      try { resolve(data ? JSON.parse(data) : {}); } catch (e) { reject(e); }
+    });
     req.on("error", reject);
   });
 }
@@ -57,11 +55,8 @@ function drawCenteredImage(doc, absPath, { y, width, height } = {}) {
     const opts = (width && height) ? { fit: [w, h] } : (width ? { width: w } : { height: h });
     doc.image(absPath, x, topY, opts);
     return topY + (opts.fit ? opts.fit[1] : (h || 0));
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
-
 function drawLeftImage(doc, absPath, { y, width, height } = {}) {
   try {
     if (!absPath || !fs.existsSync(absPath)) return null;
@@ -70,13 +65,10 @@ function drawLeftImage(doc, absPath, { y, width, height } = {}) {
     const opts  = (width && height) ? { fit: [width, height] } : (width ? { width } : { height });
     doc.image(absPath, xLeft, topY, opts);
     return topY + (opts.fit ? opts.fit[1] : (opts.height ?? 0));
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 /* ------------------------- Webhook fiable (Option 1) ----------------------- */
-// Réglages (tu peux ajuster)
 const WEBHOOK_TIMEOUT_MS = 4500;
 const WEBHOOK_RETRIES    = 2;
 const WEBHOOK_BACKOFF_MS = 800;
@@ -86,12 +78,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
   const ctrl = new AbortController();
   const id = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { ...options, signal: ctrl.signal });
-    return res;
-  } finally {
-    clearTimeout(id);
-  }
+  try { return await fetch(url, { ...options, signal: ctrl.signal }); }
+  finally { clearTimeout(id); }
 }
 
 async function sendToWebhookReliable(payload, {
@@ -110,7 +98,6 @@ async function sendToWebhookReliable(payload, {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       }, timeoutMs);
-
       if (res.ok) return true;
       console.warn(`Webhook HTTP ${res.status} (attempt ${attempt + 1}/${retries + 1})`);
     } catch (err) {
@@ -130,25 +117,50 @@ export default async function handler(req, res) {
   }
 
   try {
-    const body   = await readJson(req);
-    const parsed = CompanySchema.safeParse(body.company);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.format() });
+    const body = await readJson(req);
+    const incoming = body?.company ?? {};
 
-    const coyParsed = parsed.data;
+    // --- Detect EI from payload (either client sends "EI", or legacy "Autre" + empty rcsCity)
+    const isEI =
+      String(incoming.legalForm || "").toUpperCase() === "EI" ||
+      (String(incoming.legalForm || "").toUpperCase() === "AUTRE" && !incoming.rcsCity);
 
-    // Infos extra pour Sheet (email/tél même si hors schéma)
-    const coyForSheet = {
-      ...coyParsed,
-      email: body.company?.email || "",
-      phone: body.company?.phone || "",
-      representatives: Array.isArray(body.company?.representatives)
-        ? body.company.representatives
-        : (coyParsed.representatives || []),
+    // --- Build a version ONLY for schema validation (schema doesn't know EI and requires rcsCity)
+    const forSchema = {
+      ...incoming,
+      legalForm: isEI ? "Autre" : incoming.legalForm,     // map EI → Autre so the schema accepts it
+      rcsCity: isEI ? (incoming.rcsCity || "Lille") : incoming.rcsCity, // dummy city to satisfy required field
     };
 
-    const clause = companyClause({ company: coyParsed });
+    const parsed = CompanySchema.safeParse(forSchema);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.format() });
+    }
 
-    // --- Envoi webhook FIABLE (attendu avec timeout + retries) ---
+    // --- Build the *actual* company object we want to use (and show) in the clause/PDF
+    const coyParsedSchemaOK = parsed.data;
+    const companyForOutput = isEI
+      ? { ...coyParsedSchemaOK, legalForm: "EI", rcsCity: "" }   // blank RCS city for EI
+      : coyParsedSchemaOK;
+
+    // Infos extra pour Sheet (email/tél même si hors schéma) — keep the original values
+    const coyForSheet = {
+      ...companyForOutput,
+      email: incoming?.email || "",
+      phone: incoming?.phone || "",
+      representatives: Array.isArray(incoming?.representatives)
+        ? incoming.representatives
+        : (companyForOutput.representatives || []),
+    };
+
+    // --- Clause text
+    let clause = companyClause({ company: companyForOutput });
+    if (isEI) {
+      // Some formatters leave "au RCS de ,". Clean it.
+      clause = clause.replace(/\s*au RCS de\s*,\s*/i, " ");
+    }
+
+    // --- Envoi webhook FIABLE
     const webhookOk = await sendToWebhookReliable({
       company: coyForSheet,
       clause,
@@ -180,7 +192,6 @@ export default async function handler(req, res) {
     const writeH2 = (t) => { doc.font(boldFont).fontSize(H2).text(t, { align: "left" }); };
     const para    = (t, opts={}) => { doc.font(bodyFont).fontSize(P).text(t, { align: "justify", lineGap: 2, ...opts }); };
 
-    // Espacements (tes valeurs conservées)
     const SPACE_AFTER_LOGO          = 32;
     const SPACE_BEFORE_ENTRE        = 100;
     const SPACE_AFTER_ENTRE_HEADING = 25;
@@ -214,7 +225,6 @@ export default async function handler(req, res) {
     const GAP_BEFORE_ART6_TITLE        = 8;
     const GAP_AFTER_ART6_TITLE         = 8;
 
-    // Signature / lieu & date / image
     const GAP_BEFORE_PLACE_DATE        = 12;
     const GAP_AFTER_PLACE_DATE         = 10;
     const GAP_AFTER_SIGNATURE_HEADING  = 6;
@@ -260,7 +270,7 @@ export default async function handler(req, res) {
     doc.y += BLOC_GAP_BEFORE_OWNER_ALIAS;
     doc.font(italicFont).fontSize(P).text('Ci-après dénommée “Owner”', { align: "left", lineBreak: true });
 
-    // Préambule + Article 1
+    // Préambule + Articles
     doc.y += GAP_BEFORE_PREAMBULE_TITLE;
     doc.font(boldFont).fontSize(H1).text("Préambule", { align: "center" });
 
@@ -282,7 +292,6 @@ export default async function handler(req, res) {
       "document."
     );
 
-    // Articles 2 → 6
     doc.y += GAP_BEFORE_ART2_TITLE;
     writeH2("Article 2 : Confidentialité des données");
 
@@ -358,7 +367,7 @@ export default async function handler(req, res) {
     drawLeftImage(doc, SIGN_IMAGE_PATH, { y: doc.y, width: SIGN_IMAGE_WIDTH, height: SIGN_IMAGE_HEIGHT });
 
     // Envoi du PDF
-    const filename = makePdfFilename({ body, company: coyParsed });
+    const filename = makePdfFilename({ body, company: companyForOutput });
     doc.on("end", () => {
       const pdfBuffer = Buffer.concat(buffers);
       res.setHeader("Content-Type", "application/pdf");
