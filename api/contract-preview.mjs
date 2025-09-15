@@ -120,6 +120,11 @@ export default async function handler(req, res) {
     const body = await readJson(req);
     const incoming = body?.company ?? {};
 
+    const typeEntreprise =
+      body?.meta?.typeEntreprise ??
+      body?.company?.businessType ??
+      "Générale";
+
     // --- Detect EI from payload (either client sends "EI", or legacy "Autre" + empty rcsCity)
     const isEI =
       String(incoming.legalForm || "").toUpperCase() === "EI" ||
@@ -148,6 +153,7 @@ export default async function handler(req, res) {
       ...companyForOutput,
       email: incoming?.email || "",
       phone: incoming?.phone || "",
+      businessType: typeEntreprise,
       representatives: Array.isArray(incoming?.representatives)
         ? incoming.representatives
         : (companyForOutput.representatives || []),
@@ -166,7 +172,7 @@ export default async function handler(req, res) {
       clause,
       meta: {
         clientProspect: "Audit Prévu",
-        typeEntreprise: "Général",
+        typeEntreprise,
         generatedAt: new Date().toISOString(),
       },
     });
