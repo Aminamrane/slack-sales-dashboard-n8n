@@ -3,7 +3,24 @@ import { CompanySchema, normalizeSiren, isValidSiren } from "../contracts/schema
 import { companyClause } from "../contracts/format.js";
 import "./contract.css";
 
-const LEGAL_FORMS = ["SARL", "SAS", "SASU", "SA", "EURL", "SCI", "Autre"];
+// UI shows EI instead of "Autre"
+const LEGAL_FORMS = ["SARL", "SAS", "SASU", "SA", "EURL", "SCI", "EI"];
+
+// New: business types list
+const BUSINESS_TYPES = [
+  "Ambulance",
+  "Micro créche",
+  "Dentiste",
+  "Pharmacie",
+  "Salle de sport",
+  "Esthétique",
+  "Batiment",
+  "Tech",
+  "Générale",
+];
+
+// Map UI value to what the schema expects
+const toSchemaLegalForm = (lf) => (lf === "EI" ? "Autre" : lf);
 
 export default function ContractNew() {
   const [company, setCompany] = useState({
@@ -15,6 +32,8 @@ export default function ContractNew() {
     phone: "",
     headOffice: { line1: "", postalCode: "", city: "", country: "France" },
     representatives: [{ fullName: "", role: "" }],
+    // New: default business type
+    businessType: "Générale",
   });
 
   const [errors, setErrors] = useState({});
@@ -44,6 +63,11 @@ export default function ContractNew() {
       let obj = next;
       for (let i = 0; i < parts.length - 1; i++) obj = obj[parts[i]];
       obj[parts.at(-1)] = value;
+
+      // If switching to EI, clear RCS city since it's not applicable
+      if (path === "legalForm" && value === "EI") {
+        next.rcsCity = "";
+      }
       return next;
     });
   };
@@ -78,7 +102,17 @@ export default function ContractNew() {
     const phone = (c.phone || "").trim();
     if (phone && !/^[\d+\s().-]{6,}$/.test(phone)) flat["phone"] = "Numéro invalide";
 
-    const res = CompanySchema.safeParse(c);
+    // Remove the UI-only businessType from schema payload (in case schema is strict)
+    const { businessType: _bt, ...rest } = c;
+
+    // Prepare payload for schema: map EI -> Autre, blank RCS city if EI
+    const cForSchema = {
+      ...rest,
+      legalForm: toSchemaLegalForm(c.legalForm),
+      rcsCity: c.legalForm === "EI" ? "" : c.rcsCity,
+    };
+
+    const res = CompanySchema.safeParse(cForSchema);
     if (!res.success) {
       for (const issue of res.error.issues) {
         const key = issue.path.join(".");
@@ -86,8 +120,21 @@ export default function ContractNew() {
       }
     }
 
+    // EI: RCS city is not required — drop any error about it
+    if (c.legalForm === "EI") delete flat["rcsCity"];
+
     const ok = Object.keys(flat).length === 0;
-    const previewText = ok && res.success ? companyClause({ company: res.data }) : "";
+
+    // --- PREVIEW: keep the UI label "EI" so it displays (EI), and clean "au RCS de ,"
+    const cForPreview = { ...cForSchema, legalForm: c.legalForm };
+    let previewText = "";
+    if (ok) {
+      previewText = companyClause({ company: cForPreview });
+      if (c.legalForm === "EI") {
+        previewText = previewText.replace(/\s*au RCS de\s*,\s*/i, " ");
+      }
+    }
+
     return { ok, flat, previewText };
   };
 
@@ -99,16 +146,23 @@ export default function ContractNew() {
     return ok;
   };
 
-  useEffect(() => { validateAndPreview(); /* eslint-disable-next-line */ }, [company]);
+  useEffect(() => {
+    validateAndPreview();
+    // eslint-disable-next-line
+  }, [company]);
 
   // ----- steps -----
   const steps = useMemo(
     () => [
-      { key: "identite",  title: "Identité",        fields: ["legalName", "legalForm", "siren", "rcsCity"] },
-      { key: "contacts",  title: "Contacts",        fields: ["email", "phone"] },
-      { key: "siege",     title: "Siège social",    fields: ["headOffice.line1","headOffice.postalCode","headOffice.city","headOffice.country"] },
-      { key: "reps",      title: "Représentants",   fields: [] },
-      { key: "apercu",    title: "Aperçu & PDF",    fields: [] },
+      { key: "identite", title: "Identité", fields: ["legalName", "legalForm", "siren", "rcsCity"] },
+      { key: "contacts", title: "Contacts", fields: ["email", "phone"] },
+      {
+        key: "siege",
+        title: "Siège social",
+        fields: ["headOffice.line1", "headOffice.postalCode", "headOffice.city", "headOffice.country"],
+      },
+      { key: "reps", title: "Représentants", fields: [] },
+      { key: "apercu", title: "Aperçu & PDF", fields: [] },
     ],
     []
   );
@@ -127,8 +181,10 @@ export default function ContractNew() {
   // use synchronous validation result here (no stale state)
   const isCurrentStepValid = () => {
     const { flat } = buildValidation(company);
-    if (!stepFields.length) return true;                // reps / preview steps
-    return !stepFields.some((k) => flat[k]);            // only block on this step's fields
+    if (!stepFields.length) return true; // reps / preview steps
+    const fieldsToCheck =
+      company.legalForm === "EI" ? stepFields.filter((k) => k !== "rcsCity") : stepFields;
+    return !fieldsToCheck.some((k) => flat[k]);
   };
 
   const goNext = () => {
@@ -142,21 +198,39 @@ export default function ContractNew() {
   // ----- PDF -----
   const generatePdfDraft = async () => {
     const ok = validateAndPreview();
-    if (!ok) { setShowAllErrors(true); alert("Corrige les erreurs avant de générer le PDF."); return; }
+    if (!ok) {
+      setShowAllErrors(true);
+      alert("Corrige les erreurs avant de générer le PDF.");
+      return;
+    }
     try {
+      // Strip UI-only field from server payload as well
+      const { businessType: _bt, ...rest } = company;
+
+      const payloadCompany = {
+        ...rest,
+        legalForm: toSchemaLegalForm(company.legalForm),
+        rcsCity: company.legalForm === "EI" ? "" : company.rcsCity,
+      };
+
       const resp = await fetch("/api/contract-preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company }),
+        body: JSON.stringify({ company: payloadCompany }),
       });
-      if (!resp.ok) { alert("Erreur génération PDF: " + (await resp.text())); return; }
+      if (!resp.ok) {
+        alert("Erreur génération PDF: " + (await resp.text()));
+        return;
+      }
 
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = computePdfFilename(company);
-      document.body.appendChild(a); a.click(); a.remove();
+      a.download = computePdfFilename(payloadCompany);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error(err);
@@ -213,7 +287,9 @@ export default function ContractNew() {
                     className="input"
                   >
                     {LEGAL_FORMS.map((f) => (
-                      <option key={f} value={f}>{f}</option>
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
                     ))}
                   </select>
                   {showErr("legalForm") && <span className="error">{errors["legalForm"]}</span>}
@@ -233,17 +309,20 @@ export default function ContractNew() {
                 </label>
               </div>
 
-              <label className="field">
-                Ville du RCS *
-                <input
-                  value={company.rcsCity}
-                  onChange={(e) => setField("rcsCity", e.target.value)}
-                  onBlur={() => markTouched("rcsCity")}
-                  className="input"
-                  placeholder="Lille"
-                />
-                {showErr("rcsCity") && <span className="error">{errors["rcsCity"]}</span>}
-              </label>
+              {/* RCS city is only relevant if NOT EI */}
+              {company.legalForm !== "EI" && (
+                <label className="field">
+                  Ville du RCS *
+                  <input
+                    value={company.rcsCity}
+                    onChange={(e) => setField("rcsCity", e.target.value)}
+                    onBlur={() => markTouched("rcsCity")}
+                    className="input"
+                    placeholder="Lille"
+                  />
+                  {showErr("rcsCity") && <span className="error">{errors["rcsCity"]}</span>}
+                </label>
+              )}
             </form>
           )}
 
@@ -292,9 +371,7 @@ export default function ContractNew() {
                     className="input"
                     placeholder="18 rue du commerce"
                   />
-                  {showErr("headOffice.line1") && (
-                    <span className="error">{errors["headOffice.line1"]}</span>
-                  )}
+                  {showErr("headOffice.line1") && <span className="error">{errors["headOffice.line1"]}</span>}
                 </label>
 
                 <div className="grid2">
@@ -321,9 +398,7 @@ export default function ContractNew() {
                       className="input"
                       placeholder="Lille"
                     />
-                    {showErr("headOffice.city") && (
-                      <span className="error">{errors["headOffice.city"]}</span>
-                    )}
+                    {showErr("headOffice.city") && <span className="error">{errors["headOffice.city"]}</span>}
                   </label>
                 </div>
 
@@ -391,6 +466,22 @@ export default function ContractNew() {
                   + Ajouter un représentant
                 </button>
               </fieldset>
+
+              {/* New: Type D'entreprise */}
+              <label className="field" style={{ marginTop: 12 }}>
+                Type D'entreprise
+                <select
+                  value={company.businessType}
+                  onChange={(e) => setField("businessType", e.target.value)}
+                  className="input"
+                >
+                  {BUSINESS_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </form>
           )}
 

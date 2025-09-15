@@ -2,25 +2,38 @@
    Contract Wizard (Arial)
    =============================== */
 
-/* Quick tuning:
-   --wizard-min-h : overall card min-height (reduce it to shrink bottom space)
-   --wizard-pad   : vertical padding inside the card */
+/* NEW — kill phantom scroll + use border-box everywhere */
+html, body { height: 100%; margin: 0; }
+*, *::before, *::after { box-sizing: border-box; }
+
 :root{
-  --wizard-min-h: 430px; /* ↓ try 440px if you want it shorter */
+  --wizard-min-h: 430px;
   --wizard-pad:   22px;
+  --wizard-left-gutter:  clamp(16px, 2.5vw, 32px);
+  --wizard-right-gutter: clamp(32px, 40vw, 215px); /* > left = shifts layout left */
 }
 
 /* Centered screen (no page scroll) */
 .wizard-outer{
   min-height: 100svh;
-  height: 100svh;           /* lock to viewport */
-  overflow: hidden;         /* remove unnecessary scroll */
+  height: 100svh;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: clamp(16px,3vw,32px);
-  background: #f6f8f9;
+  /* was: padding: clamp(16px,3vw,32px); */
+  padding-block: clamp(16px, 3vw, 32px);
+  padding-inline: var(--wizard-left-gutter) var(--wizard-right-gutter);
+  background: #ffffff;
   font-family: Arial,"Helvetica Neue",Helvetica,sans-serif;
+  box-sizing: border-box;
+}
+
+/* Keep mobile centered again */
+@media (max-width:900px){
+  .wizard-outer{
+    padding-inline: clamp(12px, 3vw, 24px); /* symmetric on small screens */
+  }
 }
 /* Fallback for older browsers */
 @supports not (height: 100svh){
@@ -37,6 +50,8 @@
   display:grid;
   grid-template-columns:280px 1fr;
   gap:1.5rem;
+  /* NEW — ensure exact horizontal centering inside the flex box */
+  margin: 0 auto;
 }
 
 /* Left column (steps) */
