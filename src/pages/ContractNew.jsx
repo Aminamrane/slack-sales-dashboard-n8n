@@ -16,6 +16,13 @@ const BUSINESS_TYPES = [
   "Esthétique",
   "Batiment",
   "Tech",
+  "Hôtellerie",
+  "Grande Distribution",
+  "Tertiaire",
+  "BTP",
+  "Boulangerie",
+  "Immobilier",
+  "Restauration",
   "Général",
 ];
 
@@ -430,7 +437,7 @@ export default function ContractNew() {
                   return (
                     <div key={idx} className="reps-row">
                       <label className="field">
-                        Nom complet
+                        Nom complet (Obligatoire)
                         <input
                           value={rep.fullName}
                           onChange={(e) => setRep(idx, "fullName", e.target.value)}
@@ -444,7 +451,7 @@ export default function ContractNew() {
                       </label>
 
                       <label className="field">
-                        Fonction (facultatif)
+                        Fonction (Obligatoire)
                         <input
                           value={rep.role || ""}
                           onChange={(e) => setRep(idx, "role", e.target.value)}
