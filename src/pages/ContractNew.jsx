@@ -23,7 +23,7 @@ const BUSINESS_TYPES = [
   "Boulangerie",
   "Immobilier",
   "Restauration",
-  "Général",
+  "Générales",
 ];
 
 // Map UI value to what the schema expects

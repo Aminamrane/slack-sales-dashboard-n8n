@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import * as XLSX from "xlsx";
@@ -7,7 +7,7 @@ import myLogo from "../assets/my_image.png";
 
 import Chart from "chart.js/auto";
 import ChartDataLabels from "chartjs-plugin-datalabels";
-import { Doughnut, Pie, Bar } from "react-chartjs-2";
+import { Doughnut, Pie, Line } from "react-chartjs-2";
 import "../index.css";
 
 Chart.register(ChartDataLabels);
@@ -15,24 +15,107 @@ Chart.register(ChartDataLabels);
 // Optional workspace lock (leave empty to allow any)
 const REQUIRED_TEAM = import.meta.env.VITE_SLACK_TEAM_ID || "";
 
+/* ────────────────────────────────────────────────────────────────────────────
+   Helpers
+──────────────────────────────────────────────────────────────────────────── */
 function getSlackTeamId(user) {
   if (!user) return "";
   const meta = user.user_metadata || {};
-  const fromMeta =
-    meta.team?.id ||
-    meta.slack_team_id ||
-    meta["https://slack.com/team_id"];
+  const fromMeta = meta.team?.id || meta.slack_team_id || meta["https://slack.com/team_id"];
   if (fromMeta) return fromMeta;
 
   const id0 = user.identities?.[0]?.identity_data;
   const fromIdentity = id0?.team?.id || id0?.team_id || id0?.workspace?.id;
   if (fromIdentity) return fromIdentity;
 
-  const fromAppMeta =
-    user.app_metadata?.team?.id || user.app_metadata?.slack_team_id;
+  const fromAppMeta = user.app_metadata?.team?.id || user.app_metadata?.slack_team_id;
   return fromAppMeta || "";
 }
 
+// Normalize acquisition channels to canonical labels (case/accents/aliases)
+const ALIAS_MAP = new Map([
+  ["ads", "ADS"], ["ad", "ADS"], ["publicite", "ADS"],
+  ["facebook ads", "ADS"], ["meta ads", "ADS"], ["google ads", "ADS"], ["gg ads", "ADS"],
+  ["linkedin", "LinkedIn"], ["lnkd", "LinkedIn"], ["lkd", "LinkedIn"],
+  ["cc", "CC"], ["cold call", "CC"], ["call", "CC"],
+  ["ref", "Referral"], ["referral", "Referral"], ["parrainage", "Referral"],
+  ["site", "Site Web"], ["web", "Site Web"], ["seo", "Site Web"],
+]);
+
+const stripDiacritics = (s = "") => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+function normalizeTunnelLabel(raw) {
+  if (!raw) return "Autre";
+  const base = stripDiacritics(String(raw).trim().toLowerCase());
+  if (ALIAS_MAP.has(base)) return ALIAS_MAP.get(base);
+  return base.split(/\s+/).map((w) => (w ? w[0].toUpperCase() + w.slice(1) : "")).join(" ");
+}
+
+// ISO week helpers
+function startOfISOWeek(d) {
+  const date = new Date(d);
+  const day = date.getDay() || 7; // Sun→7
+  if (day !== 1) date.setDate(date.getDate() - (day - 1));
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+const DOW_FR = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Tiny hooks / chips
+──────────────────────────────────────────────────────────────────────────── */
+function useAutoFit(ref, { max = 240, minFont = 12, maxFont = 16, step = 0.5 } = {}) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    el.style.fontSize = `${maxFont}px`;
+    const originalMaxWidth = el.style.maxWidth;
+    el.style.maxWidth = `${max}px`;
+
+    const fits = () => el.scrollWidth <= max;
+    let size = maxFont;
+    while (!fits() && size > minFont) {
+      size -= step;
+      el.style.fontSize = `${size}px`;
+    }
+    return () => { el.style.maxWidth = originalMaxWidth; };
+  }, [ref, max, minFont, maxFont, step]);
+}
+
+function TrendBadge({ deltaAbs, deltaPct }) {
+  const isUp = deltaAbs > 0, isDown = deltaAbs < 0;
+  const ref = useRef(null);
+  useAutoFit(ref, { max: 240, minFont: 12, maxFont: 16, step: 0.5 });
+
+  return (
+    <div
+      ref={ref}
+      className={`trend-badge ${isUp ? "trend-up" : isDown ? "trend-down" : "trend-flat"}`}
+      title="Comparaison semaine en cours vs semaine précédente"
+    >
+      <span className="row">
+        {isUp ? "↑" : isDown ? "↓" : "→"} {Math.abs(deltaAbs).toLocaleString("fr-FR")} €
+      </span>
+      <span className="row">({Math.abs(deltaPct).toFixed(2)}%)</span>
+    </div>
+  );
+}
+
+/** Static visual key for the 3 weeks (so users know which one is current). */
+function WeekKey() {
+  return (
+    <div className="chart-key" aria-label="Légende des semaines">
+      <span className="key"><i className="dot dot-w2" /> Semaine -2</span>
+      <span className="key"><i className="dot dot-w1" /> Semaine -1</span>
+      <span className="key current"><i className="dot dot-w0" /> Semaine en cours</span>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Component
+──────────────────────────────────────────────────────────────────────────── */
 export default function Leaderboard() {
   const navigate = useNavigate();
 
@@ -53,7 +136,7 @@ export default function Leaderboard() {
           setAllowed(Boolean(ses));
         } else {
           const tid = getSlackTeamId(ses?.user);
-          setAllowed(!tid || tid === REQUIRED_TEAM); // allow if missing to avoid loops
+          setAllowed(!tid || tid === REQUIRED_TEAM);
         }
       } catch (e) {
         console.error("getSession failed:", e);
@@ -83,15 +166,9 @@ export default function Leaderboard() {
       setLoggingIn(true);
       await supabase.auth.signInWithOAuth({
         provider: "slack_oidc",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          scopes: "openid profile email",
-        },
+        options: { redirectTo: `${window.location.origin}/auth/callback`, scopes: "openid profile email" },
       });
-    } finally {
-      // Supabase will redirect; this just prevents double-clicks
-      setLoggingIn(false);
-    }
+    } finally { setLoggingIn(false); }
   };
 
   const logout = async () => {
@@ -99,21 +176,18 @@ export default function Leaderboard() {
       const { error } = await supabase.auth.signOut();
       if (error) console.error("signOut error:", error);
     } finally {
-      // Clear local state and hard-reload home to avoid any stale memory
-      setSession(null);
-      setAllowed(false);
-      window.location.assign("/"); // hard navigation to reset everything
+      setSession(null); setAllowed(false); window.location.assign("/");
     }
   };
 
   // ── DATA ────────────────────────────────────────────────────────────────────
   const [rows, setRows] = useState([]);
-  const [dailyData, setDailyData] = useState([]);
   const [tunnelStats, setTunnelStats] = useState({});
   const [totals, setTotals] = useState({ cash: 0, revenu: 0, ventes: 0 });
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("table");
   const [range, setRange] = useState("month");
+  const [sales, setSales] = useState([]); // cleaned rows
 
   useEffect(() => {
     if (!session || !allowed) return;
@@ -132,11 +206,13 @@ export default function Leaderboard() {
       const { data, error } = await query;
       if (error) { console.error(error); setLoading(false); return; }
 
-      const cleaned = data.filter((r) =>
-        Number.isFinite(r.amount) &&
-        Number.isFinite(r.mensualite) &&
-        !(r.amount === 0 && r.mensualite === 0)
+      const cleaned = (data || []).filter(
+        (r) =>
+          Number.isFinite(r.amount) &&
+          Number.isFinite(r.mensualite) &&
+          !(r.amount === 0 && r.mensualite === 0)
       );
+      setSales(cleaned);
 
       const totalRev = cleaned.reduce((sum, r) => sum + Number(r.amount), 0);
       const totalCash = totalRev / 12;
@@ -149,9 +225,7 @@ export default function Leaderboard() {
         const mensu = Number(r.mensualite) || 0;
         const t = new Date(r.created_at).getTime() || 0;
 
-        if (!stats[name]) {
-          stats[name] = { name, sales: 0, cash: 0, revenu: 0, avatar: "", _last: 0 };
-        }
+        if (!stats[name]) stats[name] = { name, sales: 0, cash: 0, revenu: 0, avatar: "", _last: 0 };
         stats[name].sales += 1;
         stats[name].cash += mensu;
         stats[name].revenu += amount;
@@ -162,30 +236,12 @@ export default function Leaderboard() {
         }
       });
 
-      setRows(
-        Object.values(stats)
-          .map(({ _last, ...rest }) => rest)
-          .sort((a, b) => (b.sales - a.sales) || (b.revenu - a.revenu) || (b.cash - a.cash))
-      );
+      setRows(Object.values(stats).map(({ _last, ...rest }) => rest)
+        .sort((a, b) => b.sales - a.sales || b.revenu - a.revenu || b.cash - a.cash));
 
       const tunnel = {};
-      cleaned.forEach((r) => { tunnel[r.tunnel] = (tunnel[r.tunnel] || 0) + 1; });
+      cleaned.forEach((r) => { const label = normalizeTunnelLabel(r.tunnel); tunnel[label] = (tunnel[label] || 0) + 1; });
       setTunnelStats(tunnel);
-
-      const byDay = {};
-      cleaned.forEach((r) => {
-        const d = new Date(r.created_at);
-        if ([0, 6].includes(d.getDay())) return;
-        const key = d.toLocaleDateString("fr-FR");
-        byDay[key] ??= { date: key, ventes: 0, cash: 0, revenu: 0 };
-        byDay[key].ventes++;
-        byDay[key].cash += Number(r.mensualite);
-        byDay[key].revenu += Number(r.amount);
-      });
-      const dates = Object.keys(byDay)
-        .sort((a, b) => new Date(a.split("/").reverse().join("-")) - new Date(b.split("/").reverse().join("-")))
-        .slice(-6);
-      setDailyData(dates.map((d) => byDay[d]));
 
       setLoading(false);
     })();
@@ -206,14 +262,162 @@ export default function Leaderboard() {
     saveAs(new Blob([wbout]), "leaderboard.xlsx");
   };
 
-  // ── Charts (unchanged) ──────────────────────────────────────────────────────
-  const commonTitle = { display: true, align: "center", fullSize: true, padding: { top: 10, bottom: 10 }, color: "#000", font: { size: 16, weight: "600" } };
-  const doughnutData = { labels: Object.keys(tunnelStats), datasets: [{ data: Object.values(tunnelStats), backgroundColor: ["#4d4d4d", "#1a1a1a", "#999999", "#333333"] }] };
-  const doughnutOptions = { maintainAspectRatio: false, responsive: true, plugins: { title: { ...commonTitle, text: "Répartition tunnel d'acquisition" }, legend: { display: true, position: "bottom", align: "start", labels: { boxWidth: 12, padding: 8, font: { size: 12, weight: "500" } } }, datalabels: { color: "#fff", font: { size: 12, weight: "600" }, textStrokeColor: "#000", textStrokeWidth: 2, formatter: (v, ctx) => { const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0) || 1; return Math.round((v / total) * 100) + "%"; } } } };
-  const barData = { labels: dailyData.map((d) => d.date), datasets: [{ label: "Cash €/mois", data: dailyData.map((d) => d.cash), backgroundColor: "rgba(153,153,153,255)" }, { label: "Revenu €", data: dailyData.map((d) => d.revenu), backgroundColor: "rgba(26,26,26,255)" }] };
-  const barOptions = { maintainAspectRatio: false, responsive: true, plugins: { title: { ...commonTitle, text: "Cash & Revenu" }, legend: { position: "bottom" }, tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString("fr-FR")} €` } } }, scales: { y: { beginAtZero: true } }, interaction: { mode: "index", intersect: false } };
-  const pieUnderData = { labels: rows.map((r) => r.name), datasets: [{ data: rows.map((r) => r.sales), backgroundColor: ["#9966ff", "#ff9f40", "#2ecc71", "#e74c3c", "#3498db", "#f1c40f", "#9b59b6", "#1abc9c"].slice(0, rows.length) }] };
-  const pieUnderOptions = { maintainAspectRatio: false, responsive: true, plugins: { title: { ...commonTitle, text: "% de ventes par commercial" }, legend: { display: true, position: "bottom", align: "start", labels: { boxWidth: 12, padding: 8 } }, datalabels: { color: "#fff", font: { size: 12, weight: "600" }, textStrokeColor: "#000", textStrokeWidth: 2, formatter: (v, ctx) => { const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0) || 1; return Math.round((v / total) * 100) + "%"; } } } };
+  /* ──────────────────────────────────────────────────────────────────────────
+     CHARTS
+  ─────────────────────────────────────────────────────────────────────────── */
+
+  // ── Acquisition gauge (Screen 2) ───────────────────────────────────────────
+  const gauge = useMemo(() => {
+    const entries = Object.entries(tunnelStats);
+    const total = entries.reduce((s, [,v]) => s + v, 0) || 1;
+
+    // take top 3 channels
+    const top3 = entries.sort((a,b) => b[1] - a[1]).slice(0, 3);
+    const display = (l) => {
+      if (/^ads$/i.test(l)) return "ADS";
+      if (/^cc$/i.test(l)) return "CC";
+      if (/link/i.test(l)) return "LKND";
+      return l;
+    };
+    const labels = top3.map(([l]) => display(l));
+    const counts = top3.map(([,v]) => v);
+    const pct = counts.map(v => (v / total) * 100);
+
+    // palette faithful to your mock (blue → light blue → light gray)
+    const colors = labels.map((lbl, i) => {
+      if (lbl === "ADS") return "#3b5bff";
+      if (lbl === "CC")  return "#35bdf4";
+      if (lbl === "LKND") return "#E5E7EB";
+      return ["#3b5bff", "#35bdf4", "#E5E7EB"][i] || "#E5E7EB";
+    });
+
+    return {
+      labels,
+      pct,
+      tiles: labels.map((l, i) => ({ label: l, pct: pct[i], color: colors[i] })),
+      data: {
+        labels,
+        datasets: [
+          // background track
+          { data: [100], backgroundColor: "#F3F4F6", borderWidth: 0, cutout: "72%", rotation: -90, circumference: 180 },
+          // actual values
+          { data: pct, backgroundColor: colors, borderWidth: 0, cutout: "72%", rotation: -90, circumference: 180, spacing: 2 },
+        ]
+      }
+    };
+  }, [tunnelStats]);
+
+  const gaugeOptions = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      title: { display: true, text: "Tunnel d’acquisition", color: "#111", font: { size: 18, weight: "700" }, padding: { bottom: 8 } },
+      datalabels: {
+        // Small labels on the arc (ADS / CC / LKND) like the mock
+        color: "#fff",
+        font: { size: 10, weight: 700 },
+        formatter: (_v, ctx) => (ctx.chart.data.labels?.[ctx.dataIndex] || "").toUpperCase(),
+        display: (ctx) => (ctx.datasetIndex === 1 && ctx.dataset.data[ctx.dataIndex] > 8), // hide tiny slices
+      },
+    },
+  }), []);
+
+  // ── Last 3 ISO weeks lines + trend badge ──────────────────────────────────
+  const threeWeeks = useMemo(() => {
+    const today = new Date();
+    const w0Start = startOfISOWeek(today);
+    const w1Start = addDays(w0Start, -7);
+    const w2Start = addDays(w0Start, -14);
+
+    const weeks = [
+      { key: "w0", start: w0Start },
+      { key: "w1", start: w1Start },
+      { key: "w2", start: w2Start },
+    ];
+    const makeEmpty7 = () => Array.from({ length: 7 }, () => 0);
+    const series = { w0: makeEmpty7(), w1: makeEmpty7(), w2: makeEmpty7() };
+
+    for (const r of sales) {
+      const d = new Date(r.created_at);
+      const amt = Number(r.amount) || 0;
+      for (const w of weeks) {
+        const start = w.start, end = addDays(start, 7);
+        if (d >= start && d < end) {
+          const dayIndex = ((d.getDay() || 7) - 1); // Mon..Sun → 0..6
+          series[w.key][dayIndex] += amt;
+          break;
+        }
+      }
+    }
+
+    const sum = (arr) => arr.reduce((a, b) => a + b, 0);
+    const sums = { w0: sum(series.w0), w1: sum(series.w1), w2: sum(series.w2) };
+
+    const data = {
+      labels: DOW_FR,
+      datasets: [
+        { label: "Semaine -2", data: series.w2, borderWidth: 2, borderColor: "rgba(107,114,128,1)", backgroundColor: "rgba(107,114,128,0.16)", tension: 0.35, pointRadius: 2, fill: true },
+        { label: "Semaine -1", data: series.w1, borderWidth: 2, borderColor: "rgba(239,68,68,1)",  backgroundColor: "rgba(239,68,68,0.14)",  tension: 0.35, pointRadius: 2, fill: true },
+        { label: "Semaine en cours", data: series.w0, borderWidth: 3, borderColor: "rgba(29,78,216,1)",  backgroundColor: "rgba(29,78,216,0.12)",  tension: 0.35, pointRadius: 3, fill: true },
+      ],
+    };
+
+    return { data, sums };
+  }, [sales]);
+
+  const line3Options = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    resizeDelay: 150,
+    animation: { duration: 200 },
+    layout: { padding: { top: 4, bottom: 18 } },
+    plugins: {
+      title: { display: false },
+      legend: { display: false }, // no clickable legend
+      tooltip: {
+        callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString("fr-FR")} €` },
+      },
+      datalabels: { display: false },
+    },
+    interaction: { mode: "index", intersect: false },
+    scales: {
+      y: {
+        beginAtZero: true,
+        grace: "3%",
+        ticks: { font: { size: 11 }, callback: (v) => `${Number(v).toLocaleString("fr-FR")} €` },
+        grid: { color: "rgba(0,0,0,0.06)" },
+      },
+      x: { ticks: { font: { size: 11 }, padding: 4 }, grid: { display: false } },
+    },
+    elements: { point: { radius: 2, hoverRadius: 5 } },
+  }), []);
+
+  // Trend badge (current week vs last week)
+  const deltaAbs = threeWeeks.sums.w0 - threeWeeks.sums.w1;
+  const deltaPct = threeWeeks.sums.w1 ? (deltaAbs / threeWeeks.sums.w1) * 100 : 0;
+
+  // Third chart (unchanged)
+  const pieUnderData = useMemo(() => ({
+    labels: rows.map((r) => r.name),
+    datasets: [{ data: rows.map((r) => r.sales), backgroundColor: ["#9966ff","#ff9f40","#2ecc71","#e74c3c","#3498db","#f1c40f","#9b59b6","#1abc9c"].slice(0, rows.length) }],
+  }), [rows]);
+
+  const pieUnderOptions = useMemo(() => ({
+    maintainAspectRatio: false,
+    responsive: true,
+    plugins: {
+      title: { display: true, text: "% de ventes par commercial", color: "#111", font: { size: 16, weight: "600" } },
+      legend: { display: true, position: "bottom", align: "start", labels: { boxWidth: 12, padding: 8 } },
+      datalabels: {
+        color: "#fff", font: { size: 12, weight: "600" }, textStrokeColor: "#000", textStrokeWidth: 2,
+        formatter: (v, ctx) => {
+          const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0) || 1;
+          return Math.round((v / total) * 100) + "%";
+        },
+      },
+    },
+  }), []);
 
   // ── RENDER ──────────────────────────────────────────────────────────────────
   if (authChecking) return <p style={{ padding: 24 }}>Checking auth…</p>;
@@ -242,14 +446,8 @@ export default function Leaderboard() {
       <div className="board-frame">
         <button className="export-btn" onClick={() => navigate("/contracts/new")}>📄 NDA</button>
 
-        {/* moved left a bit more & ensures logout works */}
-        <button
-          className="export-btn"
-          style={{ right: 170 }}
-          onClick={logout}
-          title="Sign out"
-        >
-           Déconnexion
+        <button className="export-btn" style={{ right: 170 }} onClick={logout} title="Sign out">
+          Déconnexion
         </button>
 
         <div className="view-toggle">
@@ -298,9 +496,39 @@ export default function Leaderboard() {
 
         {view === "charts" && !loading && (
           <div className="charts-wrapper">
-            <div className="chart pie-container"><Doughnut data={doughnutData} options={doughnutOptions} /></div>
-            <div className="chart bar-container"><Bar data={barData} options={barOptions} /></div>
-            <div className="chart pie-under"><Pie data={pieUnderData} options={pieUnderOptions} /></div>
+            {/* New gauge card (Screen 2) */}
+            <div className="chart-card chart--gauge">
+              <Doughnut data={gauge.data} options={gaugeOptions} />
+              <div className="gauge-sep" />
+              <div className="gauge-tiles">
+                {gauge.tiles.map((t) => (
+                  <div key={t.label} className="gauge-tile">
+                    <span className="tile-dot" style={{ background: t.color }} />
+                    <div className="tile-text">
+                      <div className="tile-label">{t.label}</div>
+                      <div className="tile-value">{Math.round(t.pct)}%</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 3-weeks performance */}
+            <div className="chart-card chart--weeks">
+              <div className="chart-header">
+                <div className="chart-title">Performance des 3 dernières semaines (Revenu €/jour)</div>
+                <TrendBadge deltaAbs={deltaAbs} deltaPct={deltaPct} />
+              </div>
+              <div className="chart-body">
+                <Line data={threeWeeks.data} options={line3Options} />
+              </div>
+              <WeekKey />
+            </div>
+
+            {/* Bottom chart kept as-is */}
+            <div className="chart-card chart--full">
+              <Pie data={pieUnderData} options={pieUnderOptions} />
+            </div>
           </div>
         )}
       </div>
