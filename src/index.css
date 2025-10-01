@@ -243,39 +243,149 @@
 .toggle-btn:hover,
 .toggle-btn.active { background: #e5e7eb; }
 
-/*══════════  CHART LAYOUT ONLY  ════════════*/
-.charts-wrapper {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2rem;
-  justify-content: center;
-  margin-top: 2rem;
-}
-.chart.pie-container,
-.chart.bar-container {
-  flex: 1 1 300px;
-  background: #fff;
-  padding: 1rem;
-  border-radius: .75rem;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-  min-height: 300px;
-  position: relative;
-  overflow: visible;
-}
-@media (max-width: 768px) {
-  .charts-wrapper {
-    flex-direction: column;
-  }
+/*══════════  CHART LAYOUT  ════════════*/
+:root{
+  --chart-card-height: 360px;   /* smaller so everything fits */
+  --chart-gap:           1.5rem;
+  --trend-badge-max:     240px; /* badge width before auto-shrink */
+  --radius-lg:           .75rem;
+  --shadow-sm:           0 2px 6px rgba(0,0,0,0.05);
 }
 
-/* make the third chart span full width below the first two */
-.chart.pie-under {
-  flex: 1 1 100%;
-  background: #fff;
-  padding: 1rem;
-  border-radius: .75rem;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-  min-height: 300px;
-  position: relative;
-  overflow: visible;
+.charts-wrapper{
+  display:flex; flex-wrap:wrap; gap:var(--chart-gap);
+  justify-content:center; margin-top:2rem;
 }
+
+/* Generic chart card */
+.chart-card{
+  flex: 1 1 320px;
+  background:#fff; border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-sm); padding:1rem;
+  min-width: 300px;
+}
+
+/* Donut & Weeks share the same fixed height to avoid resize loops */
+.chart--donut, .chart--weeks{ height: var(--chart-card-height); }
+
+/* Use flex so we can keep a header + body + footer key without clipping */
+.chart--weeks{
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.chart--weeks .chart-header{
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:.35rem;
+}
+.chart--weeks .chart-title{ font-weight:600; font-size:1.05rem; }
+.chart--weeks .chart-body{ flex:1; min-height:0; } /* canvas grows into this */
+.chart--weeks .chart-key{
+  display:flex; gap:1rem; align-items:center;
+  padding-top:.35rem; font-size:.85rem; color:#6b7280;
+  flex-wrap:wrap;
+}
+
+.key{ display:flex; align-items:center; gap:.4rem; }
+.key.current{ font-weight:700; color:#111; }
+.dot{ width:.6rem; height:.6rem; border-radius:50%; display:inline-block; }
+.dot-w2{ background:#6b7280; }   /* grey */
+.dot-w1{ background:#ef4444; }   /* red  */
+.dot-w0{ background:#1d4ed8; }   /* blue */
+
+/* Trend badge (auto-fit width handled in JS) */
+.trend-badge{
+  display:inline-block; background:#f3f4f6; border-radius:.65rem;
+  padding:.45rem .7rem; line-height:1.1; width:fit-content;
+  max-width: var(--trend-badge-max); white-space:nowrap;
+  font-weight:700; font-size:.95rem;
+}
+.trend-up{   color:#16a34a; }
+.trend-down{ color:#dc2626; }
+.trend-flat{ color:#6b7280; }
+
+/* Full-width third chart (keep if you use the bottom pie) */
+.chart--full{
+  flex:1 1 100%;
+  min-height:300px;
+}
+
+:root{
+  --card-h-lg: 360px;   /* gauge + weeks */
+  --card-h-sm: 300px;   /* bottom pie */
+  --chart-gap: 1.5rem;
+  --trend-badge-max: 240px;
+  --radius-lg: .75rem;
+  --shadow-sm: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+.charts-wrapper{
+  display:flex; flex-wrap:wrap; gap:var(--chart-gap);
+  justify-content:center; margin-top:2rem;
+}
+
+.chart-card{
+  flex: 1 1 320px;
+  background:#fff; border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-sm); padding:1rem;
+  min-width: 300px;
+  /* Prevent resize-observer feedback loops */
+  overflow:hidden;
+  contain: layout paint;        /* modern browsers: isolates layout */
+}
+
+/* ── Acquisition gauge (semi-donut) ── */
+.chart--gauge{
+  height: var(--card-h-lg);
+  display:flex; flex-direction:column; align-items:center;
+}
+.chart--gauge canvas{ max-height:58%; display:block; }
+
+/* ── 3-weeks line ── */
+.chart--weeks{
+  height: var(--card-h-lg);
+  display:flex; flex-direction:column;
+}
+.chart--weeks .chart-header{
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:.35rem;
+}
+.chart--weeks .chart-title{ font-weight:600; font-size:1.05rem; }
+.chart--weeks .chart-body{ flex:1; min-height:0; } /* canvas grows here */
+
+/* Static key (legend-like) */
+.chart-key{
+  display:flex; gap:1rem; align-items:center;
+  padding-top:.35rem; font-size:.85rem; color:#6b7280; flex-wrap:wrap;
+}
+.key{ display:flex; align-items:center; gap:.4rem; }
+.key.current{ font-weight:700; color:#111; }
+.dot{ width:.6rem; height:.6rem; border-radius:50%; display:inline-block; }
+.dot-w2{ background:#6b7280; }
+.dot-w1{ background:#ef4444; }
+.dot-w0{ background:#1d4ed8; }
+
+/* Trend badge */
+.trend-badge{
+  display:inline-block; background:#f3f4f6; border-radius:.65rem;
+  padding:.45rem .7rem; line-height:1.1; width:fit-content;
+  max-width: var(--trend-badge-max); white-space:nowrap;
+  font-weight:700; font-size:.95rem;
+}
+.trend-badge .row{ display:block; }
+.trend-up{   color:#16a34a; }
+.trend-down{ color:#dc2626; }
+.trend-flat{ color:#6b7280; }
+
+/* ── Bottom full-width pie (give it a fixed height too!) ── */
+.chart--full{ flex:1 1 100%; height: var(--card-h-sm); }
+
+/* Gauge tiles (under the arc) */
+.gauge-sep{ width:100%; height:1px; background:#eef0f3; margin:.35rem 0 .6rem; }
+.gauge-tiles{
+  width:100%; display:grid; grid-template-columns:repeat(3,1fr);
+  gap:1rem; align-items:center;
+}
+.gauge-tile{ display:flex; align-items:center; gap:.7rem; justify-content:center; }
+.tile-dot{ width:22px; height:22px; border-radius:50%; }
+.tile-text{ line-height:1.05; }
+.tile-label{ font-weight:700; color:#3b5bff; }
+.tile-value{ font-weight:800; font-size:1.1rem; }
