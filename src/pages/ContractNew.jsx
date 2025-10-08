@@ -14,7 +14,6 @@ const BUSINESS_TYPES = [
   "Pharmacie",
   "Salle de sport",
   "Esthétique",
-  "Batiment",
   "Tech",
   "Hôtellerie",
   "Grande Distribution",
@@ -40,7 +39,7 @@ export default function ContractNew() {
     headOffice: { line1: "", postalCode: "", city: "", country: "France" },
     representatives: [{ fullName: "", role: "" }],
     // New: default business type
-    businessType: "Général",
+    businessType: "Générales",
   });
 
   const [errors, setErrors] = useState({});
