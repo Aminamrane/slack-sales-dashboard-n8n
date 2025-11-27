@@ -30,6 +30,22 @@ export default function ProtectedRoute({ children }) {
   useEffect(() => {
     const sync = async () => {
       try {
+        // Check for admin session first
+        const storedAdminSession = localStorage.getItem("admin_session");
+        if (storedAdminSession) {
+          try {
+            const adminSession = JSON.parse(storedAdminSession);
+            if (adminSession?.user?.user_metadata?.role === "admin") {
+              setAllowed(true);
+              setChecking(false);
+              return;
+            }
+          } catch (e) {
+            localStorage.removeItem("admin_session");
+          }
+        }
+
+        // Check Slack session
         const { data } = await supabase.auth.getSession();
         const ses = data?.session || null;
 
@@ -46,6 +62,21 @@ export default function ProtectedRoute({ children }) {
     };
 
     const { data: sub } = supabase.auth.onAuthStateChange((_ev, ses) => {
+      // Check admin session on auth change too
+      const storedAdminSession = localStorage.getItem("admin_session");
+      if (storedAdminSession) {
+        try {
+          const adminSession = JSON.parse(storedAdminSession);
+          if (adminSession?.user?.user_metadata?.role === "admin") {
+            setAllowed(true);
+            setChecking(false);
+            return;
+          }
+        } catch (e) {
+          localStorage.removeItem("admin_session");
+        }
+      }
+
       if (!REQUIRED_TEAM) {
         setAllowed(Boolean(ses));
       } else {

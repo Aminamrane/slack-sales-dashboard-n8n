@@ -125,8 +125,46 @@ export default function Leaderboard() {
   const [allowed, setAllowed] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
 
+  // ── ADMIN LOGIN STATE ─────────────────────────────────────────────────────
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [adminUsername, setAdminUsername] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminError, setAdminError] = useState("");
+  const [adminLoading, setAdminLoading] = useState(false);
+
+  // Check for admin session on mount FIRST
+  useEffect(() => {
+    const storedAdminSession = localStorage.getItem("admin_session");
+    if (storedAdminSession) {
+      try {
+        const adminSession = JSON.parse(storedAdminSession);
+        if (adminSession?.user?.user_metadata?.role === "admin") {
+          setSession(adminSession);
+          setAllowed(true);
+          setAuthChecking(false);
+          return;
+        }
+      } catch (e) {
+        localStorage.removeItem("admin_session");
+      }
+    }
+  }, []);
+
   useEffect(() => {
     const syncSession = async () => {
+      // Skip if admin is already logged in
+      const adminSession = localStorage.getItem("admin_session");
+      if (adminSession) {
+        try {
+          const parsed = JSON.parse(adminSession);
+          if (parsed?.user?.user_metadata?.role === "admin") {
+            return; // Admin already authenticated
+          }
+        } catch (e) {
+          localStorage.removeItem("admin_session");
+        }
+      }
+
       try {
         const { data } = await supabase.auth.getSession();
         const ses = data?.session || null;
@@ -147,6 +185,19 @@ export default function Leaderboard() {
     };
 
     const { data: sub } = supabase.auth.onAuthStateChange((_ev, ses) => {
+      // Check admin session first
+      const adminSession = localStorage.getItem("admin_session");
+      if (adminSession) {
+        try {
+          const parsed = JSON.parse(adminSession);
+          if (parsed?.user?.user_metadata?.role === "admin") {
+            return; // Keep admin session
+          }
+        } catch (e) {
+          localStorage.removeItem("admin_session");
+        }
+      }
+
       setSession(ses);
       if (!REQUIRED_TEAM) {
         setAllowed(Boolean(ses));
@@ -161,6 +212,37 @@ export default function Leaderboard() {
     return () => sub.subscription?.unsubscribe?.();
   }, []);
 
+  const handleAdminLogin = async (e) => {
+    e.preventDefault();
+    setAdminError("");
+    setAdminLoading(true);
+
+    const validUsername = import.meta.env.VITE_ADMIN_USERNAME;
+    const validPassword = import.meta.env.VITE_ADMIN_PASSWORD;
+
+    if (adminUsername === validUsername && adminPassword === validPassword) {
+      // Create a mock session for admin
+      const adminSession = {
+        user: {
+          id: "admin-user",
+          email: "paul@company.com",
+          user_metadata: { name: "Paul Faucomprez", role: "admin" },
+        },
+        access_token: "admin-token",
+      };
+
+      // Store in localStorage
+      localStorage.setItem("admin_session", JSON.stringify(adminSession));
+      
+      setSession(adminSession);
+      setAllowed(true);
+      setAdminLoading(false);
+    } else {
+      setAdminError("Identifiants incorrects");
+      setAdminLoading(false);
+    }
+  };
+
   const loginWithSlack = async () => {
     try {
       setLoggingIn(true);
@@ -173,10 +255,16 @@ export default function Leaderboard() {
 
   const logout = async () => {
     try {
+      // Remove admin session
+      localStorage.removeItem("admin_session");
+      
+      // Supabase logout
       const { error } = await supabase.auth.signOut();
       if (error) console.error("signOut error:", error);
     } finally {
-      setSession(null); setAllowed(false); window.location.assign("/");
+      setSession(null); 
+      setAllowed(false); 
+      window.location.assign("/");
     }
   };
 
@@ -312,7 +400,7 @@ export default function Leaderboard() {
     maintainAspectRatio: false,
     plugins: {
       legend: { display: false },
-      title: { display: true, text: "Tunnel d’acquisition", color: "#111", font: { size: 18, weight: "700" }, padding: { bottom: 8 } },
+      title: { display: true, text: "Tunnel d'acquisition", color: "#111", font: { size: 18, weight: "700" }, padding: { bottom: 8 } },
       datalabels: {
         // Small labels on the arc (ADS / CC / LKND) like the mock
         color: "#fff",
@@ -329,6 +417,9 @@ export default function Leaderboard() {
     const w0Start = startOfISOWeek(today);
     const w1Start = addDays(w0Start, -7);
     const w2Start = addDays(w0Start, -14);
+
+    // Calculate current day of week (0=Mon, 6=Sun)
+    const currentDayOfWeek = ((today.getDay() || 7) - 1);
 
     const weeks = [
       { key: "w0", start: w0Start },
@@ -351,8 +442,16 @@ export default function Leaderboard() {
       }
     }
 
-    const sum = (arr) => arr.reduce((a, b) => a + b, 0);
-    const sums = { w0: sum(series.w0), w1: sum(series.w1), w2: sum(series.w2) };
+    // Only sum up to the current day of the week for fair comparison
+    const sumUpToCurrentDay = (arr) => {
+      return arr.slice(0, currentDayOfWeek + 1).reduce((a, b) => a + b, 0);
+    };
+    
+    const sums = { 
+      w0: sumUpToCurrentDay(series.w0), 
+      w1: sumUpToCurrentDay(series.w1), 
+      w2: sumUpToCurrentDay(series.w2) 
+    };
 
     const data = {
       labels: DOW_FR,
@@ -424,18 +523,167 @@ export default function Leaderboard() {
 
   if (!session || !allowed) {
     return (
-      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", fontFamily: "sans-serif" }}>
-        <div style={{ textAlign: "center" }}>
+      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", fontFamily: "sans-serif", background: "#f9fafb" }}>
+        <div style={{ textAlign: "center", maxWidth: 400, width: "100%", padding: "0 20px" }}>
           <img src={myLogo} alt="" style={{ width: 64, height: 64, marginBottom: 12, borderRadius: 12 }} />
-          <h2>Accès sécurisé</h2>
-          <p style={{ opacity: .8, marginBottom: 16 }}>Connectez-vous avec Slack pour accéder au leaderboard.</p>
-          <button
-            onClick={loginWithSlack}
-            disabled={loggingIn}
-            style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #d1d5db", cursor: loggingIn ? "not-allowed" : "pointer", opacity: loggingIn ? .7 : 1 }}
-          >
-            {loggingIn ? "Redirecting…" : "Connectez-vous via Slack"}
-          </button>
+          <h2 style={{ marginBottom: 8, fontSize: 24, fontWeight: 700 }}>Accès sécurisé</h2>
+          <p style={{ opacity: .7, marginBottom: 24, fontSize: 14 }}>
+            Connectez-vous pour accéder au dashboard
+          </p>
+
+          {!showAdminLogin ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <button
+                onClick={loginWithSlack}
+                disabled={loggingIn}
+                style={{
+                  padding: "12px 20px",
+                  borderRadius: 10,
+                  border: "1px solid #d1d5db",
+                  background: "#fff",
+                  cursor: loggingIn ? "not-allowed" : "pointer",
+                  opacity: loggingIn ? .7 : 1,
+                  fontSize: 15,
+                  fontWeight: 500,
+                  transition: "all 0.2s",
+                }}
+                onMouseOver={(e) => !loggingIn && (e.target.style.background = "#f9fafb")}
+                onMouseOut={(e) => (e.target.style.background = "#fff")}
+              >
+                {loggingIn ? "Redirection…" : "🔐 Connectez-vous via Slack"}
+              </button>
+
+              <button
+                onClick={() => setShowAdminLogin(true)}
+                style={{
+                  padding: "10px 20px",
+                  borderRadius: 10,
+                  border: "none",
+                  background: "transparent",
+                  cursor: "pointer",
+                  fontSize: 13,
+                  color: "#6b7280",
+                  textDecoration: "underline",
+                  transition: "color 0.2s",
+                }}
+                onMouseOver={(e) => (e.target.style.color = "#111")}
+                onMouseOut={(e) => (e.target.style.color = "#6b7280")}
+              >
+                Connexion Admin
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleAdminLogin} style={{ textAlign: "left" }}>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500, color: "#374151" }}>
+                  Nom d'utilisateur
+                </label>
+                <input
+                  type="text"
+                  value={adminUsername}
+                  onChange={(e) => setAdminUsername(e.target.value)}
+                  required
+                  autoFocus
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #d1d5db",
+                    fontSize: 14,
+                    outline: "none",
+                    transition: "border-color 0.2s",
+                    boxSizing: "border-box",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500, color: "#374151" }}>
+                  Mot de passe
+                </label>
+                <input
+                  type="password"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #d1d5db",
+                    fontSize: 14,
+                    outline: "none",
+                    transition: "border-color 0.2s",
+                    boxSizing: "border-box",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                  onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                />
+              </div>
+
+              {adminError && (
+                <div style={{
+                  padding: "10px 12px",
+                  marginBottom: 16,
+                  borderRadius: 8,
+                  background: "#fee",
+                  color: "#c00",
+                  fontSize: 13,
+                  border: "1px solid #fcc",
+                }}>
+                  {adminError}
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAdminLogin(false);
+                    setAdminError("");
+                    setAdminUsername("");
+                    setAdminPassword("");
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: "10px 20px",
+                    borderRadius: 8,
+                    border: "1px solid #d1d5db",
+                    background: "#fff",
+                    cursor: "pointer",
+                    fontSize: 14,
+                    fontWeight: 500,
+                    transition: "background 0.2s",
+                  }}
+                  onMouseOver={(e) => (e.target.style.background = "#f9fafb")}
+                  onMouseOut={(e) => (e.target.style.background = "#fff")}
+                >
+                  Retour
+                </button>
+                <button
+                  type="submit"
+                  disabled={adminLoading}
+                  style={{
+                    flex: 1,
+                    padding: "10px 20px",
+                    borderRadius: 8,
+                    border: "none",
+                    background: "#3b82f6",
+                    color: "#fff",
+                    cursor: adminLoading ? "not-allowed" : "pointer",
+                    fontSize: 14,
+                    fontWeight: 500,
+                    opacity: adminLoading ? 0.7 : 1,
+                    transition: "opacity 0.2s",
+                  }}
+                >
+                  {adminLoading ? "Connexion…" : "Se connecter"}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
     );
@@ -473,7 +721,7 @@ export default function Leaderboard() {
         </div>
 
         {loading && <p>Loading…</p>}
-        {!loading && rows.length === 0 && <p>Aucune vente ce mois-ci pour l’instant.</p>}
+        {!loading && rows.length === 0 && <p>Aucune vente ce mois-ci pour l'instant.</p>}
 
         {view === "table" && !loading && rows.length > 0 && (
           <div className="leaderboard-wrapper">
