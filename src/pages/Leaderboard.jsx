@@ -39,7 +39,7 @@ const TEAMS = [
     id: "team2",
     label: "Équipe 2",
     captain: "Léo Mafrici",
-    members: [],
+    members: ["Mehdi BOUFFESSIL"],
     color: COLORS.primary, // indigo
   },
   {
