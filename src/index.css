@@ -1,6 +1,11 @@
 /* Racine */
 #root { position: relative; }
 
+/* Smooth transitions for dark mode */
+* {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
 /*════════════════  TABLEAU  ════════════════*/
 .leaderboard {
   width: 100%;
@@ -175,8 +180,6 @@
   filter: saturate(1.1);
 }
 
-
-
 /*══════════  TABLEAU WRAPPER  ════════════*/
 .leaderboard-wrapper {
   margin-top: 0;
@@ -245,9 +248,9 @@
 
 /*══════════  CHART LAYOUT  ════════════*/
 :root{
-  --chart-card-height: 360px;   /* smaller so everything fits */
+  --chart-card-height: 360px;
   --chart-gap:           1.5rem;
-  --trend-badge-max:     240px; /* badge width before auto-shrink */
+  --trend-badge-max:     240px;
   --radius-lg:           .75rem;
   --shadow-sm:           0 2px 6px rgba(0,0,0,0.05);
 }
@@ -257,18 +260,15 @@
   justify-content:center; margin-top:2rem;
 }
 
-/* Generic chart card */
 .chart-card{
   flex: 1 1 320px;
   background:#fff; border-radius:var(--radius-lg);
   box-shadow:var(--shadow-sm); padding:1rem;
   min-width: 300px;
+  overflow:hidden;
+  contain: layout paint;
 }
 
-/* Donut & Weeks share the same fixed height to avoid resize loops */
-.chart--donut, .chart--weeks{ height: var(--chart-card-height); }
-
-/* Use flex so we can keep a header + body + footer key without clipping */
 .chart--weeks{
   display:flex; flex-direction:column; overflow:hidden;
 }
@@ -277,7 +277,7 @@
   margin-bottom:.35rem;
 }
 .chart--weeks .chart-title{ font-weight:600; font-size:1.05rem; }
-.chart--weeks .chart-body{ flex:1; min-height:0; } /* canvas grows into this */
+.chart--weeks .chart-body{ flex:1; min-height:0; }
 .chart--weeks .chart-key{
   display:flex; gap:1rem; align-items:center;
   padding-top:.35rem; font-size:.85rem; color:#6b7280;
@@ -287,11 +287,10 @@
 .key{ display:flex; align-items:center; gap:.4rem; }
 .key.current{ font-weight:700; color:#111; }
 .dot{ width:.6rem; height:.6rem; border-radius:50%; display:inline-block; }
-.dot-w2{ background:#6b7280; }   /* grey */
-.dot-w1{ background:#ef4444; }   /* red  */
-.dot-w0{ background:#1d4ed8; }   /* blue */
+.dot-w2{ background:#6b7280; }
+.dot-w1{ background:#ef4444; }
+.dot-w0{ background:#1d4ed8; }
 
-/* Trend badge (auto-fit width handled in JS) */
 .trend-badge{
   display:inline-block; background:#f3f4f6; border-radius:.65rem;
   padding:.45rem .7rem; line-height:1.1; width:fit-content;
@@ -302,84 +301,78 @@
 .trend-down{ color:#dc2626; }
 .trend-flat{ color:#6b7280; }
 
-/* Full-width third chart (keep if you use the bottom pie) */
 .chart--full{
   flex:1 1 100%;
   min-height:300px;
 }
 
 :root{
-  --card-h-lg: 360px;   /* gauge + weeks */
-  --card-h-sm: 300px;   /* bottom pie */
+  --card-h-lg: 360px;
+  --card-h-sm: 300px;
   --chart-gap: 1.5rem;
   --trend-badge-max: 240px;
   --radius-lg: .75rem;
   --shadow-sm: 0 2px 6px rgba(0,0,0,0.05);
 }
 
-.charts-wrapper{
-  display:flex; flex-wrap:wrap; gap:var(--chart-gap);
-  justify-content:center; margin-top:2rem;
-}
-
-.chart-card{
-  flex: 1 1 320px;
-  background:#fff; border-radius:var(--radius-lg);
-  box-shadow:var(--shadow-sm); padding:1rem;
-  min-width: 300px;
-  /* Prevent resize-observer feedback loops */
-  overflow:hidden;
-  contain: layout paint;        /* modern browsers: isolates layout */
-}
-
-/* ── Acquisition gauge (semi-donut) ── */
+/* FIX: Gauge hérite du style KPI card mais garde sa propre structure interne */
 .chart--gauge{
   height: var(--card-h-lg);
-  display:flex; flex-direction:column; align-items:center;
+  display:flex; 
+  flex-direction:column; 
+  align-items:center;
+  /* Le border-radius, padding, background sont hérités de .chart-card.kpi-card */
 }
-.chart--gauge canvas{ max-height:58%; display:block; }
 
-/* ── 3-weeks line ── */
+.chart--gauge canvas{ 
+  max-height:58%; 
+  display:block; 
+}
+
 .chart--weeks{
   height: var(--card-h-lg);
   display:flex; flex-direction:column;
 }
-.chart--weeks .chart-header{
-  display:flex; align-items:center; justify-content:space-between;
-  margin-bottom:.35rem;
-}
-.chart--weeks .chart-title{ font-weight:600; font-size:1.05rem; }
-.chart--weeks .chart-body{ flex:1; min-height:0; } /* canvas grows here */
 
-/* Static key (legend-like) */
 .chart-key{
   display:flex; gap:1rem; align-items:center;
   padding-top:.35rem; font-size:.85rem; color:#6b7280; flex-wrap:wrap;
 }
-.key{ display:flex; align-items:center; gap:.4rem; }
-.key.current{ font-weight:700; color:#111; }
-.dot{ width:.6rem; height:.6rem; border-radius:50%; display:inline-block; }
-.dot-w2{ background:#6b7280; }
-.dot-w1{ background:#ef4444; }
-.dot-w0{ background:#1d4ed8; }
 
-/* Trend badge */
-.trend-badge{
-  display:inline-block; background:#f3f4f6; border-radius:.65rem;
-  padding:.45rem .7rem; line-height:1.1; width:fit-content;
-  max-width: var(--trend-badge-max); white-space:nowrap;
-  font-weight:700; font-size:.95rem;
-}
 .trend-badge .row{ display:block; }
-.trend-up{   color:#16a34a; }
-.trend-down{ color:#dc2626; }
-.trend-flat{ color:#6b7280; }
 
-/* ── Bottom full-width pie (give it a fixed height too!) ── */
 .chart--full{ flex:1 1 100%; height: var(--card-h-sm); }
 
-/* Gauge tiles (under the arc) */
 .gauge-sep{ width:100%; height:1px; background:#eef0f3; margin:.35rem 0 .6rem; }
+
+/* Gauge header */
+.gauge-header {
+  width: 100%;
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.gauge-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 0.25rem;
+}
+
+.gauge-subtitle {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+body.dark-mode .gauge-title {
+  color: #f1f3f5;
+}
+
+body.dark-mode .gauge-subtitle {
+  color: #9ba3af;
+}
+
 .gauge-tiles{
   width:100%; display:grid; grid-template-columns:repeat(3,1fr);
   gap:1rem; align-items:center;
@@ -387,5 +380,519 @@
 .gauge-tile{ display:flex; align-items:center; gap:.7rem; justify-content:center; }
 .tile-dot{ width:22px; height:22px; border-radius:50%; }
 .tile-text{ line-height:1.05; }
-.tile-label{ font-weight:700; color:#3b5bff; }
+.tile-label{ font-weight:700; color:#6366f1; }
 .tile-value{ font-weight:800; font-size:1.1rem; }
+.tile-count{ 
+  font-weight: 400; 
+  font-size: 0.85rem; 
+  color: #6b7280; 
+  margin-left: 0.25rem;
+}
+
+body.dark-mode .tile-count {
+  color: #9ba3af;
+}
+
+/* Health indicator badge */
+.health-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: 0.65rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.health-indicator.excellent {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+}
+
+.health-indicator.good {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.25);
+}
+
+.health-indicator.moderate {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25);
+}
+
+.health-indicator.warning {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+}
+
+.health-indicator-icon {
+  font-size: 1.1rem;
+}
+
+/* KPI Card - Ethereum Style */
+.kpi-card {
+  position: relative;
+  border-radius: 24px;
+  padding: 18px 20px 16px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+  overflow: hidden;
+}
+
+body.dark-mode .kpi-card {
+  background: radial-gradient(circle at top left, rgba(129, 140, 248, 0.25), transparent) no-repeat,
+    #020617;
+  border-color: rgba(148, 163, 184, 0.4);
+  box-shadow: 0 22px 45px rgba(15, 23, 42, 0.75);
+}
+
+.kpi-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.kpi-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9ca3af;
+}
+
+body.dark-mode .kpi-label {
+  color: #9ca3af;
+}
+
+.kpi-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: #111827;
+}
+
+body.dark-mode .kpi-value {
+  color: #e5e7eb;
+}
+
+.kpi-sub {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+body.dark-mode .kpi-sub {
+  color: #9ca3af;
+}
+
+.chart-title-small {
+  font-size: 13px;
+  color: #374151;
+  opacity: 0.8;
+  margin-bottom: 8px;
+}
+
+body.dark-mode .chart-title-small {
+  color: #e5e7eb;
+}
+
+.chart-body--glass {
+  position: relative;
+  border-radius: 18px;
+  padding: 4px 6px 0;
+  background: #f9fafb;
+}
+
+body.dark-mode .chart-body--glass {
+  background: radial-gradient(circle at top, rgba(15, 23, 42, 0.95), transparent);
+}
+
+.chart-footnote {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #6b7280;
+  opacity: 0.9;
+}
+
+body.dark-mode .chart-footnote {
+  color: #9ca3af;
+}
+
+/*════════════════════════════════════════════════════════════════════════════
+  TEAM PERFORMANCE CARD
+════════════════════════════════════════════════════════════════════════════*/
+
+.team-card {
+  /* Ne pas prendre toute la largeur - comme les autres cartes */
+  flex: 1 1 calc(66% - var(--chart-gap));
+  max-width: 800px;
+  border-radius: 24px;
+  padding: 18px 22px 20px;
+}
+
+.team-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.team-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+body.dark-mode .team-title {
+  color: #f1f3f5;
+}
+
+.team-subtitle {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+body.dark-mode .team-subtitle {
+  color: #9ca3af;
+}
+
+.team-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+
+@media (max-width: 768px) {
+  .team-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .team-card {
+    flex: 1 1 100%;
+  }
+}
+
+.team-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.team-rank {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+
+.team-captain {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.3;
+}
+
+body.dark-mode .team-captain {
+  color: #f1f3f5;
+}
+
+.team-meta {
+  font-size: 13px;
+  color: #4b5563;
+  font-weight: 500;
+}
+
+body.dark-mode .team-meta {
+  color: #e5e7eb;
+}
+
+/* Rendu avec colonnes parfaitement alignées et silhouette organique */
+.team-dots {
+  display: grid;
+  grid-template-columns: repeat(6, 8px);
+  grid-auto-rows: 8px;
+  gap: 5px 6px;
+  margin-top: 8px;
+}
+
+.team-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.35);
+  transition: all 0.2s ease;
+}
+
+body.dark-mode .team-dot {
+  background: rgba(148, 163, 184, 0.25);
+}
+
+.team-dot--filled {
+  background: #4b5563; /* sera écrasé par style inline = team.color */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+body.dark-mode .team-dot--filled {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/*════════════════════════════════════════════════════════════════════════════
+  DARK MODE - Softer, Modern Style
+════════════════════════════════════════════════════════════════════════════*/
+
+/* Body & Root - Softer dark background */
+body.dark-mode {
+  background: #0f1419;
+  color: #e7e9ea;
+}
+
+/* Board frame - Card-like with subtle elevation */
+body.dark-mode .board-frame {
+  background: #1a1d23;
+  border-color: #2f3640;
+  box-shadow: 0 8px 24px rgba(0,0,0,.4);
+}
+
+/* Title */
+body.dark-mode .leaderboard-title {
+  color: #f1f3f5;
+}
+
+/* Totals block */
+body.dark-mode .totals-block {
+  background: transparent;
+}
+
+body.dark-mode .totals-label {
+  color: #9ba3af;
+}
+
+body.dark-mode .totals-value {
+  color: #f1f3f5;
+}
+
+body.dark-mode .totals-value.cash {
+  color: #10b981;
+}
+
+body.dark-mode .totals-value.revenu {
+  color: #3b82f6;
+}
+
+body.dark-mode .totals-sales {
+  color: #f59e0b;
+}
+
+/* Buttons */
+body.dark-mode .export-btn {
+  background: #252932;
+  color: #e7e9ea;
+  border-color: #3f4451;
+}
+
+body.dark-mode .export-btn:hover {
+  background: #2d323d;
+  border-color: #4a5161;
+}
+
+body.dark-mode .toggle-btn {
+  background: #252932;
+  color: #9ba3af;
+  border-color: #3f4451;
+}
+
+body.dark-mode .toggle-btn:hover {
+  background: #2d323d;
+  color: #e7e9ea;
+  border-color: #4a5161;
+}
+
+body.dark-mode .toggle-btn.active {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #fff;
+  border-color: #6366f1;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+/* Table */
+body.dark-mode .leaderboard {
+  background: transparent;
+}
+
+body.dark-mode .leaderboard thead th {
+  background: transparent;
+  color: #f1f3f5;
+  border-color: #3f4451;
+}
+
+body.dark-mode .leaderboard thead tr:hover th {
+  background-color: #252932;
+}
+
+body.dark-mode .leaderboard tbody tr:first-child {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.12) 0%, rgba(245, 158, 11, 0.08) 100%);
+}
+
+body.dark-mode .leaderboard tbody tr:first-child td:nth-child(2),
+body.dark-mode .leaderboard tbody tr:first-child td:nth-child(3) {
+  color: #fbbf24;
+}
+
+body.dark-mode .leaderboard tbody tr:nth-child(n+3):nth-child(odd) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+body.dark-mode .leaderboard tbody tr {
+  border-color: #3f4451;
+}
+
+body.dark-mode .leaderboard tbody tr:hover td {
+  background-color: #252932;
+}
+
+body.dark-mode .leaderboard td {
+  color: #e7e9ea;
+}
+
+body.dark-mode .avatar {
+  border: 2px solid #3f4451;
+}
+
+/* Charts - Card style with elevation */
+body.dark-mode .chart-card {
+  background: #1e2128;
+  border: 1px solid #3f4451;
+  box-shadow: 0 4px 12px rgba(0,0,0,.3);
+}
+
+body.dark-mode .chart-title {
+  color: #f1f3f5;
+}
+
+body.dark-mode .gauge-sep {
+  background: #3f4451;
+}
+
+body.dark-mode .gauge-tile {
+  background: transparent;
+}
+
+body.dark-mode .tile-label {
+  color: #6366f1;
+}
+
+body.dark-mode .tile-value {
+  color: #f1f3f5;
+}
+
+/* Trend badge - More subtle in dark mode */
+body.dark-mode .trend-badge {
+  background: #252932;
+  border: 1px solid #3f4451;
+  color: #e7e9ea;
+}
+
+body.dark-mode .trend-badge.trend-up {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+
+body.dark-mode .trend-badge.trend-down {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.15) 100%);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+body.dark-mode .trend-badge.trend-flat {
+  background: #252932;
+  border-color: #3f4451;
+  color: #9ba3af;
+}
+
+/* Health indicators in dark mode */
+body.dark-mode .health-indicator.excellent {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.2) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+}
+
+body.dark-mode .health-indicator.good {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(22, 163, 74, 0.2) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #4ade80;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.15);
+}
+
+body.dark-mode .health-indicator.moderate {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.2) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
+}
+
+body.dark-mode .health-indicator.warning {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.2) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
+}
+
+/* Chart key */
+body.dark-mode .chart-key {
+  color: #9ba3af;
+}
+
+body.dark-mode .key.current {
+  color: #f1f3f5;
+}
+
+/* Scrollbar (Webkit) - Softer */
+body.dark-mode ::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+body.dark-mode ::-webkit-scrollbar-track {
+  background: #1a1d23;
+}
+
+body.dark-mode ::-webkit-scrollbar-thumb {
+  background: #3f4451;
+  border-radius: 6px;
+}
+
+body.dark-mode ::-webkit-scrollbar-thumb:hover {
+  background: #4a5161;
+}
+
+/* Select dropdown */
+body.dark-mode select {
+  background: #252932;
+  color: #e7e9ea;
+  border-color: #3f4451;
+}
+
+body.dark-mode select option {
+  background: #252932;
+  color: #e7e9ea;
+}
+
+/* Loading text */
+body.dark-mode p {
+  color: #e7e9ea;
+}
+
+/* Canvas background fix */
+body.dark-mode canvas {
+  background: transparent !important;
+}
