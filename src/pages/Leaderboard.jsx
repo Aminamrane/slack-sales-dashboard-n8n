@@ -1181,9 +1181,17 @@ export default function Leaderboard() {
                 const months = [];
                 const current = new Date(startDate);
                 
-                while (current <= today) {
+                // FIX: Comparer uniquement année + mois (ignorer le jour)
+                const currentYearMonth = today.getFullYear() * 100 + today.getMonth();
+                
+                while (true) {
                   const year = current.getFullYear();
                   const month = current.getMonth();
+                  const iterYearMonth = year * 100 + month;
+                  
+                  // Stop si on dépasse le mois actuel
+                  if (iterYearMonth > currentYearMonth) break;
+                  
                   const monthName = new Intl.DateTimeFormat('fr-FR', { 
                     month: 'long', 
                     year: 'numeric' 
