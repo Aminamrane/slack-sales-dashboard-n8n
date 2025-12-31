@@ -120,6 +120,14 @@ export default async function handler(req, res) {
     const body = await readJson(req);
     const incoming = body?.company ?? {};
 
+    // Normaliser representatives: s'assurer que c'est un array
+    const normalizedIncoming = {
+      ...incoming,
+      representatives: Array.isArray(incoming.representatives) 
+        ? incoming.representatives 
+        : [],
+    };
+
     const typeEntreprise =
       body?.meta?.typeEntreprise ??
       body?.company?.businessType ??
@@ -132,9 +140,9 @@ export default async function handler(req, res) {
 
     // --- Build a version ONLY for schema validation (schema doesn't know EI and requires rcsCity)
     const forSchema = {
-      ...incoming,
-      legalForm: isEI ? "Autre" : incoming.legalForm,     // map EI → Autre so the schema accepts it
-      rcsCity: isEI ? (incoming.rcsCity || "Lille") : incoming.rcsCity, // dummy city to satisfy required field
+      ...normalizedIncoming,
+      legalForm: isEI ? "Autre" : normalizedIncoming.legalForm,     // map EI → Autre so the schema accepts it
+      rcsCity: isEI ? (normalizedIncoming.rcsCity || "Lille") : normalizedIncoming.rcsCity, // dummy city to satisfy required field
     };
 
     const parsed = CompanySchema.safeParse(forSchema);
@@ -154,9 +162,7 @@ export default async function handler(req, res) {
       email: incoming?.email || "",
       phone: incoming?.phone || "",
       businessType: typeEntreprise,
-      representatives: Array.isArray(incoming?.representatives)
-        ? incoming.representatives
-        : (companyForOutput.representatives || []),
+      representatives: companyForOutput.representatives, // ✅ Version validée
     };
 
     // --- Clause text
