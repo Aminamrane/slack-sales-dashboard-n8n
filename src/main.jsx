@@ -12,6 +12,7 @@ import ContractNew   from "./pages/ContractNew.jsx";
 import ClientNew     from "./pages/ClientNew.jsx";
 import AssignLeads   from "./pages/AssignLeads.jsx";
 import AuthCallback  from "./pages/AuthCallback.jsx";
+import AdminLeads    from "./pages/AdminLeads.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import MouseDot from "./components/MouseDot.jsx";
@@ -24,6 +25,7 @@ function App() {
       <Routes>
         {/* Public routes */}
         <Route path="/" element={<Leaderboard />} />
+        <Route path="/admin/leads" element={<AdminLeads />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
 
         {/* Everything below is protected */}

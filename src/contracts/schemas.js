@@ -28,10 +28,10 @@ export const AddressSchema = z.object({
   country: z.string().default("France"),
 });
 
-/** Représentant totalement optionnel en V1 */
+/** Représentant obligatoire avec nom et fonction */
 export const RepresentativeSchema = z.object({
-  fullName: z.string().optional(),
-  role: z.string().optional(),
+  fullName: z.string().min(3, "Nom du représentant requis"),
+  role: z.string().min(2, "Fonction du représentant requise"),
 });
 
 /** ➜ V1 souple : SIREN = 9 chiffres, représentants facultatifs */
@@ -43,7 +43,8 @@ export const CompanySchema = z.object({
     .refine((v) => /^\d{9}$/.test(v), "SIREN = 9 chiffres"),
   rcsCity: z.string().min(2, "Ville du RCS requise"),
   headOffice: AddressSchema,
-  representatives: z.array(RepresentativeSchema).default([]), // ✅ plus de min(1)
+  representatives: z.array(RepresentativeSchema)
+    .min(1, "Ajoute au moins 1 représentant (fonction + nom)"),
 });
 
 export const ClientSchema = z.object({

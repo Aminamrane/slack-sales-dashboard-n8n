@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { CompanySchema, normalizeSiren, isValidSiren } from "../contracts/schemas.js";
 import { companyClause } from "../contracts/format.js";
+import myLogo from "../assets/my_image.png";
+import myLogoDark from "../assets/my_image2.png";
 import "./contract.css";
 
 // UI shows EI instead of "Autre"
@@ -37,7 +39,7 @@ export default function ContractNew() {
     email: "",
     phone: "",
     headOffice: { line1: "", postalCode: "", city: "", country: "France" },
-    representatives: [{ fullName: "", role: "" }],
+    representatives: [{ fullName: "", role: "Président" }],
     // New: default business type
     businessType: "Générales",
   });
@@ -47,6 +49,39 @@ export default function ContractNew() {
   const [showAllErrors, setShowAllErrors] = useState(false);
   const [preview, setPreview] = useState("");
   const [step, setStep] = useState(0); // 0..4
+
+  // Dark mode detection - IMMEDIATE pour éviter le flash
+  const [darkMode, setDarkMode] = useState(() => {
+    // Détection IMMÉDIATE au chargement
+    return document.documentElement.classList.contains('dark-mode') || 
+           document.body.classList.contains('dark-mode');
+  });
+
+  useEffect(() => {
+    // Détecter si dark mode est actif
+    const isDark = document.documentElement.classList.contains('dark-mode') || 
+                   document.body.classList.contains('dark-mode');
+    setDarkMode(isDark);
+
+    // Écouter les changements
+    const observer = new MutationObserver(() => {
+      const isDark = document.documentElement.classList.contains('dark-mode') || 
+                     document.body.classList.contains('dark-mode');
+      setDarkMode(isDark);
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+    
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   // ----- filename helpers -----
   const stripDiacritics = (s = "") => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -248,11 +283,17 @@ export default function ContractNew() {
   };
 
   return (
-    <div className="wizard-outer">
+    <div className={`wizard-outer ${darkMode ? 'dark-mode' : ''}`}>
       <div className="wizard">
         {/* Left stepper */}
         <aside className="wizard-side">
-          <div className="wizard-brand">OWNER</div>
+          <div className="wizard-brand">
+            <img 
+              src={darkMode ? myLogoDark : myLogo} 
+              alt="OWNER" 
+              style={{ width: 48, height: 48, borderRadius: 12 }} 
+            />
+          </div>
           <div className="wizard-steps">
             {steps.map((s, i) => {
               const state = i < step ? "done" : i === step ? "active" : "todo";
@@ -273,7 +314,7 @@ export default function ContractNew() {
 
           {/* STEP 0 — Identité */}
           {step === 0 && (
-            <form>
+            <form key={step}>
               <label className="field">
                 Raison sociale *
                 <input
@@ -337,7 +378,7 @@ export default function ContractNew() {
 
           {/* STEP 1 — Contacts (phone below email) */}
           {step === 1 && (
-            <form>
+            <form key={step}>
               <label className="field">
                 Email (contact) *
                 <input
@@ -367,7 +408,7 @@ export default function ContractNew() {
 
           {/* STEP 2 — Siège social */}
           {step === 2 && (
-            <form>
+            <form key={step}>
               <fieldset className="card">
                 <legend>Siège social *</legend>
 
@@ -427,7 +468,7 @@ export default function ContractNew() {
 
           {/* STEP 3 — Représentants */}
           {step === 3 && (
-            <form>
+            <form key={step}>
               <fieldset className="card">
                 <legend>Représentant(s) légal(aux)</legend>
                 {company.representatives.map((rep, idx) => {
@@ -458,6 +499,9 @@ export default function ContractNew() {
                           className="input"
                           placeholder="Gérant"
                         />
+                        {errors[roleKey] && (touched[roleKey] || showAllErrors) && (
+                          <span className="error">{errors[roleKey]}</span>
+                        )}
                       </label>
 
                       <button
