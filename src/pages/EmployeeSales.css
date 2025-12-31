@@ -1,222 +1,464 @@
-/* ===== Page wrapper ===== */
-.employee-page { padding: 20px; }
-@media (max-width: 480px) { .employee-page { padding: 12px; } }
-
-/* ===== Back button ===== */
-.employee-page .emp-back{
-  display:inline-block;margin-bottom:12px;text-decoration:none;
-  font-weight:600;color:#111827;background:#f3f4f6;
-  padding:10px 14px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.04);
+/* ===== Container ===== */
+.employee-page {
+  min-height: 100vh;
+  background: #f5f5f7;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-/* ===== Header card ===== */
-.employee-page .emp-header-card{
-  display:flex;justify-content:space-between;align-items:center;
-  gap:16px;padding:22px;border:1px solid #eef2f7;border-radius:18px;
-  background:#fff;box-shadow:0 12px 40px rgba(0,0,0,.06);
-  max-width:1100px;margin:0 auto;
-}
-.employee-page .emp-left{display:flex;align-items:center;gap:14px;min-width:0;}
-
-.employee-page .emp-avatar-wrap{width:72px;height:72px;}
-.employee-page .emp-avatar{width:100%;height:100%;border-radius:14px;object-fit:cover;display:block;}
-.employee-page .emp-avatar.emp-placeholder{background:#e5e7eb;}
-
-.employee-page .emp-id-block{display:flex;flex-direction:column;min-width:0;}
-.employee-page .emp-name{
-  margin:0;font-weight:800;color:#111827;font-size:clamp(22px,4vw,32px);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:68vw;
-}
-.employee-page .emp-id{font-size:12px;color:#6b7280;margin-top:4px;}
-
-.employee-page .emp-right{margin-left:auto;display:flex;align-items:center;}
-.employee-page .emp-fake-select{
-  padding:12px 44px 12px 16px;border:1px solid #e5e7eb;border-radius:14px;background:#f9fafb;
-  font-weight:700;color:#111827;cursor:not-allowed;appearance:none;line-height:1.1;
-  background-image:
-    linear-gradient(45deg,transparent 50%,#9ca3af 50%),
-    linear-gradient(135deg,#9ca3af 50%,transparent 50%);
-  background-position:calc(100% - 22px) 55%,calc(100% - 16px) 55%;
-  background-size:6px 6px,6px 6px;background-repeat:no-repeat;
-}
-.employee-page .emp-fake-select:disabled{opacity:1;}
-
-@media (max-width: 760px){
-  .employee-page .emp-header-card{flex-direction:column;align-items:flex-start;}
-  .employee-page .emp-right{margin-left:0;}
+.employee-page.dark-mode {
+  background: #000000;
 }
 
-/* ===== Stats title ===== */
-.employee-page .emp-stats-title{
-  max-width:1100px;margin:18px auto 8px;text-align:center;color:#374151;
-  font-size:14px;
-}
-.employee-page .emp-stats-title a{color:#2563eb;text-decoration:none;font-weight:700;}
-
-/* ===== Stats grid ===== */
-.employee-page .emp-stats{
-  max-width:1100px;margin:8px auto 0;
-  display:grid;grid-template-columns:repeat(3,1fr);gap:16px;
-}
-.employee-page .stat-card{
-  border-radius:18px;padding:22px;text-align:center;font-weight:600;
-  box-shadow:0 10px 34px rgba(0,0,0,.06);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:110px;
-}
-.employee-page .stat-value{font-size:clamp(22px,4vw,30px);font-weight:800;line-height:1.1;}
-.employee-page .stat-label{margin-top:8px;font-size:15px;color:#6b7280}
-
-/* color themes (comme ton modèle) */
-.employee-page .stat-card.ventes{ background:#ECFDF5; color:#16A34A; }
-.employee-page .stat-card.cash  { background:#EFF6FF; color:#2563EB; }
-.employee-page .stat-card.revenu{ background:#FFF7ED; color:#EA580C; }
-
-/* breakpoints: 3 -> 2 -> 1 colonnes */
-@media (max-width: 1024px){ .employee-page .emp-stats{ grid-template-columns:repeat(2,1fr); } }
-@media (max-width: 640px) { .employee-page .emp-stats{ grid-template-columns:1fr; } }
-
-/* ===== Placeholder panel (table à venir) ===== */
-.employee-page .emp-panel-placeholder{
-  max-width:1100px;margin:16px auto 0;padding:18px;
-  border:1px solid #eef2f7;border-radius:16px;background:#fff;color:#9ca3af;
+.emp-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 24px;
 }
 
-/* ===== Sales history card ===== */
-.employee-page .emp-history-card{
-  max-width:1100px;
-  margin:16px auto 0;
-  padding:18px;
-  border:1px solid #eef2f7;
-  border-radius:16px;
-  background:#fff;
-  box-shadow:0 10px 34px rgba(0,0,0,.06);
-}
-
-.employee-page .emp-history-head{
-  display:flex;align-items:center;justify-content:space-between;
-  margin-bottom:10px;
-}
-.employee-page .emp-history-head h2{
-  font-size:18px;margin:0;color:#111827;font-weight:800;
-}
-
-.employee-page .emp-history-empty{
-  margin:8px 0 0; color:#9ca3af; font-size:14px;
-}
-
-/* Table wrapper to allow horizontal scroll on mobile */
-.employee-page .emp-history-table-wrap{
-  width:100%; overflow:auto;
-}
-
-/* Table styles */
-.employee-page .emp-history{
-  width:100%; border-collapse:collapse; font-size:14px;
-  min-width: 640px; /* so columns keep shape on small screens */
-}
-.employee-page .emp-history th,
-.employee-page .emp-history td{
-  padding:10px 8px; background-clip:padding-box;
-}
-.employee-page .emp-history thead th{
-  border-bottom:1px solid #e5e7eb; font-weight:700; color:#374151;
-}
-.employee-page .emp-history tbody tr{
-  border-bottom:1px solid #f0f2f5;
-}
-.employee-page .emp-history tbody tr:nth-child(odd){
-  background:#fafafa;
-}
-.employee-page .emp-history tbody tr:hover td{
-  background:#f5f7fa;
-}
-
-/* comment cell can wrap */
-.employee-page .emp-history td.emp-history-comment{
-  max-width:420px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-
-/* Responsive tweaks */
-@media (max-width: 720px){
-  .employee-page .emp-history-head h2{ font-size:16px; }
-  .employee-page .emp-history { font-size:13px; }
-}
-
-/* Small count on the right of the title */
-.employee-page .emp-history-count {
-  color: #6b7280;
+/* ===== Back Button ===== */
+.emp-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding: 12px 20px;
+  background: #ffffff;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  font-weight: 600;
   font-size: 14px;
+  color: #1d1d1f;
+  text-decoration: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
 }
 
-/* subtle text */
-.employee-page .muted {
-  color: #9ca3af;
+.emp-back:hover {
+  background: #f5f5f7;
+  transform: translateX(-4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
-/* Pills for mode & tunnel */
-.employee-page .emp-chip {
-  display: inline-block;
-  padding: 4px 8px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  background: #eef2f7;
-  color: #374151;
+.dark-mode .emp-back {
+  background: #2c2c2e;
+  border-color: #3a3a3c;
+  color: #f5f5f7;
 }
 
-/* lighter pill variant (tunnel) */
-.employee-page .emp-chip.light {
-  background: #f3f4f6;
-  color: #4b5563;
+.dark-mode .emp-back:hover {
+  background: #3a3a3c;
 }
 
-/* optional color hints by mode text */
-.employee-page .emp-chip.cb {         /* CB */
-  background: #e6f0ff;
+/* ===== Header Card ===== */
+.emp-header-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 28px 32px;
+  background: #ffffff;
+  border: 1px solid #e5e5e5;
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+  margin-bottom: 24px;
+}
+
+.dark-mode .emp-header-card {
+  background: #1c1c1e;
+  border-color: #2c2c2e;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.emp-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 1;
+  min-width: 0;
+}
+
+.emp-avatar-wrap {
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
+}
+
+.emp-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+  object-fit: cover;
+  border: 3px solid #f5f5f7;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.dark-mode .emp-avatar {
+  border-color: #2c2c2e;
+}
+
+.emp-avatar.emp-placeholder {
+  background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
+}
+
+.dark-mode .emp-avatar.emp-placeholder {
+  background: linear-gradient(135deg, #3a3a3c 0%, #2c2c2e 100%);
+}
+
+.emp-id-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.emp-name {
+  margin: 0;
+  font-size: clamp(24px, 4vw, 32px);
+  font-weight: 800;
+  color: #1d1d1f;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dark-mode .emp-name {
+  color: #f5f5f7;
+}
+
+.emp-subtitle {
+  margin-top: 6px;
+  font-size: 14px;
+  color: #86868b;
+  font-weight: 500;
+}
+
+.dark-mode .emp-subtitle {
+  color: #98989d;
+}
+
+/* ===== Stats Grid ===== */
+.emp-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 768px) {
+  .emp-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+.stat-card {
+  position: relative;
+  padding: 28px 24px;
+  border-radius: 20px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+}
+
+.stat-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.stat-value {
+  font-size: clamp(28px, 5vw, 36px);
+  font-weight: 800;
+  line-height: 1.1;
+  margin-bottom: 8px;
+}
+
+.stat-label {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.9;
+}
+
+/* Stat Card Colors */
+.stat-card.ventes {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  color: #047857;
+}
+
+.dark-mode .stat-card.ventes {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.08) 100%);
+  color: #34d399;
+}
+
+.stat-card.cash {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
   color: #1d4ed8;
 }
-.employee-page .emp-chip.virement {   /* virement */
-  background: #e8fff3;
-  color: #16a34a;
-}
-.employee-page .emp-chip.espèces,
-.employee-page .emp-chip.especes {    /* espèces */
-  background: #fff7ed;
-  color: #ea580c;
+
+.dark-mode .stat-card.cash {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.15) 0%, rgba(37, 99, 235, 0.08) 100%);
+  color: #60a5fa;
 }
 
-/* Client column: force left align and a bit more padding */
-.emp-history th:first-child,
-.emp-history td:first-child {
-  text-align: left;
-  padding-left: 1rem; /* adjust as needed */
+.stat-card.revenu {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  color: #c2410c;
 }
 
-/* Email column: center align */
-.emp-history th:nth-child(2),
-.emp-history td:nth-child(2) {
-  text-align: center;
-  width: 200px; /* optional: reserve space for future email addresses */
+.dark-mode .stat-card.revenu {
+  background: linear-gradient(135deg, rgba(234, 88, 12, 0.15) 0%, rgba(234, 88, 12, 0.08) 100%);
+  color: #fb923c;
 }
 
-/* Default chip style (already present probably) */
-.emp-chip {
-  display: inline-block;
-  padding: 4px 8px;
-  border-radius: 8px;
+/* ===== History Card ===== */
+.emp-history-card {
+  background: #ffffff;
+  border: 1px solid #e5e5e5;
+  border-radius: 20px;
+  padding: 28px 32px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+}
+
+.dark-mode .emp-history-card {
+  background: #1c1c1e;
+  border-color: #2c2c2e;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.emp-history-head {
+  margin-bottom: 20px;
+}
+
+.emp-history-head h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1d1d1f;
+  margin: 0 0 6px 0;
+}
+
+.dark-mode .emp-history-head h2 {
+  color: #f5f5f7;
+}
+
+.emp-history-count {
   font-size: 13px;
+  color: #86868b;
+  font-weight: 500;
+}
+
+.dark-mode .emp-history-count {
+  color: #98989d;
+}
+
+/* Empty States */
+.emp-history-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: #86868b;
+}
+
+.dark-mode .emp-history-empty {
+  color: #98989d;
+}
+
+.emp-empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.emp-loader {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e5e5e5;
+  border-top-color: #007aff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 16px;
+}
+
+.dark-mode .emp-loader {
+  border-color: #3a3a3c;
+  border-top-color: #0a84ff;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ===== Table ===== */
+.emp-history-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 12px;
+}
+
+.emp-history {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  min-width: 800px;
+}
+
+.emp-history thead th {
+  padding: 14px 12px;
+  text-align: left;
   font-weight: 600;
-  background: #f3f4f6;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #6b7280;
+  border-bottom: 2px solid #e5e5e5;
+  background: #f9fafb;
+}
+
+.dark-mode .emp-history thead th {
+  color: #98989d;
+  border-bottom-color: #2c2c2e;
+  background: #2c2c2e;
+}
+
+.emp-history tbody tr {
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.2s ease;
+}
+
+.dark-mode .emp-history tbody tr {
+  border-bottom-color: #2c2c2e;
+}
+
+.emp-history tbody tr:hover {
+  background: #f9fafb;
+}
+
+.dark-mode .emp-history tbody tr:hover {
+  background: #2c2c2e;
+}
+
+.emp-history tbody td {
+  padding: 16px 12px;
   color: #374151;
 }
 
-/* Mode-specific colors */
+.dark-mode .emp-history tbody td {
+  color: #e5e7eb;
+}
+
+.emp-date {
+  font-weight: 500;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.dark-mode .emp-date {
+  color: #9ba3af;
+}
+
+.emp-client {
+  font-weight: 600;
+}
+
+.emp-amount,
+.emp-mensualite {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.emp-history-comment {
+  max-width: 300px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.dark-mode .emp-history-comment {
+  color: #9ba3af;
+}
+
+/* ===== Chips ===== */
+.emp-chip {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .emp-chip.mode-m {
-  background: #dcfce7; /* soft green */
-  color: #166534;      /* darker green text */
+  background: #d1fae5;
+  color: #047857;
+}
+
+.dark-mode .emp-chip.mode-m {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
 }
 
 .emp-chip.mode-a {
-  background: #ede9fe; /* soft purple */
-  color: #5b21b6;      /* darker purple text */
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.dark-mode .emp-chip.mode-a {
+  background: rgba(99, 102, 241, 0.2);
+  color: #818cf8;
+}
+
+.emp-chip.mode-default {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.dark-mode .emp-chip.mode-default {
+  background: #3a3a3c;
+  color: #9ba3af;
+}
+
+.emp-chip.tunnel {
+  background: #f5f5f7;
+  color: #374151;
+  border: 1px solid #e5e5e5;
+}
+
+.dark-mode .emp-chip.tunnel {
+  background: #2c2c2e;
+  color: #e5e7eb;
+  border-color: #3a3a3c;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .emp-container {
+    padding: 20px 16px;
+  }
+
+  .emp-header-card {
+    padding: 20px;
+  }
+
+  .emp-avatar-wrap {
+    width: 64px;
+    height: 64px;
+  }
+
+  .emp-history-card {
+    padding: 20px 16px;
+  }
+
+  .emp-history {
+    font-size: 13px;
+  }
+
+  .emp-history thead th,
+  .emp-history tbody td {
+    padding: 12px 8px;
+  }
 }
