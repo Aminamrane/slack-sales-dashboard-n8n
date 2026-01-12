@@ -23,6 +23,10 @@ import lightIcon from "../assets/light.png";
 import darkIcon from "../assets/dark.png";
 
 import trophyIcon from "../assets/trophy.png";
+import ndaIcon from "../assets/icon1.png";
+import declareIcon from "../assets/icon2.png";
+import toolsIcon from "../assets/icon3.png";
+import crownIcon from "../assets/crown.png";
 
 import Chart from "chart.js/auto";
 
@@ -470,37 +474,103 @@ export default function Leaderboard() {
         reporter_email: session?.user?.email || null,
       };
       
-      console.log('📤 Sending to webhook:', payload);
+      console.log('📤 Tentative d\'envoi au webhook...');
       
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 12000);
+      // ═══════════════════════════════════════════════════════════════
+      // SYSTÈME DE RETRY AVEC BACKOFF EXPONENTIEL
+      // ═══════════════════════════════════════════════════════════════
       
-      const res = await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
+      const MAX_RETRIES = 5; // Nombre de tentatives
+      const INITIAL_TIMEOUT = 15000; // 15s pour la première tentative
+      let lastError = null;
+      let success = false;
       
-      clearTimeout(timeout);
-      
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        throw new Error(`Webhook failed ${res.status}: ${txt}`);
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          console.log(`🔄 Tentative ${attempt}/${MAX_RETRIES}...`);
+          
+          // Timeout progressif : 15s, 20s, 25s, 30s, 35s
+          const timeoutDuration = INITIAL_TIMEOUT + (attempt - 1) * 5000;
+          
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), timeoutDuration);
+          
+          const res = await fetch(webhookUrl, {
+            method: "POST",
+            headers: { 
+              "Content-Type": "application/json",
+              "X-Retry-Attempt": attempt.toString(), // Info pour n8n
+            },
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+          });
+          
+          clearTimeout(timeout);
+          
+          // Vérifier le statut HTTP
+          if (!res.ok) {
+            const txt = await res.text().catch(() => "");
+            throw new Error(`HTTP ${res.status}: ${txt}`);
+          }
+          
+          // ✅ SUCCÈS!
+          console.log(`✅ Webhook envoyé avec succès (tentative ${attempt})`);
+          success = true;
+          break; // Sortir de la boucle
+          
+        } catch (err) {
+          lastError = err;
+          console.error(`❌ Tentative ${attempt} échouée:`, err.message);
+          
+          // Si ce n'est pas la dernière tentative, attendre avant retry
+          if (attempt < MAX_RETRIES) {
+            // Backoff exponentiel : 2s, 4s, 8s, 16s
+            const waitTime = Math.min(2000 * Math.pow(2, attempt - 1), 16000);
+            console.log(`⏳ Attente de ${waitTime / 1000}s avant retry...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+          }
+        }
       }
       
-      console.log('✅ Webhook success');
-      setSaleSuccess(true);
+      // ═══════════════════════════════════════════════════════════════
+      // GESTION DU RÉSULTAT FINAL
+      // ═══════════════════════════════════════════════════════════════
       
-      setTimeout(() => {
-        setShowSaleModal(false);
-        setSaleSuccess(false);
-        setSaleForm({ email: "", paymentModality: "M", employeeRange: "" });
-      }, 1500);
+      if (success) {
+        // ✅ Succès après X tentatives
+        console.log('✅ Vente déclarée avec succès!');
+        setSaleSuccess(true);
+        
+        setTimeout(() => {
+          setShowSaleModal(false);
+          setSaleSuccess(false);
+          setSaleForm({ email: "", paymentModality: "M", employeeRange: "" });
+        }, 1500);
+        
+      } else {
+        // ❌ Échec après toutes les tentatives
+        console.error('❌ Échec après toutes les tentatives:', lastError);
+        
+        // Afficher un message détaillé à l'utilisateur
+        const errorDetails = lastError.name === 'AbortError' 
+          ? 'Le serveur n8n ne répond pas (timeout)'
+          : lastError.message;
+        
+        alert(
+          `❌ Échec d'envoi après ${MAX_RETRIES} tentatives.\n\n` +
+          `Erreur : ${errorDetails}\n\n` +
+          `⚠️ IMPORTANT : Notez ces informations :\n` +
+          `Email : ${payload.email}\n` +
+          `Mode : ${payload.payment_mode}\n` +
+          `Salariés : ${payload.employee_band}\n` +
+          `Date : ${new Date().toLocaleString('fr-FR')}\n\n` +
+          `Contactez un administrateur pour enregistrer manuellement.`
+        );
+      }
       
     } catch (err) {
-      console.error("Sale submit error:", err);
-      alert("Échec d'envoi au webhook. Réessaie.");
+      console.error("❌ Erreur critique:", err);
+      alert(`Erreur critique : ${err.message}`);
     } finally {
       setSaleSubmitting(false);
     }
@@ -798,6 +868,8 @@ export default function Leaderboard() {
 
   const [rows, setRows] = useState([]);
 
+  const [allTimeTopSeller, setAllTimeTopSeller] = useState(null);
+
   const [tunnelStats, setTunnelStats] = useState({});
 
   const [totals, setTotals] = useState({ cash: 0, revenu: 0, ventes: 0 });
@@ -880,6 +952,48 @@ export default function Leaderboard() {
 
     })();
 
+  }, [session, allowed]);
+
+  // Load all-time top seller for crown display
+  useEffect(() => {
+    if (!session || !allowed) return;
+
+    (async () => {
+      // On récupère toutes les ventes (all-time) pour déterminer le #1 définitif
+      const { data, error } = await supabase
+        .from("Info")
+        .select("employee_name, amount, mensualite")
+        .not("employee_name", "is", null);
+
+      if (error) {
+        console.error("allTimeTopSeller error:", error);
+        return;
+      }
+
+      const stats = {};
+
+      (data || []).forEach((r) => {
+        const name = (r.employee_name || "").trim();
+        if (!name) return;
+
+        const amount = Number(r.amount) || 0;
+        const mensu = Number(r.mensualite) || 0;
+
+        if (!stats[name]) stats[name] = { name, sales: 0, revenu: 0, cash: 0 };
+        stats[name].sales += 1;
+        stats[name].revenu += amount;
+        stats[name].cash += mensu;
+      });
+
+      const best = Object.values(stats).sort(
+        (a, b) =>
+          b.sales - a.sales ||          // critère #1 : nb ventes
+          b.revenu - a.revenu ||        // tie-break #1 : revenu
+          b.cash - a.cash               // tie-break #2 : cash
+      )[0];
+
+      setAllTimeTopSeller(best?.name || null);
+    })();
   }, [session, allowed]);
 
   useEffect(() => {
@@ -2195,28 +2309,23 @@ export default function Leaderboard() {
           {/* Mes outils - Dropdown */}
           <div style={{ position: 'relative' }}>
             <button 
+              className="tools-btn"
               onClick={(e) => {
                 const dropdown = e.currentTarget.nextElementSibling;
                 dropdown.style.display = dropdown.style.display === 'none' ? 'flex' : 'none';
               }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 12px',
-                borderRadius: '10px',
-                border: 'none',
-                background: darkMode ? '#2a2b2e' : '#f5f5f7',
-                color: darkMode ? '#f5f5f7' : '#1d1d1f',
-                fontSize: '13px',
-                fontWeight: 500,
-                cursor: 'pointer',
-                transition: 'background 0.15s'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? '#333338' : '#e5e5e5'}
-              onMouseLeave={(e) => e.currentTarget.style.background = darkMode ? '#2a2b2e' : '#f5f5f7'}
             >
-              🛠️ Mes outils
+              <img 
+                src={toolsIcon} 
+                alt="" 
+                style={{ 
+                  width: '50px',
+                  height: '50px', 
+                  objectFit: 'contain',
+                  flexShrink: 0
+                }} 
+              />
+              Mes outils
               <span style={{ fontSize: '10px', opacity: 0.6 }}>▼</span>
             </button>
             {/* Dropdown menu */}
@@ -2413,19 +2522,35 @@ export default function Leaderboard() {
               className="export-btn nda-btn-primary"
               onClick={() => navigate("/contracts/new")}
             >
-              📄 Générer le NDA
+              <img 
+                src={ndaIcon} 
+                alt="" 
+                style={{ 
+                  width: '50px',
+                  height: '50px', 
+                  objectFit: 'contain',
+                  flexShrink: 0
+                }} 
+              />
+              Générer le NDA
             </button>
 
             {/* Déclarer une vente */}
             <button 
-              className="export-btn"
+              className="export-btn declare-btn-secondary"
               onClick={() => setShowSaleModal(true)}
-              style={{
-                background: COLORS.tertiary,
-                boxShadow: `0 2px 8px ${COLORS.tertiary}40`
-              }}
             >
-              ➕ Déclarer une vente
+              <img 
+                src={declareIcon} 
+                alt="" 
+                style={{ 
+                  width: '50px',
+                  height: '50px', 
+                  objectFit: 'contain',
+                  flexShrink: 0
+                }} 
+              />
+              Déclarer une vente
             </button>
           </div>
         </div>
@@ -2611,7 +2736,27 @@ export default function Leaderboard() {
 
                     <td className="name-cell">
 
-                      <img src={r.avatar} className="avatar" alt="" /> 
+                      <div className="avatar-wrap">
+
+                        <img src={r.avatar} className="avatar" alt="" />
+
+                        {allTimeTopSeller && r.name === allTimeTopSeller && (
+
+                          <img
+
+                            src={crownIcon}
+
+                            className="crown-icon"
+
+                            alt="Top ventes all-time"
+
+                            title="Top ventes all-time"
+
+                          />
+
+                        )}
+
+                      </div>
 
                       <span>{r.name}</span>
 

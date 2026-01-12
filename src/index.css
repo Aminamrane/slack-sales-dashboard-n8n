@@ -177,6 +177,32 @@ body.dark-mode .trophy-count {
   border-radius: 50%;
   object-fit: cover;
 }
+
+.avatar-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.crown-icon {
+  position: absolute;
+  top: -8px;
+  left: 48%;
+  transform: translateX(-50%);
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  pointer-events: none;
+  z-index: 2;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.25));
+}
+
+/* Dark mode: un poil plus lumineux si besoin */
+body.dark-mode .crown-icon {
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.55)) brightness(1.05);
+}
+
 .leaderboard thead th:nth-child(2) {
   padding-left: calc(36px + .6rem);
 }
@@ -1449,3 +1475,102 @@ body.dark-mode .chart-body--glass {
 body.dark-mode .money-emoji {
   filter: brightness(1.2);
 }
+
+/* ════════════════════════════════════════════════════════════════
+   NDA BUTTON - ICÔNE 50PX DANS BOUTON COMPACT
+   ════════════════════════════════════════════════════════════════ */
+
+   .export-btn.nda-btn-primary {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0px !important;
+    padding: 8px 15px 8px 2px !important;
+    min-height: 44px !important;
+    max-height: 44px !important;
+    overflow: visible !important;
+    position: relative !important;
+    width: auto !important;
+  }
+  
+  /* Icône NDA - déborde du bouton grâce à overflow: visible */
+  .export-btn.nda-btn-primary img {
+    width: 50px !important;
+    height: 50px !important;
+    object-fit: contain !important;
+    flex-shrink: 0 !important;
+    margin: -8px -8px -8px 0 !important;  /* ← AJOUT : margin-right -4px */
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     DECLARE BUTTON - ICÔNE 50PX DANS BOUTON COMPACT
+     ════════════════════════════════════════════════════════════════ */
+
+  .export-btn.declare-btn-secondary {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0px !important;
+    padding: 8px 15px 8px 2px !important;
+    min-height: 44px !important;
+    max-height: 44px !important;
+    overflow: visible !important;
+    position: relative !important;
+    width: auto !important;
+    /* HÉRITE du style .export-btn de base = GRIS */
+  }
+
+  /* Icône Declare - déborde du bouton grâce à overflow: visible */
+  .export-btn.declare-btn-secondary img {
+    width: 50px !important;
+    height: 50px !important;
+    object-fit: contain !important;
+    flex-shrink: 0 !important;
+    margin: -8px -8px -8px 0 !important;
+    filter: brightness(0.7) grayscale(0.3) !important;  /* Plus gris */
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     TOOLS BUTTON - ICÔNE 50PX DANS BOUTON 34PX
+     ════════════════════════════════════════════════════════════════ */
+
+  .tools-btn {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0px !important;
+    padding: 8px 12px 8px 0px !important;
+    min-height: 34px !important;
+    max-height: 34px !important;
+    border-radius: 10px !important;
+    border: none !important;
+    background: #f5f5f7 !important;
+    color: #1d1d1f !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    transition: background 0.15s !important;
+    position: relative !important;
+    overflow: visible !important;
+  }
+
+  .tools-btn:hover {
+    background: #e5e5e5 !important;
+  }
+
+  /* Icône Tools - déborde du bouton */
+  .tools-btn img {
+    width: 50px !important;
+    height: 50px !important;
+    object-fit: contain !important;
+    flex-shrink: 0 !important;
+    margin: -8px -13px -8px 0 !important;
+    filter: brightness(0.7) grayscale(0.3) !important;  /* Plus gris */
+  }
+
+  /* Dark mode */
+  body.dark-mode .tools-btn {
+    background: #2a2b2e !important;
+    color: #f5f5f7 !important;
+  }
+
+  body.dark-mode .tools-btn:hover {
+    background: #333338 !important;
+  }
