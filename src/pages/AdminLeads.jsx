@@ -316,7 +316,7 @@ export default function AdminLeads() {
   }
 
   return (
-    <div style={{ padding: 0, fontFamily: "sans-serif" }}>
+    <div style={{ padding: 0, fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif" }}>
       <div className="board-frame">
         <div style={{
           position: 'absolute',
