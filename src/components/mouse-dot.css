@@ -1,10 +1,10 @@
 /* src/components/mouse-dot.css */
 .mouse-dot {
-  left: 0; top: 0;
-  border-radius: 9999px;
-  will-change: transform, width, height, opacity;
+  border-radius: 50%;
+  will-change: transform, opacity;
+  transition: background-color 0.2s ease;
 }
 
 @media (pointer: coarse), (hover: none) {
-  .mouse-dot { display: none; }
+  .mouse-dot { display: none !important; }
 }

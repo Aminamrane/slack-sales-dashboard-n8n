@@ -1,7 +1,7 @@
 /* scope page contrat */
 .contract-page {
   padding: 1rem;
-  font-family: sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
   max-width: 900px;
   margin: 0 auto;
 }

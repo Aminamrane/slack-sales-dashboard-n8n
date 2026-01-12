@@ -405,30 +405,30 @@ select.input {
 }
 
 /*════════════════════════════════════════════════════════════════════════════
-  DARK MODE - APPLE STYLE (NDA PAGE)
+  DARK MODE - MATCHING MAIN PAGE (CHARCOAL STYLE)
 ════════════════════════════════════════════════════════════════════════════*/
 
-/* Background */
+/* Background - Same as main page */
 .wizard-outer.dark-mode {
-  background: #000000 !important;
+  background: #1a1a1e !important;
 }
 
 /* Left stepper - Dark */
 .wizard-outer.dark-mode .wizard-side {
-  background: #1c1c1e !important;
-  border-color: #2c2c2e !important;
+  background: #242428 !important;
+  border-color: #333338 !important;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6) !important;
 }
 
 .wizard-outer.dark-mode .wizard-brand {
-  border-bottom-color: #2c2c2e !important;
+  border-bottom-color: #333338 !important;
 }
 
 /* Step buttons - Dark */
 .wizard-outer.dark-mode .step .bullet {
-  border-color: #3a3a3c !important;
-  color: #98989d !important;
-  background: #2c2c2e !important;
+  border-color: #333338 !important;
+  color: #8b8d93 !important;
+  background: #242428 !important;
 }
 
 .wizard-outer.dark-mode .step .label {
@@ -436,7 +436,7 @@ select.input {
 }
 
 .wizard-outer.dark-mode .step.active {
-  background: #2c2c2e !important;
+  background: #2a2b2e !important;
 }
 
 .wizard-outer.dark-mode .step.active .bullet {
@@ -452,14 +452,14 @@ select.input {
 }
 
 .wizard-outer.dark-mode .step.todo:hover {
-  background: #2c2c2e !important;
+  background: #2a2b2e !important;
 }
 
 /* Right content - Dark */
 .wizard-outer.dark-mode .wizard-content {
-  background: #1c1c1e !important;
-  border-color: #2c2c2e !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8) !important;
+  background: #242428 !important;
+  border-color: #333338 !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
 }
 
 .wizard-outer.dark-mode .contract-title {
@@ -467,11 +467,11 @@ select.input {
 }
 
 .wizard-outer.dark-mode .contract-subtitle {
-  color: #98989d !important;
+  color: #8b8d93 !important;
 }
 
 .wizard-outer.dark-mode .wizard-nav {
-  border-top-color: #2c2c2e !important;
+  border-top-color: #333338 !important;
 }
 
 /* Form fields - Dark */
@@ -480,8 +480,8 @@ select.input {
 }
 
 .wizard-outer.dark-mode .input {
-  background: #2c2c2e !important;
-  border-color: #3a3a3c !important;
+  background: #2a2b2e !important;
+  border-color: #333338 !important;
   color: #f5f5f7 !important;
 }
 
@@ -491,12 +491,12 @@ select.input {
 }
 
 .wizard-outer.dark-mode .input::placeholder {
-  color: #98989d !important;
+  color: #8b8d93 !important;
 }
 
 /* Select options - Dark */
 .wizard-outer.dark-mode select.input option {
-  background: #2c2c2e !important;
+  background: #2a2b2e !important;
   color: #f5f5f7 !important;
 }
 
@@ -511,8 +511,8 @@ select.input {
 
 /* Cards - Dark */
 .wizard-outer.dark-mode .card {
-  background: #2c2c2e !important;
-  border-color: #3a3a3c !important;
+  background: #2a2b2e !important;
+  border-color: #333338 !important;
 }
 
 .wizard-outer.dark-mode .card legend {
@@ -521,8 +521,8 @@ select.input {
 
 /* Preview card - Dark */
 .wizard-outer.dark-mode .preview {
-  background: #2c2c2e !important;
-  border-color: #3a3a3c !important;
+  background: #2a2b2e !important;
+  border-color: #333338 !important;
 }
 
 .wizard-outer.dark-mode .preview-title {
@@ -535,13 +535,13 @@ select.input {
 
 /* Buttons - Dark */
 .wizard-outer.dark-mode .btn-ghost {
-  background: #2c2c2e !important;
-  border-color: #3a3a3c !important;
+  background: #2a2b2e !important;
+  border-color: #333338 !important;
   color: #f5f5f7 !important;
 }
 
 .wizard-outer.dark-mode .btn-ghost:hover {
-  background: #3a3a3c !important;
+  background: #333338 !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
 }
 

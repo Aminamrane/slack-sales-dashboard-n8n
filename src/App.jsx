@@ -1,4 +1,5 @@
 // src/App.jsx
+
 import { Routes, Route } from "react-router-dom";
 import MouseDot from "./components/MouseDot.jsx";
 import Leaderboard from "./pages/Leaderboard.jsx";
