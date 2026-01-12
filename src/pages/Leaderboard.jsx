@@ -455,7 +455,7 @@ export default function Leaderboard() {
     setSaleSubmitting(true);
     
     try {
-      const webhookUrl = import.meta.env.VITE_N8N_SALES_WEBHOOK_URL || 'https://n8nmay.xyz/webhook-test/6c57e2c2-79c7-4e21-ad42-6dfe0abc6839';
+      const webhookUrl = import.meta.env.VITE_N8N_SALES_WEBHOOK_URL || 'https://n8nmay.xyz/webhook/6c57e2c2-79c7-4e21-ad42-6dfe0abc6839';
       
       const reporter = getReporterName(session);
       
