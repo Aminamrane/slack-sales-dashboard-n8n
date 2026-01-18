@@ -1574,3 +1574,131 @@ body.dark-mode .money-emoji {
   body.dark-mode .tools-btn:hover {
     background: #333338 !important;
   }
+
+/* ════════════════════════════════════════════════════════════════
+   BOUTON EOD - PREMIUM STYLE
+   ════════════════════════════════════════════════════════════════ */
+
+.eod-btn{
+  border: none !important;
+  background: linear-gradient(135deg, rgba(99,102,241,1), rgba(99,102,241,0.82)) !important;
+  color:#fff !important;
+  font-weight: 650 !important;
+  padding: 10px 14px !important;
+  border-radius: 14px !important;
+  box-shadow: 0 10px 22px rgba(99,102,241,.22) !important;
+  gap: 10px !important;
+  display: flex !important;
+  align-items: center !important;
+  transition: all 0.2s !important;
+}
+
+.eod-btn:hover{
+  transform: translateY(-1px) !important;
+  box-shadow: 0 14px 28px rgba(99,102,241,.28) !important;
+  filter: saturate(1.05);
+}
+
+.eod-btn:active{ 
+  transform: translateY(0) !important; 
+}
+
+.eod-btn__icon{ 
+  font-size: 16px; 
+  line-height: 1; 
+}
+
+.eod-btn__label{ 
+  font-size: 14px; 
+}
+
+.eod-btn__badge{
+  margin-left: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.18);
+  border: 1px solid rgba(255,255,255,.22);
+}
+
+/* Dark mode: garde l'effet premium */
+body.dark-mode .eod-btn{
+  box-shadow: 0 14px 34px rgba(99,102,241,.28) !important;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   EOD TABS - PILL SLIDER (SEGMENTED CONTROL)
+   ════════════════════════════════════════════════════════════════ */
+
+.eod-tabs{
+  position: relative;
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 14px;
+  border: 1px solid #e5e5e5;
+  background: #f5f5f7;
+  gap: 4px;
+  overflow: hidden;
+}
+
+body.dark-mode .eod-tabs{
+  border-color: #333338;
+  background: #1a1a1e;
+}
+
+.eod-tabs__pill{
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 118px;
+  height: calc(100% - 8px);
+  border-radius: 12px;
+  background: #4f46e5;
+  transition: transform 220ms cubic-bezier(.2,.9,.2,1);
+  will-change: transform;
+}
+
+.eod-tabs__btn{
+  position: relative;
+  width: 118px;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+  color: #1d1d1f;
+  z-index: 1;
+}
+
+body.dark-mode .eod-tabs__btn{ 
+  color: #f5f5f7; 
+}
+
+.eod-tabs__btn.is-active{
+  color: #fff;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   EOD FORM - RESPONSIVE (MOBILE)
+   ════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 600px) {
+  .eod-grid-2col {
+    grid-template-columns: 1fr !important;
+    gap: 24px !important;
+  }
+  
+  .eod-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .mood-container {
+    gap: 12px !important;
+  }
+  
+  .mood-btn {
+    min-width: 70px !important;
+  }
+}

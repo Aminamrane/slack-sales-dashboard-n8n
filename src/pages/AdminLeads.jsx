@@ -42,22 +42,26 @@ export default function AdminLeads() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const adminSession = localStorage.getItem("admin_session");
-    if (adminSession) {
+    const checkAdmin = async () => {
       try {
-        const parsed = JSON.parse(adminSession);
-        if (parsed?.user?.user_metadata?.role === "admin") {
+        const { data } = await supabase.auth.getSession();
+        const session = data?.session;
+
+        if (session) {
+          // Allow any authenticated user (admins and Slack users)
+          // You can add role check here if needed: session.user?.user_metadata?.role === "admin"
           setIsAdmin(true);
         } else {
           navigate("/");
         }
       } catch (e) {
         navigate("/");
+      } finally {
+        setLoading(false);
       }
-    } else {
-      navigate("/");
-    }
-    setLoading(false);
+    };
+
+    checkAdmin();
   }, [navigate]);
 
   const [leads, setLeads] = useState([]);

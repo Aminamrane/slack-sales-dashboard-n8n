@@ -778,46 +778,29 @@ export default function Leaderboard() {
 
     setAdminLoading(true);
 
-    const validUsername = import.meta.env.VITE_ADMIN_USERNAME;
+    try {
+      // Use Supabase Auth with email/password instead of localStorage
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: adminUsername, // Use email instead of username
+        password: adminPassword,
+      });
 
-    const validPassword = import.meta.env.VITE_ADMIN_PASSWORD;
+      if (error) {
+        setAdminError("Identifiants incorrects");
+        setAdminLoading(false);
+        return;
+      }
 
-    if (adminUsername === validUsername && adminPassword === validPassword) {
-
-      const adminSession = {
-
-        user: {
-
-          id: "admin-user",
-
-          email: "paul@company.com",
-
-          user_metadata: { name: "Paul Faucomprez", role: "admin" },
-
-        },
-
-        access_token: "admin-token",
-
-      };
-
-      localStorage.setItem("admin_session", JSON.stringify(adminSession));
-
-      
-      
-      setSession(adminSession);
-
+      // Session is now managed by Supabase Auth (authenticated role)
+      setSession(data.session);
       setAllowed(true);
-
       setIsAdminUser(true);
-
       setAdminLoading(false);
 
-    } else {
-
-      setAdminError("Identifiants incorrects");
-
+    } catch (err) {
+      console.error("Admin login error:", err);
+      setAdminError("Erreur de connexion");
       setAdminLoading(false);
-
     }
 
   };
@@ -3392,6 +3375,8 @@ export default function Leaderboard() {
           </div>
         </div>
       )}
+
+      {/* Modal animations */}
 
       {/* Modal animations */}
       <style>{`
