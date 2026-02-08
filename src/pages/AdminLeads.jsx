@@ -11,16 +11,28 @@ import "../index.css";
 
 Chart.register(ChartDataLabels);
 
-const COLORS = {
-  primary: "#3b82f6", // Blue - main accent
-  success: "#10b981", // Green - positive metrics
-  danger: "#ef4444", // Red - negative metrics
-  textPrimary: "#0f172a", // Almost black - main text
-  textSecondary: "#64748b", // Gray - secondary text
-  textTertiary: "#94a3b8", // Light gray - labels
-  border: "#e2e8f0", // Very light gray - borders
-  background: "#f8fafc", // Very light blue-gray - background
-  cardBg: "#ffffff", // White - cards
+const LIGHT_COLORS = {
+  primary: "#3b82f6",
+  success: "#10b981",
+  danger: "#ef4444",
+  textPrimary: "#0f172a",
+  textSecondary: "#64748b",
+  textTertiary: "#94a3b8",
+  border: "#e2e8f0",
+  background: "#f8fafc",
+  cardBg: "#ffffff",
+};
+
+const DARK_COLORS = {
+  primary: "#3b82f6",
+  success: "#34d399",
+  danger: "#f87171",
+  textPrimary: "#f5f5f7",
+  textSecondary: "#9ba3af",
+  textTertiary: "#6b7280",
+  border: "#333338",
+  background: "#1a1a1e",
+  cardBg: "#242428",
 };
 
 export default function AdminLeads() {
@@ -30,6 +42,8 @@ export default function AdminLeads() {
     const saved = localStorage.getItem("darkMode");
     return saved === "true";
   });
+
+  const COLORS = darkMode ? DARK_COLORS : LIGHT_COLORS;
 
   useEffect(() => {
     localStorage.setItem("darkMode", darkMode);
