@@ -42,6 +42,8 @@ export default function ContractNew() {
     representatives: [{ fullName: "", role: "Président" }],
     // New: default business type
     businessType: "Générales",
+    // New: flag for companies in registration process
+    isInRegistration: false,
   });
 
   const [errors, setErrors] = useState({});
@@ -146,11 +148,12 @@ export default function ContractNew() {
     // Remove the UI-only businessType from schema payload (in case schema is strict)
     const { businessType: _bt, ...rest } = c;
 
-    // Prepare payload for schema: map EI -> Autre, blank RCS city if EI
+    // Prepare payload for schema: map EI -> Autre, blank RCS city if EI, blank SIREN if in registration
     const cForSchema = {
       ...rest,
       legalForm: toSchemaLegalForm(c.legalForm),
       rcsCity: c.legalForm === "EI" ? "" : c.rcsCity,
+      siren: c.isInRegistration ? "" : c.siren,
     };
 
     const res = CompanySchema.safeParse(cForSchema);
@@ -164,10 +167,13 @@ export default function ContractNew() {
     // EI: RCS city is not required — drop any error about it
     if (c.legalForm === "EI") delete flat["rcsCity"];
 
+    // In registration: SIREN is not required — drop any error about it
+    if (c.isInRegistration) delete flat["siren"];
+
     const ok = Object.keys(flat).length === 0;
 
     // --- PREVIEW: keep the UI label "EI" so it displays (EI), and clean "au RCS de ,"
-    const cForPreview = { ...cForSchema, legalForm: c.legalForm };
+    const cForPreview = { ...cForSchema, legalForm: c.legalForm, isInRegistration: c.isInRegistration };
     let previewText = "";
     if (ok) {
       previewText = companyClause({ company: cForPreview });
@@ -252,6 +258,8 @@ export default function ContractNew() {
         ...rest,
         legalForm: toSchemaLegalForm(company.legalForm),
         rcsCity: company.legalForm === "EI" ? "" : company.rcsCity,
+        siren: company.isInRegistration ? "" : company.siren,
+        isInRegistration: company.isInRegistration || false,
       };
 
       const resp = await fetch("/api/contract-preview", {
@@ -327,24 +335,42 @@ export default function ContractNew() {
                 {showErr("legalName") && <span className="error">{errors["legalName"]}</span>}
               </label>
 
-              <div className="grid2">
-                <label className="field">
-                  Forme juridique *
-                  <select
-                    value={company.legalForm}
-                    onChange={(e) => setField("legalForm", e.target.value)}
-                    onBlur={() => markTouched("legalForm")}
-                    className="input"
-                  >
-                    {LEGAL_FORMS.map((f) => (
-                      <option key={f} value={f}>
-                        {f}
-                      </option>
-                    ))}
-                  </select>
-                  {showErr("legalForm") && <span className="error">{errors["legalForm"]}</span>}
-                </label>
+              <label className="field">
+                Forme juridique *
+                <select
+                  value={company.legalForm}
+                  onChange={(e) => setField("legalForm", e.target.value)}
+                  onBlur={() => markTouched("legalForm")}
+                  className="input"
+                >
+                  {LEGAL_FORMS.map((f) => (
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
+                  ))}
+                </select>
+                {showErr("legalForm") && <span className="error">{errors["legalForm"]}</span>}
+              </label>
 
+              {/* Checkbox for in-registration companies - available for ALL legal forms */}
+              <label className="field" style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={company.isInRegistration}
+                  onChange={(e) => {
+                    setField("isInRegistration", e.target.checked);
+                    // Clear SIREN when checking "in registration"
+                    if (e.target.checked) {
+                      setField("siren", "");
+                    }
+                  }}
+                  style={{ width: 'auto', cursor: 'pointer' }}
+                />
+                <span>En cours d'immatriculation{company.legalForm === "EI" ? "" : " au RCS"}</span>
+              </label>
+
+              {/* SIREN field - show if NOT in registration (for ALL legal forms including EI) */}
+              {!company.isInRegistration && (
                 <label className="field">
                   SIREN (9 chiffres) *
                   <input
@@ -357,12 +383,27 @@ export default function ContractNew() {
                   {showErr("siren") && <span className="error">{errors["siren"]}</span>}
                   {showSirenWarning && <span className="warn">⚠️ SIREN non valide.</span>}
                 </label>
-              </div>
+              )}
 
-              {/* RCS city is only relevant if NOT EI */}
-              {company.legalForm !== "EI" && (
+              {/* RCS city is only relevant if NOT EI and NOT in registration */}
+              {company.legalForm !== "EI" && !company.isInRegistration && (
                 <label className="field">
                   Ville du RCS *
+                  <input
+                    value={company.rcsCity}
+                    onChange={(e) => setField("rcsCity", e.target.value)}
+                    onBlur={() => markTouched("rcsCity")}
+                    className="input"
+                    placeholder="Lille"
+                  />
+                  {showErr("rcsCity") && <span className="error">{errors["rcsCity"]}</span>}
+                </label>
+              )}
+
+              {/* If in registration, ask for the RCS city (different context) */}
+              {company.legalForm !== "EI" && company.isInRegistration && (
+                <label className="field">
+                  Ville du RCS (en cours) *
                   <input
                     value={company.rcsCity}
                     onChange={(e) => setField("rcsCity", e.target.value)}

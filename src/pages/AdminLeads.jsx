@@ -1,24 +1,26 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../lib/supabaseClient";
+import apiClient from "../services/apiClient";
 import { Line, Bar } from "react-chartjs-2";
 import Chart from "chart.js/auto";
 import ChartDataLabels from "chartjs-plugin-datalabels";
 import myLogo from "../assets/my_image.png";
 import myLogoDark from "../assets/my_image2.png";
+import SharedNavbar from "../components/SharedNavbar.jsx";
 import "../index.css";
 
 Chart.register(ChartDataLabels);
 
 const COLORS = {
-  primary: "#6366f1",
-  secondary: "#fb923c",
-  tertiary: "#10b981",
-  gray: "#94a3b8",
-  purple: "#a78bfa",
-  cyan: "#22d3ee",
-  pink: "#f472b6",
-  yellow: "#fbbf24",
+  primary: "#3b82f6", // Blue - main accent
+  success: "#10b981", // Green - positive metrics
+  danger: "#ef4444", // Red - negative metrics
+  textPrimary: "#0f172a", // Almost black - main text
+  textSecondary: "#64748b", // Gray - secondary text
+  textTertiary: "#94a3b8", // Light gray - labels
+  border: "#e2e8f0", // Very light gray - borders
+  background: "#f8fafc", // Very light blue-gray - background
+  cardBg: "#ffffff", // White - cards
 };
 
 export default function AdminLeads() {
@@ -38,24 +40,34 @@ export default function AdminLeads() {
     }
   }, [darkMode]);
 
+  const [session, setSession] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const checkAdmin = async () => {
       try {
-        const { data } = await supabase.auth.getSession();
-        const session = data?.session;
+        // Check JWT auth
+        const token = apiClient.getToken();
+        const user = apiClient.getUser();
 
-        if (session) {
-          // Allow any authenticated user (admins and Slack users)
-          // You can add role check here if needed: session.user?.user_metadata?.role === "admin"
+        if (!token || !user) {
+          navigate("/login");
+          return;
+        }
+
+        // Create session object for compatibility with SharedNavbar
+        setSession({ user: { email: user.email, user_metadata: { name: user.name } } });
+
+        // Check if user has admin or admin_leads permission
+        if (user.role === 'admin' || apiClient.hasAccess('admin_leads')) {
           setIsAdmin(true);
         } else {
           navigate("/");
         }
       } catch (e) {
-        navigate("/");
+        console.error("Access check error:", e);
+        navigate("/login");
       } finally {
         setLoading(false);
       }
@@ -64,28 +76,40 @@ export default function AdminLeads() {
     checkAdmin();
   }, [navigate]);
 
+  const [stats, setStats] = useState(null);
   const [leads, setLeads] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
 
-  const fetchLeads = async () => {
+  const fetchStats = async () => {
     setDataLoading(true);
     try {
-      const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      
-      const { data, error } = await supabase
-        .from("leads_realtime")
-        .select("*")
-        .gte("created_at", startOfMonth.toISOString())
-        .order("created_at", { ascending: true });
+      // Fetch stats and leads in parallel
+      const [statsData, leadsData] = await Promise.all([
+        apiClient.get('/api/v1/admin/leads/stats').catch(err => {
+          console.error("Error fetching stats:", err);
+          return null;
+        }),
+        apiClient.get('/api/v1/leads?page=1&limit=500').catch(err => {
+          console.error("Error fetching leads:", err);
+          return { leads: [], items: [], data: [] };
+        })
+      ]);
 
-      if (error) {
-        console.error("Error fetching leads:", error);
-      } else {
-        setLeads(data || []);
-      }
+      console.log("📊 Stats response:", statsData);
+      console.log("📊 Stats by_source keys:", statsData?.by_source ? Object.keys(statsData.by_source) : "NO by_source");
+      console.log("📊 Leads response:", leadsData);
+
+      setStats(statsData);
+
+      // Handle different response formats for leads
+      const leadsArray = leadsData?.leads || leadsData?.items || leadsData?.data || (Array.isArray(leadsData) ? leadsData : []);
+      setLeads(leadsArray);
+      console.log("📊 Leads set:", leadsArray.length, "items");
     } catch (err) {
       console.error("Fetch error:", err);
+      if (err.message?.includes('401')) {
+        navigate("/login");
+      }
     } finally {
       setDataLoading(false);
     }
@@ -93,75 +117,64 @@ export default function AdminLeads() {
 
   useEffect(() => {
     if (isAdmin) {
-      fetchLeads();
+      fetchStats();
     }
   }, [isAdmin]);
 
+  // Stats from backend API (already calculated)
+  const monthStats = useMemo(() => {
+    if (!stats) return { total: 0, byOrigin: {}, entries: [], avgPerDay: '0.0' };
+
+    const byOrigin = stats.by_source || {};
+    const total = stats.total_leads || 0;
+    const entries = Object.entries(byOrigin).sort((a, b) => b[1] - a[1]);
+
+    // Use average per day calculated by backend (for current month)
+    const avgPerDay = stats.avg_per_day?.toFixed(1) || '0.0';
+
+    return { total, byOrigin, entries, avgPerDay };
+  }, [stats]);
+
   const todayStats = useMemo(() => {
-    const today = new Date();
-    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+    if (!stats) {
+      return { total: 0, byOrigin: {}, top: { origin: "Aucun", count: 0 } };
+    }
 
-    const todayLeads = leads.filter((l) => {
-      const d = new Date(l.created_at);
-      return d >= startOfToday && d < endOfToday;
-    });
+    // Get today's leads count from backend
+    const total = stats.today_leads || 0;
 
-    const byOrigin = {};
-    todayLeads.forEach((l) => {
-      const origin = l.origin || "Unknown";
-      byOrigin[origin] = (byOrigin[origin] || 0) + 1;
-    });
-
+    // For today stats, we'll use the overall source breakdown as an approximation
+    const byOrigin = stats.by_source || {};
     const sorted = Object.entries(byOrigin).sort((a, b) => b[1] - a[1]);
     const top = sorted[0] || ["Aucun", 0];
 
     return {
-      total: todayLeads.length,
+      total,
       byOrigin,
       top: { origin: top[0], count: top[1] },
     };
-  }, [leads]);
-
-  const monthStats = useMemo(() => {
-    const byOrigin = {};
-    leads.forEach((l) => {
-      const origin = l.origin || "Unknown";
-      byOrigin[origin] = (byOrigin[origin] || 0) + 1;
-    });
-
-    const total = leads.length;
-    const entries = Object.entries(byOrigin).sort((a, b) => b[1] - a[1]);
-
-    // Calcul moyenne par jour DEPUIS LE 24/12/2025
-    const now = new Date();
-    const startDate = new Date('2025-12-24'); // Date de début du tracking
-    const msPerDay = 1000 * 60 * 60 * 24;
-    const daysElapsed = Math.max(1, Math.ceil((now - startDate) / msPerDay));
-    const avgPerDay = (total / daysElapsed).toFixed(1);
-
-    return { total, byOrigin, entries, avgPerDay };
-  }, [leads]);
+  }, [stats]);
 
   // Bar chart (horizontal) - Leads par origine
   const barChartData = useMemo(() => {
     const entries = monthStats.entries;
     const labels = entries.map(([origin]) => origin);
     const data = entries.map(([, count]) => count);
-    
-    const colors = [
-      COLORS.primary, COLORS.secondary, COLORS.tertiary, 
-      COLORS.purple, COLORS.cyan, COLORS.pink, COLORS.yellow, COLORS.gray
-    ];
+
+    // Use gradient of blue shades for cleaner look
+    const blueGradient = (index, total) => {
+      const opacity = 1 - (index * 0.15); // Fade from 1 to lighter
+      return `rgba(59, 130, 246, ${Math.max(opacity, 0.4)})`;
+    };
 
     return {
       labels,
       datasets: [{
         label: 'Nombre de leads',
         data,
-        backgroundColor: colors.slice(0, entries.length),
+        backgroundColor: entries.map((_, idx) => blueGradient(idx, entries.length)),
         borderWidth: 0,
-        borderRadius: 6,
+        borderRadius: 8,
       }],
     };
   }, [monthStats]);
@@ -181,18 +194,19 @@ export default function AdminLeads() {
           },
         },
         backgroundColor: darkMode ? "#020617" : "#ffffff",
-        titleColor: darkMode ? "#e5e7eb" : "#000000",
-        bodyColor: darkMode ? "#f9fafb" : "#000000",
-        borderColor: darkMode ? "#1f2937" : "#e5e7eb",
+        titleColor: darkMode ? "#e5e7eb" : COLORS.textPrimary,
+        bodyColor: darkMode ? "#f9fafb" : COLORS.textPrimary,
+        borderColor: darkMode ? "#1f2937" : COLORS.border,
         borderWidth: 1,
         padding: 12,
+        cornerRadius: 8,
       },
       datalabels: {
         anchor: 'end',
         align: 'end',
-        color: darkMode ? "#e5e7eb" : "#374151",
+        color: darkMode ? "#e5e7eb" : COLORS.textSecondary,
         font: { size: 12, weight: 600 },
-        formatter: (value, ctx) => {
+        formatter: (value) => {
           const total = monthStats.total || 1;
           const pct = ((value / total) * 100).toFixed(0);
           return `${value} (${pct}%)`;
@@ -203,19 +217,26 @@ export default function AdminLeads() {
       x: {
         beginAtZero: true,
         ticks: {
-          color: darkMode ? "#9ba3af" : "#4b5563",
+          color: darkMode ? "#9ba3af" : COLORS.textSecondary,
           font: { size: 11 },
         },
         grid: {
-          color: darkMode ? "rgba(148, 163, 184, 0.15)" : "rgba(209, 213, 219, 0.5)",
+          color: darkMode ? "rgba(148, 163, 184, 0.1)" : COLORS.border,
+          drawBorder: false,
+        },
+        border: {
+          display: false,
         },
       },
       y: {
         ticks: {
-          color: darkMode ? "#9ba3af" : "#4b5563",
+          color: darkMode ? "#9ba3af" : COLORS.textPrimary,
           font: { size: 12, weight: 500 },
         },
         grid: { display: false },
+        border: {
+          display: false,
+        },
       },
     },
   }), [darkMode, monthStats.total]);
@@ -233,9 +254,9 @@ export default function AdminLeads() {
     leads.forEach((l) => {
       const origin = l.origin || "Unknown";
       if (!top3Origins.includes(origin)) return; // Skip si pas dans top 3
-      
+
       const day = new Date(l.created_at).getDate();
-      
+
       if (!originData[origin]) {
         originData[origin] = Array(daysInMonth).fill(0);
       }
@@ -248,18 +269,27 @@ export default function AdminLeads() {
         return acc;
       }, []);
 
-      const colors = [COLORS.primary, COLORS.secondary, COLORS.tertiary];
+      // Modern color palette - shades of blue
+      const colors = [
+        '#3b82f6', // Bright blue
+        '#06b6d4', // Cyan
+        '#8b5cf6', // Purple
+      ];
       const color = colors[idx];
 
       return {
         label: origin,
         data: cumulative,
         borderColor: color,
-        backgroundColor: "transparent",
-        borderWidth: 3,
+        backgroundColor: `${color}15`, // Very transparent fill
+        borderWidth: 2.5,
         tension: 0.4,
         pointRadius: 0,
-        fill: false,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: color,
+        pointHoverBorderColor: '#fff',
+        pointHoverBorderWidth: 2,
+        fill: true,
       };
     });
 
@@ -269,28 +299,36 @@ export default function AdminLeads() {
   const lineOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    interaction: {
+      mode: 'index',
+      intersect: false,
+    },
     plugins: {
-      legend: { 
+      legend: {
         display: true,
         position: "bottom",
         labels: {
-          color: darkMode ? "#e5e7eb" : "#374151",
-          font: { size: 14, weight: 600 },
+          color: darkMode ? "#e5e7eb" : COLORS.textPrimary,
+          font: { size: 13, weight: 600 },
           padding: 20,
           usePointStyle: true,
-          pointStyle: 'line',
+          pointStyle: 'circle',
+          boxWidth: 8,
+          boxHeight: 8,
         }
       },
       tooltip: {
         callbacks: {
-          label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y} leads cumulés`,
+          label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()} leads cumulés`,
         },
         backgroundColor: darkMode ? "#020617" : "#ffffff",
-        titleColor: darkMode ? "#e5e7eb" : "#000000",
-        bodyColor: darkMode ? "#f9fafb" : "#000000",
-        borderColor: darkMode ? "#1f2937" : "#e5e7eb",
+        titleColor: darkMode ? "#e5e7eb" : COLORS.textPrimary,
+        bodyColor: darkMode ? "#f9fafb" : COLORS.textPrimary,
+        borderColor: darkMode ? "#1f2937" : COLORS.border,
         borderWidth: 1,
         padding: 12,
+        cornerRadius: 8,
+        displayColors: true,
       },
       datalabels: { display: false },
     },
@@ -298,19 +336,30 @@ export default function AdminLeads() {
       y: {
         beginAtZero: true,
         ticks: {
-          color: darkMode ? "#9ba3af" : "#4b5563",
-          font: { size: 12 },
+          color: darkMode ? "#9ba3af" : COLORS.textSecondary,
+          font: { size: 11 },
+          callback: (value) => value.toLocaleString(),
         },
         grid: {
-          color: darkMode ? "rgba(148, 163, 184, 0.15)" : "rgba(209, 213, 219, 0.5)",
+          color: darkMode ? "rgba(148, 163, 184, 0.1)" : COLORS.border,
+          drawBorder: false,
+        },
+        border: {
+          display: false,
         },
       },
       x: {
         ticks: {
-          color: darkMode ? "#9ba3af" : "#4b5563",
+          color: darkMode ? "#9ba3af" : COLORS.textSecondary,
           font: { size: 11 },
+          maxTicksLimit: 15,
         },
-        grid: { display: false },
+        grid: {
+          display: false,
+        },
+        border: {
+          display: false,
+        },
       },
     },
   }), [darkMode]);
@@ -320,7 +369,15 @@ export default function AdminLeads() {
   }
 
   return (
-    <div style={{ padding: 0, fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif" }}>
+    <div style={{
+      padding: 0,
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif",
+      background: darkMode ? "#1a1a1e" : COLORS.background,
+      minHeight: "100vh",
+      paddingTop: '16px'
+    }}>
+      <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />
+
       <div className="board-frame">
         <div style={{
           position: 'absolute',
@@ -334,28 +391,22 @@ export default function AdminLeads() {
         }}>
           {/* Gauche: Logo + Titre */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-            <img 
-              src={darkMode ? myLogoDark : myLogo} 
-              alt="OWNER" 
-              style={{ width: 48, height: 48, borderRadius: 12 }} 
+            <img
+              src={darkMode ? myLogoDark : myLogo}
+              alt="OWNER"
+              style={{ width: 48, height: 48, borderRadius: 12 }}
             />
             <h1 className="leaderboard-title" style={{ margin: 0 }}>Monitoring des Leads</h1>
           </div>
 
           {/* Droite: Boutons */}
           <div style={{ display: 'flex', gap: 'var(--space-md)', alignItems: 'center' }}>
-            <button 
-              className="export-btn" 
-              onClick={() => fetchLeads()}
+            <button
+              className="export-btn"
+              onClick={() => fetchStats()}
               title="Refresh data"
             >
-              🔄 Refresh
-            </button>
-            <button 
-              className="export-btn" 
-              onClick={() => navigate("/")}
-            >
-              ← Retour
+              Refresh
             </button>
           </div>
         </div>
@@ -367,21 +418,76 @@ export default function AdminLeads() {
         {!dataLoading && (
           <>
             {/* Stats du jour */}
-            <div className="totals-block">
-              <div className="totals-row">
-                <div>
-                  <span className="totals-label">📅 Aujourd'hui</span>
-                  <br />
-                  <span className="totals-value cash dot-boost">
-                    {todayStats.total} leads
-                  </span>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '24px',
+              marginBottom: '32px',
+              padding: '0 20px'
+            }}>
+              <div style={{
+                background: COLORS.cardBg,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: '12px',
+                padding: '24px'
+              }}>
+                <div style={{
+                  fontSize: '11px',
+                  color: COLORS.textTertiary,
+                  textTransform: 'uppercase',
+                  fontWeight: 600,
+                  letterSpacing: '0.5px',
+                  marginBottom: '12px'
+                }}>
+                  Aujourd'hui
                 </div>
-                <div>
-                  <span className="totals-label">🏆 Top origine</span>
-                  <br />
-                  <span className="totals-value revenu dot-boost">
-                    {todayStats.top.origin} ({todayStats.top.count})
-                  </span>
+                <div style={{
+                  fontSize: '36px',
+                  fontWeight: 700,
+                  color: COLORS.textPrimary,
+                  lineHeight: 1
+                }}>
+                  {todayStats.total}
+                </div>
+                <div style={{
+                  fontSize: '14px',
+                  color: COLORS.textSecondary,
+                  marginTop: '8px'
+                }}>
+                  leads reçus
+                </div>
+              </div>
+
+              <div style={{
+                background: COLORS.cardBg,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: '12px',
+                padding: '24px'
+              }}>
+                <div style={{
+                  fontSize: '11px',
+                  color: COLORS.textTertiary,
+                  textTransform: 'uppercase',
+                  fontWeight: 600,
+                  letterSpacing: '0.5px',
+                  marginBottom: '12px'
+                }}>
+                  Top origine
+                </div>
+                <div style={{
+                  fontSize: '24px',
+                  fontWeight: 700,
+                  color: COLORS.textPrimary,
+                  lineHeight: 1,
+                  marginBottom: '8px'
+                }}>
+                  {todayStats.top.origin}
+                </div>
+                <div style={{
+                  fontSize: '14px',
+                  color: COLORS.textSecondary
+                }}>
+                  {todayStats.top.count.toLocaleString()} leads
                 </div>
               </div>
             </div>
@@ -392,45 +498,125 @@ export default function AdminLeads() {
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '20px',
-                marginBottom: '30px'
+                gap: '24px',
+                marginBottom: '32px'
               }}>
-                
+
                 {/* Card 1: Meilleure source */}
-                <div className="chart-card kpi-card" style={{ padding: '20px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '12px', color: '#9ca3af', textTransform: 'uppercase', marginBottom: '8px' }}>
-                    🏆 Meilleure source
+                <div style={{
+                  background: COLORS.cardBg,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: '12px',
+                  padding: '24px',
+                  transition: 'all 0.2s ease',
+                  cursor: 'default'
+                }}>
+                  <div style={{
+                    fontSize: '11px',
+                    color: COLORS.textTertiary,
+                    textTransform: 'uppercase',
+                    fontWeight: 600,
+                    letterSpacing: '0.5px',
+                    marginBottom: '12px'
+                  }}>
+                    Meilleure source
                   </div>
-                  <div style={{ fontSize: '28px', fontWeight: 700, color: COLORS.primary, marginBottom: '4px' }}>
+                  <div style={{
+                    fontSize: '32px',
+                    fontWeight: 700,
+                    color: COLORS.textPrimary,
+                    marginBottom: '8px',
+                    lineHeight: 1
+                  }}>
                     {monthStats.entries[0]?.[0] || 'N/A'}
                   </div>
-                  <div style={{ fontSize: '14px', color: '#6b7280' }}>
-                    {monthStats.entries[0]?.[1] || 0} leads ({monthStats.entries[0] ? ((monthStats.entries[0][1] / monthStats.total) * 100).toFixed(0) : 0}%)
+                  <div style={{
+                    fontSize: '14px',
+                    color: COLORS.textSecondary,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    <span style={{ fontWeight: 600 }}>{monthStats.entries[0]?.[1] || 0}</span>
+                    <span>leads</span>
+                    <span style={{
+                      color: COLORS.success,
+                      fontSize: '13px',
+                      fontWeight: 600
+                    }}>
+                      ({monthStats.entries[0] ? ((monthStats.entries[0][1] / monthStats.total) * 100).toFixed(0) : 0}%)
+                    </span>
                   </div>
                 </div>
 
                 {/* Card 2: Total ce mois */}
-                <div className="chart-card kpi-card" style={{ padding: '20px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '12px', color: '#9ca3af', textTransform: 'uppercase', marginBottom: '8px' }}>
-                    📊 Total ce mois
+                <div style={{
+                  background: COLORS.cardBg,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: '12px',
+                  padding: '24px',
+                  transition: 'all 0.2s ease',
+                  cursor: 'default'
+                }}>
+                  <div style={{
+                    fontSize: '11px',
+                    color: COLORS.textTertiary,
+                    textTransform: 'uppercase',
+                    fontWeight: 600,
+                    letterSpacing: '0.5px',
+                    marginBottom: '12px'
+                  }}>
+                    Total ce mois
                   </div>
-                  <div style={{ fontSize: '28px', fontWeight: 700, color: COLORS.secondary, marginBottom: '4px' }}>
-                    {monthStats.total}
+                  <div style={{
+                    fontSize: '32px',
+                    fontWeight: 700,
+                    color: COLORS.textPrimary,
+                    marginBottom: '8px',
+                    lineHeight: 1
+                  }}>
+                    {monthStats.total.toLocaleString()}
                   </div>
-                  <div style={{ fontSize: '14px', color: '#6b7280' }}>
+                  <div style={{
+                    fontSize: '14px',
+                    color: COLORS.textSecondary
+                  }}>
                     {monthStats.entries.length} sources actives
                   </div>
                 </div>
 
                 {/* Card 3: Moyenne par jour */}
-                <div className="chart-card kpi-card" style={{ padding: '20px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '12px', color: '#9ca3af', textTransform: 'uppercase', marginBottom: '8px' }}>
-                    📈 Moyenne / jour
+                <div style={{
+                  background: COLORS.cardBg,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: '12px',
+                  padding: '24px',
+                  transition: 'all 0.2s ease',
+                  cursor: 'default'
+                }}>
+                  <div style={{
+                    fontSize: '11px',
+                    color: COLORS.textTertiary,
+                    textTransform: 'uppercase',
+                    fontWeight: 600,
+                    letterSpacing: '0.5px',
+                    marginBottom: '12px'
+                  }}>
+                    Moyenne / jour
                   </div>
-                  <div style={{ fontSize: '28px', fontWeight: 700, color: COLORS.tertiary, marginBottom: '4px' }}>
+                  <div style={{
+                    fontSize: '32px',
+                    fontWeight: 700,
+                    color: COLORS.textPrimary,
+                    marginBottom: '8px',
+                    lineHeight: 1
+                  }}>
                     {monthStats.avgPerDay}
                   </div>
-                  <div style={{ fontSize: '14px', color: '#6b7280' }}>
+                  <div style={{
+                    fontSize: '14px',
+                    color: COLORS.textSecondary
+                  }}>
                     leads par jour
                   </div>
                 </div>
@@ -439,33 +625,61 @@ export default function AdminLeads() {
 
               {/* Charts côte à côte */}
               <div className="charts-side-by-side">
-                
+
                 {/* GAUCHE: Bar chart horizontal */}
-                <div className="chart-card kpi-card">
-                  <div className="gauge-header">
-                    <div className="gauge-title">📊 Leads par origine - Ce mois</div>
-                    <div className="gauge-subtitle">
-                      Répartition des {monthStats.total} leads reçus
+                <div style={{
+                  background: COLORS.cardBg,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: '12px',
+                  padding: '24px'
+                }}>
+                  <div style={{ marginBottom: '20px' }}>
+                    <div style={{
+                      fontSize: '16px',
+                      fontWeight: 700,
+                      color: COLORS.textPrimary,
+                      marginBottom: '4px'
+                    }}>
+                      Leads par origine
+                    </div>
+                    <div style={{
+                      fontSize: '13px',
+                      color: COLORS.textSecondary
+                    }}>
+                      Répartition des {monthStats.total.toLocaleString()} leads reçus ce mois
                     </div>
                   </div>
 
-                  <div style={{ height: 450, marginTop: 20 }}>
+                  <div style={{ height: 450 }}>
                     <Bar data={barChartData} options={barOptions} />
                   </div>
                 </div>
 
                 {/* DROITE: Line chart (TOP 3) */}
-                <div className="chart-card kpi-card chart--weeks">
-                  <div className="chart-header kpi-header">
-                    <div>
-                      <div className="kpi-label">📈 Évolution TOP 3 sources</div>
-                      <div className="kpi-sub">
-                        Leads cumulés des 3 meilleures sources
-                      </div>
+                <div style={{
+                  background: COLORS.cardBg,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: '12px',
+                  padding: '24px'
+                }}>
+                  <div style={{ marginBottom: '20px' }}>
+                    <div style={{
+                      fontSize: '16px',
+                      fontWeight: 700,
+                      color: COLORS.textPrimary,
+                      marginBottom: '4px'
+                    }}>
+                      Évolution TOP 3 sources
+                    </div>
+                    <div style={{
+                      fontSize: '13px',
+                      color: COLORS.textSecondary
+                    }}>
+                      Leads cumulés des 3 meilleures sources
                     </div>
                   </div>
 
-                  <div className="chart-body chart-body--glass" style={{ height: 450 }}>
+                  <div style={{ height: 450 }}>
                     <Line data={lineChartData} options={lineOptions} />
                   </div>
                 </div>
@@ -474,24 +688,88 @@ export default function AdminLeads() {
 
               {/* Tableau des leads du jour */}
               {todayStats.total > 0 && (
-                <div className="chart-card kpi-card" style={{ marginTop: 30 }}>
-                  <div className="gauge-header">
-                    <div className="gauge-title">📋 Détail des leads d'aujourd'hui</div>
-                    <div className="gauge-subtitle">
+                <div style={{
+                  background: COLORS.cardBg,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: '12px',
+                  padding: '24px',
+                  marginTop: '32px'
+                }}>
+                  <div style={{ marginBottom: '20px' }}>
+                    <div style={{
+                      fontSize: '16px',
+                      fontWeight: 700,
+                      color: COLORS.textPrimary,
+                      marginBottom: '4px'
+                    }}>
+                      Détail des leads d'aujourd'hui
+                    </div>
+                    <div style={{
+                      fontSize: '13px',
+                      color: COLORS.textSecondary
+                    }}>
                       {todayStats.total} lead{todayStats.total > 1 ? 's' : ''} reçu{todayStats.total > 1 ? 's' : ''}
                     </div>
                   </div>
 
-                  <div className="leaderboard-wrapper" style={{ marginTop: 20 }}>
-                    <table className="leaderboard">
+                  <div className="leaderboard-wrapper">
+                    <table className="leaderboard" style={{ width: '100%', tableLayout: 'fixed' }}>
                       <thead>
                         <tr>
-                          <th>#</th>
-                          <th>Heure</th>
-                          <th>Nom complet</th>
-                          <th>Email</th>
-                          <th>Téléphone</th>
-                          <th>Origine</th>
+                          <th style={{
+                            width: '60px',
+                            textAlign: 'center',
+                            color: COLORS.textTertiary,
+                            fontWeight: 600,
+                            fontSize: '11px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>#</th>
+                          <th style={{
+                            width: '80px',
+                            textAlign: 'center',
+                            color: COLORS.textTertiary,
+                            fontWeight: 600,
+                            fontSize: '11px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>Heure</th>
+                          <th style={{
+                            width: '200px',
+                            textAlign: 'left',
+                            color: COLORS.textTertiary,
+                            fontWeight: 600,
+                            fontSize: '11px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>Nom complet</th>
+                          <th style={{
+                            width: '250px',
+                            textAlign: 'left',
+                            color: COLORS.textTertiary,
+                            fontWeight: 600,
+                            fontSize: '11px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>Email</th>
+                          <th style={{
+                            width: '140px',
+                            textAlign: 'center',
+                            color: COLORS.textTertiary,
+                            fontWeight: 600,
+                            fontSize: '11px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>Téléphone</th>
+                          <th style={{
+                            width: '140px',
+                            textAlign: 'center',
+                            color: COLORS.textTertiary,
+                            fontWeight: 600,
+                            fontSize: '11px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>Origine</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -505,25 +783,49 @@ export default function AdminLeads() {
                           })
                           .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
                           .map((lead, idx) => {
-                            const time = new Date(lead.created_at).toLocaleTimeString('fr-FR', { 
-                              hour: '2-digit', 
-                              minute: '2-digit' 
+                            const time = new Date(lead.created_at).toLocaleTimeString('fr-FR', {
+                              hour: '2-digit',
+                              minute: '2-digit'
                             });
 
                             return (
-                              <tr key={lead.id}>
-                                <td>{idx + 1}</td>
-                                <td>{time}</td>
-                                <td className="name-cell">{lead.full_name || '-'}</td>
-                                <td>{lead.email || '-'}</td>
-                                <td>{lead.phone || '-'}</td>
-                                <td>
+                              <tr key={lead.id} style={{
+                                borderTop: `1px solid ${COLORS.border}`
+                              }}>
+                                <td style={{
+                                  textAlign: 'center',
+                                  color: COLORS.textSecondary,
+                                  fontSize: '13px'
+                                }}>{idx + 1}</td>
+                                <td style={{
+                                  textAlign: 'center',
+                                  color: COLORS.textSecondary,
+                                  fontSize: '13px',
+                                  fontWeight: 500
+                                }}>{time}</td>
+                                <td style={{
+                                  textAlign: 'left',
+                                  fontWeight: 600,
+                                  color: COLORS.textPrimary,
+                                  fontSize: '14px'
+                                }}>{lead.full_name || '-'}</td>
+                                <td style={{
+                                  textAlign: 'left',
+                                  color: COLORS.textSecondary,
+                                  fontSize: '13px'
+                                }}>{lead.email || '-'}</td>
+                                <td style={{
+                                  textAlign: 'center',
+                                  color: COLORS.textSecondary,
+                                  fontSize: '13px'
+                                }}>{lead.phone || '-'}</td>
+                                <td style={{ textAlign: 'center' }}>
                                   <span style={{
-                                    padding: '4px 10px',
+                                    padding: '4px 12px',
                                     borderRadius: '6px',
                                     fontSize: '12px',
-                                    fontWeight: 500,
-                                    background: darkMode ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.1)',
+                                    fontWeight: 600,
+                                    background: darkMode ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.08)',
                                     color: COLORS.primary,
                                   }}>
                                     {lead.origin}

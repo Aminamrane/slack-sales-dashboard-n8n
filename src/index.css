@@ -1190,7 +1190,9 @@ body {
 
 .leaderboard thead th {
   background: #f3f3f3 !important;
-  border: none !important;
+  border-top: none !important;
+  border-bottom: 1px solid #e5e5e5 !important;
+  border-left: none !important;
   padding: 16px 12px !important;
   font-weight: 600 !important;
   color: #1d1d1f !important;
@@ -1702,3 +1704,103 @@ body.dark-mode .eod-tabs__btn{
     min-width: 70px !important;
   }
 }
+
+/* ════════════════════════════════════════════════════════════════
+   PAGE TRANSITIONS - Smooth board switching
+   ════════════════════════════════════════════════════════════════ */
+
+/* Fade in animation for board content */
+@keyframes boardFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Fade out animation for board content */
+@keyframes boardFadeOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+/* Apply fade-in to board frames */
+.board-frame {
+  animation: boardFadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Generic fade-in animation for content */
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Skeleton loading animations */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite linear;
+  border-radius: 12px;
+}
+
+body:not(.dark-mode) .skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.02) 0%,
+    rgba(0, 0, 0, 0.06) 50%,
+    rgba(0, 0, 0, 0.02) 100%
+  );
+  background-size: 1000px 100%;
+}
+
+/* Smooth content appearance */
+.content-fade-in {
+  animation: contentFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes contentFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* ── Monitoring Perf overrides ── */
+.totals-value.perf-neutral {
+  color: #3a3a3c !important;
+}
+body.dark-mode .totals-value.perf-neutral {
+  color: #d1d1d6 !important;
+}
+

@@ -1,70 +1,74 @@
-// src/routes/ProtectedRoute.jsx
-import { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
-import { supabase } from "../lib/supabaseClient";
+// src/routes/ProtectedRoute.jsx - NOUVELLE VERSION POUR JWT
+import { useState, useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
+import apiClient from '../services/apiClient';
 
-const REQUIRED_TEAM = import.meta.env.VITE_SLACK_TEAM_ID || "";
+// Mapping des rôles vers les pages autorisées
+const ROLE_PERMISSIONS = {
+  admin: ['*'], // Accès à tout
+  head_of_sales: ['/leads-management', '/tracking-sheet', '/', '/admin/leads'],
+  commercial: ['/tracking-sheet', '/'],
+  tech: ['/admin/leads', '/', '/monitoring-perf'],
+  finance: ['/', '/reports'],
+};
 
-function getSlackTeamId(user) {
-  if (!user) return "";
-  const meta = user.user_metadata || {};
-  const fromMeta =
-    meta.team?.id ||
-    meta.slack_team_id ||
-    meta["https://slack.com/team_id"];
-  if (fromMeta) return fromMeta;
-
-  const id0 = user.identities?.[0]?.identity_data;
-  const fromIdentity = id0?.team?.id || id0?.team_id || id0?.workspace?.id;
-  if (fromIdentity) return fromIdentity;
-
-  const fromAppMeta =
-    user.app_metadata?.team?.id || user.app_metadata?.slack_team_id;
-  return fromAppMeta || "";
-}
-
-export default function ProtectedRoute({ children }) {
-  const [checking, setChecking] = useState(true);
+export default function ProtectedRoute({ children, allowedRoles = null }) {
+  const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
 
   useEffect(() => {
-    const sync = async () => {
-      try {
-        // Check Supabase Auth session (works for both Slack OAuth and email/password)
-        const { data } = await supabase.auth.getSession();
-        const ses = data?.session || null;
-
-        if (!REQUIRED_TEAM) {
-          // If no team requirement, allow any authenticated user
-          setAllowed(Boolean(ses));
-        } else {
-          const tid = getSlackTeamId(ses?.user);
-          // If team id exists, enforce it. If missing, allow to avoid false negatives.
-          setAllowed(Boolean(ses) && (!tid || tid === REQUIRED_TEAM));
-        }
-      } finally {
-        setChecking(false);
-      }
-    };
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_ev, ses) => {
-      if (!REQUIRED_TEAM) {
-        setAllowed(Boolean(ses));
-      } else {
-        const tid = getSlackTeamId(ses?.user);
-        setAllowed(Boolean(ses) && (!tid || tid === REQUIRED_TEAM));
-      }
-      setChecking(false);
-    });
-
-    sync();
-    return () => sub.subscription?.unsubscribe?.();
+    checkAuth();
   }, []);
 
-  if (checking) return <p style={{ padding: 24 }}>Checking access…</p>;
+  const checkAuth = async () => {
+    const token = apiClient.getToken();
+    const user = apiClient.getUser();
 
-  // If not allowed → send them to "/" (your Slack login lives there).
-  if (!allowed) return <Navigate to="/" replace />;
+    if (!token || !user) {
+      setAllowed(false);
+      setLoading(false);
+      return;
+    }
+
+    // Vérifier si le rôle est autorisé (si spécifié)
+    if (allowedRoles && !allowedRoles.includes(user.role) && user.role !== 'admin') {
+      setAllowed(false);
+      setLoading(false);
+      return;
+    }
+
+    // Optionnel : vérifier le token côté serveur
+    try {
+      await apiClient.getMe();
+      setAllowed(true);
+    } catch (e) {
+      console.error("getMe failed:", e);
+      // TEMP: ne wipe pas tant qu'on n'a pas compris
+      // apiClient.clearAuth();
+      setAllowed(false);
+    }
+
+    setLoading(false);
+  };
+
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        background: '#1a1a2e',
+        color: '#fff'
+      }}>
+        Chargement...
+      </div>
+    );
+  }
+
+  if (!allowed) {
+    return <Navigate to="/login" replace />;
+  }
 
   return children;
 }
