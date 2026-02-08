@@ -40,7 +40,7 @@ export const CompanySchema = z.object({
   legalForm: z.enum(["SARL","SAS","SASU","SA","EURL","SCI","Autre"]),
   siren: z.string()
     .transform(normalizeSiren)
-    .refine((v) => /^\d{9}$/.test(v), "SIREN = 9 chiffres"),
+    .refine((v) => v === "" || /^\d{9}$/.test(v), "SIREN = 9 chiffres"),
   rcsCity: z.string().min(2, "Ville du RCS requise"),
   headOffice: AddressSchema,
   representatives: z.array(RepresentativeSchema)
