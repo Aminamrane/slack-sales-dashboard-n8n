@@ -1,5 +1,5 @@
 // src/contracts/format.js
-import { formatSiren, normalizeSiren } from "./schemas.js";
+import { formatSiren } from "./schemas.js";
 
 /**
  * Concatène proprement une adresse en "Ligne 1, 35000 Rennes, France"
@@ -52,15 +52,37 @@ const joinReps = (reps = []) => {
 };
 
 /**
- * Clause “Société” avec représentants dynamiques et mention des sociétés liées.
+ * Clause "Société" avec représentants dynamiques et mention des sociétés liées.
  */
 export function companyClause({ company }) {
-  const { legalName, legalForm, siren, rcsCity, headOffice, representatives = [] } = company;
+  const { legalName, legalForm, siren, rcsCity, headOffice, representatives = [], isInRegistration = false } = company;
   const repsText = joinReps(representatives);
 
-  return `La Société ${legalName} (${legalForm}), immatriculée sous le SIREN n° ${formatSiren(
-    siren
-  )} au RCS de ${rcsCity}, dont le siège social est situé ${formatAddress(
+  const isEI = legalForm === "EI" || legalForm === "Autre";
+
+  // Build the registration part
+  let registrationText;
+  if (isInRegistration) {
+    // Company in registration process
+    if (isEI) {
+      // EI doesn't have RCS
+      registrationText = `en cours d'immatriculation`;
+    } else {
+      // Other legal forms have RCS
+      registrationText = `en cours d'immatriculation au Registre du Commerce et des Sociétés de ${rcsCity}`;
+    }
+  } else {
+    // Already registered/immatriculated
+    if (isEI) {
+      // EI has SIREN but no RCS
+      registrationText = `immatriculée sous le SIREN n° ${formatSiren(siren)}`;
+    } else {
+      // Other legal forms have both SIREN and RCS
+      registrationText = `immatriculée sous le SIREN n° ${formatSiren(siren)} au RCS de ${rcsCity}`;
+    }
+  }
+
+  return `La Société ${legalName} (${legalForm}), ${registrationText}, dont le siège social est situé ${formatAddress(
     headOffice
   )}, prise en la personne de ${repsText}, domiciliés en cette qualité audit siège, et des éventuelles sociétés liées à la société sus-mentionnée.`;
 }

@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useNavigate } from "react-router-dom";
 
-import { supabase } from "../lib/supabaseClient";
+// import { supabase } from "../lib/supabaseClient"; // No longer needed - using API backend
+
+import apiClient from "../services/apiClient";
 
 import * as XLSX from "xlsx";
 
@@ -27,6 +29,7 @@ import ndaIcon from "../assets/icon1.png";
 import declareIcon from "../assets/icon2.png";
 import toolsIcon from "../assets/icon3.png";
 import crownIcon from "../assets/crown.png";
+import SharedNavbar from "../components/SharedNavbar.jsx";
 
 import Chart from "chart.js/auto";
 
@@ -171,20 +174,23 @@ function getSlackTeamId(user) {
 }
 
 function getReporterName(session) {
-  const meta = session?.user?.user_metadata || {};
+  const user = session?.user || {};
+  const meta = user?.user_metadata || {};
 
-  // Selon Slack / admin session / supabase, ça peut varier
+  // JWT auth: name fields are directly on user object
+  // Slack/Supabase legacy: name fields are in user_metadata
   const full =
+    user.full_name ||
+    user.name ||
     meta.name ||
     meta.full_name ||
     meta.real_name ||
     meta.display_name ||
     meta.user_name ||
-    session?.user?.email ||
+    user.email ||
     "Unknown";
 
-  // si tu veux "prénom" uniquement
-  const first = String(full).trim().split(/\s+/)[0] || "Unknown";
+  const first = user.first_name || String(full).trim().split(/\s+/)[0] || "Unknown";
 
   return { full_name: String(full).trim(), first_name: first };
 }
@@ -586,7 +592,7 @@ export default function Leaderboard() {
 
   // ── AUTH ────────────────────────────────────────────────────────────────────
 
-  const [authChecking, setAuthChecking] = useState(true);
+  const [authChecking, setAuthChecking] = useState(false);
 
   const [session, setSession] = useState(null);
 
@@ -606,245 +612,51 @@ export default function Leaderboard() {
 
   const PULL_THRESHOLD = 50; // Distance minimum pour trigger le refresh (RÉDUIT)
 
-  // ── ADMIN LOGIN STATE ─────────────────────────────────────────────────────
-
-  const [showAdminLogin, setShowAdminLogin] = useState(false);
-
-  const [adminUsername, setAdminUsername] = useState("");
-
-  const [adminPassword, setAdminPassword] = useState("");
-
-  const [adminError, setAdminError] = useState("");
-
-  const [adminLoading, setAdminLoading] = useState(false);
+  // ── JWT AUTH STATE ────────────────────────────────────────────────────────
 
   const [isAdminUser, setIsAdminUser] = useState(false);
+  const [isSalesUser, setIsSalesUser] = useState(false);
 
   useEffect(() => {
 
-    const storedAdminSession = localStorage.getItem("admin_session");
+    const checkAuth = async () => {
+      const token = apiClient.getToken();
+      const user = apiClient.getUser();
 
-    if (storedAdminSession) {
+      if (token && user) {
+        // JWT valide - afficher le contenu
+        setSession({ user }); // Simuler une session pour compatibilité
+        setAllowed(true);
 
-      try {
+        // Check admin
+        setIsAdminUser(user.role === 'admin' || user.role === 'head_of_sales' || user.role === 'tech');
 
-        const adminSession = JSON.parse(storedAdminSession);
-
-        if (adminSession?.user?.user_metadata?.role === "admin") {
-
-          setSession(adminSession);
-
-          setAllowed(true);
-
-          setAuthChecking(false);
-
-          setIsAdminUser(true);
-
-          return;
-
+        // Check sales
+        if (user.role === 'commercial') {
+          const { data: trackingSheet } = await supabase
+            .from('tracking_sheets')
+            .select('*')
+            .eq('sales_email', user.email)
+            .eq('is_active', true)
+            .maybeSingle();
+          setIsSalesUser(!!trackingSheet);
         }
-
-      } catch (e) {
-
-        localStorage.removeItem("admin_session");
-
+      } else {
+        // Pas de JWT - rediriger vers login (Leaderboard désormais protégé)
+        setSession(null);
+        setAllowed(false);
+        setIsAdminUser(false);
+        setIsSalesUser(false);
+        navigate('/login');
       }
-
-    }
-
-  }, []);
-
-  useEffect(() => {
-
-    const syncSession = async () => {
-
-      const adminSession = localStorage.getItem("admin_session");
-
-      if (adminSession) {
-
-        try {
-
-          const parsed = JSON.parse(adminSession);
-
-          if (parsed?.user?.user_metadata?.role === "admin") {
-
-            setIsAdminUser(true);
-
-            return;
-
-          }
-
-        } catch (e) {
-
-          localStorage.removeItem("admin_session");
-
-        }
-
-      }
-
-      setIsAdminUser(false);
-
-      try {
-
-        const { data } = await supabase.auth.getSession();
-
-        const ses = data?.session || null;
-
-        setSession(ses);
-
-        if (!REQUIRED_TEAM) {
-
-          setAllowed(Boolean(ses));
-
-        } else {
-
-          const tid = getSlackTeamId(ses?.user);
-
-          setAllowed(!tid || tid === REQUIRED_TEAM);
-
-        }
-
-      } catch (e) {
-
-        console.error("getSession failed:", e);
-
-        setAllowed(!REQUIRED_TEAM);
-
-      } finally {
-
-        setAuthChecking(false);
-
-      }
-
     };
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_ev, ses) => {
-
-      const adminSession = localStorage.getItem("admin_session");
-
-      if (adminSession) {
-
-        try {
-
-          const parsed = JSON.parse(adminSession);
-
-          if (parsed?.user?.user_metadata?.role === "admin") {
-
-            setIsAdminUser(true);
-
-            return;
-
-          }
-
-        } catch (e) {
-
-          localStorage.removeItem("admin_session");
-
-        }
-
-      }
-
-      setIsAdminUser(false);
-
-      setSession(ses);
-
-      if (!REQUIRED_TEAM) {
-
-        setAllowed(Boolean(ses));
-
-      } else {
-
-        const tid = getSlackTeamId(ses?.user);
-
-        setAllowed(!tid || tid === REQUIRED_TEAM);
-
-      }
-
-      setAuthChecking(false);
-
-    });
-
-    syncSession();
-
-    return () => sub.subscription?.unsubscribe?.();
+    checkAuth();
 
   }, []);
 
-  const handleAdminLogin = async (e) => {
-
-    e.preventDefault();
-
-    setAdminError("");
-
-    setAdminLoading(true);
-
-    try {
-      // Use Supabase Auth with email/password instead of localStorage
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: adminUsername, // Use email instead of username
-        password: adminPassword,
-      });
-
-      if (error) {
-        setAdminError("Identifiants incorrects");
-        setAdminLoading(false);
-        return;
-      }
-
-      // Session is now managed by Supabase Auth (authenticated role)
-      setSession(data.session);
-      setAllowed(true);
-      setIsAdminUser(true);
-      setAdminLoading(false);
-
-    } catch (err) {
-      console.error("Admin login error:", err);
-      setAdminError("Erreur de connexion");
-      setAdminLoading(false);
-    }
-
-  };
-
-  const loginWithSlack = async () => {
-
-    try {
-
-      setLoggingIn(true);
-
-      await supabase.auth.signInWithOAuth({
-
-        provider: "slack_oidc",
-
-        options: { redirectTo: `${window.location.origin}/auth/callback`, scopes: "openid profile email" },
-
-      });
-
-    } finally { setLoggingIn(false); }
-
-  };
-
-  const logout = async () => {
-
-    try {
-
-      localStorage.removeItem("admin_session");
-
-      const { error } = await supabase.auth.signOut();
-
-      if (error) console.error("signOut error:", error);
-
-    } finally {
-
-      setSession(null); 
-
-      setAllowed(false);
-
-      setIsAdminUser(false);
-
-      window.location.assign("/");
-
-    }
-
+  const logout = () => {
+    apiClient.logout();
   };
 
   // ── DATA ────────────────────────────────────────────────────────────────────
@@ -852,6 +664,8 @@ export default function Leaderboard() {
   const [rows, setRows] = useState([]);
 
   const [allTimeTopSeller, setAllTimeTopSeller] = useState(null);
+
+  const [trophies, setTrophies] = useState({});
 
   const [tunnelStats, setTunnelStats] = useState({});
 
@@ -881,199 +695,116 @@ export default function Leaderboard() {
 
   const [chartSales, setChartSales] = useState([]); // For 3-month chart
 
-  // Load chart data (since September 2025 for trophies)
-
+  // ── LOAD CHART DATA (3 months comparison - API Backend) ────────────────────
   useEffect(() => {
 
-    if (!session || !allowed) return;
+    const fetchChartData = async () => {
 
-    (async () => {
+      try {
 
-      const septemberStart = new Date('2025-09-01');
+        const data = await apiClient.getLeaderboardChart();
 
-      const { data, error } = await supabase
+        console.log('📊 Chart data loaded:', data);
 
-        .from("Info")
+        // Stocker les données du chart pour utilisation dans useMemo
+        setChartSales(data);
 
-        .select("*")
-
-        .gte("created_at", septemberStart.toISOString());
-
-      if (error) {
-
-        console.error("chartSales error:", error);
-
-        return;
-
+      } catch (err) {
+        console.error("Erreur chargement chart:", err);
       }
 
-      const cleaned = (data || []).filter(
+    };
 
-        (r) =>
+    fetchChartData();
 
-          Number.isFinite(r.amount) &&
+  }, []);
 
-          Number.isFinite(r.mensualite) &&
-
-          !(r.amount === 0 && r.mensualite === 0)
-
-      );
-
-      console.log('📊 chartSales loaded:', cleaned.length, 'sales');
-
-      console.log('📅 Date range:', 
-
-        cleaned.length > 0 ? new Date(cleaned[0].created_at).toLocaleDateString('fr-FR') : 'none',
-
-        'to',
-
-        cleaned.length > 0 ? new Date(cleaned[cleaned.length - 1].created_at).toLocaleDateString('fr-FR') : 'none'
-
-      );
-
-      setChartSales(cleaned);
-
-    })();
-
-  }, [session, allowed]);
-
-  // Load all-time top seller for crown display
+  // ── LOAD ALL-TIME TOP SELLER (API Backend) ─────────────────────────────────
   useEffect(() => {
-    if (!session || !allowed) return;
+    const fetchAllTimeTopSeller = async () => {
+      try {
+        // Récupérer les stats all-time depuis l'API
+        const data = await apiClient.getLeaderboardStats('all');
+        console.log('👑 All-time data loaded:', data);
 
-    (async () => {
-      // On récupère toutes les ventes (all-time) pour déterminer le #1 définitif
-      const { data, error } = await supabase
-        .from("Info")
-        .select("employee_name, amount, mensualite")
-        .not("employee_name", "is", null);
-
-      if (error) {
-        console.error("allTimeTopSeller error:", error);
-        return;
+        // Le top seller all-time est le premier de all_sellers
+        const best = data.all_sellers?.[0];
+        setAllTimeTopSeller(best?.name || null);
+      } catch (err) {
+        console.error("Erreur chargement all-time top seller:", err);
       }
+    };
 
-      const stats = {};
+    fetchAllTimeTopSeller();
+  }, []);
 
-      (data || []).forEach((r) => {
-        const name = (r.employee_name || "").trim();
-        if (!name) return;
+  // ── LOAD TROPHIES (API Backend) ────────────────────────────────────────────
+  useEffect(() => {
+    const fetchTrophies = async () => {
+      try {
+        const data = await apiClient.get('/api/v1/leaderboard/trophies');
+        console.log('🏆 Trophies loaded:', data);
+        setTrophies(data.monthly_winners || {});
+      } catch (err) {
+        console.error("Erreur chargement trophies:", err);
+      }
+    };
 
-        const amount = Number(r.amount) || 0;
-        const mensu = Number(r.mensualite) || 0;
+    fetchTrophies();
+  }, []);
 
-        if (!stats[name]) stats[name] = { name, sales: 0, revenu: 0, cash: 0 };
-        stats[name].sales += 1;
-        stats[name].revenu += amount;
-        stats[name].cash += mensu;
-      });
-
-      const best = Object.values(stats).sort(
-        (a, b) =>
-          b.sales - a.sales ||          // critère #1 : nb ventes
-          b.revenu - a.revenu ||        // tie-break #1 : revenu
-          b.cash - a.cash               // tie-break #2 : cash
-      )[0];
-
-      setAllTimeTopSeller(best?.name || null);
-    })();
-  }, [session, allowed]);
-
+  // ── LOAD LEADERBOARD DATA (API Backend) ────────────────────────────────────
   useEffect(() => {
 
-    if (!session || !allowed) return;
-
-    (async () => {
+    const fetchLeaderboardData = async () => {
 
       setLoading(true);
 
-      let query = supabase.from("Info").select("*");
+      try {
 
-      if (range !== "all" && range.match(/^\d{4}-\d{2}$/)) {
+        // Appel API backend au lieu de Supabase direct
+        const data = await apiClient.getLeaderboardStats(range);
 
-        // Specific month (format: "2025-09")
+        console.log('📊 Leaderboard data loaded:', data);
 
-        const [year, month] = range.split('-').map(Number);
+        // Mettre à jour les states avec les données du backend
+        setTotals({
+          cash: data.totals.cash_collected,
+          revenu: data.totals.revenue,
+          ventes: data.totals.sales
+        });
 
-        const start = new Date(year, month - 1, 1);
+        // Transformer all_sellers pour matcher le format attendu par le frontend
+        const formattedRows = data.all_sellers.map(seller => ({
+          name: seller.name,
+          sales: seller.sales,
+          cash: seller.cash_collected,
+          revenu: seller.revenue,
+          avatar: seller.avatar_url || ''
+        }));
+        setRows(formattedRows);
 
-        const end = new Date(year, month, 0, 23, 59, 59, 999);
+        // Tunnel stats - transformer teams en tunnel format
+        const tunnel = {};
+        data.teams.forEach(team => {
+          tunnel[team.name] = team.sales;
+        });
+        setTunnelStats(tunnel);
 
-        query = query.gte("created_at", start.toISOString()).lte("created_at", end.toISOString());
+        // Pour compatibilité avec le reste du code, garder sales
+        setSales(data.all_sellers || []);
 
+      } catch (err) {
+        console.error("Erreur chargement leaderboard:", err);
+      } finally {
+        setLoading(false);
       }
 
-      // else: "all" = no filter (all time)
+    };
 
-      const { data, error } = await query;
+    fetchLeaderboardData();
 
-      if (error) { console.error(error); setLoading(false); return; }
-
-      const cleaned = (data || []).filter(
-
-        (r) =>
-
-          Number.isFinite(r.amount) &&
-
-          Number.isFinite(r.mensualite) &&
-
-          !(r.amount === 0 && r.mensualite === 0)
-
-      );
-
-      setSales(cleaned);
-
-      const totalRev = cleaned.reduce((sum, r) => sum + Number(r.amount), 0);
-
-      const totalCash = totalRev / 12;
-
-      setTotals({ cash: totalCash, revenu: totalRev, ventes: cleaned.length });
-
-      const stats = {};
-
-      cleaned.forEach((r) => {
-
-        const name = r.employee_name?.trim() || "Unknown";
-
-        const amount = Number(r.amount) || 0;
-
-        const mensu = Number(r.mensualite) || 0;
-
-        const t = new Date(r.created_at).getTime() || 0;
-
-        if (!stats[name]) stats[name] = { name, sales: 0, cash: 0, revenu: 0, avatar: "", _last: 0 };
-
-        stats[name].sales += 1;
-
-        stats[name].cash += mensu;
-
-        stats[name].revenu += amount;
-
-        if (t >= stats[name]._last && r.avatar_url) {
-
-          stats[name].avatar = r.avatar_url;
-
-          stats[name]._last = t;
-
-        }
-
-      });
-
-      setRows(Object.values(stats).map(({ _last, ...rest }) => rest)
-
-        .sort((a, b) => b.sales - a.sales || b.revenu - a.revenu || b.cash - a.cash));
-
-      const tunnel = {};
-
-      cleaned.forEach((r) => { const label = normalizeTunnelLabel(r.tunnel); tunnel[label] = (tunnel[label] || 0) + 1; });
-
-      setTunnelStats(tunnel);
-
-      setLoading(false);
-
-    })();
-
-  }, [range, session, allowed]);
+  }, [range]);
 
   /* ──────────────────────────────────────────────────────────────────────────
 
@@ -1276,179 +1007,84 @@ export default function Leaderboard() {
   // ── Last 3 months comparison (CUMULATIVE) ──────────────────────────────────
 
   const threeMonths = useMemo(() => {
+    if (!chartSales || !chartSales.current_month) {
+      // Données par défaut si pas encore chargées
+      const today = new Date();
+      const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+      const labels = Array.from({ length: daysInMonth }, (_, i) => (i + 1).toString());
 
-    const today = new Date();
-
-    const currentDay = today.getDate();
-
-    const m0Start = new Date(today.getFullYear(), today.getMonth(), 1);
-
-    const m1Start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-
-    const m2Start = new Date(today.getFullYear(), today.getMonth() - 2, 1);
-
-    const months = [
-
-      { key: "m0", start: m0Start },
-
-      { key: "m1", start: m1Start },
-
-      { key: "m2", start: m2Start },
-
-    ];
-
-    const makeEmpty31 = () => Array.from({ length: 31 }, () => 0);
-
-    const series = { m0: makeEmpty31(), m1: makeEmpty31(), m2: makeEmpty31() };
-
-    for (const r of chartSales) {
-
-      const d = new Date(r.created_at);
-
-      const amt = Number(r.amount) || 0;
-
-      for (const m of months) {
-
-        const start = m.start;
-
-        const end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
-
-        if (d >= start && d <= end) {
-
-          const dayIndex = d.getDate() - 1;
-
-          series[m.key][dayIndex] += amt;
-
-          break;
-
-        }
-
-      }
-
+      return {
+        data: {
+          labels,
+          datasets: []
+        },
+        sums: { m0: 0, m1: 0, m2: 0 },
+        monthNames: { m0: '', m1: '', m2: '' },
+        currentDay: today.getDate()
+      };
     }
 
-    // Convert to cumulative
-
-    const toCumulative = (arr) =>
-
-      arr.reduce((acc, value, idx) => {
-
-        acc[idx] = (idx === 0 ? 0 : acc[idx - 1]) + value;
-
-        return acc;
-
-      }, []);
-
-    const m0Cum = toCumulative(series.m0);
-
-    const m1Cum = toCumulative(series.m1);
-
-    const m2Cum = toCumulative(series.m2);
-
-    const todayIndex = currentDay - 1;
-
-    const sumUpTo = (arr) => arr.slice(0, currentDay).reduce((a, b) => a + b, 0);
-
-    const sums = {
-
-      m0: sumUpTo(series.m0),
-
-      m1: sumUpTo(series.m1),
-
-      m2: sumUpTo(series.m2),
-
-    };
-
+    const today = new Date();
+    const currentDay = chartSales.current_day || today.getDate();
     const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-
     const labels = Array.from({ length: daysInMonth }, (_, i) => (i + 1).toString());
 
-    const monthFormatter = new Intl.DateTimeFormat("fr-FR", { month: "short" });
-
-    const monthNames = {
-
-      m0: monthFormatter.format(m0Start),
-
-      m1: monthFormatter.format(m1Start),
-
-      m2: monthFormatter.format(m2Start),
-
-    };
+    // Extraire les données cumulatives du backend
+    const m0Data = chartSales.current_month.data.map(d => d.value);
+    const m1Data = chartSales.previous_month.data.map(d => d.value);
+    const m2Data = chartSales.two_months_ago.data.map(d => d.value);
 
     const data = {
-
       labels,
-
       datasets: [
-
         {
-
-          label: `${monthNames.m2.toUpperCase()} (N-2)`,
-
-          data: m2Cum.slice(0, daysInMonth),
-
+          label: `${chartSales.two_months_ago.month_label} (N-2)`,
+          data: m2Data.slice(0, daysInMonth),
           borderColor: COLORS.gray,
-
           backgroundColor: "transparent",
-
           borderWidth: 1.5,
-
           tension: 0.4,
-
           pointRadius: 0,
-
           fill: false,
-
         },
-
         {
-
-          label: `${monthNames.m1.toUpperCase()} (N-1)`,
-
-          data: m1Cum.slice(0, daysInMonth),
-
+          label: `${chartSales.previous_month.month_label} (N-1)`,
+          data: m1Data.slice(0, daysInMonth),
           borderColor: COLORS.secondary,
-
           backgroundColor: "transparent",
-
           borderWidth: 2,
-
           tension: 0.4,
-
           pointRadius: 0,
-
           fill: false,
-
         },
-
         {
-
-          label: `${monthNames.m0.toUpperCase()} (N)`,
-
-          data: m0Cum.slice(0, daysInMonth),
-
+          label: `${chartSales.current_month.month_label} (N)`,
+          data: m0Data.slice(0, daysInMonth),
           borderColor: COLORS.primary,
-
           backgroundColor: "transparent",
-
           borderWidth: 3,
-
           tension: 0.45,
-
-          pointRadius: labels.map((_, i) => (i === todayIndex ? 4 : 0)),
-
+          pointRadius: labels.map((_, i) => (i === currentDay - 1 ? 4 : 0)),
           pointHoverRadius: 6,
-
           fill: false,
-
         },
-
       ],
-
     };
 
-    return { data, sums, monthNames, currentDay };
-
+    return {
+      data,
+      sums: {
+        m0: chartSales.current_month.total,
+        m1: chartSales.previous_month.total,
+        m2: chartSales.two_months_ago.total
+      },
+      monthNames: {
+        m0: chartSales.current_month.month_label,
+        m1: chartSales.previous_month.month_label,
+        m2: chartSales.two_months_ago.month_label
+      },
+      currentDay
+    };
   }, [chartSales, darkMode]);
 
   const lineOptions = useMemo(() => ({
@@ -1588,152 +1224,11 @@ export default function Leaderboard() {
   // Trophy system - Monthly winners since September 2025
 
   const calculateTrophies = useMemo(() => {
-
-    console.log('🏆 calculateTrophies called with chartSales length:', chartSales?.length);
-
-    
-    
-    if (!chartSales || chartSales.length === 0) {
-
-      console.log('⚠️ No chartSales data!');
-
-      return {};
-
-    }
-
-    const trophyCount = {};
-
-    const startDate = new Date('2025-09-01'); // September 2025
-
-    const today = new Date();
-
-    // Get all COMPLETE months from September 2025 to last month
-
-    const months = [];
-
-    let current = new Date(startDate);
-
-    
-    
-    // Get the first day of current month
-
-    const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-
-    
-    
-    while (current < currentMonthStart) {
-
-      months.push(new Date(current));
-
-      current.setMonth(current.getMonth() + 1);
-
-    }
-
-    console.log('📅 Months to check for trophies:', months.map(m => 
-
-      m.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
-
-    ));
-
-    // For each complete month, find the winner
-
-    months.forEach(monthStart => {
-
-      const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0, 23, 59, 59, 999);
-
-      
-      
-      const monthName = monthStart.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-
-      console.log(`\n🔍 Checking ${monthName}`);
-
-      console.log(`   Date range: ${monthStart.toISOString()} to ${monthEnd.toISOString()}`);
-
-      
-      
-      // Filter sales for this specific month
-
-      const monthSales = chartSales.filter(sale => {
-
-        const saleDate = new Date(sale.created_at);
-
-        const isInRange = saleDate >= monthStart && saleDate <= monthEnd;
-
-        return isInRange;
-
-      });
-
-      console.log(`   Found ${monthSales.length} sales`);
-
-      // Log first few sales for debugging
-
-      if (monthSales.length > 0) {
-
-        console.log(`   Sample sales:`, monthSales.slice(0, 3).map(s => ({
-
-          name: s.employee_name,
-
-          date: new Date(s.created_at).toLocaleDateString('fr-FR')
-
-        })));
-
-      }
-
-      // Count sales per person
-
-      const salesByPerson = {};
-
-      monthSales.forEach(sale => {
-
-        const name = sale.employee_name?.trim() || "Unknown";
-
-        salesByPerson[name] = (salesByPerson[name] || 0) + 1;
-
-      });
-
-      console.log('   Sales by person:', salesByPerson);
-
-      // Find winner (most sales)
-
-      let maxSales = 0;
-
-      let winner = null;
-
-      Object.entries(salesByPerson).forEach(([name, count]) => {
-
-        if (count > maxSales) {
-
-          maxSales = count;
-
-          winner = name;
-
-        }
-
-      });
-
-      // Award trophy to winner
-
-      if (winner && maxSales > 0) {
-
-        trophyCount[winner] = (trophyCount[winner] || 0) + 1;
-
-        console.log(`   🏆 Winner: ${winner} with ${maxSales} sales`);
-
-      }
-
-    });
-
-    // Check for name variations
-
-    const allNames = [...new Set(chartSales.map(s => s.employee_name?.trim()))];
-
-    console.log('👥 All employee names in chartSales:', allNames);
-
-    console.log('🏆 Final trophy count:', trophyCount);
-
-    return trophyCount;
-
-  }, [chartSales]);
+    // Trophies are now fetched from backend API endpoint /api/v1/leaderboard/trophies
+    // The trophies state is populated in useEffect above
+    console.log('🏆 Using trophies from backend:', trophies);
+    return trophies;
+  }, [trophies]);
 
   // ── Team stats ──────────────────────────────────────────────────────────────
 
@@ -1795,343 +1290,6 @@ export default function Leaderboard() {
 
   // ── RENDER ──────────────────────────────────────────────────────────────────
 
-  if (authChecking) return <p style={{ padding: 24 }}>Checking auth…</p>;
-
-  if (!session || !allowed) {
-
-    return (
-
-      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", fontFamily: "sans-serif", background: darkMode ? "#0f1419" : "#f9fafb" }}>
-
-        <div style={{ textAlign: "center", maxWidth: 400, width: "100%", padding: "0 20px" }}>
-
-          <img src={myLogo} alt="" style={{ width: 64, height: 64, marginBottom: 12, borderRadius: 12 }} />
-
-          <h2 style={{ marginBottom: 8, fontSize: 24, fontWeight: 700, color: darkMode ? "#f1f3f5" : "#000" }}>Accès sécurisé</h2>
-
-          <p style={{ opacity: .7, marginBottom: 24, fontSize: 14, color: darkMode ? "#9ba3af" : "#666" }}>
-
-            Connectez-vous pour accéder au dashboard
-
-          </p>
-
-          {!showAdminLogin ? (
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-
-              <button
-
-                onClick={loginWithSlack}
-
-                disabled={loggingIn}
-
-                style={{
-
-                  padding: "12px 20px",
-
-                  borderRadius: 10,
-
-                  border: `1px solid ${darkMode ? "#3f4451" : "#d1d5db"}`,
-
-                  background: darkMode ? "#252932" : "#fff",
-
-                  color: darkMode ? "#e7e9ea" : "#000",
-
-                  cursor: loggingIn ? "not-allowed" : "pointer",
-
-                  opacity: loggingIn ? .7 : 1,
-
-                  fontSize: 15,
-
-                  fontWeight: 500,
-
-                  transition: "all 0.2s",
-
-                }}
-
-                onMouseOver={(e) => !loggingIn && (e.target.style.background = darkMode ? "#2d323d" : "#f9fafb")}
-
-                onMouseOut={(e) => (e.target.style.background = darkMode ? "#252932" : "#fff")}
-
-              >
-
-                {loggingIn ? "Redirection…" : "🔐 Connectez-vous via Slack"}
-
-              </button>
-
-              <button
-
-                onClick={() => setShowAdminLogin(true)}
-
-                style={{
-
-                  padding: "10px 20px",
-
-                  borderRadius: 10,
-
-                  border: "none",
-
-                  background: "transparent",
-
-                  cursor: "pointer",
-
-                  fontSize: 13,
-
-                  color: darkMode ? "#9ba3af" : "#6b7280",
-
-                  textDecoration: "underline",
-
-                  transition: "color 0.2s",
-
-                }}
-
-                onMouseOver={(e) => (e.target.style.color = darkMode ? "#e7e9ea" : "#111")}
-
-                onMouseOut={(e) => (e.target.style.color = darkMode ? "#9ba3af" : "#6b7280")}
-
-              >
-
-                Connexion Admin
-
-              </button>
-
-            </div>
-
-          ) : (
-
-            <form onSubmit={handleAdminLogin} style={{ textAlign: "left" }}>
-
-              <div style={{ marginBottom: 16 }}>
-
-                <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500, color: darkMode ? "#f1f3f5" : "#374151" }}>
-
-                  Nom d'utilisateur
-
-                </label>
-
-                <input
-
-                  type="text"
-
-                  value={adminUsername}
-
-                  onChange={(e) => setAdminUsername(e.target.value)}
-
-                  required
-
-                  autoFocus
-
-                  style={{
-
-                    width: "100%",
-
-                    padding: "10px 12px",
-
-                    borderRadius: 8,
-
-                    border: `1px solid ${darkMode ? "#3f4451" : "#d1d5db"}`,
-
-                    background: darkMode ? "#252932" : "#fff",
-
-                    color: darkMode ? "#e7e9ea" : "#000",
-
-                    fontSize: 14,
-
-                    outline: "none",
-
-                    transition: "border-color 0.2s",
-
-                    boxSizing: "border-box",
-
-                  }}
-
-                  onFocus={(e) => (e.target.style.borderColor = COLORS.primary)}
-
-                  onBlur={(e) => (e.target.style.borderColor = darkMode ? "#3f4451" : "#d1d5db")}
-
-                />
-
-              </div>
-
-              <div style={{ marginBottom: 20 }}>
-
-                <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500, color: darkMode ? "#f1f3f5" : "#374151" }}>
-
-                  Mot de passe
-
-                </label>
-
-                <input
-
-                  type="password"
-
-                  value={adminPassword}
-
-                  onChange={(e) => setAdminPassword(e.target.value)}
-
-                  required
-
-                  style={{
-
-                    width: "100%",
-
-                    padding: "10px 12px",
-
-                    borderRadius: 8,
-
-                    border: `1px solid ${darkMode ? "#3f4451" : "#d1d5db"}`,
-
-                    background: darkMode ? "#252932" : "#fff",
-
-                    color: darkMode ? "#e7e9ea" : "#000",
-
-                    fontSize: 14,
-
-                    outline: "none",
-
-                    transition: "border-color 0.2s",
-
-                    boxSizing: "border-box",
-
-                  }}
-
-                  onFocus={(e) => (e.target.style.borderColor = COLORS.primary)}
-
-                  onBlur={(e) => (e.target.style.borderColor = darkMode ? "#3f4451" : "#d1d5db")}
-
-                />
-
-              </div>
-
-              {adminError && (
-
-                <div style={{
-
-                  padding: "10px 12px",
-
-                  marginBottom: 16,
-
-                  borderRadius: 8,
-
-                  background: darkMode ? "rgba(239, 68, 68, 0.15)" : "#fee",
-
-                  color: darkMode ? "#f87171" : "#c00",
-
-                  fontSize: 13,
-
-                  border: `1px solid ${darkMode ? "rgba(239, 68, 68, 0.3)" : "#fcc"}`,
-
-                }}>
-
-                  {adminError}
-
-                </div>
-
-              )}
-
-              <div style={{ display: "flex", gap: 10 }}>
-
-                <button
-
-                  type="button"
-
-                  onClick={() => {
-
-                    setShowAdminLogin(false);
-
-                    setAdminError("");
-
-                    setAdminUsername("");
-
-                    setAdminPassword("");
-
-                  }}
-
-                  style={{
-
-                    flex: 1,
-
-                    padding: "10px 20px",
-
-                    borderRadius: 8,
-
-                    border: `1px solid ${darkMode ? "#3f4451" : "#d1d5db"}`,
-
-                    background: darkMode ? "#252932" : "#fff",
-
-                    color: darkMode ? "#e7e9ea" : "#000",
-
-                    cursor: "pointer",
-
-                    fontSize: 14,
-
-                    fontWeight: 500,
-
-                    transition: "background 0.2s",
-
-                  }}
-
-                  onMouseOver={(e) => (e.target.style.background = darkMode ? "#2d323d" : "#f9fafb")}
-
-                  onMouseOut={(e) => (e.target.style.background = darkMode ? "#252932" : "#fff")}
-
-                >
-
-                  Retour
-
-                </button>
-
-                <button
-
-                  type="submit"
-
-                  disabled={adminLoading}
-
-                  style={{
-
-                    flex: 1,
-
-                    padding: "10px 20px",
-
-                    borderRadius: 8,
-
-                    border: "none",
-
-                    background: COLORS.primary,
-
-                    color: "#fff",
-
-                    cursor: adminLoading ? "not-allowed" : "pointer",
-
-                    fontSize: 14,
-
-                    fontWeight: 500,
-
-                    opacity: adminLoading ? 0.7 : 1,
-
-                    transition: "opacity 0.2s",
-
-                  }}
-
-                >
-
-                  {adminLoading ? "Connexion…" : "Se connecter"}
-
-                </button>
-
-              </div>
-
-            </form>
-
-          )}
-
-        </div>
-
-      </div>
-
-    );
-
-  }
 
   // Pull-to-refresh handlers
 
@@ -2216,205 +1374,7 @@ export default function Leaderboard() {
       minHeight: "100vh",
       paddingTop: '16px'
     }}>
-      {/* ═══════════════════════════════════════════════════════════════════
-          TOP PLATFORM - Floating bar with user info & tools
-      ═══════════════════════════════════════════════════════════════════ */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        marginBottom: '16px',
-        padding: '0 24px'
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          padding: '10px 16px',
-          borderRadius: '16px',
-          background: darkMode ? '#242428' : '#ffffff',
-          border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`,
-          boxShadow: darkMode ? '0 4px 20px rgba(0,0,0,0.4)' : '0 4px 20px rgba(0,0,0,0.08)'
-        }}>
-          {/* User Profile */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            paddingRight: '12px',
-            borderRight: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`
-          }}>
-            {session?.user?.user_metadata?.avatar_url ? (
-              <img 
-                src={session.user.user_metadata.avatar_url} 
-                alt="" 
-                style={{ 
-                  width: 32, 
-                  height: 32, 
-                  borderRadius: '50%',
-                  border: `2px solid ${darkMode ? '#333338' : '#e5e5e5'}`
-                }} 
-              />
-            ) : (
-              <div style={{
-                width: 32,
-                height: 32,
-                borderRadius: '50%',
-                background: isAdminUser ? COLORS.primary : COLORS.tertiary,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '14px',
-                color: '#fff',
-                fontWeight: 600
-              }}>
-                {isAdminUser ? '👑' : '👤'}
-              </div>
-            )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
-              <span style={{ 
-                fontSize: '13px', 
-                fontWeight: 600, 
-                color: darkMode ? '#f5f5f7' : '#1d1d1f',
-                lineHeight: 1.2
-              }}>
-                {session?.user?.user_metadata?.name || session?.user?.user_metadata?.full_name || 'Utilisateur'}
-              </span>
-              <span style={{ 
-                fontSize: '11px', 
-                color: darkMode ? '#8b8d93' : '#86868b',
-                lineHeight: 1.2
-              }}>
-                {isAdminUser ? 'Admin' : 'via Slack'}
-              </span>
-            </div>
-          </div>
-
-          {/* Mes outils - Dropdown */}
-          <div style={{ position: 'relative' }}>
-            <button 
-              className="tools-btn"
-              onClick={(e) => {
-                const dropdown = e.currentTarget.nextElementSibling;
-                dropdown.style.display = dropdown.style.display === 'none' ? 'flex' : 'none';
-              }}
-            >
-              <img 
-                src={toolsIcon} 
-                alt="" 
-                style={{ 
-                  width: '50px',
-                  height: '50px', 
-                  objectFit: 'contain',
-                  flexShrink: 0
-                }} 
-              />
-              Mes outils
-              <span style={{ fontSize: '10px', opacity: 0.6 }}>▼</span>
-            </button>
-            {/* Dropdown menu */}
-            <div 
-              style={{ 
-                display: 'none',
-                position: 'absolute',
-                top: 'calc(100% + 8px)',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                flexDirection: 'column',
-                gap: '4px',
-                padding: '8px',
-                borderRadius: '12px',
-                background: darkMode ? '#242428' : '#ffffff',
-                border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`,
-                boxShadow: darkMode ? '0 8px 24px rgba(0,0,0,0.5)' : '0 8px 24px rgba(0,0,0,0.12)',
-                minWidth: '160px',
-                zIndex: 1000
-              }}
-              onMouseLeave={(e) => e.currentTarget.style.display = 'none'}
-            >
-              {isAdminUser && (
-                <button 
-                  onClick={() => navigate("/admin/leads")}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '10px 12px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    background: 'transparent',
-                    color: darkMode ? '#f5f5f7' : '#1d1d1f',
-                    fontSize: '14px',
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    width: '100%',
-                    transition: 'background 0.15s'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? '#2a2b2e' : '#f5f5f7'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                >
-                  📊 Monitoring
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Dark Mode Toggle - Fixed container to not affect navbar height */}
-          <div style={{
-            width: '80px',
-            height: '34px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            overflow: 'visible'
-          }}>
-            <img
-              src={darkMode ? darkIcon : lightIcon}
-              alt={darkMode ? "Dark mode" : "Light mode"}
-              onClick={() => setDarkMode(!darkMode)}
-              title={darkMode ? "Mode clair" : "Mode sombre"}
-              style={{
-                width: '80px',
-                height: 'auto',
-                cursor: 'pointer',
-                transition: 'transform 0.2s ease'
-              }}
-              onMouseEnter={(e) => e.target.style.transform = 'scale(1.05)'}
-              onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
-            />
-          </div>
-
-          {/* Logout */}
-          <button 
-            onClick={logout} 
-            title="Déconnexion"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '34px',
-              height: '34px',
-              borderRadius: '10px',
-              border: 'none',
-              background: darkMode ? '#2a2b2e' : '#f5f5f7',
-              color: darkMode ? '#8b8d93' : '#86868b',
-              cursor: 'pointer',
-              fontSize: '14px',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = darkMode ? '#ff453a' : '#ff3b30';
-              e.currentTarget.style.color = '#fff';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = darkMode ? '#2a2b2e' : '#f5f5f7';
-              e.currentTarget.style.color = darkMode ? '#8b8d93' : '#86868b';
-            }}
-          >
-            ⏻
-          </button>
-        </div>
-      </div>
+      <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />
 
       {/* ═══════════════════════════════════════════════════════════════════
           DASHBOARD BOARD-FRAME
