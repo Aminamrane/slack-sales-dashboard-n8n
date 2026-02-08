@@ -152,9 +152,10 @@ export default async function handler(req, res) {
 
     // --- Build the *actual* company object we want to use (and show) in the clause/PDF
     const coyParsedSchemaOK = parsed.data;
+    const isInRegistration = incoming.isInRegistration || false;
     const companyForOutput = isEI
-      ? { ...coyParsedSchemaOK, legalForm: "EI", rcsCity: "" }   // blank RCS city for EI
-      : coyParsedSchemaOK;
+      ? { ...coyParsedSchemaOK, legalForm: "EI", rcsCity: "", isInRegistration }
+      : { ...coyParsedSchemaOK, isInRegistration };
 
     // Infos extra pour Sheet (email/tél même si hors schéma) — keep the original values
     const coyForSheet = {
