@@ -52,14 +52,16 @@ export default function ProtectedRoute({ children, allowedRoles = null }) {
   };
 
   if (loading) {
+    const isDark = document.body.classList.contains('dark-mode') ||
+                   document.documentElement.classList.contains('dark-mode');
     return (
       <div style={{
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
         height: '100vh',
-        background: '#1a1a2e',
-        color: '#fff'
+        background: isDark ? '#1a1a1e' : '#f5f5f7',
+        color: isDark ? '#f5f5f7' : '#1d1d1f'
       }}>
         Chargement...
       </div>
