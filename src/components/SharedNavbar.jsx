@@ -230,7 +230,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode }) {
                 onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? '#2a2b2e' : '#f5f5f7'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
               >
-                Monitoring
+                Monitoring Lead
               </button>
             )}
 
@@ -282,7 +282,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode }) {
                 onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? '#2a2b2e' : '#f5f5f7'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
               >
-                Monitoring Perf
+                Monitoring Sales
               </button>
             )}
 
