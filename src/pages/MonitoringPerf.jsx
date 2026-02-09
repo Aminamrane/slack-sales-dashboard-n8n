@@ -340,9 +340,13 @@ export default function MonitoringPerf() {
         const signatures = person.nbr_signature || 0;
         const revenue = person.total_revenue || 0;
         const cashCollected = person.total_cash || 0;
+        const leads_assigned = person.leads_assigned || 0;
+        const leads_ads = person.leads_ads || 0;
+        const leads_cc = person.leads_cc || 0;
 
         // Use API-provided conversion rates, with fallback calculations
-        const conv_global = person.conversion_global || (calls_answered > 0 ? (signatures / calls_answered) * 100 : 0);
+        // Conv. global = Ventes / Leads affectés (not calls_answered anymore)
+        const conv_global = person.conversion_global || (leads_assigned > 0 ? (signatures / leads_assigned) * 100 : 0);
         const conv_calls_to_answered = person.conv_calls_to_answered || (calls_total > 0 ? (calls_answered / calls_total) * 100 : 0);
         const conv_answered_to_r1p = person.conv_answered_to_r1p || (calls_answered > 0 ? (r1_placed / calls_answered) * 100 : 0);
         const conv_r1p_to_r1r = person.conv_r1p_to_r1r || (r1_placed > 0 ? (r1_done / r1_placed) * 100 : 0);
@@ -361,6 +365,9 @@ export default function MonitoringPerf() {
           signatures,
           revenue,
           cashCollected,
+          leads_assigned,
+          leads_ads,
+          leads_cc,
           avatar: "",
           // Conversion rates (funnel order)
           conv_global,
@@ -402,6 +409,7 @@ export default function MonitoringPerf() {
       return {
         calls: 0, answered: 0, signatures: 0, revenue: 0, cashCollected: 0,
         r1_placed: 0, r1_done: 0, r2_placed: 0, r2_done: 0,
+        leads_assigned: 0,
         conv_global: 0, conv_calls_to_answered: 0, conv_answered_to_r1p: 0,
         conv_r1p_to_r1r: 0, conv_r2p_to_r2r: 0, conv_sales: 0
       };
@@ -416,13 +424,15 @@ export default function MonitoringPerf() {
       r2_done: acc.r2_done + stat.r2_done,
       signatures: acc.signatures + stat.signatures,
       revenue: acc.revenue + stat.revenue,
-      cashCollected: acc.cashCollected + stat.cashCollected
-    }), { calls: 0, answered: 0, r1_placed: 0, r1_done: 0, r2_placed: 0, r2_done: 0, signatures: 0, revenue: 0, cashCollected: 0 });
+      cashCollected: acc.cashCollected + stat.cashCollected,
+      leads_assigned: acc.leads_assigned + stat.leads_assigned
+    }), { calls: 0, answered: 0, r1_placed: 0, r1_done: 0, r2_placed: 0, r2_done: 0, signatures: 0, revenue: 0, cashCollected: 0, leads_assigned: 0 });
 
     // Calculate conversion rates from totals (funnel order)
+    // Conv. global = Ventes / Leads affectés (not calls_answered anymore)
     return {
       ...t,
-      conv_global: t.answered > 0 ? (t.signatures / t.answered) * 100 : 0,
+      conv_global: t.leads_assigned > 0 ? (t.signatures / t.leads_assigned) * 100 : 0,
       conv_calls_to_answered: t.calls > 0 ? (t.answered / t.calls) * 100 : 0,
       conv_answered_to_r1p: t.answered > 0 ? (t.r1_placed / t.answered) * 100 : 0,
       conv_r1p_to_r1r: t.r1_placed > 0 ? (t.r1_done / t.r1_placed) * 100 : 0,
@@ -664,6 +674,13 @@ export default function MonitoringPerf() {
             </div>
 
             <div className="money-float-container">
+              <span className="totals-label">Leads affectés</span><br />
+              <span className="totals-value perf-neutral dot-boost">
+                {totals.leads_assigned?.toLocaleString("fr-FR") || 0}
+              </span>
+            </div>
+
+            <div className="money-float-container">
               <span className="totals-label">Ventes</span><br />
               <span className="totals-value cash dot-boost">
                 {totals.signatures?.toLocaleString("fr-FR") || 0}
@@ -724,7 +741,8 @@ export default function MonitoringPerf() {
                   <tr>
                     <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>#</th>
                     <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>Sales</th>
-                    <th align="center" title="Ventes / Appels Décrochés" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Conv. %</th>
+                    <th align="center" title="Leads affectés" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Leads</th>
+                    <th align="center" title="Ventes / Leads affectés" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Conv. %</th>
                     <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Appels</th>
                     <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Décrochés</th>
                     <th align="center" title="Appels Décrochés / Appels Totaux" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Tx Décr.</th>
@@ -809,7 +827,13 @@ export default function MonitoringPerf() {
                             {stat.salesName}
                           </span>
                         </td>
-                        {/* Conv. Globale (Ventes / Décrochés) */}
+                        {/* Leads affectés */}
+                        <td align="center" style={{ fontWeight: 700, ...cellBorder }}>
+                          {canal === "ads" ? (stat.leads_ads?.toLocaleString("fr-FR") || 0) :
+                           canal === "cc" ? (stat.leads_cc?.toLocaleString("fr-FR") || 0) :
+                           (stat.leads_assigned?.toLocaleString("fr-FR") || 0)}
+                        </td>
+                        {/* Conv. Globale (Ventes / Leads affectés) */}
                         <td align="center" style={{ fontWeight: 700, color: getConvGlobalColor(stat.conv_global), ...cellBorder }}>
                           {stat.conv_global?.toFixed(2) || 0}%
                         </td>
