@@ -235,10 +235,6 @@ export default function MonitoringPerf() {
   const [leadQualityLoading, setLeadQualityLoading] = useState(false);
   const [leadQualityRange, setLeadQualityRange] = useState(() => {
     const now = new Date();
-    // If current date is before Feb 2026, default to Feb 2026
-    if (now < new Date('2026-02-01')) {
-      return '2026-02';
-    }
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
   const [selectedOrigins, setSelectedOrigins] = useState([]); // multi-select origins filter
@@ -647,7 +643,7 @@ export default function MonitoringPerf() {
                 >
                   {(() => {
                     const options = [];
-                    const startDate = new Date('2026-02-01');
+                    const startDate = new Date('2026-01-01');
                     const today = new Date();
                     const months = [];
                     const current = new Date(startDate);
@@ -1056,21 +1052,32 @@ export default function MonitoringPerf() {
                 <div className="money-float-container">
                   <span className="totals-label">Ventes</span><br />
                   <span className="totals-value cash dot-boost">
-                    {leadQualityData?.summary?.total_sales?.toLocaleString("fr-FR") || 0}
+                    {leadQualityData?.summary?.total_ads_sales_signed?.toLocaleString("fr-FR") || 0}
                   </span>
                 </div>
 
                 <div className="money-float-container">
                   <span className="totals-label">Clients réels</span><br />
                   <span className="totals-value cash dot-boost">
-                    {leadQualityData?.summary?.total_real_clients?.toLocaleString("fr-FR") || 0}
+                    {leadQualityData?.summary?.total_sales?.toLocaleString("fr-FR") || 0}
                   </span>
                 </div>
 
                 <div className="money-float-container">
                   <span className="totals-label">Taux Perte</span><br />
                   <span className="totals-value revenu dot-boost">
-                    {leadQualityData?.summary?.global_loss_rate?.toFixed(1) || 0}%
+                    {leadQualityData?.summary?.total_unique_answered > 0
+                      ? `${leadQualityData.summary.global_loss_rate?.toFixed(1) || 0}%`
+                      : '—'}
+                  </span>
+                </div>
+
+                <div className="money-float-container">
+                  <span className="totals-label">Non traités</span><br />
+                  <span className="totals-value perf-neutral dot-boost">
+                    {leadQualityData?.summary?.total_untreated > 0
+                      ? `${leadQualityData.summary.total_untreated.toLocaleString("fr-FR")} (${leadQualityData.summary.total_leads > 0 ? ((leadQualityData.summary.total_untreated / leadQualityData.summary.total_leads) * 100).toFixed(1) : 0}%)`
+                      : '0'}
                   </span>
                 </div>
 
@@ -1130,12 +1137,12 @@ export default function MonitoringPerf() {
                       <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>#</th>
                       <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>Origine</th>
                       <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Leads</th>
-                      <th align="center" title="Leads non décrochés / Total leads" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Tx Perte</th>
+                      <th align="center" title="Leads avec téléphone mais jamais appelés" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Non traités</th>
+                      <th align="center" title="Leads tentés non décrochés / Leads tentés" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Tx Perte</th>
                       <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Ventes</th>
                       <th align="center" title="Ventes / Leads" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Conv. %</th>
                       <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Appels</th>
                       <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Décrochés</th>
-                      <th align="center" title="Clients réels / Ventes" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Conv. Réelle</th>
                       <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Cash</th>
                       <th align="center" style={{ whiteSpace: 'nowrap' }}>ARR</th>
                     </tr>
@@ -1154,12 +1161,6 @@ export default function MonitoringPerf() {
                           if (rate <= 50) return COLORS.secondary;
                           return '#ff453a';
                         };
-                        const getRealConvColor = (rate) => {
-                          if (rate >= 80) return COLORS.tertiary;
-                          if (rate >= 50) return COLORS.secondary;
-                          return '#ff453a';
-                        };
-
                         const cellBorder = { borderRight: '1px solid rgba(128,128,128,0.15)' };
 
                         return (
@@ -1191,8 +1192,11 @@ export default function MonitoringPerf() {
                             <td align="center" style={{ fontWeight: 700, ...cellBorder }}>
                               {origin.leads_count?.toLocaleString("fr-FR") || 0}
                             </td>
-                            <td align="center" style={{ fontWeight: 600, color: getLossColor(origin.loss_rate), ...cellBorder }}>
-                              {origin.loss_rate?.toFixed(1) || 0}%
+                            <td align="center" style={{ fontWeight: 500, color: (origin.untreated_count > 0) ? '#ff9500' : (darkMode ? '#8b8d93' : '#86868b'), ...cellBorder }}>
+                              {origin.untreated_count > 0 ? origin.untreated_count.toLocaleString("fr-FR") : '0'}
+                            </td>
+                            <td align="center" style={{ fontWeight: 600, color: origin.calls_total > 0 ? getLossColor(origin.loss_rate) : (darkMode ? '#8b8d93' : '#86868b'), ...cellBorder }}>
+                              {origin.calls_total > 0 ? `${origin.loss_rate?.toFixed(1) || 0}%` : '—'}
                             </td>
                             <td align="center" style={{ fontWeight: 800, fontSize: '0.95rem', color: COLORS.tertiary, ...cellBorder }}>
                               {origin.sales_count?.toLocaleString("fr-FR") || 0}
@@ -1200,14 +1204,11 @@ export default function MonitoringPerf() {
                             <td align="center" style={{ fontWeight: 700, color: getConvColor(origin.conversion_rate), ...cellBorder }}>
                               {origin.conversion_rate?.toFixed(1) || 0}%
                             </td>
-                            <td align="center" style={{ fontWeight: 500, ...cellBorder }}>
-                              {origin.calls_total?.toLocaleString("fr-FR") || 0}
+                            <td align="center" style={{ fontWeight: 500, color: !origin.calls_total ? (darkMode ? '#8b8d93' : '#86868b') : undefined, ...cellBorder }}>
+                              {origin.calls_total > 0 ? origin.calls_total.toLocaleString("fr-FR") : '—'}
                             </td>
-                            <td align="center" style={{ fontWeight: 500, ...cellBorder }}>
-                              {origin.calls_answered?.toLocaleString("fr-FR") || 0}
-                            </td>
-                            <td align="center" style={{ fontWeight: 600, color: getRealConvColor(origin.real_conversion_rate), ...cellBorder }}>
-                              {origin.real_conversion_rate?.toFixed(1) || 0}%
+                            <td align="center" style={{ fontWeight: 500, color: !origin.calls_total ? (darkMode ? '#8b8d93' : '#86868b') : undefined, ...cellBorder }}>
+                              {origin.calls_total > 0 ? (origin.calls_answered?.toLocaleString("fr-FR") || 0) : '—'}
                             </td>
                             <td align="center" style={{ fontWeight: 500, color: COLORS.tertiary, ...cellBorder }}>
                               {origin.cash_collected > 0 ? `${Math.round(origin.cash_collected).toLocaleString("fr-FR")} €` : '—'}
