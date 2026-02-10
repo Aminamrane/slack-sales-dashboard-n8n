@@ -241,6 +241,7 @@ export default function MonitoringPerf() {
     }
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
+  const [selectedOrigins, setSelectedOrigins] = useState([]); // multi-select origins filter
 
   // ── FILTERS ─────────────────────────────────────────────────────────────────
   const [range, setRange] = useState(() => {
@@ -310,9 +311,12 @@ export default function MonitoringPerf() {
     setLeadQualityLoading(true);
     try {
       const period = leadQualityRange || 'current_month';
-      console.log("🔍 Fetching lead quality data with period:", period);
-      const data = await apiClient.get(`/api/v1/monitoring/lead-quality?period=${period}`);
-      console.log("📊 Lead quality response:", data);
+      let url = `/api/v1/monitoring/lead-quality?period=${period}`;
+      if (selectedOrigins.length > 0) {
+        const originsParam = selectedOrigins.map(o => `origins=${encodeURIComponent(o)}`).join('&');
+        url += `&${originsParam}`;
+      }
+      const data = await apiClient.get(url);
       setLeadQualityData(data);
     } catch (err) {
       console.error("Lead quality fetch error:", err);
@@ -328,7 +332,7 @@ export default function MonitoringPerf() {
     if (hasAccess && viewMode === 'lead_quality') {
       fetchLeadQuality();
     }
-  }, [hasAccess, viewMode, leadQualityRange]);
+  }, [hasAccess, viewMode, leadQualityRange, selectedOrigins]);
 
   // ── KPI CALCULATIONS ────────────────────────────────────────────────────────
   // Sales Funnel: Appels → Décrochés → R1p → R1r → R2p → R2r → Ventes
@@ -623,53 +627,147 @@ export default function MonitoringPerf() {
                 </div>
               </>
             ) : (
-              /* Month selector for Lead Quality (starts Feb 2026) */
-              <select
-                value={leadQualityRange}
-                onChange={(e) => setLeadQualityRange(e.target.value)}
-                className="range-select"
-                style={{
-                  padding: '8px 14px',
-                  paddingRight: '32px',
-                  borderRadius: '12px',
-                  border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`,
-                  background: darkMode ? '#2a2b2e' : '#ffffff',
-                  color: darkMode ? '#f5f5f7' : '#1d1d1f',
-                  fontWeight: 500,
-                  fontSize: '14px',
-                  cursor: 'pointer'
-                }}
-              >
-                {(() => {
-                  const options = [];
-                  const startDate = new Date('2026-02-01'); // Lead quality starts Feb 2026
-                  const today = new Date();
-                  const months = [];
-                  const current = new Date(startDate);
-                  const currentYearMonth = today.getFullYear() * 100 + today.getMonth();
+              /* Month selector + Origin filter for Lead Quality */
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <select
+                  value={leadQualityRange}
+                  onChange={(e) => setLeadQualityRange(e.target.value)}
+                  className="range-select"
+                  style={{
+                    padding: '8px 14px',
+                    paddingRight: '32px',
+                    borderRadius: '12px',
+                    border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`,
+                    background: darkMode ? '#2a2b2e' : '#ffffff',
+                    color: darkMode ? '#f5f5f7' : '#1d1d1f',
+                    fontWeight: 500,
+                    fontSize: '14px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {(() => {
+                    const options = [];
+                    const startDate = new Date('2026-02-01');
+                    const today = new Date();
+                    const months = [];
+                    const current = new Date(startDate);
+                    const currentYearMonth = today.getFullYear() * 100 + today.getMonth();
 
-                  while (true) {
-                    const year = current.getFullYear();
-                    const month = current.getMonth();
-                    const iterYearMonth = year * 100 + month;
-                    if (iterYearMonth > currentYearMonth) break;
+                    while (true) {
+                      const year = current.getFullYear();
+                      const month = current.getMonth();
+                      const iterYearMonth = year * 100 + month;
+                      if (iterYearMonth > currentYearMonth) break;
 
-                    const monthName = new Intl.DateTimeFormat('fr-FR', {
-                      month: 'long',
-                      year: 'numeric'
-                    }).format(current);
+                      const monthName = new Intl.DateTimeFormat('fr-FR', {
+                        month: 'long',
+                        year: 'numeric'
+                      }).format(current);
 
-                    const value = `${year}-${String(month + 1).padStart(2, '0')}`;
-                    months.unshift({ value, label: monthName.charAt(0).toUpperCase() + monthName.slice(1) });
-                    current.setMonth(current.getMonth() + 1);
-                  }
+                      const value = `${year}-${String(month + 1).padStart(2, '0')}`;
+                      months.unshift({ value, label: monthName.charAt(0).toUpperCase() + monthName.slice(1) });
+                      current.setMonth(current.getMonth() + 1);
+                    }
 
-                  months.forEach(m => {
-                    options.push(<option key={m.value} value={m.value}>{m.label}</option>);
-                  });
-                  return options;
-                })()}
-              </select>
+                    months.forEach(m => {
+                      options.push(<option key={m.value} value={m.value}>{m.label}</option>);
+                    });
+                    return options;
+                  })()}
+                </select>
+
+                {/* Origin multi-select filter */}
+                {leadQualityData?.available_origins && leadQualityData.available_origins.length > 0 && (
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      onClick={() => {
+                        const el = document.getElementById('origin-dropdown');
+                        if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+                      }}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: '12px',
+                        border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`,
+                        background: selectedOrigins.length > 0
+                          ? (darkMode ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.1)')
+                          : (darkMode ? '#2a2b2e' : '#ffffff'),
+                        color: selectedOrigins.length > 0 ? COLORS.primary : (darkMode ? '#f5f5f7' : '#1d1d1f'),
+                        fontWeight: 500,
+                        fontSize: '14px',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      {selectedOrigins.length > 0
+                        ? `${selectedOrigins.length} origine${selectedOrigins.length > 1 ? 's' : ''}`
+                        : 'Toutes origines'}
+                      {' ▾'}
+                    </button>
+                    <div
+                      id="origin-dropdown"
+                      style={{
+                        display: 'none',
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        marginTop: '4px',
+                        background: darkMode ? '#242428' : '#ffffff',
+                        border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`,
+                        borderRadius: '12px',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                        padding: '8px 0',
+                        zIndex: 100,
+                        maxHeight: '300px',
+                        overflowY: 'auto',
+                        minWidth: '200px'
+                      }}
+                    >
+                      {selectedOrigins.length > 0 && (
+                        <div
+                          onClick={() => setSelectedOrigins([])}
+                          style={{
+                            padding: '8px 16px',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            color: '#ff453a',
+                            borderBottom: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`
+                          }}
+                        >
+                          Réinitialiser
+                        </div>
+                      )}
+                      {leadQualityData.available_origins.map(o => (
+                        <label
+                          key={o}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '6px 16px',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            fontWeight: selectedOrigins.includes(o) ? 600 : 400,
+                            color: darkMode ? '#f5f5f7' : '#1d1d1f'
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedOrigins.includes(o)}
+                            onChange={() => {
+                              setSelectedOrigins(prev =>
+                                prev.includes(o) ? prev.filter(x => x !== o) : [...prev, o]
+                              );
+                            }}
+                            style={{ accentColor: COLORS.primary }}
+                          />
+                          {o}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -956,37 +1054,44 @@ export default function MonitoringPerf() {
                 </div>
 
                 <div className="money-float-container">
-                  <span className="totals-label">Total Clients</span><br />
+                  <span className="totals-label">Ventes</span><br />
                   <span className="totals-value cash dot-boost">
-                    {leadQualityData?.summary?.total_clients?.toLocaleString("fr-FR") || 0}
+                    {leadQualityData?.summary?.total_sales?.toLocaleString("fr-FR") || 0}
                   </span>
                 </div>
 
                 <div className="money-float-container">
-                  <span className="totals-label">Taux Conv. Global</span><br />
+                  <span className="totals-label">Clients réels</span><br />
                   <span className="totals-value cash dot-boost">
-                    {leadQualityData?.summary?.global_conversion_rate?.toFixed(1) || 0}%
+                    {leadQualityData?.summary?.total_real_clients?.toLocaleString("fr-FR") || 0}
                   </span>
                 </div>
 
                 <div className="money-float-container">
-                  <span className="totals-label">Total Appels</span><br />
-                  <span className="totals-value perf-neutral dot-boost">
-                    {leadQualityData?.summary?.total_calls?.toLocaleString("fr-FR") || 0}
-                  </span>
-                </div>
-
-                <div className="money-float-container">
-                  <span className="totals-label">Appels Décrochés</span><br />
-                  <span className="totals-value perf-neutral dot-boost">
-                    {leadQualityData?.summary?.total_answered?.toLocaleString("fr-FR") || 0}
-                  </span>
-                </div>
-
-                <div className="money-float-container">
-                  <span className="totals-label">Taux Décr. Global</span><br />
+                  <span className="totals-label">Taux Perte</span><br />
                   <span className="totals-value revenu dot-boost">
-                    {leadQualityData?.summary?.global_answer_rate?.toFixed(1) || 0}%
+                    {leadQualityData?.summary?.global_loss_rate?.toFixed(1) || 0}%
+                  </span>
+                </div>
+
+                <div className="money-float-container">
+                  <span className="totals-label">Conv. Réelle</span><br />
+                  <span className="totals-value cash dot-boost">
+                    {leadQualityData?.summary?.global_real_conversion_rate?.toFixed(1) || 0}%
+                  </span>
+                </div>
+
+                <div className="money-float-container">
+                  <span className="totals-label">Cash Total</span><br />
+                  <span className="totals-value cash dot-boost">
+                    {leadQualityData?.summary?.total_cash > 0 ? `${Math.round(leadQualityData.summary.total_cash).toLocaleString("fr-FR")} €` : '0 €'}
+                  </span>
+                </div>
+
+                <div className="money-float-container">
+                  <span className="totals-label">ARR Total</span><br />
+                  <span className="totals-value revenu dot-boost">
+                    {leadQualityData?.summary?.total_arr > 0 ? `${Math.round(leadQualityData.summary.total_arr).toLocaleString("fr-FR")} €` : '0 €'}
                   </span>
                 </div>
               </div>
@@ -1025,13 +1130,14 @@ export default function MonitoringPerf() {
                       <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>#</th>
                       <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>Origine</th>
                       <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Leads</th>
-                      <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Clients</th>
-                      <th align="center" title="Clients / Leads" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Conv. %</th>
+                      <th align="center" title="Leads non décrochés / Total leads" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Tx Perte</th>
+                      <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Ventes</th>
+                      <th align="center" title="Ventes / Leads" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Conv. %</th>
                       <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Appels</th>
                       <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Décrochés</th>
-                      <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Manqués</th>
-                      <th align="center" title="Décrochés / Total Appels" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Tx Décr.</th>
-                      <th align="center" title="Manqués / Total Appels" style={{ whiteSpace: 'nowrap' }}>Tx Manqués</th>
+                      <th align="center" title="Clients réels / Ventes" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Conv. Réelle</th>
+                      <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Cash</th>
+                      <th align="center" style={{ whiteSpace: 'nowrap' }}>ARR</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1043,14 +1149,14 @@ export default function MonitoringPerf() {
                           if (rate >= 5) return COLORS.secondary;
                           return darkMode ? '#f5f5f7' : '#1d1d1f';
                         };
-                        const getAnswerColor = (rate) => {
-                          if (rate >= 80) return COLORS.tertiary;
-                          if (rate >= 60) return COLORS.secondary;
+                        const getLossColor = (rate) => {
+                          if (rate <= 30) return COLORS.tertiary;
+                          if (rate <= 50) return COLORS.secondary;
                           return '#ff453a';
                         };
-                        const getMissedColor = (rate) => {
-                          if (rate <= 20) return COLORS.tertiary;
-                          if (rate <= 40) return COLORS.secondary;
+                        const getRealConvColor = (rate) => {
+                          if (rate >= 80) return COLORS.tertiary;
+                          if (rate >= 50) return COLORS.secondary;
                           return '#ff453a';
                         };
 
@@ -1082,11 +1188,14 @@ export default function MonitoringPerf() {
                                 {origin.origin || 'Inconnu'}
                               </span>
                             </td>
-                            <td align="center" style={{ fontWeight: 500, ...cellBorder }}>
+                            <td align="center" style={{ fontWeight: 700, ...cellBorder }}>
                               {origin.leads_count?.toLocaleString("fr-FR") || 0}
                             </td>
-                            <td align="center" style={{ fontWeight: 600, color: COLORS.tertiary, ...cellBorder }}>
-                              {origin.clients_count?.toLocaleString("fr-FR") || 0}
+                            <td align="center" style={{ fontWeight: 600, color: getLossColor(origin.loss_rate), ...cellBorder }}>
+                              {origin.loss_rate?.toFixed(1) || 0}%
+                            </td>
+                            <td align="center" style={{ fontWeight: 800, fontSize: '0.95rem', color: COLORS.tertiary, ...cellBorder }}>
+                              {origin.sales_count?.toLocaleString("fr-FR") || 0}
                             </td>
                             <td align="center" style={{ fontWeight: 700, color: getConvColor(origin.conversion_rate), ...cellBorder }}>
                               {origin.conversion_rate?.toFixed(1) || 0}%
@@ -1097,14 +1206,14 @@ export default function MonitoringPerf() {
                             <td align="center" style={{ fontWeight: 500, ...cellBorder }}>
                               {origin.calls_answered?.toLocaleString("fr-FR") || 0}
                             </td>
-                            <td align="center" style={{ fontWeight: 500, ...cellBorder }}>
-                              {origin.calls_missed?.toLocaleString("fr-FR") || 0}
+                            <td align="center" style={{ fontWeight: 600, color: getRealConvColor(origin.real_conversion_rate), ...cellBorder }}>
+                              {origin.real_conversion_rate?.toFixed(1) || 0}%
                             </td>
-                            <td align="center" style={{ fontWeight: 600, color: getAnswerColor(origin.answer_rate), ...cellBorder }}>
-                              {origin.answer_rate?.toFixed(1) || 0}%
+                            <td align="center" style={{ fontWeight: 500, color: COLORS.tertiary, ...cellBorder }}>
+                              {origin.cash_collected > 0 ? `${Math.round(origin.cash_collected).toLocaleString("fr-FR")} €` : '—'}
                             </td>
-                            <td align="center" style={{ fontWeight: 600, color: getMissedColor(origin.missed_rate) }}>
-                              {origin.missed_rate?.toFixed(1) || 0}%
+                            <td align="center" style={{ fontWeight: 500, color: COLORS.secondary }}>
+                              {origin.arr > 0 ? `${Math.round(origin.arr).toLocaleString("fr-FR")} €` : '—'}
                             </td>
                           </tr>
                         );
