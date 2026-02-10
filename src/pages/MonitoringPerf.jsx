@@ -162,7 +162,8 @@ const displaySalesName = (rawName) => {
 // Personnes exclues (pas des sales)
 const EXCLUDED_KEYS = new Set([
   "mohamed bouaksa",
-  "sara benabid"
+  "sara benabid",
+  "sarah amroune"
 ]);
 
 export default function MonitoringPerf() {
@@ -248,6 +249,24 @@ export default function MonitoringPerf() {
   });
   const [canal, setCanal] = useState("global"); // "global" | "ads" | "cc"
 
+  // ── DETAIL DRILL-DOWN (ADS/CC) ──────────────────────────────────────────
+  const [detailModal, setDetailModal] = useState(null); // { personName, type, data, loading }
+
+  const openDetail = async (personName) => {
+    if (canal !== "ads" && canal !== "cc") return;
+    setDetailModal({ personName, type: canal, data: null, loading: true });
+    try {
+      const endpoint = canal === "ads"
+        ? `/api/v1/monitoring/performance/detail/ads`
+        : `/api/v1/monitoring/performance/detail/cc`;
+      const res = await apiClient.get(`${endpoint}?person_name=${encodeURIComponent(personName)}&period=${range}`);
+      setDetailModal(prev => prev ? { ...prev, data: res, loading: false } : null);
+    } catch (e) {
+      console.error("Detail fetch error:", e);
+      setDetailModal(prev => prev ? { ...prev, data: null, loading: false } : null);
+    }
+  };
+
   const fetchData = async () => {
     setDataLoading(true);
     try {
@@ -330,6 +349,7 @@ export default function MonitoringPerf() {
 
     const performanceArray = viewData.by_person
       .filter(person => !EXCLUDED_KEYS.has(getCanonicalKey(person.name)))
+      .filter(person => (person.leads_assigned || 0) > 0 || (person.nbr_signature || 0) > 0)
       .map(person => {
         const calls_total = person.nbr_appel || 0;
         const calls_answered = person.nbr_appel_d || 0;
@@ -343,6 +363,7 @@ export default function MonitoringPerf() {
         const leads_assigned = person.leads_assigned || 0;
         const leads_ads = person.leads_ads || 0;
         const leads_cc = person.leads_cc || 0;
+        const unique_answered = person.unique_answered || 0;
 
         // Use API-provided conversion rates, with fallback calculations
         // Conv. global = Ventes / Leads affectés (not calls_answered anymore)
@@ -368,6 +389,7 @@ export default function MonitoringPerf() {
           leads_assigned,
           leads_ads,
           leads_cc,
+          unique_answered,
           avatar: "",
           // Conversion rates (funnel order)
           conv_global,
@@ -389,13 +411,13 @@ export default function MonitoringPerf() {
       return true;
     });
 
-    // Sort by conv_global (DESC), then signatures (DESC), then calls (DESC)
+    // Sort by signatures (DESC), then conv_global (DESC), then calls (DESC)
     dedupedArray.sort((a, b) => {
-      if (b.conv_global !== a.conv_global) {
-        return b.conv_global - a.conv_global;
-      }
       if (b.signatures !== a.signatures) {
         return b.signatures - a.signatures;
+      }
+      if (b.conv_global !== a.conv_global) {
+        return b.conv_global - a.conv_global;
       }
       return b.calls_total - a.calls_total;
     });
@@ -409,9 +431,10 @@ export default function MonitoringPerf() {
       return {
         calls: 0, answered: 0, signatures: 0, revenue: 0, cashCollected: 0,
         r1_placed: 0, r1_done: 0, r2_placed: 0, r2_done: 0,
-        leads_assigned: 0,
+        leads_assigned: 0, unique_answered: 0,
         conv_global: 0, conv_calls_to_answered: 0, conv_answered_to_r1p: 0,
-        conv_r1p_to_r1r: 0, conv_r2p_to_r2r: 0, conv_sales: 0
+        conv_r1p_to_r1r: 0, conv_r2p_to_r2r: 0, conv_sales: 0,
+        lead_qualifie: 0, closing_r1: 0, closing_r2: 0, closing_audit: 0
       };
     }
 
@@ -425,14 +448,21 @@ export default function MonitoringPerf() {
       signatures: acc.signatures + stat.signatures,
       revenue: acc.revenue + stat.revenue,
       cashCollected: acc.cashCollected + stat.cashCollected,
-      leads_assigned: acc.leads_assigned + stat.leads_assigned
-    }), { calls: 0, answered: 0, r1_placed: 0, r1_done: 0, r2_placed: 0, r2_done: 0, signatures: 0, revenue: 0, cashCollected: 0, leads_assigned: 0 });
+      leads_assigned: acc.leads_assigned + stat.leads_assigned,
+      unique_answered: acc.unique_answered + stat.unique_answered
+    }), { calls: 0, answered: 0, r1_placed: 0, r1_done: 0, r2_placed: 0, r2_done: 0, signatures: 0, revenue: 0, cashCollected: 0, leads_assigned: 0, unique_answered: 0 });
 
     // Calculate conversion rates from totals (funnel order)
-    // Conv. global = Ventes / Leads affectés (not calls_answered anymore)
+    // All KPIs calculated on SUMS, not averages of individual rates
     return {
       ...t,
+      // Funnel KPIs (calculated on global sums)
+      lead_qualifie: t.leads_assigned > 0 ? (t.unique_answered / t.leads_assigned) * 100 : 0,
+      closing_r1: t.unique_answered > 0 ? (t.r1_done / t.unique_answered) * 100 : 0,
+      closing_r2: t.r1_done > 0 ? (t.r2_done / t.r1_done) * 100 : 0,
+      closing_audit: t.r2_done > 0 ? (t.signatures / t.r2_done) * 100 : 0,
       conv_global: t.leads_assigned > 0 ? (t.signatures / t.leads_assigned) * 100 : 0,
+      // Legacy rates (still used in table columns)
       conv_calls_to_answered: t.calls > 0 ? (t.answered / t.calls) * 100 : 0,
       conv_answered_to_r1p: t.answered > 0 ? (t.r1_placed / t.answered) * 100 : 0,
       conv_r1p_to_r1r: t.r1_placed > 0 ? (t.r1_done / t.r1_placed) * 100 : 0,
@@ -702,10 +732,9 @@ export default function MonitoringPerf() {
             </div>
           </div>
 
-          <div className="money-float-container" style={{ display: 'inline-block', marginTop: '12px' }}>
-            <div className="totals-sales dot-boost">
-              Taux de décrochage: {totals.conv_calls_to_answered?.toFixed(1) || 0}% | R1 convertis: {totals.conv_r1p_to_r1r?.toFixed(0) || 0}% | Taux de conversion: {totals.conv_global?.toFixed(2) || 0}%
-            </div>
+          {/* ── Funnel KPIs ── */}
+          <div className="totals-sales dot-boost" style={{ marginTop: '10px' }}>
+            Lead Qualifié: {totals.lead_qualifie?.toFixed(1) || 0}%&nbsp;&nbsp;&nbsp;Closing R1: {totals.closing_r1?.toFixed(1) || 0}%&nbsp;&nbsp;&nbsp;Closing R2: {totals.closing_r2?.toFixed(1) || 0}%&nbsp;&nbsp;&nbsp;Closing Audit: {totals.closing_audit?.toFixed(1) || 0}%&nbsp;&nbsp;&nbsp;Taux de conversion: {totals.conv_global?.toFixed(2) || 0}%
           </div>
         </div>
 
@@ -823,7 +852,15 @@ export default function MonitoringPerf() {
                               </div>
                             )}
                           </div>
-                          <span style={{ fontWeight: i < 3 ? 700 : 500, fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                          <span
+                            style={{
+                              fontWeight: i < 3 ? 700 : 500,
+                              fontSize: '0.85rem',
+                              whiteSpace: 'nowrap',
+                              ...(canal !== "global" ? { cursor: 'pointer', textDecoration: 'underline', textDecorationColor: 'rgba(128,128,128,0.3)', textUnderlineOffset: '3px' } : {})
+                            }}
+                            onClick={() => canal !== "global" && openDetail(stat.salesName)}
+                          >
                             {stat.salesName}
                           </span>
                         </td>
@@ -878,7 +915,7 @@ export default function MonitoringPerf() {
                           {stat.conv_r2p_to_r2r?.toFixed(0) || 0}%
                         </td>
                         {/* Ventes */}
-                        <td align="center" style={{ fontWeight: 600, color: COLORS.tertiary, ...cellBorder }}>
+                        <td align="center" style={{ fontWeight: 800, fontSize: '0.95rem', color: COLORS.tertiary, ...cellBorder }}>
                           {stat.signatures?.toLocaleString("fr-FR") || 0}
                         </td>
                         {/* Conv. Ventes */}
@@ -1079,6 +1116,128 @@ export default function MonitoringPerf() {
           </>
         )}
       </div>
+
+      {/* ── Detail Modal (ADS / CC drill-down) ── */}
+      {detailModal && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '24px'
+          }}
+          onClick={() => setDetailModal(null)}
+        >
+          <div
+            style={{
+              background: darkMode ? '#242428' : '#ffffff',
+              borderRadius: '20px',
+              padding: '28px',
+              maxWidth: '750px',
+              width: '100%',
+              maxHeight: '80vh',
+              overflow: 'auto',
+              boxShadow: '0 24px 64px rgba(0,0,0,0.3)',
+              border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: darkMode ? '#f5f5f7' : '#1d1d1f' }}>
+                  {detailModal.personName}
+                </h3>
+                <span style={{ fontSize: '0.85rem', color: darkMode ? '#8b8d93' : '#86868b' }}>
+                  {detailModal.type === 'ads' ? 'Leads ADS' : 'Cold Calls'} &middot; {detailModal.data?.period || range}
+                </span>
+              </div>
+              <button
+                onClick={() => setDetailModal(null)}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: '1.5rem', lineHeight: 1, padding: '4px 8px',
+                  color: darkMode ? '#8b8d93' : '#86868b', borderRadius: '8px'
+                }}
+              >&times;</button>
+            </div>
+
+            {/* Loading */}
+            {detailModal.loading && (
+              <p style={{ textAlign: 'center', padding: '40px', color: darkMode ? '#8b8d93' : '#86868b' }}>
+                Chargement...
+              </p>
+            )}
+
+            {/* No data */}
+            {!detailModal.loading && !detailModal.data && (
+              <p style={{ textAlign: 'center', padding: '40px', color: darkMode ? '#8b8d93' : '#86868b' }}>
+                Erreur lors du chargement
+              </p>
+            )}
+
+            {/* ADS Table */}
+            {!detailModal.loading && detailModal.data && detailModal.type === 'ads' && (
+              <>
+                <p style={{ fontSize: '0.85rem', color: darkMode ? '#8b8d93' : '#86868b', marginBottom: '12px' }}>
+                  {detailModal.data.total || detailModal.data.leads?.length || 0} leads
+                </p>
+                <table style={{
+                  width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem',
+                  color: darkMode ? '#f5f5f7' : '#1d1d1f'
+                }}>
+                  <thead>
+                    <tr style={{ borderBottom: `2px solid ${darkMode ? '#333338' : '#e5e5e5'}` }}>
+                      <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: darkMode ? '#8b8d93' : '#86868b' }}>Nom</th>
+                      <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: darkMode ? '#8b8d93' : '#86868b' }}>Telephone</th>
+                      <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: darkMode ? '#8b8d93' : '#86868b' }}>Origine</th>
+                      <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: darkMode ? '#8b8d93' : '#86868b' }}>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(detailModal.data.leads || []).map((lead, idx) => (
+                      <tr key={idx} style={{ borderBottom: `1px solid ${darkMode ? '#2a2b2e' : '#f0f0f0'}` }}>
+                        <td style={{ padding: '8px 10px', fontWeight: 500 }}>{lead.full_name}</td>
+                        <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: '0.8rem' }}>{lead.phone}</td>
+                        <td style={{ padding: '8px 10px' }}>{lead.origin}</td>
+                        <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{lead.date}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+
+            {/* CC Table */}
+            {!detailModal.loading && detailModal.data && detailModal.type === 'cc' && (
+              <>
+                <p style={{ fontSize: '0.85rem', color: darkMode ? '#8b8d93' : '#86868b', marginBottom: '12px' }}>
+                  {detailModal.data.total_entries || detailModal.data.entries?.length || 0} jours &middot; {detailModal.data.total_appels?.toLocaleString("fr-FR") || 0} appels
+                </p>
+                <table style={{
+                  width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem',
+                  color: darkMode ? '#f5f5f7' : '#1d1d1f'
+                }}>
+                  <thead>
+                    <tr style={{ borderBottom: `2px solid ${darkMode ? '#333338' : '#e5e5e5'}` }}>
+                      <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: darkMode ? '#8b8d93' : '#86868b' }}>Date</th>
+                      <th style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, color: darkMode ? '#8b8d93' : '#86868b' }}>Nombre d'appels</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(detailModal.data.entries || []).map((entry, idx) => (
+                      <tr key={idx} style={{ borderBottom: `1px solid ${darkMode ? '#2a2b2e' : '#f0f0f0'}` }}>
+                        <td style={{ padding: '8px 10px', fontWeight: 500, whiteSpace: 'nowrap' }}>{entry.date}</td>
+                        <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 600 }}>{entry.nbr_appel?.toLocaleString("fr-FR") || 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -150,15 +150,25 @@ export default function AdminLeads() {
   }, [stats]);
 
   const todayStats = useMemo(() => {
-    if (!stats) {
-      return { total: 0, byOrigin: {}, top: { origin: "Aucun", count: 0 } };
-    }
+    // Count today's leads client-side (uses browser's local timezone, not server UTC)
+    const today = new Date();
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
 
-    // Get today's leads count from backend
-    const total = stats.today_leads || 0;
+    const todayLeads = leads.filter(l => {
+      const d = new Date(l.created_at);
+      return d >= startOfToday && d < endOfToday;
+    });
 
-    // For today stats, we'll use the overall source breakdown as an approximation
-    const byOrigin = stats.by_source || {};
+    const total = todayLeads.length;
+
+    // Count by origin for today's leads
+    const byOrigin = {};
+    todayLeads.forEach(l => {
+      const origin = l.origin || "Unknown";
+      byOrigin[origin] = (byOrigin[origin] || 0) + 1;
+    });
+
     const sorted = Object.entries(byOrigin).sort((a, b) => b[1] - a[1]);
     const top = sorted[0] || ["Aucun", 0];
 
@@ -167,7 +177,7 @@ export default function AdminLeads() {
       byOrigin,
       top: { origin: top[0], count: top[1] },
     };
-  }, [stats]);
+  }, [leads]);
 
   // Bar chart (horizontal) - Leads par origine
   const barChartData = useMemo(() => {
