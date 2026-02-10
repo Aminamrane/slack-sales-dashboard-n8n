@@ -734,7 +734,7 @@ export default function MonitoringPerf() {
 
           {/* ── Funnel KPIs ── */}
           <div className="totals-sales dot-boost" style={{ marginTop: '10px' }}>
-            Lead Qualifié: {totals.lead_qualifie?.toFixed(1) || 0}%&nbsp;&nbsp;&nbsp;Closing R1: {totals.closing_r1?.toFixed(1) || 0}%&nbsp;&nbsp;&nbsp;Closing R2: {totals.closing_r2?.toFixed(1) || 0}%&nbsp;&nbsp;&nbsp;Closing Audit: {totals.closing_audit?.toFixed(1) || 0}%&nbsp;&nbsp;&nbsp;Taux de conversion: {totals.conv_global?.toFixed(2) || 0}%
+            {canal !== "cc" && <>Lead Qualifié: {totals.lead_qualifie?.toFixed(1) || 0}%&nbsp;&nbsp;&nbsp;</>}Closing R1: {totals.closing_r1?.toFixed(1) || 0}%&nbsp;&nbsp;&nbsp;Closing R2: {totals.closing_r2?.toFixed(1) || 0}%&nbsp;&nbsp;&nbsp;Closing Audit: {totals.closing_audit?.toFixed(1) || 0}%&nbsp;&nbsp;&nbsp;Taux de conversion: {totals.conv_global?.toFixed(2) || 0}%
           </div>
         </div>
 
