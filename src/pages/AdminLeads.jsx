@@ -35,6 +35,19 @@ const DARK_COLORS = {
   cardBg: "#242428",
 };
 
+const formatPhone = (raw) => {
+  if (!raw) return '-';
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('33')) {
+    const rest = digits.slice(2);
+    return `+33 ${rest[0]} ${rest.slice(1, 3)} ${rest.slice(3, 5)} ${rest.slice(5, 7)} ${rest.slice(7, 9)}`;
+  }
+  if (digits.length === 10 && digits.startsWith('0')) {
+    return `${digits.slice(0, 2)} ${digits.slice(2, 4)} ${digits.slice(4, 6)} ${digits.slice(6, 8)} ${digits.slice(8, 10)}`;
+  }
+  return raw;
+};
+
 export default function AdminLeads() {
   const navigate = useNavigate();
 
@@ -94,6 +107,15 @@ export default function AdminLeads() {
   const [leads, setLeads] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
 
+  // ── CHALLENGE VIEW ──────────────────────────────────────────
+  const [viewMode, setViewMode] = useState("monitoring"); // "monitoring" | "challenge"
+  const [challengeData, setChallengeData] = useState(null);
+  const [challengeLoading, setChallengeLoading] = useState(false);
+  const [challengeRange, setChallengeRange] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+
   const fetchStats = async () => {
     setDataLoading(true);
     try {
@@ -134,6 +156,29 @@ export default function AdminLeads() {
       fetchStats();
     }
   }, [isAdmin]);
+
+  // ── CHALLENGE FETCH ─────────────────────────────────────────
+  const fetchChallenge = async () => {
+    setChallengeLoading(true);
+    try {
+      const period = challengeRange || 'current_month';
+      const data = await apiClient.get(`/api/v1/monitoring/challenge?period=${period}`);
+      setChallengeData(data);
+    } catch (err) {
+      console.error("Challenge fetch error:", err);
+      if (err.message?.includes('401')) {
+        navigate("/login");
+      }
+    } finally {
+      setChallengeLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdmin && viewMode === 'challenge') {
+      fetchChallenge();
+    }
+  }, [isAdmin, viewMode, challengeRange]);
 
   // Stats from backend API (already calculated)
   const monthStats = useMemo(() => {
@@ -388,6 +433,74 @@ export default function AdminLeads() {
     },
   }), [darkMode]);
 
+  // ── CHALLENGE: Bar chart vertical - Leads par jour ──────────
+  const challengeBarData = useMemo(() => {
+    if (!challengeData?.summary?.leads_par_jour) return { labels: [], datasets: [] };
+    const days = challengeData.summary.leads_par_jour;
+    return {
+      labels: days.map(d => d.date),
+      datasets: [{
+        label: 'Leads par jour',
+        data: days.map(d => d.count),
+        backgroundColor: 'rgba(59, 130, 246, 0.7)',
+        borderWidth: 0,
+        borderRadius: 6,
+      }],
+    };
+  }, [challengeData]);
+
+  const challengeBarOptions = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => `${ctx.parsed.y} leads`,
+        },
+        backgroundColor: darkMode ? "#020617" : "#ffffff",
+        titleColor: darkMode ? "#e5e7eb" : COLORS.textPrimary,
+        bodyColor: darkMode ? "#f9fafb" : COLORS.textPrimary,
+        borderColor: darkMode ? "#1f2937" : COLORS.border,
+        borderWidth: 1,
+        padding: 12,
+        cornerRadius: 8,
+      },
+      datalabels: {
+        anchor: 'end',
+        align: 'top',
+        color: darkMode ? "#e5e7eb" : COLORS.textSecondary,
+        font: { size: 11, weight: 600 },
+        formatter: (value) => value > 0 ? value : '',
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: {
+          color: darkMode ? "#9ba3af" : COLORS.textSecondary,
+          font: { size: 11 },
+          stepSize: 1,
+        },
+        grid: {
+          color: darkMode ? "rgba(148, 163, 184, 0.1)" : COLORS.border,
+          drawBorder: false,
+        },
+        border: { display: false },
+      },
+      x: {
+        ticks: {
+          color: darkMode ? "#9ba3af" : COLORS.textSecondary,
+          font: { size: 11 },
+          maxRotation: 45,
+          minRotation: 0,
+        },
+        grid: { display: false },
+        border: { display: false },
+      },
+    },
+  }), [darkMode]);
+
   if (loading || !isAdmin) {
     return <p style={{ padding: 24 }}>Loading...</p>;
   }
@@ -420,14 +533,28 @@ export default function AdminLeads() {
               alt="OWNER"
               style={{ width: 48, height: 48, borderRadius: 12 }}
             />
-            <h1 className="leaderboard-title" style={{ margin: 0 }}>Monitoring des Leads</h1>
+            <h1 className="leaderboard-title" style={{ margin: 0 }}>
+              {viewMode === "challenge" ? "Challenge" : "Monitoring des Leads"}
+            </h1>
           </div>
 
-          {/* Droite: Boutons */}
+          {/* Droite: Toggle + Refresh */}
           <div style={{ display: 'flex', gap: 'var(--space-md)', alignItems: 'center' }}>
             <button
+              className={viewMode === "monitoring" ? "toggle-btn active" : "toggle-btn"}
+              onClick={() => setViewMode("monitoring")}
+            >
+              Monitoring
+            </button>
+            <button
+              className={viewMode === "challenge" ? "toggle-btn active" : "toggle-btn"}
+              onClick={() => setViewMode("challenge")}
+            >
+              Challenge
+            </button>
+            <button
               className="export-btn"
-              onClick={() => fetchStats()}
+              onClick={() => viewMode === "monitoring" ? fetchStats() : fetchChallenge()}
               title="Refresh data"
             >
               Refresh
@@ -437,6 +564,11 @@ export default function AdminLeads() {
 
         <div style={{ height: '80px' }} /> {/* Spacer pour éviter chevauchement */}
 
+        {/* ══════════════════════════════════════════════════════════ */}
+        {/* MONITORING VIEW */}
+        {/* ══════════════════════════════════════════════════════════ */}
+        {viewMode === "monitoring" && (
+          <>
         {dataLoading && <p>Chargement des données...</p>}
 
         {!dataLoading && (
@@ -865,6 +997,208 @@ export default function AdminLeads() {
               )}
 
             </div>
+          </>
+        )}
+          </>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════ */}
+        {/* CHALLENGE VIEW */}
+        {/* ══════════════════════════════════════════════════════════ */}
+        {viewMode === "challenge" && (
+          <>
+            {/* Month Selector */}
+            <div style={{ padding: '0 20px', marginBottom: '24px', display: 'flex', justifyContent: 'flex-end' }}>
+              <select
+                value={challengeRange}
+                onChange={(e) => setChallengeRange(e.target.value)}
+                className="range-select"
+                style={{
+                  padding: '8px 14px',
+                  paddingRight: '32px',
+                  borderRadius: '12px',
+                  border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`,
+                  background: darkMode ? '#2a2b2e' : '#ffffff',
+                  color: darkMode ? '#f5f5f7' : '#1d1d1f',
+                  fontWeight: 500,
+                  fontSize: '14px',
+                  cursor: 'pointer'
+                }}
+              >
+                {(() => {
+                  const options = [];
+                  const startDate = new Date('2026-02-01');
+                  const today = new Date();
+                  const months = [];
+                  const current = new Date(startDate);
+                  const currentYearMonth = today.getFullYear() * 100 + today.getMonth();
+                  while (true) {
+                    const year = current.getFullYear();
+                    const month = current.getMonth();
+                    if (year * 100 + month > currentYearMonth) break;
+                    const monthName = new Intl.DateTimeFormat('fr-FR', {
+                      month: 'long', year: 'numeric'
+                    }).format(current);
+                    const value = `${year}-${String(month + 1).padStart(2, '0')}`;
+                    months.unshift({ value, label: monthName.charAt(0).toUpperCase() + monthName.slice(1) });
+                    current.setMonth(current.getMonth() + 1);
+                  }
+                  months.forEach(m => {
+                    options.push(<option key={m.value} value={m.value}>{m.label}</option>);
+                  });
+                  return options;
+                })()}
+              </select>
+            </div>
+
+            {challengeLoading && (
+              <p style={{ textAlign: 'center', padding: '60px', color: COLORS.textSecondary }}>
+                Chargement des données...
+              </p>
+            )}
+
+            {!challengeLoading && challengeData && (
+              <>
+                {/* KPI Cards - 2 columns */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: '24px',
+                  marginBottom: '32px',
+                  padding: '0 20px'
+                }}>
+                  <div style={{
+                    background: COLORS.cardBg,
+                    border: `1px solid ${COLORS.border}`,
+                    borderRadius: '12px',
+                    padding: '24px'
+                  }}>
+                    <div style={{
+                      fontSize: '11px', color: COLORS.textTertiary,
+                      textTransform: 'uppercase', fontWeight: 600,
+                      letterSpacing: '0.5px', marginBottom: '12px'
+                    }}>Total Leads</div>
+                    <div style={{
+                      fontSize: '36px', fontWeight: 700,
+                      color: COLORS.textPrimary, lineHeight: 1
+                    }}>{challengeData.summary?.total_leads ?? 0}</div>
+                    <div style={{
+                      fontSize: '14px', color: COLORS.textSecondary, marginTop: '8px'
+                    }}>
+                      {challengeData.start_date} — {challengeData.end_date}
+                    </div>
+                  </div>
+
+                  <div style={{
+                    background: COLORS.cardBg,
+                    border: `1px solid ${COLORS.border}`,
+                    borderRadius: '12px',
+                    padding: '24px'
+                  }}>
+                    <div style={{
+                      fontSize: '11px', color: COLORS.textTertiary,
+                      textTransform: 'uppercase', fontWeight: 600,
+                      letterSpacing: '0.5px', marginBottom: '12px'
+                    }}>Aujourd'hui</div>
+                    <div style={{
+                      fontSize: '36px', fontWeight: 700,
+                      color: COLORS.primary, lineHeight: 1
+                    }}>{challengeData.summary?.total_today ?? 0}</div>
+                    <div style={{
+                      fontSize: '14px', color: COLORS.textSecondary, marginTop: '8px'
+                    }}>leads reçus</div>
+                  </div>
+                </div>
+
+                {/* Bar Chart - Leads par jour */}
+                {challengeData.summary?.leads_par_jour?.length > 0 && (
+                  <div style={{ padding: '0 20px', marginBottom: '32px' }}>
+                    <div style={{
+                      background: COLORS.cardBg,
+                      border: `1px solid ${COLORS.border}`,
+                      borderRadius: '12px',
+                      padding: '24px'
+                    }}>
+                      <div style={{ marginBottom: '20px' }}>
+                        <div style={{
+                          fontSize: '16px', fontWeight: 700,
+                          color: COLORS.textPrimary, marginBottom: '4px'
+                        }}>Leads par jour</div>
+                        <div style={{
+                          fontSize: '13px', color: COLORS.textSecondary
+                        }}>
+                          Distribution des {challengeData.summary?.total_leads ?? 0} leads sur la période
+                        </div>
+                      </div>
+                      <div style={{ height: 300 }}>
+                        <Bar data={challengeBarData} options={challengeBarOptions} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Leads Table */}
+                {challengeData.leads && challengeData.leads.length > 0 && (
+                  <div style={{
+                    background: COLORS.cardBg,
+                    border: `1px solid ${COLORS.border}`,
+                    borderRadius: '12px',
+                    padding: '24px',
+                    margin: '0 20px'
+                  }}>
+                    <div style={{ marginBottom: '20px' }}>
+                      <div style={{
+                        fontSize: '16px', fontWeight: 700,
+                        color: COLORS.textPrimary, marginBottom: '4px'
+                      }}>Détail des leads</div>
+                      <div style={{
+                        fontSize: '13px', color: COLORS.textSecondary
+                      }}>
+                        {challengeData.leads.length} lead{challengeData.leads.length > 1 ? 's' : ''}
+                      </div>
+                    </div>
+
+                    <div className="leaderboard-wrapper">
+                      <table className="leaderboard" style={{ width: '100%', tableLayout: 'fixed' }}>
+                        <thead>
+                          <tr>
+                            <th style={{ width: '50px', textAlign: 'center', color: COLORS.textTertiary, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>#</th>
+                            <th style={{ width: '100px', textAlign: 'center', color: COLORS.textTertiary, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Date</th>
+                            <th style={{ width: '60px', textAlign: 'center', color: COLORS.textTertiary, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Heure</th>
+                            <th style={{ textAlign: 'left', color: COLORS.textTertiary, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Client</th>
+                            <th style={{ textAlign: 'left', color: COLORS.textTertiary, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Email</th>
+                            <th style={{ width: '160px', textAlign: 'center', color: COLORS.textTertiary, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Téléphone</th>
+                            <th style={{ width: '90px', textAlign: 'center', color: COLORS.textTertiary, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Effectif</th>
+                            <th style={{ width: '100px', textAlign: 'center', color: COLORS.textTertiary, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Places</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {challengeData.leads.map((lead, idx) => (
+                            <tr key={lead.id || idx} style={{ borderTop: `1px solid ${COLORS.border}` }}>
+                              <td style={{ textAlign: 'center', color: COLORS.textSecondary, fontSize: '13px' }}>{idx + 1}</td>
+                              <td style={{ textAlign: 'center', color: COLORS.textSecondary, fontSize: '13px', fontWeight: 500 }}>{lead.date || '-'}</td>
+                              <td style={{ textAlign: 'center', color: COLORS.textSecondary, fontSize: '13px' }}>{lead.heure || '-'}</td>
+                              <td style={{ textAlign: 'left', fontWeight: 600, color: COLORS.textPrimary, fontSize: '14px' }}>{lead.client || '-'}</td>
+                              <td style={{ textAlign: 'left', color: COLORS.textSecondary, fontSize: '13px' }}>{lead.email || '-'}</td>
+                              <td style={{ textAlign: 'center', color: COLORS.textSecondary, fontSize: '13px', fontFamily: 'monospace' }}>{formatPhone(lead.phone)}</td>
+                              <td style={{ textAlign: 'center', color: COLORS.textPrimary, fontSize: '13px', fontWeight: 600 }}>{lead.nbr_headcount || '-'}</td>
+                              <td style={{ textAlign: 'center', color: COLORS.textPrimary, fontSize: '13px' }}>{lead.nbr_places || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty state */}
+                {(!challengeData.leads || challengeData.leads.length === 0) && (
+                  <p style={{ textAlign: 'center', padding: '60px', color: COLORS.textSecondary }}>
+                    Aucun lead pour cette période
+                  </p>
+                )}
+              </>
+            )}
           </>
         )}
       </div>

@@ -363,6 +363,7 @@ export default function MonitoringPerf() {
         const leads_assigned = person.leads_assigned || 0;
         const leads_ads = person.leads_ads || 0;
         const leads_cc = person.leads_cc || 0;
+        const unique_attempted = person.unique_attempted || 0;
         const unique_answered = person.unique_answered || 0;
 
         // Use API-provided conversion rates, with fallback calculations
@@ -389,6 +390,7 @@ export default function MonitoringPerf() {
           leads_assigned,
           leads_ads,
           leads_cc,
+          unique_attempted,
           unique_answered,
           avatar: "",
           // Conversion rates (funnel order)
@@ -431,7 +433,7 @@ export default function MonitoringPerf() {
       return {
         calls: 0, answered: 0, signatures: 0, revenue: 0, cashCollected: 0,
         r1_placed: 0, r1_done: 0, r2_placed: 0, r2_done: 0,
-        leads_assigned: 0, unique_answered: 0,
+        leads_assigned: 0, unique_attempted: 0, unique_answered: 0,
         conv_global: 0, conv_calls_to_answered: 0, conv_answered_to_r1p: 0,
         conv_r1p_to_r1r: 0, conv_r2p_to_r2r: 0, conv_sales: 0,
         lead_qualifie: 0, closing_r1: 0, closing_r2: 0, closing_audit: 0
@@ -449,8 +451,9 @@ export default function MonitoringPerf() {
       revenue: acc.revenue + stat.revenue,
       cashCollected: acc.cashCollected + stat.cashCollected,
       leads_assigned: acc.leads_assigned + stat.leads_assigned,
+      unique_attempted: acc.unique_attempted + stat.unique_attempted,
       unique_answered: acc.unique_answered + stat.unique_answered
-    }), { calls: 0, answered: 0, r1_placed: 0, r1_done: 0, r2_placed: 0, r2_done: 0, signatures: 0, revenue: 0, cashCollected: 0, leads_assigned: 0, unique_answered: 0 });
+    }), { calls: 0, answered: 0, r1_placed: 0, r1_done: 0, r2_placed: 0, r2_done: 0, signatures: 0, revenue: 0, cashCollected: 0, leads_assigned: 0, unique_attempted: 0, unique_answered: 0 });
 
     // Calculate conversion rates from totals (funnel order)
     // All KPIs calculated on SUMS, not averages of individual rates
@@ -1050,13 +1053,6 @@ export default function MonitoringPerf() {
                 </div>
 
                 <div className="money-float-container">
-                  <span className="totals-label">Ventes</span><br />
-                  <span className="totals-value cash dot-boost">
-                    {leadQualityData?.summary?.total_ads_sales_signed?.toLocaleString("fr-FR") || 0}
-                  </span>
-                </div>
-
-                <div className="money-float-container">
                   <span className="totals-label">Clients réels</span><br />
                   <span className="totals-value cash dot-boost">
                     {leadQualityData?.summary?.total_sales?.toLocaleString("fr-FR") || 0}
@@ -1082,7 +1078,14 @@ export default function MonitoringPerf() {
                 </div>
 
                 <div className="money-float-container">
-                  <span className="totals-label">Conv. Réelle</span><br />
+                  <span className="totals-label">Tx Conversion</span><br />
+                  <span className="totals-value cash dot-boost">
+                    {leadQualityData?.summary?.global_conversion_rate?.toFixed(1) || 0}%
+                  </span>
+                </div>
+
+                <div className="money-float-container">
+                  <span className="totals-label">Tx Conv. Réel</span><br />
                   <span className="totals-value cash dot-boost">
                     {leadQualityData?.summary?.global_real_conversion_rate?.toFixed(1) || 0}%
                   </span>
@@ -1141,6 +1144,7 @@ export default function MonitoringPerf() {
                       <th align="center" title="Leads tentés non décrochés / Leads tentés" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Tx Perte</th>
                       <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Ventes</th>
                       <th align="center" title="Ventes / Leads" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Conv. %</th>
+                      <th align="center" title="Ventes / (Leads - Non pertinent - Non traitable)" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Conv. Réel %</th>
                       <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Appels</th>
                       <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Décrochés</th>
                       <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Cash</th>
@@ -1203,6 +1207,9 @@ export default function MonitoringPerf() {
                             </td>
                             <td align="center" style={{ fontWeight: 700, color: getConvColor(origin.conversion_rate), ...cellBorder }}>
                               {origin.conversion_rate?.toFixed(1) || 0}%
+                            </td>
+                            <td align="center" style={{ fontWeight: 700, color: getConvColor(origin.real_conversion_rate), ...cellBorder }}>
+                              {origin.real_conversion_rate?.toFixed(1) || 0}%
                             </td>
                             <td align="center" style={{ fontWeight: 500, color: !origin.calls_total ? (darkMode ? '#8b8d93' : '#86868b') : undefined, ...cellBorder }}>
                               {origin.calls_total > 0 ? origin.calls_total.toLocaleString("fr-FR") : '—'}
