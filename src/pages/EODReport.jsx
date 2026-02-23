@@ -7,6 +7,37 @@ import "../index.css";
 
 const STATUS = { success: "#10b981", danger: "#ef4444" };
 
+// Security limits
+const LIMITS = {
+  TASK_NAME_MAX: 300,
+  ANSWER_MAX: 3000,
+  MAX_TASKS: 20,
+  MAX_SUBTASKS: 15,
+  HOURS_MIN: 0,
+  HOURS_MAX: 24,
+  SUBMIT_COOLDOWN_MS: 3000,
+  MAX_PAYLOAD_BYTES: 50000,
+};
+
+// Sanitize text: strip HTML tags, dangerous URIs, event handlers
+function sanitizeText(str) {
+  if (typeof str !== "string") return "";
+  return str
+    .replace(/<[^>]*>/g, "")
+    .replace(/javascript\s*:/gi, "")
+    .replace(/vbscript\s*:/gi, "")
+    .replace(/data\s*:\s*text\/html/gi, "")
+    .replace(/on\w+\s*=/gi, "");
+}
+
+// Sanitize hours: clamp [0, 24], round to 0.5
+function sanitizeHours(val) {
+  const n = parseFloat(val);
+  if (!Number.isFinite(n)) return 0;
+  const clamped = Math.max(LIMITS.HOURS_MIN, Math.min(LIMITS.HOURS_MAX, n));
+  return Math.round(clamped * 2) / 2;
+}
+
 // Question pools - rotation hebdomadaire
 const QUESTION_POOLS = {
   A: {
@@ -99,6 +130,7 @@ export default function EODReport() {
   const [allQuestionsDone, setAllQuestionsDone] = useState(false);
   const [sendingAnswer, setSendingAnswer] = useState(false);
   const inputRef = useRef(null);
+  const lastSubmitRef = useRef(0);
 
   useEffect(() => {
     const init = async () => {
@@ -206,6 +238,7 @@ export default function EODReport() {
   };
 
   const addMainTask = () => {
+    if (tasks.length >= LIMITS.MAX_TASKS) return;
     setTasks([
       ...tasks,
       {
@@ -231,6 +264,7 @@ export default function EODReport() {
     if (!newTasks[mainTaskIndex].subtasks) {
       newTasks[mainTaskIndex].subtasks = [];
     }
+    if (newTasks[mainTaskIndex].subtasks.length >= LIMITS.MAX_SUBTASKS) return;
     newTasks[mainTaskIndex].subtasks.push({
       _id: Date.now(),
       task_name: "",
@@ -270,10 +304,10 @@ export default function EODReport() {
         return;
       }
       const invalidTasks = tasks.filter(
-        (t) => !t.task_name.trim() || !t.subtasks || t.subtasks.length === 0 || !t.subtasks.some((st) => st.task_name.trim())
+        (t) => !t.task_name.trim() || !sanitizeText(t.task_name.trim()) || !t.subtasks || t.subtasks.length === 0 || !t.subtasks.some((st) => st.task_name.trim() && sanitizeText(st.task_name.trim()))
       );
       if (invalidTasks.length > 0) {
-        alert("Chaque tâche doit avoir un nom et au moins une sous-tâche.");
+        alert("Chaque tâche doit avoir un nom valide et au moins une sous-tâche.");
         return;
       }
       const totalHours = calculateTotalHours();
@@ -317,18 +351,23 @@ export default function EODReport() {
   }, [currentAnswer, sendingAnswer, questionIndex, todayQuestions, questionAnswers]);
 
   const handleFinalSubmit = async (answers) => {
+    // Rate limiting
+    const now = Date.now();
+    if (now - lastSubmitRef.current < LIMITS.SUBMIT_COOLDOWN_MS) return false;
+    lastSubmitRef.current = now;
+
     setSubmitting(true);
     try {
       const cleanTasks = tasks
         .filter((t) => t.task_name.trim())
         .map((t) => ({
-          task_name: t.task_name.trim(),
+          task_name: sanitizeText(t.task_name.trim()).slice(0, LIMITS.TASK_NAME_MAX),
           hours_spent: 0,
           subtasks: (t.subtasks || [])
             .filter((st) => st.task_name.trim())
             .map((st) => ({
-              task_name: st.task_name.trim(),
-              hours_spent: parseFloat(st.hours_spent) || 0,
+              task_name: sanitizeText(st.task_name.trim()).slice(0, LIMITS.TASK_NAME_MAX),
+              hours_spent: sanitizeHours(st.hours_spent),
             })),
         }));
 
@@ -336,7 +375,10 @@ export default function EODReport() {
 
       // Separate pool answers from custom answer by index (not text, to avoid duplicates)
       const poolCount = poolQuestions.length;
-      const poolAnswers = answers.slice(0, poolCount);
+      const poolAnswers = answers.slice(0, poolCount).map((a) => ({
+        question: sanitizeText(a.question).slice(0, LIMITS.ANSWER_MAX),
+        answer: sanitizeText(a.answer).slice(0, LIMITS.ANSWER_MAX),
+      }));
       const customAnswerEntry = customQuestion && answers.length > poolCount
         ? answers[poolCount]
         : null;
@@ -349,11 +391,17 @@ export default function EODReport() {
         ...(customAnswerEntry && customQuestion && {
           custom_answer: {
             question_id: customQuestion.id,
-            question: customQuestion.question,
-            answer: customAnswerEntry.answer,
+            question: sanitizeText(customQuestion.question).slice(0, LIMITS.ANSWER_MAX),
+            answer: sanitizeText(customAnswerEntry.answer).slice(0, LIMITS.ANSWER_MAX),
           },
         }),
       };
+
+      // Payload size guard
+      if (JSON.stringify(payload).length > LIMITS.MAX_PAYLOAD_BYTES) {
+        alert("Le contenu est trop volumineux. Veuillez raccourcir vos réponses.");
+        return false;
+      }
 
       // 1. Send to backend (blocking — must succeed)
       await apiClient.post("/api/v1/eod/submit", payload);
@@ -636,15 +684,16 @@ export default function EODReport() {
                     <button
                       type="button"
                       onClick={addMainTask}
+                      disabled={tasks.length >= LIMITS.MAX_TASKS}
                       style={{
                         padding: "12px 32px",
-                        background: C.accent,
+                        background: tasks.length >= LIMITS.MAX_TASKS ? C.muted : C.accent,
                         color: "#fff",
                         border: "none",
                         borderRadius: "8px",
                         fontSize: "15px",
                         fontWeight: 600,
-                        cursor: "pointer",
+                        cursor: tasks.length >= LIMITS.MAX_TASKS ? "not-allowed" : "pointer",
                         transition: "all 0.2s ease",
                       }}
                       onMouseEnter={(e) => {
@@ -701,6 +750,7 @@ export default function EODReport() {
                             placeholder="Nom de la tâche principale"
                             value={task.task_name}
                             onChange={(e) => updateMainTask(taskIndex, "task_name", e.target.value)}
+                            maxLength={LIMITS.TASK_NAME_MAX}
                             style={{
                               flex: 1,
                               padding: "12px 16px",
@@ -756,6 +806,7 @@ export default function EODReport() {
                                   onChange={(e) =>
                                     updateSubtask(taskIndex, subtaskIndex, "task_name", e.target.value)
                                   }
+                                  maxLength={LIMITS.TASK_NAME_MAX}
                                   style={{
                                     flex: 1,
                                     padding: "10px 14px",
@@ -954,6 +1005,7 @@ export default function EODReport() {
                         onChange={(e) => setCurrentAnswer(e.target.value)}
                         onKeyDown={handleAnswerKeyDown}
                         placeholder="Écrivez votre réponse..."
+                        maxLength={LIMITS.ANSWER_MAX}
                         rows={2}
                         style={{
                           overflow: "hidden",
