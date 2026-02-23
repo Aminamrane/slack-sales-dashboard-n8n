@@ -600,8 +600,8 @@ export default function EODDashboard() {
           r: {
             min: 0, max: 5,
             ticks: { stepSize: 1, display: true, backdropColor: "transparent", color: C.muted, font: { size: 10 } },
-            grid: { color: C.border, lineWidth: 1 },
-            angleLines: { color: C.border },
+            grid: { color: darkMode ? 'rgba(255,255,255,0.18)' : C.border, lineWidth: 1 },
+            angleLines: { color: darkMode ? 'rgba(255,255,255,0.18)' : C.border },
             pointLabels: { color: C.text, font: { size: 12, weight: 600 } },
           },
         },
@@ -1245,7 +1245,7 @@ export default function EODDashboard() {
                             marginBottom: 24,
                           }}>
                             <span style={{ fontSize: 14, fontWeight: 700, color: C.text, display: "flex", alignItems: "center", gap: 2, marginBottom: 10, marginLeft: -10 }}>
-                              <img src={iconRapport} alt="" style={{ width: 32, height: 32, opacity: 0.85, filter: "brightness(0)" }} />
+                              <img src={iconRapport} alt="" style={{ width: 32, height: 32, opacity: 0.85, filter: darkMode ? "brightness(0) invert(1)" : "brightness(0)" }} />
                               Résumé de la semaine
                             </span>
                             <p style={{

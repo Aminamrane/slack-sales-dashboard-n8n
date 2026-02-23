@@ -148,23 +148,14 @@ export default function EODReport() {
 
         await loadTodayReport();
         // Fetch personalized question from OpenClaw (via backend)
-        // The endpoint marks the question as "served" on first GET, so cache it
-        // in sessionStorage to survive page reloads / hot-reloads.
-        const today = new Date().toISOString().split("T")[0];
-        const cacheKey = `eod_custom_q_${today}`;
-        const cached = sessionStorage.getItem(cacheKey);
-        if (cached) {
-          try { setCustomQuestion(JSON.parse(cached)); } catch (_) {}
-        } else {
-          try {
-            const qResp = await apiClient.get("/api/v1/eod/my-question");
-            if (qResp?.question) {
-              const q = { id: qResp.id, question: qResp.question };
-              setCustomQuestion(q);
-              sessionStorage.setItem(cacheKey, JSON.stringify(q));
-            }
-          } catch (_) { /* No custom question available */ }
-        }
+        // GET /eod/my-question is now idempotent (backend filters on answered=false,
+        // marks served+answered only on POST /eod/submit). No client-side cache needed.
+        try {
+          const qResp = await apiClient.get("/api/v1/eod/my-question");
+          if (qResp?.question) {
+            setCustomQuestion({ id: qResp.id, question: qResp.question });
+          }
+        } catch (_) { /* No custom question available */ }
         setTimeout(() => setFadeIn(true), 50);
       } catch (error) {
         console.error("Auth error:", error);
@@ -382,17 +373,21 @@ export default function EODReport() {
       const customAnswerEntry = customQuestion && answers.length > poolCount
         ? answers[poolCount]
         : null;
+      // Only include custom_answer if the answer is non-empty after sanitization
+      const sanitizedCustomAnswer = customAnswerEntry && customQuestion
+        ? sanitizeText(customAnswerEntry.answer).slice(0, LIMITS.ANSWER_MAX).trim()
+        : "";
 
       const payload = {
         report_date: reportDate,
         pool_key: poolKey,
         question_answers: poolAnswers,
         tasks: cleanTasks,
-        ...(customAnswerEntry && customQuestion && {
+        ...(sanitizedCustomAnswer && {
           custom_answer: {
             question_id: customQuestion.id,
             question: sanitizeText(customQuestion.question).slice(0, LIMITS.ANSWER_MAX),
-            answer: sanitizeText(customAnswerEntry.answer).slice(0, LIMITS.ANSWER_MAX),
+            answer: sanitizedCustomAnswer,
           },
         }),
       };
@@ -405,8 +400,6 @@ export default function EODReport() {
 
       // 1. Send to backend (blocking — must succeed)
       await apiClient.post("/api/v1/eod/submit", payload);
-      // Clear cached custom question after successful submit
-      sessionStorage.removeItem(`eod_custom_q_${reportDate}`);
 
       // 2. Send to OpenClaw (fire-and-forget — don't block the user)
       const openclawUrl = import.meta.env.VITE_OPENCLAW_WEBHOOK_URL;
