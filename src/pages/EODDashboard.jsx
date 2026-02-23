@@ -584,7 +584,7 @@ export default function EODDashboard() {
         maintainAspectRatio: true,
         plugins: {
           legend: { display: false },
-          datalabels: { display: false },
+          datalabels: false,
           tooltip: {
             backgroundColor: C.bg,
             titleColor: C.text,
