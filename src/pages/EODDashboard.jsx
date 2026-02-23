@@ -162,12 +162,13 @@ function CircleScore({ score, size = 56, strokeWidth = 4, C }) {
 }
 
 function DimensionBar({ label, value, color, C }) {
-  const pct = (value / 5) * 100;
+  const v = Number.isFinite(value) ? value : 0;
+  const pct = (v / 5) * 100;
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{label}</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color }}>{value.toFixed(1)}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color }}>{v.toFixed(1)}</span>
       </div>
       <div style={{ height: 6, borderRadius: 3, background: C.subtle, overflow: "hidden" }}>
         <div style={{ height: "100%", borderRadius: 3, width: `${pct}%`, background: color, transition: "width 0.8s ease" }} />
@@ -583,6 +584,7 @@ export default function EODDashboard() {
         maintainAspectRatio: true,
         plugins: {
           legend: { display: false },
+          datalabels: { display: false },
           tooltip: {
             backgroundColor: C.bg,
             titleColor: C.text,
@@ -1672,7 +1674,8 @@ function SidebarItem({ icon, iconSrc, label, badge, score, active, accent, onCli
 // ── SCORE PILL (for table cells) ────────────────────────────────────────────────
 
 function ScorePill({ value, C }) {
-  const color = getScoreColor(value);
+  const v = Number.isFinite(value) ? value : 0;
+  const color = getScoreColor(v);
   return (
     <span style={{
       fontSize: 13, fontWeight: 600,
@@ -1680,7 +1683,7 @@ function ScorePill({ value, C }) {
       background: `${color}12`,
       color,
     }}>
-      {value.toFixed(1)}
+      {v.toFixed(1)}
     </span>
   );
 }
