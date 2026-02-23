@@ -85,7 +85,10 @@ export default function EODReport() {
   const [customQuestion, setCustomQuestion] = useState(null); // { id, question } or null
   const todayQuestions = useMemo(() => {
     const qs = [...poolQuestions];
-    if (customQuestion) qs.push(customQuestion.question);
+    // Only add custom question if it's not a duplicate of a pool question
+    if (customQuestion && !poolQuestions.includes(customQuestion.question)) {
+      qs.push(customQuestion.question);
+    }
     return qs;
   }, [poolQuestions, customQuestion]);
   const [questionIndex, setQuestionIndex] = useState(0);
@@ -287,17 +290,22 @@ export default function EODReport() {
     if (!currentAnswer.trim() || sendingAnswer) return;
 
     setSendingAnswer(true);
-    const newAnswers = [...questionAnswers, {
-      question: todayQuestions[questionIndex],
-      answer: currentAnswer.trim(),
-    }];
-    setQuestionAnswers(newAnswers);
+
+    // If all questions already answered (retry after failed submit), don't add again
+    const allAnswered = questionAnswers.length >= todayQuestions.length;
+    const newAnswers = allAnswered
+      ? questionAnswers
+      : [...questionAnswers, {
+          question: todayQuestions[questionIndex],
+          answer: currentAnswer.trim(),
+        }];
+    if (!allAnswered) setQuestionAnswers(newAnswers);
 
     // Small delay for smooth transition
     await new Promise((r) => setTimeout(r, 300));
     setSendingAnswer(false);
 
-    if (questionIndex + 1 < todayQuestions.length) {
+    if (!allAnswered && questionIndex + 1 < todayQuestions.length) {
       setQuestionIndex(questionIndex + 1);
     } else {
       // All questions done — submit entire EOD
@@ -326,12 +334,11 @@ export default function EODReport() {
 
       const reportDate = new Date().toISOString().split("T")[0];
 
-      // Separate pool answers from custom answer
-      const poolAnswers = customQuestion
-        ? answers.filter((a) => a.question !== customQuestion.question)
-        : answers;
-      const customAnswerEntry = customQuestion
-        ? answers.find((a) => a.question === customQuestion.question)
+      // Separate pool answers from custom answer by index (not text, to avoid duplicates)
+      const poolCount = poolQuestions.length;
+      const poolAnswers = answers.slice(0, poolCount);
+      const customAnswerEntry = customQuestion && answers.length > poolCount
+        ? answers[poolCount]
         : null;
 
       const payload = {
