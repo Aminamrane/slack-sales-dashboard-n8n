@@ -1,29 +1,11 @@
 // src/pages/EODReport.jsx
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import SharedNavbar from "../components/SharedNavbar";
 import "../index.css";
 
-const COLORS = {
-  primary: "#3b82f6",
-  success: "#10b981",
-  danger: "#ef4444",
-  textPrimary: "#0f172a",
-  textSecondary: "#64748b",
-  textTertiary: "#94a3b8",
-  border: "#e2e8f0",
-  background: "#f8fafc",
-  cardBg: "#ffffff",
-};
-
-const RATINGS = [
-  { value: 4, label: "Excellente" },
-  { value: 3, label: "Bonne" },
-  { value: 2, label: "Correcte" },
-  { value: 1, label: "Difficile" },
-  { value: 0, label: "Très difficile" },
-];
+const STATUS = { success: "#10b981", danger: "#ef4444" };
 
 // Question pools - rotation hebdomadaire
 const QUESTION_POOLS = {
@@ -59,14 +41,7 @@ function getTodayQuestions() {
   const poolKey = ["A", "B", "C"][poolIndex];
   const pool = QUESTION_POOLS[poolKey];
 
-  const dayOfWeek = now.getDay(); // 0=Sun, 2=Tue, 4=Thu
-  const isTueOrThu = dayOfWeek === 2 || dayOfWeek === 4;
-
-  const questions = [pool.q1, pool.q2];
-  if (isTueOrThu) {
-    questions.push(pool.q3);
-  }
-  return { questions, poolKey };
+  return { questions: [pool.q1, pool.q2, pool.q3], poolKey };
 }
 
 export default function EODReport() {
@@ -76,14 +51,27 @@ export default function EODReport() {
     return saved === "true";
   });
 
+  const C = {
+    bg: darkMode ? '#1e1f28' : '#ffffff',
+    border: darkMode ? '#2a2b36' : '#e2e6ef',
+    surface: darkMode ? '#13141b' : '#edf0f8',
+    text: darkMode ? '#eef0f6' : '#1e2330',
+    muted: darkMode ? '#5e6273' : '#9ca3af',
+    subtle: darkMode ? '#252636' : '#f4f6fb',
+    secondary: darkMode ? '#8b8fa0' : '#6b7280',
+    accent: darkMode ? '#7c8adb' : '#5b6abf',
+    shadow: darkMode
+      ? '0 1px 3px rgba(0,0,0,0.2), 0 4px 16px rgba(0,0,0,0.15)'
+      : '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03)',
+  };
+
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
   const [hasAccess, setHasAccess] = useState(false);
   const [fadeIn, setFadeIn] = useState(false);
 
   // Form state
-  const [step, setStep] = useState(0); // 0: tasks, 1: rating, 2: questions
-  const [rating, setRating] = useState(3);
+  const [step, setStep] = useState(0); // 0: tasks, 1: questions
   const [tasks, setTasks] = useState([]);
   const [todayReport, setTodayReport] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -93,7 +81,13 @@ export default function EODReport() {
   const fullText = "Quelles tâches avez-vous effectuées aujourd'hui ?";
 
   // Step 2: Questions flow
-  const { questions: todayQuestions, poolKey } = getTodayQuestions();
+  const { questions: poolQuestions, poolKey } = getTodayQuestions();
+  const [customQuestion, setCustomQuestion] = useState(null); // { id, question } or null
+  const todayQuestions = useMemo(() => {
+    const qs = [...poolQuestions];
+    if (customQuestion) qs.push(customQuestion.question);
+    return qs;
+  }, [poolQuestions, customQuestion]);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [questionTypedText, setQuestionTypedText] = useState("");
   const [questionTypingDone, setQuestionTypingDone] = useState(false);
@@ -118,6 +112,24 @@ export default function EODReport() {
         }
 
         await loadTodayReport();
+        // Fetch personalized question from OpenClaw (via backend)
+        // The endpoint marks the question as "served" on first GET, so cache it
+        // in sessionStorage to survive page reloads / hot-reloads.
+        const today = new Date().toISOString().split("T")[0];
+        const cacheKey = `eod_custom_q_${today}`;
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          try { setCustomQuestion(JSON.parse(cached)); } catch (_) {}
+        } else {
+          try {
+            const qResp = await apiClient.get("/api/v1/eod/my-question");
+            if (qResp?.question) {
+              const q = { id: qResp.id, question: qResp.question };
+              setCustomQuestion(q);
+              sessionStorage.setItem(cacheKey, JSON.stringify(q));
+            }
+          } catch (_) { /* No custom question available */ }
+        }
         setTimeout(() => setFadeIn(true), 50);
       } catch (error) {
         console.error("Auth error:", error);
@@ -146,9 +158,9 @@ export default function EODReport() {
     return () => clearInterval(typingInterval);
   }, [fadeIn, step]);
 
-  // Step 2: Question typing animation
+  // Step 1: Question typing animation
   useEffect(() => {
-    if (step !== 2 || allQuestionsDone) return;
+    if (step !== 1 || allQuestionsDone) return;
 
     const question = todayQuestions[questionIndex];
     if (!question) return;
@@ -183,7 +195,6 @@ export default function EODReport() {
       const resp = await apiClient.get("/api/v1/eod/today");
       if (resp.exists && resp.report) {
         setTodayReport(resp.report);
-        setRating(resp.report.rating ?? 3);
         setTasks(resp.report.tasks || []);
       }
     } catch (error) {
@@ -300,26 +311,82 @@ export default function EODReport() {
   const handleFinalSubmit = async (answers) => {
     setSubmitting(true);
     try {
+      const cleanTasks = tasks
+        .filter((t) => t.task_name.trim())
+        .map((t) => ({
+          task_name: t.task_name.trim(),
+          hours_spent: 0,
+          subtasks: (t.subtasks || [])
+            .filter((st) => st.task_name.trim())
+            .map((st) => ({
+              task_name: st.task_name.trim(),
+              hours_spent: parseFloat(st.hours_spent) || 0,
+            })),
+        }));
+
+      const reportDate = new Date().toISOString().split("T")[0];
+
+      // Separate pool answers from custom answer
+      const poolAnswers = customQuestion
+        ? answers.filter((a) => a.question !== customQuestion.question)
+        : answers;
+      const customAnswerEntry = customQuestion
+        ? answers.find((a) => a.question === customQuestion.question)
+        : null;
+
       const payload = {
-        report_date: new Date().toISOString().split("T")[0],
-        rating: rating,
+        report_date: reportDate,
         pool_key: poolKey,
-        question_answers: answers,
-        tasks: tasks
-          .filter((t) => t.task_name.trim())
-          .map((t) => ({
-            task_name: t.task_name.trim(),
-            hours_spent: 0,
-            subtasks: (t.subtasks || [])
-              .filter((st) => st.task_name.trim())
-              .map((st) => ({
-                task_name: st.task_name.trim(),
-                hours_spent: parseFloat(st.hours_spent) || 0,
-              })),
-          })),
+        question_answers: poolAnswers,
+        tasks: cleanTasks,
+        ...(customAnswerEntry && customQuestion && {
+          custom_answer: {
+            question_id: customQuestion.id,
+            question: customQuestion.question,
+            answer: customAnswerEntry.answer,
+          },
+        }),
       };
 
+      // 1. Send to backend (blocking — must succeed)
       await apiClient.post("/api/v1/eod/submit", payload);
+      // Clear cached custom question after successful submit
+      sessionStorage.removeItem(`eod_custom_q_${reportDate}`);
+
+      // 2. Send to OpenClaw (fire-and-forget — don't block the user)
+      const openclawUrl = import.meta.env.VITE_OPENCLAW_WEBHOOK_URL;
+      if (openclawUrl) {
+        const user = apiClient.getUser();
+        const totalHours = cleanTasks.reduce((sum, t) =>
+          sum + (t.subtasks || []).reduce((s, st) => s + (st.hours_spent || 0), 0), 0);
+
+        fetch(openclawUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": import.meta.env.VITE_OPENCLAW_API_KEY || "",
+          },
+          body: JSON.stringify({
+            event: "eod_submitted",
+            timestamp: new Date().toISOString(),
+            user: {
+              id: user?.id,
+              name: user?.name || `${user?.first_name || ""} ${user?.last_name || ""}`.trim(),
+              email: user?.email,
+              role: user?.role,
+              department: user?.department || user?.role,
+            },
+            eod: {
+              report_date: reportDate,
+              pool_key: poolKey,
+              tasks: cleanTasks,
+              question_answers: answers,
+              total_hours: totalHours,
+            },
+          }),
+        }).catch((err) => console.warn("[OpenClaw] Send failed (non-blocking):", err));
+      }
+
       return true;
     } catch (error) {
       console.error("Error submitting EOD:", error);
@@ -350,15 +417,23 @@ export default function EODReport() {
     <div
       style={{
         padding: 0,
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif",
-        background: darkMode ? "#1a1a1e" : COLORS.background,
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+        background: C.surface,
         minHeight: "100vh",
-        paddingTop: "16px",
+        paddingTop: 80,
+        color: C.text,
       }}
     >
       <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />
 
-      <div className="board-frame" style={{ paddingTop: "24px" }}>
+      <div style={{
+        maxWidth: 1400,
+        margin: '32px auto 64px',
+        padding: '18px',
+        background: darkMode ? 'rgba(0,0,0,0.10)' : 'rgba(190,197,215,0.20)',
+        borderRadius: '32px',
+      }}>
+      <div className="board-frame" style={{ margin: 0, paddingTop: "24px" }}>
         <div
           style={{
             maxWidth: "1200px",
@@ -375,13 +450,13 @@ export default function EODReport() {
               style={{
                 fontSize: "28px",
                 fontWeight: 700,
-                color: darkMode ? "#e5e7eb" : COLORS.textPrimary,
+                color: C.text,
                 margin: 0,
               }}
             >
               End of Day Report
             </h1>
-            <p style={{ fontSize: "14px", color: COLORS.textSecondary, margin: "4px 0 0 0" }}>
+            <p style={{ fontSize: "14px", color: C.secondary, margin: "4px 0 0 0" }}>
               Partagez votre journée de travail
             </p>
           </div>
@@ -390,14 +465,14 @@ export default function EODReport() {
           {!todayReport && (
           <div style={{ marginBottom: "12px" }}>
             <div style={{ display: "flex", justifyContent: "center", gap: "12px" }}>
-              {[0, 1, 2].map((s) => (
+              {[0, 1].map((s) => (
                 <div
                   key={s}
                   style={{
                     width: step === s ? "48px" : "12px",
                     height: "12px",
                     borderRadius: "6px",
-                    background: step >= s ? COLORS.primary : darkMode ? "#3f3f46" : COLORS.border,
+                    background: step >= s ? C.accent : C.border,
                     transition: "all 0.3s ease",
                   }}
                 />
@@ -450,22 +525,22 @@ export default function EODReport() {
               .eod-free-input {
                 width: 100%;
                 border: none;
-                border-bottom: 2px solid ${darkMode ? "#3f3f46" : COLORS.border};
+                border-bottom: 2px solid ${C.border};
                 background: transparent;
                 font-size: 17px;
                 line-height: 1.8;
                 padding: 8px 0;
-                color: ${darkMode ? "#e5e7eb" : COLORS.textPrimary};
+                color: ${C.text};
                 font-family: inherit;
                 outline: none;
                 resize: none;
                 transition: border-color 0.3s ease;
               }
               .eod-free-input:focus {
-                border-bottom-color: ${COLORS.primary};
+                border-bottom-color: ${C.accent};
               }
               .eod-free-input::placeholder {
-                color: ${darkMode ? "#52525b" : "#cbd5e1"};
+                color: ${C.muted};
                 font-style: italic;
               }
             `}
@@ -474,8 +549,8 @@ export default function EODReport() {
           {/* Form */}
           <div
             style={{
-              background: darkMode ? "#27272a" : COLORS.cardBg,
-              border: `1px solid ${darkMode ? "#3f3f46" : COLORS.border}`,
+              background: C.bg,
+              border: `1px solid ${C.border}`,
               borderRadius: "12px",
               padding: "40px",
               marginBottom: "32px",
@@ -497,48 +572,31 @@ export default function EODReport() {
                   width: "64px",
                   height: "64px",
                   borderRadius: "50%",
-                  background: `${COLORS.success}15`,
+                  background: `${STATUS.success}15`,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   margin: "0 auto 20px",
                 }}>
-                  <span style={{ fontSize: "28px", color: COLORS.success }}>&#10003;</span>
+                  <span style={{ fontSize: "28px", color: STATUS.success }}>&#10003;</span>
                 </div>
                 <h2 style={{
                   fontSize: "22px",
                   fontWeight: 700,
-                  color: darkMode ? "#e5e7eb" : COLORS.textPrimary,
+                  color: C.text,
                   marginBottom: "8px",
                 }}>
                   EOD déjà soumis aujourd'hui
                 </h2>
                 <p style={{
                   fontSize: "15px",
-                  color: COLORS.textSecondary,
+                  color: C.secondary,
                   margin: "0 0 24px 0",
                   lineHeight: 1.6,
                 }}>
                   Vous avez déjà complété votre End of Day pour aujourd'hui.
                   <br />Revenez demain !
                 </p>
-                <div style={{
-                  display: "inline-block",
-                  padding: "12px 24px",
-                  background: darkMode ? "#18181b" : "#f8fafc",
-                  borderRadius: "8px",
-                  border: `1px solid ${darkMode ? "#3f3f46" : COLORS.border}`,
-                }}>
-                  <span style={{ fontSize: "14px", color: COLORS.textTertiary }}>
-                    Note du jour : </span>
-                  <span style={{
-                    fontSize: "16px",
-                    fontWeight: 700,
-                    color: COLORS.primary,
-                  }}>
-                    {todayReport.rating}/4
-                  </span>
-                </div>
               </div>
             )}
 
@@ -549,7 +607,7 @@ export default function EODReport() {
                   style={{
                     fontSize: "24px",
                     fontWeight: 600,
-                    color: darkMode ? "#e5e7eb" : COLORS.textPrimary,
+                    color: C.text,
                     marginBottom: "32px",
                     textAlign: "center",
                     minHeight: "32px",
@@ -573,7 +631,7 @@ export default function EODReport() {
                       onClick={addMainTask}
                       style={{
                         padding: "12px 32px",
-                        background: COLORS.primary,
+                        background: C.accent,
                         color: "#fff",
                         border: "none",
                         borderRadius: "8px",
@@ -600,15 +658,15 @@ export default function EODReport() {
                       style={{
                         textAlign: "center",
                         padding: "48px 20px",
-                        background: darkMode ? "#18181b" : "#f9fafb",
+                        background: C.subtle,
                         borderRadius: "8px",
-                        border: `1px dashed ${darkMode ? "#3f3f46" : COLORS.border}`,
+                        border: `1px dashed ${C.border}`,
                         animation: "slideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1) both",
                       }}
                     >
                       <p
                         style={{
-                          color: COLORS.textTertiary,
+                          color: C.muted,
                           fontSize: "14px",
                           margin: 0,
                         }}
@@ -623,10 +681,10 @@ export default function EODReport() {
                       <div
                         key={task._id || taskIndex}
                         style={{
-                          border: `1px solid ${darkMode ? "#3f3f46" : COLORS.border}`,
+                          border: `1px solid ${C.border}`,
                           borderRadius: "8px",
                           padding: "20px",
-                          background: darkMode ? "#18181b" : "#fff",
+                          background: C.bg,
                           animation: "slideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1) both",
                         }}
                       >
@@ -639,12 +697,12 @@ export default function EODReport() {
                             style={{
                               flex: 1,
                               padding: "12px 16px",
-                              border: `1px solid ${darkMode ? "#3f3f46" : COLORS.border}`,
+                              border: `1px solid ${C.border}`,
                               borderRadius: "6px",
                               fontSize: "15px",
                               fontWeight: 600,
-                              background: darkMode ? "#27272a" : "#f9fafb",
-                              color: darkMode ? "#e5e7eb" : COLORS.textPrimary,
+                              background: C.subtle,
+                              color: C.text,
                             }}
                           />
                           <button
@@ -652,7 +710,7 @@ export default function EODReport() {
                             onClick={() => removeMainTask(taskIndex)}
                             style={{
                               padding: "12px 20px",
-                              background: COLORS.danger,
+                              background: STATUS.danger,
                               color: "#fff",
                               border: "none",
                               borderRadius: "6px",
@@ -670,7 +728,7 @@ export default function EODReport() {
                             style={{
                               marginLeft: "0",
                               paddingLeft: "20px",
-                              borderLeft: `3px solid ${COLORS.primary}`,
+                              borderLeft: `3px solid ${C.accent}`,
                               marginBottom: "16px",
                             }}
                           >
@@ -694,11 +752,11 @@ export default function EODReport() {
                                   style={{
                                     flex: 1,
                                     padding: "10px 14px",
-                                    border: `1px solid ${darkMode ? "#3f3f46" : COLORS.border}`,
+                                    border: `1px solid ${C.border}`,
                                     borderRadius: "6px",
                                     fontSize: "14px",
-                                    background: darkMode ? "#27272a" : "#fff",
-                                    color: darkMode ? "#e5e7eb" : COLORS.textPrimary,
+                                    background: C.bg,
+                                    color: C.text,
                                   }}
                                 />
                                 <input
@@ -714,11 +772,11 @@ export default function EODReport() {
                                   style={{
                                     width: "110px",
                                     padding: "10px 14px",
-                                    border: `1px solid ${darkMode ? "#3f3f46" : COLORS.border}`,
+                                    border: `1px solid ${C.border}`,
                                     borderRadius: "6px",
                                     fontSize: "14px",
-                                    background: darkMode ? "#27272a" : "#fff",
-                                    color: darkMode ? "#e5e7eb" : COLORS.textPrimary,
+                                    background: C.bg,
+                                    color: C.text,
                                   }}
                                 />
                                 <button
@@ -727,8 +785,8 @@ export default function EODReport() {
                                   style={{
                                     padding: "10px 14px",
                                     background: "transparent",
-                                    color: COLORS.danger,
-                                    border: `1px solid ${COLORS.danger}`,
+                                    color: STATUS.danger,
+                                    border: `1px solid ${STATUS.danger}`,
                                     borderRadius: "6px",
                                     fontSize: "13px",
                                     cursor: "pointer",
@@ -748,8 +806,8 @@ export default function EODReport() {
                             marginLeft: "20px",
                             padding: "8px 14px",
                             background: "transparent",
-                            color: COLORS.primary,
-                            border: `1px solid ${COLORS.primary}`,
+                            color: C.accent,
+                            border: `1px solid ${C.accent}`,
                             borderRadius: "6px",
                             fontSize: "13px",
                             fontWeight: 600,
@@ -767,8 +825,8 @@ export default function EODReport() {
                   <div
                     style={{
                       padding: "16px 20px",
-                      background: darkMode ? "#18181b" : "#f0f9ff",
-                      border: `1px solid ${darkMode ? "#3f3f46" : "#bfdbfe"}`,
+                      background: C.subtle,
+                      border: `1px solid ${C.border}`,
                       borderRadius: "8px",
                       marginBottom: "24px",
                       display: "flex",
@@ -780,7 +838,7 @@ export default function EODReport() {
                       style={{
                         fontSize: "15px",
                         fontWeight: 600,
-                        color: darkMode ? "#e5e7eb" : COLORS.textPrimary,
+                        color: C.text,
                       }}
                     >
                       Total heures
@@ -789,7 +847,7 @@ export default function EODReport() {
                       style={{
                         fontSize: "20px",
                         fontWeight: 700,
-                        color: calculateTotalHours() > 24 ? COLORS.danger : COLORS.primary,
+                        color: calculateTotalHours() > 24 ? STATUS.danger : C.accent,
                       }}
                     >
                       {calculateTotalHours().toFixed(1)}h
@@ -799,82 +857,8 @@ export default function EODReport() {
               </div>
             )}
 
-            {/* Step 1: Rating */}
+            {/* Step 1: Questions */}
             {!todayReport && step === 1 && (
-              <div>
-                <h2
-                  style={{
-                    fontSize: "24px",
-                    fontWeight: 600,
-                    color: darkMode ? "#e5e7eb" : COLORS.textPrimary,
-                    marginBottom: "32px",
-                    textAlign: "center",
-                  }}
-                >
-                  Comment s'est passée votre journée ?
-                </h2>
-
-                <div style={{ display: "flex", gap: "12px", marginBottom: "24px" }}>
-                  {RATINGS.map(({ value, label }) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setRating(value)}
-                      style={{
-                        flex: 1,
-                        padding: "20px",
-                        border: `2px solid ${
-                          rating === value ? COLORS.primary : darkMode ? "#3f3f46" : COLORS.border
-                        }`,
-                        borderRadius: "8px",
-                        background:
-                          rating === value ? `${COLORS.primary}15` : darkMode ? "#18181b" : "#fff",
-                        cursor: "pointer",
-                        transition: "all 0.2s ease",
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        gap: "8px",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (rating !== value) {
-                          e.currentTarget.style.transform = "translateY(-4px)";
-                          e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.1)";
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (rating !== value) {
-                          e.currentTarget.style.transform = "translateY(0)";
-                          e.currentTarget.style.boxShadow = "none";
-                        }
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "32px",
-                          fontWeight: 700,
-                          color: rating === value ? COLORS.primary : darkMode ? "#d1d5db" : COLORS.textSecondary,
-                        }}
-                      >
-                        {value}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "13px",
-                          color: darkMode ? "#9ca3af" : COLORS.textSecondary,
-                          fontWeight: 500,
-                        }}
-                      >
-                        {label}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Step 2: Questions */}
-            {!todayReport && step === 2 && (
               <div style={{ minHeight: "200px" }}>
                 {!allQuestionsDone ? (
                   <div>
@@ -883,7 +867,7 @@ export default function EODReport() {
                       textAlign: "center",
                       marginBottom: "8px",
                       fontSize: "13px",
-                      color: COLORS.textTertiary,
+                      color: C.muted,
                       fontWeight: 500,
                     }}>
                       Question {questionIndex + 1} / {todayQuestions.length}
@@ -898,12 +882,12 @@ export default function EODReport() {
                             style={{
                               marginBottom: "20px",
                               paddingBottom: "20px",
-                              borderBottom: `1px solid ${darkMode ? "#3f3f46" : "#f1f5f9"}`,
+                              borderBottom: `1px solid ${C.border}`,
                             }}
                           >
                             <p style={{
                               fontSize: "14px",
-                              color: COLORS.textTertiary,
+                              color: C.muted,
                               margin: "0 0 6px 0",
                               fontWeight: 500,
                             }}>
@@ -911,7 +895,7 @@ export default function EODReport() {
                             </p>
                             <p style={{
                               fontSize: "16px",
-                              color: darkMode ? "#d1d5db" : COLORS.textSecondary,
+                              color: C.secondary,
                               margin: 0,
                               lineHeight: 1.6,
                               fontStyle: "italic",
@@ -928,7 +912,7 @@ export default function EODReport() {
                       style={{
                         fontSize: "22px",
                         fontWeight: 600,
-                        color: darkMode ? "#e5e7eb" : COLORS.textPrimary,
+                        color: C.text,
                         marginBottom: "24px",
                         textAlign: "left",
                         minHeight: "30px",
@@ -991,7 +975,7 @@ export default function EODReport() {
                           disabled={sendingAnswer}
                           style={{
                             padding: "10px 28px",
-                            background: sendingAnswer ? COLORS.textTertiary : COLORS.primary,
+                            background: sendingAnswer ? C.muted : C.accent,
                             color: "#fff",
                             border: "none",
                             borderRadius: "8px",
@@ -1034,14 +1018,14 @@ export default function EODReport() {
                     <h2 style={{
                       fontSize: "24px",
                       fontWeight: 700,
-                      color: darkMode ? "#e5e7eb" : COLORS.textPrimary,
+                      color: C.text,
                       marginBottom: "8px",
                     }}>
                       Merci d'avoir répondu au formulaire
                     </h2>
                     <p style={{
                       fontSize: "16px",
-                      color: COLORS.textSecondary,
+                      color: C.secondary,
                       margin: 0,
                     }}>
                       À demain !
@@ -1052,7 +1036,7 @@ export default function EODReport() {
             )}
 
             {/* Navigation buttons (steps 0 and 1 only) */}
-            {!todayReport && step < 2 && (step > 0 || tasks.length > 0) && (
+            {!todayReport && step < 1 && tasks.length > 0 && (
               <div
                 style={{
                   display: "flex",
@@ -1071,8 +1055,8 @@ export default function EODReport() {
                     style={{
                       padding: "14px 40px",
                       background: "transparent",
-                      color: darkMode ? "#e5e7eb" : COLORS.textPrimary,
-                      border: `1px solid ${darkMode ? "#3f3f46" : COLORS.border}`,
+                      color: C.text,
+                      border: `1px solid ${C.border}`,
                       borderRadius: "8px",
                       fontSize: "15px",
                       fontWeight: 600,
@@ -1080,7 +1064,7 @@ export default function EODReport() {
                       transition: "all 0.2s ease",
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = darkMode ? "#27272a" : "#f9fafb";
+                      e.currentTarget.style.background = C.subtle;
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.background = "transparent";
@@ -1095,7 +1079,7 @@ export default function EODReport() {
                   disabled={submitting}
                   style={{
                     padding: "14px 40px",
-                    background: COLORS.primary,
+                    background: C.accent,
                     color: "#fff",
                     border: "none",
                     borderRadius: "8px",
@@ -1119,6 +1103,7 @@ export default function EODReport() {
             )}
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

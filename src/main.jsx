@@ -13,6 +13,7 @@ import LeadsManagement  from "./pages/LeadsManagement.jsx";
 import TrackingSheet    from "./pages/TrackingSheet.jsx";
 import MonitoringPerf   from "./pages/MonitoringPerf.jsx";
 import EODReport        from "./pages/EODReport.jsx";
+import EODDashboard     from "./pages/EODDashboard.jsx";
 import Login            from "./pages/Login.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
@@ -32,6 +33,7 @@ function App() {
         <Route path="/tracking-sheet" element={<TrackingSheet />} />
         <Route path="/monitoring-perf" element={<MonitoringPerf />} />
         <Route path="/eod-report" element={<EODReport />} />
+        <Route path="/eod-dashboard" element={<EODDashboard />} />
 
         {/* Protected routes */}
         <Route

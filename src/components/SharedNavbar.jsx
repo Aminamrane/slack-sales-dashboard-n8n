@@ -68,21 +68,29 @@ export default function SharedNavbar({ session, darkMode, setDarkMode }) {
 
   return (
     <div style={{
+      position: 'fixed',
+      top: '20px',
+      left: 0,
+      right: 0,
+      zIndex: 1000,
       display: 'flex',
       justifyContent: 'center',
-      marginBottom: '16px',
-      padding: '0 24px',
-      fontFamily: 'sans-serif'
+      padding: '12px 24px',
+      pointerEvents: 'none',
+      fontFamily: 'sans-serif',
     }}>
       <div style={{
+        pointerEvents: 'auto',
         display: 'flex',
         alignItems: 'center',
         gap: '12px',
         padding: '10px 16px',
         borderRadius: '16px',
-        background: darkMode ? '#242428' : '#ffffff',
-        border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`,
-        boxShadow: darkMode ? '0 4px 20px rgba(0,0,0,0.4)' : '0 4px 20px rgba(0,0,0,0.08)',
+        background: darkMode ? 'rgba(30,31,40,0.45)' : 'rgba(255,255,255,0.40)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        border: `1px solid ${darkMode ? 'rgba(42,43,54,0.6)' : 'rgba(226,230,239,0.6)'}`,
+        boxShadow: darkMode ? '0 4px 20px rgba(0,0,0,0.3)' : '0 4px 20px rgba(0,0,0,0.06)',
         fontFamily: 'sans-serif'
       }}>
         {/* User Profile */}
@@ -91,7 +99,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode }) {
           alignItems: 'center',
           gap: '10px',
           paddingRight: '12px',
-          borderRight: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`
+          borderRight: `1px solid ${darkMode ? '#2a2b36' : '#e2e6ef'}`
         }}>
           {session?.user?.user_metadata?.avatar_url ? (
             <img
@@ -101,7 +109,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode }) {
                 width: 32,
                 height: 32,
                 borderRadius: '50%',
-                border: `2px solid ${darkMode ? '#333338' : '#e5e5e5'}`
+                border: `2px solid ${darkMode ? '#2a2b36' : '#e2e6ef'}`
               }}
             />
           ) : (
@@ -174,7 +182,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode }) {
               padding: '8px',
               borderRadius: '12px',
               background: darkMode ? '#242428' : '#ffffff',
-              border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`,
+              border: `1px solid ${darkMode ? '#2a2b36' : '#e2e6ef'}`,
               boxShadow: darkMode ? '0 8px 24px rgba(0,0,0,0.5)' : '0 8px 24px rgba(0,0,0,0.12)',
               minWidth: '160px',
               zIndex: 1000
@@ -335,6 +343,32 @@ export default function SharedNavbar({ session, darkMode, setDarkMode }) {
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
               >
                 End of Day
+              </button>
+            )}
+
+            {apiClient.hasAccess('eod_dashboard') && (
+              <button
+                onClick={() => navigate("/eod-dashboard")}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: darkMode ? '#f5f5f7' : '#1d1d1f',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  width: '100%',
+                  transition: 'background 0.15s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? '#2a2b2e' : '#f5f5f7'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                Dashboard EOD
               </button>
             )}
           </div>

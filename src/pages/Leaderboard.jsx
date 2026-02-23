@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useNavigate } from "react-router-dom";
 
+import { motion, AnimatePresence } from "framer-motion";
+
 // import { supabase } from "../lib/supabaseClient"; // No longer needed - using API backend
 
 import apiClient from "../services/apiClient";
@@ -29,6 +31,11 @@ import ndaIcon from "../assets/icon1.png";
 import declareIcon from "../assets/icon2.png";
 import toolsIcon from "../assets/icon3.png";
 import crownIcon from "../assets/crown.png";
+import chefIcon from "../assets/chef.png";
+import airBg from "../assets/Air.png";
+import airportFont from "../assets/Airport.otf";
+import shipIcon from "../assets/ship.png";
+import flameIcon from "../assets/flame.png";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
 import Chart from "chart.js/auto";
@@ -67,83 +74,7 @@ const COLORS = {
 
 // Équipes commerciales
 
-const TEAMS = [
-
-  {
-
-    id: "team1",
-
-    label: "Équipe 1",
-
-    captain: "Yohan Debowski",
-
-    members: [
-
-      "Yanis Zaïri",
-
-      "Mourad Derradji",
-
-      "Youness El Boukhrissi",
-
-      "Alex Gaudrillet",
-
-      "Kaïl"
-
-    ],
-
-    color: COLORS.secondary, // orange
-
-  },
-
-  {
-
-    id: "team2",
-
-    label: "Équipe 2",
-
-    captain: "Léo Mafrici",
-
-    members: [
-
-      "Eva",
-
-      "Mehdi BOUFFESSIL",
-
-      "Sarah Amroune",
-
-      "Sébastien ITEMA",
-
-      "Selim Kouay"
-
-    ],
-
-    color: COLORS.primary, // indigo
-
-  },
-
-  {
-
-    id: "team3",
-
-    label: "Équipe 3",
-
-    captain: "David",
-
-    members: [
-
-      "Aurélie Briquet",
-
-      "Gwenaël",
-
-      "Quentin Rattez"
-
-    ],
-
-    color: COLORS.tertiary, // vert
-
-  },
-
-];
+// TEAMS is now fetched from GET /api/v1/teams (no more hardcoded)
 
 /* ────────────────────────────────────────────────────────────────────────────
 
@@ -172,6 +103,364 @@ function getSlackTeamId(user) {
   return fromAppMeta || "";
 
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Chef Callout — smart phrase selection
+──────────────────────────────────────────────────────────────────────────── */
+
+function getChefPhrase({
+  chefFirstName,
+  topSellerFirstName,
+  chefIsTopSeller,
+  todayDay,
+  daysInMonth,
+  daysLeft,
+  gap,
+  isPastMonth,
+  storyline, // { scenario, winner, runner_up, final_gap, lead_changes, days_as_leader } or null
+  teamLabel,
+  team1Ventes, // total ventes of #1 team — used for reactive hash
+  team2Ventes, // total ventes of #2 team — used for reactive hash
+}) {
+  const chef = chefFirstName;
+  const top = topSellerFirstName;
+  const dl = daysLeft;
+  const dlStr = `${dl} jour${dl > 1 ? 's' : ''}`;
+
+  // ── Reactive pick: hash changes when situation changes ──
+  // Incorporates: day, quarter-hour, gap, ventes, WHO is #1 (teamLabel)
+  // → phrase updates on data refresh, leader swap, or every ~15 min
+  const now = new Date();
+  const quarter = Math.floor(now.getMinutes() / 15);        // 0-3 within each hour
+  const labelHash = teamLabel.split('').reduce((h, c) => ((h << 5) - h) + c.charCodeAt(0), 0);
+  const seed = todayDay * 31 + now.getHours() * 7 + quarter * 53 + gap * 13
+    + (team1Ventes || 0) * 17 + (team2Ventes || 0) * 23 + Math.abs(labelHash);
+  const pick = (pool) => pool[Math.abs(seed) % pool.length];
+
+  // Detect momentum from storyline (recent lead change = just took #1)
+  const recentLeadChange = (() => {
+    if (!storyline?.lead_changes?.length) return false;
+    const last = storyline.lead_changes[storyline.lead_changes.length - 1];
+    if (!last?.date) return false;
+    const d = new Date(last.date);
+    const now = new Date();
+    return (now - d) / 86400000 <= 5; // within last 5 days
+  })();
+  const daysAsLeader = storyline?.days_as_leader ?? null;
+  // Unified momentum signal: team JUST took the lead (highest priority for current month)
+  const justTookLead = (daysAsLeader !== null && daysAsLeader <= 2) || recentLeadChange;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  PAST MONTH — storyline-based recap (stable messages)
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (isPastMonth) {
+    const scenario = storyline?.scenario;
+    const fg = storyline?.final_gap ?? gap;
+    const fgStr = `${fg} vente${fg > 1 ? 's' : ''}`;
+
+    if (scenario === 'comeback') return pick([
+      `Renversement : ${teamLabel} a repris la tête et termine #1.`,
+      `Longtemps derrière, ${chef} a accéléré au bon moment et décroche la 1ère place.`,
+      `Comeback réussi : ${chef} a renversé le classement sur la fin.`,
+      `Quand tout semblait joué, ${chef} a relancé son équipe — et ça a payé.`,
+      `${teamLabel} a prouvé qu'on ne les enterre pas trop vite.`,
+      `Retournement de situation : ${chef} a su remotiver l'équipe pour finir en tête.`,
+      `Le mois semblait plié, mais ${chef} a décidé autrement.`,
+      `${chef} ne lâche rien : son équipe a remonté le classement main dans la main.`,
+    ]);
+
+    if (scenario === 'close_race') return pick([
+      `Course serrée jusqu'au bout : ${chef} l'emporte de ${fgStr}.`,
+      `Match serré : ${teamLabel} termine #1 d'un souffle.`,
+      `${chef} a tenu bon — première place arrachée au finish.`,
+      `Rien n'était acquis : ${chef} a gardé son sang-froid jusqu'au dernier jour.`,
+      `${fgStr} d'écart — ${chef} a su faire la différence dans les détails.`,
+      `Un mois haletant : ${teamLabel} prend la tête d'une courte avance.`,
+      `C'était serré, mais ${chef} a l'instinct des grands moments.`,
+      `Chaque vente comptait : ${chef} a mené l'équipe à la victoire sur le fil.`,
+    ]);
+
+    if (scenario === 'dominance') return pick([
+      `${teamLabel} a dominé tout le mois : ${chef} n'a rien lâché.`,
+      `Maîtrise totale : ${chef} garde l'équipe au sommet du début à la fin.`,
+      `${chef} a imposé son rythme — première place incontestée.`,
+      `Aucune équipe n'a pu suivre le tempo de ${chef} ce mois-ci.`,
+      `Mois parfait : ${teamLabel} en tête du premier au dernier jour.`,
+      `${chef} a installé une dynamique que personne n'a pu briser.`,
+      `Domination tranquille : ${chef} a gardé le cap sans trembler.`,
+      `Le classement n'a jamais été en doute — ${chef} avait tout planifié.`,
+    ]);
+
+    // Fallback recap (no storyline data)
+    return pick([
+      `Bravo ${chef} : son équipe termine #1 ce mois-ci.`,
+      `Fin de mois maîtrisée : ${chef} garde l'équipe au sommet.`,
+      `${chef} a su maintenir l'équipe en tête jusqu'au bout.`,
+      `Mission accomplie pour ${chef} : première place verrouillée.`,
+      `${teamLabel} finit le mois en beauté sous la houlette de ${chef}.`,
+      `Objectif atteint : ${chef} ramène la première place à son équipe.`,
+      `Un mois solide pour ${chef} — le leadership paie.`,
+      `${chef} prouve une fois de plus que la constance fait la différence.`,
+    ]);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  CURRENT MONTH — dynamic phrases (priority: momentum > time > gap)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ── TOP PRIORITY: Team just took the lead (overtake/momentum) ──
+  // This fires FIRST because an overtake is the most exciting event to surface
+  if (justTookLead) {
+    if (gap === 0) return pick([
+      `Coup de théâtre : ${teamLabel} revient à hauteur — tout est relancé !`,
+      `${chef} ramène son équipe à égalité : le suspense est total.`,
+      `Retour en force : ${teamLabel} est de retour au coude à coude.`,
+      `${chef} galvanise les troupes — l'écart est comblé, tout se joue maintenant.`,
+      `Égalité après la remontée : ${chef} a remis les compteurs à zéro.`,
+      `${teamLabel} ne lâche rien : retour à égalité, le match repart de zéro.`,
+      `${chef} refuse de décrocher — son équipe est revenue à hauteur !`,
+      `La course est relancée : ${teamLabel} est de retour dans le game.`,
+    ]);
+    if (gap <= 2) return pick([
+      `Changement de leader : ${teamLabel} passe devant !`,
+      `${chef} renverse la tendance — ${teamLabel} prend la tête.`,
+      `${chef} vient de reprendre les commandes — l'élan est lancé.`,
+      `Coup d'accélérateur : ${teamLabel} arrache la première place !`,
+      `${chef} sent le momentum — son équipe vient de passer #1.`,
+      `L'équipe de ${chef} accélère : la première place est à eux.`,
+      `${chef} a trouvé le déclic : ${teamLabel} est de retour en tête.`,
+      `Retournement : ${chef} hisse l'équipe au sommet du classement.`,
+    ]);
+    return pick([
+      `${chef} a pris les commandes et creuse l'écart — belle dynamique.`,
+      `${teamLabel} s'est installée en tête : ${chef} confirme jour après jour.`,
+      `Nouveau leader : ${chef} a imposé le rythme et l'équipe suit.`,
+      `${chef} a pris la tête et ne regarde plus en arrière.`,
+      `L'élan est du côté de ${chef} — la première place se consolide.`,
+      `${teamLabel} vient de prendre le large : ${chef} capitalise sur le momentum.`,
+    ]);
+  }
+
+  // ── Dernier jour du mois ──
+  if (dl === 0) {
+    if (gap <= 2) return pick([
+      `Jour J : ${chef} joue la première place aujourd'hui.`,
+      `Dernier jour — ${chef} sait que chaque vente peut tout changer.`,
+      `C'est maintenant ou jamais : ${chef} galvanise l'équipe.`,
+      `Le classement se joue aujourd'hui : ${chef} est prêt.`,
+      `Ultime journée : ${chef} veut finir en tête, rien de moins.`,
+      `Dernières heures pour sceller la victoire — ${chef} reste focus.`,
+    ]);
+    return pick([
+      `Dernier jour du mois : ${chef} veut finir en beauté.`,
+      `${chef} garde le rythme jusqu'au bout — dernier jour, pas de relâchement.`,
+      `Jour final : ${teamLabel} termine en position de force.`,
+      `${chef} clôture le mois avec la même intensité qu'au premier jour.`,
+    ]);
+  }
+
+  // ── 3 derniers jours (sprint final) ──
+  if (dl <= 3) {
+    if (gap <= 2) return pick([
+      `Sprint final : ${chef} sent la pression — ${dlStr} pour tenir.`,
+      `${chef} ne relâche rien : ${dlStr}, tout peut basculer.`,
+      `L'écart est mince et le temps presse — ${chef} garde le cap.`,
+      `${dlStr} et une avance fragile : ${chef} pousse l'équipe au maximum.`,
+      `Chaque heure compte : ${chef} mobilise l'équipe pour le rush final.`,
+      `Le #2 est là : ${chef} sait qu'il faut tout donner sur ces ${dlStr}.`,
+    ]);
+    if (chefIsTopSeller) return pick([
+      `${chef} mène de front : ${dlStr} pour verrouiller la première place.`,
+      `En tête et au charbon : ${chef} finit ce qu'il a commencé.`,
+      `${dlStr} et ${chef} ne lâche rien : le meilleur vendeur veut la victoire.`,
+      `${chef} montre le chemin jusqu'à la dernière seconde.`,
+    ]);
+    return pick([
+      `${dlStr} : ${chef} pousse l'équipe à conclure en force.`,
+      `Fin de mois imminente : ${chef} garde tout le monde concentré.`,
+      `${chef} prépare le sprint final — ${dlStr} pour finir fort.`,
+      `L'équipe de ${chef} aborde les derniers jours avec sérénité.`,
+    ]);
+  }
+
+  // ── Leader installé (streak > 10 jours consécutifs) — before generic end-of-month ──
+  if (daysAsLeader && daysAsLeader > 10 && gap >= 3) return pick([
+    `${chef} maintient l'équipe en tête depuis ${daysAsLeader} jours : la constance paie.`,
+    `${teamLabel} est installée au sommet — ${chef} ne connaît pas le relâchement.`,
+    `En tête depuis ${daysAsLeader} jours : ${chef} impose sa régularité.`,
+    `${daysAsLeader} jours en tête : ${chef} prouve que la discipline gagne.`,
+    `${chef} a installé une série de ${daysAsLeader} jours — l'équipe suit le mouvement.`,
+    `La constance de ${chef} fait la différence : en tête jour après jour.`,
+  ]);
+
+  // ── Fin de mois (daysLeft ≤ 10) + gap pressure ──
+  if (dl <= 10 && gap <= 1) return pick([
+    `${chef} serre les rangs : l'écart est mince, il faut rester solide.`,
+    `Dernière ligne droite : le #2 colle au classement de ${chef}.`,
+    `Plus que ${dlStr} et une seule vente d'avance — ${chef} mobilise.`,
+    `Fin de mois tendue : ${chef} refuse de laisser filer la première place.`,
+    `${chef} sent le souffle du #2 : chaque vente est une bataille.`,
+    `L'écart se resserre : ${chef} rappelle à l'équipe qu'il faut tout donner.`,
+  ]);
+
+  if (dl <= 10 && gap <= 3) return pick([
+    `${chef} serre les rangs — ${dlStr} et le #2 n'est pas loin.`,
+    `Dernière ligne droite : ${chef} pousse l'équipe à finir fort.`,
+    `Plus que ${dlStr} : ${chef} veut verrouiller la première place.`,
+    `Le classement peut encore bouger : ${chef} garde tout le monde alerte.`,
+    `${chef} ne sous-estime pas le #2 : ${dlStr} pour sécuriser.`,
+    `L'avance est correcte mais ${chef} veut du concret — ${dlStr} pour finir.`,
+  ]);
+
+  // ── Fin de mois (comfortable) ──
+  if (dl <= 10) return pick([
+    `Fin de mois : ${chef} garde l'équipe concentrée jusqu'au bout.`,
+    `Plus que ${dlStr} : ${chef} veut verrouiller la première place.`,
+    `Dernière ligne droite — ${chef} ne relâche pas la pression.`,
+    `${chef} aborde la fin de mois avec confiance : l'avance est là.`,
+    `${dlStr} et une avance solide : ${chef} gère la fin de mois avec calme.`,
+    `${chef} sait que les fins de mois se méritent — il garde le cap.`,
+  ]);
+
+  // ── Début de mois (jours 1-3) ──
+  if (todayDay <= 3) return pick([
+    `Nouveau mois, même ambition : ${chef} veut rester en tête.`,
+    `Le mois commence bien : ${chef} place l'équipe en position de force.`,
+    `${chef} lance le mois avec la même énergie : objectif #1.`,
+    `Démarrage fort : ${chef} donne le ton dès les premiers jours.`,
+    `Les compteurs sont remis à zéro — ${chef} veut repartir en tête.`,
+    `${chef} n'attend pas : son équipe démarre le mois à fond.`,
+  ]);
+
+  // ── Semaine 1 (jours 4-7) ──
+  if (todayDay <= 7) return pick([
+    `Première semaine solide : ${chef} installe son équipe en tête.`,
+    `${chef} pose les bases : le rythme est donné dès la première semaine.`,
+    `L'équipe de ${chef} démarre bien — il faut maintenir.`,
+    `${chef} construit l'avance brique par brique, dès les premiers jours.`,
+    `Début de mois prometteur sous l'impulsion de ${chef}.`,
+    `${chef} aime commencer fort : les premières ventes sont au rendez-vous.`,
+  ]);
+
+  // ── Égalité parfaite (gap === 0) ──
+  if (gap === 0) return pick([
+    `Égalité parfaite avec le #2 : ${chef} veut faire la différence.`,
+    `${chef} refuse le statu quo — il faut passer devant.`,
+    `Coude à coude : ${chef} cherche la vente qui fera basculer le classement.`,
+    `Le classement est à égalité : c'est le moment pour ${chef} d'accélérer.`,
+    `Tout est à jouer : ${chef} prépare l'équipe pour prendre l'avantage.`,
+    `Match nul au classement — ${chef} sait que la prochaine vente compte double.`,
+  ]);
+
+  // ── Gap danger (1 vente) ──
+  if (gap === 1) {
+    if (chefIsTopSeller) return pick([
+      `${chef} porte l'équipe : une seule vente d'avance, chaque effort compte.`,
+      `${chef} garde l'équipe devant d'une vente — il mène de front.`,
+      `Le leader et meilleur vendeur : ${chef} fait tout pour maintenir l'écart.`,
+      `${chef} montre l'exemple sous pression : le #2 n'est qu'à 1 vente.`,
+      `Une vente d'avance et ${chef} au charbon : le #2 ne passera pas.`,
+      `${chef} ne recule devant rien — une vente d'avance, il faut tenir.`,
+    ]);
+    return pick([
+      `${chef} garde l'équipe devant — le #2 n'est plus qu'à 1 vente.`,
+      `${chef} le sait : la première place se joue au détail.`,
+      `${chef} serre les rangs : l'écart est mince, il faut rester solide.`,
+      `Une seule vente d'avance : ${chef} compte sur ${top} pour creuser l'écart.`,
+      `${chef} pousse ${top} et l'équipe : le #2 est juste derrière.`,
+      `L'écart est minimal — ${chef} sait que chaque vente est décisive.`,
+    ]);
+  }
+
+  // ── Gap serré (2-3 ventes) ──
+  if (gap <= 3) {
+    if (chefIsTopSeller) return pick([
+      `${chef} garde l'équipe devant — le #2 n'est pas loin.`,
+      `${chef} le sait : la première place se joue au détail.`,
+      `${chef} donne l'exemple et maintient la pression sur le #2.`,
+      `${gap} ventes d'avance : ${chef} veut creuser l'écart.`,
+      `${chef} ne se repose pas : l'avance est correcte mais pas suffisante.`,
+      `Le meilleur vendeur et le leader — ${chef} fait le boulot.`,
+    ]);
+    return pick([
+      `${chef} garde l'équipe devant — le #2 n'est pas loin.`,
+      `${chef} le sait : la première place se joue au détail.`,
+      `${gap} ventes d'avance : ${chef} compte sur ${top} pour creuser.`,
+      `L'écart est correct mais ${chef} veut du confort : à l'attaque.`,
+      `${chef} motive l'équipe : ${top} est en forme, il faut capitaliser.`,
+      `Pas le moment de relâcher — ${chef} garde le groupe concentré.`,
+    ]);
+  }
+
+  // ── Comfortable gap (4-7 ventes) ──
+  if (gap >= 4 && gap <= 7) {
+    if (chefIsTopSeller) return pick([
+      `${chef} donne le tempo : son équipe suit et performe.`,
+      `${chef} a de l'avance — mais garde l'équipe disciplinée.`,
+      `${chef} sécurise la tête : rester #1, c'est tous les jours.`,
+      `${chef} impose le rythme, l'équipe répond présent.`,
+      `En tête et meilleur vendeur : ${chef} est sur tous les fronts.`,
+      `${chef} ne connaît pas le confort — il veut toujours plus.`,
+      `${chef} mène par l'exemple : ${gap} ventes d'avance et pas de relâchement.`,
+      `L'avance est là grâce à ${chef} — il ne compte pas s'arrêter.`,
+    ]);
+    return pick([
+      `Sous l'impulsion de ${chef}, ${top} fait la différence.`,
+      `${chef} a de l'avance — mais garde l'équipe disciplinée.`,
+      `${chef} sécurise la tête : rester #1, c'est tous les jours.`,
+      `${chef} met les bons joueurs au bon endroit : ${top} frappe fort.`,
+      `L'avance est confortable — ${chef} en profite pour structurer.`,
+      `${chef} construit quelque chose de solide : ${top} et l'équipe suivent.`,
+      `${gap} ventes d'avance : ${chef} félicite ${top} mais veut plus.`,
+      `${chef} sait déléguer : ${top} prend les devants, l'équipe avance.`,
+    ]);
+  }
+
+  // ── Dominant gap (≥ 8 ventes) ──
+  if (gap >= 8) {
+    if (chefIsTopSeller) return pick([
+      `${chef} domine : meilleur vendeur et leader d'une équipe imbattable.`,
+      `${gap} ventes d'avance — ${chef} a installé une machine de guerre.`,
+      `${chef} ne ralentit jamais : l'équipe est en pilote automatique.`,
+      `Domination totale : ${chef} écrase le classement et motive les troupes.`,
+      `${chef} vise l'excellence — la première place ne suffit pas, il veut le record.`,
+      `L'écart parle de lui-même : ${chef} est sur une autre planète.`,
+    ]);
+    return pick([
+      `${chef} a construit une avance colossale : ${gap} ventes devant le #2.`,
+      `L'équipe de ${chef} est inarrêtable — ${top} et les autres cartonnent.`,
+      `${gap} ventes d'écart : ${chef} a créé une dynamique que personne ne peut suivre.`,
+      `${chef} gère la première place avec sérénité : l'avance est massive.`,
+      `${top} performe sous la direction de ${chef} — le #2 est loin derrière.`,
+      `Avance record : ${chef} a transformé son équipe en référence.`,
+    ]);
+  }
+
+  // ── Standard — chef top performer (Pool A) ──
+  if (chefIsTopSeller) return pick([
+    `${chef} donne le tempo : son équipe suit et performe.`,
+    `Quand ${chef} accélère, l'équipe avance.`,
+    `${chef} montre l'exemple, et l'équipe élève son niveau.`,
+    `${chef} impose le rythme, l'équipe répond présent.`,
+    `${chef} ne demande rien qu'il ne fait pas lui-même — leadership par l'action.`,
+    `Le meilleur vendeur est aussi le chef : ${chef} est partout.`,
+    `${chef} prouve que le leadership se joue sur le terrain.`,
+    `En tête du classement individuel et collectif : ${chef} fait le doublé.`,
+  ]);
+
+  // ── Standard — un membre brille (Pool B) ──
+  return pick([
+    `Sous l'impulsion de ${chef}, ${top} fait la différence.`,
+    `${chef} construit l'élan collectif : ${top} conclut.`,
+    `${chef} sait faire grandir ses talents — ${top} porte l'équipe.`,
+    `${chef} met les bons joueurs au bon endroit : ${top} frappe fort.`,
+    `L'œil de ${chef} pour le talent paie : ${top} est en feu.`,
+    `${chef} orchestre, ${top} exécute — duo gagnant.`,
+    `Le management de ${chef} porte ses fruits : ${top} explose les compteurs.`,
+    `${chef} sait tirer le meilleur de chacun — aujourd'hui, ${top} brille.`,
+  ]);
+}
+
 
 function getReporterName(session) {
   const user = session?.user || {};
@@ -381,6 +670,596 @@ function useCountUp(end, duration = 1500) {
   
   return { count, isComplete };
 
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+
+   Airport Flip Display
+
+──────────────────────────────────────────────────────────────────────────── */
+
+function AirportFlipDigit({ targetDigit, delay = 0, duration = 1500, darkMode }) {
+  const [displayDigit, setDisplayDigit] = useState(() => Math.floor(Math.random() * 10));
+  const [velocity, setVelocity] = useState(1);
+  const [settled, setSettled] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const glitchChars = ['#', '@', '&', '%', '!', '?', '*', '0', '7', '3'];
+
+  // ── Initial load animation (vertical flip 0→target, decelerating) ──
+  const [offsetY, setOffsetY] = useState(0);
+  const flipDuration = 800;
+  useEffect(() => {
+    const target = parseInt(targetDigit) || 0;
+    let startTime = null;
+    let frame;
+    let prevDigit = -1;
+
+    setSettled(false);
+    setDisplayDigit(0);
+    setOffsetY(0);
+    setVelocity(0);
+
+    // Total flips: cycle through 0→target (going through 10 + target to get a full spin)
+    const totalSteps = 10 + target;
+
+    const timeout = setTimeout(() => {
+      const animate = (time) => {
+        if (!startTime) startTime = time;
+        const elapsed = time - startTime;
+        // Ease-out cubic for deceleration
+        const raw = Math.min(elapsed / flipDuration, 1);
+        const progress = 1 - Math.pow(1 - raw, 3);
+
+        const currentStep = Math.floor(progress * totalSteps);
+        const currentDigit = currentStep % 10;
+        const fractional = (progress * totalSteps) % 1;
+
+        if (currentDigit !== prevDigit) {
+          prevDigit = currentDigit;
+          setDisplayDigit(currentDigit);
+        }
+
+        // Vertical offset: slide up during each flip
+        setOffsetY(-fractional * 6 * (1 - raw));
+        setVelocity(0.3 * (1 - raw));
+
+        if (raw < 1) {
+          frame = requestAnimationFrame(animate);
+        } else {
+          setDisplayDigit(target);
+          setOffsetY(0);
+          setVelocity(0);
+          setSettled(true);
+        }
+      };
+
+      frame = requestAnimationFrame(animate);
+    }, delay);
+
+    return () => {
+      clearTimeout(timeout);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [targetDigit, delay, duration]);
+
+  // ── Hover glitch animation ──
+  useEffect(() => {
+    if (!settled) return;
+    const target = parseInt(targetDigit) || 0;
+    let frame;
+    let startTime = null;
+    const glitchDuration = 300;
+
+    const animate = (time) => {
+      if (!startTime) startTime = time;
+      const elapsed = time - startTime;
+      const progress = Math.min(elapsed / glitchDuration, 1);
+
+      setVelocity(0.3 * (1 - progress));
+      setOffsetY(Math.sin(progress * 8) * 4 * (1 - progress));
+
+      if (progress < 0.8) {
+        setDisplayDigit(glitchChars[Math.floor(Math.random() * glitchChars.length)]);
+      } else {
+        setDisplayDigit(hovered ? '#' : target);
+      }
+
+      if (progress < 1) {
+        frame = requestAnimationFrame(animate);
+      } else {
+        setDisplayDigit(hovered ? '#' : target);
+        setVelocity(0);
+        setOffsetY(0);
+      }
+    };
+
+    frame = requestAnimationFrame(animate);
+    return () => { if (frame) cancelAnimationFrame(frame); };
+  }, [hovered]);
+
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+      position: 'relative',
+      width: '38px',
+      height: '50px',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    }}>
+      <img
+        src={airBg}
+        alt=""
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'fill',
+          borderRadius: '3px',
+          pointerEvents: 'none',
+        }}
+      />
+      <span style={{
+        position: 'relative',
+        fontFamily: "'Airport', monospace",
+        fontSize: '38px',
+        fontWeight: 700,
+        color: darkMode ? '#f5d742' : '#e8e8e8',
+        textShadow: darkMode ? '0 0 8px rgba(245,215,66,0.5), 0 0 16px rgba(245,215,66,0.2)' : '0 1px 2px rgba(0,0,0,0.5)',
+        transform: `translateY(${offsetY}px)`,
+        filter: `blur(${velocity * 0.6}px)`,
+        transition: settled ? 'all 0.1s ease-out' : 'none',
+        userSelect: 'none',
+        lineHeight: 1,
+        zIndex: 1,
+      }}>
+        {displayDigit}
+      </span>
+    </div>
+  );
+}
+
+function AirportKPI({ label, value, minDigits = 3, darkMode, suffix }) {
+  const digits = String(Math.abs(Math.floor(value || 0))).padStart(minDigits, '0').split('');
+  // Insert spaces every 3 digits from the right for readability
+  const grouped = [];
+  const total = digits.length;
+  digits.forEach((d, i) => {
+    const posFromRight = total - i;
+    if (posFromRight % 3 === 0 && i !== 0) {
+      grouped.push('space');
+    }
+    grouped.push({ digit: d, idx: i });
+  });
+
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '3px',
+    }}>
+      {label && (
+        <span style={{
+          fontFamily: "'Inter', -apple-system, system-ui, sans-serif",
+          fontWeight: 600,
+          fontSize: '15px',
+          color: '#9ca3af',
+          letterSpacing: '0.2px',
+        }}>
+          {label}
+        </span>
+      )}
+      <div style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
+        {grouped.map((item, i) =>
+          item === 'space'
+            ? <div key={`sp-${i}`} style={{ width: '6px' }} />
+            : <AirportFlipDigit
+                key={item.idx}
+                targetDigit={item.digit}
+                delay={item.idx * 100}
+                duration={1500 + item.idx * 80}
+                darkMode={darkMode}
+              />
+        )}
+        {suffix && (
+          <>
+            <div style={{ width: '6px' }} />
+            <div style={{
+              position: 'relative',
+              width: '38px',
+              height: '50px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              <img src={airBg} alt="" style={{
+                position: 'absolute', inset: 0,
+                width: '100%', height: '100%',
+                objectFit: 'fill', borderRadius: '3px', pointerEvents: 'none',
+              }} />
+              <div style={{
+                position: 'absolute', top: '50%', left: 0, right: 0,
+                height: '2px', background: 'rgba(0,0,0,0.95)',
+                transform: 'translateY(-50%)', zIndex: 2, pointerEvents: 'none',
+              }} />
+              <span style={{
+                position: 'relative',
+                fontFamily: "'Airport', monospace",
+                fontSize: '38px', fontWeight: 700,
+                color: darkMode ? '#f5d742' : '#e8e8e8',
+                textShadow: darkMode ? '0 0 8px rgba(245,215,66,0.5), 0 0 16px rgba(245,215,66,0.2)' : '0 1px 2px rgba(0,0,0,0.5)',
+                userSelect: 'none', lineHeight: 1, zIndex: 1,
+              }}>{suffix}</span>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+
+   Team Card (Doodles-style animated)
+
+──────────────────────────────────────────────────────────────────────────── */
+
+function ChefCallout({ text, darkMode, show }) {
+  const [typed, setTyped] = useState('');
+  const idxRef = useRef(0);
+  const contentRef = useRef(null);
+  const [contentH, setContentH] = useState(0);
+
+  useEffect(() => {
+    if (!show) { setTyped(''); idxRef.current = 0; setContentH(0); return; }
+    idxRef.current = 0;
+    setTyped('');
+    const id = setInterval(() => {
+      idxRef.current++;
+      if (idxRef.current <= text.length) {
+        setTyped(text.slice(0, idxRef.current));
+      } else {
+        clearInterval(id);
+      }
+    }, 32);
+    return () => clearInterval(id);
+  }, [show, text]);
+
+  // Measure content height on every typed change
+  useEffect(() => {
+    if (contentRef.current) {
+      const h = contentRef.current.scrollHeight;
+      if (h !== contentH) setContentH(h);
+    }
+  }, [typed]);
+
+  const GLASS_BG = darkMode ? 'rgba(30, 31, 40, 0.72)' : 'rgba(255, 255, 255, 0.68)';
+  const GLASS_BORDER = darkMode ? 'rgba(53, 54, 71, 0.6)' : 'rgba(223, 226, 235, 0.7)';
+
+  return (
+    <AnimatePresence>
+      {show && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.85, y: 6 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.9, y: 4 }}
+          transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+          style={{
+            position: 'absolute',
+            left: 34,
+            top: -38,
+            zIndex: 50,
+            pointerEvents: 'none',
+          }}
+        >
+          <div style={{
+            position: 'relative',
+            background: GLASS_BG,
+            backdropFilter: 'blur(14px)',
+            WebkitBackdropFilter: 'blur(14px)',
+            border: `1px solid ${GLASS_BORDER}`,
+            borderRadius: '10px',
+            padding: '0 14px',
+            boxShadow: darkMode
+              ? '0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(124,138,219,0.10)'
+              : '0 4px 24px rgba(0,0,0,0.06), 0 0 0 1px rgba(91,106,191,0.05)',
+            minWidth: 200,
+            maxWidth: 300,
+            overflow: 'hidden',
+          }}>
+            {/* Animated height wrapper — slow start, accelerate, micro-bounce settle */}
+            <motion.div
+              animate={{ height: contentH || 'auto' }}
+              transition={{
+                duration: 0.25,
+                ease: [0.22, 0.68, 0.35, 1.05],
+              }}
+              style={{ overflow: 'hidden' }}
+            >
+              <div ref={contentRef} style={{ padding: '7px 0' }}>
+                <span style={{
+                  fontSize: '11.5px',
+                  fontWeight: 500,
+                  fontFamily: "'Inter', system-ui, sans-serif",
+                  color: darkMode ? '#c8cbda' : '#3a3f54',
+                  lineHeight: 1.4,
+                  letterSpacing: '-0.01em',
+                  whiteSpace: 'pre-wrap',
+                }}>
+                  {typed}
+                  <motion.span
+                    animate={{ opacity: [1, 0] }}
+                    transition={{ duration: 0.5, repeat: Infinity, repeatType: 'reverse' }}
+                    style={{ color: darkMode ? '#7c8adb' : '#5b6abf', fontWeight: 300 }}
+                  >|</motion.span>
+                </span>
+              </div>
+            </motion.div>
+            {/* Arrow pointing toward avatar */}
+            <div style={{
+              position: 'absolute',
+              bottom: -6,
+              left: 6,
+              width: 10,
+              height: 10,
+              background: GLASS_BG,
+              backdropFilter: 'blur(14px)',
+              WebkitBackdropFilter: 'blur(14px)',
+              border: `1px solid ${GLASS_BORDER}`,
+              borderTop: 'none',
+              borderLeft: 'none',
+              transform: 'rotate(45deg)',
+              borderRadius: '0 0 2px 0',
+            }} />
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function TeamCard({ team, darkMode, isTopTeam, chefPhrase }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+  const [cw, setCw] = useState(440);
+  const [chefHover, setChefHover] = useState(false);
+
+  useEffect(() => {
+    if (containerRef.current) setCw(containerRef.current.clientWidth);
+  }, []);
+
+  const captain = team.memberAvatars.find(m => m.isCaptain);
+  const members = team.memberAvatars.filter(m => !m.isCaptain);
+
+  const getInitials = (name) => {
+    const parts = name.trim().split(' ');
+    return parts.length > 1
+      ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+      : name.substring(0, 2).toUpperCase();
+  };
+
+  // ── All cards are the EXACT same size. No scale ever. ──
+  const SIZE = 42;
+  const GAP = 10;
+  const cx = SIZE / 2 + 40;
+
+  // ── COLLAPSED: messy deck offsets (translate + rotate only) ──
+  const deck = [
+    { dx: -18, dy: -5, r: -8 },
+    { dx: 15, dy: -7, r: 7 },
+    { dx: -24, dy: 6, r: -13 },
+    { dx: 20, dy: 7, r: 11 },
+    { dx: -6, dy: -13, r: -3 },
+    { dx: 10, dy: 12, r: 6 },
+  ];
+
+  // ── EXPANDED: single row up to 5, grid of 3 beyond ──
+  const ROW_Y = SIZE + 14;
+  const COLS = members.length <= 5 ? members.length : 3;
+  const rowCount = Math.ceil(members.length / COLS);
+  const ROW_GAP = 8;
+  const availableW = cw - 16;
+  const chiefX = cx - SIZE / 2;
+  const expandedPos = members.map((_, i) => {
+    const col = i % COLS;
+    const row = Math.floor(i / COLS);
+    const colsInRow = Math.min(COLS, members.length - row * COLS);
+    const idealW = colsInRow * SIZE + (colsInRow - 1) * GAP;
+    const maxW = availableW - chiefX;
+    const fitGap = idealW > maxW
+      ? Math.max(2, Math.floor((maxW - colsInRow * SIZE) / Math.max(1, colsInRow - 1)))
+      : GAP;
+    return {
+      x: chiefX + col * (SIZE + fitGap),
+      y: ROW_Y + row * (SIZE + ROW_GAP + 14),
+    };
+  });
+
+  // ── Animated zone heights ──
+  const closedH = SIZE + 16;
+  const openH = ROW_Y + rowCount * (SIZE + ROW_GAP + 14) - ROW_GAP + 2;
+
+  const BG = darkMode ? '#1e1f28' : '#ffffff';
+  const BORDER = darkMode ? '#2a2b36' : '#e2e6ef';
+  const TEXT = darkMode ? '#eef0f6' : '#1e2330';
+  const MUTED = darkMode ? '#5e6273' : '#9ca3af';
+
+  return (
+    <div
+      ref={containerRef}
+      onClick={() => setOpen(v => !v)}
+      style={{
+        padding: '4px 0',
+        paddingBottom: '24px',
+        cursor: 'pointer',
+        position: 'relative',
+        userSelect: 'none',
+      }}
+    >
+      {/* ── Animated avatar zone ── */}
+      <motion.div
+        animate={{ height: open ? openH : closedH }}
+        transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+        style={{ position: 'relative', overflow: 'visible' }}
+      >
+        {/* ── Member cards (always in DOM — slide between deck & row) ── */}
+        {members.map((m, i) => (
+          <motion.div
+            key={m.name}
+            animate={open ? {
+              x: expandedPos[i].x,
+              y: expandedPos[i].y,
+              rotate: 0,
+            } : {
+              x: cx - SIZE / 2 + (deck[i]?.dx || 0),
+              y: 6 + (deck[i]?.dy || 0),
+              rotate: deck[i]?.r || 0,
+            }}
+            transition={{
+              type: 'spring', stiffness: 280, damping: 24,
+              delay: open ? 0.02 + i * 0.045 : i * 0.02,
+            }}
+            style={{
+              position: 'absolute', left: 0, top: 0,
+              width: SIZE, height: SIZE,
+              borderRadius: '10px', overflow: 'hidden',
+              border: `2px solid ${BG}`,
+              zIndex: open ? 2 : members.length - i,
+              boxShadow: darkMode
+                ? '0 2px 8px rgba(0,0,0,0.30)'
+                : '0 2px 8px rgba(0,0,0,0.10)',
+            }}
+          >
+            {m.avatar
+              ? <img src={m.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+              : <div style={{
+                  width: '100%', height: '100%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: darkMode ? '#27272a' : '#e4e4e7',
+                  fontSize: '13px', fontWeight: 700, color: team.color,
+                }}>{getInitials(m.name)}</div>
+            }
+          </motion.div>
+        ))}
+
+        {/* ── Chief card (always in front, slides up on expand) ── */}
+        <motion.div
+          animate={{
+            x: cx - SIZE / 2,
+            y: open ? 0 : 6,
+          }}
+          transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+          style={{
+            position: 'absolute', left: 0, top: 0,
+            width: SIZE, height: SIZE,
+            borderRadius: '10px', overflow: 'hidden',
+            border: `2px solid ${team.color}`,
+            zIndex: 10,
+            boxShadow: `0 3px 12px ${team.color}30`,
+          }}
+        >
+          {captain?.avatar
+            ? <img src={captain.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            : <div style={{
+                width: '100%', height: '100%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: `${team.color}20`,
+                fontSize: '13px', fontWeight: 700, color: team.color,
+              }}>{getInitials(captain?.name || team.captain)}</div>
+          }
+        </motion.div>
+
+        {/* ── Chef cap for best team captain ── */}
+        {isTopTeam && (
+          <motion.div
+            animate={{
+              x: cx - 14,
+              y: open ? -6 : 0,
+            }}
+            transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+            style={{ position: 'absolute', left: 0, top: 0, zIndex: 11 }}
+            onMouseEnter={() => setChefHover(true)}
+            onMouseLeave={() => setChefHover(false)}
+          >
+            <motion.img
+              src={chefIcon}
+              alt="Meilleur chef d'équipe"
+              whileHover={{ scale: 1.18, y: -3 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 18 }}
+              style={{
+                width: 28,
+                height: 28,
+                objectFit: 'contain',
+                cursor: 'default',
+                filter: darkMode
+                  ? 'drop-shadow(0 2px 8px rgba(0,0,0,0.55)) brightness(1.05)'
+                  : 'drop-shadow(0 2px 6px rgba(0,0,0,0.25))',
+              }}
+            />
+            <ChefCallout
+              text={chefPhrase}
+              darkMode={darkMode}
+              show={chefHover}
+            />
+          </motion.div>
+        )}
+
+        {/* ── Member name labels (expanded, staggered fade) ── */}
+        {members.map((m, i) => (
+          <motion.div
+            key={`lbl-${m.name}`}
+            animate={{ opacity: open ? 1 : 0 }}
+            transition={{ delay: open ? 0.2 + i * 0.03 : 0, duration: 0.15 }}
+            style={{
+              position: 'absolute',
+              left: expandedPos[i].x, top: expandedPos[i].y + SIZE + 2,
+              width: SIZE, textAlign: 'center',
+              fontSize: '8px', fontWeight: 500, color: MUTED,
+              lineHeight: 1.1, pointerEvents: 'none',
+            }}
+          >
+            {m.name.split(' ')[0]}
+          </motion.div>
+        ))}
+      </motion.div>
+
+      {/* ── Team name label (animates: below stack → right of captain) ── */}
+      <motion.div
+        initial={false}
+        animate={{
+          left: open ? cx + SIZE / 2 + 10 : 19,
+          top: open ? SIZE / 2 - 8 : closedH + 8,
+          opacity: open ? 1 : 1,
+        }}
+        transition={{
+          left: { type: 'spring', stiffness: 280, damping: 26 },
+          top: { type: 'spring', stiffness: 280, damping: 26 },
+          opacity: { duration: 0.15, delay: 0.1 },
+        }}
+        style={{
+          position: 'absolute',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        <span style={{ fontSize: '13px', fontWeight: 600, color: TEXT }}>
+          Équipe {(captain?.name || team.captain).split(' ')[0]}
+        </span>
+        <span style={{
+          width: '6px', height: '6px', borderRadius: '50%',
+          background: team.color, display: 'inline-block', flexShrink: 0,
+        }} />
+      </motion.div>
+    </div>
+  );
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -694,6 +1573,50 @@ export default function Leaderboard() {
   const [sales, setSales] = useState([]);
 
   const [chartSales, setChartSales] = useState([]); // For 3-month chart
+
+  // ── TEAMS (fetched from backend) ──────────────────────────────────────────
+  const [teams, setTeams] = useState([]);
+  const [storyline, setStoryline] = useState(null);
+
+  useEffect(() => {
+    const fetchTeams = async () => {
+      try {
+        const data = await apiClient.get('/api/v1/teams');
+        // Normalize API response to internal format
+        const normalized = data.map(t => ({
+          id: t.id,
+          label: t.label,
+          color: t.color,
+          captain: t.captain.name,
+          captainAvatar: t.captain.avatar_url || '',
+          members: t.members.map(m => m.name),
+          memberAvatars: [
+            { name: t.captain.name, avatar: t.captain.avatar_url || '', isCaptain: true },
+            ...t.members.map(m => ({ name: m.name, avatar: m.avatar_url || '', isCaptain: false })),
+          ],
+        }));
+        setTeams(normalized);
+      } catch (err) {
+        console.error('Error fetching teams:', err);
+      }
+    };
+    fetchTeams();
+  }, []);
+
+  // Fetch storyline when range changes (for contextual chef callout)
+  useEffect(() => {
+    if (!range || range === 'all') { setStoryline(null); return; }
+    const fetchStoryline = async () => {
+      try {
+        const data = await apiClient.get(`/api/v1/teams/storyline?period=${range}`);
+        setStoryline(data);
+      } catch (err) {
+        console.warn('Storyline not available:', err);
+        setStoryline(null);
+      }
+    };
+    fetchStoryline();
+  }, [range]);
 
   // ── LOAD CHART DATA (3 months comparison - API Backend) ────────────────────
   useEffect(() => {
@@ -1233,60 +2156,137 @@ export default function Leaderboard() {
   // ── Team stats ──────────────────────────────────────────────────────────────
 
   const teamStats = useMemo(() => {
-
-    if (!rows || rows.length === 0) return [];
+    if (!rows || rows.length === 0 || teams.length === 0) return [];
 
     const byName = new Map(rows.map((r) => [r.name, r]));
 
-    const teams = TEAMS.map((t) => {
+    // Fuzzy lookup: "David Dubois" exact, or "David" prefix match
+    const findRow = (name) => {
+      if (byName.has(name)) return byName.get(name);
+      const lower = name.toLowerCase();
+      for (const [key, val] of byName) {
+        if (key.toLowerCase().startsWith(lower + ' ') || key.toLowerCase() === lower) return val;
+      }
+      return null;
+    };
 
+    const computed = teams.map((t) => {
       const people = [t.captain, ...t.members];
-
       let ventes = 0;
-
       let revenu = 0;
 
       people.forEach((p) => {
-
-        const r = byName.get(p);
-
-        if (r) {
-
-          ventes += r.sales;
-
-          revenu += r.revenu;
-
-        }
-
+        const r = findRow(p);
+        if (r) { ventes += r.sales; revenu += r.revenu; }
       });
 
-      return { ...t, ventes, revenu };
+      // Merge avatars: prefer API avatar_url, fallback to leaderboard row avatar
+      const memberAvatars = t.memberAvatars.map((m) => ({
+        ...m,
+        avatar: m.avatar || findRow(m.name)?.avatar || '',
+      }));
 
+      return { ...t, ventes, revenu, memberAvatars };
     });
 
-    const totalRevenu = teams.reduce((s, t) => s + t.revenu, 0) || 1;
-
-    const bestRevenu = Math.max(...teams.map((t) => t.revenu), 0) || 1;
-
+    const totalRevenu = computed.reduce((s, t) => s + t.revenu, 0) || 1;
+    const bestRevenu = Math.max(...computed.map((t) => t.revenu), 0) || 1;
     const MAX_DOTS = 24;
 
-    return teams
-
+    return computed
       .map((t) => ({
-
         ...t,
-
         share: (t.revenu / totalRevenu) * 100,
-
         dots: Math.max(1, Math.round((t.revenu / bestRevenu) * MAX_DOTS)),
-
       }))
-
-      .sort((a, b) => b.revenu - a.revenu) // classement
-
+      .sort((a, b) => b.ventes - a.ventes)
       .map((t, index) => ({ ...t, rank: index + 1 }));
+  }, [rows, teams]);
 
-  }, [rows]);
+  // ── Chef callout phrase (smart, contextual) ──
+  const chefPhrase = useMemo(() => {
+    if (teamStats.length < 2) return '';
+
+    const team1 = teamStats[0]; // #1 by ventes
+    const team2 = teamStats[1]; // #2
+
+    // Find captain first name
+    const captainName = team1.memberAvatars.find(m => m.isCaptain)?.name || team1.captain;
+    const chefFirstName = captainName.split(' ')[0];
+
+    // Find top individual seller in team #1 — prefer storyline.best_seller, fallback to local computation
+    const byName = new Map(rows.map(r => [r.name, r]));
+    const findRow = (name) => {
+      if (byName.has(name)) return byName.get(name);
+      const lower = name.toLowerCase();
+      for (const [key, val] of byName) {
+        if (key.toLowerCase().startsWith(lower + ' ') || key.toLowerCase() === lower) return val;
+      }
+      return null;
+    };
+
+    let topSeller;
+    if (storyline?.best_seller?.name) {
+      topSeller = { name: storyline.best_seller.name.split(' ')[0], sales: storyline.best_seller.sales || 0 };
+    } else {
+      const team1People = [team1.captain, ...team1.members];
+      topSeller = { name: chefFirstName, sales: 0 };
+      team1People.forEach(p => {
+        const r = findRow(p);
+        if (r && r.sales > topSeller.sales) {
+          topSeller = { name: p.split(' ')[0], sales: r.sales };
+        }
+      });
+    }
+
+    const captainRow = findRow(team1.captain);
+    const chefIsTopSeller = captainRow && captainRow.sales >= topSeller.sales;
+
+    // Date calculations
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const isPastMonth = range !== 'all' && range < currentMonth;
+    const isAllTime = range === 'all';
+
+    // For "all" period, use a generic dominant phrase
+    if (isAllTime) {
+      const c = chefFirstName;
+      const pool = [
+        `${c} impose le rythme, l'équipe répond présent.`,
+        `${c} donne le tempo : son équipe suit et performe.`,
+        `${c} sécurise la tête : rester #1, c'est tous les jours.`,
+        `Sur la durée, ${c} a prouvé que la constance fait les grands leaders.`,
+        `${c} et son équipe : une machine qui tourne, mois après mois.`,
+        `All-time #1 : ${c} a écrit l'histoire du classement.`,
+      ];
+      const h = now.getHours();
+      const s = now.getDate() * 31 + h * 7 + (team1.ventes || 0) * 17;
+      return pool[Math.abs(s) % pool.length];
+    }
+
+    // Parse the selected period for day calculations
+    const [y, m] = range.split('-').map(Number);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const todayDay = isPastMonth ? daysInMonth : now.getDate();
+    const daysLeft = daysInMonth - todayDay;
+
+    const gap = team1.ventes - team2.ventes;
+
+    return getChefPhrase({
+      chefFirstName,
+      topSellerFirstName: topSeller.name,
+      chefIsTopSeller,
+      todayDay,
+      daysInMonth,
+      daysLeft,
+      gap,
+      isPastMonth,
+      storyline,
+      teamLabel: team1.label,
+      team1Ventes: team1.ventes,
+      team2Ventes: team2.ventes,
+    });
+  }, [teamStats, rows, range, storyline]);
 
   // ── RENDER ──────────────────────────────────────────────────────────────────
 
@@ -1365,22 +2365,46 @@ export default function Leaderboard() {
 
   };
 
+  // Progress percentage for objective
+  const progressPct = Math.min((totals.ventes / 45) * 100, 100);
+  const CARD = {
+    bg: darkMode ? '#1e1f28' : '#ffffff',
+    border: darkMode ? '#2a2b36' : '#e2e6ef',
+    surface: darkMode ? '#13141b' : '#edf0f8',
+    text: darkMode ? '#eef0f6' : '#1e2330',
+    muted: darkMode ? '#5e6273' : '#9ca3af',
+    subtle: darkMode ? '#252636' : '#f4f6fb',
+    secondary: darkMode ? '#8b8fa0' : '#6b7280',
+    accent: darkMode ? '#7c8adb' : '#5b6abf',
+    shadow: darkMode
+      ? '0 1px 3px rgba(0,0,0,0.2), 0 4px 16px rgba(0,0,0,0.15)'
+      : '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03)',
+  };
+
   return (
 
-    <div style={{ 
-      padding: 0, 
-      fontFamily: "sans-serif",
-      background: darkMode ? "#1a1a1e" : "#f5f5f7",
+    <div style={{
+      padding: 0,
+      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+      background: CARD.surface,
       minHeight: "100vh",
-      paddingTop: '16px'
+      paddingTop: '80px',
+      color: CARD.text,
     }}>
       <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />
 
       {/* ═══════════════════════════════════════════════════════════════════
-          DASHBOARD BOARD-FRAME
+          OUTER WRAPPER — soft card-behind-card
       ═══════════════════════════════════════════════════════════════════ */}
-      <div className="board-frame">
-        {/* Dashboard Controls - Inside the board */}
+      <div style={{
+        maxWidth: 1400,
+        margin: '32px auto 64px',
+        padding: '18px',
+        background: darkMode ? 'rgba(0,0,0,0.10)' : 'rgba(190,197,215,0.20)',
+        borderRadius: '32px',
+      }}>
+      <div className="board-frame" style={{ margin: 0 }}>
+        {/* ── Top bar ── */}
         <div style={{
           position: 'absolute',
           top: 'var(--space-xl)',
@@ -1391,38 +2415,51 @@ export default function Leaderboard() {
           alignItems: 'center',
           zIndex: 10
         }}>
-          {/* Left: Tableaux + Charts + Month Select */}
-          <div style={{ 
-            display: 'flex', 
-            gap: 'var(--space-md)',
-            alignItems: 'center' 
-          }}>
-            <button 
-              className={`toggle-btn ${view === "table" ? "active" : ""}`} 
-              onClick={() => setView("table")}
-            >
-              Tableaux
-            </button>
-            <button 
-              className={`toggle-btn ${view === "charts" ? "active" : ""}`} 
-              onClick={() => setView("charts")}
-            >
-              Charts
-            </button>
-            <select 
-              value={range} 
-              onChange={(e) => setRange(e.target.value)} 
+          {/* Left controls */}
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            {/* Pill toggle */}
+            <div style={{
+              display: 'inline-flex',
+              background: darkMode ? '#252636' : '#eef1f6',
+              borderRadius: '10px',
+              padding: '3px',
+              border: `1px solid ${darkMode ? '#2a2b36' : '#dfe3ed'}`,
+            }}>
+              {[{ key: 'table', label: 'Tableaux' }, { key: 'charts', label: 'Charts' }].map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setView(t.key)}
+                  style={{
+                    padding: '6px 16px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: view === t.key ? (darkMode ? '#1e1f28' : '#ffffff') : 'transparent',
+                    color: view === t.key ? CARD.text : CARD.muted,
+                    fontSize: '13px',
+                    fontWeight: view === t.key ? 600 : 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    boxShadow: view === t.key ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                  }}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <select
+              value={range}
+              onChange={(e) => setRange(e.target.value)}
               className="range-select"
-              style={{ 
-                padding: "8px 14px",
-                paddingRight: "32px",
-                borderRadius: "12px",
-                border: `1px solid ${darkMode ? "#333338" : "#e5e5e5"}`, 
-                background: darkMode ? "#2a2b2e" : "#ffffff", 
-                color: darkMode ? "#f5f5f7" : "#1d1d1f",
+              style={{
+                padding: '6px 12px',
+                paddingRight: '28px',
+                borderRadius: '8px',
+                border: `1px solid ${CARD.border}`,
+                background: CARD.bg,
+                color: CARD.text,
                 fontWeight: 500,
-                fontSize: "14px",
-                cursor: "pointer"
+                fontSize: '13px',
+                cursor: 'pointer',
               }}
             >
               {(() => {
@@ -1432,23 +2469,23 @@ export default function Leaderboard() {
                 const months = [];
                 const current = new Date(startDate);
                 const currentYearMonth = today.getFullYear() * 100 + today.getMonth();
-                
+
                 while (true) {
                   const year = current.getFullYear();
                   const month = current.getMonth();
                   const iterYearMonth = year * 100 + month;
                   if (iterYearMonth > currentYearMonth) break;
-                  
-                  const monthName = new Intl.DateTimeFormat('fr-FR', { 
-                    month: 'long', 
-                    year: 'numeric' 
+
+                  const monthName = new Intl.DateTimeFormat('fr-FR', {
+                    month: 'long',
+                    year: 'numeric'
                   }).format(current);
-                  
+
                   const value = `${year}-${String(month + 1).padStart(2, '0')}`;
                   months.unshift({ value, label: monthName.charAt(0).toUpperCase() + monthName.slice(1) });
                   current.setMonth(current.getMonth() + 1);
                 }
-                
+
                 months.forEach(m => {
                   options.push(<option key={m.value} value={m.value}>{m.label}</option>);
                 });
@@ -1458,292 +2495,357 @@ export default function Leaderboard() {
             </select>
           </div>
 
-          {/* Right: NDA + Déclarer une vente */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* NDA Button */}
-            <button 
-              className="export-btn nda-btn-primary"
+          {/* Right: Actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button
               onClick={() => navigate("/contracts/new")}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                fontFamily: "'Inter', system-ui, sans-serif",
+                fontSize: '13px', fontWeight: 700, letterSpacing: '-0.01em',
+                color: darkMode ? '#9ca3b8' : '#464b65',
+                padding: '8px 18px',
+                background: darkMode ? '#2a2b36' : '#dfdfe5',
+                borderRadius: '10px',
+                border: darkMode ? '1px solid #353647' : '1px solid #c3c3c3',
+                borderBottom: darkMode ? '1px solid #252636' : '1px solid #a5a5a5',
+                boxShadow: darkMode
+                  ? 'inset 0 2px 0 rgba(255,255,255,0.12), inset 0 -3px 4px rgba(0,0,0,0.3), 0 3px 6px rgba(0,0,0,0.25)'
+                  : 'inset 0 2px 0 rgba(255,255,255,0.9), inset 0 -3px 4px #d0d1d8, 0 3px 6px rgba(0,0,0,0.1)',
+                cursor: 'pointer',
+                userSelect: 'none',
+              }}
             >
-              <img 
-                src={ndaIcon} 
-                alt="" 
-                style={{ 
-                  width: '50px',
-                  height: '50px', 
-                  objectFit: 'contain',
-                  flexShrink: 0
-                }} 
-              />
-              Générer le NDA
+              NDA
             </button>
-
-            {/* Déclarer une vente */}
-            <button 
-              className="export-btn declare-btn-secondary"
+            <button
               onClick={() => setShowSaleModal(true)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                fontFamily: "'Inter', system-ui, sans-serif",
+                fontSize: '13px', fontWeight: 700, letterSpacing: '-0.01em',
+                color: darkMode ? '#9ca3b8' : '#464b65',
+                padding: '8px 18px',
+                background: darkMode ? '#2a2b36' : '#dfdfe5',
+                borderRadius: '10px',
+                border: darkMode ? '1px solid #353647' : '1px solid #c3c3c3',
+                borderBottom: darkMode ? '1px solid #252636' : '1px solid #a5a5a5',
+                boxShadow: darkMode
+                  ? 'inset 0 2px 0 rgba(255,255,255,0.12), inset 0 -3px 4px rgba(0,0,0,0.3), 0 3px 6px rgba(0,0,0,0.25)'
+                  : 'inset 0 2px 0 rgba(255,255,255,0.9), inset 0 -3px 4px #d0d1d8, 0 3px 6px rgba(0,0,0,0.1)',
+                cursor: 'pointer',
+                userSelect: 'none',
+              }}
             >
-              <img 
-                src={declareIcon} 
-                alt="" 
-                style={{ 
-                  width: '50px',
-                  height: '50px', 
-                  objectFit: 'contain',
-                  flexShrink: 0
-                }} 
-              />
               Déclarer une vente
             </button>
           </div>
         </div>
 
-        {/* Title bar */}
-        <div className="title-bar">
-
-          <img 
-
-            src={darkMode ? myLogoDark : myLogo} 
-
-            className="title-logo" 
-
-            alt="logo" 
-
-          />
-
-          <h1 className="leaderboard-title">Suivi des ventes</h1>
-
+        {/* ── Hero: Logo + Title ── */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '10px',
+          marginBottom: '24px',
+        }}>
+          <img src={darkMode ? myLogoDark : myLogo} className="title-logo" alt="logo" />
+          <h1 className="leaderboard-title" style={{
+            letterSpacing: '-0.5px',
+            margin: 0,
+            fontSize: 'clamp(1.1rem, 2.8vw, 1.5rem)',
+            fontWeight: 700,
+            color: CARD.text,
+          }}>Suivi des ventes</h1>
         </div>
 
-        {/* Pull-to-refresh area: SEULEMENT TOTAUX */}
-
-        <div 
-
-          className="pull-refresh-area"
-
-          onMouseDown={handlePullStart}
-
-          onMouseMove={handlePullMove}
-
-          onMouseUp={handlePullEnd}
-
-          onMouseLeave={handlePullEnd}
-
-          onTouchStart={handlePullStart}
-
-          onTouchMove={handlePullMove}
-
-          onTouchEnd={handlePullEnd}
-
-          style={{
-
-            transform: `translateY(${pullDistance}px)`,
-
-            transition: isPulling ? 'none' : 'transform 0.3s ease-out',
-
-            cursor: isPulling ? 'grabbing' : 'grab',
-
-            userSelect: 'none',
-
-            position: 'relative',
-
-            paddingTop: pullDistance > 0 ? '30px' : '0', // Espace pour l'indicateur
-
-          }}
-
-        >
-
-          {/* Refresh indicator - PLUS PETIT */}
-
-          {pullDistance > 0 && (
-
-            <div style={{
-
-              position: 'absolute',
-
-              top: 0,
-
-              left: '50%',
-
-              transform: 'translateX(-50%)',
-
-              fontSize: 20,
-
-              opacity: Math.min(pullDistance / PULL_THRESHOLD, 1),
-
-              transition: 'opacity 0.2s'
-
+        {/* ── Objective progress (full width, thin) ── */}
+        <div style={{
+          maxWidth: '560px',
+          margin: '0 auto 32px',
+          padding: '0 20px',
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'baseline',
+            marginBottom: '8px',
+          }}>
+            <span style={{
+              fontSize: '11px',
+              fontWeight: 600,
+              color: CARD.muted,
+              textTransform: 'uppercase',
+              letterSpacing: '0.8px',
             }}>
-
-              {pullDistance >= PULL_THRESHOLD ? '🔄' : '⬇️'}
-
+              Objectif mensuel
+            </span>
+            <span style={{
+              fontSize: '13px',
+              fontWeight: 700,
+              color: CARD.accent,
+            }}>
+              {totals.ventes} / 45
+            </span>
+          </div>
+          <div style={{
+            width: '100%',
+            height: '5px',
+            background: darkMode ? '#252636' : '#e2e6ef',
+            borderRadius: '3px',
+            position: 'relative',
+            overflow: 'visible',
+          }}>
+            <div style={{
+              width: `${progressPct}%`,
+              height: '100%',
+              background: darkMode
+                ? 'linear-gradient(90deg, #5b6abf, #7c8adb)'
+                : 'linear-gradient(90deg, #5b6abf, #7c8adb)',
+              borderRadius: '3px',
+              transition: 'width 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+              minWidth: '4px',
+            }} />
+            {/* Ship + Flame */}
+            <div style={{
+              position: 'absolute',
+              left: `${progressPct}%`,
+              top: '50%',
+              transform: 'translate(-18px, -50%)',
+              display: 'flex',
+              alignItems: 'center',
+              zIndex: 3,
+              transition: 'left 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 1s ease',
+              opacity: (totals.ventes / 45) >= 0.9 ? Math.max(0, 1 - ((totals.ventes / 45) - 0.9) / 0.1) : 1,
+            }}>
+              <img src={flameIcon} alt="" style={{
+                width: '20px', height: '20px', objectFit: 'contain', marginRight: '-8px',
+                filter: darkMode
+                  ? 'brightness(0) saturate(100%) invert(60%) sepia(30%) saturate(800%) hue-rotate(200deg) brightness(120%)'
+                  : 'brightness(0) saturate(100%) invert(30%) sepia(50%) saturate(1200%) hue-rotate(210deg) brightness(95%)',
+              }} />
+              <img src={shipIcon} alt="" style={{
+                width: '30px', height: '30px', objectFit: 'contain', marginLeft: '-4px',
+                filter: darkMode ? 'brightness(0) invert(1)' : 'none',
+              }} />
             </div>
+          </div>
+        </div>
 
+        {/* ── KPI Cards Row ── */}
+        <div
+          className="pull-refresh-area"
+          onMouseDown={handlePullStart}
+          onMouseMove={handlePullMove}
+          onMouseUp={handlePullEnd}
+          onMouseLeave={handlePullEnd}
+          onTouchStart={handlePullStart}
+          onTouchMove={handlePullMove}
+          onTouchEnd={handlePullEnd}
+          style={{
+            transform: `translateY(${pullDistance}px)`,
+            transition: isPulling ? 'none' : 'transform 0.3s ease-out',
+            cursor: isPulling ? 'grabbing' : 'grab',
+            userSelect: 'none',
+            position: 'relative',
+            paddingTop: pullDistance > 0 ? '30px' : '0',
+          }}
+        >
+          {pullDistance > 0 && (
+            <div style={{
+              position: 'absolute', top: 0, left: '50%',
+              transform: 'translateX(-50%)', fontSize: 20,
+              opacity: Math.min(pullDistance / PULL_THRESHOLD, 1),
+            }}>
+              {pullDistance >= PULL_THRESHOLD ? '🔄' : '⬇️'}
+            </div>
           )}
 
-          <div className="totals-block">
-
-            <div className="totals-row">
-
-              <div className="money-float-container">
-
-                <span className="totals-label">Total Cash</span><br />
-
-                <span className="totals-value cash dot-boost">
-
-                  {animatedCash.toLocaleString("fr-FR")} €
-
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '14px',
+            maxWidth: '900px',
+            margin: '0 auto 36px',
+            padding: '0 20px',
+          }}>
+            {[
+              { label: 'Total Cash', value: totals.cash, digits: Math.max(5, String(Math.floor(totals.cash || 0)).length), suffix: '€' },
+              { label: 'Total Ventes', value: totals.ventes, digits: 3 },
+              { label: 'Total Revenu', value: totals.revenu, digits: Math.max(5, String(Math.floor(totals.revenu || 0)).length), suffix: '€' },
+            ].map((kpi) => (
+              <div key={kpi.label} style={{
+                background: darkMode ? '#16171f' : CARD.bg,
+                border: `1px solid ${darkMode ? '#2a2b36' : CARD.border}`,
+                borderTop: darkMode ? '1px solid rgba(124, 138, 219, 0.25)' : `1px solid ${CARD.border}`,
+                borderBottom: darkMode ? '1px solid #0c0d12' : `1px solid ${CARD.border}`,
+                borderRadius: '14px',
+                padding: '18px 14px 16px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: darkMode
+                  ? '0 -1px 12px rgba(124, 138, 219, 0.08), 0 4px 10px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3)'
+                  : CARD.shadow,
+              }}>
+                <span style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: CARD.muted,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.8px',
+                }}>
+                  {kpi.label}
                 </span>
-
-                {cashComplete && <span className="money-emoji">💸</span>}
-
+                <AirportKPI key={`${kpi.label}-${range}`} label="" value={kpi.value} minDigits={kpi.digits} darkMode={darkMode} suffix={kpi.suffix} />
               </div>
-
-              
-              
-              <div className="money-float-container">
-
-                <span className="totals-label">Total Revenu</span><br />
-
-                <span className="totals-value revenu dot-boost">
-
-                  {animatedRevenu.toLocaleString("fr-FR")} €
-
-                </span>
-
-                {revenuComplete && <span className="money-emoji">💰</span>}
-
-              </div>
-
-            </div>
-
-            
-            
-            <div className="money-float-container" style={{ display: 'inline-block' }}>
-
-              <div className="totals-sales dot-boost">Total ventes: {animatedVentes}</div>
-
-              {ventesComplete && <span className="money-emoji">🎉</span>}
-
-            </div>
-
+            ))}
           </div>
-
         </div>
 
-        {loading && <p>Loading…</p>}
+        {loading && <p style={{ textAlign: 'center', color: CARD.muted }}>Loading...</p>}
+        {!loading && rows.length === 0 && <p style={{ textAlign: 'center', color: CARD.muted }}>Aucune vente ce mois-ci pour l'instant.</p>}
 
-        {!loading && rows.length === 0 && <p>Aucune vente ce mois-ci pour l'instant.</p>}
+        {view === "table" && !loading && rows.length > 0 && (() => {
 
-        {view === "table" && !loading && rows.length > 0 && (
+          const pillBtn = (label) => ({
+            display: 'inline-block',
+            fontFamily: "'Inter', system-ui, sans-serif",
+            fontSize: '13px',
+            fontWeight: 700,
+            letterSpacing: '-0.01em',
+            color: darkMode ? '#9ca3b8' : '#464b65',
+            padding: '8px 18px',
+            background: darkMode ? '#2a2b36' : '#dfdfe5',
+            borderRadius: '14px',
+            border: darkMode ? '1px solid #353647' : '1px solid #c3c3c3',
+            borderBottom: darkMode ? '1px solid #252636' : '1px solid #a5a5a5',
+            boxShadow: darkMode
+              ? 'inset 0 2px 0 rgba(255,255,255,0.12), inset 0 -3px 4px rgba(0,0,0,0.3), 0 3px 6px rgba(0,0,0,0.25)'
+              : 'inset 0 2px 0 rgba(255,255,255,0.9), inset 0 -3px 4px #d0d1d8, 0 3px 6px rgba(0,0,0,0.1)',
+            cursor: 'default',
+            userSelect: 'none',
+          });
 
-          <div className="leaderboard-wrapper">
-
-            <table className="leaderboard">
-
-              <thead><tr><th>#</th><th>Name</th><th align="center">Sales</th><th align="right">Revenu €</th></tr></thead>
-
-              <tbody>
-
-                {rows.map((r, i) => (
-
-                  <tr 
-
-                    key={r.name}
-
-                    onClick={() => navigate(`/employee/${encodeURIComponent(r.name)}`, { state: { avatar: r.avatar, ventes: r.sales, cash: r.cash, revenu: r.revenu }})}
-
-                  >
-
-                    <td>
-
-                      {i === 0 ? (
-
-                        <img src={firstPlace} alt="1st" style={{ width: 28, height: 28 }} />
-
-                      ) : i === 1 ? (
-
-                        <img src={secondPlace} alt="2nd" style={{ width: 28, height: 28 }} />
-
-                      ) : i === 2 ? (
-
-                        <img src={thirdPlace} alt="3rd" style={{ width: 28, height: 28 }} />
-
-                      ) : (
-
-                        i + 1
-
-                      )}
-
-                    </td>
-
-                    <td className="name-cell">
-
-                      <div className="avatar-wrap">
-
-                        <img src={r.avatar} className="avatar" alt="" />
-
-                        {allTimeTopSeller && r.name === allTimeTopSeller && (
-
-                          <img
-
-                            src={crownIcon}
-
-                            className="crown-icon"
-
-                            alt="Top ventes all-time"
-
-                            title="Top ventes all-time"
-
-                          />
-
-                        )}
-
-                      </div>
-
-                      <span>{r.name}</span>
-
-                      {calculateTrophies[r.name] > 0 && (
-
-                        <div className="trophy-container">
-
-                          <img 
-
-                            src={trophyIcon} 
-
-                            alt="Trophy" 
-
-                            className="trophy-icon"
-
-                          />
-
-                          {calculateTrophies[r.name] > 1 && (
-
-                            <span className="trophy-count">×{calculateTrophies[r.name]}</span>
-
+          return (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '32px',
+            maxWidth: '1400px',
+            margin: '0 auto',
+            padding: '0 20px',
+            alignItems: 'start',
+          }}>
+            {/* ── Left column ── */}
+            <div>
+              <div style={{ marginBottom: '12px' }}>
+                <div style={pillBtn()}>Classement Individuel</div>
+              </div>
+              <div className="leaderboard-wrapper" style={{ margin: 0 }}>
+                <table className="leaderboard" style={{ maxWidth: '100%' }}>
+                  <thead><tr>
+                    <th style={{ width: '36px', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 600 }}>#</th>
+                    <th style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 600 }}>Nom</th>
+                    <th align="center" style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 600 }}>Ventes</th>
+                    <th align="right" style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 600 }}>Revenu</th>
+                  </tr></thead>
+                  <tbody>
+                    {rows.map((r, i) => (
+                      <tr
+                        key={r.name}
+                        style={{ cursor: 'default' }}
+                      >
+                        <td>
+                          {i === 0 ? (
+                            <img src={firstPlace} alt="1st" style={{ width: 28, height: 28 }} />
+                          ) : i === 1 ? (
+                            <img src={secondPlace} alt="2nd" style={{ width: 28, height: 28 }} />
+                          ) : i === 2 ? (
+                            <img src={thirdPlace} alt="3rd" style={{ width: 28, height: 28 }} />
+                          ) : (
+                            <span style={{ color: CARD.muted, fontWeight: 500, fontSize: '12px' }}>{i + 1}</span>
                           )}
+                        </td>
+                        <td className="name-cell">
+                          <div className="avatar-wrap">
+                            <img src={r.avatar} className="avatar" alt="" />
+                            {allTimeTopSeller && r.name === allTimeTopSeller && (
+                              <img src={crownIcon} className="crown-icon" alt="Top ventes all-time" title="Top ventes all-time" />
+                            )}
+                          </div>
+                          <span style={{ fontWeight: 500 }}>{r.name}</span>
+                          {calculateTrophies[r.name] > 0 && (
+                            <div className="trophy-container">
+                              <img src={trophyIcon} alt="Trophy" className="trophy-icon" />
+                              {calculateTrophies[r.name] > 1 && (
+                                <span className="trophy-count">×{calculateTrophies[r.name]}</span>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td align="center" style={{
+                          fontWeight: 700,
+                          fontSize: '15px',
+                          color: CARD.text,
+                        }}>{r.sales}</td>
+                        <td align="right" style={{
+                          fontWeight: 500,
+                          fontVariantNumeric: 'tabular-nums',
+                          fontSize: '13px',
+                          color: CARD.secondary,
+                        }}>{r.revenu.toLocaleString("fr-FR")} €</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
-                        </div>
-
-                      )}
-
-                    </td>
-
-                    <td align="center">{r.sales}</td>
-
-                    <td align="right">{r.revenu.toLocaleString("fr-FR")} €</td>
-
-                  </tr>
-
-                ))}
-
-              </tbody>
-
-            </table>
-
+            {/* ── Right column: Team ranking (table-style rows + animation) ── */}
+            {teamStats.length > 0 && (
+              <div>
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={pillBtn()}>Classement Équipes</div>
+                </div>
+                <div className="leaderboard-wrapper" style={{ margin: 0 }}>
+                  <table className="leaderboard" style={{ maxWidth: '100%' }}>
+                    <thead><tr>
+                      <th style={{ width: '60%', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 600, textAlign: 'left' }}><span style={{ marginLeft: '54px' }}>Équipe</span></th>
+                      <th style={{ width: '18%', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 600, textAlign: 'center' }}>Ventes</th>
+                      <th style={{ width: '22%', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 600, textAlign: 'center' }}>Revenu</th>
+                    </tr></thead>
+                    <tbody>
+                      {teamStats.map((team, i) => (
+                        <tr key={team.id} style={{ cursor: 'default' }}>
+                          <td style={{ paddingLeft: '36px' }}>
+                            <TeamCard key={team.id} team={team} darkMode={darkMode} isTopTeam={i === 0} chefPhrase={i === 0 ? chefPhrase : ''} />
+                          </td>
+                          <td style={{
+                            fontWeight: 700,
+                            fontSize: '15px',
+                            color: CARD.text,
+                            textAlign: 'center',
+                          }}>{team.ventes}</td>
+                          <td style={{
+                            fontWeight: 500,
+                            fontVariantNumeric: 'tabular-nums',
+                            fontSize: '13px',
+                            color: CARD.secondary,
+                            textAlign: 'center',
+                          }}>{team.revenu.toLocaleString('fr-FR')} €</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
-
-        )}
+          );
+        })()}
 
         {view === "charts" && !loading && (
 
@@ -2006,6 +3108,7 @@ export default function Leaderboard() {
         )}
 
       </div>
+      </div>{/* /outer wrapper */}
 
       {/* ═══════════════════════════════════════════════════════════════════
           SALE DECLARATION MODAL
@@ -2340,6 +3443,13 @@ export default function Leaderboard() {
 
       {/* Modal animations */}
       <style>{`
+        @font-face {
+          font-family: 'Airport';
+          src: url('${airportFont}') format('opentype');
+          font-weight: normal;
+          font-style: normal;
+          font-display: swap;
+        }
         @keyframes modalBackdropIn {
           from { opacity: 0; }
           to { opacity: 1; }
