@@ -68,7 +68,7 @@ const DEPARTMENTS = [
   { key: "finance", label: "Finance", iconSrc: iconFinance, expectedEods: 2 },
 ];
 
-const DEPT_MAP = { admin: "tech", finance_director: "finance", finance_team: "finance" };
+const DEPT_MAP = { admin: "tech", hr: "rh", finance_director: "finance", finance_team: "finance" };
 
 // Total expected EOD collaborators across all departments
 const TOTAL_EXPECTED_COLLABS = DEPARTMENTS.reduce((s, d) => s + d.expectedEods, 0);
