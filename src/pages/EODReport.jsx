@@ -529,7 +529,7 @@ export default function EODReport() {
               name: user?.name || `${user?.first_name || ""} ${user?.last_name || ""}`.trim(),
               email: user?.email,
               role: user?.role,
-              department: ({ admin: "tech", hr: "rh", finance_director: "finance", finance_team: "finance" }[user?.department || user?.role]) || user?.department || user?.role,
+              department: user?.department || user?.role,
             },
             eod: {
               report_date: reportDate,
