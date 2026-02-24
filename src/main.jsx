@@ -15,6 +15,7 @@ import MonitoringPerf   from "./pages/MonitoringPerf.jsx";
 import EODReport        from "./pages/EODReport.jsx";
 import EODDashboard     from "./pages/EODDashboard.jsx";
 import Login            from "./pages/Login.jsx";
+import ChangePassword   from "./pages/ChangePassword.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import MouseDot from "./components/MouseDot.jsx";
@@ -34,6 +35,7 @@ function App() {
         <Route path="/monitoring-perf" element={<MonitoringPerf />} />
         <Route path="/eod-report" element={<EODReport />} />
         <Route path="/eod-dashboard" element={<EODDashboard />} />
+        <Route path="/change-password" element={<ChangePassword />} />
 
         {/* Protected routes */}
         <Route

@@ -96,6 +96,18 @@ export default function EODReport() {
       : '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03)',
   };
 
+  // Sync dark-mode class on body & html (needed for CSS rules like body.dark-mode .board-frame)
+  useEffect(() => {
+    localStorage.setItem("darkMode", darkMode);
+    if (darkMode) {
+      document.body.classList.add("dark-mode");
+      document.documentElement.classList.add("dark-mode");
+    } else {
+      document.body.classList.remove("dark-mode");
+      document.documentElement.classList.remove("dark-mode");
+    }
+  }, [darkMode]);
+
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
   const [hasAccess, setHasAccess] = useState(false);
@@ -104,6 +116,9 @@ export default function EODReport() {
   // Form state
   const [step, setStep] = useState(0); // 0: tasks, 1: questions
   const [tasks, setTasks] = useState([]);
+  const [removingTaskId, setRemovingTaskId] = useState(null);
+  const [newTaskName, setNewTaskName] = useState("");
+  const [newSubtasks, setNewSubtasks] = useState([{ name: "", hours: "" }]);
   const [todayReport, setTodayReport] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -204,7 +219,7 @@ export default function EODReport() {
         clearInterval(typingInterval);
         setQuestionTypingDone(true);
       }
-    }, 40);
+    }, 18);
 
     return () => clearInterval(typingInterval);
   }, [step, questionIndex, allQuestionsDone]);
@@ -228,16 +243,92 @@ export default function EODReport() {
     }
   };
 
-  const addMainTask = () => {
+  const addMainTask = (name = "") => {
     if (tasks.length >= LIMITS.MAX_TASKS) return;
     setTasks([
       ...tasks,
       {
         _id: Date.now(),
-        task_name: "",
+        task_name: name,
         subtasks: [{ _id: Date.now() + 1, task_name: "", hours_spent: 0 }],
       },
     ]);
+  };
+
+  const updateNewSubtask = (index, field, value) => {
+    setNewSubtasks(prev => {
+      const updated = prev.map((s, i) => i === index ? { ...s, [field]: value } : s);
+      // If last subtask now has content, add a new empty row
+      const last = updated[updated.length - 1];
+      if (last.name.trim() && updated.length < LIMITS.MAX_SUBTASKS) {
+        updated.push({ name: "", hours: "" });
+      }
+      return updated;
+    });
+  };
+
+  const removeNewSubtask = (index) => {
+    setNewSubtasks(prev => {
+      if (prev.length <= 1 || index === 0) return prev; // never remove the first
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  // Save current composer content to tasks array. Returns true if saved.
+  const saveComposerToTasks = () => {
+    const trimmed = newTaskName.trim();
+    if (!trimmed || tasks.length >= LIMITS.MAX_TASKS) return false;
+    const first = newSubtasks[0];
+    if (!first || !first.name.trim()) return false;
+    const firstHours = parseFloat(first.hours);
+    if (!firstHours || firstHours <= 0) return false;
+    const subtasks = newSubtasks
+      .filter(s => s.name.trim())
+      .map((s, i) => ({
+        _id: Date.now() + i + 1,
+        task_name: s.name.trim(),
+        hours_spent: Math.min(Math.max(parseFloat(s.hours) || 0, 0), 24),
+      }));
+    setTasks(prev => [...prev, { _id: Date.now(), task_name: trimmed, subtasks }]);
+    setNewTaskName("");
+    setNewSubtasks([{ name: "", hours: "" }]);
+    return true;
+  };
+
+  // "Ajouter une tâche" pill clicked — save current task, composer resets for next
+  const handleStartNewTask = () => {
+    saveComposerToTasks();
+  };
+
+  // Arrow on compact card — edit that task (load into composer)
+  const editTask = (taskId) => {
+    // Save current composer if it has valid content
+    if (newTaskName.trim() && newSubtasks[0]?.name?.trim() && parseFloat(newSubtasks[0]?.hours) > 0) {
+      saveComposerToTasks();
+    }
+    const task = tasks.find(t => t._id === taskId);
+    if (!task) return;
+    setNewTaskName(task.task_name);
+    setNewSubtasks(
+      task.subtasks.length > 0
+        ? task.subtasks.map(s => ({ name: s.task_name, hours: String(s.hours_spent) }))
+        : [{ name: "", hours: "" }]
+    );
+    setTasks(prev => prev.filter(t => t._id !== taskId));
+  };
+
+  // Delete a compact card with exit animation
+  const deleteTask = (taskId) => {
+    setRemovingTaskId(taskId);
+    setTimeout(() => {
+      setTasks(prev => prev.filter(t => t._id !== taskId));
+      setRemovingTaskId(null);
+    }, 350);
+  };
+
+  // Arrow button in composer — save and reset
+  const handleAddTaskFromInput = () => {
+    saveComposerToTasks();
   };
 
   const updateMainTask = (index, field, value) => {
@@ -290,25 +381,41 @@ export default function EODReport() {
 
   const handleNext = () => {
     if (step === 0) {
-      if (tasks.length === 0) {
-        alert("Veuillez ajouter au moins une tâche.");
-        return;
+      // Auto-save composer if it has valid content
+      if (newTaskName.trim() && newSubtasks[0]?.name?.trim() && parseFloat(newSubtasks[0]?.hours) > 0) {
+        saveComposerToTasks();
       }
-      const invalidTasks = tasks.filter(
-        (t) => !t.task_name.trim() || !sanitizeText(t.task_name.trim()) || !t.subtasks || t.subtasks.length === 0 || !t.subtasks.some((st) => st.task_name.trim() && sanitizeText(st.task_name.trim()))
-      );
-      if (invalidTasks.length > 0) {
-        alert("Chaque tâche doit avoir un nom valide et au moins une sous-tâche.");
-        return;
-      }
-      const totalHours = calculateTotalHours();
-      if (totalHours > 24) {
-        alert("Le total des heures ne peut pas dépasser 24h par jour.");
-        return;
-      }
+      // Use callback to check tasks after state update
+      setTimeout(() => {}, 0);
     }
 
-    setStep(step + 1);
+    // Validate (tasks may have just been updated by saveComposerToTasks)
+    setTasks(prev => {
+      if (step === 0) {
+        if (prev.length === 0) {
+          alert("Veuillez ajouter au moins une tâche.");
+          return prev;
+        }
+        const invalidTasks = prev.filter(
+          (t) => !t.task_name.trim() || !sanitizeText(t.task_name.trim()) || !t.subtasks || t.subtasks.length === 0 || !t.subtasks.some((st) => st.task_name.trim() && sanitizeText(st.task_name.trim()))
+        );
+        if (invalidTasks.length > 0) {
+          alert("Chaque tâche doit avoir un nom valide et au moins une sous-tâche.");
+          return prev;
+        }
+        const totalHours = prev.reduce((total, task) => {
+          return total + (task.subtasks || []).reduce((sub, st) => sub + (parseFloat(st.hours_spent) || 0), 0);
+        }, 0);
+        if (totalHours > 24) {
+          alert("Le total des heures ne peut pas dépasser 24h par jour.");
+          return prev;
+        }
+        setStep(1);
+      } else {
+        setStep(s => s + 1);
+      }
+      return prev;
+    });
   };
 
   const handleSendAnswer = useCallback(async () => {
@@ -481,7 +588,18 @@ export default function EODReport() {
         background: darkMode ? 'rgba(0,0,0,0.10)' : 'rgba(190,197,215,0.20)',
         borderRadius: '32px',
       }}>
-      <div className="board-frame" style={{ margin: 0, paddingTop: "24px" }}>
+      <style>{`
+        #eod-board-frame.board-frame {
+          background: linear-gradient(180deg, rgba(91,106,191,0.20) 0%, #ffffff 80%) !important;
+        }
+        body.dark-mode #eod-board-frame.board-frame {
+          background: linear-gradient(180deg, rgba(124,138,219,0.25) 0%, #1e1f28 80%) !important;
+        }
+      `}</style>
+      <div id="eod-board-frame" className="board-frame" style={{
+        margin: 0,
+        paddingTop: "24px",
+      }}>
         <div
           style={{
             maxWidth: "1200px",
@@ -509,9 +627,9 @@ export default function EODReport() {
             </p>
           </div>
 
-          {/* Progress indicator */}
+          {/* Progress indicator (hidden, space preserved) */}
           {!todayReport && (
-          <div style={{ marginBottom: "12px" }}>
+          <div style={{ marginBottom: "12px", visibility: "hidden" }}>
             <div style={{ display: "flex", justifyContent: "center", gap: "12px" }}>
               {[0, 1].map((s) => (
                 <div
@@ -546,6 +664,38 @@ export default function EODReport() {
                   transform: translateY(0) scale(1);
                 }
               }
+              @keyframes compactIn {
+                from {
+                  opacity: 0;
+                  transform: translateY(8px);
+                  max-height: 0;
+                  margin-bottom: 0;
+                  padding: 0 16px;
+                }
+                to {
+                  opacity: 1;
+                  transform: translateY(0);
+                  max-height: 70px;
+                  margin-bottom: 0;
+                  padding: 12px 16px;
+                }
+              }
+              @keyframes compactOut {
+                from {
+                  opacity: 1;
+                  transform: translateX(0) scale(1);
+                  max-height: 70px;
+                }
+                to {
+                  opacity: 0;
+                  transform: translateX(-30px) scale(0.95);
+                  max-height: 0;
+                  padding-top: 0;
+                  padding-bottom: 0;
+                  margin-bottom: 0;
+                  border-width: 0;
+                }
+              }
               @keyframes subtaskSlideIn {
                 from {
                   opacity: 0;
@@ -564,6 +714,18 @@ export default function EODReport() {
                 to {
                   opacity: 1;
                   transform: translateY(0);
+                }
+              }
+              @keyframes subtaskReveal {
+                from {
+                  opacity: 0;
+                  transform: translateY(-8px) scale(0.97);
+                  max-height: 0;
+                }
+                to {
+                  opacity: 1;
+                  transform: translateY(0) scale(1);
+                  max-height: 50px;
                 }
               }
               @keyframes gentlePulse {
@@ -597,14 +759,7 @@ export default function EODReport() {
           {/* Form */}
           <div
             style={{
-              background: C.bg,
-              border: `1px solid ${C.border}`,
-              borderRadius: "12px",
-              padding: "40px",
-              marginBottom: "32px",
-              boxShadow: darkMode
-                ? "0 4px 20px rgba(0,0,0,0.3)"
-                : "0 2px 8px rgba(0,0,0,0.04)",
+              padding: "40px 0",
             }}
           >
             {/* Already submitted today */}
@@ -672,231 +827,432 @@ export default function EODReport() {
                   </span>
                 </h2>
 
-                <div style={{ marginBottom: "24px" }}>
-                  <div style={{ display: "flex", justifyContent: "center", marginBottom: "24px" }}>
-                    <button
-                      type="button"
-                      onClick={addMainTask}
-                      disabled={tasks.length >= LIMITS.MAX_TASKS}
-                      style={{
-                        padding: "12px 32px",
-                        background: tasks.length >= LIMITS.MAX_TASKS ? C.muted : C.accent,
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "8px",
-                        fontSize: "15px",
-                        fontWeight: 600,
-                        cursor: tasks.length >= LIMITS.MAX_TASKS ? "not-allowed" : "pointer",
-                        transition: "all 0.2s ease",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = "translateY(-2px)";
-                        e.currentTarget.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.3)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = "translateY(0)";
-                        e.currentTarget.style.boxShadow = "none";
-                      }}
-                    >
-                      + Ajouter une tâche
-                    </button>
-                  </div>
-
-                  {tasks.length === 0 && (
-                    <div
-                      style={{
-                        textAlign: "center",
-                        padding: "48px 20px",
-                        background: C.subtle,
-                        borderRadius: "8px",
-                        border: `1px dashed ${C.border}`,
-                        animation: "slideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1) both",
-                      }}
-                    >
-                      <p
-                        style={{
-                          color: C.muted,
-                          fontSize: "14px",
-                          margin: 0,
-                        }}
-                      >
-                        Aucune tâche ajoutée
-                      </p>
-                    </div>
-                  )}
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                    {tasks.map((task, taskIndex) => (
+                {/* ── Compact task cards ── */}
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", marginBottom: tasks.length > 0 ? "12px" : "0" }}>
+                  {tasks.map((task) => {
+                    const subCount = (task.subtasks || []).length;
+                    const totalH = (task.subtasks || []).reduce((s, st) => s + (parseFloat(st.hours_spent) || 0), 0);
+                    return (
                       <div
-                        key={task._id || taskIndex}
+                        key={task._id}
                         style={{
-                          border: `1px solid ${C.border}`,
-                          borderRadius: "8px",
-                          padding: "20px",
-                          background: C.bg,
-                          animation: "slideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1) both",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "10px",
+                          width: "100%",
+                          maxWidth: "560px",
+                          padding: "12px 16px",
+                          background: darkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.025)",
+                          borderRadius: "50px",
+                          border: `1px solid ${darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
+                          animation: removingTaskId === task._id
+                            ? "compactOut 0.35s cubic-bezier(0.4,0,0.2,1) both"
+                            : "compactIn 0.5s cubic-bezier(0.34,1.56,0.64,1) both",
+                          boxSizing: "border-box",
+                          overflow: "hidden",
                         }}
                       >
-                        <div style={{ display: "flex", gap: "12px", marginBottom: "16px" }}>
-                          <input
-                            type="text"
-                            placeholder="Nom de la tâche principale"
-                            value={task.task_name}
-                            onChange={(e) => updateMainTask(taskIndex, "task_name", e.target.value)}
-                            maxLength={LIMITS.TASK_NAME_MAX}
-                            style={{
-                              flex: 1,
-                              padding: "12px 16px",
-                              border: `1px solid ${C.border}`,
-                              borderRadius: "6px",
-                              fontSize: "15px",
-                              fontWeight: 600,
-                              background: C.subtle,
-                              color: C.text,
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => removeMainTask(taskIndex)}
-                            style={{
-                              padding: "12px 20px",
-                              background: STATUS.danger,
-                              color: "#fff",
-                              border: "none",
-                              borderRadius: "6px",
-                              fontSize: "14px",
-                              fontWeight: 600,
-                              cursor: "pointer",
-                            }}
-                          >
-                            Supprimer
-                          </button>
+                        <div style={{ flex: 1, minWidth: 0, paddingLeft: "6px" }}>
+                          <div style={{ fontSize: "14px", fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {task.task_name}
+                          </div>
+                          <div style={{ fontSize: "11.5px", color: C.muted, marginTop: "1px" }}>
+                            +{subCount} sous-tâche{subCount > 1 ? "s" : ""}
+                          </div>
                         </div>
+                        <span style={{
+                          fontSize: "13px",
+                          fontWeight: 700,
+                          color: C.accent,
+                          flexShrink: 0,
+                          whiteSpace: "nowrap",
+                        }}>
+                          {totalH.toFixed(1)}h
+                        </span>
+                        <div style={{ display: "flex", alignItems: "center", gap: "2px", flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          onClick={() => editTask(task._id)}
+                          style={{
+                            width: "30px",
+                            height: "30px",
+                            borderRadius: "50%",
+                            border: "none",
+                            background: "transparent",
+                            color: C.muted,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                            transition: "color 0.2s, background 0.2s",
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = C.accent; e.currentTarget.style.background = darkMode ? "rgba(124,138,219,0.12)" : "rgba(91,106,191,0.08)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = C.muted; e.currentTarget.style.background = "transparent"; }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteTask(task._id)}
+                          style={{
+                            width: "30px",
+                            height: "30px",
+                            borderRadius: "50%",
+                            border: "none",
+                            background: "transparent",
+                            color: C.muted,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                            transition: "color 0.2s, background 0.2s",
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = "#ef4444"; e.currentTarget.style.background = darkMode ? "rgba(239,68,68,0.12)" : "rgba(239,68,68,0.08)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = C.muted; e.currentTarget.style.background = "transparent"; }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                          </svg>
+                        </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
 
-                        {task.subtasks && task.subtasks.length > 0 && (
-                          <div
-                            style={{
-                              marginLeft: "0",
-                              paddingLeft: "20px",
-                              borderLeft: `3px solid ${C.accent}`,
-                              marginBottom: "16px",
-                            }}
-                          >
-                            {task.subtasks.map((subtask, subtaskIndex) => (
+                {/* ── Active composer ── */}
+                <div style={{ marginBottom: "24px" }}>
+                  <div style={{ display: "flex", justifyContent: "center" }}>
+                    <div style={{ width: "100%", maxWidth: "560px" }}>
+                      {/* Main pill input */}
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          width: "100%",
+                          background: darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.035)",
+                          borderRadius: newTaskName.trim() ? "20px 20px 0 0" : "50px",
+                          padding: "6px 6px 6px 22px",
+                          border: `1px solid ${newTaskName.trim()
+                            ? (darkMode ? "rgba(124,138,219,0.3)" : "rgba(91,106,191,0.25)")
+                            : (darkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)")}`,
+                          borderBottom: newTaskName.trim() ? "none" : undefined,
+                          transition: "border-radius 0.35s cubic-bezier(0.4,0,0.2,1), border-color 0.3s ease, background 0.3s ease",
+                        }}
+                      >
+                        <input
+                          type="text"
+                          placeholder={tasks.length > 0 ? "Tâche suivante..." : "Titre de la tâche"}
+                          value={newTaskName}
+                          onChange={(e) => setNewTaskName(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddTaskFromInput(); } }}
+                          maxLength={LIMITS.TASK_NAME_MAX}
+                          disabled={tasks.length >= LIMITS.MAX_TASKS}
+                          style={{
+                            flex: 1,
+                            border: "none",
+                            background: "transparent",
+                            outline: "none",
+                            fontSize: "15px",
+                            fontWeight: 500,
+                            color: C.text,
+                            fontFamily: "inherit",
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddTaskFromInput}
+                          disabled={!newTaskName.trim() || tasks.length >= LIMITS.MAX_TASKS}
+                          style={{
+                            width: "36px",
+                            height: "36px",
+                            borderRadius: "50%",
+                            border: "none",
+                            background: newTaskName.trim() ? C.accent : darkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+                            color: newTaskName.trim() ? "#fff" : C.muted,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: newTaskName.trim() ? "pointer" : "default",
+                            transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)",
+                            transform: newTaskName.trim() ? "scale(1)" : "scale(0.92)",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="5" y1="12" x2="19" y2="12" />
+                            <polyline points="12 5 19 12 12 19" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      {/* Subtask rows — smooth reveal */}
+                      <div
+                        style={{
+                          overflow: "hidden",
+                          maxHeight: newTaskName.trim() ? `${newSubtasks.length * 52 + 16}px` : "0px",
+                          opacity: newTaskName.trim() ? 1 : 0,
+                          transition: "max-height 0.45s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease 0.05s",
+                        }}
+                      >
+                        <div
+                          style={{
+                            background: darkMode ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.018)",
+                            borderRadius: "0 0 20px 20px",
+                            border: `1px solid ${darkMode ? "rgba(124,138,219,0.3)" : "rgba(91,106,191,0.25)"}`,
+                            borderTop: `1px solid ${darkMode ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)"}`,
+                            padding: "8px 14px 10px 14px",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "6px",
+                          }}
+                        >
+                          {newSubtasks.map((sub, idx) => {
+                            const isFirst = idx === 0;
+                            return (
                               <div
-                                key={subtask._id || subtaskIndex}
+                                key={idx}
                                 style={{
                                   display: "flex",
-                                  gap: "12px",
-                                  marginBottom: "12px",
-                                  animation: "subtaskSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) both",
+                                  alignItems: "center",
+                                  gap: "8px",
+                                  paddingLeft: "8px",
+                                  animation: !isFirst ? `subtaskReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) both` : undefined,
+                                  animationDelay: !isFirst ? `${idx * 0.04}s` : undefined,
                                 }}
                               >
+                                <span style={{ color: C.muted, fontSize: "13px", flexShrink: 0 }}>↳</span>
                                 <input
                                   type="text"
-                                  placeholder="Sous-tâche"
-                                  value={subtask.task_name}
-                                  onChange={(e) =>
-                                    updateSubtask(taskIndex, subtaskIndex, "task_name", e.target.value)
-                                  }
+                                  placeholder={isFirst ? "Sous-tâche" : "Sous-tâche (optionnel)"}
+                                  value={sub.name}
+                                  onChange={(e) => updateNewSubtask(idx, "name", e.target.value)}
+                                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddTaskFromInput(); } }}
                                   maxLength={LIMITS.TASK_NAME_MAX}
                                   style={{
                                     flex: 1,
-                                    padding: "10px 14px",
-                                    border: `1px solid ${C.border}`,
-                                    borderRadius: "6px",
-                                    fontSize: "14px",
-                                    background: C.bg,
-                                    color: C.text,
-                                  }}
-                                />
-                                <input
-                                  type="number"
-                                  placeholder="Heures"
-                                  value={subtask.hours_spent}
-                                  onChange={(e) =>
-                                    updateSubtask(taskIndex, subtaskIndex, "hours_spent", e.target.value)
-                                  }
-                                  min="0"
-                                  max="24"
-                                  step="0.5"
-                                  style={{
-                                    width: "110px",
-                                    padding: "10px 14px",
-                                    border: `1px solid ${C.border}`,
-                                    borderRadius: "6px",
-                                    fontSize: "14px",
-                                    background: C.bg,
-                                    color: C.text,
-                                  }}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => removeSubtask(taskIndex, subtaskIndex)}
-                                  style={{
-                                    padding: "10px 14px",
+                                    border: "none",
                                     background: "transparent",
-                                    color: STATUS.danger,
-                                    border: `1px solid ${STATUS.danger}`,
-                                    borderRadius: "6px",
-                                    fontSize: "13px",
-                                    cursor: "pointer",
+                                    outline: "none",
+                                    fontSize: "13.5px",
+                                    color: C.secondary,
+                                    fontFamily: "inherit",
+                                  }}
+                                />
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                    background: darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                                    borderRadius: "8px",
+                                    padding: "5px 10px",
+                                    flexShrink: 0,
                                   }}
                                 >
-                                  ✕
-                                </button>
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    placeholder="0"
+                                    value={sub.hours}
+                                    onChange={(e) => { const v = e.target.value; if (v === "" || /^\d{0,2}(\.\d{0,1})?$/.test(v)) updateNewSubtask(idx, "hours", v); }}
+                                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddTaskFromInput(); } }}
+                                    style={{
+                                      width: "36px",
+                                      border: "none",
+                                      background: "transparent",
+                                      outline: "none",
+                                      fontSize: "13px",
+                                      fontWeight: 600,
+                                      color: C.text,
+                                      fontFamily: "inherit",
+                                      textAlign: "center",
+                                    }}
+                                  />
+                                  <span style={{ fontSize: "12px", color: C.muted, fontWeight: 500 }}>h</span>
+                                </div>
+                                {isFirst ? (
+                                  newSubtasks.length === 1 ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setNewSubtasks(prev => [...prev, { name: "", hours: "" }])}
+                                      style={{
+                                        width: "28px",
+                                        height: "28px",
+                                        borderRadius: "8px",
+                                        border: "none",
+                                        background: "transparent",
+                                        color: darkMode ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.3)",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        cursor: "pointer",
+                                        flexShrink: 0,
+                                        transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)",
+                                        opacity: 1,
+                                        animation: "subtaskReveal 0.3s cubic-bezier(0.34,1.56,0.64,1) both",
+                                      }}
+                                      onMouseEnter={(e) => { e.currentTarget.style.color = C.accent; e.currentTarget.style.background = darkMode ? "rgba(124,138,219,0.12)" : "rgba(91,106,191,0.08)"; }}
+                                      onMouseLeave={(e) => { e.currentTarget.style.color = darkMode ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.3)"; e.currentTarget.style.background = "transparent"; }}
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <line x1="12" y1="5" x2="12" y2="19" />
+                                        <line x1="5" y1="12" x2="19" y2="12" />
+                                      </svg>
+                                    </button>
+                                  ) : (
+                                    <div style={{ width: "28px", flexShrink: 0 }} />
+                                  )
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeNewSubtask(idx)}
+                                    style={{
+                                      width: "28px",
+                                      height: "28px",
+                                      borderRadius: "8px",
+                                      border: "none",
+                                      background: "transparent",
+                                      color: C.muted,
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      cursor: "pointer",
+                                      flexShrink: 0,
+                                      transition: "color 0.2s, background 0.2s",
+                                    }}
+                                    onMouseEnter={(e) => { e.currentTarget.style.color = "#ef4444"; e.currentTarget.style.background = darkMode ? "rgba(239,68,68,0.12)" : "rgba(239,68,68,0.08)"; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.color = C.muted; e.currentTarget.style.background = "transparent"; }}
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <polyline points="3 6 5 6 21 6" />
+                                      <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                                    </svg>
+                                  </button>
+                                )}
                               </div>
-                            ))}
-                          </div>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => addSubtask(taskIndex)}
-                          style={{
-                            marginLeft: "20px",
-                            padding: "8px 14px",
-                            background: "transparent",
-                            color: C.accent,
-                            border: `1px solid ${C.accent}`,
-                            borderRadius: "6px",
-                            fontSize: "13px",
-                            fontWeight: 600,
-                            cursor: "pointer",
-                          }}
-                        >
-                          + Ajouter une sous-tâche
-                        </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    ))}
+
+                      {/* "Ajouter une tâche" pill — appears when first subtask is filled */}
+                      {(() => {
+                        const canAdd = newTaskName.trim() && newSubtasks[0]?.name?.trim() && parseFloat(newSubtasks[0]?.hours) > 0;
+                        return (
+                          <div
+                            style={{
+                              overflow: "hidden",
+                              maxHeight: canAdd ? "56px" : "0px",
+                              opacity: canAdd ? 1 : 0,
+                              transition: "max-height 0.45s cubic-bezier(0.4,0,0.2,1), opacity 0.4s ease 0.08s",
+                              marginTop: canAdd ? "12px" : "0px",
+                              display: "flex",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={handleStartNewTask}
+                              style={{
+                                padding: "10px 28px",
+                                borderRadius: "50px",
+                                border: `1px solid ${darkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)"}`,
+                                background: darkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.025)",
+                                color: C.muted,
+                                fontSize: "13.5px",
+                                fontWeight: 500,
+                                fontFamily: "inherit",
+                                cursor: "pointer",
+                                transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)",
+                                whiteSpace: "nowrap",
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.borderColor = darkMode ? "rgba(124,138,219,0.3)" : "rgba(91,106,191,0.25)"; e.currentTarget.style.color = C.accent; e.currentTarget.style.background = darkMode ? "rgba(124,138,219,0.08)" : "rgba(91,106,191,0.05)"; e.currentTarget.style.padding = "10px 60px"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.borderColor = darkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)"; e.currentTarget.style.color = C.muted; e.currentTarget.style.background = darkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.025)"; e.currentTarget.style.padding = "10px 28px"; }}
+                            >
+                              Ajouter une tâche
+                            </button>
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
 
-                {tasks.length > 0 && (
+                {/* ── "Passer à l'étape suivante" button — appears when first subtask is filled ── */}
+                {!todayReport && step === 0 && (() => {
+                  const canProceed = newTaskName.trim() && newSubtasks[0]?.name?.trim() && parseFloat(newSubtasks[0]?.hours) > 0 || tasks.length > 0;
+                  return (
+                    <div
+                      style={{
+                        overflow: "hidden",
+                        maxHeight: canProceed ? "80px" : "0px",
+                        opacity: canProceed ? 1 : 0,
+                        transition: "max-height 0.5s cubic-bezier(0.4,0,0.2,1), opacity 0.45s ease 0.1s",
+                        marginTop: canProceed ? "28px" : "0px",
+                        display: "flex",
+                        justifyContent: "center",
+                        padding: canProceed ? "6px 0 16px" : "0",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={handleNext}
+                        style={{
+                          padding: "13px 36px",
+                          background: "transparent",
+                          color: C.accent,
+                          border: `1.5px solid ${darkMode ? "rgba(124,138,219,0.35)" : "rgba(91,106,191,0.3)"}`,
+                          borderRadius: "50px",
+                          fontSize: "14px",
+                          fontWeight: 600,
+                          fontFamily: "inherit",
+                          cursor: "pointer",
+                          transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)",
+                          letterSpacing: "-0.01em",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = darkMode ? "rgba(124,138,219,0.12)" : "rgba(91,106,191,0.08)";
+                          e.currentTarget.style.borderColor = C.accent;
+                          e.currentTarget.style.transform = "translateY(-2px)";
+                          e.currentTarget.style.boxShadow = darkMode ? "0 4px 16px rgba(124,138,219,0.2)" : "0 4px 16px rgba(91,106,191,0.15)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "transparent";
+                          e.currentTarget.style.borderColor = darkMode ? "rgba(124,138,219,0.35)" : "rgba(91,106,191,0.3)";
+                          e.currentTarget.style.transform = "translateY(0)";
+                          e.currentTarget.style.boxShadow = "none";
+                        }}
+                      >
+                        Passer à l'étape suivante
+                      </button>
+                    </div>
+                  );
+                })()}
+
+                {/* ── Total hours (hidden — re-enable after animation validation) ── */}
+                {false && tasks.length > 0 && (
                   <div
                     style={{
-                      padding: "16px 20px",
-                      background: C.subtle,
-                      border: `1px solid ${C.border}`,
-                      borderRadius: "8px",
+                      padding: "12px 20px",
+                      background: darkMode ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.025)",
+                      borderRadius: "12px",
                       marginBottom: "24px",
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
                     }}
                   >
-                    <span
-                      style={{
-                        fontSize: "15px",
-                        fontWeight: 600,
-                        color: C.text,
-                      }}
-                    >
+                    <span style={{ fontSize: "14px", fontWeight: 600, color: C.secondary }}>
                       Total heures
                     </span>
                     <span
                       style={{
-                        fontSize: "20px",
+                        fontSize: "18px",
                         fontWeight: 700,
                         color: calculateTotalHours() > 24 ? STATUS.danger : C.accent,
                       }}
@@ -1087,72 +1443,8 @@ export default function EODReport() {
               </div>
             )}
 
-            {/* Navigation buttons (steps 0 and 1 only) */}
-            {!todayReport && step < 1 && tasks.length > 0 && (
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  gap: "12px",
-                  marginTop: "32px",
-                  opacity: step === 0 && tasks.length > 0 ? 1 : step > 0 ? 1 : 0,
-                  transform: step === 0 && tasks.length > 0 ? "translateY(0)" : step > 0 ? "translateY(0)" : "translateY(10px)",
-                  transition: "opacity 0.4s ease, transform 0.4s ease",
-                }}
-              >
-                {step > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setStep(step - 1)}
-                    style={{
-                      padding: "14px 40px",
-                      background: "transparent",
-                      color: C.text,
-                      border: `1px solid ${C.border}`,
-                      borderRadius: "8px",
-                      fontSize: "15px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      transition: "all 0.2s ease",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = C.subtle;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = "transparent";
-                    }}
-                  >
-                    Précédent
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={handleNext}
-                  disabled={submitting}
-                  style={{
-                    padding: "14px 40px",
-                    background: C.accent,
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "8px",
-                    fontSize: "15px",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    transition: "all 0.2s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translateY(-2px)";
-                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.3)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translateY(0)";
-                    e.currentTarget.style.boxShadow = "none";
-                  }}
-                >
-                  Suivant
-                </button>
-              </div>
-            )}
+            {/* Navigation buttons (hidden — re-enable after animation validation) */}
+            {/* Old Suivant/Précédent block removed — replaced by "Passer à l'étape suivante" above */}
           </div>
         </div>
       </div>

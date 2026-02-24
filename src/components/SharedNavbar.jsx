@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import apiClient from "../services/apiClient";
-import toolsIcon from "../assets/icon3.png";
 import lightIcon from "../assets/light.png";
 import darkIcon from "../assets/dark.png";
 
@@ -147,7 +146,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode }) {
           </div>
         </div>
 
-        {/* Mes outils - Dropdown */}
+        {/* Mes pages - Dropdown */}
         <div style={{ position: 'relative' }}>
           <button
             className="tools-btn"
@@ -156,18 +155,8 @@ export default function SharedNavbar({ session, darkMode, setDarkMode }) {
               dropdown.style.display = dropdown.style.display === 'none' ? 'flex' : 'none';
             }}
           >
-            <img
-              src={toolsIcon}
-              alt=""
-              style={{
-                width: '50px',
-                height: '50px',
-                objectFit: 'contain',
-                flexShrink: 0
-              }}
-            />
-            Mes outils
-            <span style={{ fontSize: '10px', opacity: 0.6 }}>▼</span>
+            <span style={{ marginLeft: '10px' }}>Mes pages</span>
+            <span style={{ fontSize: '10px', opacity: 0.6, marginLeft: '6px' }}>▼</span>
           </button>
           {/* Dropdown menu */}
           <div
@@ -371,6 +360,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode }) {
                 Dashboard EOD
               </button>
             )}
+
           </div>
         </div>
 

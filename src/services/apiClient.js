@@ -1,6 +1,7 @@
 const API_URL = import.meta.env.VITE_API_URL || 'https://api.ownertechnology.com';
 
 const TOKEN_KEY = "auth_token";
+const REFRESH_KEY = "refresh_token";
 const USER_KEY = "auth_user";
 
 async function safeJson(res) {
@@ -45,8 +46,38 @@ class ApiClient {
 
   clearAuth() {
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_KEY);
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem('permissions');
+  }
+
+  // Tente de rafraîchir l'access token via le refresh token
+  async _refreshAccessToken() {
+    const refreshToken = localStorage.getItem(REFRESH_KEY);
+    if (!refreshToken) return false;
+
+    try {
+      const res = await fetch(`${this.baseUrl}/api/v1/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+
+      if (!res.ok) return false;
+
+      const data = await safeJson(res);
+      const newToken = data?.access_token || data?.data?.access_token;
+      const newRefresh = data?.refresh_token || data?.data?.refresh_token;
+
+      if (!newToken) return false;
+
+      localStorage.setItem(TOKEN_KEY, newToken);
+      if (newRefresh) localStorage.setItem(REFRESH_KEY, newRefresh);
+
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async request(endpoint, options = {}) {
@@ -64,15 +95,27 @@ class ApiClient {
 
     console.log('[API] Request:', { url, method: config.method, body: options.body });
 
-    const response = await fetch(url, config);
+    let response = await fetch(url, config);
 
     console.log('[API] Response:', { status: response.status, ok: response.ok });
 
-    // Token expiré ou invalide → redirect login
+    // Token expiré → tenter un refresh silencieux
     if (response.status === 401) {
-      this.clearAuth();
-      window.location.href = '/login';
-      return;
+      const refreshed = await this._refreshAccessToken();
+
+      if (refreshed) {
+        // Retry avec le nouveau token
+        config.headers['Authorization'] = `Bearer ${this.getToken()}`;
+        response = await fetch(url, config);
+        console.log('[API] Retry after refresh:', { status: response.status });
+      }
+
+      // Si refresh échoué ou retry encore 401 → logout réel
+      if (!refreshed || response.status === 401) {
+        this.clearAuth();
+        window.location.href = '/login';
+        return;
+      }
     }
 
     if (!response.ok) {
@@ -154,6 +197,10 @@ class ApiClient {
     if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
     else localStorage.removeItem(USER_KEY);
 
+    // Stocker le refresh token si présent
+    const refreshToken = data?.refresh_token || null;
+    if (refreshToken) localStorage.setItem(REFRESH_KEY, refreshToken);
+
     // Stocker les permissions si présentes
     if (data.permissions) {
       this.setPermissions(data.permissions);
@@ -187,9 +234,28 @@ class ApiClient {
     return data;
   }
 
-  logout() {
+  async logout() {
+    // Révoquer le refresh token côté backend
+    const refreshToken = localStorage.getItem(REFRESH_KEY);
+    if (refreshToken) {
+      try {
+        await fetch(`${this.baseUrl}/api/v1/auth/logout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+      } catch { /* fire-and-forget */ }
+    }
     this.clearAuth();
     window.location.href = '/login';
+  }
+
+  // ============ PASSWORD ============
+  async changePassword(currentPassword, newPassword) {
+    return this.post('/api/v1/auth/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
   }
 
   // ============ LEADS ============
