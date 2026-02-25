@@ -404,6 +404,7 @@ export default function EODDashboard() {
   const [personSummaries, setPersonSummaries] = useState([]);
   const [dataLoading, setDataLoading] = useState(false);
   const fallbackAttempted = useRef(false);
+  const [eodExpectedData, setEodExpectedData] = useState(null); // from GET /eod/dashboard/expected
 
   const weekOptions = useMemo(() => getWeekOptions(), []);
   const C = useMemo(() => CARD(darkMode), [darkMode]);
@@ -438,7 +439,7 @@ export default function EODDashboard() {
     return { year, weekNum, startDate: fmt(monday), endDate: fmt(friday) };
   }, [selectedWeek]);
 
-  function aggregateScores(dailyScores) {
+  function aggregateScores(dailyScores, expectedData) {
     const byUser = {};
     for (const entry of dailyScores) {
       const uid = entry.user_id;
@@ -461,7 +462,8 @@ export default function EODDashboard() {
       });
       const avg_global = u.days.reduce((s, d) => s + (d.global_score || 0), 0) / n;
       const latestSummary = u.days[u.days.length - 1]?.ressenti_individuel || "";
-      return { user_id: u.user_id, name: u.name, department: u.department, avg_scores, avg_global, eods_submitted: n, eods_expected: 5, summary: latestSummary, days: u.days };
+      const userExpected = expectedData?.by_user?.[u.user_id]?.expected || 5;
+      return { user_id: u.user_id, name: u.name, department: u.department, avg_scores, avg_global, eods_submitted: n, eods_expected: userExpected, summary: latestSummary, days: u.days };
     });
   }
 
@@ -471,11 +473,15 @@ export default function EODDashboard() {
       setDataLoading(true);
       try {
         const { year, weekNum } = selectedWeekMeta;
-        const [scoresResp, alertsResp, reportResp] = await Promise.allSettled([
-          apiClient.get(`/api/v1/eod/dashboard/scores?period=${year}-W${String(weekNum).padStart(2, "0")}`),
+        const weekPeriod = `${year}-W${String(weekNum).padStart(2, "0")}`;
+        const [scoresResp, alertsResp, reportResp, expectedResp] = await Promise.allSettled([
+          apiClient.get(`/api/v1/eod/dashboard/scores?period=${weekPeriod}`),
           apiClient.get(`/api/v1/eod/dashboard/alerts?resolved=false`),
           apiClient.get(`/api/v1/eod/dashboard/weekly-report?week=${weekNum}&year=${year}`),
+          apiClient.get(`/api/v1/eod/dashboard/expected?period=${weekPeriod}`),
         ]);
+        const expectedData = (expectedResp.status === "fulfilled" && expectedResp.value) ? expectedResp.value : null;
+        if (expectedData) setEodExpectedData(expectedData);
         if (scoresResp.status === "fulfilled") {
           const raw = scoresResp.value?.scores || scoresResp.value?.collaborators || scoresResp.value || [];
           const list = Array.isArray(raw) ? raw : [];
@@ -488,7 +494,7 @@ export default function EODDashboard() {
               return; // will re-fetch with previous week
             }
           }
-          setCollaborators(list.length > 0 ? aggregateScores(list) : []);
+          setCollaborators(list.length > 0 ? aggregateScores(list, expectedData) : []);
         } else { setCollaborators([]); }
         if (alertsResp.status === "fulfilled" && alertsResp.value?.alerts) {
           setAlerts(alertsResp.value.alerts);
@@ -941,15 +947,21 @@ export default function EODDashboard() {
                       color={getScoreColor(currentPersonData?.avg_global || currentDeptData?.avgGlobal || globalAvg)}
                     />
                     <KPICard C={C} label="Collaborateurs"
-                      value={currentPersonData ? 1 : currentDeptData ? (DEPARTMENTS.find(d => d.key === selectedDept)?.expectedEods || currentDeptData.count) : TOTAL_EXPECTED_COLLABS}
+                      value={currentPersonData ? 1 : currentDeptData ? (eodExpectedData?.by_department?.[selectedDept]?.eligible || DEPARTMENTS.find(d => d.key === selectedDept)?.expectedEods || currentDeptData.count) : (eodExpectedData?.total_eligible || TOTAL_EXPECTED_COLLABS)}
                       color={C.accent}
                     />
                     <KPICard C={C} label="EODs soumis"
                       value={(() => {
                         const list = currentPersonData ? [currentPersonData] : currentDeptData ? currentDeptData.people : collaborators;
                         const sub = list.reduce((s, c) => s + c.eods_submitted, 0);
-                        const expectedCollabs = currentPersonData ? 1 : currentDeptData ? (DEPARTMENTS.find(d => d.key === selectedDept)?.expectedEods || currentDeptData.count) : TOTAL_EXPECTED_COLLABS;
-                        const exp = expectedCollabs * 5;
+                        let exp;
+                        if (currentPersonData) {
+                          exp = eodExpectedData?.by_user?.[currentPersonData.user_id]?.expected || 5;
+                        } else if (currentDeptData) {
+                          exp = eodExpectedData?.by_department?.[selectedDept]?.expected || (DEPARTMENTS.find(d => d.key === selectedDept)?.expectedEods || 1) * 5;
+                        } else {
+                          exp = eodExpectedData?.total_expected || TOTAL_EXPECTED_COLLABS * 5;
+                        }
                         return `${sub}/${exp}`;
                       })()}
                       color={C.success}

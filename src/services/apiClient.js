@@ -146,6 +146,13 @@ class ApiClient {
     });
   }
 
+  async put(endpoint, data) {
+    return this.request(endpoint, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
   async delete(endpoint) {
     return this.request(endpoint, { method: 'DELETE' });
   }
@@ -319,6 +326,20 @@ class ApiClient {
   // ============ LEADERBOARD ============
   async getLeaderboardStats(period = 'current_month') {
     return this.request(`/api/v1/leaderboard/stats?period=${period}`);
+  }
+
+  // ============ WORKING DAYS ============
+  async getWorkingDays() {
+    return this.get('/api/v1/users/me/working-days');
+  }
+
+  async updateWorkingDays(days) {
+    return this.put('/api/v1/users/me/working-days', { working_days: days });
+  }
+
+  // ============ EOD STATUS ============
+  async getEodStatus() {
+    return this.get('/api/v1/eod/status');
   }
 
   // ============ MONITORING ============

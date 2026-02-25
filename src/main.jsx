@@ -3,7 +3,7 @@
 import "./index.css";
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import Leaderboard      from "./pages/Leaderboard.jsx";
 import EmployeeSales    from "./pages/EmployeeSales.jsx";
@@ -15,7 +15,7 @@ import MonitoringPerf   from "./pages/MonitoringPerf.jsx";
 import EODReport        from "./pages/EODReport.jsx";
 import EODDashboard     from "./pages/EODDashboard.jsx";
 import Login            from "./pages/Login.jsx";
-import ChangePassword   from "./pages/ChangePassword.jsx";
+import Profile          from "./pages/Profile.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import MouseDot from "./components/MouseDot.jsx";
@@ -35,7 +35,8 @@ function App() {
         <Route path="/monitoring-perf" element={<MonitoringPerf />} />
         <Route path="/eod-report" element={<EODReport />} />
         <Route path="/eod-dashboard" element={<EODDashboard />} />
-        <Route path="/change-password" element={<ChangePassword />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/change-password" element={<Navigate to="/profile" replace />} />
 
         {/* Protected routes */}
         <Route

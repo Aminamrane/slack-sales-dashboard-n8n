@@ -92,14 +92,22 @@ export default function SharedNavbar({ session, darkMode, setDarkMode }) {
         boxShadow: darkMode ? '0 4px 20px rgba(0,0,0,0.3)' : '0 4px 20px rgba(0,0,0,0.06)',
         fontFamily: 'sans-serif'
       }}>
-        {/* User Profile */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          paddingRight: '12px',
-          borderRight: `1px solid ${darkMode ? '#2a2b36' : '#e2e6ef'}`
-        }}>
+        {/* User Profile — clickable → /profile */}
+        <div
+          onClick={() => navigate('/profile')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            paddingRight: '12px',
+            borderRight: `1px solid ${darkMode ? '#2a2b36' : '#e2e6ef'}`,
+            cursor: 'pointer',
+            borderRadius: '10px',
+            transition: 'background 0.15s',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+        >
           {session?.user?.user_metadata?.avatar_url ? (
             <img
               src={session.user.user_metadata.avatar_url}

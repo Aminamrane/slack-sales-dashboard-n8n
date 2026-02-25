@@ -30,12 +30,12 @@ function sanitizeText(str) {
     .replace(/on\w+\s*=/gi, "");
 }
 
-// Sanitize hours: clamp [0, 24], round to 0.5
+// Sanitize hours: clamp [0, 24], round to 0.25
 function sanitizeHours(val) {
   const n = parseFloat(val);
   if (!Number.isFinite(n)) return 0;
   const clamped = Math.max(LIMITS.HOURS_MIN, Math.min(LIMITS.HOURS_MAX, n));
-  return Math.round(clamped * 2) / 2;
+  return Math.round(clamped * 4) / 4;
 }
 
 // Question pools - rotation hebdomadaire
@@ -122,6 +122,10 @@ export default function EODReport() {
   const [todayReport, setTodayReport] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // J-1 recovery state
+  const [eodStatus, setEodStatus] = useState(null);
+  const [activeDate, setActiveDate] = useState("today"); // "today" | "yesterday"
+
   // Step 0 typing animation
   const [typedText, setTypedText] = useState("");
   const fullText = "Quelles tâches avez-vous effectuées aujourd'hui ?";
@@ -144,8 +148,37 @@ export default function EODReport() {
   const [currentAnswer, setCurrentAnswer] = useState("");
   const [allQuestionsDone, setAllQuestionsDone] = useState(false);
   const [sendingAnswer, setSendingAnswer] = useState(false);
+  const goingBackAnswer = useRef(null); // stores pre-filled answer when going back
   const inputRef = useRef(null);
   const lastSubmitRef = useRef(0);
+
+  // ── UNSAVED WORK DETECTION ──────────────────────────────────────────────────
+  const hasUnsavedWork = !todayReport && (
+    tasks.length > 0 || newTaskName.trim() !== "" || questionAnswers.length > 0
+  );
+
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const pendingNavRef = useRef(null);
+
+  // Browser close / refresh → native popup
+  useEffect(() => {
+    const handler = (e) => { if (hasUnsavedWork) e.preventDefault(); };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [hasUnsavedWork]);
+
+  // Browser back button → intercept popstate
+  useEffect(() => {
+    if (!hasUnsavedWork) return;
+    const handler = () => {
+      window.history.pushState(null, '', window.location.href);
+      setShowLeaveModal(true);
+      pendingNavRef.current = () => { window.history.go(-2); };
+    };
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', handler);
+    return () => window.removeEventListener('popstate', handler);
+  }, [hasUnsavedWork]);
 
   useEffect(() => {
     const init = async () => {
@@ -162,6 +195,13 @@ export default function EODReport() {
         }
 
         await loadTodayReport();
+
+        // Fetch EOD status (J-1 recovery)
+        try {
+          const status = await apiClient.getEodStatus();
+          setEodStatus(status);
+        } catch (_) { /* endpoint not available yet */ }
+
         // Fetch personalized question from OpenClaw (via backend)
         // GET /eod/my-question is now idempotent (backend filters on answered=false,
         // marks served+answered only on POST /eod/submit). No client-side cache needed.
@@ -205,6 +245,15 @@ export default function EODReport() {
 
     const question = todayQuestions[questionIndex];
     if (!question) return;
+
+    // If going back, skip typing animation and pre-fill answer
+    if (goingBackAnswer.current !== null) {
+      setQuestionTypedText(question);
+      setQuestionTypingDone(true);
+      setCurrentAnswer(goingBackAnswer.current);
+      goingBackAnswer.current = null;
+      return;
+    }
 
     setQuestionTypedText("");
     setQuestionTypingDone(false);
@@ -469,7 +518,9 @@ export default function EODReport() {
             })),
         }));
 
-      const reportDate = new Date().toISOString().split("T")[0];
+      const reportDate = activeDate === "yesterday" && eodStatus?.yesterday?.date
+        ? eodStatus.yesterday.date
+        : new Date().toISOString().split("T")[0];
 
       // Separate pool answers from custom answer by index (not text, to avoid duplicates)
       const poolCount = poolQuestions.length;
@@ -540,6 +591,25 @@ export default function EODReport() {
             },
           }),
         }).catch((err) => console.warn("[OpenClaw] Send failed (non-blocking):", err));
+      }
+
+      // If we just submitted yesterday's EOD, reset to today
+      if (activeDate === "yesterday") {
+        setActiveDate("today");
+        setTodayReport(null);
+        setTasks([]);
+        setStep(0);
+        setQuestionAnswers([]);
+        setQuestionIndex(0);
+        setCurrentAnswer("");
+        setAllQuestionsDone(false);
+        // Refresh EOD status
+        try {
+          const status = await apiClient.getEodStatus();
+          setEodStatus(status);
+        } catch (_) { /* ignore */ }
+        await loadTodayReport();
+        return true;
       }
 
       return true;
@@ -626,6 +696,84 @@ export default function EODReport() {
               Partagez votre journée de travail
             </p>
           </div>
+
+          {/* ── J-1 Recovery Banner ── */}
+          {eodStatus?.yesterday && (() => {
+            const y = eodStatus.yesterday;
+            const isPastDeadline = y.deadline ? new Date() >= new Date(y.deadline) : false;
+            const formattedDate = y.date ? new Date(y.date + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }) : "";
+
+            // Currently filling yesterday's EOD
+            if (activeDate === "yesterday" && y.can_submit) return (
+              <div style={{
+                maxWidth: "560px", margin: "0 auto 16px", padding: "14px 20px",
+                borderRadius: "16px", borderLeft: `4px solid ${C.accent}`,
+                background: darkMode ? "rgba(91,106,191,0.10)" : "rgba(91,106,191,0.06)",
+                display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px",
+                fontSize: "13px", color: C.text, lineHeight: 1.5,
+              }}>
+                <span>Vous complétez l'EOD du <strong>{formattedDate}</strong></span>
+                <button onClick={() => setActiveDate("today")} style={{
+                  padding: "6px 14px", borderRadius: "50px", border: `1px solid ${C.border}`,
+                  background: darkMode ? "#252636" : "#f4f6fb", color: C.secondary,
+                  fontSize: "12px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+                  fontFamily: "inherit", transition: "all 0.15s",
+                }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? "#2a2b3a" : "#ebedf5"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? "#252636" : "#f4f6fb"; }}
+                >
+                  Revenir à aujourd'hui
+                </button>
+              </div>
+            );
+
+            // Yesterday missed + can still submit
+            if (!y.submitted && y.is_working_day && y.can_submit && !isPastDeadline && activeDate === "today") return (
+              <div style={{
+                maxWidth: "560px", margin: "0 auto 16px", padding: "14px 20px",
+                borderRadius: "16px", borderLeft: `4px solid ${C.accent}`,
+                background: darkMode ? "rgba(124,138,219,0.10)" : "rgba(91,106,191,0.06)",
+                display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px",
+                fontSize: "13px", color: C.text, lineHeight: 1.5,
+              }}>
+                <span>Vous n'avez pas soumis votre EOD du <strong>{formattedDate}</strong>. Vous avez jusqu'à 12h00 pour le compléter.</span>
+                <button onClick={() => {
+                  setActiveDate("yesterday");
+                  setTodayReport(null);
+                  setTasks([]);
+                  setStep(0);
+                  setQuestionAnswers([]);
+                  setQuestionIndex(0);
+                  setCurrentAnswer("");
+                  setAllQuestionsDone(false);
+                }} style={{
+                  padding: "6px 14px", borderRadius: "50px", border: "none",
+                  background: C.accent, color: "#fff",
+                  fontSize: "12px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+                  fontFamily: "inherit", transition: "all 0.15s",
+                }}
+                  onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.1)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}
+                >
+                  Cliquez ici pour le compléter
+                </button>
+              </div>
+            );
+
+            // Yesterday missed + deadline passed
+            if (!y.submitted && y.is_working_day && isPastDeadline) return (
+              <div style={{
+                maxWidth: "560px", margin: "0 auto 16px", padding: "14px 20px",
+                borderRadius: "16px", borderLeft: `4px solid ${C.muted}`,
+                background: darkMode ? "rgba(100,116,139,0.10)" : "rgba(100,116,139,0.06)",
+                fontSize: "13px", color: C.muted, lineHeight: 1.5,
+              }}>
+                L'EOD du <strong style={{ color: C.secondary }}>{formattedDate}</strong> n'a pas été soumis. Le délai de rattrapage est dépassé.
+              </div>
+            );
+
+            return null;
+          })()}
 
           {/* Progress indicator (hidden, space preserved) */}
           {!todayReport && (
@@ -715,6 +863,10 @@ export default function EODReport() {
                   opacity: 1;
                   transform: translateY(0);
                 }
+              }
+              @keyframes modalFadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
               }
               @keyframes subtaskReveal {
                 from {
@@ -1059,7 +1211,7 @@ export default function EODReport() {
                                     inputMode="decimal"
                                     placeholder="0"
                                     value={sub.hours}
-                                    onChange={(e) => { const v = e.target.value; if (v === "" || /^\d{0,2}(\.\d{0,1})?$/.test(v)) updateNewSubtask(idx, "hours", v); }}
+                                    onChange={(e) => { const v = e.target.value; if (v === "" || /^\d{0,2}(\.\d{0,2})?$/.test(v)) updateNewSubtask(idx, "hours", v); }}
                                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddTaskFromInput(); } }}
                                     style={{
                                       width: "36px",
@@ -1286,11 +1438,22 @@ export default function EODReport() {
                         {questionAnswers.map((qa, i) => (
                           <div
                             key={i}
+                            onClick={() => {
+                              goingBackAnswer.current = qa.answer;
+                              setQuestionAnswers(questionAnswers.slice(0, i));
+                              setQuestionIndex(i);
+                            }}
                             style={{
                               marginBottom: "20px",
                               paddingBottom: "20px",
                               borderBottom: `1px solid ${C.border}`,
+                              cursor: "pointer",
+                              borderRadius: "8px",
+                              padding: "12px 14px 20px",
+                              transition: "background 0.15s",
                             }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.02)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                           >
                             <p style={{
                               fontSize: "14px",
@@ -1300,15 +1463,18 @@ export default function EODReport() {
                             }}>
                               {qa.question}
                             </p>
-                            <p style={{
-                              fontSize: "16px",
-                              color: C.secondary,
-                              margin: 0,
-                              lineHeight: 1.6,
-                              fontStyle: "italic",
-                            }}>
-                              {qa.answer}
-                            </p>
+                            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px" }}>
+                              <p style={{
+                                fontSize: "16px",
+                                color: C.secondary,
+                                margin: 0,
+                                lineHeight: 1.6,
+                                fontStyle: "italic",
+                              }}>
+                                {qa.answer}
+                              </p>
+                              <span style={{ fontSize: "12px", color: C.muted, flexShrink: 0, marginTop: "4px" }}>Modifier</span>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1365,46 +1531,87 @@ export default function EODReport() {
                         }}
                       />
 
-                      {/* Send button — appears when user starts typing */}
+                      {/* Action buttons row */}
                       <div
                         style={{
                           display: "flex",
-                          justifyContent: "flex-end",
+                          justifyContent: questionIndex > 0 ? "space-between" : "flex-end",
+                          alignItems: "center",
                           marginTop: "16px",
-                          opacity: currentAnswer.trim().length > 0 ? 1 : 0,
-                          transform: currentAnswer.trim().length > 0 ? "translateY(0)" : "translateY(8px)",
-                          transition: "opacity 0.35s ease, transform 0.35s ease",
-                          pointerEvents: currentAnswer.trim().length > 0 ? "auto" : "none",
                         }}
                       >
-                        <button
-                          type="button"
-                          onClick={handleSendAnswer}
-                          disabled={sendingAnswer}
+                        {/* Back button */}
+                        {questionIndex > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const prevIndex = questionIndex - 1;
+                              const prevAnswer = questionAnswers[prevIndex]?.answer || "";
+                              goingBackAnswer.current = prevAnswer;
+                              setQuestionAnswers(questionAnswers.slice(0, prevIndex));
+                              setQuestionIndex(prevIndex);
+                            }}
+                            style={{
+                              padding: "10px 20px",
+                              background: "transparent",
+                              color: C.secondary,
+                              border: `1px solid ${C.border}`,
+                              borderRadius: "8px",
+                              fontSize: "14px",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              transition: "all 0.2s ease",
+                              fontFamily: "inherit",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = "transparent";
+                            }}
+                          >
+                            ← Précédent
+                          </button>
+                        )}
+
+                        {/* Send button — appears when user starts typing */}
+                        <div
                           style={{
-                            padding: "10px 28px",
-                            background: sendingAnswer ? C.muted : C.accent,
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: "8px",
-                            fontSize: "14px",
-                            fontWeight: 600,
-                            cursor: sendingAnswer ? "not-allowed" : "pointer",
-                            transition: "all 0.2s ease",
-                          }}
-                          onMouseEnter={(e) => {
-                            if (!sendingAnswer) {
-                              e.currentTarget.style.transform = "translateY(-2px)";
-                              e.currentTarget.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.3)";
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.transform = "translateY(0)";
-                            e.currentTarget.style.boxShadow = "none";
+                            opacity: currentAnswer.trim().length > 0 ? 1 : 0,
+                            transform: currentAnswer.trim().length > 0 ? "translateY(0)" : "translateY(8px)",
+                            transition: "opacity 0.35s ease, transform 0.35s ease",
+                            pointerEvents: currentAnswer.trim().length > 0 ? "auto" : "none",
                           }}
                         >
-                          {sendingAnswer ? "Envoi..." : "Envoyer"}
-                        </button>
+                          <button
+                            type="button"
+                            onClick={handleSendAnswer}
+                            disabled={sendingAnswer}
+                            style={{
+                              padding: "10px 28px",
+                              background: sendingAnswer ? C.muted : C.accent,
+                              color: "#fff",
+                              border: "none",
+                              borderRadius: "8px",
+                              fontSize: "14px",
+                              fontWeight: 600,
+                              cursor: sendingAnswer ? "not-allowed" : "pointer",
+                              transition: "all 0.2s ease",
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!sendingAnswer) {
+                                e.currentTarget.style.transform = "translateY(-2px)";
+                                e.currentTarget.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.3)";
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = "translateY(0)";
+                              e.currentTarget.style.boxShadow = "none";
+                            }}
+                          >
+                            {sendingAnswer ? "Envoi..." : "Envoyer"}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1449,6 +1656,145 @@ export default function EODReport() {
         </div>
       </div>
       </div>
+
+      {/* ── LEAVE CONFIRMATION MODAL ───────────────────────────────────────────── */}
+      {showLeaveModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          animation: 'modalFadeIn 0.2s ease both',
+        }}>
+          {/* Overlay */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(0,0,0,0.5)',
+              backdropFilter: 'blur(4px)',
+              WebkitBackdropFilter: 'blur(4px)',
+            }}
+            onClick={() => setShowLeaveModal(false)}
+          />
+          {/* Modal card */}
+          <div style={{
+            position: 'relative',
+            background: darkMode
+              ? 'linear-gradient(180deg, #2d3059 0%, #1e1f28 80%)'
+              : 'linear-gradient(180deg, #d6daf0 0%, #ffffff 80%)',
+            borderRadius: '20px',
+            padding: '32px',
+            maxWidth: '420px',
+            width: '90%',
+            border: `1px solid ${C.border}`,
+            boxShadow: darkMode
+              ? '0 8px 32px rgba(0,0,0,0.5)'
+              : '0 8px 32px rgba(0,0,0,0.15)',
+            textAlign: 'center',
+          }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '50%',
+              background: darkMode ? 'rgba(239,68,68,0.22)' : 'rgba(239,68,68,0.12)',
+              border: `1px solid ${darkMode ? 'rgba(239,68,68,0.30)' : 'rgba(239,68,68,0.18)'}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px',
+              fontSize: '22px',
+              color: '#ef4444',
+              fontWeight: 800,
+            }}>
+              !
+            </div>
+            <h3 style={{
+              fontSize: '17px',
+              fontWeight: 700,
+              color: C.text,
+              margin: '0 0 8px',
+              fontFamily: 'inherit',
+            }}>
+              Êtes-vous sûr de vouloir quitter ?
+            </h3>
+            <p style={{
+              fontSize: '14px',
+              color: C.secondary,
+              margin: '0 0 24px',
+              lineHeight: 1.5,
+              fontFamily: 'inherit',
+            }}>
+              Vos tâches et réponses en cours ne seront pas sauvegardées.
+            </p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button
+                onClick={() => setShowLeaveModal(false)}
+                style={{
+                  padding: '10px 24px',
+                  borderRadius: '12px',
+                  border: darkMode ? '1px solid rgba(124,138,219,0.35)' : '1px solid rgba(91,106,191,0.25)',
+                  borderBottom: darkMode ? '2px solid rgba(60,70,140,0.6)' : '2px solid rgba(70,80,150,0.4)',
+                  background: darkMode
+                    ? 'linear-gradient(180deg, #8b96e0 0%, #5b6abf 50%, #4a57a0 100%)'
+                    : 'linear-gradient(180deg, #7b8ad4 0%, #5b6abf 50%, #4a56a8 100%)',
+                  color: '#fff',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  fontFamily: 'inherit',
+                  boxShadow: darkMode
+                    ? 'inset 0 1px 1px rgba(255,255,255,0.25), inset 0 -2px 3px rgba(0,0,0,0.2), 0 2px 6px rgba(0,0,0,0.3)'
+                    : 'inset 0 1px 1px rgba(255,255,255,0.35), inset 0 -2px 3px rgba(0,0,0,0.1), 0 2px 6px rgba(0,0,0,0.12)',
+                  textShadow: '0 1px 1px rgba(0,0,0,0.15)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                  e.currentTarget.style.boxShadow = darkMode
+                    ? 'inset 0 1px 1px rgba(255,255,255,0.30), inset 0 -2px 3px rgba(0,0,0,0.2), 0 4px 12px rgba(91,106,191,0.35)'
+                    : 'inset 0 1px 1px rgba(255,255,255,0.40), inset 0 -2px 3px rgba(0,0,0,0.1), 0 4px 12px rgba(91,106,191,0.25)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = darkMode
+                    ? 'inset 0 1px 1px rgba(255,255,255,0.25), inset 0 -2px 3px rgba(0,0,0,0.2), 0 2px 6px rgba(0,0,0,0.3)'
+                    : 'inset 0 1px 1px rgba(255,255,255,0.35), inset 0 -2px 3px rgba(0,0,0,0.1), 0 2px 6px rgba(0,0,0,0.12)';
+                }}
+              >
+                Rester
+              </button>
+              <button
+                onClick={() => (() => { setShowLeaveModal(false); if (pendingNavRef.current) { pendingNavRef.current(); pendingNavRef.current = null; } })()}
+                style={{
+                  padding: '10px 24px',
+                  borderRadius: '12px',
+                  border: `1px solid ${darkMode ? 'rgba(248,113,113,0.3)' : 'rgba(248,113,113,0.2)'}`,
+                  background: darkMode ? 'rgba(248,113,113,0.1)' : 'rgba(248,113,113,0.06)',
+                  color: '#f87171',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  fontFamily: 'inherit',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#f87171';
+                  e.currentTarget.style.color = '#fff';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = darkMode ? 'rgba(248,113,113,0.1)' : 'rgba(248,113,113,0.06)';
+                  e.currentTarget.style.color = '#f87171';
+                }}
+              >
+                Quitter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
