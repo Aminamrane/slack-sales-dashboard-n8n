@@ -125,6 +125,7 @@ export default function EODReport() {
   // J-1 recovery state
   const [eodStatus, setEodStatus] = useState(null);
   const [activeDate, setActiveDate] = useState("today"); // "today" | "yesterday"
+  const [yesterdaySubmitted, setYesterdaySubmitted] = useState(false); // success screen after J-1 submit
 
   // Step 0 typing animation
   const [typedText, setTypedText] = useState("");
@@ -593,22 +594,15 @@ export default function EODReport() {
         }).catch((err) => console.warn("[OpenClaw] Send failed (non-blocking):", err));
       }
 
-      // If we just submitted yesterday's EOD, reset to today
+      // If we just submitted yesterday's EOD, show success screen
       if (activeDate === "yesterday") {
-        setActiveDate("today");
-        setTodayReport(null);
-        setTasks([]);
-        setStep(0);
-        setQuestionAnswers([]);
-        setQuestionIndex(0);
-        setCurrentAnswer("");
-        setAllQuestionsDone(false);
-        // Refresh EOD status
+        setAllQuestionsDone(true);
+        setYesterdaySubmitted(true);
+        // Refresh EOD status in background
         try {
           const status = await apiClient.getEodStatus();
           setEodStatus(status);
         } catch (_) { /* ignore */ }
-        await loadTodayReport();
         return true;
       }
 
@@ -1636,15 +1630,54 @@ export default function EODReport() {
                       color: C.text,
                       marginBottom: "8px",
                     }}>
-                      Merci d'avoir répondu au formulaire
+                      {yesterdaySubmitted ? "EOD d'hier envoyé avec succès" : "Merci d'avoir répondu au formulaire"}
                     </h2>
                     <p style={{
                       fontSize: "16px",
                       color: C.secondary,
-                      margin: 0,
+                      margin: yesterdaySubmitted ? "0 0 24px" : 0,
                     }}>
-                      À demain !
+                      {yesterdaySubmitted ? "Vous pouvez maintenant remplir votre EOD du jour." : "À demain !"}
                     </p>
+                    {yesterdaySubmitted && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setYesterdaySubmitted(false);
+                          setActiveDate("today");
+                          setTodayReport(null);
+                          setTasks([]);
+                          setStep(0);
+                          setQuestionAnswers([]);
+                          setQuestionIndex(0);
+                          setCurrentAnswer("");
+                          setAllQuestionsDone(false);
+                          await loadTodayReport();
+                        }}
+                        style={{
+                          padding: "12px 32px",
+                          background: C.accent,
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "10px",
+                          fontSize: "15px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                          transition: "all 0.2s ease",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = "translateY(-2px)";
+                          e.currentTarget.style.boxShadow = "0 4px 12px rgba(91,106,191,0.3)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = "translateY(0)";
+                          e.currentTarget.style.boxShadow = "none";
+                        }}
+                      >
+                        Remplir l'EOD d'aujourd'hui
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
