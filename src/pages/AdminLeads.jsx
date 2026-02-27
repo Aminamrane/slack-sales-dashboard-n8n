@@ -6,34 +6,16 @@ import Chart from "chart.js/auto";
 import ChartDataLabels from "chartjs-plugin-datalabels";
 import myLogo from "../assets/my_image.png";
 import myLogoDark from "../assets/my_image2.png";
+import metaLogo from "../assets/meta.png";
+import sysLogo from "../assets/sys.png";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import "../index.css";
 
 Chart.register(ChartDataLabels);
 
-const LIGHT_COLORS = {
-  primary: "#3b82f6",
-  success: "#10b981",
-  danger: "#ef4444",
-  textPrimary: "#0f172a",
-  textSecondary: "#64748b",
-  textTertiary: "#94a3b8",
-  border: "#e2e8f0",
-  background: "#f8fafc",
-  cardBg: "#ffffff",
-};
-
-const DARK_COLORS = {
-  primary: "#3b82f6",
-  success: "#34d399",
-  danger: "#f87171",
-  textPrimary: "#f5f5f7",
-  textSecondary: "#9ba3af",
-  textTertiary: "#6b7280",
-  border: "#333338",
-  background: "#1a1a1e",
-  cardBg: "#242428",
-};
+// Color constants kept outside component for chart useMemo deps
+const LIGHT_ACCENT_RGB = [91, 106, 191];
+const DARK_ACCENT_RGB = [124, 138, 219];
 
 const formatPhone = (raw) => {
   if (!raw) return '-';
@@ -56,7 +38,21 @@ export default function AdminLeads() {
     return saved === "true";
   });
 
-  const COLORS = darkMode ? DARK_COLORS : LIGHT_COLORS;
+  const CARD = {
+    bg: darkMode ? '#1e1f28' : '#ffffff',
+    border: darkMode ? '#2a2b36' : '#e2e6ef',
+    surface: darkMode ? '#13141b' : '#edf0f8',
+    text: darkMode ? '#eef0f6' : '#1e2330',
+    muted: darkMode ? '#5e6273' : '#9ca3af',
+    subtle: darkMode ? '#252636' : '#f4f6fb',
+    secondary: darkMode ? '#8b8fa0' : '#6b7280',
+    accent: darkMode ? '#7c8adb' : '#5b6abf',
+    shadow: darkMode
+      ? '0 1px 3px rgba(0,0,0,0.2), 0 4px 16px rgba(0,0,0,0.15)'
+      : '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03)',
+    success: '#10b981',
+    danger: '#ef4444',
+  };
 
   useEffect(() => {
     localStorage.setItem("darkMode", darkMode);
@@ -230,10 +226,11 @@ export default function AdminLeads() {
     const labels = entries.map(([origin]) => origin);
     const data = entries.map(([, count]) => count);
 
-    // Use gradient of blue shades for cleaner look
-    const blueGradient = (index, total) => {
-      const opacity = 1 - (index * 0.15); // Fade from 1 to lighter
-      return `rgba(59, 130, 246, ${Math.max(opacity, 0.4)})`;
+    // Use gradient of accent shades for cleaner look
+    const accentRGB = darkMode ? DARK_ACCENT_RGB : LIGHT_ACCENT_RGB;
+    const accentGradient = (index) => {
+      const opacity = 1 - (index * 0.15);
+      return `rgba(${accentRGB.join(',')}, ${Math.max(opacity, 0.4)})`;
     };
 
     return {
@@ -241,7 +238,7 @@ export default function AdminLeads() {
       datasets: [{
         label: 'Nombre de leads',
         data,
-        backgroundColor: entries.map((_, idx) => blueGradient(idx, entries.length)),
+        backgroundColor: entries.map((_, idx) => accentGradient(idx)),
         borderWidth: 0,
         borderRadius: 8,
       }],
@@ -252,6 +249,9 @@ export default function AdminLeads() {
     indexAxis: 'y',
     responsive: true,
     maintainAspectRatio: false,
+    layout: {
+      padding: { right: 90 },
+    },
     plugins: {
       legend: { display: false },
       tooltip: {
@@ -262,10 +262,10 @@ export default function AdminLeads() {
             return `${ctx.parsed.x} leads (${pct}%)`;
           },
         },
-        backgroundColor: darkMode ? "#020617" : "#ffffff",
-        titleColor: darkMode ? "#e5e7eb" : COLORS.textPrimary,
-        bodyColor: darkMode ? "#f9fafb" : COLORS.textPrimary,
-        borderColor: darkMode ? "#1f2937" : COLORS.border,
+        backgroundColor: CARD.bg,
+        titleColor: CARD.text,
+        bodyColor: CARD.text,
+        borderColor: CARD.border,
         borderWidth: 1,
         padding: 12,
         cornerRadius: 8,
@@ -273,7 +273,7 @@ export default function AdminLeads() {
       datalabels: {
         anchor: 'end',
         align: 'end',
-        color: darkMode ? "#e5e7eb" : COLORS.textSecondary,
+        color: CARD.secondary,
         font: { size: 12, weight: 600 },
         formatter: (value) => {
           const total = monthStats.total || 1;
@@ -286,11 +286,11 @@ export default function AdminLeads() {
       x: {
         beginAtZero: true,
         ticks: {
-          color: darkMode ? "#9ba3af" : COLORS.textSecondary,
+          color: CARD.secondary,
           font: { size: 11 },
         },
         grid: {
-          color: darkMode ? "rgba(148, 163, 184, 0.1)" : COLORS.border,
+          color: darkMode ? 'rgba(255,255,255,0.06)' : CARD.border,
           drawBorder: false,
         },
         border: {
@@ -299,7 +299,7 @@ export default function AdminLeads() {
       },
       y: {
         ticks: {
-          color: darkMode ? "#9ba3af" : COLORS.textPrimary,
+          color: CARD.text,
           font: { size: 12, weight: 500 },
         },
         grid: { display: false },
@@ -338,11 +338,11 @@ export default function AdminLeads() {
         return acc;
       }, []);
 
-      // Modern color palette - shades of blue
+      // Modern color palette - accent indigo + complements
       const colors = [
-        '#3b82f6', // Bright blue
-        '#06b6d4', // Cyan
-        '#8b5cf6', // Purple
+        CARD.accent, // Indigo accent
+        '#06b6d4',   // Cyan
+        '#8b5cf6',   // Purple
       ];
       const color = colors[idx];
 
@@ -377,7 +377,7 @@ export default function AdminLeads() {
         display: true,
         position: "bottom",
         labels: {
-          color: darkMode ? "#e5e7eb" : COLORS.textPrimary,
+          color: CARD.text,
           font: { size: 13, weight: 600 },
           padding: 20,
           usePointStyle: true,
@@ -390,10 +390,10 @@ export default function AdminLeads() {
         callbacks: {
           label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()} leads cumulés`,
         },
-        backgroundColor: darkMode ? "#020617" : "#ffffff",
-        titleColor: darkMode ? "#e5e7eb" : COLORS.textPrimary,
-        bodyColor: darkMode ? "#f9fafb" : COLORS.textPrimary,
-        borderColor: darkMode ? "#1f2937" : COLORS.border,
+        backgroundColor: CARD.bg,
+        titleColor: CARD.text,
+        bodyColor: CARD.text,
+        borderColor: CARD.border,
         borderWidth: 1,
         padding: 12,
         cornerRadius: 8,
@@ -405,12 +405,12 @@ export default function AdminLeads() {
       y: {
         beginAtZero: true,
         ticks: {
-          color: darkMode ? "#9ba3af" : COLORS.textSecondary,
+          color: CARD.secondary,
           font: { size: 11 },
           callback: (value) => value.toLocaleString(),
         },
         grid: {
-          color: darkMode ? "rgba(148, 163, 184, 0.1)" : COLORS.border,
+          color: darkMode ? 'rgba(255,255,255,0.06)' : CARD.border,
           drawBorder: false,
         },
         border: {
@@ -419,7 +419,7 @@ export default function AdminLeads() {
       },
       x: {
         ticks: {
-          color: darkMode ? "#9ba3af" : COLORS.textSecondary,
+          color: CARD.secondary,
           font: { size: 11 },
           maxTicksLimit: 15,
         },
@@ -433,19 +433,41 @@ export default function AdminLeads() {
     },
   }), [darkMode]);
 
-  // ── CHALLENGE: Bar chart vertical - Leads par jour ──────────
+  // ── CHALLENGE: Bar chart vertical - Leads par jour (stacked Meta + Systeme.io) ──
   const challengeBarData = useMemo(() => {
     if (!challengeData?.summary?.leads_par_jour) return { labels: [], datasets: [] };
     const days = challengeData.summary.leads_par_jour;
+    const leads = challengeData.leads || [];
+
+    // Count per day per origin
+    const metaByDay = {};
+    const sysByDay = {};
+    leads.forEach(l => {
+      const d = l.date;
+      if (!d) return;
+      if (l.origin === 'Meta') metaByDay[d] = (metaByDay[d] || 0) + 1;
+      else sysByDay[d] = (sysByDay[d] || 0) + 1;
+    });
+
+    const labels = days.map(d => d.date);
     return {
-      labels: days.map(d => d.date),
-      datasets: [{
-        label: 'Leads par jour',
-        data: days.map(d => d.count),
-        backgroundColor: 'rgba(59, 130, 246, 0.7)',
-        borderWidth: 0,
-        borderRadius: 6,
-      }],
+      labels,
+      datasets: [
+        {
+          label: 'Meta',
+          data: labels.map(d => metaByDay[d] || 0),
+          backgroundColor: '#1877F2',
+          borderWidth: 0,
+          borderRadius: 4,
+        },
+        {
+          label: 'Systeme.io',
+          data: labels.map(d => sysByDay[d] || 0),
+          backgroundColor: '#06b6d4',
+          borderWidth: 0,
+          borderRadius: 4,
+        },
+      ],
     };
   }, [challengeData]);
 
@@ -453,44 +475,63 @@ export default function AdminLeads() {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: { display: false },
+      legend: {
+        display: true,
+        position: 'bottom',
+        labels: {
+          color: CARD.text,
+          font: { size: 12, weight: 600 },
+          padding: 16,
+          usePointStyle: true,
+          pointStyle: 'circle',
+          boxWidth: 8,
+          boxHeight: 8,
+        },
+      },
       tooltip: {
         callbacks: {
-          label: (ctx) => `${ctx.parsed.y} leads`,
+          label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y} leads`,
         },
-        backgroundColor: darkMode ? "#020617" : "#ffffff",
-        titleColor: darkMode ? "#e5e7eb" : COLORS.textPrimary,
-        bodyColor: darkMode ? "#f9fafb" : COLORS.textPrimary,
-        borderColor: darkMode ? "#1f2937" : COLORS.border,
+        backgroundColor: CARD.bg,
+        titleColor: CARD.text,
+        bodyColor: CARD.text,
+        borderColor: CARD.border,
         borderWidth: 1,
         padding: 12,
         cornerRadius: 8,
       },
       datalabels: {
+        display: (ctx) => ctx.datasetIndex === ctx.chart.data.datasets.length - 1,
         anchor: 'end',
         align: 'top',
-        color: darkMode ? "#e5e7eb" : COLORS.textSecondary,
+        color: CARD.secondary,
         font: { size: 11, weight: 600 },
-        formatter: (value) => value > 0 ? value : '',
+        formatter: (value, ctx) => {
+          // Show stacked total
+          const total = ctx.chart.data.datasets.reduce((sum, ds) => sum + (ds.data[ctx.dataIndex] || 0), 0);
+          return total > 0 ? total : '';
+        },
       },
     },
     scales: {
       y: {
+        stacked: true,
         beginAtZero: true,
         ticks: {
-          color: darkMode ? "#9ba3af" : COLORS.textSecondary,
+          color: CARD.secondary,
           font: { size: 11 },
           stepSize: 1,
         },
         grid: {
-          color: darkMode ? "rgba(148, 163, 184, 0.1)" : COLORS.border,
+          color: darkMode ? 'rgba(255,255,255,0.06)' : CARD.border,
           drawBorder: false,
         },
         border: { display: false },
       },
       x: {
+        stacked: true,
         ticks: {
-          color: darkMode ? "#9ba3af" : COLORS.textSecondary,
+          color: CARD.secondary,
           font: { size: 11 },
           maxRotation: 45,
           minRotation: 0,
@@ -508,14 +549,22 @@ export default function AdminLeads() {
   return (
     <div style={{
       padding: 0,
-      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif",
-      background: darkMode ? "#1a1a1e" : COLORS.background,
+      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+      background: CARD.surface,
       minHeight: "100vh",
-      paddingTop: '16px'
+      paddingTop: '80px',
+      color: CARD.text,
     }}>
       <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />
 
-      <div className="board-frame">
+      <div style={{
+        maxWidth: 1400,
+        margin: '32px auto 64px',
+        padding: '18px',
+        background: darkMode ? 'rgba(0,0,0,0.10)' : 'rgba(190,197,215,0.20)',
+        borderRadius: '32px',
+      }}>
+      <div className="board-frame" style={{ margin: 0 }}>
         <div style={{
           position: 'absolute',
           top: 'var(--space-xl)',
@@ -539,23 +588,55 @@ export default function AdminLeads() {
           </div>
 
           {/* Droite: Toggle + Refresh */}
-          <div style={{ display: 'flex', gap: 'var(--space-md)', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <div style={{
+              display: 'inline-flex',
+              background: darkMode ? '#252636' : '#eef1f6',
+              borderRadius: '10px',
+              padding: '3px',
+              border: `1px solid ${darkMode ? '#2a2b36' : '#dfe3ed'}`,
+            }}>
+              {[{ key: 'monitoring', label: 'Lead' }, { key: 'challenge', label: 'Challenge' }].map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setViewMode(t.key)}
+                  style={{
+                    padding: '6px 16px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: viewMode === t.key ? (darkMode ? '#1e1f28' : '#ffffff') : 'transparent',
+                    color: viewMode === t.key ? CARD.text : CARD.muted,
+                    fontSize: '13px',
+                    fontWeight: viewMode === t.key ? 600 : 500,
+                    fontFamily: "'Inter', system-ui, sans-serif",
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    boxShadow: viewMode === t.key ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                  }}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
             <button
-              className={viewMode === "monitoring" ? "toggle-btn active" : "toggle-btn"}
-              onClick={() => setViewMode("monitoring")}
-            >
-              Monitoring
-            </button>
-            <button
-              className={viewMode === "challenge" ? "toggle-btn active" : "toggle-btn"}
-              onClick={() => setViewMode("challenge")}
-            >
-              Challenge
-            </button>
-            <button
-              className="export-btn"
               onClick={() => viewMode === "monitoring" ? fetchStats() : fetchChallenge()}
               title="Refresh data"
+              style={{
+                display: 'inline-flex', alignItems: 'center',
+                fontFamily: "'Inter', system-ui, sans-serif",
+                fontSize: '13px', fontWeight: 700, letterSpacing: '-0.01em',
+                color: darkMode ? '#9ca3b8' : '#464b65',
+                padding: '8px 18px',
+                background: darkMode ? '#2a2b36' : '#dfdfe5',
+                borderRadius: '10px',
+                border: darkMode ? '1px solid #353647' : '1px solid #c3c3c3',
+                borderBottom: darkMode ? '1px solid #252636' : '1px solid #a5a5a5',
+                boxShadow: darkMode
+                  ? 'inset 0 2px 0 rgba(255,255,255,0.12), inset 0 -3px 4px rgba(0,0,0,0.3), 0 3px 6px rgba(0,0,0,0.25)'
+                  : 'inset 0 2px 0 rgba(255,255,255,0.9), inset 0 -3px 4px #d0d1d8, 0 3px 6px rgba(0,0,0,0.1)',
+                cursor: 'pointer',
+                userSelect: 'none',
+              }}
             >
               Refresh
             </button>
@@ -582,14 +663,15 @@ export default function AdminLeads() {
               padding: '0 20px'
             }}>
               <div style={{
-                background: COLORS.cardBg,
-                border: `1px solid ${COLORS.border}`,
-                borderRadius: '12px',
-                padding: '24px'
+                background: CARD.bg,
+                border: `1px solid ${CARD.border}`,
+                borderRadius: '16px',
+                padding: '24px',
+                boxShadow: CARD.shadow
               }}>
                 <div style={{
                   fontSize: '11px',
-                  color: COLORS.textTertiary,
+                  color: CARD.muted,
                   textTransform: 'uppercase',
                   fontWeight: 600,
                   letterSpacing: '0.5px',
@@ -600,14 +682,14 @@ export default function AdminLeads() {
                 <div style={{
                   fontSize: '36px',
                   fontWeight: 700,
-                  color: COLORS.textPrimary,
+                  color: CARD.text,
                   lineHeight: 1
                 }}>
                   {todayStats.total}
                 </div>
                 <div style={{
                   fontSize: '14px',
-                  color: COLORS.textSecondary,
+                  color: CARD.secondary,
                   marginTop: '8px'
                 }}>
                   leads reçus
@@ -615,14 +697,15 @@ export default function AdminLeads() {
               </div>
 
               <div style={{
-                background: COLORS.cardBg,
-                border: `1px solid ${COLORS.border}`,
-                borderRadius: '12px',
-                padding: '24px'
+                background: CARD.bg,
+                border: `1px solid ${CARD.border}`,
+                borderRadius: '16px',
+                padding: '24px',
+                boxShadow: CARD.shadow
               }}>
                 <div style={{
                   fontSize: '11px',
-                  color: COLORS.textTertiary,
+                  color: CARD.muted,
                   textTransform: 'uppercase',
                   fontWeight: 600,
                   letterSpacing: '0.5px',
@@ -633,7 +716,7 @@ export default function AdminLeads() {
                 <div style={{
                   fontSize: '24px',
                   fontWeight: 700,
-                  color: COLORS.textPrimary,
+                  color: CARD.text,
                   lineHeight: 1,
                   marginBottom: '8px'
                 }}>
@@ -641,7 +724,7 @@ export default function AdminLeads() {
                 </div>
                 <div style={{
                   fontSize: '14px',
-                  color: COLORS.textSecondary
+                  color: CARD.secondary
                 }}>
                   {todayStats.top.count.toLocaleString()} leads
                 </div>
@@ -660,8 +743,8 @@ export default function AdminLeads() {
 
                 {/* Card 1: Meilleure source */}
                 <div style={{
-                  background: COLORS.cardBg,
-                  border: `1px solid ${COLORS.border}`,
+                  background: CARD.bg,
+                  border: `1px solid ${CARD.border}`,
                   borderRadius: '12px',
                   padding: '24px',
                   transition: 'all 0.2s ease',
@@ -669,7 +752,7 @@ export default function AdminLeads() {
                 }}>
                   <div style={{
                     fontSize: '11px',
-                    color: COLORS.textTertiary,
+                    color: CARD.muted,
                     textTransform: 'uppercase',
                     fontWeight: 600,
                     letterSpacing: '0.5px',
@@ -680,7 +763,7 @@ export default function AdminLeads() {
                   <div style={{
                     fontSize: '32px',
                     fontWeight: 700,
-                    color: COLORS.textPrimary,
+                    color: CARD.text,
                     marginBottom: '8px',
                     lineHeight: 1
                   }}>
@@ -688,7 +771,7 @@ export default function AdminLeads() {
                   </div>
                   <div style={{
                     fontSize: '14px',
-                    color: COLORS.textSecondary,
+                    color: CARD.secondary,
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px'
@@ -696,7 +779,7 @@ export default function AdminLeads() {
                     <span style={{ fontWeight: 600 }}>{monthStats.entries[0]?.[1] || 0}</span>
                     <span>leads</span>
                     <span style={{
-                      color: COLORS.success,
+                      color: CARD.success,
                       fontSize: '13px',
                       fontWeight: 600
                     }}>
@@ -707,8 +790,8 @@ export default function AdminLeads() {
 
                 {/* Card 2: Total ce mois */}
                 <div style={{
-                  background: COLORS.cardBg,
-                  border: `1px solid ${COLORS.border}`,
+                  background: CARD.bg,
+                  border: `1px solid ${CARD.border}`,
                   borderRadius: '12px',
                   padding: '24px',
                   transition: 'all 0.2s ease',
@@ -716,7 +799,7 @@ export default function AdminLeads() {
                 }}>
                   <div style={{
                     fontSize: '11px',
-                    color: COLORS.textTertiary,
+                    color: CARD.muted,
                     textTransform: 'uppercase',
                     fontWeight: 600,
                     letterSpacing: '0.5px',
@@ -727,7 +810,7 @@ export default function AdminLeads() {
                   <div style={{
                     fontSize: '32px',
                     fontWeight: 700,
-                    color: COLORS.textPrimary,
+                    color: CARD.text,
                     marginBottom: '8px',
                     lineHeight: 1
                   }}>
@@ -735,7 +818,7 @@ export default function AdminLeads() {
                   </div>
                   <div style={{
                     fontSize: '14px',
-                    color: COLORS.textSecondary
+                    color: CARD.secondary
                   }}>
                     {monthStats.entries.length} sources actives
                   </div>
@@ -743,8 +826,8 @@ export default function AdminLeads() {
 
                 {/* Card 3: Moyenne par jour */}
                 <div style={{
-                  background: COLORS.cardBg,
-                  border: `1px solid ${COLORS.border}`,
+                  background: CARD.bg,
+                  border: `1px solid ${CARD.border}`,
                   borderRadius: '12px',
                   padding: '24px',
                   transition: 'all 0.2s ease',
@@ -752,7 +835,7 @@ export default function AdminLeads() {
                 }}>
                   <div style={{
                     fontSize: '11px',
-                    color: COLORS.textTertiary,
+                    color: CARD.muted,
                     textTransform: 'uppercase',
                     fontWeight: 600,
                     letterSpacing: '0.5px',
@@ -763,7 +846,7 @@ export default function AdminLeads() {
                   <div style={{
                     fontSize: '32px',
                     fontWeight: 700,
-                    color: COLORS.textPrimary,
+                    color: CARD.text,
                     marginBottom: '8px',
                     lineHeight: 1
                   }}>
@@ -771,7 +854,7 @@ export default function AdminLeads() {
                   </div>
                   <div style={{
                     fontSize: '14px',
-                    color: COLORS.textSecondary
+                    color: CARD.secondary
                   }}>
                     leads par jour
                   </div>
@@ -784,8 +867,8 @@ export default function AdminLeads() {
 
                 {/* GAUCHE: Bar chart horizontal */}
                 <div style={{
-                  background: COLORS.cardBg,
-                  border: `1px solid ${COLORS.border}`,
+                  background: CARD.bg,
+                  border: `1px solid ${CARD.border}`,
                   borderRadius: '12px',
                   padding: '24px'
                 }}>
@@ -793,14 +876,14 @@ export default function AdminLeads() {
                     <div style={{
                       fontSize: '16px',
                       fontWeight: 700,
-                      color: COLORS.textPrimary,
+                      color: CARD.text,
                       marginBottom: '4px'
                     }}>
                       Leads par origine
                     </div>
                     <div style={{
                       fontSize: '13px',
-                      color: COLORS.textSecondary
+                      color: CARD.secondary
                     }}>
                       Répartition des {monthStats.total.toLocaleString()} leads reçus ce mois
                     </div>
@@ -813,8 +896,8 @@ export default function AdminLeads() {
 
                 {/* DROITE: Line chart (TOP 3) */}
                 <div style={{
-                  background: COLORS.cardBg,
-                  border: `1px solid ${COLORS.border}`,
+                  background: CARD.bg,
+                  border: `1px solid ${CARD.border}`,
                   borderRadius: '12px',
                   padding: '24px'
                 }}>
@@ -822,14 +905,14 @@ export default function AdminLeads() {
                     <div style={{
                       fontSize: '16px',
                       fontWeight: 700,
-                      color: COLORS.textPrimary,
+                      color: CARD.text,
                       marginBottom: '4px'
                     }}>
                       Évolution TOP 3 sources
                     </div>
                     <div style={{
                       fontSize: '13px',
-                      color: COLORS.textSecondary
+                      color: CARD.secondary
                     }}>
                       Leads cumulés des 3 meilleures sources
                     </div>
@@ -845,8 +928,8 @@ export default function AdminLeads() {
               {/* Tableau des leads du jour */}
               {todayStats.total > 0 && (
                 <div style={{
-                  background: COLORS.cardBg,
-                  border: `1px solid ${COLORS.border}`,
+                  background: CARD.bg,
+                  border: `1px solid ${CARD.border}`,
                   borderRadius: '12px',
                   padding: '24px',
                   marginTop: '32px'
@@ -855,14 +938,14 @@ export default function AdminLeads() {
                     <div style={{
                       fontSize: '16px',
                       fontWeight: 700,
-                      color: COLORS.textPrimary,
+                      color: CARD.text,
                       marginBottom: '4px'
                     }}>
                       Détail des leads d'aujourd'hui
                     </div>
                     <div style={{
                       fontSize: '13px',
-                      color: COLORS.textSecondary
+                      color: CARD.secondary
                     }}>
                       {todayStats.total} lead{todayStats.total > 1 ? 's' : ''} reçu{todayStats.total > 1 ? 's' : ''}
                     </div>
@@ -875,7 +958,7 @@ export default function AdminLeads() {
                           <th style={{
                             width: '60px',
                             textAlign: 'center',
-                            color: COLORS.textTertiary,
+                            color: CARD.muted,
                             fontWeight: 600,
                             fontSize: '11px',
                             textTransform: 'uppercase',
@@ -884,7 +967,7 @@ export default function AdminLeads() {
                           <th style={{
                             width: '80px',
                             textAlign: 'center',
-                            color: COLORS.textTertiary,
+                            color: CARD.muted,
                             fontWeight: 600,
                             fontSize: '11px',
                             textTransform: 'uppercase',
@@ -893,7 +976,7 @@ export default function AdminLeads() {
                           <th style={{
                             width: '200px',
                             textAlign: 'left',
-                            color: COLORS.textTertiary,
+                            color: CARD.muted,
                             fontWeight: 600,
                             fontSize: '11px',
                             textTransform: 'uppercase',
@@ -902,7 +985,7 @@ export default function AdminLeads() {
                           <th style={{
                             width: '250px',
                             textAlign: 'left',
-                            color: COLORS.textTertiary,
+                            color: CARD.muted,
                             fontWeight: 600,
                             fontSize: '11px',
                             textTransform: 'uppercase',
@@ -911,7 +994,7 @@ export default function AdminLeads() {
                           <th style={{
                             width: '140px',
                             textAlign: 'center',
-                            color: COLORS.textTertiary,
+                            color: CARD.muted,
                             fontWeight: 600,
                             fontSize: '11px',
                             textTransform: 'uppercase',
@@ -920,7 +1003,7 @@ export default function AdminLeads() {
                           <th style={{
                             width: '140px',
                             textAlign: 'center',
-                            color: COLORS.textTertiary,
+                            color: CARD.muted,
                             fontWeight: 600,
                             fontSize: '11px',
                             textTransform: 'uppercase',
@@ -946,33 +1029,33 @@ export default function AdminLeads() {
 
                             return (
                               <tr key={lead.id} style={{
-                                borderTop: `1px solid ${COLORS.border}`
+                                borderTop: `1px solid ${CARD.border}`
                               }}>
                                 <td style={{
                                   textAlign: 'center',
-                                  color: COLORS.textSecondary,
+                                  color: CARD.secondary,
                                   fontSize: '13px'
                                 }}>{idx + 1}</td>
                                 <td style={{
                                   textAlign: 'center',
-                                  color: COLORS.textSecondary,
+                                  color: CARD.secondary,
                                   fontSize: '13px',
                                   fontWeight: 500
                                 }}>{time}</td>
                                 <td style={{
                                   textAlign: 'left',
                                   fontWeight: 600,
-                                  color: COLORS.textPrimary,
+                                  color: CARD.text,
                                   fontSize: '14px'
                                 }}>{lead.full_name || '-'}</td>
                                 <td style={{
                                   textAlign: 'left',
-                                  color: COLORS.textSecondary,
+                                  color: CARD.secondary,
                                   fontSize: '13px'
                                 }}>{lead.email || '-'}</td>
                                 <td style={{
                                   textAlign: 'center',
-                                  color: COLORS.textSecondary,
+                                  color: CARD.secondary,
                                   fontSize: '13px'
                                 }}>{lead.phone || '-'}</td>
                                 <td style={{ textAlign: 'center' }}>
@@ -981,8 +1064,8 @@ export default function AdminLeads() {
                                     borderRadius: '6px',
                                     fontSize: '12px',
                                     fontWeight: 600,
-                                    background: darkMode ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.08)',
-                                    color: COLORS.primary,
+                                    background: darkMode ? `rgba(${DARK_ACCENT_RGB.join(',')}, 0.2)` : `rgba(${LIGHT_ACCENT_RGB.join(',')}, 0.08)`,
+                                    color: CARD.accent,
                                   }}>
                                     {lead.origin}
                                   </span>
@@ -1017,9 +1100,9 @@ export default function AdminLeads() {
                   padding: '8px 14px',
                   paddingRight: '32px',
                   borderRadius: '12px',
-                  border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`,
-                  background: darkMode ? '#2a2b2e' : '#ffffff',
-                  color: darkMode ? '#f5f5f7' : '#1d1d1f',
+                  border: `1px solid ${CARD.border}`,
+                  background: CARD.bg,
+                  color: CARD.text,
                   fontWeight: 500,
                   fontSize: '14px',
                   cursor: 'pointer'
@@ -1052,7 +1135,7 @@ export default function AdminLeads() {
             </div>
 
             {challengeLoading && (
-              <p style={{ textAlign: 'center', padding: '60px', color: COLORS.textSecondary }}>
+              <p style={{ textAlign: 'center', padding: '60px', color: CARD.secondary }}>
                 Chargement des données...
               </p>
             )}
@@ -1068,44 +1151,58 @@ export default function AdminLeads() {
                   padding: '0 20px'
                 }}>
                   <div style={{
-                    background: COLORS.cardBg,
-                    border: `1px solid ${COLORS.border}`,
+                    background: CARD.bg,
+                    border: `1px solid ${CARD.border}`,
                     borderRadius: '12px',
                     padding: '24px'
                   }}>
                     <div style={{
-                      fontSize: '11px', color: COLORS.textTertiary,
+                      fontSize: '11px', color: CARD.muted,
                       textTransform: 'uppercase', fontWeight: 600,
                       letterSpacing: '0.5px', marginBottom: '12px'
                     }}>Total Leads</div>
                     <div style={{
                       fontSize: '36px', fontWeight: 700,
-                      color: COLORS.textPrimary, lineHeight: 1
+                      color: CARD.text, lineHeight: 1
                     }}>{challengeData.summary?.total_leads ?? 0}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginTop: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <img src={metaLogo} alt="Meta" style={{ width: 52, height: 52, objectFit: 'contain', margin: '-13px -10px -13px 0' }} />
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: CARD.secondary }}>
+                          {challengeData.leads?.filter(l => l.origin === 'Meta').length ?? 0}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <img src={sysLogo} alt="Systeme.io" style={{ width: 18, height: 18, objectFit: 'contain' }} />
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: CARD.secondary }}>
+                          {challengeData.leads?.filter(l => l.origin === 'Systeme.io').length ?? 0}
+                        </span>
+                      </div>
+                    </div>
                     <div style={{
-                      fontSize: '14px', color: COLORS.textSecondary, marginTop: '8px'
+                      fontSize: '13px', color: CARD.muted, marginTop: '6px'
                     }}>
                       {challengeData.start_date} — {challengeData.end_date}
                     </div>
                   </div>
 
                   <div style={{
-                    background: COLORS.cardBg,
-                    border: `1px solid ${COLORS.border}`,
+                    background: CARD.bg,
+                    border: `1px solid ${CARD.border}`,
                     borderRadius: '12px',
                     padding: '24px'
                   }}>
                     <div style={{
-                      fontSize: '11px', color: COLORS.textTertiary,
+                      fontSize: '11px', color: CARD.muted,
                       textTransform: 'uppercase', fontWeight: 600,
                       letterSpacing: '0.5px', marginBottom: '12px'
                     }}>Aujourd'hui</div>
                     <div style={{
                       fontSize: '36px', fontWeight: 700,
-                      color: COLORS.primary, lineHeight: 1
+                      color: CARD.accent, lineHeight: 1
                     }}>{challengeData.summary?.total_today ?? 0}</div>
                     <div style={{
-                      fontSize: '14px', color: COLORS.textSecondary, marginTop: '8px'
+                      fontSize: '14px', color: CARD.secondary, marginTop: '8px'
                     }}>leads reçus</div>
                   </div>
                 </div>
@@ -1114,18 +1211,18 @@ export default function AdminLeads() {
                 {challengeData.summary?.leads_par_jour?.length > 0 && (
                   <div style={{ padding: '0 20px', marginBottom: '32px' }}>
                     <div style={{
-                      background: COLORS.cardBg,
-                      border: `1px solid ${COLORS.border}`,
+                      background: CARD.bg,
+                      border: `1px solid ${CARD.border}`,
                       borderRadius: '12px',
                       padding: '24px'
                     }}>
                       <div style={{ marginBottom: '20px' }}>
                         <div style={{
                           fontSize: '16px', fontWeight: 700,
-                          color: COLORS.textPrimary, marginBottom: '4px'
+                          color: CARD.text, marginBottom: '4px'
                         }}>Leads par jour</div>
                         <div style={{
-                          fontSize: '13px', color: COLORS.textSecondary
+                          fontSize: '13px', color: CARD.secondary
                         }}>
                           Distribution des {challengeData.summary?.total_leads ?? 0} leads sur la période
                         </div>
@@ -1140,8 +1237,8 @@ export default function AdminLeads() {
                 {/* Leads Table */}
                 {challengeData.leads && challengeData.leads.length > 0 && (
                   <div style={{
-                    background: COLORS.cardBg,
-                    border: `1px solid ${COLORS.border}`,
+                    background: CARD.bg,
+                    border: `1px solid ${CARD.border}`,
                     borderRadius: '12px',
                     padding: '24px',
                     margin: '0 20px'
@@ -1149,12 +1246,24 @@ export default function AdminLeads() {
                     <div style={{ marginBottom: '20px' }}>
                       <div style={{
                         fontSize: '16px', fontWeight: 700,
-                        color: COLORS.textPrimary, marginBottom: '4px'
+                        color: CARD.text, marginBottom: '8px'
                       }}>Détail des leads</div>
-                      <div style={{
-                        fontSize: '13px', color: COLORS.textSecondary
-                      }}>
-                        {challengeData.leads.length} lead{challengeData.leads.length > 1 ? 's' : ''}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '13px', color: CARD.secondary }}>
+                          {challengeData.leads.length} lead{challengeData.leads.length > 1 ? 's' : ''}
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <img src={metaLogo} alt="Meta" style={{ width: 44, height: 44, objectFit: 'contain', margin: '-14px 0' }} />
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: CARD.secondary }}>
+                            {challengeData.leads.filter(l => l.origin === 'Meta').length}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <img src={sysLogo} alt="Systeme.io" style={{ width: 16, height: 16, objectFit: 'contain' }} />
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: CARD.secondary }}>
+                            {challengeData.leads.filter(l => l.origin === 'Systeme.io').length}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
@@ -1162,27 +1271,39 @@ export default function AdminLeads() {
                       <table className="leaderboard" style={{ width: '100%', tableLayout: 'fixed' }}>
                         <thead>
                           <tr>
-                            <th style={{ width: '50px', textAlign: 'center', color: COLORS.textTertiary, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>#</th>
-                            <th style={{ width: '100px', textAlign: 'center', color: COLORS.textTertiary, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Date</th>
-                            <th style={{ width: '60px', textAlign: 'center', color: COLORS.textTertiary, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Heure</th>
-                            <th style={{ textAlign: 'left', color: COLORS.textTertiary, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Client</th>
-                            <th style={{ textAlign: 'left', color: COLORS.textTertiary, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Email</th>
-                            <th style={{ width: '160px', textAlign: 'center', color: COLORS.textTertiary, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Téléphone</th>
-                            <th style={{ width: '90px', textAlign: 'center', color: COLORS.textTertiary, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Effectif</th>
-                            <th style={{ width: '100px', textAlign: 'center', color: COLORS.textTertiary, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Places</th>
+                            <th style={{ width: '50px', textAlign: 'center', color: CARD.muted, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>#</th>
+                            <th style={{ width: '70px', textAlign: 'center', color: CARD.muted, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Source</th>
+                            <th style={{ width: '100px', textAlign: 'center', color: CARD.muted, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Date</th>
+                            <th style={{ width: '60px', textAlign: 'center', color: CARD.muted, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Heure</th>
+                            <th style={{ textAlign: 'left', color: CARD.muted, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Client</th>
+                            <th style={{ textAlign: 'left', color: CARD.muted, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Email</th>
+                            <th style={{ width: '160px', textAlign: 'center', color: CARD.muted, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Téléphone</th>
+                            <th style={{ width: '90px', textAlign: 'center', color: CARD.muted, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Effectif</th>
+                            <th style={{ width: '100px', textAlign: 'center', color: CARD.muted, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Places</th>
                           </tr>
                         </thead>
                         <tbody>
                           {challengeData.leads.map((lead, idx) => (
-                            <tr key={lead.id || idx} style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                              <td style={{ textAlign: 'center', color: COLORS.textSecondary, fontSize: '13px' }}>{idx + 1}</td>
-                              <td style={{ textAlign: 'center', color: COLORS.textSecondary, fontSize: '13px', fontWeight: 500 }}>{lead.date || '-'}</td>
-                              <td style={{ textAlign: 'center', color: COLORS.textSecondary, fontSize: '13px' }}>{lead.heure || '-'}</td>
-                              <td style={{ textAlign: 'left', fontWeight: 600, color: COLORS.textPrimary, fontSize: '14px' }}>{lead.client || '-'}</td>
-                              <td style={{ textAlign: 'left', color: COLORS.textSecondary, fontSize: '13px' }}>{lead.email || '-'}</td>
-                              <td style={{ textAlign: 'center', color: COLORS.textSecondary, fontSize: '13px', fontFamily: 'monospace' }}>{formatPhone(lead.phone)}</td>
-                              <td style={{ textAlign: 'center', color: COLORS.textPrimary, fontSize: '13px', fontWeight: 600 }}>{lead.nbr_headcount || '-'}</td>
-                              <td style={{ textAlign: 'center', color: COLORS.textPrimary, fontSize: '13px' }}>{lead.nbr_places || '-'}</td>
+                            <tr key={lead.id || idx} style={{ borderTop: `1px solid ${CARD.border}` }}>
+                              <td style={{ textAlign: 'center', color: CARD.secondary, fontSize: '13px' }}>{idx + 1}</td>
+                              <td style={{ textAlign: 'center' }}>
+                                <img
+                                  src={lead.origin === 'Meta' ? metaLogo : sysLogo}
+                                  alt={lead.origin}
+                                  title={lead.origin}
+                                  style={lead.origin === 'Meta'
+                                    ? { width: 60, height: 60, objectFit: 'contain', verticalAlign: 'middle', margin: '-18px 0' }
+                                    : { width: 26, height: 26, objectFit: 'contain', verticalAlign: 'middle' }
+                                  }
+                                />
+                              </td>
+                              <td style={{ textAlign: 'center', color: CARD.secondary, fontSize: '13px', fontWeight: 500 }}>{lead.date || '-'}</td>
+                              <td style={{ textAlign: 'center', color: CARD.secondary, fontSize: '13px' }}>{lead.heure || '-'}</td>
+                              <td style={{ textAlign: 'left', fontWeight: 600, color: CARD.text, fontSize: '14px' }}>{lead.client || '-'}</td>
+                              <td style={{ textAlign: 'left', color: CARD.secondary, fontSize: '13px' }}>{lead.email || '-'}</td>
+                              <td style={{ textAlign: 'center', color: CARD.secondary, fontSize: '13px', fontFamily: 'monospace' }}>{formatPhone(lead.phone)}</td>
+                              <td style={{ textAlign: 'center', color: CARD.text, fontSize: '13px', fontWeight: 600 }}>{lead.nbr_headcount || '-'}</td>
+                              <td style={{ textAlign: 'center', color: CARD.text, fontSize: '13px' }}>{lead.nbr_places || '-'}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1193,7 +1314,7 @@ export default function AdminLeads() {
 
                 {/* Empty state */}
                 {(!challengeData.leads || challengeData.leads.length === 0) && (
-                  <p style={{ textAlign: 'center', padding: '60px', color: COLORS.textSecondary }}>
+                  <p style={{ textAlign: 'center', padding: '60px', color: CARD.secondary }}>
                     Aucun lead pour cette période
                   </p>
                 )}
@@ -1202,6 +1323,7 @@ export default function AdminLeads() {
           </>
         )}
       </div>
+      </div>{/* /outer wrapper */}
     </div>
   );
 }
