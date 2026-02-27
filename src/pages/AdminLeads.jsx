@@ -1274,7 +1274,6 @@ export default function AdminLeads() {
                             <th style={{ width: '50px', textAlign: 'center', color: CARD.muted, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>#</th>
                             <th style={{ width: '70px', textAlign: 'center', color: CARD.muted, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Source</th>
                             <th style={{ width: '100px', textAlign: 'center', color: CARD.muted, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Date</th>
-                            <th style={{ width: '60px', textAlign: 'center', color: CARD.muted, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Heure</th>
                             <th style={{ textAlign: 'left', color: CARD.muted, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Client</th>
                             <th style={{ textAlign: 'left', color: CARD.muted, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Email</th>
                             <th style={{ width: '160px', textAlign: 'center', color: CARD.muted, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Téléphone</th>
@@ -1298,7 +1297,6 @@ export default function AdminLeads() {
                                 />
                               </td>
                               <td style={{ textAlign: 'center', color: CARD.secondary, fontSize: '13px', fontWeight: 500 }}>{lead.date || '-'}</td>
-                              <td style={{ textAlign: 'center', color: CARD.secondary, fontSize: '13px' }}>{lead.heure || '-'}</td>
                               <td style={{ textAlign: 'left', fontWeight: 600, color: CARD.text, fontSize: '14px' }}>{lead.client || '-'}</td>
                               <td style={{ textAlign: 'left', color: CARD.secondary, fontSize: '13px' }}>{lead.email || '-'}</td>
                               <td style={{ textAlign: 'center', color: CARD.secondary, fontSize: '13px', fontFamily: 'monospace' }}>{formatPhone(lead.phone)}</td>
