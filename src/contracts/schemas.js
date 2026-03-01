@@ -37,7 +37,7 @@ export const RepresentativeSchema = z.object({
 /** ➜ V1 souple : SIREN = 9 chiffres, représentants facultatifs */
 export const CompanySchema = z.object({
   legalName: z.string().min(2, "Raison sociale requise"),
-  legalForm: z.enum(["SARL","SAS","SASU","SA","EURL","SCI","Autre"]),
+  legalForm: z.enum(["SARL","SAS","SASU","SA","EURL","SCI","SNC","Autre"]),
   siren: z.string()
     .transform(normalizeSiren)
     .refine((v) => v === "" || /^\d{9}$/.test(v), "SIREN = 9 chiffres"),
