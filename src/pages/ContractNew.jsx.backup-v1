@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CompanySchema, normalizeSiren, isValidSiren } from "../contracts/schemas.js";
 import { companyClause } from "../contracts/format.js";
 import myLogo from "../assets/my_image.png";
@@ -51,9 +51,6 @@ export default function ContractNew() {
   const [showAllErrors, setShowAllErrors] = useState(false);
   const [preview, setPreview] = useState("");
   const [step, setStep] = useState(0); // 0..4
-  const [generationPhase, setGenerationPhase] = useState(null); // null | "success" | "loading"
-  const [loadingMsg, setLoadingMsg] = useState("");
-  const hasGenerated = useRef(false);
 
   // Dark mode detection - IMMEDIATE pour éviter le flash
   const [darkMode, setDarkMode] = useState(() => {
@@ -287,44 +284,11 @@ export default function ContractNew() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-
-      // Post-generation flow
-      if (hasGenerated.current) {
-        // Re-generation → show loading animation
-        setGenerationPhase("loading");
-      } else {
-        // First generation → show success screen
-        hasGenerated.current = true;
-        setGenerationPhase("success");
-      }
     } catch (err) {
       console.error(err);
       alert("Erreur réseau lors de la génération du PDF.");
     }
   };
-
-  const handleModify = () => {
-    setGenerationPhase(null);
-    setStep(0);
-  };
-
-  // Loading animation timer (75s with rotating messages)
-  useEffect(() => {
-    if (generationPhase !== "loading") return;
-    const messages = [
-      { time: 0, text: "Prise en compte de la modification..." },
-      { time: 15000, text: `Recherche de l'email "${company.email}"...` },
-      { time: 30000, text: "Modification en cours..." },
-      { time: 50000, text: "Vérification..." },
-      { time: 65000, text: "Finalisation..." },
-    ];
-    setLoadingMsg(messages[0].text);
-    const timers = messages.slice(1).map(m =>
-      setTimeout(() => setLoadingMsg(m.text), m.time)
-    );
-    const endTimer = setTimeout(() => setGenerationPhase("success"), 75000);
-    return () => { timers.forEach(clearTimeout); clearTimeout(endTimer); };
-  }, [generationPhase, company.email]);
 
   return (
     <div className={`wizard-outer ${darkMode ? 'dark-mode' : ''}`}>
@@ -616,7 +580,7 @@ export default function ContractNew() {
           )}
 
           {/* STEP 4 — Aperçu & PDF */}
-          {step === 4 && generationPhase === null && (
+          {step === 4 && (
             <>
               <div className="preview card">
                 <div className="preview-title">Aperçu</div>
@@ -625,64 +589,14 @@ export default function ContractNew() {
 
               <div className="actions-bottom">
                 <button type="button" className="export-btn" onClick={generatePdfDraft}>
-                  {hasGenerated.current ? "Régénérer le NDA" : "Générer PDF"}
+                  Générer PDF
                 </button>
               </div>
             </>
           )}
 
-          {/* SUCCESS SCREEN */}
-          {step === 4 && generationPhase === "success" && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 24px', textAlign: 'center' }}>
-              <svg viewBox="0 0 52 52" style={{ width: 72, height: 72, marginBottom: 24 }}>
-                <circle cx="26" cy="26" r="24" fill="none" stroke="#10b981" strokeWidth="3"
-                  style={{ strokeDasharray: 151, strokeDashoffset: 151, animation: 'checkCircle 0.6s ease forwards' }} />
-                <path fill="none" stroke="#10b981" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"
-                  d="M15 27l7 7 15-15"
-                  style={{ strokeDasharray: 36, strokeDashoffset: 36, animation: 'checkMark 0.4s 0.5s ease forwards' }} />
-              </svg>
-              <h2 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 8px', color: darkMode ? '#f5f5f7' : '#1d1d1f' }}>
-                NDA généré avec succès
-              </h2>
-              <p style={{ fontSize: 15, color: darkMode ? '#a1a1a6' : '#6e6e73', margin: '0 0 32px' }}>
-                Vous pouvez désormais envoyer le contrat
-              </p>
-              <button type="button" className="btn-ghost" onClick={handleModify}
-                style={{ fontSize: 15, padding: '12px 28px', borderRadius: 12, border: `1.5px solid ${darkMode ? '#0a84ff' : '#007aff'}`, color: darkMode ? '#0a84ff' : '#007aff', background: 'transparent', cursor: 'pointer', fontWeight: 600 }}>
-                Modifier le contrat
-              </button>
-              <style>{`
-                @keyframes checkCircle { to { stroke-dashoffset: 0; } }
-                @keyframes checkMark { to { stroke-dashoffset: 0; } }
-              `}</style>
-            </div>
-          )}
-
-          {/* LOADING SCREEN (75s) */}
-          {step === 4 && generationPhase === "loading" && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 24px', textAlign: 'center' }}>
-              <div style={{ position: 'relative', width: 100, height: 100, marginBottom: 32 }}>
-                <svg viewBox="0 0 100 100" style={{ width: 100, height: 100, transform: 'rotate(-90deg)' }}>
-                  <circle cx="50" cy="50" r="44" fill="none" stroke={darkMode ? '#333338' : '#e5e5ea'} strokeWidth="6" />
-                  <circle cx="50" cy="50" r="44" fill="none" stroke={darkMode ? '#0a84ff' : '#007aff'} strokeWidth="6"
-                    strokeLinecap="round"
-                    style={{ strokeDasharray: 276.5, strokeDashoffset: 276.5, animation: 'loaderProgress 75s linear forwards' }} />
-                </svg>
-              </div>
-              <p style={{ fontSize: 16, fontWeight: 600, color: darkMode ? '#f5f5f7' : '#1d1d1f', margin: '0 0 8px', minHeight: 24, transition: 'opacity 0.4s' }}>
-                {loadingMsg}
-              </p>
-              <p style={{ fontSize: 13, color: darkMode ? '#636366' : '#aeaeb2' }}>
-                Veuillez patienter...
-              </p>
-              <style>{`
-                @keyframes loaderProgress { to { stroke-dashoffset: 0; } }
-              `}</style>
-            </div>
-          )}
-
-          {/* Bottom nav - hidden during success/loading phases */}
-          <div className="wizard-nav" style={generationPhase ? { display: 'none' } : undefined}>
+          {/* Bottom nav */}
+          <div className="wizard-nav">
             <button type="button" className="btn-ghost" onClick={goBack} disabled={step === 0}>
               ← Précédent
             </button>
