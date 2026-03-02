@@ -246,6 +246,11 @@ export default function MonitoringPerf() {
   });
   const [canal, setCanal] = useState("global"); // "global" | "ads" | "cc"
 
+  // ── ADS HEADCOUNT DETAIL VIEW ───────────────────────────────────────────
+  const [adsDetailView, setAdsDetailView] = useState(false);
+  const [headcountData, setHeadcountData] = useState(null);
+  const [headcountLoading, setHeadcountLoading] = useState(false);
+
   // ── DETAIL DRILL-DOWN (ADS/CC) ──────────────────────────────────────────
   const [detailModal, setDetailModal] = useState(null); // { personName, type, data, loading }
 
@@ -263,6 +268,26 @@ export default function MonitoringPerf() {
       setDetailModal(prev => prev ? { ...prev, data: null, loading: false } : null);
     }
   };
+
+  // Fetch headcount breakdown when detail view is active
+  useEffect(() => {
+    if (!adsDetailView || canal !== "ads") return;
+    let cancelled = false;
+    const fetchHeadcount = async () => {
+      setHeadcountLoading(true);
+      try {
+        const res = await apiClient.get(`/api/v1/monitoring/performance/detail/ads/headcount?period=${range}`);
+        if (!cancelled) setHeadcountData(res);
+      } catch (e) {
+        console.error("Headcount fetch error:", e);
+        if (!cancelled) setHeadcountData(null);
+      } finally {
+        if (!cancelled) setHeadcountLoading(false);
+      }
+    };
+    fetchHeadcount();
+    return () => { cancelled = true; };
+  }, [adsDetailView, range, canal]);
 
   const fetchData = async () => {
     setDataLoading(true);
@@ -604,10 +629,10 @@ export default function MonitoringPerf() {
                 </select>
 
                 {/* Canal selector (Global/ADS/CC) */}
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <button
                     className={canal === "global" ? "toggle-btn active" : "toggle-btn"}
-                    onClick={() => setCanal("global")}
+                    onClick={() => { setCanal("global"); setAdsDetailView(false); }}
                   >
                     Global
                   </button>
@@ -619,10 +644,22 @@ export default function MonitoringPerf() {
                   </button>
                   <button
                     className={canal === "cc" ? "toggle-btn active" : "toggle-btn"}
-                    onClick={() => setCanal("cc")}
+                    onClick={() => { setCanal("cc"); setAdsDetailView(false); }}
                   >
                     CC
                   </button>
+                  {canal === "ads" && (
+                    <>
+                      <div style={{ width: 1, height: 20, background: darkMode ? '#444' : '#d0d0d0', margin: '0 4px' }} />
+                      <button
+                        className={adsDetailView ? "toggle-btn active" : "toggle-btn"}
+                        onClick={() => setAdsDetailView(v => !v)}
+                        style={{ fontSize: '0.8rem' }}
+                      >
+                        {adsDetailView ? "Funnel" : "Détail"}
+                      </button>
+                    </>
+                  )}
                 </div>
               </>
             ) : (
@@ -857,7 +894,88 @@ export default function MonitoringPerf() {
           </p>
         )}
 
-        {!dataLoading && performanceData.length > 0 && (
+        {/* ── ADS HEADCOUNT DETAIL TABLE ─────────────────────────────────── */}
+        {!dataLoading && canal === "ads" && adsDetailView && (
+          <div className="leaderboard-wrapper" style={{ animation: 'fadeIn 0.4s ease-out' }}>
+            {headcountLoading ? (
+              <p style={{ textAlign: 'center', padding: '60px', color: darkMode ? '#8b8d93' : '#86868b' }}>
+                Chargement...
+              </p>
+            ) : !headcountData ? (
+              <p style={{ textAlign: 'center', padding: '60px', color: darkMode ? '#8b8d93' : '#86868b' }}>
+                Aucune donnée disponible
+              </p>
+            ) : (
+              <table className="leaderboard" style={{ fontSize: '0.82rem', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>#</th>
+                    <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>Sales</th>
+                    <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center', fontWeight: 700 }}>Leads</th>
+                    <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>1-2</th>
+                    <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>3-4</th>
+                    <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>5-6</th>
+                    <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>7-10</th>
+                    <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>11-19</th>
+                    <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>20+</th>
+                    <th style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>Inconnu</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...(headcountData.by_person || [])]
+                    .sort((a, b) => (b.leads_assigned || 0) - (a.leads_assigned || 0))
+                    .map((person, i) => {
+                      const cellBorder = { borderRight: '1px solid rgba(128,128,128,0.15)' };
+                      const hc = person.headcount_breakdown || {};
+                      return (
+                        <tr key={person.person_name}>
+                          <td style={{ textAlign: 'center', ...cellBorder }}>{i + 1}</td>
+                          <td style={{ fontWeight: i < 3 ? 700 : 500, paddingLeft: 12, whiteSpace: 'nowrap', ...cellBorder }}>
+                            {person.person_name}
+                          </td>
+                          <td style={{ textAlign: 'center', fontWeight: 700, ...cellBorder }}>
+                            {(person.leads_assigned || 0).toLocaleString("fr-FR")}
+                          </td>
+                          {["1-2", "3-4", "5-6", "7-10", "11-19", "20+"].map(bracket => (
+                            <td key={bracket} style={{ textAlign: 'center', fontWeight: 500, ...cellBorder }}>
+                              {hc[bracket] || 0}
+                            </td>
+                          ))}
+                          <td style={{ textAlign: 'center', fontWeight: 400, color: darkMode ? '#8b8d93' : '#86868b' }}>
+                            {person.unknown || 0}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  {/* Totals row */}
+                  {headcountData.totals && (
+                    <tr style={{
+                      borderTop: `2px solid ${darkMode ? '#444' : '#d0d0d0'}`,
+                      fontWeight: 700,
+                      background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'
+                    }}>
+                      <td style={{ textAlign: 'center', borderRight: '1px solid rgba(128,128,128,0.15)' }}></td>
+                      <td style={{ textAlign: 'center', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Total</td>
+                      <td style={{ textAlign: 'center', borderRight: '1px solid rgba(128,128,128,0.15)' }}>
+                        {(headcountData.totals.leads_assigned || 0).toLocaleString("fr-FR")}
+                      </td>
+                      {["1-2", "3-4", "5-6", "7-10", "11-19", "20+"].map(bracket => (
+                        <td key={bracket} style={{ textAlign: 'center', borderRight: '1px solid rgba(128,128,128,0.15)' }}>
+                          {(headcountData.totals.headcount_breakdown || {})[bracket] || 0}
+                        </td>
+                      ))}
+                      <td style={{ textAlign: 'center', color: darkMode ? '#8b8d93' : '#86868b' }}>
+                        {headcountData.totals.unknown || 0}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {!dataLoading && performanceData.length > 0 && !(canal === "ads" && adsDetailView) && (
           <div className="leaderboard-wrapper" style={{
             animation: 'fadeIn 0.4s ease-out'
           }}>
