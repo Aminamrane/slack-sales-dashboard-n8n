@@ -327,20 +327,29 @@ export default function ContractNew() {
     return () => { timers.forEach(clearTimeout); clearTimeout(endTimer); };
   }, [generationPhase, company.email]);
 
-  // Typewriter effect for loading messages
+  // Typewriter effect + animated dots (. → .. → ...)
   useEffect(() => {
     if (generationPhase !== "loading" || !loadingMsg) {
       setDisplayedMsg("");
       return;
     }
+    const base = loadingMsg.replace(/\.+$/, "");
     setDisplayedMsg("");
     let i = 0;
-    const id = setInterval(() => {
+    let dotInterval;
+    const typeId = setInterval(() => {
       i++;
-      setDisplayedMsg(loadingMsg.slice(0, i));
-      if (i >= loadingMsg.length) clearInterval(id);
+      setDisplayedMsg(base.slice(0, i));
+      if (i >= base.length) {
+        clearInterval(typeId);
+        let d = 0;
+        dotInterval = setInterval(() => {
+          d = (d % 3) + 1;
+          setDisplayedMsg(base + ".".repeat(d));
+        }, 400);
+      }
     }, 28);
-    return () => clearInterval(id);
+    return () => { clearInterval(typeId); if (dotInterval) clearInterval(dotInterval); };
   }, [loadingMsg, generationPhase]);
 
   return (
@@ -686,16 +695,14 @@ export default function ContractNew() {
                     style={{ strokeDasharray: 276.5, strokeDashoffset: 276.5, animation: 'loaderProgress 75s linear forwards' }} />
                 </svg>
               </div>
-              <p style={{ fontSize: 16, fontWeight: 600, color: darkMode ? '#f5f5f7' : '#1d1d1f', margin: '0 0 8px', minHeight: 24, fontFamily: 'monospace', letterSpacing: '-0.02em' }}>
+              <p style={{ fontSize: 16, fontWeight: 600, color: darkMode ? '#f5f5f7' : '#1d1d1f', margin: '0 0 8px', minHeight: 24 }}>
                 {displayedMsg}
-                <span className="typing-cursor" style={{ display: 'inline-block', width: 2, height: '1em', marginLeft: 2, verticalAlign: 'text-bottom', background: darkMode ? '#0a84ff' : '#007aff', animation: 'blink 0.6s step-end infinite' }} />
               </p>
               <p style={{ fontSize: 13, color: darkMode ? '#636366' : '#aeaeb2' }}>
                 Veuillez patienter...
               </p>
               <style>{`
                 @keyframes loaderProgress { to { stroke-dashoffset: 0; } }
-                @keyframes blink { 50% { opacity: 0; } }
               `}</style>
             </div>
           )}
