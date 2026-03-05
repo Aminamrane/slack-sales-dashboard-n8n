@@ -121,7 +121,10 @@ class ApiClient {
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       console.error('[API] Error:', error);
-      throw new Error(error.detail || 'Erreur API');
+      const err = new Error(error.detail || 'Erreur API');
+      err.status = response.status;
+      err.data = error;
+      throw err;
     }
 
     return response.json();
@@ -265,6 +268,28 @@ class ApiClient {
     });
   }
 
+  async forgotPassword(email) {
+    const res = await fetch(`${this.baseUrl}/api/v1/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: String(email).trim().toLowerCase() }),
+    });
+    return safeJson(res);
+  }
+
+  async resetPassword(token, newPassword) {
+    const res = await fetch(`${this.baseUrl}/api/v1/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, new_password: newPassword }),
+    });
+    const data = await safeJson(res);
+    if (!res.ok) {
+      throw new Error(data?.detail || 'Erreur lors de la réinitialisation');
+    }
+    return data;
+  }
+
   // ============ LEADS ============
   async getLeads(params = {}) {
     const query = new URLSearchParams(params).toString();
@@ -290,8 +315,16 @@ class ApiClient {
   }
 
   async unassignLead(id) {
-    return this.request(`/api/v1/leads/${id}/unassign`, {
+    return this.request(`/api/v1/leads/${id}/assign`, {
       method: 'POST',
+      body: JSON.stringify({ assigned_to: null }),
+    });
+  }
+
+  async forceAssignLead(id, assignedTo) {
+    return this.request(`/api/v1/leads/${id}/assign?force=true`, {
+      method: 'POST',
+      body: JSON.stringify({ assigned_to: assignedTo }),
     });
   }
 

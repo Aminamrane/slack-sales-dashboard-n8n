@@ -157,13 +157,30 @@ export default function SharedNavbar({ session, darkMode, setDarkMode }) {
         {/* Mes pages - Dropdown */}
         <div style={{ position: 'relative' }}>
           <button
-            className="tools-btn"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0,
+              padding: '8px 12px',
+              minHeight: 34,
+              maxHeight: 34,
+              borderRadius: 10,
+              border: 'none',
+              background: darkMode ? '#2a2b2e' : '#eef0f6',
+              color: darkMode ? '#eef0f6' : '#1e2330',
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? '#2a2b36' : '#e2e6ef'}
+            onMouseLeave={(e) => e.currentTarget.style.background = darkMode ? '#2a2b2e' : '#eef0f6'}
             onClick={(e) => {
               const dropdown = e.currentTarget.nextElementSibling;
               dropdown.style.display = dropdown.style.display === 'none' ? 'flex' : 'none';
             }}
           >
-            <span style={{ marginLeft: '10px' }}>Mes pages</span>
+            <span>Mes pages</span>
             <span style={{ fontSize: '10px', opacity: 0.6, marginLeft: '6px' }}>▼</span>
           </button>
           {/* Dropdown menu */}

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { CompanySchema, normalizeSiren, isValidSiren } from "../contracts/schemas.js";
 import { companyClause } from "../contracts/format.js";
+import apiClient from "../services/apiClient";
 import myLogo from "../assets/my_image.png";
 import myLogoDark from "../assets/my_image2.png";
 import "./contract.css";
@@ -31,6 +33,9 @@ const BUSINESS_TYPES = [
 const toSchemaLegalForm = (lf) => (lf === "EI" ? "Autre" : lf);
 
 export default function ContractNew() {
+  const [searchParams] = useSearchParams();
+  const leadId = searchParams.get('lead_id');
+
   const [company, setCompany] = useState({
     legalName: "",
     legalForm: "SARL",
@@ -288,6 +293,19 @@ export default function ContractNew() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
+
+      // Fire-and-forget: sync client data to backend DB
+      try {
+        const clientDataPayload = {
+          company: payloadCompany,
+          meta: { typeEntreprise: company.businessType || "Général" },
+          client_info_text: preview,
+        };
+        if (leadId) clientDataPayload.lead_id = leadId;
+        await apiClient.post('/contracts/client-data', clientDataPayload);
+      } catch (e) {
+        console.warn("Backend client-data sync failed (non-blocking):", e);
+      }
 
       // Post-generation flow
       if (hasGenerated.current) {

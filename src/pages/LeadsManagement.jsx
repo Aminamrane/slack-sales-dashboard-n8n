@@ -325,18 +325,35 @@ export default function LeadsManagement() {
       if (salesEmail) {
         await apiClient.assignLead(leadId, salesEmail);
       } else {
-        // Unassign: use dedicated unassign endpoint
+        // Unassign: POST /assign with assigned_to: null
         await apiClient.unassignLead(leadId);
       }
     } catch (err) {
       console.error('Assignment error:', err);
 
-      // Rollback on error
+      // Handle 409 conflict — lead already assigned to someone else
+      if (err.status === 409 || err.message?.includes('409')) {
+        const confirmForce = window.confirm(
+          `Ce lead est déjà assigné à un autre commercial. Voulez-vous forcer la réassignation ?`
+        );
+        if (confirmForce) {
+          try {
+            await apiClient.forceAssignLead(leadId, salesEmail);
+            return; // Success — keep optimistic update
+          } catch (forceErr) {
+            console.error('Force assignment error:', forceErr);
+          }
+        }
+      }
+
+      // Rollback on error (or user declined force)
       setLeads(prev => prev.map(lead =>
         lead.id === leadId ? previousLead : lead
       ));
 
-      alert('Erreur lors de l\'assignation. Veuillez réessayer.');
+      if (err.status !== 409 && !err.message?.includes('409')) {
+        alert('Erreur lors de l\'assignation. Veuillez réessayer.');
+      }
     } finally {
       // Remove from assigning set
       setAssigningLeads(prev => {

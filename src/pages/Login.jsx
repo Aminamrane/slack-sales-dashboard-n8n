@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import apiClient from '../services/apiClient';
 import myLogoDark from '../assets/my_image2.png';
 import './Login.css';
@@ -88,9 +88,42 @@ export default function Login() {
             </div>
           </div>
 
+          <div style={{ textAlign: 'right', marginTop: '-8px' }}>
+            <Link
+              to="/forgot-password"
+              style={{
+                color: '#6b7280',
+                fontSize: '13px',
+                fontWeight: 500,
+                textDecoration: 'none',
+                transition: 'color 0.15s',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.color = '#1d1d1f'}
+              onMouseLeave={(e) => e.currentTarget.style.color = '#6b7280'}
+            >
+              Mot de passe oublié ?
+            </Link>
+          </div>
+
           <button type="submit" disabled={loading}>
             {loading ? 'Connexion' : 'Se connecter'}
           </button>
+
+          <a
+            href="mailto:y.amrane@ownertechnology.com"
+            style={{
+              color: '#9ca3af',
+              fontSize: '13px',
+              fontWeight: 400,
+              textDecoration: 'none',
+              textAlign: 'center',
+              transition: 'color 0.15s',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = '#6b7280'}
+            onMouseLeave={(e) => e.currentTarget.style.color = '#9ca3af'}
+          >
+            Contacter le support
+          </a>
         </form>
       </div>
     </div>

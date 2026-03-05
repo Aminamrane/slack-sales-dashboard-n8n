@@ -15,6 +15,8 @@ import MonitoringPerf   from "./pages/MonitoringPerf.jsx";
 import EODReport        from "./pages/EODReport.jsx";
 import EODDashboard     from "./pages/EODDashboard.jsx";
 import Login            from "./pages/Login.jsx";
+import ForgotPassword   from "./pages/ForgotPassword.jsx";
+import ResetPassword    from "./pages/ResetPassword.jsx";
 import Profile          from "./pages/Profile.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
@@ -29,6 +31,8 @@ function App() {
         {/* Public routes */}
         <Route path="/" element={<Leaderboard />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/admin/leads" element={<AdminLeads />} />
         <Route path="/leads-management" element={<LeadsManagement />} />
         <Route path="/tracking-sheet" element={<TrackingSheet />} />
