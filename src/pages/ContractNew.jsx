@@ -302,7 +302,7 @@ export default function ContractNew() {
           client_info_text: preview,
         };
         if (leadId) clientDataPayload.lead_id = leadId;
-        await apiClient.post('/contracts/client-data', clientDataPayload);
+        await apiClient.post('/api/v1/contracts/client-data', clientDataPayload);
       } catch (e) {
         console.warn("Backend client-data sync failed (non-blocking):", e);
       }
