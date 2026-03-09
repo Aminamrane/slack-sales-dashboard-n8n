@@ -59,6 +59,15 @@ export default function ContractNew() {
   const [generationPhase, setGenerationPhase] = useState(null); // null | "success" | "loading"
   const [loadingMsg, setLoadingMsg] = useState("");
   const [displayedMsg, setDisplayedMsg] = useState("");
+
+  // AI Prefill state
+  const [aiQuery, setAiQuery] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [aiSuccess, setAiSuccess] = useState(false);
+  const [aiFading, setAiFading] = useState(false);
+  const [aiFieldsFilled, setAiFieldsFilled] = useState([]);
+  const [aiContactNotif, setAiContactNotif] = useState(false);
   const hasGenerated = useRef(false);
 
   // Dark mode detection - IMMEDIATE pour éviter le flash
@@ -210,15 +219,16 @@ export default function ContractNew() {
   // ----- steps -----
   const steps = useMemo(
     () => [
-      { key: "identite", title: "Identité", fields: ["legalName", "legalForm", "siren", "rcsCity"] },
-      { key: "contacts", title: "Contacts", fields: ["email", "phone"] },
+      { key: "identite", title: "Identité", desc: "Raison sociale & SIREN", fields: ["legalName", "legalForm", "siren", "rcsCity"] },
+      { key: "contacts", title: "Contacts", desc: "Email & téléphone", fields: ["email", "phone"] },
       {
         key: "siege",
         title: "Siège social",
+        desc: "Adresse du siège",
         fields: ["headOffice.line1", "headOffice.postalCode", "headOffice.city", "headOffice.country"],
       },
-      { key: "reps", title: "Représentants", fields: [] },
-      { key: "apercu", title: "Aperçu & PDF", fields: [] },
+      { key: "reps", title: "Représentants", desc: "Dirigeants & type", fields: [] },
+      { key: "apercu", title: "Aperçu & PDF", desc: "Vérifier & générer", fields: [] },
     ],
     []
   );
@@ -246,10 +256,85 @@ export default function ContractNew() {
   const goNext = () => {
     stepFields.forEach((k) => markTouched(k));
     if (!isCurrentStepValid()) return;
-    setStep((s) => Math.min(s + 1, steps.length - 1));
+    const next = Math.min(step + 1, steps.length - 1);
+    if (next === 1) setAiContactNotif(false);
+    setStep(next);
   };
-  const goBack = () => setStep((s) => Math.max(s - 1, 0));
-  const goTo = (idx) => setStep(idx);
+  const goBack = () => {
+    const prev = Math.max(step - 1, 0);
+    if (prev === 1) setAiContactNotif(false);
+    setStep(prev);
+  };
+  const goTo = (idx) => {
+    if (idx === 1) setAiContactNotif(false);
+    setStep(idx);
+  };
+
+  // ----- AI PREFILL -----
+  const handleAiPrefill = async () => {
+    const q = aiQuery.trim();
+    if (!q) return;
+    setAiLoading(true);
+    setAiError("");
+    setAiSuccess(false);
+    setAiFading(false);
+    setAiFieldsFilled([]);
+
+    try {
+      const data = await apiClient.post('/api/v1/contracts/ai-prefill', { query: q });
+      console.log('[AI Prefill] Backend response:', data);
+
+      // Map response to company state
+      const filled = [];
+      const updates = {};
+
+      if (data.legal_name) { updates.legalName = data.legal_name; filled.push("Raison sociale"); }
+      if (data.legal_form) {
+        // Match case-insensitive (backend may return "Sas", "SARL", etc.)
+        const match = LEGAL_FORMS.find(f => f.toUpperCase() === data.legal_form.toUpperCase());
+        if (match) {
+          updates.legalForm = match; filled.push("Forme juridique");
+        } else {
+          console.warn('[AI Prefill] legal_form not matched:', data.legal_form, '— expected one of:', LEGAL_FORMS);
+        }
+      }
+      if (data.siren) { updates.siren = data.siren; filled.push("SIREN"); }
+      if (data.rcs_city) { updates.rcsCity = data.rcs_city; filled.push("Ville RCS"); }
+      if (data.address) {
+        updates.headOffice = {
+          line1: data.address.line1 || "",
+          postalCode: data.address.postal_code || "",
+          city: data.address.city || "",
+          country: data.address.country || "France",
+        };
+        if (data.address.line1) filled.push("Adresse");
+      }
+      if (data.representatives?.length) {
+        updates.representatives = data.representatives.map(r => ({
+          fullName: r.full_name || "",
+          role: (r.role || "Gérant").replace(/\s+d[eu']\s+\S+$/i, ""),
+        }));
+        filled.push("Représentant(s)");
+      }
+      if (data.business_type && BUSINESS_TYPES.includes(data.business_type)) {
+        updates.businessType = data.business_type; filled.push("Type d'entreprise");
+      }
+
+      setCompany(prev => ({ ...prev, ...updates }));
+      setAiFieldsFilled(filled);
+      setAiSuccess(true);
+      setAiFading(false);
+      setAiContactNotif(true);
+
+      // Auto-dismiss: start fade+collapse at 6.5s, remove from DOM at 7.5s (after 1s transition)
+      setTimeout(() => setAiFading(true), 6500);
+      setTimeout(() => { setAiSuccess(false); setAiFading(false); }, 7500);
+    } catch (err) {
+      setAiError(err?.data?.detail || err?.message || "Erreur lors de la recherche IA");
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   // ----- PDF -----
   const generatePdfDraft = async () => {
@@ -387,8 +472,31 @@ export default function ContractNew() {
               const state = i < step ? "done" : i === step ? "active" : "todo";
               return (
                 <button key={s.key} type="button" className={`step ${state}`} onClick={() => goTo(i)}>
-                  <span className="bullet">{i + 1}</span>
-                  <span className="label">{s.title}</span>
+                  <span className="bullet">
+                    {state === "done" ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    ) : (
+                      i + 1
+                    )}
+                  </span>
+                  <span className="step-text">
+                    <span className="label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {s.title}
+                      {i === 1 && aiContactNotif && (
+                        <span style={{
+                          width: 8, height: 8, borderRadius: '50%',
+                          background: darkMode ? '#ff9f0a' : '#ff9500',
+                          display: 'inline-block',
+                          animation: 'contactPulse 1.5s ease-in-out infinite',
+                          boxShadow: `0 0 6px ${darkMode ? 'rgba(255,159,10,0.5)' : 'rgba(255,149,0,0.5)'}`,
+                          flexShrink: 0,
+                        }} />
+                      )}
+                    </span>
+                    <span className="step-desc">{s.desc}</span>
+                  </span>
                 </button>
               );
             })}
@@ -397,8 +505,136 @@ export default function ContractNew() {
 
         {/* Right Content */}
         <section className="wizard-content">
+          {/* Progress bar */}
+          <div className="wizard-progress">
+            <div className="wizard-progress-bar" style={{ width: `${((step + 1) / steps.length) * 100}%` }} />
+          </div>
+
           <h1 className="contract-title">Clause de confidentialité</h1>
-          <p className="contract-subtitle">Renseigne les infos de l’entreprise.</p>
+          <p className="contract-subtitle">
+            {step < steps.length - 1
+              ? `Étape ${step + 1}/${steps.length - 1} — ${steps[step].desc}`
+              : "Vérifiez les informations et générez le PDF"}
+          </p>
+
+          {/* AI PREFILL BAR */}
+          {generationPhase === null && (
+            <div style={{
+              background: darkMode
+                ? 'linear-gradient(135deg, rgba(10,132,255,0.08) 0%, rgba(88,86,214,0.06) 100%)'
+                : 'linear-gradient(135deg, rgba(0,122,255,0.04) 0%, rgba(88,86,214,0.03) 100%)',
+              border: `1px solid ${darkMode ? 'rgba(10,132,255,0.2)' : 'rgba(0,122,255,0.15)'}`,
+              borderRadius: 16,
+              padding: '14px 18px',
+              marginBottom: 8,
+              position: 'relative',
+              overflow: 'hidden',
+            }}>
+              {/* Shimmer overlay */}
+              <div style={{
+                position: 'absolute',
+                top: 0, left: 0, right: 0, bottom: 0,
+                background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 50%, transparent 100%)',
+                backgroundSize: '200% 100%',
+                animation: 'shimmer 3s ease-in-out infinite',
+                pointerEvents: 'none',
+              }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, position: 'relative' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={darkMode ? '#0a84ff' : '#007aff'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
+                </svg>
+                <span style={{ fontSize: 12, fontWeight: 600, color: darkMode ? '#0a84ff' : '#007aff', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
+                  Pré-remplir
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  value={aiQuery}
+                  onChange={(e) => { setAiQuery(e.target.value); setAiError(""); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAiPrefill(); } }}
+                  placeholder={"Ex. : \u00ab Nom de l'entreprise - Nom Pr\u00e9nom \u00bb"}
+                  disabled={aiLoading}
+                  style={{
+                    flex: 1,
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`,
+                    background: darkMode ? '#2a2b2e' : '#ffffff',
+                    color: darkMode ? '#f5f5f7' : '#1d1d1f',
+                    fontSize: 14,
+                    outline: 'none',
+                    transition: 'border-color 0.2s',
+                  }}
+                  onFocus={(e) => { e.target.style.borderColor = darkMode ? '#0a84ff' : '#007aff'; }}
+                  onBlur={(e) => { e.target.style.borderColor = darkMode ? '#333338' : '#e5e5e5'; }}
+                />
+                <button
+                  type="button"
+                  onClick={handleAiPrefill}
+                  disabled={aiLoading || !aiQuery.trim()}
+                  style={{
+                    padding: '10px 18px',
+                    borderRadius: 10,
+                    border: 'none',
+                    background: darkMode ? '#0a84ff' : '#007aff',
+                    color: '#fff',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: aiLoading || !aiQuery.trim() ? 'not-allowed' : 'pointer',
+                    opacity: aiLoading || !aiQuery.trim() ? 0.5 : 1,
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {aiLoading ? (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" style={{ animation: 'spin 1s linear infinite' }}>
+                        <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="12" />
+                      </svg>
+                      Recherche...
+                    </>
+                  ) : 'Rechercher'}
+                </button>
+              </div>
+
+              {/* Error message */}
+              {aiError && (
+                <p style={{ margin: '8px 0 0', fontSize: 13, color: darkMode ? '#ff453a' : '#ff3b30', fontWeight: 500 }}>
+                  {aiError}
+                </p>
+              )}
+
+              {/* Success message + contact reminder */}
+              {aiSuccess && aiFieldsFilled.length > 0 && (
+                <div style={{
+                  opacity: aiFading ? 0 : 1,
+                  maxHeight: aiFading ? 0 : 80,
+                  marginTop: aiFading ? 0 : 8,
+                  overflow: 'hidden',
+                  transform: aiFading ? 'translateY(-4px)' : 'translateY(0)',
+                  transition: 'opacity 0.5s ease, transform 0.5s ease, max-height 0.6s ease 0.15s, margin-top 0.6s ease 0.15s',
+                }}>
+                  <p style={{
+                    margin: '0 0 0', fontSize: 13, fontWeight: 500,
+                    color: darkMode ? '#30d158' : '#34c759',
+                    animation: 'fadeIn 0.3s ease',
+                  }}>
+                    ✓ {aiFieldsFilled.length} champ{aiFieldsFilled.length > 1 ? 's' : ''} pré-rempli{aiFieldsFilled.length > 1 ? 's' : ''} : {aiFieldsFilled.join(', ')}
+                  </p>
+                  <p style={{
+                    margin: '6px 0 0', fontSize: 12, fontWeight: 500,
+                    color: darkMode ? '#ff9f0a' : '#ff9500',
+                    animation: 'fadeIn 0.3s ease 0.1s both',
+                  }}>
+                    Pensez à remplir l'email et le téléphone dans l'étape Contacts.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* STEP 0 — Identité */}
           {step === 0 && (
@@ -677,27 +913,49 @@ export default function ContractNew() {
 
           {/* SUCCESS SCREEN */}
           {step === 4 && generationPhase === "success" && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 24px', textAlign: 'center' }}>
-              <svg viewBox="0 0 52 52" style={{ width: 72, height: 72, marginBottom: 24 }}>
-                <circle cx="26" cy="26" r="24" fill="none" stroke="#10b981" strokeWidth="3"
-                  style={{ strokeDasharray: 151, strokeDashoffset: 151, animation: 'checkCircle 0.6s ease forwards' }} />
-                <path fill="none" stroke="#10b981" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"
-                  d="M15 27l7 7 15-15"
-                  style={{ strokeDasharray: 36, strokeDashoffset: 36, animation: 'checkMark 0.4s 0.5s ease forwards' }} />
-              </svg>
-              <h2 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 8px', color: darkMode ? '#f5f5f7' : '#1d1d1f' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 24px', textAlign: 'center', animation: 'fadeIn 0.4s ease' }}>
+              {/* Success ring with glow */}
+              <div style={{ position: 'relative', marginBottom: 28 }}>
+                <div style={{
+                  position: 'absolute', inset: -8,
+                  borderRadius: '50%',
+                  background: 'radial-gradient(circle, rgba(16,185,129,0.12) 0%, transparent 70%)',
+                  animation: 'successGlow 2s ease-in-out infinite',
+                }} />
+                <svg viewBox="0 0 52 52" style={{ width: 68, height: 68, position: 'relative' }}>
+                  <circle cx="26" cy="26" r="24" fill="none" stroke="#10b981" strokeWidth="2.5"
+                    style={{ strokeDasharray: 151, strokeDashoffset: 151, animation: 'checkCircle 0.6s ease forwards' }} />
+                  <path fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                    d="M15 27l7 7 15-15"
+                    style={{ strokeDasharray: 36, strokeDashoffset: 36, animation: 'checkMark 0.4s 0.5s ease forwards' }} />
+                </svg>
+              </div>
+              <h2 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 6px', color: darkMode ? '#f5f5f7' : '#1d1d1f' }}>
                 NDA généré avec succès
               </h2>
-              <p style={{ fontSize: 15, color: darkMode ? '#a1a1a6' : '#6e6e73', margin: '0 0 32px' }}>
-                Vous pouvez désormais envoyer le contrat
+              <p style={{ fontSize: 14, color: darkMode ? '#a1a1a6' : '#6e6e73', margin: '0 0 28px', lineHeight: 1.5 }}>
+                Le document a été téléchargé. Vous pouvez<br />désormais envoyer le contrat.
               </p>
               <button type="button" className="btn-ghost" onClick={handleModify}
-                style={{ fontSize: 15, padding: '12px 28px', borderRadius: 12, border: `1.5px solid ${darkMode ? '#0a84ff' : '#007aff'}`, color: darkMode ? '#0a84ff' : '#007aff', background: 'transparent', cursor: 'pointer', fontWeight: 600 }}>
+                style={{
+                  fontSize: 14, padding: '11px 24px', borderRadius: 50,
+                  border: `1.5px solid ${darkMode ? '#0a84ff' : '#007aff'}`,
+                  color: darkMode ? '#0a84ff' : '#007aff',
+                  background: 'transparent', cursor: 'pointer', fontWeight: 600,
+                  transition: 'all 0.25s',
+                }}
+                onMouseEnter={(e) => { e.target.style.background = darkMode ? 'rgba(10,132,255,0.1)' : 'rgba(0,122,255,0.06)'; }}
+                onMouseLeave={(e) => { e.target.style.background = 'transparent'; }}
+              >
                 Modifier le contrat
               </button>
               <style>{`
                 @keyframes checkCircle { to { stroke-dashoffset: 0; } }
                 @keyframes checkMark { to { stroke-dashoffset: 0; } }
+                @keyframes successGlow {
+                  0%, 100% { opacity: 0.6; transform: scale(1); }
+                  50% { opacity: 1; transform: scale(1.08); }
+                }
               `}</style>
             </div>
           )}
@@ -727,12 +985,14 @@ export default function ContractNew() {
 
           {/* Bottom nav - hidden during success/loading phases */}
           <div className="wizard-nav" style={generationPhase ? { display: 'none' } : undefined}>
-            <button type="button" className="btn-ghost" onClick={goBack} disabled={step === 0}>
-              ← Précédent
+            <button type="button" className="btn-ghost" onClick={goBack} disabled={step === 0}
+              style={{ borderRadius: 50, padding: '10px 20px', fontSize: 13 }}>
+              Précédent
             </button>
             {step < steps.length - 1 ? (
-              <button type="button" className="export-btn" onClick={goNext}>
-                Suivant →
+              <button type="button" className="export-btn" onClick={goNext}
+                style={{ borderRadius: 50, padding: '10px 24px', fontSize: 13 }}>
+                Suivant
               </button>
             ) : (
               <span />

@@ -770,11 +770,11 @@ export default function TrackingSheet() {
 
       {/* ── PAGE CONTAINER ──────────────────────────────────────────────────── */}
       <div style={{
-        maxWidth: 1640,
-        margin: '32px auto 20px',
-        padding: '12px',
+        maxWidth: 1400,
+        margin: '32px auto 64px',
+        padding: '18px',
         background: darkMode ? 'rgba(0,0,0,0.10)' : 'rgba(190,197,215,0.20)',
-        borderRadius: '24px',
+        borderRadius: '32px',
         animation: 'pageReveal 0.5s cubic-bezier(0.4,0,0.2,1) both',
       }}>
 
@@ -892,11 +892,11 @@ export default function TrackingSheet() {
           {/* ── INNER BOARD (white card) ──────────────────────────────────────── */}
           <div style={{
             background: C.bg,
-            borderRadius: 20,
+            borderRadius: 24,
             boxShadow: C.shadow,
             border: `1px solid ${C.border}`,
             display: 'flex',
-            height: 'calc(100vh - 200px)',
+            height: 'calc(100vh - 260px)',
             minHeight: '600px',
             overflow: 'hidden',
           }}>

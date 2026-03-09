@@ -1,19 +1,9 @@
 import { useEffect, useState, useMemo, useRef } from "react";
-import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import { supabase } from "../lib/supabaseClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import "../index.css";
-
-// ── SIDEBAR ICONS ────────────────────────────────────────────────────────────
-import iconMyLead from "../assets/mylead.png";
-import iconPlus from "../assets/plus.png";
-import iconEmail from "../assets/email.png";
-import iconCampaigns from "../assets/tar.png";
-import iconKpis from "../assets/finance.png";
-import campaignImg1 from "../assets/audit-document.jpg";
-import campaignImg2 from "../assets/charges-fatales-2.png";
 
 // ── CATEGORIES ────────────────────────────────────────────────────────────────
 const CATEGORIES = [
@@ -148,18 +138,13 @@ export default function TrackingSheet() {
   const [droppingTab, setDroppingTab] = useState(null); // index of tab that just became inactive
 
   // ── SIDEBAR NAV + FORM STATE ────────────────────────────────────────────
-  const [sidebarView, setSidebarView] = useState('leads'); // 'leads' | 'add_lead' | 'calendar' | 'kpis' | 'campaigns'
+  const [sidebarView, setSidebarView] = useState('leads'); // 'leads' | 'add_lead' | 'calendar' | 'kpis'
   const [formData, setFormData] = useState({ full_name: '', phone: '', email: '', sector: '', company_type: '' });
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formSuccess, setFormSuccess] = useState(false);
   const [formError, setFormError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeWorkflow, setActiveWorkflow] = useState(null); // { leadId, contactResult, appointmentResult, r1Result, r1FollowUp, r2Result, newDate }
-
-  // ── CAMPAIGN STATE ──────────────────────────────────────────────────────
-  const [openCampaign, setOpenCampaign] = useState(null); // campaign object or null
-  const [campaignRect, setCampaignRect] = useState(null); // source DOMRect for animation
-  const [campaignClosing, setCampaignClosing] = useState(false); // closing animation flag
 
   // ── DERIVED DATA ──────────────────────────────────────────────────────────
   const tabCounts = useMemo(() => {
@@ -223,11 +208,9 @@ export default function TrackingSheet() {
   const triggerFlyAnimation = (leadId, lead, newStatus) => {
     flyCleanupRef.current.forEach(clearTimeout);
     flyCleanupRef.current = [];
-    const cardEl = document.getElementById(`lead-card-${leadId}`);
     const pillEl = document.getElementById(`lead-pill-${leadId}`);
-    const wasExpanded = expandedCard === leadId;
-    // Use full card when expanded (genie from full shape), pill when collapsed
-    const srcEl = wasExpanded ? (cardEl || pillEl) : (pillEl || cardEl);
+    const cardEl = document.getElementById(`lead-card-${leadId}`);
+    const srcEl = pillEl || cardEl;
     const destCatIdx = CATEGORIES.findIndex(c => c.key === newStatus);
     const tabEl = document.querySelector(`[data-tab-key="${newStatus}"]`);
     if (!srcEl || !tabEl || destCatIdx === -1) return;
@@ -242,12 +225,11 @@ export default function TrackingSheet() {
       dx, dy,
       catColor: CATEGORIES[destCatIdx].color,
       destCatIndex: destCatIdx,
-      wasExpanded,
     });
     flyCleanupRef.current = [
-      setTimeout(() => setGlowingTab(destCatIdx), 480),
-      setTimeout(() => setFlyingCard(null), 780),
-      setTimeout(() => setGlowingTab(null), 1020),
+      setTimeout(() => setGlowingTab(destCatIdx), 520),
+      setTimeout(() => setFlyingCard(null), 820),
+      setTimeout(() => setGlowingTab(null), 1050),
     ];
   };
 
@@ -256,16 +238,14 @@ export default function TrackingSheet() {
     const el = document.getElementById('flying-card-clone');
     if (!el) return;
     const { dx, dy } = flyingCard;
-    // Apple Genie effect: perspective + rotateX creates trapezoid funnel
-    // Top edge narrows (pulled toward tab), bottom trails wider
+    // Aspiration effect: stays full size → horizontal squeeze → sucked into tab
     el.animate([
-      { transform: 'perspective(1200px) translate3d(0, 0, 0) rotateX(0deg) scaleX(1) scaleY(1)', opacity: 1 },
-      { transform: `perspective(1200px) translate3d(${dx * 0.18}px, ${dy * 0.1}px, 0) rotateX(10deg) scaleX(0.88) scaleY(0.95)`, opacity: 1, offset: 0.14 },
-      { transform: `perspective(1200px) translate3d(${dx * 0.48}px, ${dy * 0.3}px, 0) rotateX(24deg) scaleX(0.45) scaleY(0.78)`, opacity: 0.97, offset: 0.34 },
-      { transform: `perspective(1200px) translate3d(${dx * 0.76}px, ${dy * 0.58}px, 0) rotateX(38deg) scaleX(0.16) scaleY(0.45)`, opacity: 0.85, offset: 0.55 },
-      { transform: `perspective(1200px) translate3d(${dx * 0.94}px, ${dy * 0.86}px, 0) rotateX(50deg) scaleX(0.05) scaleY(0.16)`, opacity: 0.5, offset: 0.76 },
-      { transform: `perspective(1200px) translate3d(${dx}px, ${dy}px, 0) rotateX(55deg) scaleX(0.02) scaleY(0.05)`, opacity: 0.15 },
-    ], { duration: 700, easing: 'cubic-bezier(0.25, 0, 0.75, 0.35)', fill: 'forwards' });
+      { transform: 'translate(0, 0) scaleX(1) scaleY(1)', opacity: 1 },
+      { transform: `translate(${dx * 0.15}px, ${dy * 0.05}px) scaleX(0.97) scaleY(0.98)`, opacity: 1, offset: 0.22 },
+      { transform: `translate(${dx * 0.45}px, ${dy * 0.2}px) scaleX(0.5) scaleY(0.82)`, opacity: 0.95, offset: 0.48 },
+      { transform: `translate(${dx * 0.78}px, ${dy * 0.6}px) scaleX(0.14) scaleY(0.4)`, opacity: 0.6, offset: 0.72 },
+      { transform: `translate(${dx}px, ${dy}px) scaleX(0.03) scaleY(0.1)`, opacity: 0 },
+    ], { duration: 750, easing: 'cubic-bezier(0.5, 0, 1, 0.4)', fill: 'forwards' });
   }, [flyingCard]);
 
   // Cleanup fly timers on unmount
@@ -674,33 +654,11 @@ export default function TrackingSheet() {
           80%  { transform: translateY(-1px); }
           100% { transform: translateY(0); }
         }
-        @keyframes contentReveal {
-          from { opacity: 0; transform: translateY(8px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes campaignCardIn {
-          from { opacity: 0; transform: translateY(18px) scale(0.97); }
-          to   { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes campaignOpen {
-          0% {
-            left: var(--cr-left); top: var(--cr-top);
-            width: var(--cr-width); height: var(--cr-height);
-            border-radius: 24px; opacity: 0.85;
-            transform: translate(0, 0);
-          }
-          100% {
-            left: 50%; top: 50%;
-            width: min(92vw, 860px); height: min(88vh, 720px);
-            border-radius: 20px; opacity: 1;
-            transform: translate(-50%, -50%);
-          }
-        }
       `}</style>
 
       <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />
 
-      {/* ── FLYING CARD CLONE (Genie effect transition) ───────────────────── */}
+      {/* ── FLYING CARD CLONE (FLIP shared-element transition) ───────────── */}
       {flyingCard && (
         <div
           id="flying-card-clone"
@@ -711,70 +669,48 @@ export default function TrackingSheet() {
             top: flyingCard.sourceRect.top,
             width: flyingCard.sourceRect.width,
             height: flyingCard.sourceRect.height,
-            borderRadius: '20px',
-            background: darkMode ? 'rgba(30,31,40,0.97)' : 'rgba(255,255,255,0.98)',
+            borderRadius: '50px',
+            background: darkMode ? 'rgba(30,31,40,0.95)' : 'rgba(255,255,255,0.97)',
             border: `1.5px solid ${flyingCard.catColor}40`,
             boxShadow: `0 8px 32px rgba(0,0,0,0.18), 0 0 0 1px ${flyingCard.catColor}15`,
             pointerEvents: 'none',
             overflow: 'hidden',
             display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'flex-start',
+            alignItems: 'center',
+            padding: '0 18px',
+            gap: '10px',
             willChange: 'transform, opacity',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
           }}
         >
-          {/* Top row — pill content */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            padding: flyingCard.wasExpanded ? '16px 20px' : '0 18px',
-            height: flyingCard.wasExpanded ? 'auto' : '100%',
-            gap: '10px',
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: flyingCard.catColor, flexShrink: 0 }} />
+          <span style={{
+            fontSize: '14px', fontWeight: 600, color: C.text,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: flyingCard.catColor, flexShrink: 0 }} />
-            <span style={{
-              fontSize: flyingCard.wasExpanded ? '15px' : '14px', fontWeight: 600, color: C.text,
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>
-              {flyingCard.lead.full_name}
-            </span>
-            <span style={{
-              display: 'inline-flex', alignItems: 'center',
-              padding: '2px 8px', borderRadius: '50px',
-              fontSize: '10px', fontWeight: 600,
-              background: (ORIGIN_COLORS[flyingCard.lead.origin] || DEFAULT_ORIGIN).bg,
-              color: (ORIGIN_COLORS[flyingCard.lead.origin] || DEFAULT_ORIGIN).text,
-              flexShrink: 0,
-            }}>
-              {flyingCard.lead.origin}
-            </span>
-          </div>
-          {/* Expanded: subtle content placeholder lines */}
-          {flyingCard.wasExpanded && (
-            <div style={{ padding: '8px 20px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <div style={{ height: 10, width: '30%', borderRadius: 5, background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }} />
-                <div style={{ height: 10, width: '25%', borderRadius: 5, background: darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.035)' }} />
-                <div style={{ height: 10, width: '20%', borderRadius: 5, background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.025)' }} />
-              </div>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <div style={{ height: 10, width: '40%', borderRadius: 5, background: darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.035)' }} />
-                <div style={{ height: 10, width: '22%', borderRadius: 5, background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.025)' }} />
-              </div>
-            </div>
-          )}
+            {flyingCard.lead.full_name}
+          </span>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center',
+            padding: '2px 8px', borderRadius: '50px',
+            fontSize: '10px', fontWeight: 600,
+            background: (ORIGIN_COLORS[flyingCard.lead.origin] || DEFAULT_ORIGIN).bg,
+            color: (ORIGIN_COLORS[flyingCard.lead.origin] || DEFAULT_ORIGIN).text,
+            flexShrink: 0,
+          }}>
+            {flyingCard.lead.origin}
+          </span>
         </div>
       )}
 
       {/* ── PAGE CONTAINER ──────────────────────────────────────────────────── */}
       <div style={{
-        maxWidth: 1640,
-        margin: '32px auto 20px',
-        padding: '12px',
+        maxWidth: 1400,
+        margin: '32px auto 64px',
+        padding: '18px',
         background: darkMode ? 'rgba(0,0,0,0.10)' : 'rgba(190,197,215,0.20)',
-        borderRadius: '24px',
+        borderRadius: '32px',
         animation: 'pageReveal 0.5s cubic-bezier(0.4,0,0.2,1) both',
       }}>
 
@@ -892,11 +828,11 @@ export default function TrackingSheet() {
           {/* ── INNER BOARD (white card) ──────────────────────────────────────── */}
           <div style={{
             background: C.bg,
-            borderRadius: 20,
+            borderRadius: 24,
             boxShadow: C.shadow,
             border: `1px solid ${C.border}`,
             display: 'flex',
-            height: 'calc(100vh - 200px)',
+            height: 'calc(100vh - 260px)',
             minHeight: '600px',
             overflow: 'hidden',
           }}>
@@ -930,19 +866,19 @@ export default function TrackingSheet() {
 
             {/* Nav items */}
             {[
-              { key: 'leads', label: 'Mes leads', iconSrc: iconMyLead, accent: C.accent, keepColor: true },
-              { key: 'add_lead', label: 'Ajouter un lead', iconSrc: iconPlus, accent: '#10b981' },
-              { key: 'email', label: 'Relance', iconSrc: iconEmail, accent: C.accent },
-              { key: 'campaigns', label: 'Campagnes marketing', iconSrc: iconCampaigns, accent: '#f59e0b' },
-              { key: 'kpis', label: 'KPIs & Stats', iconSrc: iconKpis, accent: '#6366f1' },
+              { key: 'leads', label: 'Mes leads', icon: '◉', accent: C.accent },
+              { key: 'add_lead', label: 'Ajouter un lead', icon: '+', accent: '#10b981' },
+              { key: 'calendar', label: 'Calendrier', icon: '▦', accent: '#f59e0b' },
+              { key: 'kpis', label: 'KPIs & Stats', icon: '◈', accent: '#6366f1' },
+              { key: 'nda', label: 'Générer NDA', icon: '✎', accent: '#10b981', isLink: true },
             ].map(item => {
               const isActive = sidebarView === item.key;
               return (
                 <div
                   key={item.key}
-                  onClick={() => setSidebarView(item.key)}
+                  onClick={() => item.isLink ? navigate('/contracts/new') : setSidebarView(item.key)}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 4,
+                    display: 'flex', alignItems: 'center', gap: 10,
                     padding: '10px 16px', cursor: 'pointer', borderRadius: 0,
                     background: isActive ? `${item.accent}10` : 'transparent',
                     borderLeft: isActive ? `3px solid ${item.accent}` : '3px solid transparent',
@@ -951,30 +887,12 @@ export default function TrackingSheet() {
                   onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'; }}
                   onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                 >
-                  {item.iconSrc && item.keepColor ? (
-                    <img src={item.iconSrc} alt="" style={{ width: 38, height: 38, flexShrink: 0, opacity: isActive ? 1 : 0.55, transition: 'opacity 0.15s' }} />
-                  ) : item.iconSrc ? (
-                    <div style={{
-                      width: 38, height: 38, flexShrink: 0,
-                      backgroundColor: isActive ? (item.accent || C.accent) : darkMode ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.35)',
-                      WebkitMaskImage: `url(${item.iconSrc})`,
-                      WebkitMaskSize: 'contain',
-                      WebkitMaskRepeat: 'no-repeat',
-                      WebkitMaskPosition: 'center',
-                      maskImage: `url(${item.iconSrc})`,
-                      maskSize: 'contain',
-                      maskRepeat: 'no-repeat',
-                      maskPosition: 'center',
-                      transition: 'all 0.15s',
-                    }} />
-                  ) : (
-                    <span style={{
-                      fontSize: 16, fontWeight: 700, width: 30, textAlign: 'center',
-                      color: isActive ? item.accent : C.muted, transition: 'color 0.15s',
-                    }}>
-                      {item.icon}
-                    </span>
-                  )}
+                  <span style={{
+                    fontSize: 16, fontWeight: 700, width: 24, textAlign: 'center',
+                    color: isActive ? item.accent : C.muted, transition: 'color 0.15s',
+                  }}>
+                    {item.icon}
+                  </span>
                   <span style={{
                     fontSize: 13, fontWeight: isActive ? 700 : 500,
                     color: isActive ? item.accent : C.muted, transition: 'color 0.15s',
@@ -996,6 +914,24 @@ export default function TrackingSheet() {
 
             {/* Spacer */}
             <div style={{ flex: 1 }} />
+
+            {/* Email button (mockup) */}
+            <div style={{ padding: '16px', borderTop: `1px solid ${C.border}` }}>
+              <button
+                style={{
+                  width: '100%', padding: '10px 0', borderRadius: 10, border: 'none',
+                  background: darkMode ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.08)',
+                  color: C.accent, fontSize: 12, fontWeight: 600,
+                  cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(99,102,241,0.2)' : 'rgba(99,102,241,0.14)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.08)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+              >
+                <span style={{ fontSize: 14 }}>✉</span>
+                <span>Envoyer email</span>
+              </button>
+            </div>
           </div>
 
           {/* ── RIGHT MAIN CONTENT ──────────────────────────────────────────── */}
@@ -1016,56 +952,30 @@ export default function TrackingSheet() {
                 { key: 'full_name', label: 'Nom complet *', placeholder: 'Jean Dupont', type: 'text' },
                 { key: 'phone', label: 'Téléphone *', placeholder: '06 12 34 56 78', type: 'tel' },
                 { key: 'email', label: 'Email', placeholder: 'jean@example.com', type: 'email' },
-                { key: 'sector', label: "Secteur d'activité", placeholder: 'Sélectionner...', type: 'select', options: ["Ambulance","Micro crèche","Dentiste","Pharmacie","Salle de sport","Esthétique","Tech","Hôtellerie","Grande Distribution","Tertiaire","BTP","Boulangerie","Immobilier","Restauration","Générales"] },
-                { key: 'company_type', label: "Type d'entreprise", placeholder: 'Sélectionner...', type: 'select', options: ["SARL","SAS","SASU","SA","EURL","SCI","SNC","EI"] },
+                { key: 'sector', label: "Secteur d'activité", placeholder: 'BTP, Restauration...', type: 'text' },
+                { key: 'company_type', label: "Type d'entreprise", placeholder: 'SARL, SAS...', type: 'text' },
               ].map(field => (
                 <div key={field.key}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: C.secondary, marginBottom: 6, display: 'block' }}>
                     {field.label}
                   </label>
-                  {field.type === 'select' ? (
-                    <select
-                      value={formData[field.key]}
-                      onChange={(e) => handleFormChange(field.key, e.target.value)}
-                      style={{
-                        width: '100%', padding: '10px 14px', borderRadius: 10,
-                        fontSize: 13, fontWeight: 500,
-                        border: `1px solid ${C.border}`,
-                        background: darkMode ? '#16171e' : '#fff', color: formData[field.key] ? C.text : C.muted,
-                        outline: 'none', fontFamily: 'inherit',
-                        transition: 'border-color 0.15s, box-shadow 0.15s',
-                        boxSizing: 'border-box', cursor: 'pointer',
-                        appearance: 'none',
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
-                        backgroundRepeat: 'no-repeat',
-                        backgroundPosition: 'right 12px center',
-                        paddingRight: 36,
-                      }}
-                      onFocus={(e) => { e.target.style.borderColor = C.accent; e.target.style.boxShadow = `0 0 0 3px ${C.accent}15`; }}
-                      onBlur={(e) => { e.target.style.borderColor = C.border; e.target.style.boxShadow = 'none'; }}
-                    >
-                      <option value="" disabled>{field.placeholder}</option>
-                      {field.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                    </select>
-                  ) : (
-                    <input
-                      type={field.type}
-                      value={formData[field.key]}
-                      onChange={(e) => handleFormChange(field.key, e.target.value)}
-                      placeholder={field.placeholder}
-                      style={{
-                        width: '100%', padding: '10px 14px', borderRadius: 10,
-                        fontSize: 13, fontWeight: 500,
-                        border: `1px solid ${C.border}`,
-                        background: darkMode ? '#16171e' : '#fff', color: C.text,
-                        outline: 'none', fontFamily: 'inherit',
-                        transition: 'border-color 0.15s, box-shadow 0.15s',
-                        boxSizing: 'border-box',
-                      }}
-                      onFocus={(e) => { e.target.style.borderColor = C.accent; e.target.style.boxShadow = `0 0 0 3px ${C.accent}15`; }}
-                      onBlur={(e) => { e.target.style.borderColor = C.border; e.target.style.boxShadow = 'none'; }}
-                    />
-                  )}
+                  <input
+                    type={field.type}
+                    value={formData[field.key]}
+                    onChange={(e) => handleFormChange(field.key, e.target.value)}
+                    placeholder={field.placeholder}
+                    style={{
+                      width: '100%', padding: '10px 14px', borderRadius: 10,
+                      fontSize: 13, fontWeight: 500,
+                      border: `1px solid ${C.border}`,
+                      background: darkMode ? '#16171e' : '#fff', color: C.text,
+                      outline: 'none', fontFamily: 'inherit',
+                      transition: 'border-color 0.15s, box-shadow 0.15s',
+                      boxSizing: 'border-box',
+                    }}
+                    onFocus={(e) => { e.target.style.borderColor = C.accent; e.target.style.boxShadow = `0 0 0 3px ${C.accent}15`; }}
+                    onBlur={(e) => { e.target.style.borderColor = C.border; e.target.style.boxShadow = 'none'; }}
+                  />
                 </div>
               ))}
 
@@ -1113,6 +1023,25 @@ export default function TrackingSheet() {
           </div>
         )}
 
+        {/* ════ VIEW: CALENDAR (mockup) ═══════════════════════════════════════ */}
+        {sidebarView === 'calendar' && (
+          <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
+              Calendrier
+            </h2>
+            <p style={{ fontSize: 13, color: C.muted, margin: '0 0 28px' }}>
+              Vos rendez-vous et relances à venir
+            </p>
+            <div style={{
+              background: C.subtle, borderRadius: 14, border: `1px solid ${C.border}`,
+              padding: '60px 32px', textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.4 }}>📅</div>
+              <p style={{ fontSize: 14, fontWeight: 600, color: C.text, margin: '0 0 6px' }}>Calendrier à venir</p>
+              <p style={{ fontSize: 13, color: C.muted, margin: 0 }}>La vue calendrier sera bientôt disponible</p>
+            </div>
+          </div>
+        )}
 
         {/* ════ VIEW: KPIs (mockup) ═══════════════════════════════════════════ */}
         {sidebarView === 'kpis' && (
@@ -1144,269 +1073,6 @@ export default function TrackingSheet() {
                   </div>
                 </div>
               ))}
-            </div>
-          </div>
-        )}
-
-        {/* ════ VIEW: CAMPAIGNS ═══════════════════════════════════════════ */}
-        {sidebarView === 'campaigns' && (() => {
-          const MOCK_CAMPAIGNS = [
-            {
-              id: 1,
-              niche: 'Ambulances internes',
-              date: '04 mars 2026',
-              image: campaignImg1,
-              status: 'En cours',
-              objectif: "Générer des leads qualifiés d'ambulanciers / structures d'ambulance avec besoin de structuration et optimisation.",
-              angle: 'Audit + optimisation charges / conformité.',
-              canaux: 'Cold email + SMS + retargeting.',
-              message: '"Réduisez vos charges et sécurisez votre structure en 30 min."',
-              cta: 'Prendre rendez-vous / Demander un audit.',
-            },
-            {
-              id: 2,
-              niche: 'BTP Interne',
-              date: '12 février 2026',
-              image: campaignImg2,
-              status: 'En cours',
-              objectif: "Cibler les entreprises BTP avec des besoins de structuration interne et d'optimisation des charges.",
-              angle: 'Audit conformité + optimisation charges sociales BTP.',
-              canaux: 'Cold email + LinkedIn Ads + call.',
-              message: '"Structurez votre entreprise BTP et réduisez vos charges en 30 min."',
-              cta: 'Demander un audit gratuit.',
-            },
-          ];
-          return (
-          <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
-              Campagnes marketing
-            </h2>
-            <p style={{ fontSize: 13, color: C.muted, margin: '0 0 28px' }}>
-              Vue sur les campagnes marketing en cours
-            </p>
-
-            {/* Campaign cards grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 18 }}>
-              {MOCK_CAMPAIGNS.map((camp, i) => (
-                <div
-                  key={camp.id}
-                  data-campaign-id={camp.id}
-                  onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    setCampaignRect({ left: rect.left, top: rect.top, width: rect.width, height: rect.height });
-                    setOpenCampaign(camp);
-                  }}
-                  style={{
-                    position: 'relative',
-                    borderRadius: 18,
-                    overflow: 'hidden',
-                    cursor: 'pointer',
-                    aspectRatio: '3 / 4',
-                    animation: `campaignCardIn 0.5s cubic-bezier(0.34,1.56,0.64,1) ${i * 0.08}s both`,
-                    boxShadow: darkMode
-                      ? '0 3px 16px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.25)'
-                      : '0 3px 16px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.05)',
-                    transition: 'transform 0.3s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s ease',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = darkMode ? '0 8px 32px rgba(0,0,0,0.5)' : '0 8px 32px rgba(0,0,0,0.14)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = darkMode ? '0 3px 16px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.25)' : '0 3px 16px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.05)'; }}
-                >
-                  {/* Background image */}
-                  <img
-                    src={camp.image}
-                    alt=""
-                    style={{
-                      position: 'absolute', inset: 0, width: '100%', height: '100%',
-                      objectFit: 'cover', objectPosition: 'center',
-                      transform: 'scale(1.06)',
-                    }}
-                  />
-                  {/* Dark overlay */}
-                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.03) 0%, rgba(0,0,0,0.4) 100%)' }} />
-
-                  {/* Status pill */}
-                  <div style={{
-                    position: 'absolute', top: 10, right: 10,
-                    padding: '3px 10px', borderRadius: 20,
-                    fontSize: 10, fontWeight: 700,
-                    background: '#10b981', color: '#fff',
-                    boxShadow: '0 2px 6px rgba(16,185,129,0.35)',
-                  }}>
-                    {camp.status}
-                  </div>
-
-                  {/* Glass banner */}
-                  <div style={{
-                    position: 'absolute', left: 0, right: 0, bottom: 0,
-                    padding: '14px 16px',
-                    background: darkMode ? 'rgba(30,31,40,0.6)' : 'rgba(255,255,255,0.6)',
-                    backdropFilter: 'blur(20px) saturate(1.6)',
-                    WebkitBackdropFilter: 'blur(20px) saturate(1.6)',
-                    borderTop: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.4)',
-                  }}>
-                    <div style={{
-                      fontSize: 14, fontWeight: 700, color: darkMode ? '#eef0f6' : '#1e2330',
-                      letterSpacing: '-0.01em', lineHeight: 1.25,
-                    }}>
-                      {camp.niche}
-                    </div>
-                    <div style={{
-                      fontSize: 10, fontWeight: 500, color: darkMode ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.4)',
-                      marginTop: 3,
-                    }}>
-                      Lancée le {camp.date}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          );
-        })()}
-
-        {/* ════ CAMPAIGN FULLSCREEN DETAIL (Apple open animation) ══════════ */}
-        {(openCampaign || campaignClosing) && (() => {
-          const camp = openCampaign || {};
-          return createPortal(
-            <>
-              {/* Backdrop dim */}
-              <div
-                onClick={() => {
-                  setCampaignClosing(true);
-                  setTimeout(() => { setOpenCampaign(null); setCampaignClosing(false); setCampaignRect(null); }, 380);
-                }}
-                style={{
-                  position: 'fixed', inset: 0, zIndex: 99990,
-                  background: 'rgba(0,0,0,0.5)',
-                  opacity: campaignClosing ? 0 : 1,
-                  transition: 'opacity 0.38s ease',
-                }}
-              />
-              {/* Expanding card → fullscreen */}
-              <div
-                style={{
-                  position: 'fixed', zIndex: 99991,
-                  ...(campaignClosing && campaignRect ? {
-                    left: campaignRect.left, top: campaignRect.top,
-                    width: campaignRect.width, height: campaignRect.height,
-                    borderRadius: 24,
-                  } : {
-                    left: '50%', top: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    width: 'min(92vw, 860px)', height: 'min(88vh, 720px)',
-                    borderRadius: 20,
-                  }),
-                  background: C.bg,
-                  overflow: 'hidden',
-                  boxShadow: '0 24px 80px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.15)',
-                  transition: campaignClosing
-                    ? 'all 0.38s cubic-bezier(0.4, 0, 0.6, 1)'
-                    : 'none',
-                  animation: !campaignClosing ? 'campaignOpen 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards' : 'none',
-                  '--cr-left': campaignRect ? `${campaignRect.left}px` : '50%',
-                  '--cr-top': campaignRect ? `${campaignRect.top}px` : '50%',
-                  '--cr-width': campaignRect ? `${campaignRect.width}px` : '860px',
-                  '--cr-height': campaignRect ? `${campaignRect.height}px` : '260px',
-                  display: 'flex', flexDirection: 'column',
-                }}
-              >
-                {/* Hero image */}
-                <div style={{ position: 'relative', height: 260, flexShrink: 0, overflow: 'hidden' }}>
-                  <img
-                    src={camp.image}
-                    alt=""
-                    style={{
-                      width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center',
-                      transform: 'scale(1.05)',
-                    }}
-                  />
-                  <div style={{
-                    position: 'absolute', inset: 0,
-                    background: 'linear-gradient(180deg, rgba(0,0,0,0.0) 40%, rgba(0,0,0,0.45) 100%)',
-                  }} />
-                  {/* Close button */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setCampaignClosing(true);
-                      setTimeout(() => { setOpenCampaign(null); setCampaignClosing(false); setCampaignRect(null); }, 380);
-                    }}
-                    style={{
-                      position: 'absolute', top: 16, right: 16,
-                      width: 36, height: 36, borderRadius: '50%',
-                      background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
-                      border: '1px solid rgba(255,255,255,0.15)',
-                      color: '#fff', fontSize: 18, fontWeight: 400,
-                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      transition: 'background 0.15s',
-                      fontFamily: 'inherit',
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.55)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.35)'; }}
-                  >
-                    ✕
-                  </button>
-                  {/* Glass title overlay */}
-                  <div style={{
-                    position: 'absolute', left: 0, right: 0, bottom: 0,
-                    padding: '20px 32px',
-                    background: darkMode ? 'rgba(30,31,40,0.5)' : 'rgba(255,255,255,0.45)',
-                    backdropFilter: 'blur(16px) saturate(1.4)', WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
-                    borderTop: darkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(255,255,255,0.4)',
-                  }}>
-                    <div style={{ fontSize: 26, fontWeight: 700, color: darkMode ? '#eef0f6' : '#1e2330', letterSpacing: '-0.02em' }}>
-                      Campagne — {camp.niche}
-                    </div>
-                    <div style={{ fontSize: 12, color: darkMode ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.4)', marginTop: 3 }}>
-                      Campagne lancée le {camp.date}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Detail content */}
-                <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px 32px' }}>
-                  {[
-                    { label: 'Objectif', value: camp.objectif },
-                    { label: 'Angle', value: camp.angle },
-                    { label: 'Canaux', value: camp.canaux },
-                    { label: 'Message', value: camp.message },
-                    { label: 'CTA', value: camp.cta },
-                    { label: 'Statut', value: camp.status },
-                  ].map((row, idx) => (
-                    <div key={row.label} style={{
-                      marginBottom: 18,
-                      opacity: 0, animation: `tabFadeIn 0.35s ease ${0.15 + idx * 0.05}s forwards`,
-                    }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                        {row.label}
-                      </div>
-                      <div style={{ fontSize: 14, fontWeight: 500, color: C.text, lineHeight: 1.55 }}>
-                        {row.value}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>,
-            document.body
-          );
-        })()}
-
-        {/* ════ VIEW: EMAIL (placeholder) ══════════════════════════════════ */}
-        {sidebarView === 'email' && (
-          <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
-              Relance
-            </h2>
-            <p style={{ fontSize: 13, color: C.muted, margin: '0 0 28px' }}>
-              Relancez vos prospects par email
-            </p>
-            <div style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              padding: '60px 20px', borderRadius: 16, border: `1.5px dashed ${C.border}`,
-              background: darkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
-            }}>
-              <p style={{ fontSize: 12, color: C.muted, margin: 0 }}>Cette fonctionnalité sera bientôt disponible</p>
             </div>
           </div>
         )}
@@ -1526,14 +1192,14 @@ export default function TrackingSheet() {
                     id={`lead-card-${lead.id}`}
                     style={{
                       position: 'relative',
-                      borderRadius: '20px',
+                      borderRadius: isExpanded ? '20px' : '50px',
                       border: `1px solid ${isExpanded ? C.border : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)')}`,
                       background: isExpanded
                         ? (darkMode ? '#16171e' : C.bg)
                         : (darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)'),
                       transition: isExpanded
-                        ? 'border-color 0.2s ease, background 0.2s ease, box-shadow 0.3s ease 0.04s, transform 0.25s cubic-bezier(0.22,1,0.36,1)'
-                        : 'border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, transform 0.2s ease',
+                        ? 'border-radius 0.28s cubic-bezier(0.22,1,0.36,1), border-color 0.2s ease, background 0.2s ease, box-shadow 0.3s ease 0.04s, transform 0.25s cubic-bezier(0.22,1,0.36,1)'
+                        : 'border-radius 0.2s cubic-bezier(0.4,0,0.2,1), border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, transform 0.2s ease',
                       animation: signingCard === lead.id
                         ? 'signedGlow 0.8s ease both'
                         : isExiting
@@ -1571,16 +1237,12 @@ export default function TrackingSheet() {
                     {/* ═══ COMPACT VIEW (pill) ═══ */}
                     <div
                       id={`lead-pill-${lead.id}`}
-                      onClick={(e) => {
-                        if (isExpanded) { e.stopPropagation(); setExpandedCard(null); }
-                      }}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: '10px',
                         padding: isExpanded ? '16px 20px' : '11px 18px',
                         transition: isExpanded ? 'padding 0.25s ease' : 'padding 0.15s ease',
-                        cursor: isExpanded ? 'pointer' : 'default',
                       }}
                     >
                       {/* Category color dot */}
@@ -1690,20 +1352,19 @@ export default function TrackingSheet() {
                       maxHeight: isExpanded ? '800px' : '0px',
                       opacity: isExpanded ? 1 : 0,
                       transition: isExpanded
-                        ? 'max-height 0.45s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease 0.04s'
+                        ? 'max-height 0.4s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease 0.04s'
                         : 'max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.12s ease',
                     }}>
                       <div style={{
                         padding: '2px 20px 18px',
                         borderTop: `1px solid ${darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'}`,
+                        transform: isExpanded ? 'translateY(0)' : 'translateY(4px)',
+                        transition: 'transform 0.3s cubic-bezier(0.22, 1, 0.36, 1) 0.04s',
                       }}>
 
                         {/* Company name row */}
                         {lead.company && (
-                          <p style={{
-                            margin: '12px 0 0', fontSize: '13px', color: C.secondary, fontWeight: 500,
-                            animation: isExpanded ? 'contentReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.04s both' : 'none',
-                          }}>
+                          <p style={{ margin: '12px 0 0', fontSize: '13px', color: C.secondary, fontWeight: 500 }}>
                             {lead.company}
                           </p>
                         )}
@@ -1718,7 +1379,6 @@ export default function TrackingSheet() {
                           borderRadius: '12px',
                           background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.018)',
                           border: `1px solid ${darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'}`,
-                          animation: isExpanded ? 'contentReveal 0.4s cubic-bezier(0.34,1.56,0.64,1) 0.08s both' : 'none',
                         }}>
                           <div>
                             <div style={{ fontSize: '10px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '3px' }}>Téléphone</div>
@@ -1746,7 +1406,7 @@ export default function TrackingSheet() {
 
                         {/* ─ CONTACTED INDICATOR (NEW tab) ─ */}
                         {activeCat.key === 'new' && (
-                          <div style={{ marginBottom: '10px', animation: isExpanded ? 'contentReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.12s both' : 'none' }}>
+                          <div style={{ marginBottom: '10px' }}>
                             {lead.first_contact_date ? (
                               <span style={{ fontSize: '11px', color: C.accent, fontWeight: 600 }}>
                                 Contacté le {formatDate(lead.first_contact_date)}
@@ -1761,7 +1421,7 @@ export default function TrackingSheet() {
 
                         {/* ─ Dates (if R1/R2 exist) ─ */}
                         {(lead.r1 || lead.r2) && (
-                          <div style={{ display: 'flex', gap: '12px', marginBottom: '14px', flexWrap: 'wrap', animation: isExpanded ? 'contentReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.14s both' : 'none' }}>
+                          <div style={{ display: 'flex', gap: '12px', marginBottom: '14px', flexWrap: 'wrap' }}>
                             {lead.r1 && (
                               <div style={{
                                 display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 12px', borderRadius: '8px',
@@ -1805,7 +1465,7 @@ export default function TrackingSheet() {
 
                         {/* Notes editor */}
                         {editingNotes.hasOwnProperty(lead.id) && (
-                          <div style={{ marginBottom: '12px', animation: 'contentReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.16s both' }}>
+                          <div style={{ marginBottom: '12px' }}>
                             <textarea
                               value={notesVal}
                               onChange={(e) => setEditingNotes(prev => ({ ...prev, [lead.id]: e.target.value }))}
@@ -1873,7 +1533,6 @@ export default function TrackingSheet() {
                         <div style={{
                           borderTop: `1px solid ${darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'}`,
                           paddingTop: '12px',
-                          animation: isExpanded ? 'contentReveal 0.4s cubic-bezier(0.34,1.56,0.64,1) 0.2s both' : 'none',
                         }}>
 
                       {/* ═══ NEW TAB WORKFLOW ═══ */}
@@ -2250,7 +1909,7 @@ export default function TrackingSheet() {
 
                       {/* ═══ OTHER TABS: Déplacer vers (callback, voicemail, not_relevant, signed) ═══ */}
                       {!['new', 'r1', 'r2'].includes(activeCat.key) && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', animation: isExpanded ? 'contentReveal 0.4s cubic-bezier(0.34,1.56,0.64,1) 0.2s both' : 'none' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <span style={{ fontSize: '11px', color: C.muted, fontWeight: 500 }}>Déplacer vers</span>
                           <div style={{ position: 'relative' }}>
                             <select

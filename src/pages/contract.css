@@ -1,21 +1,23 @@
 /* ===============================
-   Contract Wizard - MODERN STYLE (inspired by dashboard)
+   Contract Wizard - PREMIUM STYLE
    =============================== */
 
 /* Reset & Base */
-html, body { 
-  height: 100%; 
-  margin: 0; 
+html, body {
+  height: 100%;
+  margin: 0;
   background: #f5f5f7 !important;
 }
 
-*, *::before, *::after { 
-  box-sizing: border-box; 
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
 :root {
   --wizard-min-h: 430px;
   --wizard-pad: 32px;
+  --wizard-accent: #007aff;
+  --wizard-accent-dark: #0a84ff;
 }
 
 /* Centered screen - ÉQUILIBRÉ */
@@ -82,10 +84,24 @@ html, body {
   object-fit: contain;
 }
 
-.wizard-steps { 
+.wizard-steps {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
+  position: relative;
+}
+
+/* Connecting line between steps */
+.wizard-steps::before {
+  content: '';
+  position: absolute;
+  left: 27px; /* center of bullet (12px padding + 16px half of 32px) */
+  top: 28px;
+  bottom: 28px;
+  width: 2px;
+  background: #e5e5e5;
+  border-radius: 1px;
+  z-index: 0;
 }
 
 /* Step buttons - Apple style */
@@ -100,7 +116,9 @@ html, body {
   padding: 12px;
   border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  z-index: 1;
 }
 
 .step .bullet {
@@ -114,36 +132,61 @@ html, body {
   border: 2px solid #e5e5e5;
   color: #86868b;
   background: #ffffff;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.step .label { 
+.step .step-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.step .label {
   font-weight: 500;
   font-size: 15px;
   color: #1d1d1f;
+  transition: color 0.2s;
 }
 
-.step.active { 
+.step .step-desc {
+  font-size: 11px;
+  color: #86868b;
+  font-weight: 400;
+  line-height: 1.3;
+  transition: color 0.2s;
+}
+
+.step.active {
   background: #f5f5f7;
 }
 
-.step.active .bullet { 
-  border-color: #007aff;
-  color: #007aff;
+.step.active .bullet {
+  border-color: var(--wizard-accent);
+  color: var(--wizard-accent);
   background: #e6f2ff;
+  box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.08);
 }
 
-.step.done .bullet { 
-  background: #007aff;
+.step.active .label {
+  font-weight: 600;
+  color: var(--wizard-accent);
+}
+
+.step.done .bullet {
+  background: var(--wizard-accent);
   color: #ffffff;
-  border-color: #007aff;
+  border-color: var(--wizard-accent);
 }
 
-.step.todo:hover { 
+.step.done .label {
+  color: #86868b;
+}
+
+.step.todo:hover {
   background: #fafafa;
 }
 
-/* Right content card - MODERN STYLE */
+/* Right content card - PREMIUM STYLE */
 .wizard-content {
   background: #ffffff;
   border: 1px solid #e5e5e5;
@@ -152,41 +195,73 @@ html, body {
   min-height: var(--wizard-min-h);
   padding: var(--wizard-pad);
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto auto auto 1fr auto;
   gap: 12px;
   transition: height 0.3s ease-in-out;
+  position: relative;
+  overflow: hidden;
 }
 
-.contract-title { 
+/* Progress bar at top of content card */
+.wizard-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #e5e5e5;
+  border-radius: 24px 24px 0 0;
+  overflow: hidden;
+}
+
+.wizard-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--wizard-accent), #5856d6);
+  border-radius: 0 2px 2px 0;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.contract-title {
   margin: 0;
-  font-size: 32px;
-  font-weight: 600;
+  font-size: 28px;
+  font-weight: 700;
   color: #1d1d1f;
   letter-spacing: -0.5px;
 }
 
-.contract-subtitle { 
+.contract-subtitle {
   color: #86868b;
-  margin: 8px 0 16px;
-  font-size: 15px;
+  margin: 4px 0 12px;
+  font-size: 14px;
   font-weight: 400;
 }
 
 /* Panel area */
-.wizard-content > :nth-child(3) { 
+.wizard-content > :nth-child(4) {
   align-self: start;
 }
 
-/* Form container avec fade animation */
+/* Form container avec slide animation */
 .wizard-content > form,
-.wizard-content > div:nth-child(3) {
-  animation: fadeIn 0.4s ease-in-out;
+.wizard-content > div:nth-child(4) {
+  animation: stepSlideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes stepSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 @keyframes fadeIn {
   0% {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
   100% {
     opacity: 1;
@@ -196,7 +271,7 @@ html, body {
 
 /* Bottom navigation */
 .wizard-nav {
-  grid-row: 4;
+  grid-row: 5;
   display: flex;
   justify-content: flex-start;
   gap: 12px;
@@ -248,9 +323,13 @@ html, body {
   transition: all 0.2s ease;
 }
 
-.input:focus { 
-  border-color: #007aff;
+.input:focus {
+  border-color: var(--wizard-accent);
   box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
+}
+
+.input:hover:not(:focus) {
+  border-color: #c8c8cc;
 }
 
 .input::placeholder {
@@ -330,7 +409,7 @@ select.input {
   margin-bottom: 12px;
 }
 
-/* Buttons - MODERN STYLE */
+/* Buttons - PREMIUM STYLE */
 .btn-ghost {
   padding: 12px 20px;
   border-radius: 12px;
@@ -340,36 +419,47 @@ select.input {
   cursor: pointer;
   font-weight: 500;
   font-size: 14px;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .btn-ghost:hover {
   background: #f5f5f7;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transform: translateY(-0.5px);
 }
 
-.btn-ghost:disabled { 
+.btn-ghost:active {
+  transform: translateY(0.5px);
+}
+
+.btn-ghost:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+  transform: none;
 }
 
 .export-btn {
   padding: 12px 24px;
   border-radius: 12px;
   border: none;
-  background: #007aff;
+  background: linear-gradient(180deg, #1a8aff 0%, #006fe6 100%);
   color: #ffffff;
   cursor: pointer;
   font-weight: 600;
   font-size: 14px;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .export-btn:hover {
-  background: #0051d5;
-  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.4);
+  background: linear-gradient(180deg, #0078ff 0%, #0051d5 100%);
+  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.15);
   transform: translateY(-1px);
+}
+
+.export-btn:active {
+  transform: translateY(0.5px);
+  box-shadow: 0 1px 4px rgba(0, 122, 255, 0.3);
 }
 
 /* Responsive */
@@ -557,4 +647,62 @@ select.input {
 .wizard-outer.dark-mode .export-btn:hover {
   background: #409cff !important;
   box-shadow: 0 6px 16px rgba(10, 132, 255, 0.5) !important;
+}
+
+/* Dark mode - connecting line */
+.wizard-outer.dark-mode .wizard-steps::before {
+  background: #333338 !important;
+}
+
+/* Dark mode - step active label */
+.wizard-outer.dark-mode .step.active .label {
+  color: var(--wizard-accent-dark) !important;
+}
+
+/* Dark mode - step desc */
+.wizard-outer.dark-mode .step .step-desc {
+  color: #636366 !important;
+}
+
+/* Dark mode - progress bar */
+.wizard-outer.dark-mode .wizard-progress {
+  background: #333338 !important;
+}
+
+.wizard-outer.dark-mode .wizard-progress-bar {
+  background: linear-gradient(90deg, var(--wizard-accent-dark), #7c7aff) !important;
+}
+
+/* Dark mode - input hover */
+.wizard-outer.dark-mode .input:hover:not(:focus) {
+  border-color: #444449 !important;
+}
+
+/* Dark mode - export btn gradient */
+.wizard-outer.dark-mode .export-btn {
+  background: linear-gradient(180deg, #2d94ff 0%, #0a84ff 100%) !important;
+  box-shadow: 0 4px 12px rgba(10, 132, 255, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+.wizard-outer.dark-mode .export-btn:hover {
+  background: linear-gradient(180deg, #52a8ff 0%, #409cff 100%) !important;
+  box-shadow: 0 6px 16px rgba(10, 132, 255, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+/* AI Prefill shimmer */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Contact step notification pulse */
+@keyframes contactPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
+}
+
+/* AI Prefill spinner */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
