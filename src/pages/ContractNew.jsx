@@ -68,6 +68,7 @@ export default function ContractNew() {
   const [aiFading, setAiFading] = useState(false);
   const [aiFieldsFilled, setAiFieldsFilled] = useState([]);
   const [aiContactNotif, setAiContactNotif] = useState(false);
+  const [aiPappersUrl, setAiPappersUrl] = useState("");
   const hasGenerated = useRef(false);
 
   // Dark mode detection - IMMEDIATE pour éviter le flash
@@ -279,10 +280,12 @@ export default function ContractNew() {
     setAiSuccess(false);
     setAiFading(false);
     setAiFieldsFilled([]);
+    setAiPappersUrl("");
 
     try {
       const data = await apiClient.post('/api/v1/contracts/ai-prefill', { query: q });
       console.log('[AI Prefill] Backend response:', data);
+      if (data.pappers_url) setAiPappersUrl(data.pappers_url);
 
       // Map response to company state
       const filled = [];
@@ -546,6 +549,38 @@ export default function ContractNew() {
                 <span style={{ fontSize: 12, fontWeight: 600, color: darkMode ? '#0a84ff' : '#007aff', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
                   Pré-remplir
                 </span>
+                {/* Pappers link — appears smooth after successful prefill */}
+                <a
+                  href={aiPappersUrl || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => { if (!aiPappersUrl) e.preventDefault(); }}
+                  style={{
+                    marginLeft: 'auto',
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    fontSize: 11, fontWeight: 600,
+                    color: darkMode ? '#30d158' : '#34c759',
+                    textDecoration: 'none',
+                    padding: '4px 10px',
+                    borderRadius: 50,
+                    border: `1px solid ${darkMode ? 'rgba(48,209,88,0.3)' : 'rgba(52,199,89,0.3)'}`,
+                    background: darkMode ? 'rgba(48,209,88,0.08)' : 'rgba(52,199,89,0.06)',
+                    opacity: aiPappersUrl ? 1 : 0,
+                    transform: aiPappersUrl ? 'translateX(0)' : 'translateX(8px)',
+                    pointerEvents: aiPappersUrl ? 'auto' : 'none',
+                    transition: 'opacity 0.4s ease, transform 0.4s ease, background 0.2s',
+                    cursor: aiPappersUrl ? 'pointer' : 'default',
+                  }}
+                  onMouseEnter={(e) => { if (aiPappersUrl) e.currentTarget.style.background = darkMode ? 'rgba(48,209,88,0.15)' : 'rgba(52,199,89,0.12)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(48,209,88,0.08)' : 'rgba(52,199,89,0.06)'; }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg>
+                  Pappers
+                </a>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
