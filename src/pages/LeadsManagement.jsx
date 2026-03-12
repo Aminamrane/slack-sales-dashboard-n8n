@@ -50,7 +50,7 @@ export default function LeadsManagement() {
         }
 
         // Create session object for compatibility with SharedNavbar
-        setSession({ user: { email: user.email, user_metadata: { name: user.name } } });
+        setSession({ user: { email: user.email, user_metadata: { name: user.name, avatar_url: user.avatar_url || null } } });
 
         // Check if user has admin or leads_management permission
         if (user.role === 'admin' || apiClient.hasAccess('leads_management')) {

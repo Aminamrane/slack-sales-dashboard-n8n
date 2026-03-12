@@ -80,7 +80,7 @@ export default function AdminLeads() {
         }
 
         // Create session object for compatibility with SharedNavbar
-        setSession({ user: { email: user.email, user_metadata: { name: user.name } } });
+        setSession({ user: { email: user.email, user_metadata: { name: user.name, avatar_url: user.avatar_url || null } } });
 
         // Check if user has admin or admin_leads permission
         if (user.role === 'admin' || apiClient.hasAccess('admin_leads')) {

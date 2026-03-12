@@ -148,7 +148,7 @@ export default function TrackingSheet() {
         const token = apiClient.getToken();
         const user = apiClient.getUser();
         if (!token || !user) { navigate("/login"); return; }
-        setSession({ user: { email: user.email, user_metadata: { name: user.name, avatar_url: user.avatar_url || null } } });
+        setSession({ user: { email: user.email, user_metadata: { name: user.name } } });
 
         // Access check
         const sheetsResp = await apiClient.get('/api/v1/tracking/my-sheets');
@@ -3722,7 +3722,7 @@ export default function TrackingSheet() {
         <div
           style={{
             position: 'fixed', inset: 0, zIndex: 9999,
-            background: 'rgba(0,0,0,0.45)',
+            background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             animation: 'modalOverlayIn 0.2s ease both',
           }}
@@ -3878,7 +3878,7 @@ export default function TrackingSheet() {
           <div
             style={{
               position: 'fixed', inset: 0, zIndex: 9999,
-              background: 'rgba(0,0,0,0.45)',
+              background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               animation: 'modalOverlayIn 0.25s ease both',
             }}

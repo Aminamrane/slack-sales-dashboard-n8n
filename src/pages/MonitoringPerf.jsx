@@ -204,7 +204,7 @@ export default function MonitoringPerf() {
         }
 
         // Create session object for compatibility with SharedNavbar
-        setSession({ user: { email: user.email, user_metadata: { name: user.name } } });
+        setSession({ user: { email: user.email, user_metadata: { name: user.name, avatar_url: user.avatar_url || null } } });
 
         // Check if user has monitoring_perf permission
         if (user.role === 'admin' || apiClient.hasAccess('monitoring_perf')) {

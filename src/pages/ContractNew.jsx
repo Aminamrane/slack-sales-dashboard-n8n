@@ -389,7 +389,7 @@ export default function ContractNew() {
           meta: { typeEntreprise: company.businessType || "Général" },
           client_info_text: preview,
         };
-        if (leadId) clientDataPayload.lead_id = leadId;
+        if (leadId) clientDataPayload.lead_id = parseInt(leadId, 10);
         await apiClient.post('/api/v1/contracts/client-data', clientDataPayload);
       } catch (e) {
         console.warn("Backend client-data sync failed (non-blocking):", e);

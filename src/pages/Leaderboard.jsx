@@ -2388,7 +2388,7 @@ export default function Leaderboard() {
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
       background: CARD.surface,
       minHeight: "100vh",
-      paddingTop: '80px',
+      paddingTop: '64px',
       color: CARD.text,
     }}>
       <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />

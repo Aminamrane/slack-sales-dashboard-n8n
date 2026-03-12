@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
@@ -12,6 +12,8 @@ import iconPlus from "../assets/plus.png";
 import iconEmail from "../assets/email.png";
 import iconCampaigns from "../assets/tar.png";
 import iconKpis from "../assets/finance.png";
+import iconCalendrier from "../assets/calendrier.png";
+import companyLogo from "../assets/my_image.png";
 import campaignImg1 from "../assets/audit-document.jpg";
 import campaignImg2 from "../assets/charges-fatales-2.png";
 
@@ -28,6 +30,26 @@ const CATEGORIES = [
 
 // ── TODAY (for dynamic notifications in demo) ────────────────────────────────
 const TODAY = new Date().toISOString().split('T')[0];
+
+// ── DATE/TIME HELPERS ─────────────────────────────────────────────────────────
+// Backend now returns ISO timestamps (e.g. "2026-03-11T14:00:00+00:00")
+// datetime-local inputs need "YYYY-MM-DDTHH:MM" format (no timezone suffix)
+const toDatetimeLocal = (val) => {
+  if (!val) return '';
+  if (val.length === 10) return val + 'T09:00'; // date-only → default 9am
+  return val.slice(0, 16); // trim seconds + timezone
+};
+const toDateOnly = (val) => {
+  if (!val) return '';
+  return val.slice(0, 10);
+};
+const formatDateTimeFR = (val) => {
+  if (!val) return '';
+  const d = val.slice(0, 10).split('-');
+  const t = val.length > 10 ? val.slice(11, 16) : null;
+  const date = `${d[2]}/${d[1]}`;
+  return t && t !== '00:00' ? `${date} à ${t.replace(':', 'h')}` : date;
+};
 
 // ── CONSTANTS ─────────────────────────────────────────────────────────────────
 const EMPLOYEE_RANGES = [
@@ -129,7 +151,7 @@ export default function TrackingSheet() {
   // ── LEAD STATE ────────────────────────────────────────────────────────────
   const [leads, setLeads] = useState([]);
   const [activeTab, setActiveTab] = useState(0);
-  const [expandedCard, setExpandedCard] = useState(null);
+  const [selectedLead, setSelectedLead] = useState(null);
   const [exitingCards, setExitingCards] = useState(new Set());
   const [animatingBadges, setAnimatingBadges] = useState(new Set());
   const [editingNotes, setEditingNotes] = useState({});
@@ -146,9 +168,11 @@ export default function TrackingSheet() {
   const flyCleanupRef = useRef([]);
   const prevTabRef = useRef(0); // track previous tab for tabDrop animation
   const [droppingTab, setDroppingTab] = useState(null); // index of tab that just became inactive
+  const detailContainerRef = useRef(null); // portal target for detail panel (separate card)
 
   // ── SIDEBAR NAV + FORM STATE ────────────────────────────────────────────
   const [sidebarView, setSidebarView] = useState('leads'); // 'leads' | 'add_lead' | 'calendar' | 'kpis' | 'campaigns'
+  const [calendarWeekOffset, setCalendarWeekOffset] = useState(0);
   const [formData, setFormData] = useState({ full_name: '', phone: '', email: '', sector: '', company_type: '' });
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formSuccess, setFormSuccess] = useState(false);
@@ -188,8 +212,8 @@ export default function TrackingSheet() {
     const notifs = {};
     CATEGORIES.forEach(cat => { notifs[cat.key] = 0; });
     leads.forEach(l => {
-      if (l.status === 'r1' && l.r1 === TODAY) notifs.r1++;
-      if (l.status === 'r2' && l.r2 === TODAY) notifs.r2++;
+      if (l.status === 'r1' && toDateOnly(l.r1) === TODAY) notifs.r1++;
+      if (l.status === 'r2' && toDateOnly(l.r2) === TODAY) notifs.r2++;
     });
     return notifs;
   }, [leads]);
@@ -209,25 +233,22 @@ export default function TrackingSheet() {
     prevCountsRef.current = { ...tabCounts };
   }, [tabCounts]);
 
-  // ── SCROLL EXPANDED CARD INTO VIEW ─────────────────────────────────────────
+  // ── SCROLL SELECTED PILL INTO VIEW ──────────────────────────────────────────
   useEffect(() => {
-    if (expandedCard) {
+    if (selectedLead) {
       requestAnimationFrame(() => {
-        const el = document.getElementById(`lead-card-${expandedCard}`);
+        const el = document.getElementById(`lead-pill-${selectedLead}`);
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       });
     }
-  }, [expandedCard]);
+  }, [selectedLead]);
 
   // ── FLYING CARD ANIMATION (FLIP shared-element transition) ───────────────
   const triggerFlyAnimation = (leadId, lead, newStatus) => {
     flyCleanupRef.current.forEach(clearTimeout);
     flyCleanupRef.current = [];
-    const cardEl = document.getElementById(`lead-card-${leadId}`);
     const pillEl = document.getElementById(`lead-pill-${leadId}`);
-    const wasExpanded = expandedCard === leadId;
-    // Use full card when expanded (genie from full shape), pill when collapsed
-    const srcEl = wasExpanded ? (cardEl || pillEl) : (pillEl || cardEl);
+    const srcEl = pillEl;
     const destCatIdx = CATEGORIES.findIndex(c => c.key === newStatus);
     const tabEl = document.querySelector(`[data-tab-key="${newStatus}"]`);
     if (!srcEl || !tabEl || destCatIdx === -1) return;
@@ -242,12 +263,12 @@ export default function TrackingSheet() {
       dx, dy,
       catColor: CATEGORIES[destCatIdx].color,
       destCatIndex: destCatIdx,
-      wasExpanded,
+      wasExpanded: false,
     });
     flyCleanupRef.current = [
-      setTimeout(() => setGlowingTab(destCatIdx), 480),
-      setTimeout(() => setFlyingCard(null), 780),
-      setTimeout(() => setGlowingTab(null), 1020),
+      setTimeout(() => setGlowingTab(destCatIdx), 520),
+      setTimeout(() => setFlyingCard(null), 820),
+      setTimeout(() => setGlowingTab(null), 1060),
     ];
   };
 
@@ -256,16 +277,21 @@ export default function TrackingSheet() {
     const el = document.getElementById('flying-card-clone');
     if (!el) return;
     const { dx, dy } = flyingCard;
-    // Apple Genie effect: perspective + rotateX creates trapezoid funnel
-    // Top edge narrows (pulled toward tab), bottom trails wider
+    // Apple Genie suction — exaggerated stretch + trapezoid pinch
+    // perspective(600px) = very close camera → heavy 3D distortion on rotateX
+    // Phase 1 (0-22%): card stretches tall + top edges pinch hard = visible trapezoid
+    // Phase 2 (22-100%): funnel compresses toward destination tab
     el.animate([
-      { transform: 'perspective(1200px) translate3d(0, 0, 0) rotateX(0deg) scaleX(1) scaleY(1)', opacity: 1 },
-      { transform: `perspective(1200px) translate3d(${dx * 0.18}px, ${dy * 0.1}px, 0) rotateX(10deg) scaleX(0.88) scaleY(0.95)`, opacity: 1, offset: 0.14 },
-      { transform: `perspective(1200px) translate3d(${dx * 0.48}px, ${dy * 0.3}px, 0) rotateX(24deg) scaleX(0.45) scaleY(0.78)`, opacity: 0.97, offset: 0.34 },
-      { transform: `perspective(1200px) translate3d(${dx * 0.76}px, ${dy * 0.58}px, 0) rotateX(38deg) scaleX(0.16) scaleY(0.45)`, opacity: 0.85, offset: 0.55 },
-      { transform: `perspective(1200px) translate3d(${dx * 0.94}px, ${dy * 0.86}px, 0) rotateX(50deg) scaleX(0.05) scaleY(0.16)`, opacity: 0.5, offset: 0.76 },
-      { transform: `perspective(1200px) translate3d(${dx}px, ${dy}px, 0) rotateX(55deg) scaleX(0.02) scaleY(0.05)`, opacity: 0.15 },
-    ], { duration: 700, easing: 'cubic-bezier(0.25, 0, 0.75, 0.35)', fill: 'forwards' });
+      { transform: 'perspective(600px) translate3d(0, 0, 0) rotateX(0deg) scaleX(1) scaleY(1)', opacity: 1 },
+      { transform: `perspective(600px) translate3d(0, ${dy * 0.005}px, 0) rotateX(6deg) scaleX(0.96) scaleY(1.18)`, opacity: 1, offset: 0.06 },
+      { transform: `perspective(600px) translate3d(0, ${dy * 0.01}px, 0) rotateX(12deg) scaleX(0.91) scaleY(1.28)`, opacity: 1, offset: 0.13 },
+      { transform: `perspective(600px) translate3d(${dx * 0.04}px, ${dy * 0.04}px, 0) rotateX(16deg) scaleX(0.86) scaleY(1.18)`, opacity: 1, offset: 0.20 },
+      { transform: `perspective(600px) translate3d(${dx * 0.22}px, ${dy * 0.14}px, 0) rotateX(24deg) scaleX(0.62) scaleY(0.82)`, opacity: 0.97, offset: 0.32 },
+      { transform: `perspective(600px) translate3d(${dx * 0.48}px, ${dy * 0.34}px, 0) rotateX(36deg) scaleX(0.32) scaleY(0.55)`, opacity: 0.92, offset: 0.46 },
+      { transform: `perspective(600px) translate3d(${dx * 0.74}px, ${dy * 0.60}px, 0) rotateX(46deg) scaleX(0.11) scaleY(0.28)`, opacity: 0.70, offset: 0.62 },
+      { transform: `perspective(600px) translate3d(${dx * 0.91}px, ${dy * 0.84}px, 0) rotateX(54deg) scaleX(0.03) scaleY(0.10)`, opacity: 0.35, offset: 0.78 },
+      { transform: `perspective(600px) translate3d(${dx}px, ${dy}px, 0) rotateX(60deg) scaleX(0.01) scaleY(0.02)`, opacity: 0.08 },
+    ], { duration: 740, easing: 'cubic-bezier(0.22, 0, 0.68, 0.35)', fill: 'forwards' });
   }, [flyingCard]);
 
   // Cleanup fly timers on unmount
@@ -327,7 +353,7 @@ export default function TrackingSheet() {
               setSigningCard(null);
               const lead = leads.find(l => l.id === updated.lead_id);
               if (lead) triggerFlyAnimation(updated.lead_id, lead, 'signed');
-              if (expandedCard === updated.lead_id) setExpandedCard(null);
+              if (selectedLead === updated.lead_id) setSelectedLead(null);
               setExitingCards(prev => new Set(prev).add(updated.lead_id));
             }, 700);
             setTimeout(() => {
@@ -349,7 +375,7 @@ export default function TrackingSheet() {
     if (idx === activeTab) return;
     setDroppingTab(activeTab);
     prevTabRef.current = activeTab;
-    setExpandedCard(null);
+    setSelectedLead(null);
     setActiveTab(idx);
     setTabKey(k => k + 1);
     // Clear dropping state after animation completes
@@ -371,7 +397,7 @@ export default function TrackingSheet() {
         setSigningCard(null);
         const lead = leads.find(l => l.id === leadId);
         if (lead) triggerFlyAnimation(leadId, lead, 'signed');
-        if (expandedCard === leadId) setExpandedCard(null);
+        if (selectedLead === leadId) setSelectedLead(null);
         setExitingCards(prev => new Set(prev).add(leadId));
       }, 700);
       setTimeout(() => {
@@ -382,7 +408,7 @@ export default function TrackingSheet() {
       // FLIP fly animation to destination tab
       const lead = leads.find(l => l.id === leadId);
       if (lead) triggerFlyAnimation(leadId, lead, newStatus);
-      if (expandedCard === leadId) setExpandedCard(null);
+      if (selectedLead === leadId) setSelectedLead(null);
       setExitingCards(prev => new Set(prev).add(leadId));
       setTimeout(() => {
         setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus } : l));
@@ -398,7 +424,7 @@ export default function TrackingSheet() {
       await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, { notes: newNotes });
       setLeads(prev => prev.map(l => l.id === leadId ? { ...l, notes: newNotes } : l));
       setEditingNotes(prev => { const n = { ...prev }; delete n[leadId]; return n; });
-      setExpandedCard(null);
+      setSelectedLead(null);
     } catch (err) {
       console.error("Erreur sauvegarde notes:", err);
     }
@@ -489,7 +515,7 @@ export default function TrackingSheet() {
           setSigningCard(null);
           const lead = leads.find(l => l.id === leadId);
           if (lead) triggerFlyAnimation(leadId, lead, 'signed');
-          if (expandedCard === leadId) setExpandedCard(null);
+          if (selectedLead === leadId) setSelectedLead(null);
           setExitingCards(prev => new Set(prev).add(leadId));
         }, 700);
         setTimeout(() => {
@@ -499,7 +525,7 @@ export default function TrackingSheet() {
       } else {
         const lead = leads.find(l => l.id === leadId);
         if (lead) triggerFlyAnimation(leadId, lead, newStatus);
-        if (expandedCard === leadId) setExpandedCard(null);
+        if (selectedLead === leadId) setSelectedLead(null);
         setExitingCards(prev => new Set(prev).add(leadId));
         setTimeout(() => {
           setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...patchData } : l));
@@ -574,7 +600,7 @@ export default function TrackingSheet() {
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
       background: C.surface,
       minHeight: "100vh",
-      paddingTop: "120px",
+      paddingTop: "80px",
     }}>
       {/* Keyframe animations */}
       <style>{`
@@ -682,6 +708,19 @@ export default function TrackingSheet() {
           from { opacity: 0; transform: translateY(18px) scale(0.97); }
           to   { opacity: 1; transform: translateY(0) scale(1); }
         }
+        @keyframes detailSlideIn {
+          from { opacity: 0; transform: translateX(30px) scale(0.97); }
+          to   { opacity: 1; transform: translateX(0) scale(1); }
+        }
+        @keyframes detailSlideOut {
+          from { opacity: 1; transform: translateX(0) scale(1); }
+          to   { opacity: 0; transform: translateX(30px) scale(0.97); }
+        }
+        @keyframes avatarPulse {
+          0%   { box-shadow: 0 0 0 0 rgba(91,106,191,0.2); }
+          70%  { box-shadow: 0 0 0 10px rgba(91,106,191,0); }
+          100% { box-shadow: 0 0 0 0 rgba(91,106,191,0); }
+        }
         @keyframes campaignOpen {
           0% {
             left: var(--cr-left); top: var(--cr-top);
@@ -771,15 +810,22 @@ export default function TrackingSheet() {
       {/* ── PAGE CONTAINER ──────────────────────────────────────────────────── */}
       <div style={{
         maxWidth: 1640,
-        margin: '32px auto 20px',
-        padding: '12px',
+        marginTop: sidebarView === 'leads' ? 44 : 16,
+        marginLeft: 'auto',
+        marginRight: 'auto',
+        marginBottom: 20,
+        padding: '10px',
         background: darkMode ? 'rgba(0,0,0,0.10)' : 'rgba(190,197,215,0.20)',
-        borderRadius: '24px',
+        borderRadius: '4px',
         animation: 'pageReveal 0.5s cubic-bezier(0.4,0,0.2,1) both',
+        transition: 'margin-top 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
       }}>
 
+        {/* ── FLEX ROW: board + detail panel ──────────────────────────────── */}
+        <div style={{ display: 'flex', alignItems: 'stretch' }}>
+
         {/* ── INNER BOARD WRAPPER (relative, for tab positioning) ──────────── */}
-        <div style={{ position: 'relative' }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 0, transition: 'flex 0.45s cubic-bezier(0.4,0,0.2,1)' }}>
 
           {/* ── FOLDER TABS (attached to top of white card) ─────────────────── */}
           {sidebarView === 'leads' && (
@@ -787,13 +833,24 @@ export default function TrackingSheet() {
               display: 'flex',
               position: 'absolute',
               bottom: '100%',
-              left: 237,
+              left: 198,
               right: 0,
               paddingLeft: 24,
               paddingRight: 24,
               zIndex: 3,
               overflow: 'visible',
             }}>
+              {/* Bridge: covers card top border behind tabs only (not beyond) */}
+              <div style={{
+                position: 'absolute',
+                bottom: -1,
+                left: 24,
+                right: 24,
+                height: 2,
+                background: C.bg,
+                zIndex: 0,
+                pointerEvents: 'none',
+              }} />
               {CATEGORIES.map((cat, idx) => {
                 const isActive = idx === activeTab;
                 const count = tabCounts[cat.key];
@@ -809,7 +866,7 @@ export default function TrackingSheet() {
                       alignItems: 'center',
                       gap: '6px',
                       padding: isActive ? '10px 16px 11px' : '8px 14px 9px',
-                      borderRadius: '10px 10px 0 0',
+                      borderRadius: '8px 8px 0 0',
                       borderTop: 'none',
                       borderLeft: 'none',
                       borderRight: 'none',
@@ -873,10 +930,10 @@ export default function TrackingSheet() {
                     {isActive && (
                       <span style={{
                         position: 'absolute',
-                        bottom: -12,
-                        left: -1,
-                        right: -1,
-                        height: 14,
+                        bottom: -10,
+                        left: 0,
+                        right: 0,
+                        height: 12,
                         background: C.bg,
                         zIndex: 1,
                         borderRadius: 0,
@@ -892,7 +949,7 @@ export default function TrackingSheet() {
           {/* ── INNER BOARD (white card) ──────────────────────────────────────── */}
           <div style={{
             background: C.bg,
-            borderRadius: 20,
+            borderRadius: 4,
             boxShadow: C.shadow,
             border: `1px solid ${C.border}`,
             display: 'flex',
@@ -903,37 +960,42 @@ export default function TrackingSheet() {
 
           {/* ── LEFT SIDEBAR ────────────────────────────────────────────────── */}
           <div style={{
-            width: 260,
-            minWidth: 260,
+            width: 220,
+            minWidth: 220,
             borderRight: `1px solid ${C.border}`,
             display: 'flex',
             flexDirection: 'column',
             background: C.subtle,
             animation: 'sidebarReveal 0.4s ease both',
           }}>
-            {/* Sidebar header */}
-            <div style={{ padding: '24px 20px 16px' }}>
-              <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 4px 0', color: C.text, letterSpacing: '-0.01em' }}>
-                Tracking Sheet
-              </h2>
-              <p style={{ fontSize: 12, color: C.muted, margin: 0 }}>
-                {leads.length} leads au total
-              </p>
-            </div>
-
-            {/* Section label */}
-            <div style={{ padding: '0 16px', marginBottom: 8 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                Navigation
-              </span>
+            {/* Sidebar header — company logo like Quno */}
+            <div style={{ padding: '18px 16px 14px', borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '6px 8px',
+                borderRadius: 10,
+                border: `1px solid ${C.border}`,
+                background: darkMode ? 'rgba(255,255,255,0.04)' : '#fff',
+              }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: 8,
+                  background: darkMode ? '#fff' : '#1e2330',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <img src={companyLogo} alt="" style={{ width: 20, height: 20, objectFit: 'contain', filter: darkMode ? 'none' : 'brightness(0) invert(1)' }} />
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>Owner</div>
+              </div>
             </div>
 
             {/* Nav items */}
             {[
-              { key: 'leads', label: 'Mes leads', iconSrc: iconMyLead, accent: C.accent, keepColor: true },
+              { key: 'leads', label: 'Dashboard', iconSrc: iconMyLead, accent: C.accent, keepColor: true },
               { key: 'add_lead', label: 'Ajouter un lead', iconSrc: iconPlus, accent: '#10b981' },
+              { key: 'calendar', label: 'Calendrier', iconSrc: iconCalendrier, accent: '#3b82f6' },
               { key: 'email', label: 'Relance', iconSrc: iconEmail, accent: C.accent },
-              { key: 'campaigns', label: 'Campagnes marketing', iconSrc: iconCampaigns, accent: '#f59e0b' },
+              { key: 'campaigns', label: 'Campagnes', iconSrc: iconCampaigns, accent: '#f59e0b' },
               { key: 'kpis', label: 'KPIs & Stats', iconSrc: iconKpis, accent: '#6366f1' },
             ].map(item => {
               const isActive = sidebarView === item.key;
@@ -942,21 +1004,27 @@ export default function TrackingSheet() {
                   key={item.key}
                   onClick={() => setSidebarView(item.key)}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 4,
-                    padding: '10px 16px', cursor: 'pointer', borderRadius: 0,
-                    background: isActive ? `${item.accent}10` : 'transparent',
-                    borderLeft: isActive ? `3px solid ${item.accent}` : '3px solid transparent',
-                    transition: 'all 0.15s',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '9px 12px', margin: '1px 12px', cursor: 'pointer',
+                    borderRadius: 10,
+                    background: isActive
+                      ? (darkMode ? '#2a2b36' : '#ffffff')
+                      : 'transparent',
+                    boxShadow: isActive
+                      ? (darkMode ? '0 1px 4px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.06), 0 1px 8px rgba(0,0,0,0.04)')
+                      : 'none',
+                    border: isActive ? `1px solid ${darkMode ? '#35364a' : '#e8eaf0'}` : '1px solid transparent',
+                    transition: 'all 0.2s ease',
                   }}
-                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'; }}
+                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'; }}
                   onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                 >
                   {item.iconSrc && item.keepColor ? (
-                    <img src={item.iconSrc} alt="" style={{ width: 38, height: 38, flexShrink: 0, opacity: isActive ? 1 : 0.55, transition: 'opacity 0.15s' }} />
+                    <img src={item.iconSrc} alt="" style={{ width: 28, height: 28, flexShrink: 0, opacity: isActive ? 1 : 0.5, transition: 'opacity 0.15s' }} />
                   ) : item.iconSrc ? (
                     <div style={{
-                      width: 38, height: 38, flexShrink: 0,
-                      backgroundColor: isActive ? (item.accent || C.accent) : darkMode ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.35)',
+                      width: 28, height: 28, flexShrink: 0,
+                      backgroundColor: isActive ? C.text : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)'),
                       WebkitMaskImage: `url(${item.iconSrc})`,
                       WebkitMaskSize: 'contain',
                       WebkitMaskRepeat: 'no-repeat',
@@ -969,15 +1037,15 @@ export default function TrackingSheet() {
                     }} />
                   ) : (
                     <span style={{
-                      fontSize: 16, fontWeight: 700, width: 30, textAlign: 'center',
-                      color: isActive ? item.accent : C.muted, transition: 'color 0.15s',
+                      fontSize: 14, fontWeight: 700, width: 28, textAlign: 'center',
+                      color: isActive ? C.text : C.muted, transition: 'color 0.15s',
                     }}>
                       {item.icon}
                     </span>
                   )}
                   <span style={{
-                    fontSize: 13, fontWeight: isActive ? 700 : 500,
-                    color: isActive ? item.accent : C.muted, transition: 'color 0.15s',
+                    fontSize: 13, fontWeight: isActive ? 600 : 500,
+                    color: isActive ? C.text : C.muted, transition: 'color 0.15s',
                   }}>
                     {item.label}
                   </span>
@@ -1289,12 +1357,12 @@ export default function TrackingSheet() {
                   ...(campaignClosing && campaignRect ? {
                     left: campaignRect.left, top: campaignRect.top,
                     width: campaignRect.width, height: campaignRect.height,
-                    borderRadius: 24,
+                    borderRadius: 14,
                   } : {
                     left: '50%', top: '50%',
                     transform: 'translate(-50%, -50%)',
                     width: 'min(92vw, 860px)', height: 'min(88vh, 720px)',
-                    borderRadius: 20,
+                    borderRadius: 14,
                   }),
                   background: C.bg,
                   overflow: 'hidden',
@@ -1392,6 +1460,197 @@ export default function TrackingSheet() {
           );
         })()}
 
+        {/* ════ VIEW: CALENDAR ═════════════════════════════════════════════ */}
+        {sidebarView === 'calendar' && (() => {
+          // Build week days: Monday → Sunday of the selected week
+          const calWeekOffset = calendarWeekOffset || 0;
+          const now = new Date();
+          const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon...
+          const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+          const monday = new Date(now);
+          monday.setDate(now.getDate() + mondayOffset + calWeekOffset * 7);
+          const weekDays = Array.from({ length: 7 }, (_, i) => {
+            const d = new Date(monday);
+            d.setDate(monday.getDate() + i);
+            return d;
+          });
+          const dayLabels = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+          const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+
+          // Collect R1 and R2 events
+          const events = [];
+          leads.forEach(l => {
+            if (l.r1 && (l.status === 'r1' || l.status === 'r2' || l.status === 'signed')) {
+              events.push({ lead: l, type: 'R1', datetime: l.r1, color: '#3b82f6', bgLight: 'rgba(59,130,246,0.08)', bgDark: 'rgba(59,130,246,0.15)' });
+            }
+            if (l.r2 && (l.status === 'r2' || l.status === 'signed')) {
+              events.push({ lead: l, type: 'R2', datetime: l.r2, color: '#fb923c', bgLight: 'rgba(251,146,60,0.08)', bgDark: 'rgba(251,146,60,0.15)' });
+            }
+          });
+
+          // Hours range: 8am - 20pm
+          const HOUR_START = 8;
+          const HOUR_END = 20;
+          const HOUR_HEIGHT = 60; // px per hour
+          const hours = Array.from({ length: HOUR_END - HOUR_START }, (_, i) => HOUR_START + i);
+
+          // Position events in the grid
+          const getEventsForDay = (dayDate) => {
+            const dayStr = dayDate.toISOString().split('T')[0];
+            return events.filter(ev => toDateOnly(ev.datetime) === dayStr).map(ev => {
+              const t = ev.datetime.length > 10 ? ev.datetime.slice(11, 16) : '09:00';
+              const [h, m] = t.split(':').map(Number);
+              const startHour = h + m / 60;
+              const duration = 1; // 1h per RDV
+              return { ...ev, startHour, duration };
+            });
+          };
+
+          const isToday = (d) => d.toISOString().split('T')[0] === TODAY;
+
+          return (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'tabFadeIn 0.3s ease-out both' }}>
+              {/* Header */}
+              <div style={{ padding: '20px 28px 0', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+                  <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: 0, letterSpacing: '-0.01em' }}>
+                    Calendrier
+                  </h2>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button onClick={() => setCalendarWeekOffset(prev => (prev || 0) - 1)}
+                      style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontFamily: 'inherit' }}
+                    >&lsaquo;</button>
+                    <button onClick={() => setCalendarWeekOffset(0)}
+                      style={{ padding: '6px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: calWeekOffset === 0 ? C.accent : 'transparent', color: calWeekOffset === 0 ? '#fff' : C.text, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
+                    >Aujourd'hui</button>
+                    <button onClick={() => setCalendarWeekOffset(prev => (prev || 0) + 1)}
+                      style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontFamily: 'inherit' }}
+                    >&rsaquo;</button>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: C.muted, marginLeft: 8 }}>
+                      {monthNames[weekDays[0].getMonth()]} {weekDays[0].getFullYear()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Day headers */}
+                <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(7, 1fr)', borderBottom: `1px solid ${C.border}` }}>
+                  <div />
+                  {weekDays.map((d, i) => (
+                    <div key={i} style={{
+                      textAlign: 'center', padding: '8px 0 10px',
+                      borderLeft: `1px solid ${C.border}`,
+                    }}>
+                      <div style={{ fontSize: 11, fontWeight: 500, color: C.muted, textTransform: 'uppercase' }}>{dayLabels[i]}</div>
+                      <div style={{
+                        fontSize: 20, fontWeight: 700, lineHeight: 1.3,
+                        color: isToday(d) ? '#fff' : C.text,
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        width: 34, height: 34, borderRadius: '50%',
+                        background: isToday(d) ? C.accent : 'transparent',
+                      }}>
+                        {d.getDate()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Time grid */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '0 28px 20px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(7, 1fr)', position: 'relative' }}>
+                  {hours.map(h => (
+                    <React.Fragment key={h}>
+                      {/* Hour label */}
+                      <div style={{
+                        height: HOUR_HEIGHT, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end',
+                        paddingRight: 10, paddingTop: 0,
+                        fontSize: 11, fontWeight: 500, color: C.muted,
+                        borderTop: `1px solid ${C.border}`,
+                      }}>
+                        {h}h
+                      </div>
+                      {/* Day cells */}
+                      {weekDays.map((d, di) => (
+                        <div key={di} style={{
+                          height: HOUR_HEIGHT, position: 'relative',
+                          borderTop: `1px solid ${C.border}`,
+                          borderLeft: `1px solid ${C.border}`,
+                          background: isToday(d) ? (darkMode ? 'rgba(124,138,219,0.04)' : 'rgba(91,106,191,0.03)') : 'transparent',
+                        }}>
+                          {/* Render events that start in this hour */}
+                          {getEventsForDay(d).filter(ev => Math.floor(ev.startHour) === h).map((ev, ei) => {
+                            const topOffset = (ev.startHour - h) * HOUR_HEIGHT;
+                            const height = ev.duration * HOUR_HEIGHT - 4;
+                            return (
+                              <div key={ei}
+                                onClick={() => { setSidebarView('leads'); setTimeout(() => setSelectedLead(ev.lead.id), 100); }}
+                                style={{
+                                  position: 'absolute', top: topOffset + 2, left: 3, right: 3,
+                                  height, borderRadius: 8, padding: '6px 8px',
+                                  background: darkMode ? ev.bgDark : ev.bgLight,
+                                  borderLeft: `3px solid ${ev.color}`,
+                                  cursor: 'pointer', overflow: 'hidden',
+                                  transition: 'transform 0.15s, box-shadow 0.15s',
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = `0 2px 8px ${ev.color}25`; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                              >
+                                <div style={{ fontSize: 11, fontWeight: 700, color: ev.color, marginBottom: 2 }}>{ev.type}</div>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {ev.lead.full_name}
+                                </div>
+                                <div style={{ fontSize: 10, color: C.muted }}>
+                                  {ev.datetime.length > 10 ? ev.datetime.slice(11, 16).replace(':', 'h') : '09h00'} - {(() => {
+                                    const t = ev.datetime.length > 10 ? ev.datetime.slice(11, 16) : '09:00';
+                                    const [hh, mm] = t.split(':').map(Number);
+                                    const end = hh + 1;
+                                    return `${end}h${mm.toString().padStart(2, '0')}`;
+                                  })()}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </React.Fragment>
+                  ))}
+
+                  {/* Current time indicator */}
+                  {calWeekOffset === 0 && (() => {
+                    const nowH = new Date().getHours();
+                    const nowM = new Date().getMinutes();
+                    if (nowH < HOUR_START || nowH >= HOUR_END) return null;
+                    const topPx = (nowH - HOUR_START) * HOUR_HEIGHT + (nowM / 60) * HOUR_HEIGHT;
+                    const todayIdx = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1; // 0=Mon
+                    return (
+                      <>
+                        {/* Time badge */}
+                        <div style={{
+                          position: 'absolute', top: topPx - 10, left: 0, width: 56,
+                          display: 'flex', justifyContent: 'flex-end', paddingRight: 6, zIndex: 5,
+                        }}>
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, color: '#fff',
+                            background: C.accent, borderRadius: 4, padding: '2px 5px',
+                          }}>
+                            {nowH}:{nowM.toString().padStart(2, '0')}
+                          </span>
+                        </div>
+                        {/* Red line across today's column */}
+                        <div style={{
+                          position: 'absolute', top: topPx, left: `calc(56px + ${todayIdx} * ((100% - 56px) / 7))`,
+                          width: `calc((100% - 56px) / 7)`, height: 2,
+                          background: C.accent, zIndex: 4, borderRadius: 1,
+                        }} />
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* ════ VIEW: EMAIL (placeholder) ══════════════════════════════════ */}
         {sidebarView === 'email' && (
           <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
@@ -1413,9 +1672,11 @@ export default function TrackingSheet() {
 
         {/* ════ VIEW: LEADS (content) ═══════════════════════════════════════ */}
         {sidebarView === 'leads' && (
+        <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
+        {/* ── LEFT: Lead list ──────────────────────────────────────────── */}
         <div style={{
           flex: 1,
-          minHeight: 0,
+          minWidth: 0,
           padding: '24px 24px 32px',
           overflowY: 'auto',
         }}>
@@ -1516,9 +1777,8 @@ export default function TrackingSheet() {
             ) : (
               filteredLeads.map((lead, index) => {
                 const isExiting = exitingCards.has(lead.id);
-                const isExpanded = expandedCard === lead.id;
+                const isSelected = selectedLead === lead.id;
                 const origin = ORIGIN_COLORS[lead.origin] || DEFAULT_ORIGIN;
-                const notesVal = editingNotes[lead.id] !== undefined ? editingNotes[lead.id] : lead.notes;
 
                 return (
                   <div
@@ -1526,61 +1786,43 @@ export default function TrackingSheet() {
                     id={`lead-card-${lead.id}`}
                     style={{
                       position: 'relative',
-                      borderRadius: '20px',
-                      border: `1px solid ${isExpanded ? C.border : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)')}`,
-                      background: isExpanded
-                        ? (darkMode ? '#16171e' : C.bg)
+                      borderRadius: '14px',
+                      border: `1px solid ${isSelected ? (C.accent + '50') : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)')}`,
+                      background: isSelected
+                        ? (darkMode ? `${C.accent}12` : `${C.accent}08`)
                         : (darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)'),
-                      transition: isExpanded
-                        ? 'border-color 0.2s ease, background 0.2s ease, box-shadow 0.3s ease 0.04s, transform 0.25s cubic-bezier(0.22,1,0.36,1)'
-                        : 'border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, transform 0.2s ease',
+                      transition: 'all 0.2s ease',
                       animation: signingCard === lead.id
                         ? 'signedGlow 0.8s ease both'
                         : isExiting
                           ? 'cardSlideOut 0.35s cubic-bezier(0.22,1,0.36,1) both'
                           : `cardStaggerIn 0.5s cubic-bezier(0.34,1.56,0.64,1) ${index * 40}ms both`,
-                      cursor: isExpanded ? 'default' : 'pointer',
+                      cursor: 'pointer',
                       overflow: 'hidden',
-                      boxShadow: isExpanded
-                        ? (darkMode ? '0 4px 16px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.2)' : '0 4px 16px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.03)')
-                        : 'none',
                     }}
                     onMouseEnter={(e) => {
-                      if (!isExiting && !isExpanded) {
+                      if (!isExiting && !isSelected) {
                         e.currentTarget.style.borderColor = darkMode ? 'rgba(124,138,219,0.3)' : 'rgba(91,106,191,0.25)';
                         e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
                       }
-                      if (!isExiting && isExpanded) {
-                        e.currentTarget.style.transform = 'translateY(-2px)';
-                        e.currentTarget.style.boxShadow = darkMode ? '0 4px 20px rgba(0,0,0,0.35)' : '0 4px 20px rgba(0,0,0,0.08)';
-                      }
                     }}
                     onMouseLeave={(e) => {
-                      if (!isExpanded) {
+                      if (!isSelected) {
                         e.currentTarget.style.borderColor = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
                         e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)';
                       }
-                      if (isExpanded) {
-                        e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = C.shadow;
-                      }
                     }}
-                    onClick={() => { if (!isExpanded && !isExiting) setExpandedCard(lead.id); }}
+                    onClick={() => { if (!isExiting) setSelectedLead(isSelected ? null : lead.id); }}
                   >
 
-                    {/* ═══ COMPACT VIEW (pill) ═══ */}
+                    {/* ═══ PILL VIEW ═══ */}
                     <div
                       id={`lead-pill-${lead.id}`}
-                      onClick={(e) => {
-                        if (isExpanded) { e.stopPropagation(); setExpandedCard(null); }
-                      }}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: '10px',
-                        padding: isExpanded ? '16px 20px' : '11px 18px',
-                        transition: isExpanded ? 'padding 0.25s ease' : 'padding 0.15s ease',
-                        cursor: isExpanded ? 'pointer' : 'default',
+                        padding: '11px 18px',
                       }}
                     >
                       {/* Category color dot */}
@@ -1592,16 +1834,16 @@ export default function TrackingSheet() {
 
                       {/* Name */}
                       <span style={{
-                        fontSize: isExpanded ? '15px' : '14px',
+                        fontSize: '14px',
                         fontWeight: 600,
-                        color: C.text,
+                        color: isSelected ? C.accent : C.text,
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         minWidth: 0,
-                        maxWidth: isExpanded ? 'none' : '160px',
+                        maxWidth: '160px',
                         letterSpacing: '-0.01em',
-                        transition: 'font-size 0.2s ease',
+                        transition: 'color 0.2s ease',
                       }}>
                         {lead.full_name}
                       </span>
@@ -1617,44 +1859,40 @@ export default function TrackingSheet() {
                         {lead.origin}
                       </span>
 
-                      {/* Compact info pills (hidden when expanded) */}
-                      {!isExpanded && (
+                      {/* Compact info pills */}
+                      <span style={{ width: '1px', height: '14px', background: C.border, flexShrink: 0 }} />
+                      <span style={{ fontSize: '12px', color: C.secondary, fontFamily: "'SF Mono', 'Fira Code', monospace", fontWeight: 500, flexShrink: 0 }}>
+                        {lead.phone}
+                      </span>
+                      {lead.headcount && (
                         <>
                           <span style={{ width: '1px', height: '14px', background: C.border, flexShrink: 0 }} />
-                          <span style={{ fontSize: '12px', color: C.secondary, fontFamily: "'SF Mono', 'Fira Code', monospace", fontWeight: 500, flexShrink: 0 }}>
-                            {lead.phone}
+                          <span style={{ fontSize: '11px', color: C.muted, flexShrink: 0 }}>
+                            <span style={{ fontWeight: 600, color: C.text }}>{lead.headcount}</span> sal.
                           </span>
-                          {lead.headcount && (
-                            <>
-                              <span style={{ width: '1px', height: '14px', background: C.border, flexShrink: 0 }} />
-                              <span style={{ fontSize: '11px', color: C.muted, flexShrink: 0 }}>
-                                <span style={{ fontWeight: 600, color: C.text }}>{lead.headcount}</span> sal.
-                              </span>
-                            </>
-                          )}
-                          {lead.sector && (
-                            <>
-                              <span style={{ width: '1px', height: '14px', background: C.border, flexShrink: 0 }} />
-                              <span style={{ fontSize: '11px', fontWeight: 600, color: C.accent, flexShrink: 0 }}>
-                                {lead.sector}
-                              </span>
-                            </>
-                          )}
+                        </>
+                      )}
+                      {lead.sector && (
+                        <>
+                          <span style={{ width: '1px', height: '14px', background: C.border, flexShrink: 0 }} />
+                          <span style={{ fontSize: '11px', fontWeight: 600, color: C.accent, flexShrink: 0 }}>
+                            {lead.sector}
+                          </span>
                         </>
                       )}
 
                       {/* Spacer */}
                       <div style={{ flex: 1 }} />
 
-                      {/* Right side: date or note indicator */}
-                      {!isExpanded && lead.notes && (
+                      {/* Right side indicators */}
+                      {lead.notes && (
                         <span style={{ fontSize: '11px', color: C.muted, flexShrink: 0 }}>
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ verticalAlign: '-1px' }}>
                             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                           </svg>
                         </span>
                       )}
-                      {!isExpanded && (lead.r1 || lead.r2) && (
+                      {(lead.r1 || lead.r2) && (
                         <span style={{
                           fontSize: '10px', fontWeight: 600,
                           padding: '2px 8px', borderRadius: '4px',
@@ -1671,850 +1909,720 @@ export default function TrackingSheet() {
                         {formatDate(lead.assigned_at)}
                       </span>
 
-                      {/* Expand/collapse chevron */}
+                      {/* Selection chevron */}
                       <span style={{
-                        fontSize: '12px', color: C.muted, flexShrink: 0,
-                        transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                        transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
+                        fontSize: '12px', color: isSelected ? C.accent : C.muted, flexShrink: 0,
+                        transition: 'color 0.2s ease',
                         display: 'flex', alignItems: 'center',
                       }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="6 9 12 15 18 9" />
+                          <polyline points="9 18 15 12 9 6" />
                         </svg>
                       </span>
                     </div>
 
-                    {/* ═══ EXPANDED VIEW ═══ */}
-                    <div style={{
-                      overflow: 'hidden',
-                      maxHeight: isExpanded ? '800px' : '0px',
-                      opacity: isExpanded ? 1 : 0,
-                      transition: isExpanded
-                        ? 'max-height 0.45s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease 0.04s'
-                        : 'max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.12s ease',
-                    }}>
-                      <div style={{
-                        padding: '2px 20px 18px',
-                        borderTop: `1px solid ${darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'}`,
-                      }}>
-
-                        {/* Company name row */}
-                        {lead.company && (
-                          <p style={{
-                            margin: '12px 0 0', fontSize: '13px', color: C.secondary, fontWeight: 500,
-                            animation: isExpanded ? 'contentReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.04s both' : 'none',
-                          }}>
-                            {lead.company}
-                          </p>
-                        )}
-
-                        {/* ─ Info grid ─ */}
-                        <div style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-                          gap: '10px 20px',
-                          margin: '14px 0',
-                          padding: '14px 16px',
-                          borderRadius: '12px',
-                          background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.018)',
-                          border: `1px solid ${darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'}`,
-                          animation: isExpanded ? 'contentReveal 0.4s cubic-bezier(0.34,1.56,0.64,1) 0.08s both' : 'none',
-                        }}>
-                          <div>
-                            <div style={{ fontSize: '10px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '3px' }}>Téléphone</div>
-                            <div style={{ fontSize: '13px', color: C.text, fontFamily: "'SF Mono', 'Fira Code', monospace", fontWeight: 500 }}>{lead.phone}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontSize: '10px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '3px' }}>Email</div>
-                            <div style={{ fontSize: '13px', color: C.secondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.email}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontSize: '10px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '3px' }}>Salariés</div>
-                            <div style={{ fontSize: '13px', color: C.text, fontWeight: 600 }}>{lead.headcount}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontSize: '10px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '3px' }}>CA</div>
-                            <div style={{ fontSize: '13px', color: C.text, fontWeight: 600 }}>{lead.revenue}</div>
-                          </div>
-                          {lead.sector && (
-                            <div>
-                              <div style={{ fontSize: '10px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '3px' }}>Secteur</div>
-                              <div style={{ fontSize: '12px', color: C.accent, fontWeight: 600 }}>{lead.sector}</div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* ─ CONTACTED INDICATOR (NEW tab) ─ */}
-                        {activeCat.key === 'new' && (
-                          <div style={{ marginBottom: '10px', animation: isExpanded ? 'contentReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.12s both' : 'none' }}>
-                            {lead.first_contact_date ? (
-                              <span style={{ fontSize: '11px', color: C.accent, fontWeight: 600 }}>
-                                Contacté le {formatDate(lead.first_contact_date)}
-                              </span>
-                            ) : (
-                              <span style={{ fontSize: '11px', color: C.muted, fontStyle: 'italic' }}>
-                                Pas encore contacté
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        {/* ─ Dates (if R1/R2 exist) ─ */}
-                        {(lead.r1 || lead.r2) && (
-                          <div style={{ display: 'flex', gap: '12px', marginBottom: '14px', flexWrap: 'wrap', animation: isExpanded ? 'contentReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.14s both' : 'none' }}>
-                            {lead.r1 && (
-                              <div style={{
-                                display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 12px', borderRadius: '8px',
-                                background: darkMode ? 'rgba(59,130,246,0.1)' : 'rgba(59,130,246,0.06)',
-                                border: `1px solid ${darkMode ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.12)'}`,
-                              }}>
-                                <span style={{ fontSize: '10px', fontWeight: 700, color: '#3b82f6', textTransform: 'uppercase' }}>R1</span>
-                                <input type="date" value={lead.r1} onChange={(e) => handleDateChange(lead.id, 'r1', e.target.value)}
-                                  onClick={(e) => e.stopPropagation()}
-                                  style={{ border: 'none', background: 'transparent', color: C.text, fontSize: '12px', fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', padding: 0, outline: 'none' }}
-                                />
-                              </div>
-                            )}
-                            {lead.r2 && (
-                              <div style={{
-                                display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 12px', borderRadius: '8px',
-                                background: darkMode ? 'rgba(251,146,60,0.1)' : 'rgba(251,146,60,0.06)',
-                                border: `1px solid ${darkMode ? 'rgba(251,146,60,0.2)' : 'rgba(251,146,60,0.12)'}`,
-                              }}>
-                                <span style={{ fontSize: '10px', fontWeight: 700, color: '#fb923c', textTransform: 'uppercase' }}>R2</span>
-                                <input type="date" value={lead.r2} onChange={(e) => handleDateChange(lead.id, 'r2', e.target.value)}
-                                  onClick={(e) => e.stopPropagation()}
-                                  style={{ border: 'none', background: 'transparent', color: C.text, fontSize: '12px', fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', padding: 0, outline: 'none' }}
-                                />
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* ─ Notes ─ */}
-                        {lead.notes && !editingNotes.hasOwnProperty(lead.id) && (
-                          <div style={{
-                            marginBottom: '12px', padding: '10px 14px', borderRadius: '10px',
-                            background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
-                            border: `1px solid ${darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'}`,
-                          }}>
-                            <span style={{ fontSize: '10px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Note</span>
-                            <p style={{ fontSize: '13px', color: C.secondary, margin: '4px 0 0', lineHeight: 1.5, fontStyle: 'italic' }}>{lead.notes}</p>
-                          </div>
-                        )}
-
-                        {/* Notes editor */}
-                        {editingNotes.hasOwnProperty(lead.id) && (
-                          <div style={{ marginBottom: '12px', animation: 'contentReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.16s both' }}>
-                            <textarea
-                              value={notesVal}
-                              onChange={(e) => setEditingNotes(prev => ({ ...prev, [lead.id]: e.target.value }))}
-                              placeholder="Ajouter un commentaire..."
-                              onClick={(e) => e.stopPropagation()}
-                              style={{
-                                width: '100%', minHeight: '80px', padding: '10px 12px', borderRadius: '10px',
-                                border: `1px solid ${C.border}`, background: darkMode ? '#252636' : '#f8f9fc',
-                                color: C.text, fontSize: '13px', fontFamily: 'inherit', resize: 'vertical',
-                                outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box',
-                              }}
-                              onFocus={(e) => e.target.style.borderColor = C.accent}
-                              onBlur={(e) => e.target.style.borderColor = C.border}
-                            />
-                            <div style={{ display: 'flex', gap: '8px', marginTop: '8px', justifyContent: 'flex-end' }}>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setEditingNotes(prev => { const n = { ...prev }; delete n[lead.id]; return n; }); }}
-                                style={{ padding: '6px 14px', borderRadius: '8px', border: `1px solid ${C.border}`, background: 'transparent', color: C.secondary, fontSize: '12px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}
-                              >
-                                Annuler
-                              </button>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleNotesSave(lead.id); }}
-                                style={{ padding: '6px 14px', borderRadius: '8px', border: 'none', background: C.accent, color: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-                              >
-                                Sauvegarder
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* ─ Employee range selector (R2 only) ─ */}
-                        {activeCat.key === 'r2' && (
-                          <div style={{ marginBottom: '14px' }}>
-                            <div style={{ fontSize: '10px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
-                              Tranche salariale
-                            </div>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                              {EMPLOYEE_RANGES.map(range => {
-                                const isSelected = lead.employee_range === range;
-                                return (
-                                  <button
-                                    key={range}
-                                    onClick={(e) => { e.stopPropagation(); handleEmployeeRangeChange(lead.id, range); }}
-                                    style={{
-                                      padding: '5px 10px', borderRadius: '8px',
-                                      border: `1px solid ${isSelected ? '#fb923c' : C.border}`,
-                                      background: isSelected ? (darkMode ? 'rgba(251,146,60,0.2)' : 'rgba(251,146,60,0.1)') : 'transparent',
-                                      color: isSelected ? '#fb923c' : C.secondary,
-                                      fontSize: '11.5px', fontWeight: isSelected ? 650 : 500,
-                                      cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit',
-                                    }}
-                                    onMouseEnter={(e) => { if (!isSelected) { e.currentTarget.style.borderColor = darkMode ? 'rgba(251,146,60,0.4)' : 'rgba(251,146,60,0.3)'; e.currentTarget.style.background = darkMode ? 'rgba(251,146,60,0.08)' : 'rgba(251,146,60,0.04)'; } }}
-                                    onMouseLeave={(e) => { if (!isSelected) { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = 'transparent'; } }}
-                                  >
-                                    {range}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* ─ Actions ─ */}
-                        <div style={{
-                          borderTop: `1px solid ${darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'}`,
-                          paddingTop: '12px',
-                          animation: isExpanded ? 'contentReveal 0.4s cubic-bezier(0.34,1.56,0.64,1) 0.2s both' : 'none',
-                        }}>
-
-                      {/* ═══ NEW TAB WORKFLOW ═══ */}
-                      {activeCat.key === 'new' && (() => {
-                        const wf = activeWorkflow?.leadId === lead.id ? activeWorkflow : null;
-                        const selectStyle = {
-                          padding: '6px 28px 6px 10px', borderRadius: '8px', border: `1px solid ${C.border}`,
-                          background: C.bg, color: C.text, fontSize: '12px', fontWeight: 500, cursor: 'pointer',
-                          appearance: 'none', WebkitAppearance: 'none', fontFamily: 'inherit', outline: 'none',
-                        };
-                        return (
-                          <div>
-                            {!wf ? (
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                                <button
-                                  onClick={() => setActiveWorkflow({ leadId: lead.id, contactResult: '', appointmentResult: '', newDate: '' })}
-                                  style={{
-                                    padding: '7px 16px', borderRadius: '8px', border: 'none',
-                                    background: C.accent, color: '#fff', fontSize: '12px', fontWeight: 600,
-                                    cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit',
-                                  }}
-                                  onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.85'; }}
-                                  onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
-                                >
-                                  Premier contact
-                                </button>
-                              </div>
-                            ) : (
-                              <div style={{
-                                padding: '14px 16px', borderRadius: '10px', marginTop: '4px',
-                                background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
-                                border: `1px solid ${C.border}`, animation: 'noteExpand 0.3s ease-out both',
-                              }}>
-                                <div style={{ fontSize: '11px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
-                                  Résultat du contact
-                                </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                  <select
-                                    value={wf.contactResult}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      if (val === 'voicemail') {
-                                        handleWorkflowSubmit(lead.id, { first_contact_date: new Date().toISOString().split('T')[0], contact_result: 'voicemail', status: 'voicemail' });
-                                      } else if (val === 'not_relevant') {
-                                        handleWorkflowSubmit(lead.id, { first_contact_date: new Date().toISOString().split('T')[0], contact_result: 'not_relevant', status: 'not_relevant' });
-                                      } else if (val === 'not_processable') {
-                                        handleWorkflowSubmit(lead.id, { first_contact_date: new Date().toISOString().split('T')[0], contact_result: 'not_processable', status: 'not_relevant' });
-                                      } else {
-                                        setActiveWorkflow(prev => ({ ...prev, contactResult: val, appointmentResult: '', newDate: '' }));
-                                      }
-                                    }}
-                                    style={selectStyle}
-                                  >
-                                    <option value="" disabled>Choisir...</option>
-                                    <option value="reached">A décroché</option>
-                                    <option value="voicemail">Répondeur</option>
-                                    <option value="not_relevant">Non pertinent</option>
-                                    <option value="not_processable">Non traitable</option>
-                                  </select>
-
-                                  {wf.contactResult === 'reached' && (
-                                    <>
-                                      <div style={{ fontSize: '11px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        Suite
-                                      </div>
-                                      <select
-                                        value={wf.appointmentResult}
-                                        onChange={(e) => {
-                                          const val = e.target.value;
-                                          if (val === 'no_appointment') {
-                                            handleWorkflowSubmit(lead.id, { first_contact_date: new Date().toISOString().split('T')[0], contact_result: 'reached', appointment_result: 'no_appointment', status: 'callback' });
-                                          } else if (val === 'not_interested') {
-                                            handleWorkflowSubmit(lead.id, { first_contact_date: new Date().toISOString().split('T')[0], contact_result: 'reached', appointment_result: 'not_interested', status: 'not_relevant' });
-                                          } else {
-                                            setActiveWorkflow(prev => ({ ...prev, appointmentResult: val, newDate: '' }));
-                                          }
-                                        }}
-                                        style={selectStyle}
-                                      >
-                                        <option value="" disabled>Choisir...</option>
-                                        <option value="appointment_set">RDV fixé</option>
-                                        <option value="no_appointment">Pas de RDV</option>
-                                        <option value="not_interested">Pas intéressé</option>
-                                      </select>
-                                    </>
-                                  )}
-
-                                  {wf.contactResult === 'reached' && wf.appointmentResult === 'appointment_set' && (
-                                    <>
-                                      <div style={{ fontSize: '11px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        Date du R1
-                                      </div>
-                                      <input
-                                        type="date"
-                                        value={wf.newDate}
-                                        onChange={(e) => setActiveWorkflow(prev => ({ ...prev, newDate: e.target.value }))}
-                                        style={{ ...selectStyle, cursor: 'text' }}
-                                      />
-                                      {wf.newDate && (
-                                        <button
-                                          onClick={() => handleWorkflowSubmit(lead.id, {
-                                            first_contact_date: new Date().toISOString().split('T')[0],
-                                            contact_result: 'reached',
-                                            appointment_result: 'appointment_set',
-                                            r1_date: wf.newDate,
-                                            status: 'r1',
-                                          })}
-                                          style={{
-                                            padding: '7px 16px', borderRadius: '8px', border: 'none',
-                                            background: C.accent, color: '#fff', fontSize: '12px', fontWeight: 600,
-                                            cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'flex-start',
-                                          }}
-                                        >
-                                          Confirmer → R1
-                                        </button>
-                                      )}
-                                    </>
-                                  )}
-
-                                  <button
-                                    onClick={() => setActiveWorkflow(null)}
-                                    style={{ padding: '4px 10px', borderRadius: '6px', border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'flex-start' }}
-                                  >
-                                    Annuler
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-
-                      {/* ═══ R1 TAB WORKFLOW ═══ */}
-                      {activeCat.key === 'r1' && (() => {
-                        const wf = activeWorkflow?.leadId === lead.id ? activeWorkflow : null;
-                        const selectStyle = {
-                          padding: '6px 28px 6px 10px', borderRadius: '8px', border: `1px solid ${C.border}`,
-                          background: C.bg, color: C.text, fontSize: '12px', fontWeight: 500, cursor: 'pointer',
-                          appearance: 'none', WebkitAppearance: 'none', fontFamily: 'inherit', outline: 'none',
-                        };
-                        return (
-                          <div>
-                            {!wf ? (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                <button
-                                  onClick={() => setActiveWorkflow({ leadId: lead.id, r1Result: '', r1FollowUp: '', newDate: '' })}
-                                  style={{
-                                    padding: '7px 16px', borderRadius: '8px', border: `1px solid ${C.border}`,
-                                    background: 'transparent', color: C.text, fontSize: '12px', fontWeight: 600,
-                                    cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit',
-                                  }}
-                                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
-                                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.text; }}
-                                >
-                                  Résultat du R1
-                                </button>
-                              </div>
-                            ) : (
-                              <div style={{
-                                padding: '14px 16px', borderRadius: '10px', marginTop: '4px',
-                                background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
-                                border: `1px solid ${C.border}`, animation: 'noteExpand 0.3s ease-out both',
-                              }}>
-                                <div style={{ fontSize: '11px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
-                                  Résultat du R1
-                                </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                  <select
-                                    value={wf.r1Result}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      if (val === 'no_show') {
-                                        handleWorkflowSubmit(lead.id, { r1_result: 'no_show', status: 'callback' });
-                                      } else if (val === 'rescheduled') {
-                                        setActiveWorkflow(prev => ({ ...prev, r1Result: val, r1FollowUp: '', newDate: '' }));
-                                      } else {
-                                        setActiveWorkflow(prev => ({ ...prev, r1Result: val, r1FollowUp: '', newDate: '' }));
-                                      }
-                                    }}
-                                    style={selectStyle}
-                                  >
-                                    <option value="" disabled>Choisir...</option>
-                                    <option value="showed_up">Présent</option>
-                                    <option value="no_show">Absent</option>
-                                    <option value="rescheduled">Reporté</option>
-                                  </select>
-
-                                  {wf.r1Result === 'rescheduled' && (
-                                    <>
-                                      <div style={{ fontSize: '11px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        Nouvelle date R1
-                                      </div>
-                                      <input
-                                        type="date"
-                                        value={wf.newDate}
-                                        onChange={(e) => setActiveWorkflow(prev => ({ ...prev, newDate: e.target.value }))}
-                                        style={{ ...selectStyle, cursor: 'text' }}
-                                      />
-                                      {wf.newDate && (
-                                        <button
-                                          onClick={() => handleWorkflowSubmit(lead.id, { r1_result: 'rescheduled', r1_date: wf.newDate })}
-                                          style={{
-                                            padding: '7px 16px', borderRadius: '8px', border: 'none',
-                                            background: '#3b82f6', color: '#fff', fontSize: '12px', fontWeight: 600,
-                                            cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'flex-start',
-                                          }}
-                                        >
-                                          Confirmer nouvelle date
-                                        </button>
-                                      )}
-                                    </>
-                                  )}
-
-                                  {wf.r1Result === 'showed_up' && (
-                                    <>
-                                      <div style={{ fontSize: '11px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        Suite vers R2 ?
-                                      </div>
-                                      <select
-                                        value={wf.r1FollowUp}
-                                        onChange={(e) => {
-                                          const val = e.target.value;
-                                          if (val === 'no_r2') {
-                                            handleWorkflowSubmit(lead.id, { r1_result: 'showed_up', r1_follow_up: 'no_r2', status: 'callback' });
-                                          } else {
-                                            setActiveWorkflow(prev => ({ ...prev, r1FollowUp: val, newDate: '' }));
-                                          }
-                                        }}
-                                        style={selectStyle}
-                                      >
-                                        <option value="" disabled>Choisir...</option>
-                                        <option value="r2_set">RDV audit fixé</option>
-                                        <option value="no_r2">Pas de suite</option>
-                                      </select>
-
-                                      {wf.r1FollowUp === 'r2_set' && (
-                                        <>
-                                          <div style={{ fontSize: '11px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                            Date du R2
-                                          </div>
-                                          <input
-                                            type="date"
-                                            value={wf.newDate}
-                                            onChange={(e) => setActiveWorkflow(prev => ({ ...prev, newDate: e.target.value }))}
-                                            style={{ ...selectStyle, cursor: 'text' }}
-                                          />
-                                          {wf.newDate && (
-                                            <button
-                                              onClick={() => handleWorkflowSubmit(lead.id, {
-                                                r1_result: 'showed_up', r1_follow_up: 'r2_set',
-                                                r2_date: wf.newDate, status: 'r2',
-                                              })}
-                                              style={{
-                                                padding: '7px 16px', borderRadius: '8px', border: 'none',
-                                                background: '#fb923c', color: '#fff', fontSize: '12px', fontWeight: 600,
-                                                cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'flex-start',
-                                              }}
-                                            >
-                                              Confirmer → R2
-                                            </button>
-                                          )}
-                                        </>
-                                      )}
-                                    </>
-                                  )}
-
-                                  <button
-                                    onClick={() => setActiveWorkflow(null)}
-                                    style={{ padding: '4px 10px', borderRadius: '6px', border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'flex-start' }}
-                                  >
-                                    Annuler
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-
-                      {/* ═══ R2 TAB WORKFLOW ═══ */}
-                      {activeCat.key === 'r2' && (() => {
-                        const wf = activeWorkflow?.leadId === lead.id ? activeWorkflow : null;
-                        const selectStyle = {
-                          padding: '6px 28px 6px 10px', borderRadius: '8px', border: `1px solid ${C.border}`,
-                          background: C.bg, color: C.text, fontSize: '12px', fontWeight: 500, cursor: 'pointer',
-                          appearance: 'none', WebkitAppearance: 'none', fontFamily: 'inherit', outline: 'none',
-                        };
-                        return (
-                          <div>
-                            {!wf ? (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
-                                <button
-                                  onClick={() => setActiveWorkflow({ leadId: lead.id, r2Result: '', newDate: '' })}
-                                  style={{
-                                    padding: '7px 16px', borderRadius: '8px', border: `1px solid ${C.border}`,
-                                    background: 'transparent', color: C.text, fontSize: '12px', fontWeight: 600,
-                                    cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit',
-                                  }}
-                                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
-                                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.text; }}
-                                >
-                                  Résultat du R2
-                                </button>
-                              </div>
-                            ) : (
-                              <div style={{
-                                padding: '14px 16px', borderRadius: '10px', marginBottom: '10px',
-                                background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
-                                border: `1px solid ${C.border}`, animation: 'noteExpand 0.3s ease-out both',
-                              }}>
-                                <div style={{ fontSize: '11px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
-                                  Résultat du R2
-                                </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                  <select
-                                    value={wf.r2Result}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      if (val === 'showed_up') {
-                                        handleWorkflowSubmit(lead.id, { r2_result: 'showed_up' });
-                                      } else if (val === 'no_show') {
-                                        handleWorkflowSubmit(lead.id, { r2_result: 'no_show', status: 'callback' });
-                                      } else {
-                                        setActiveWorkflow(prev => ({ ...prev, r2Result: val, newDate: '' }));
-                                      }
-                                    }}
-                                    style={selectStyle}
-                                  >
-                                    <option value="" disabled>Choisir...</option>
-                                    <option value="showed_up">Présent</option>
-                                    <option value="no_show">Absent</option>
-                                    <option value="rescheduled">Reporté</option>
-                                    <option value="delayed">Décalé</option>
-                                  </select>
-
-                                  {(wf.r2Result === 'rescheduled' || wf.r2Result === 'delayed') && (
-                                    <>
-                                      <div style={{ fontSize: '11px', fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        Nouvelle date R2
-                                      </div>
-                                      <input
-                                        type="date"
-                                        value={wf.newDate}
-                                        onChange={(e) => setActiveWorkflow(prev => ({ ...prev, newDate: e.target.value }))}
-                                        style={{ ...selectStyle, cursor: 'text' }}
-                                      />
-                                      {wf.newDate && (
-                                        <button
-                                          onClick={() => handleWorkflowSubmit(lead.id, { r2_result: wf.r2Result, r2_date: wf.newDate })}
-                                          style={{
-                                            padding: '7px 16px', borderRadius: '8px', border: 'none',
-                                            background: '#fb923c', color: '#fff', fontSize: '12px', fontWeight: 600,
-                                            cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'flex-start',
-                                          }}
-                                        >
-                                          Confirmer nouvelle date
-                                        </button>
-                                      )}
-                                    </>
-                                  )}
-
-                                  <button
-                                    onClick={() => setActiveWorkflow(null)}
-                                    style={{ padding: '4px 10px', borderRadius: '6px', border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'flex-start' }}
-                                  >
-                                    Annuler
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-
-                      {/* ═══ OTHER TABS: Déplacer vers (callback, voicemail, not_relevant, signed) ═══ */}
-                      {!['new', 'r1', 'r2'].includes(activeCat.key) && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', animation: isExpanded ? 'contentReveal 0.4s cubic-bezier(0.34,1.56,0.64,1) 0.2s both' : 'none' }}>
-                          <span style={{ fontSize: '11px', color: C.muted, fontWeight: 500 }}>Déplacer vers</span>
-                          <div style={{ position: 'relative' }}>
-                            <select
-                              value=""
-                              onChange={(e) => { if (e.target.value) handleStatusChange(lead.id, e.target.value); }}
-                              style={{
-                                padding: '6px 28px 6px 10px',
-                                borderRadius: '8px',
-                                border: `1px solid ${C.border}`,
-                                background: C.bg,
-                                color: C.text,
-                                fontSize: '12px',
-                                fontWeight: 500,
-                                cursor: 'pointer',
-                                appearance: 'none',
-                                WebkitAppearance: 'none',
-                                fontFamily: 'inherit',
-                                outline: 'none',
-                              }}
-                            >
-                              <option value="" disabled>Choisir...</option>
-                              {CATEGORIES.filter(cat => cat.key !== activeCat.key).map(cat => (
-                                <option key={cat.key} value={cat.key}>{cat.label}</option>
-                              ))}
-                            </select>
-                            <div style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
-                              <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                                <path d="M3 4.5L6 7.5L9 4.5" stroke={C.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                              </svg>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* ═══ ACTIONS ROW (Comment + Collapse + Contract) ═══ */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', marginTop: '10px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          {/* Comment button */}
-                          {!editingNotes.hasOwnProperty(lead.id) && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setEditingNotes(prev => ({ ...prev, [lead.id]: lead.notes || '' })); }}
-                              style={{
-                                display: 'flex', alignItems: 'center', gap: '5px',
-                                padding: '6px 12px', borderRadius: '8px', border: `1px solid ${C.border}`,
-                                background: 'transparent', color: C.secondary,
-                                fontSize: '12px', fontWeight: 500, cursor: 'pointer',
-                                transition: 'all 0.15s', fontFamily: 'inherit',
-                              }}
-                              onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'; e.currentTarget.style.borderColor = C.accent; }}
-                              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = C.border; }}
-                            >
-                              Commenter
-                            </button>
-                          )}
-
-                          {/* Contract status & actions — only for R2, requires employee_range */}
-                          {activeCat.key === 'r2' && (() => {
-                            const hasRange = !!lead.employee_range;
-                            const isSending = sendingContract === lead.id;
-                            const isResending = resendingContract === lead.id;
-                            const contracts = leadContracts[lead.id] || [];
-                            const latestContract = contracts[0] || null;
-                            const status = latestContract?.yousign_status;
-                            const isCanceling = cancelingContract === latestContract?.id;
-
-                            const STATUS_COLORS = {
-                              ongoing: '#3b82f6',
-                              done: '#10b981',
-                              expired: '#fb923c',
-                              canceled: '#94a3b8',
-                              failed: '#ef4444',
-                              draft: '#d1d5db',
-                            };
-                            const STATUS_LABELS = {
-                              ongoing: 'En attente de signature',
-                              done: 'Signé',
-                              expired: 'Expiré',
-                              canceled: 'Annulé',
-                              failed: 'Erreur',
-                              draft: 'Brouillon',
-                            };
-
-                            const badgeColor = STATUS_COLORS[status] || C.muted;
-                            const badgeLabel = STATUS_LABELS[status] || status;
-
-                            const daysLeft = latestContract?.expiry_date
-                              ? Math.ceil((new Date(latestContract.expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-                              : null;
-
-                            const actionBtnStyle = (color) => ({
-                              padding: '4px 10px',
-                              borderRadius: '6px',
-                              border: `1px solid ${color}`,
-                              background: 'transparent',
-                              color: color,
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              cursor: 'pointer',
-                              transition: 'all 0.15s',
-                              fontFamily: 'inherit',
-                            });
-
-                            return (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', marginTop: '4px' }}>
-                                {latestContract && (
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                    <span style={{
-                                      display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
-                                      borderRadius: '20px', fontSize: '11px', fontWeight: 600,
-                                      background: `${badgeColor}20`, color: badgeColor,
-                                    }}>
-                                      {badgeLabel}
-                                    </span>
-
-                                    {status === 'ongoing' && daysLeft !== null && (
-                                      <span style={{ fontSize: '11px', color: C.muted }}>
-                                        Expire dans {daysLeft} jour{daysLeft !== 1 ? 's' : ''}
-                                      </span>
-                                    )}
-                                    {status === 'done' && latestContract.signed_at && (
-                                      <span style={{ fontSize: '11px', color: C.muted }}>
-                                        Signé le {formatDate(latestContract.signed_at)}
-                                      </span>
-                                    )}
-                                    {status === 'expired' && latestContract.expired_at && (
-                                      <span style={{ fontSize: '11px', color: C.muted }}>
-                                        Expiré le {formatDate(latestContract.expired_at)}
-                                      </span>
-                                    )}
-                                    {status === 'canceled' && latestContract.canceled_at && (
-                                      <span style={{ fontSize: '11px', color: C.muted }}>
-                                        Annulé le {formatDate(latestContract.canceled_at)}
-                                      </span>
-                                    )}
-                                    {status === 'failed' && latestContract.yousign_error && (
-                                      <span style={{ fontSize: '11px', color: '#ef4444' }}>
-                                        {latestContract.yousign_error}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                  {status === 'ongoing' && (
-                                    <button
-                                      onClick={() => !isCanceling && handleCancelContract(latestContract.id, lead.id)}
-                                      disabled={isCanceling}
-                                      style={actionBtnStyle('#ef4444')}
-                                      onMouseEnter={(e) => { e.currentTarget.style.background = '#ef4444'; e.currentTarget.style.color = '#fff'; }}
-                                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#ef4444'; }}
-                                    >
-                                      {isCanceling ? 'Annulation...' : 'Annuler'}
-                                    </button>
-                                  )}
-
-                                  {(status === 'expired' || status === 'canceled' || status === 'failed') && (
-                                    <button
-                                      onClick={() => !isResending && handleResendContract(latestContract.id, lead.id)}
-                                      disabled={isResending}
-                                      style={actionBtnStyle('#fb923c')}
-                                      onMouseEnter={(e) => { e.currentTarget.style.background = '#fb923c'; e.currentTarget.style.color = '#fff'; }}
-                                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#fb923c'; }}
-                                    >
-                                      {isResending ? 'Renvoi...' : (status === 'failed' ? 'Réessayer' : 'Renvoyer')}
-                                    </button>
-                                  )}
-
-                                  {(!latestContract || status === 'canceled' || status === 'expired' || status === 'failed') && (
-                                    <>
-                                      <button
-                                        onClick={() => navigate(`/contracts/new?lead_id=${lead.id}`)}
-                                        style={actionBtnStyle('#6366f1')}
-                                        onMouseEnter={(e) => { e.currentTarget.style.background = '#6366f1'; e.currentTarget.style.color = '#fff'; }}
-                                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6366f1'; }}
-                                      >
-                                        Générer NDA
-                                      </button>
-                                      <button
-                                        onClick={() => hasRange && !isSending ? handleSendContract(lead) : null}
-                                        disabled={!hasRange || isSending}
-                                        title={!hasRange ? 'Sélectionnez une tranche salariale d\'abord' : ''}
-                                        style={{
-                                          display: 'flex', alignItems: 'center', gap: '5px',
-                                          padding: '5px 12px', borderRadius: '6px', border: 'none',
-                                          background: hasRange && !isSending ? '#10b981' : (darkMode ? '#2a2b36' : '#e2e6ef'),
-                                          color: hasRange && !isSending ? '#fff' : C.muted,
-                                          fontSize: '11px', fontWeight: 600,
-                                          cursor: hasRange && !isSending ? 'pointer' : 'not-allowed',
-                                          transition: 'all 0.15s', fontFamily: 'inherit',
-                                          opacity: hasRange && !isSending ? 1 : 0.6,
-                                        }}
-                                        onMouseEnter={(e) => { if (hasRange && !isSending) { e.currentTarget.style.background = '#059669'; } }}
-                                        onMouseLeave={(e) => { e.currentTarget.style.background = hasRange && !isSending ? '#10b981' : (darkMode ? '#2a2b36' : '#e2e6ef'); }}
-                                      >
-                                        {isSending ? 'Envoi...' : 'Envoyer le contrat'}
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })()}
-                          {/* Collapse button */}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setExpandedCard(null); setActiveWorkflow(null); setEditingNotes(prev => { const n = { ...prev }; delete n[lead.id]; return n; }); }}
-                            style={{
-                              display: 'flex', alignItems: 'center', gap: '4px',
-                              padding: '6px 12px', borderRadius: '50px', border: 'none',
-                              background: darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)',
-                              color: C.muted, fontSize: '11px', fontWeight: 500,
-                              cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'inherit',
-                            }}
-                            onMouseEnter={(e) => { e.currentTarget.style.color = C.text; e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.color = C.muted; e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)'; }}
-                          >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'rotate(180deg)' }}>
-                              <polyline points="6 9 12 15 18 9" />
-                            </svg>
-                            Replier
-                          </button>
-                        </div>
-                      </div>
-                      </div>{/* end actions wrapper */}
-
-                      </div>{/* end expanded padding */}
-                    </div>{/* end expanded max-height */}
-
-                    {/* ═══ SIGNING ANIMATION OVERLAY ═══ */}
+                    {/* Signing animation overlay */}
                     {signingCard === lead.id && (
                       <div style={{
-                        position: 'absolute',
-                        bottom: 12,
-                        right: 16,
-                        zIndex: 10,
-                        pointerEvents: 'none',
-                        animation: 'signatureFade 1.1s ease-in both',
+                        position: 'absolute', bottom: 8, right: 12, zIndex: 10,
+                        pointerEvents: 'none', animation: 'signatureFade 1.1s ease-in both',
                       }}>
-                        <svg width="90" height="36" viewBox="0 0 90 36" fill="none">
-                          <path
-                            d="M5 28 C 12 8, 18 32, 26 16 S 34 4, 42 20 Q 50 34, 58 14 C 64 6, 70 26, 80 10"
-                            stroke="#34d399"
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            fill="none"
-                            strokeDasharray="200"
-                            strokeDashoffset="0"
-                            style={{ animation: 'signatureStroke 0.8s ease-out both' }}
-                          />
+                        <svg width="60" height="24" viewBox="0 0 90 36" fill="none">
+                          <path d="M5 28 C 12 8, 18 32, 26 16 S 34 4, 42 20 Q 50 34, 58 14 C 64 6, 70 26, 80 10"
+                            stroke="#34d399" strokeWidth="2.5" strokeLinecap="round" fill="none"
+                            strokeDasharray="200" strokeDashoffset="0"
+                            style={{ animation: 'signatureStroke 0.8s ease-out both' }} />
                         </svg>
                       </div>
                     )}
+
 
                   </div>
                 );
               })
             )}
           </div>
-        </div>
+        </div>{/* end left column */}
 
+        {/* ── RIGHT: Lead Detail Panel (portaled to separate card) ──────── */}
+        {detailContainerRef.current && (() => {
+          const lead = selectedLead ? leads.find(l => l.id === selectedLead) : null;
+          if (!lead) return null;
+          const origin = ORIGIN_COLORS[lead.origin] || DEFAULT_ORIGIN;
+          const notesVal = editingNotes[lead.id] !== undefined ? editingNotes[lead.id] : lead.notes;
+          const selectStyle = {
+            padding: '7px 28px 7px 12px', borderRadius: '10px', border: `1px solid ${C.border}`,
+            background: darkMode ? '#16171e' : '#fff', color: C.text, fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+            appearance: 'none', WebkitAppearance: 'none', fontFamily: 'inherit', outline: 'none', width: '100%',
+            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+            backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
+          };
+          return createPortal(
+          <div
+            key={`detail-${lead.id}`}
+            style={{
+              width: 380,
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              animation: 'detailSlideIn 0.4s cubic-bezier(0.4,0,0.2,1) both',
+              background: C.bg,
+              borderRadius: 8,
+              border: `1px solid ${C.border}`,
+              boxShadow: C.shadow,
+              height: '100%',
+            }}
+          >
+            <div style={{ padding: '18px 20px 24px' }}>
+
+              {/* Close button */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '4px' }}>
+                <button
+                  onClick={() => { setSelectedLead(null); setActiveWorkflow(null); }}
+                  style={{
+                    width: 32, height: 32, borderRadius: '50%', border: 'none',
+                    background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                    color: C.muted, fontSize: 16, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 0.15s', fontFamily: 'inherit',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.07)'; e.currentTarget.style.color = C.text; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'; e.currentTarget.style.color = C.muted; }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* ─── PROFILE HEADER ─── */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '16px' }}>
+                {/* Avatar circle */}
+                <div style={{
+                  width: 56, height: 56, borderRadius: '50%',
+                  background: darkMode ? 'rgba(124,138,219,0.12)' : 'rgba(91,106,191,0.08)',
+                  border: `2px solid ${C.accent}30`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  marginBottom: 10,
+                  animation: 'avatarPulse 2s ease-in-out 0.3s',
+                }}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill={C.accent} opacity="0.6">
+                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                  </svg>
+                </div>
+                {/* Name */}
+                <h3 style={{
+                  margin: '0 0 4px', fontSize: 16, fontWeight: 700, color: C.text,
+                  letterSpacing: '-0.02em', textAlign: 'center',
+                }}>
+                  {lead.full_name}
+                </h3>
+                {/* Origin badge + company */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                  <span style={{
+                    padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 600,
+                    background: origin.bg, color: origin.text,
+                  }}>
+                    {lead.origin}
+                  </span>
+                  {lead.company && (
+                    <span style={{ fontSize: 12, color: C.secondary, fontWeight: 500 }}>
+                      {lead.company}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* ─── STATS ROW ─── */}
+              <div style={{
+                display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1,
+                borderRadius: 10, overflow: 'hidden', marginBottom: 14,
+                background: C.border,
+                animation: 'contentReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.08s both',
+              }}>
+                {[
+                  { label: 'Salariés', value: lead.headcount || '—' },
+                  { label: 'CA', value: lead.revenue || '—' },
+                  { label: 'Assigné', value: formatDate(lead.assigned_at) || '—' },
+                ].map(stat => (
+                  <div key={stat.label} style={{
+                    padding: '10px 6px', textAlign: 'center',
+                    background: darkMode ? '#16171e' : '#fafbfd',
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>{stat.value}</div>
+                    <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 2 }}>{stat.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* ─── INFO DETAILS ─── */}
+              <div style={{
+                display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14,
+                animation: 'contentReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.12s both',
+              }}>
+                {/* Phone */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{
+                    width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+                    background: darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Téléphone</div>
+                    <div style={{ fontSize: 12, color: C.text, fontFamily: "'SF Mono', 'Fira Code', monospace", fontWeight: 500 }}>{lead.phone || '—'}</div>
+                  </div>
+                </div>
+                {/* Email */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{
+                    width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+                    background: darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+                    </svg>
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email</div>
+                    <div style={{ fontSize: 12, color: C.secondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.email || '—'}</div>
+                  </div>
+                </div>
+                {/* Sector */}
+                {lead.sector && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{
+                      width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+                      background: darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Secteur</div>
+                      <div style={{ fontSize: 12, color: C.accent, fontWeight: 600 }}>{lead.sector}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ─── CONTACTED INDICATOR (NEW tab) ─── */}
+              {activeCat.key === 'new' && (
+                <div style={{ marginBottom: 10, animation: 'contentReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.14s both' }}>
+                  {lead.first_contact_date ? (
+                    <span style={{ fontSize: 11, color: C.accent, fontWeight: 600 }}>
+                      Contacté le {formatDate(lead.first_contact_date)}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 11, color: C.muted, fontStyle: 'italic' }}>
+                      Pas encore contacté
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* ─── DATE CHIPS ─── */}
+              {(lead.r1 || lead.r2) && (
+                <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', animation: 'contentReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.16s both' }}>
+                  {lead.r1 && (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 8,
+                      background: darkMode ? 'rgba(59,130,246,0.1)' : 'rgba(59,130,246,0.06)',
+                      border: `1px solid ${darkMode ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.12)'}`,
+                    }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: '#3b82f6', textTransform: 'uppercase' }}>R1</span>
+                      <input type="datetime-local" value={toDatetimeLocal(lead.r1)} onChange={(e) => handleDateChange(lead.id, 'r1', e.target.value)}
+                        style={{ border: 'none', background: 'transparent', color: C.text, fontSize: 11, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', padding: 0, outline: 'none', width: 145 }}
+                      />
+                    </div>
+                  )}
+                  {lead.r2 && (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 8,
+                      background: darkMode ? 'rgba(251,146,60,0.1)' : 'rgba(251,146,60,0.06)',
+                      border: `1px solid ${darkMode ? 'rgba(251,146,60,0.2)' : 'rgba(251,146,60,0.12)'}`,
+                    }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: '#fb923c', textTransform: 'uppercase' }}>R2</span>
+                      <input type="datetime-local" value={toDatetimeLocal(lead.r2)} onChange={(e) => handleDateChange(lead.id, 'r2', e.target.value)}
+                        style={{ border: 'none', background: 'transparent', color: C.text, fontSize: 11, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', padding: 0, outline: 'none', width: 145 }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ─── NOTES ─── */}
+              {lead.notes && !editingNotes.hasOwnProperty(lead.id) && (
+                <div style={{
+                  marginBottom: 10, padding: '8px 12px', borderRadius: 8,
+                  background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                  border: `1px solid ${darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'}`,
+                }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Note</span>
+                  <p style={{ fontSize: 13, color: C.secondary, margin: '4px 0 0', lineHeight: 1.5, fontStyle: 'italic' }}>{lead.notes}</p>
+                </div>
+              )}
+              {editingNotes.hasOwnProperty(lead.id) && (
+                <div style={{ marginBottom: 10 }}>
+                  <textarea
+                    value={notesVal}
+                    onChange={(e) => setEditingNotes(prev => ({ ...prev, [lead.id]: e.target.value }))}
+                    placeholder="Ajouter un commentaire..."
+                    style={{
+                      width: '100%', minHeight: 60, padding: '8px 10px', borderRadius: 8,
+                      border: `1px solid ${C.border}`, background: darkMode ? '#252636' : '#f8f9fc',
+                      color: C.text, fontSize: 13, fontFamily: 'inherit', resize: 'vertical',
+                      outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box',
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = C.accent}
+                    onBlur={(e) => e.target.style.borderColor = C.border}
+                  />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
+                    <button
+                      onClick={() => setEditingNotes(prev => { const n = { ...prev }; delete n[lead.id]; return n; })}
+                      style={{ padding: '6px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.secondary, fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >Annuler</button>
+                    <button
+                      onClick={() => handleNotesSave(lead.id)}
+                      style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: C.accent, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >Sauvegarder</button>
+                  </div>
+                </div>
+              )}
+
+              {/* ─── SEPARATOR ─── */}
+              <div style={{ height: 1, background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', margin: '2px 0 12px' }} />
+
+              {/* ─── EMPLOYEE RANGE (R2 only) ─── */}
+              {activeCat.key === 'r2' && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                    Tranche salariale
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {EMPLOYEE_RANGES.map(range => {
+                      const isSel = lead.employee_range === range;
+                      return (
+                        <button key={range}
+                          onClick={() => handleEmployeeRangeChange(lead.id, range)}
+                          style={{
+                            padding: '3px 8px', borderRadius: 6,
+                            border: `1px solid ${isSel ? '#fb923c' : C.border}`,
+                            background: isSel ? (darkMode ? 'rgba(251,146,60,0.2)' : 'rgba(251,146,60,0.1)') : 'transparent',
+                            color: isSel ? '#fb923c' : C.secondary,
+                            fontSize: '10px', fontWeight: isSel ? 650 : 500,
+                            cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit',
+                          }}
+                        >{range}</button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ═══ NEW TAB WORKFLOW ═══ */}
+              {activeCat.key === 'new' && (() => {
+                const wf = activeWorkflow?.leadId === lead.id ? activeWorkflow : null;
+                return (
+                  <div style={{ marginBottom: 16 }}>
+                    {!wf ? (
+                      <button
+                        onClick={() => setActiveWorkflow({ leadId: lead.id, contactResult: '', appointmentResult: '', newDate: '' })}
+                        style={{
+                          width: '100%', padding: '10px 16px', borderRadius: 12, border: 'none',
+                          background: C.accent, color: '#fff', fontSize: 13, fontWeight: 600,
+                          cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.85'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
+                      >
+                        Premier contact
+                      </button>
+                    ) : (
+                      <div style={{
+                        padding: '14px 16px', borderRadius: 12,
+                        background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                        border: `1px solid ${C.border}`, animation: 'noteExpand 0.3s ease-out both',
+                      }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+                          Résultat du contact
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          <select value={wf.contactResult}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === 'voicemail') { handleWorkflowSubmit(lead.id, { first_contact_date: new Date().toISOString().split('T')[0], contact_result: 'voicemail', status: 'voicemail' }); }
+                              else if (val === 'not_relevant') { handleWorkflowSubmit(lead.id, { first_contact_date: new Date().toISOString().split('T')[0], contact_result: 'not_relevant', status: 'not_relevant' }); }
+                              else if (val === 'not_processable') { handleWorkflowSubmit(lead.id, { first_contact_date: new Date().toISOString().split('T')[0], contact_result: 'not_processable', status: 'not_relevant' }); }
+                              else { setActiveWorkflow(prev => ({ ...prev, contactResult: val, appointmentResult: '', newDate: '' })); }
+                            }}
+                            style={selectStyle}
+                          >
+                            <option value="" disabled>Choisir...</option>
+                            <option value="reached">A décroché</option>
+                            <option value="voicemail">Répondeur</option>
+                            <option value="not_relevant">Non pertinent</option>
+                            <option value="not_processable">Non traitable</option>
+                          </select>
+                          {wf.contactResult === 'reached' && (
+                            <>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Suite</div>
+                              <select value={wf.appointmentResult}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val === 'no_appointment') { handleWorkflowSubmit(lead.id, { first_contact_date: new Date().toISOString().split('T')[0], contact_result: 'reached', appointment_result: 'no_appointment', status: 'callback' }); }
+                                  else if (val === 'not_interested') { handleWorkflowSubmit(lead.id, { first_contact_date: new Date().toISOString().split('T')[0], contact_result: 'reached', appointment_result: 'not_interested', status: 'not_relevant' }); }
+                                  else { setActiveWorkflow(prev => ({ ...prev, appointmentResult: val, newDate: '' })); }
+                                }}
+                                style={selectStyle}
+                              >
+                                <option value="" disabled>Choisir...</option>
+                                <option value="appointment_set">RDV fixé</option>
+                                <option value="no_appointment">Pas de RDV</option>
+                                <option value="not_interested">Pas intéressé</option>
+                              </select>
+                            </>
+                          )}
+                          {wf.contactResult === 'reached' && wf.appointmentResult === 'appointment_set' && (
+                            <>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date & heure du R1</div>
+                              <input type="datetime-local" value={wf.newDate}
+                                onChange={(e) => setActiveWorkflow(prev => ({ ...prev, newDate: e.target.value }))}
+                                style={{ ...selectStyle, cursor: 'text' }}
+                              />
+                              {wf.newDate && (
+                                <button
+                                  onClick={() => handleWorkflowSubmit(lead.id, {
+                                    first_contact_date: new Date().toISOString().split('T')[0],
+                                    contact_result: 'reached', appointment_result: 'appointment_set',
+                                    r1_date: wf.newDate, status: 'r1',
+                                  })}
+                                  style={{ padding: '8px 16px', borderRadius: 10, border: 'none', background: C.accent, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                                >Confirmer &rarr; R1</button>
+                              )}
+                            </>
+                          )}
+                          <button onClick={() => setActiveWorkflow(null)}
+                            style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'flex-start' }}
+                          >Annuler</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* ═══ R1 TAB WORKFLOW ═══ */}
+              {activeCat.key === 'r1' && (() => {
+                const wf = activeWorkflow?.leadId === lead.id ? activeWorkflow : null;
+                return (
+                  <div style={{ marginBottom: 16 }}>
+                    {!wf ? (
+                      <button
+                        onClick={() => setActiveWorkflow({ leadId: lead.id, r1Result: '', r1FollowUp: '', newDate: '' })}
+                        style={{
+                          width: '100%', padding: '10px 16px', borderRadius: 12,
+                          border: `1px solid ${C.border}`, background: 'transparent',
+                          color: C.text, fontSize: 13, fontWeight: 600,
+                          cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.text; }}
+                      >Résultat du R1</button>
+                    ) : (
+                      <div style={{
+                        padding: '14px 16px', borderRadius: 12,
+                        background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                        border: `1px solid ${C.border}`, animation: 'noteExpand 0.3s ease-out both',
+                      }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Résultat du R1</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          <select value={wf.r1Result}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === 'no_show') { handleWorkflowSubmit(lead.id, { r1_result: 'no_show', status: 'callback' }); }
+                              else { setActiveWorkflow(prev => ({ ...prev, r1Result: val, r1FollowUp: '', newDate: '' })); }
+                            }}
+                            style={selectStyle}
+                          >
+                            <option value="" disabled>Choisir...</option>
+                            <option value="showed_up">Présent</option>
+                            <option value="no_show">Absent</option>
+                            <option value="rescheduled">Reporté</option>
+                          </select>
+                          {wf.r1Result === 'rescheduled' && (
+                            <>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Nouvelle date & heure R1</div>
+                              <input type="datetime-local" value={wf.newDate}
+                                onChange={(e) => setActiveWorkflow(prev => ({ ...prev, newDate: e.target.value }))}
+                                style={{ ...selectStyle, cursor: 'text' }}
+                              />
+                              {wf.newDate && (
+                                <button
+                                  onClick={() => handleWorkflowSubmit(lead.id, { r1_result: 'rescheduled', r1_date: wf.newDate })}
+                                  style={{ padding: '8px 16px', borderRadius: 10, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                                >Confirmer nouvelle date</button>
+                              )}
+                            </>
+                          )}
+                          {wf.r1Result === 'showed_up' && (
+                            <>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Suite vers R2 ?</div>
+                              <select value={wf.r1FollowUp}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val === 'no_r2') { handleWorkflowSubmit(lead.id, { r1_result: 'showed_up', r1_follow_up: 'no_r2', status: 'callback' }); }
+                                  else { setActiveWorkflow(prev => ({ ...prev, r1FollowUp: val, newDate: '' })); }
+                                }}
+                                style={selectStyle}
+                              >
+                                <option value="" disabled>Choisir...</option>
+                                <option value="r2_set">RDV audit fixé</option>
+                                <option value="no_r2">Pas de suite</option>
+                              </select>
+                              {wf.r1FollowUp === 'r2_set' && (
+                                <>
+                                  <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date & heure du R2</div>
+                                  <input type="datetime-local" value={wf.newDate}
+                                    onChange={(e) => setActiveWorkflow(prev => ({ ...prev, newDate: e.target.value }))}
+                                    style={{ ...selectStyle, cursor: 'text' }}
+                                  />
+                                  {wf.newDate && (
+                                    <button
+                                      onClick={() => handleWorkflowSubmit(lead.id, { r1_result: 'showed_up', r1_follow_up: 'r2_set', r2_date: wf.newDate, status: 'r2' })}
+                                      style={{ padding: '8px 16px', borderRadius: 10, border: 'none', background: '#fb923c', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                                    >Confirmer &rarr; R2</button>
+                                  )}
+                                </>
+                              )}
+                            </>
+                          )}
+                          <button onClick={() => setActiveWorkflow(null)}
+                            style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'flex-start' }}
+                          >Annuler</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* ═══ R2 TAB WORKFLOW ═══ */}
+              {activeCat.key === 'r2' && (() => {
+                const wf = activeWorkflow?.leadId === lead.id ? activeWorkflow : null;
+                return (
+                  <div style={{ marginBottom: 16 }}>
+                    {!wf ? (
+                      <button
+                        onClick={() => setActiveWorkflow({ leadId: lead.id, r2Result: '', newDate: '' })}
+                        style={{
+                          width: '100%', padding: '10px 16px', borderRadius: 12,
+                          border: `1px solid ${C.border}`, background: 'transparent',
+                          color: C.text, fontSize: 13, fontWeight: 600,
+                          cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.text; }}
+                      >Résultat du R2</button>
+                    ) : (
+                      <div style={{
+                        padding: '14px 16px', borderRadius: 12,
+                        background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                        border: `1px solid ${C.border}`, animation: 'noteExpand 0.3s ease-out both',
+                      }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Résultat du R2</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          <select value={wf.r2Result}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === 'showed_up') { handleWorkflowSubmit(lead.id, { r2_result: 'showed_up' }); }
+                              else if (val === 'no_show') { handleWorkflowSubmit(lead.id, { r2_result: 'no_show', status: 'callback' }); }
+                              else { setActiveWorkflow(prev => ({ ...prev, r2Result: val, newDate: '' })); }
+                            }}
+                            style={selectStyle}
+                          >
+                            <option value="" disabled>Choisir...</option>
+                            <option value="showed_up">Présent</option>
+                            <option value="no_show">Absent</option>
+                            <option value="rescheduled">Reporté</option>
+                            <option value="delayed">Décalé</option>
+                          </select>
+                          {(wf.r2Result === 'rescheduled' || wf.r2Result === 'delayed') && (
+                            <>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Nouvelle date & heure R2</div>
+                              <input type="datetime-local" value={wf.newDate}
+                                onChange={(e) => setActiveWorkflow(prev => ({ ...prev, newDate: e.target.value }))}
+                                style={{ ...selectStyle, cursor: 'text' }}
+                              />
+                              {wf.newDate && (
+                                <button
+                                  onClick={() => handleWorkflowSubmit(lead.id, { r2_result: wf.r2Result, r2_date: wf.newDate })}
+                                  style={{ padding: '8px 16px', borderRadius: 10, border: 'none', background: '#fb923c', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                                >Confirmer nouvelle date</button>
+                              )}
+                            </>
+                          )}
+                          <button onClick={() => setActiveWorkflow(null)}
+                            style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'flex-start' }}
+                          >Annuler</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* ═══ OTHER TABS: Déplacer vers ═══ */}
+              {!['new', 'r1', 'r2'].includes(activeCat.key) && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                  <span style={{ fontSize: 11, color: C.muted, fontWeight: 500 }}>Déplacer vers</span>
+                  <select value=""
+                    onChange={(e) => { if (e.target.value) handleStatusChange(lead.id, e.target.value); }}
+                    style={selectStyle}
+                  >
+                    <option value="" disabled>Choisir...</option>
+                    {CATEGORIES.filter(cat => cat.key !== activeCat.key).map(cat => (
+                      <option key={cat.key} value={cat.key}>{cat.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* ═══ CONTRACT (R2 only) ═══ */}
+              {activeCat.key === 'r2' && (() => {
+                const hasRange = !!lead.employee_range;
+                const isSending = sendingContract === lead.id;
+                const isResending = resendingContract === lead.id;
+                const contracts = leadContracts[lead.id] || [];
+                const latestContract = contracts[0] || null;
+                const status = latestContract?.yousign_status;
+                const isCanceling = cancelingContract === latestContract?.id;
+                const STATUS_COLORS = { ongoing: '#3b82f6', done: '#10b981', expired: '#fb923c', canceled: '#94a3b8', failed: '#ef4444', draft: '#d1d5db' };
+                const STATUS_LABELS = { ongoing: 'En attente de signature', done: 'Signé', expired: 'Expiré', canceled: 'Annulé', failed: 'Erreur', draft: 'Brouillon' };
+                const badgeColor = STATUS_COLORS[status] || C.muted;
+                const badgeLabel = STATUS_LABELS[status] || status;
+                const daysLeft = latestContract?.expiry_date ? Math.ceil((new Date(latestContract.expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
+                const actionBtnStyle = (color) => ({
+                  padding: '5px 12px', borderRadius: 8, border: `1px solid ${color}`,
+                  background: 'transparent', color, fontSize: 11, fontWeight: 600,
+                  cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit',
+                });
+                return (
+                  <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {latestContract && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
+                          borderRadius: 20, fontSize: 11, fontWeight: 600,
+                          background: `${badgeColor}20`, color: badgeColor,
+                        }}>{badgeLabel}</span>
+                        {status === 'ongoing' && daysLeft !== null && <span style={{ fontSize: 11, color: C.muted }}>Expire dans {daysLeft} jour{daysLeft !== 1 ? 's' : ''}</span>}
+                        {status === 'done' && latestContract.signed_at && <span style={{ fontSize: 11, color: C.muted }}>Signé le {formatDate(latestContract.signed_at)}</span>}
+                        {status === 'expired' && latestContract.expired_at && <span style={{ fontSize: 11, color: C.muted }}>Expiré le {formatDate(latestContract.expired_at)}</span>}
+                        {status === 'canceled' && latestContract.canceled_at && <span style={{ fontSize: 11, color: C.muted }}>Annulé le {formatDate(latestContract.canceled_at)}</span>}
+                        {status === 'failed' && latestContract.yousign_error && <span style={{ fontSize: 11, color: '#ef4444' }}>{latestContract.yousign_error}</span>}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      {status === 'ongoing' && (
+                        <button onClick={() => !isCanceling && handleCancelContract(latestContract.id, lead.id)} disabled={isCanceling}
+                          style={actionBtnStyle('#ef4444')}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = '#ef4444'; e.currentTarget.style.color = '#fff'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#ef4444'; }}
+                        >{isCanceling ? 'Annulation...' : 'Annuler'}</button>
+                      )}
+                      {(status === 'expired' || status === 'canceled' || status === 'failed') && (
+                        <button onClick={() => !isResending && handleResendContract(latestContract.id, lead.id)} disabled={isResending}
+                          style={actionBtnStyle('#fb923c')}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = '#fb923c'; e.currentTarget.style.color = '#fff'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#fb923c'; }}
+                        >{isResending ? 'Renvoi...' : (status === 'failed' ? 'Réessayer' : 'Renvoyer')}</button>
+                      )}
+                      {(!latestContract || status === 'canceled' || status === 'expired' || status === 'failed') && (
+                        <>
+                          <button onClick={() => navigate(`/contracts/new?lead_id=${lead.id}`)}
+                            style={actionBtnStyle('#6366f1')}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = '#6366f1'; e.currentTarget.style.color = '#fff'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6366f1'; }}
+                          >Générer NDA</button>
+                          <button
+                            onClick={() => hasRange && !isSending ? handleSendContract(lead) : null}
+                            disabled={!hasRange || isSending}
+                            title={!hasRange ? "Sélectionnez une tranche salariale d'abord" : ''}
+                            style={{
+                              padding: '5px 12px', borderRadius: 8, border: 'none',
+                              background: hasRange && !isSending ? '#10b981' : (darkMode ? '#2a2b36' : '#e2e6ef'),
+                              color: hasRange && !isSending ? '#fff' : C.muted,
+                              fontSize: 11, fontWeight: 600,
+                              cursor: hasRange && !isSending ? 'pointer' : 'not-allowed',
+                              transition: 'all 0.15s', fontFamily: 'inherit',
+                              opacity: hasRange && !isSending ? 1 : 0.6,
+                            }}
+                          >{isSending ? 'Envoi...' : 'Envoyer le contrat'}</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ═══ ACTION BUTTONS ═══ */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {!editingNotes.hasOwnProperty(lead.id) && (
+                  <button
+                    onClick={() => setEditingNotes(prev => ({ ...prev, [lead.id]: lead.notes || '' }))}
+                    style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      padding: '9px 14px', borderRadius: 10, border: `1px solid ${C.border}`,
+                      background: 'transparent', color: C.secondary,
+                      fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                      transition: 'all 0.15s', fontFamily: 'inherit',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'; e.currentTarget.style.borderColor = C.accent; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = C.border; }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    Commenter
+                  </button>
+                )}
+              </div>
+
+            </div>{/* end detail padding */}
+          </div>,
+          detailContainerRef.current
+          );
+        })()}
+
+        </div>
         )}
 
           </div>{/* end right main */}
         </div>{/* end inner board */}
         </div>{/* end inner board wrapper */}
+
+        {/* ── DETAIL PANEL PORTAL TARGET (separate card) ─────────────────── */}
+        <div
+          ref={detailContainerRef}
+          style={{
+            width: selectedLead ? 380 : 0,
+            flexShrink: 0,
+            transition: 'width 0.45s cubic-bezier(0.4,0,0.2,1), margin-left 0.45s cubic-bezier(0.4,0,0.2,1)',
+            marginLeft: selectedLead ? 12 : 0,
+            overflow: 'hidden',
+            position: 'relative',
+            height: 'calc(100vh - 200px)',
+            minHeight: '600px',
+          }}
+        />
+
+        </div>{/* end flex row */}
       </div>{/* end outer wrapper */}
     </div>
   );
