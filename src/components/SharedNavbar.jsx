@@ -71,7 +71,7 @@ if (typeof document !== 'undefined' && !document.getElementById(NOTIF_STYLES_ID)
   document.head.appendChild(style);
 }
 
-export default function SharedNavbar({ session, darkMode, setDarkMode, notification }) {
+export default function SharedNavbar({ session, darkMode, setDarkMode, notification, hideDarkToggle }) {
   const navigate = useNavigate();
 
   // ── COLLAPSE STATE (Dynamic Island) ─────────────────────────────────────────
@@ -683,16 +683,16 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
               alignItems: 'center',
               justifyContent: 'center',
               overflow: collapsed ? 'hidden' : 'visible',
-              opacity: collapsed ? 0 : 1,
+              opacity: collapsed ? 0 : hideDarkToggle ? 0.4 : 1,
               transition: 'width 0.35s ease, opacity 0.25s ease',
-              pointerEvents: collapsed ? 'none' : 'auto',
+              pointerEvents: collapsed || hideDarkToggle ? 'none' : 'auto',
               flexShrink: 0,
             }}>
               <img
                 src={darkMode ? darkIcon : lightIcon}
                 alt={darkMode ? "Dark mode" : "Light mode"}
-                onClick={() => setDarkMode(!darkMode)}
-                title={darkMode ? "Mode clair" : "Mode sombre"}
+                onClick={() => { if (!hideDarkToggle) setDarkMode(!darkMode); }}
+                title={hideDarkToggle ? "Reposez vos yeux 🌙" : darkMode ? "Mode clair" : "Mode sombre"}
                 style={{
                   width: '80px',
                   height: 'auto',

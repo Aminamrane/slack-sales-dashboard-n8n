@@ -71,13 +71,29 @@ function useAudioRecorder() {
 export default function EODReportV2() {
   const navigate = useNavigate();
 
-  // ── DARK MODE ──────────────────────────────────────────────────────────────
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
+  // ── DARK MODE (forced on this page, no flash) ──────────────────────────────
+  const prevModeRef = useRef(localStorage.getItem("darkMode"));
+  const [darkMode] = useState(() => {
+    // Force dark SYNCHRONOUSLY before first paint
+    document.body.classList.add("dark-mode");
+    document.documentElement.classList.add("dark-mode");
+    return true;
+  });
+  const setDarkMode = () => {}; // no-op — disable toggle
+
   useEffect(() => {
-    localStorage.setItem("darkMode", darkMode);
-    document.body.classList.toggle("dark-mode", darkMode);
-    document.documentElement.classList.toggle("dark-mode", darkMode);
-  }, [darkMode]);
+
+    return () => {
+      // Restore previous mode on leave
+      document.body.style.transition = '';
+      document.documentElement.style.transition = '';
+      const wasDark = prevModeRef.current === "true";
+      if (!wasDark) {
+        document.body.classList.remove("dark-mode");
+        document.documentElement.classList.remove("dark-mode");
+      }
+    };
+  }, []);
 
   const C = {
     bg: darkMode ? '#1e1f28' : '#ffffff',
@@ -506,10 +522,38 @@ export default function EODReportV2() {
     </div>
   );
 
-  // ── LOADING / SUBMITTED ────────────────────────────────────────────────────
+  // ── LOADING (show text only after 3s) ──────────────────────────────────────
+  const [showLoadingText, setShowLoadingText] = useState(false);
+
+  // ── WELCOME TYPING ─────────────────────────────────────────────────────────
+  const welcomeMsg = "COMMENT S'EST PASS\u00c9E VOTRE JOURN\u00c9E ?";
+  // Accent map: accented char → { base, accent }
+  const ACCENT_MAP = { 'É': { base: 'E', mark: '\u0301' }, 'È': { base: 'E', mark: '\u0300' }, 'Ê': { base: 'E', mark: '\u0302' }, 'À': { base: 'A', mark: '\u0300' }, 'Ù': { base: 'U', mark: '\u0300' }, 'Ô': { base: 'O', mark: '\u0302' } };
+  const [welcomeTyped, setWelcomeTyped] = useState('');
+  const [welcomeDone, setWelcomeDone] = useState(false);
+  const welcomeRef = useRef(null);
+  useEffect(() => {
+    if (loading || todayReport || submitted) return;
+    // Delay start to sync with page fade-in
+    const delay = setTimeout(() => {
+      let i = 0;
+      welcomeRef.current = setInterval(() => {
+        i++;
+        setWelcomeTyped(welcomeMsg.slice(0, i));
+        if (i >= welcomeMsg.length) { clearInterval(welcomeRef.current); setWelcomeDone(true); }
+      }, 40);
+    }, 1600); // start after page fade-in
+    return () => { clearTimeout(delay); if (welcomeRef.current) clearInterval(welcomeRef.current); };
+  }, [loading, todayReport, submitted]);
+  useEffect(() => {
+    if (!loading) return;
+    const t = setTimeout(() => setShowLoadingText(true), 3000);
+    return () => clearTimeout(t);
+  }, [loading]);
+
   if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.surface, fontFamily: "'Inter', -apple-system, sans-serif" }}>
-      <p style={{ color: C.muted }}>Chargement...</p>
+    <div style={{ minHeight: '100vh', background: '#13141b' }}>
+      {showLoadingText && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}><p style={{ color: '#5e6273' }}>Chargement...</p></div>}
     </div>
   );
 
@@ -518,11 +562,13 @@ export default function EODReportV2() {
   // ══════════════════════════════════════════════════════════════════════════
   return (
     <>
-    <div style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", paddingTop: 80 }}>
-      <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />
+    <div style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", paddingTop: 80, animation: 'eodPageIn 1.8s cubic-bezier(0.16,1,0.3,1) both' }}>
+      <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} hideDarkToggle />
 
       <style>{`
+        @font-face { font-family: 'Minecraft'; src: url('/src/assets/Minecraft.ttf') format('truetype'); font-weight: normal; font-style: normal; }
         @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+        @keyframes undertaleWave { 0%, 100% { transform: translateY(0); } 25% { transform: translateY(-3px); } 50% { transform: translateY(0); } 75% { transform: translateY(2px); } }
         @keyframes compactIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes compactOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(-30px); max-height: 0; padding: 0; margin: 0; } }
         @keyframes subtaskReveal { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
@@ -530,7 +576,8 @@ export default function EODReportV2() {
         @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes gentlePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
         @keyframes loaderSpin { to { transform: rotate(360deg); } }
-        #eod-board-frame.board-frame { background: linear-gradient(180deg, rgba(91,106,191,0.20) 0%, #ffffff 80%) !important; }
+        @keyframes eodPageIn { 0% { opacity: 0; transform: scale(0.97) translateY(20px); } 30% { opacity: 0; transform: scale(0.97) translateY(20px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
+        #eod-board-frame.board-frame { background: linear-gradient(180deg, rgba(91,106,191,0.20) 0%, #ffffff 80%) !important; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif !important; }
         body.dark-mode #eod-board-frame.board-frame { background: linear-gradient(180deg, rgba(124,138,219,0.25) 0%, #1e1f28 80%) !important; }
         .eod-free-input { width: 100%; border: none; border-bottom: 2px solid ${C.border}; background: transparent; font-size: 17px; line-height: 1.8; padding: 8px 0; color: ${C.text}; font-family: inherit; outline: none; resize: none; transition: border-color 0.3s ease; box-sizing: border-box; }
         .eod-free-input:focus { border-bottom-color: ${C.accent}; }
@@ -538,7 +585,7 @@ export default function EODReportV2() {
       `}</style>
 
       {/* ── OUTER WRAPPER ─────────────────────────────────────────────────── */}
-      <div style={{ maxWidth: 1400, margin: '32px auto 64px', padding: '18px', background: darkMode ? 'rgba(0,0,0,0.10)' : 'rgba(190,197,215,0.20)', borderRadius: '32px' }}>
+      <div style={{ maxWidth: 1400, margin: '32px auto 64px', padding: '18px', background: darkMode ? 'rgba(0,0,0,0.10)' : 'rgba(190,197,215,0.20)', borderRadius: '32px', animation: 'eodPageIn 1.8s cubic-bezier(0.16,1,0.3,1) both' }}>
         <div id="eod-board-frame" className="board-frame" style={{ margin: 0, paddingTop: 24 }}>
 
           {/* ── HEADER ────────────────────────────────────────────────────── */}
@@ -547,6 +594,32 @@ export default function EODReportV2() {
             <p style={{ fontSize: 13, color: C.muted, margin: 0 }}>
               {submitted ? 'Rapport soumis' : todayReport ? 'Déjà soumis aujourd\'hui' : step === 1 ? 'Faisons connaissance' : `Étape ${step === 0 ? 1 : step <= 1 ? 1 : step - 1} / 4`}
             </p>
+            {!todayReport && !submitted && (
+              <p style={{ fontSize: 16, fontWeight: 400, color: C.accent, margin: '24px 0 20px', minHeight: 32, visibility: welcomeTyped ? 'visible' : 'hidden', fontFamily: "'Minecraft', monospace", letterSpacing: '1px', WebkitFontSmoothing: 'none' }}>
+                {(() => {
+                  const text = welcomeTyped || '\u00A0';
+                  const renderChar = (c, key, wave, waveIdx) => {
+                    const acc = ACCENT_MAP[c];
+                    const waveStyle = wave ? { display: 'inline-block', animation: `undertaleWave 2s ease-in-out ${waveIdx * 0.08}s infinite` } : { display: 'inline-block' };
+                    if (acc) return (
+                      <span key={key} style={{ ...waveStyle, position: 'relative' }}>
+                        {acc.base}
+                        <span style={{ position: 'absolute', top: -5, left: '50%', transform: 'translateX(-50%) scaleX(1.3)', fontSize: 13, fontFamily: 'Inter, sans-serif', fontWeight: 900, lineHeight: 1 }}>{acc.mark}</span>
+                      </span>
+                    );
+                    if (c === ' ') return <span key={key} style={{ ...waveStyle, whiteSpace: 'pre' }}>{c}</span>;
+                    return <span key={key} style={waveStyle}>{c}</span>;
+                  };
+                  const idx = text.indexOf("JOURN");
+                  if (idx === -1 || !welcomeDone) {
+                    return <>{text.split('').map((c, i) => renderChar(c, i, false, 0))}<span style={{ opacity: welcomeTyped && !welcomeDone ? 1 : 0, animation: 'blink 1s infinite', transition: 'opacity 0.5s ease' }}>|</span></>;
+                  }
+                  const before = text.slice(0, idx);
+                  const wavePart = text.slice(idx);
+                  return <>{before.split('').map((c, i) => renderChar(c, i, false, 0))}{wavePart.split('').map((c, i) => renderChar(c, `w${i}`, true, i))}</>;
+                })()}
+              </p>
+            )}
           </div>
 
           {/* ── J-1 BANNER ────────────────────────────────────────────────── */}
@@ -592,16 +665,25 @@ export default function EODReportV2() {
               {/* ═══════ STEP 0: PROJECTS & MISSIONS ═══════ */}
               {step === 0 && (
                 <>
-                  <h2 style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 6 }}>Projets & Tâches</h2>
+                  <div style={{ height: 30, marginBottom: 6 }} />
 
                   {/* Mode toggle: Projet / Tâche */}
-                  <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderRadius: 10, border: `1px solid ${C.border}`, overflow: 'hidden', width: 'fit-content' }}>
-                    {[{ key: 'project', label: 'Projet' }, { key: 'task', label: 'Tâche' }].map(m => (
+                  <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderRadius: 12, border: `1px solid ${C.border}`, overflow: 'hidden', width: 'fit-content', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)' }}>
+                    {[{ key: 'project', label: 'Projet' }, { key: 'task', label: 'Tâche' }].map(m => {
+                      const isActive = composerMode === m.key;
+                      return (
                       <button key={m.key} onClick={() => { setComposerMode(m.key); if (m.key === 'task') setSelectedProjectId(null); }}
-                        style={{ padding: '8px 20px', border: 'none', background: composerMode === m.key ? C.accent : 'transparent', color: composerMode === m.key ? '#fff' : C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s ease' }}>
+                        style={{
+                          padding: '9px 22px', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s ease',
+                          background: isActive ? `linear-gradient(180deg, ${C.accent}dd 0%, ${C.accent} 100%)` : 'transparent',
+                          color: isActive ? '#fff' : C.muted,
+                          boxShadow: isActive ? `inset 0 1px 1px rgba(255,255,255,0.25), inset 0 -1px 2px rgba(0,0,0,0.15), 0 1px 4px rgba(0,0,0,0.2)` : 'none',
+                          borderTop: isActive ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
+                          textShadow: isActive ? '0 1px 1px rgba(0,0,0,0.15)' : 'none',
+                        }}>
                         {m.label}
-                      </button>
-                    ))}
+                      </button>);
+                    })}
                   </div>
 
                   {/* Existing projects as pills (only in project mode) */}

@@ -1047,13 +1047,9 @@ export default function TrackingSheet() {
     }
   };
 
-  // ── LOADING ───────────────────────────────────────────────────────────────
+  // ── LOADING (blank screen — text only after 3s) ─────────────────────────────
   if (loading) {
-    return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: C.surface }}>
-        <p style={{ color: C.muted, fontFamily: "'Inter', sans-serif" }}>Chargement...</p>
-      </div>
-    );
+    return <div style={{ minHeight: "100vh", background: C.surface }} />;
   }
 
   const activeCat = CATEGORIES[activeTab];

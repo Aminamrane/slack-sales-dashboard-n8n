@@ -118,11 +118,7 @@ export default function PerfClosing() {
     return groups;
   }, [clients]);
 
-  if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.surface }}>
-      <div style={{ fontSize: 15, color: C.muted }}>Chargement...</div>
-    </div>
-  );
+  if (loading) return <div style={{ minHeight: '100vh', background: C.surface }} />;
 
   // ── Date helpers ───────────────────────────────────────────────────────────
   // Backend returns mixed formats: "DD/MM/YYYY", "DD/MM/YYYY HH:MM:SS", "YYYY-MM-DDTHH:MM:SS"

@@ -147,7 +147,7 @@ export default function MonitoringPerf() {
   const thS = { whiteSpace:'nowrap', textAlign:'center' };
   const tdS = { textAlign:'center' };
 
-  if (loading) return <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:C.surface}}><span style={{color:C.muted}}>Chargement...</span></div>;
+  if (loading) return <div style={{minHeight:'100vh',background:C.surface}} />;
   if (!hasAccess) return null;
 
   return (
