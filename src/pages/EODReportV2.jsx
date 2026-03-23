@@ -844,10 +844,18 @@ export default function EODReportV2() {
                     {ONBOARDING_QUESTIONS[onboardingIndex]}
                   </h3>
                   {renderAnswerTextarea(onboardingCurrent, setOnboardingCurrent, 'onboarding', 'Votre réponse...', true)}
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16, opacity: onboardingCurrent.trim() ? 1 : 0, transform: onboardingCurrent.trim() ? 'none' : 'translateY(8px)', transition: 'opacity 0.35s ease, transform 0.35s ease' }}>
-                    <button onClick={handleOnboardingNext} disabled={onboardingSending} style={{ padding: '10px 28px', background: C.accent, color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-                      {onboardingSending ? 'Envoi...' : onboardingIndex < ONBOARDING_QUESTIONS.length - 1 ? 'Suivant' : 'Terminer'}
-                    </button>
+                  <div style={{ display: 'flex', justifyContent: onboardingIndex > 0 ? 'space-between' : 'flex-end', marginTop: 16 }}>
+                    {onboardingIndex > 0 && (
+                      <button onClick={() => { const prev = onboardingAnswers[onboardingAnswers.length - 1]; setOnboardingAnswers(onboardingAnswers.slice(0, -1)); setOnboardingIndex(onboardingIndex - 1); setOnboardingCurrent(prev?.answer || ''); }}
+                        style={{ padding: '10px 20px', background: 'transparent', color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
+                        ← Précédent
+                      </button>
+                    )}
+                    <div style={{ opacity: onboardingCurrent.trim() ? 1 : 0, transform: onboardingCurrent.trim() ? 'none' : 'translateY(8px)', transition: 'opacity 0.35s ease, transform 0.35s ease' }}>
+                      <button onClick={handleOnboardingNext} disabled={onboardingSending} style={{ padding: '10px 28px', background: C.accent, color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                        {onboardingSending ? 'Envoi...' : onboardingIndex < ONBOARDING_QUESTIONS.length - 1 ? 'Suivant' : 'Terminer'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
