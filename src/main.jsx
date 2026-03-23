@@ -12,12 +12,14 @@ import AdminLeads       from "./pages/AdminLeads.jsx";
 import LeadsManagement  from "./pages/LeadsManagement.jsx";
 import TrackingSheet    from "./pages/TrackingSheet.jsx";
 import MonitoringPerf   from "./pages/MonitoringPerf.jsx";
-import EODReport        from "./pages/EODReport.jsx";
+import EODReport        from "./pages/EODReportV2.jsx"; // V2 — V1 kept as EODReport.jsx
 import EODDashboard     from "./pages/EODDashboard.jsx";
 import Login            from "./pages/Login.jsx";
 import ForgotPassword   from "./pages/ForgotPassword.jsx";
 import ResetPassword    from "./pages/ResetPassword.jsx";
 import Profile          from "./pages/Profile.jsx";
+import Campaigns        from "./pages/Campaigns.jsx";
+import PerfClosing      from "./pages/PerfClosing.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import MouseDot from "./components/MouseDot.jsx";
@@ -40,6 +42,8 @@ function App() {
         <Route path="/eod-report" element={<EODReport />} />
         <Route path="/eod-dashboard" element={<EODDashboard />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/campaigns" element={<Campaigns />} />
+        <Route path="/perf-closing" element={<PerfClosing />} />
         <Route path="/change-password" element={<Navigate to="/profile" replace />} />
 
         {/* Protected routes */}

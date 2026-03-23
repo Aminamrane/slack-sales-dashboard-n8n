@@ -7,14 +7,15 @@
 html {
   margin: 0 !important;
   padding: 0 !important;
-  background: #edf0f8 !important;
+  background: #ffffff !important;
   min-height: 100vh !important;
+  scrollbar-gutter: stable;
 }
 
 body {
   margin: 0 !important;
   padding: 0 !important;
-  background: #edf0f8 !important;
+  background: #ffffff !important;
   min-height: 100vh !important;
 }
 

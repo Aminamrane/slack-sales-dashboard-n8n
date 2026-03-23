@@ -127,6 +127,7 @@ class ApiClient {
       throw err;
     }
 
+    if (response.status === 204) return null;
     return response.json();
   }
 
@@ -382,6 +383,44 @@ class ApiClient {
 
   async getLeaderboardChart() {
     return this.request('/api/v1/leaderboard/chart');
+  }
+
+  // ============ FILE UPLOADS ============
+  async uploadFile(endpoint, file, fieldName = 'file') {
+    const token = this.getToken();
+    const formData = new FormData();
+    formData.append(fieldName, file);
+    const url = `${this.baseUrl}${endpoint}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData,
+    });
+    if (response.status === 401) {
+      const refreshed = await this._refreshAccessToken();
+      if (refreshed) {
+        const retry = await fetch(url, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${this.getToken()}` },
+          body: formData,
+        });
+        if (!retry.ok) {
+          const error = await retry.json().catch(() => ({}));
+          throw new Error(error.detail || 'Upload failed');
+        }
+        return retry.json();
+      }
+      this.clearAuth();
+      window.location.href = '/login';
+      return;
+    }
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      const err = new Error(error.detail || 'Upload failed');
+      err.status = response.status;
+      throw err;
+    }
+    return response.json();
   }
 }
 

@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabaseClient";
 import apiClient from "../services/apiClient";
 import lightIcon from "../assets/light.png";
 import darkIcon from "../assets/dark.png";
+import meetIcon from "../assets/meet.png";
 
 const COLORS = {
   primary: "#6366f1",
@@ -30,6 +31,10 @@ if (typeof document !== 'undefined' && !document.getElementById(NOTIF_STYLES_ID)
   const style = document.createElement('style');
   style.id = NOTIF_STYLES_ID;
   style.textContent = `
+    @keyframes islandNotifOpen {
+      16%  { transform: scale(0.94, 0.84); }
+      55%  { transform: scale(1.015, 1.02); }
+    }
     @keyframes navDotPulse {
       0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
       40% { opacity: 1; transform: translateY(-3px); }
@@ -47,6 +52,17 @@ if (typeof document !== 'undefined' && !document.getElementById(NOTIF_STYLES_ID)
       0% { opacity: 0; transform: translateX(8px); }
       100% { opacity: 1; transform: translateX(0); }
     }
+    @keyframes navDotPop {
+      0%   { transform: scale(0);    opacity: 0; }
+      55%  { transform: scale(1.35); opacity: 1; }
+      75%  { transform: scale(0.88); }
+      100% { transform: scale(1);    opacity: 1; }
+    }
+    @keyframes navDestLabel {
+      0%   { opacity: 0; transform: translateX(10px) scale(0.9); }
+      65%  { opacity: 1; transform: translateX(-2px) scale(1.03); }
+      100% { opacity: 1; transform: translateX(0) scale(1); }
+    }
     @keyframes spin {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
@@ -62,33 +78,99 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
   const [islandOpen, setIslandOpen] = useState(false);
 
   // ── NOTIFICATION STATE (internal phase tracking) ────────────────────────────
-  const [notifPhase, setNotifPhase] = useState(null); // 'sending' | 'sent' | null
+  const [notifPhase, setNotifPhase] = useState(null); // 'sending' | 'sent' | { type: 'lead_moved', ... } | null
+  const [isOpening, setIsOpening] = useState(false);  // triggers squeeze animation on open
+  const [isClosing, setIsClosing] = useState(false);  // keeps notification content during close transition
+  const [closingWidth, setClosingWidth] = useState(null); // measured content-box width at close start
   const notifTimerRef = useRef(null);
+  const openTimerRef = useRef(null);
+  const closeTimerRef = useRef(null);
+  const islandRef = useRef(null);
+  const closeAnimRef = useRef(null);  // WAAPI close animation — stored for reliable cancel
 
   useEffect(() => {
-    // Clear any running timer on unmount
-    return () => { if (notifTimerRef.current) clearTimeout(notifTimerRef.current); };
+    return () => {
+      if (notifTimerRef.current) clearTimeout(notifTimerRef.current);
+      if (openTimerRef.current) clearTimeout(openTimerRef.current);
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
   }, []);
+
+  const triggerOpenAnim = () => {
+    if (openTimerRef.current) clearTimeout(openTimerRef.current);
+    setIsOpening(true);
+    openTimerRef.current = setTimeout(() => setIsOpening(false), 560);
+  };
+
+  const triggerClose = () => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    const el = islandRef.current;
+    if (!el) { setNotifPhase(null); return; }
+
+    // ── Web Animations API: bypass React batching entirely ──
+    // Measure the ACTUAL rendered dimensions right now
+    const cs = getComputedStyle(el);
+    const fromWidth = el.offsetWidth;                       // border-box
+    const fromPadding = cs.padding;                          // e.g. "10px 16px"
+    const fromRadius = cs.borderRadius;                      // e.g. "16px"
+    const fromGap = cs.gap || '12px';
+
+    // Target collapsed values (must match the collapsed inline styles)
+    const toWidth = 56;                                      // border-box ≈ avatar + padding
+    const toPadding = '8px 10px';
+    const toRadius = '50px';
+    const toGap = '0px';
+
+    // Keep notification content visible during animation
+    setIsClosing(true);
+    // Clear notifPhase immediately — the animation holds the visual state
+    setNotifPhase(null);
+
+    // Animate with WAAPI — runs on compositor, immune to React renders
+    const duration = 650;
+    const easing = 'cubic-bezier(0.65, 0, 0.35, 1)'; // ease-in-out: visible deceleration at end
+
+    // Cancel any previous close animation still running
+    if (closeAnimRef.current) { try { closeAnimRef.current.cancel(); } catch (_) {} }
+
+    closeAnimRef.current = el.animate([
+      { width: `${fromWidth}px`, padding: fromPadding, borderRadius: fromRadius, gap: fromGap, overflow: 'hidden', offset: 0 },
+      { width: `${toWidth}px`,   padding: toPadding,   borderRadius: toRadius,   gap: toGap,   overflow: 'hidden', offset: 1 },
+    ], {
+      duration,
+      easing,
+      fill: 'forwards',  // hold final frame until React catches up
+    });
+    // No WAAPI on content — island overflow:hidden clips it naturally as width shrinks
+
+    // After animation completes, clean up
+    closeTimerRef.current = setTimeout(() => {
+      setIsClosing(false);
+      setClosingWidth(null);
+      // Cancel WAAPI fill so React inline styles take over
+      if (closeAnimRef.current) { try { closeAnimRef.current.cancel(); } catch (_) {} closeAnimRef.current = null; }
+    }, duration + 50);
+  };
 
   useEffect(() => {
     if (notification === 'sending') {
+      triggerOpenAnim();
       setNotifPhase('sending');
-      // Auto-transition to 'sent' not handled here — parent will set notification='sent'
     } else if (notification === 'sent') {
       setNotifPhase('sent');
-      // Auto-collapse after showing "Contrat envoyé" for 2.5s
       if (notifTimerRef.current) clearTimeout(notifTimerRef.current);
-      notifTimerRef.current = setTimeout(() => {
-        setNotifPhase(null);
-      }, 2500);
+      notifTimerRef.current = setTimeout(() => triggerClose(), 2500);
+    } else if (notification?.type === 'lead_moved' || notification?.type === 'calendar_created') {
+      // Cancel any running close animation from previous notification
+      if (closeAnimRef.current) { try { closeAnimRef.current.cancel(); } catch (_) {} closeAnimRef.current = null; }
+      if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); }
+      setIsClosing(false);
+      triggerOpenAnim();
+      setNotifPhase(notification);
+      if (notifTimerRef.current) clearTimeout(notifTimerRef.current);
+      notifTimerRef.current = setTimeout(() => triggerClose(), 2500);
     } else if (!notification) {
-      // If parent clears notification, also clear phase (with a short delay for exit)
-      if (notifPhase === 'sent') {
-        // Already handled by timer above
-      } else if (notifPhase === 'sending') {
-        // Parent cancelled — clear immediately
-        setNotifPhase(null);
-      }
+      if (notifPhase === 'sending') setNotifPhase(null);
     }
   }, [notification]);
 
@@ -130,6 +212,21 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
     checkUser();
   }, [session]);
 
+  // ── KEYBOARD SHORTCUT ───────────────────────────────────────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Shift+S → TrackingSheet (ignore if typing in an input/textarea, and only if user has access)
+      if (e.shiftKey && e.key === 'S' && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+        if (apiClient.hasAccess('tracking_sheet')) {
+          e.preventDefault();
+          navigate('/tracking-sheet');
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [navigate]);
+
   // ── LOGOUT ──────────────────────────────────────────────────────────────────
   const logout = () => {
     apiClient.logout();
@@ -137,7 +234,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
 
   // ── DERIVED STATE ─────────────────────────────────────────────────────────
   const isNotifActive = !!notifPhase;
-  const forceOpen = isNotifActive; // Notification forces island open
+  const forceOpen = isNotifActive || isClosing; // Keep island "open" during WAAPI close animation
   const collapsed = !islandOpen && !forceOpen;
 
   return (
@@ -154,6 +251,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
       fontFamily: 'sans-serif',
     }}>
       <div
+        ref={islandRef}
         onMouseEnter={() => !isNotifActive && setIslandOpen(true)}
         onMouseLeave={() => !isNotifActive && setIslandOpen(false)}
         style={{
@@ -162,7 +260,6 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
           alignItems: 'center',
           gap: collapsed ? '0px' : '12px',
           padding: collapsed ? '8px 10px' : '10px 16px',
-          maxWidth: collapsed ? '56px' : (isNotifActive ? '360px' : '700px'),
           borderRadius: collapsed ? '50px' : '16px',
           background: darkMode ? 'rgba(30,31,40,0.45)' : 'rgba(255,255,255,0.40)',
           backdropFilter: 'blur(12px)',
@@ -170,36 +267,42 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
           border: `1px solid ${darkMode ? 'rgba(42,43,54,0.6)' : 'rgba(226,230,239,0.6)'}`,
           boxShadow: darkMode ? '0 4px 20px rgba(0,0,0,0.3)' : '0 4px 20px rgba(0,0,0,0.06)',
           fontFamily: 'sans-serif',
+          // Permanent GPU layer — prevents subpixel drop when animation de-promotes the layer
+          transform: 'translateZ(0)',
           overflow: collapsed ? 'hidden' : 'visible',
-          transition: 'max-width 0.45s cubic-bezier(0.4, 0, 0.15, 1), padding 0.35s ease, gap 0.35s ease, border-radius 0.35s ease',
+          maxWidth: collapsed ? '56px' : (notifPhase?.type === 'lead_moved' || notifPhase?.type === 'calendar_created' ? '480px' : isNotifActive ? '360px' : '700px'),
+          // CSS transition handles hover open/close only. Notification close uses WAAPI (triggerClose).
+          transition: 'max-width 0.55s cubic-bezier(0.16, 1, 0.3, 1), padding 0.4s cubic-bezier(0.16, 1, 0.3, 1), gap 0.35s cubic-bezier(0.16, 1, 0.3, 1), border-radius 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.04s',
+          animation: isOpening ? 'islandNotifOpen 0.52s cubic-bezier(0.34, 1.56, 0.64, 1) both' : undefined,
         }}>
 
         {/* ── NOTIFICATION MODE ── */}
-        {isNotifActive ? (
+        {(isNotifActive || isClosing) ? (
           <>
-            {/* Avatar (always visible) */}
-            {avatarUrl ? (
-              <img
-                src={avatarUrl}
-                alt=""
-                style={{ width: 32, height: 32, borderRadius: '50%', border: `2px solid ${darkMode ? '#2a2b36' : '#e2e6ef'}`, flexShrink: 0 }}
-              />
-            ) : (
-              <div style={{
-                width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-                background: userRole === 'admin' ? COLORS.primary : COLORS.tertiary,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '14px', color: '#fff', fontWeight: 600
-              }}>
-                {userRole === 'admin' ? '👑' : '👤'}
-              </div>
-            )}
+            {/* Avatar — height:34px wrapper matches normal-mode collapsed height (dark mode + logout are 34px) */}
+            <div style={{ height: 34, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt=""
+                  style={{ width: 32, height: 32, borderRadius: '50%', border: `2px solid ${darkMode ? '#2a2b36' : '#e2e6ef'}` }}
+                />
+              ) : (
+                <div style={{
+                  width: 32, height: 32, borderRadius: '50%',
+                  background: userRole === 'admin' ? COLORS.primary : COLORS.tertiary,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '14px', color: '#fff', fontWeight: 600
+                }}>
+                  {userRole === 'admin' ? '👑' : '👤'}
+                </div>
+              )}
+            </div>
 
-            {/* Notification content */}
-            <div style={{
+            {/* Notification content — WAAPI handles close fade. Children have own stagger animations. */}
+            <div data-notif-content style={{
               display: 'flex', alignItems: 'center', gap: 8,
               overflow: 'hidden', whiteSpace: 'nowrap',
-              animation: 'navNotifFadeIn 0.35s cubic-bezier(0.22,1,0.36,1) both',
             }}>
               {notifPhase === 'sending' ? (
                 <>
@@ -241,6 +344,59 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                     Contrat envoyé
                   </span>
                 </>
+              ) : notifPhase?.type === 'calendar_created' ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  {/* Meet icon — spring pop, 150ms delay */}
+                  <img src={meetIcon} alt="Meet" style={{
+                    width: 20, height: 20, objectFit: 'contain', flexShrink: 0,
+                    animation: 'navDotPop 0.42s cubic-bezier(0.34,1.56,0.64,1) 0.15s backwards',
+                  }} />
+                  {/* Text — slide in, 210ms delay */}
+                  <span style={{
+                    fontSize: 13, fontWeight: 600, color: darkMode ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.45)',
+                    whiteSpace: 'nowrap',
+                    animation: 'navNotifFadeIn 0.32s cubic-bezier(0.16,1,0.3,1) 0.21s backwards',
+                  }}>
+                    Le rendez-vous {notifPhase.rdvType} a été créé pour
+                  </span>
+                  {/* First name — spring slide, 340ms delay */}
+                  <span style={{
+                    fontSize: 13, fontWeight: 700, color: darkMode ? '#f5f5f7' : '#1d1d1f', flexShrink: 0,
+                    animation: 'navDestLabel 0.4s cubic-bezier(0.34,1.56,0.64,1) 0.34s backwards',
+                  }}>
+                    {notifPhase.firstName}
+                  </span>
+                </div>
+              ) : notifPhase?.type === 'lead_moved' ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  {/* Dot — spring pop, 150ms delay */}
+                  <div style={{
+                    width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
+                    background: notifPhase.destColor,
+                    boxShadow: `0 0 8px ${notifPhase.destColor}90`,
+                    animation: 'navDotPop 0.42s cubic-bezier(0.34,1.56,0.64,1) 0.15s backwards',
+                  }} />
+                  {/* Lead name — slide in, 210ms delay */}
+                  <span style={{
+                    fontSize: 13, fontWeight: 700, color: darkMode ? '#f5f5f7' : '#1d1d1f',
+                    maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    animation: 'navNotifFadeIn 0.32s cubic-bezier(0.16,1,0.3,1) 0.21s backwards',
+                  }}>
+                    {notifPhase.name}
+                  </span>
+                  {/* Arrow — fade in, 280ms delay */}
+                  <span style={{
+                    fontSize: 12, color: darkMode ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.28)', flexShrink: 0,
+                    animation: 'navNotifFadeIn 0.25s cubic-bezier(0.16,1,0.3,1) 0.28s backwards',
+                  }}>→</span>
+                  {/* Destination label — spring slide, 340ms delay */}
+                  <span style={{
+                    fontSize: 13, fontWeight: 600, color: notifPhase.destColor, flexShrink: 0,
+                    animation: 'navDestLabel 0.4s cubic-bezier(0.34,1.56,0.64,1) 0.34s backwards',
+                  }}>
+                    {notifPhase.destLabel}
+                  </span>
+                </div>
               ) : null}
             </div>
           </>
@@ -483,6 +639,36 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
                     Dashboard EOD
+                  </button>
+                )}
+
+                <button
+                  onClick={() => navigate("/campaigns")}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px',
+                    borderRadius: '8px', border: 'none', background: 'transparent',
+                    color: darkMode ? '#f5f5f7' : '#1d1d1f', fontSize: '14px', fontWeight: 500,
+                    cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'background 0.15s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? '#2a2b2e' : '#f5f5f7'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  Campagnes
+                </button>
+
+                {apiClient.getUser()?.role === 'admin' && (
+                  <button
+                    onClick={() => navigate("/perf-closing")}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px',
+                      borderRadius: '8px', border: 'none', background: 'transparent',
+                      color: darkMode ? '#f5f5f7' : '#1d1d1f', fontSize: '14px', fontWeight: 500,
+                      cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? '#2a2b2e' : '#f5f5f7'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    Perf.Closing
                   </button>
                 )}
 

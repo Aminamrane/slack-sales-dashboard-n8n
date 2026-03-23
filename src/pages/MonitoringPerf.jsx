@@ -2,1477 +2,313 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
-import myLogo from "../assets/my_image.png";
-import myLogoDark from "../assets/my_image2.png";
+import companyLogo from "../assets/my_image.png";
 import firstPlace from "../assets/1st-place.png";
 import secondPlace from "../assets/2st-place.png";
 import thirdPlace from "../assets/3st-place.png";
+import iconGlobal from "../assets/global.png";
+import iconFinance from "../assets/finance.png";
 import "../index.css";
 
-const COLORS = {
-  primary: "#6366f1",
-  secondary: "#fb923c",
-  tertiary: "#10b981",
-};
+const COLORS = { primary: "#6366f1", secondary: "#fb923c", tertiary: "#10b981" };
 
-// ── NAME NORMALIZATION (Critical for matching across tables) ─────────────────
-const stripDiacritics = (str) => {
-  if (!str) return "";
-  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-};
-
+const stripDiacritics = (str) => str ? str.normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
 const normalizeSalesKey = (name) => {
   if (!name) return "unknown";
-  return stripDiacritics(name)
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, " ")              // Multi-espaces → 1 espace
-    .replace(/[^a-z\s'-]/g, "");       // Garde lettres, espaces, tirets, apostrophes
+  return stripDiacritics(name).toLowerCase().trim().replace(/\s+/g, " ").replace(/[^a-z\s'-]/g, "");
 };
 
-// Mapping de variantes de noms vers CLÉ CANONIQUE (pour matching entre tables)
-// Format: "variante normalisée" → "clé canonique"
 const NAME_VARIANTS_TO_CANONICAL = {
-  // Kaïl variations
-  "kyle dif": "kail",
-  "kail": "kail",
-  "kyle": "kail",
-
-  // Yohan variations
-  "yohan": "yohan debowski",
-  "yohan debowski": "yohan debowski",
-  "debowski": "yohan debowski",
-
-  // Léo variations
-  "leo": "leo mafrici",
-  "leo mafrici": "leo mafrici",
-  "mafrici": "leo mafrici",
-
-  // Yanis variations
-  "yanis": "yanis zairi",
-  "yanis zairi": "yanis zairi",
-  "zairi": "yanis zairi",
-
-  // Youness variations
-  "youness": "youness el boukhrissi",
-  "youness el boukhrissi": "youness el boukhrissi",
-  "el boukhrissi": "youness el boukhrissi",
-
-  // Mourad variations
-  "mourad": "mourad derradji",
-  "mourad derradji": "mourad derradji",
-  "derradji": "mourad derradji",
-
-  // Alex variations
-  "alex": "alex gaudrillet",
-  "alex gaudrillet": "alex gaudrillet",
-  "gaudrillet": "alex gaudrillet",
-
-  // Sébastien variations
-  "sebastien": "sebastien itema",
-  "sebastien itema": "sebastien itema",
-  "itema": "sebastien itema",
-
-  // Quentin variations
-  "quentin": "quentin rattez",
-  "quentin rattez": "quentin rattez",
-  "rattez": "quentin rattez",
-
-  // Gwenaël variations
-  "gwenael": "gwenael",
-  "gwenaelle": "gwenael",
-
-  // David
-  "david": "david",
-
-  // Eva
-  "eva": "eva",
-
-  // Aurélie variations
-  "aurelie": "aurelie briquet",
-  "aurelie briquet": "aurelie briquet",
-  "briquet": "aurelie briquet",
-
-  // Selim variations
-  "selim": "selim kouay",
-  "selim kouay": "selim kouay",
-  "kouay": "selim kouay",
-
-  // Mehdi variations
-  "mehdi": "mehdi bouffessil",
-  "mehdi bouffessil": "mehdi bouffessil",
-  "bouffessil": "mehdi bouffessil",
-
-  // Sarah variations
-  "sarah": "sarah amroune",
-  "sarah amroune": "sarah amroune",
-  "amroune": "sarah amroune",
-
-  // Sara variations (différente de Sarah)
-  "sara": "sara benabid",
-  "sara benabid": "sara benabid",
-  "benabid": "sara benabid",
-
-  // Mohamed variations
-  "mohamed": "mohamed bouaksa",
-  "mohamed bouaksa": "mohamed bouaksa",
-  "bouaksa": "mohamed bouaksa",
-
-  // Youcef variations
-  "youcef": "youcef amran",
-  "youcef amran": "youcef amran",
-  "amran": "youcef amran"
+  "kyle dif": "kail", "kail": "kail", "kyle": "kail",
+  "yohan": "yohan debowski", "yohan debowski": "yohan debowski", "debowski": "yohan debowski",
+  "leo": "leo mafrici", "leo mafrici": "leo mafrici", "mafrici": "leo mafrici",
+  "yanis": "yanis zairi", "yanis zairi": "yanis zairi", "zairi": "yanis zairi",
+  "youness": "youness el boukhrissi", "youness el boukhrissi": "youness el boukhrissi", "el boukhrissi": "youness el boukhrissi",
+  "mourad": "mourad derradji", "mourad derradji": "mourad derradji", "derradji": "mourad derradji",
+  "alex": "alex gaudrillet", "alex gaudrillet": "alex gaudrillet", "gaudrillet": "alex gaudrillet",
+  "sebastien": "sebastien itema", "sebastien itema": "sebastien itema", "itema": "sebastien itema",
+  "quentin": "quentin rattez", "quentin rattez": "quentin rattez", "rattez": "quentin rattez",
+  "gwenael": "gwenael", "gwenaelle": "gwenael",
+  "david": "david", "eva": "eva",
+  "aurelie": "aurelie briquet", "aurelie briquet": "aurelie briquet", "briquet": "aurelie briquet",
+  "selim": "selim kouay", "selim kouay": "selim kouay", "kouay": "selim kouay",
+  "mehdi": "mehdi bouffessil", "mehdi bouffessil": "mehdi bouffessil", "bouffessil": "mehdi bouffessil",
+  "sarah": "sarah amroune", "sarah amroune": "sarah amroune", "amroune": "sarah amroune",
+  "sara": "sara benabid", "sara benabid": "sara benabid", "benabid": "sara benabid",
+  "mohamed": "mohamed bouaksa", "mohamed bouaksa": "mohamed bouaksa", "bouaksa": "mohamed bouaksa",
+  "youcef": "youcef amran", "youcef amran": "youcef amran", "amran": "youcef amran"
 };
 
-// Canonical display names (clé canonique → nom d'affichage)
 const CANONICAL_DISPLAY_NAMES = {
-  "yohan debowski": "Yohan Debowski",
-  "leo mafrici": "Léo Mafrici",
-  "mourad derradji": "Mourad Derradji",
-  "youness el boukhrissi": "Youness El Boukhrissi",
-  "yanis zairi": "Yanis Zaïri",
-  "alex gaudrillet": "Alex Gaudrillet",
-  "sebastien itema": "Sébastien ITEMA",
-  "selim kouay": "Selim Kouay",
-  "eva": "Eva",
-  "david": "David",
-  "aurelie briquet": "Aurélie Briquet",
-  "gwenael": "Gwenaël",
-  "quentin rattez": "Quentin Rattez",
-  "mehdi bouffessil": "Mehdi BOUFFESSIL",
-  "sarah amroune": "Sarah Amroune",
-  "sara benabid": "Sara BENABID",
-  "mohamed bouaksa": "Mohamed Bouaksa",
-  "kail": "Kaïl",
-  "youcef amran": "Youcef Amran"
+  "yohan debowski": "Yohan Debowski", "leo mafrici": "L\u00e9o Mafrici", "mourad derradji": "Mourad Derradji",
+  "youness el boukhrissi": "Youness El Boukhrissi", "yanis zairi": "Yanis Za\u00efri", "alex gaudrillet": "Alex Gaudrillet",
+  "sebastien itema": "S\u00e9bastien ITEMA", "selim kouay": "Selim Kouay", "eva": "Eva", "david": "David",
+  "aurelie briquet": "Aur\u00e9lie Briquet", "gwenael": "Gwena\u00ebl", "quentin rattez": "Quentin Rattez",
+  "mehdi bouffessil": "Mehdi BOUFFESSIL", "sarah amroune": "Sarah Amroune", "sara benabid": "Sara BENABID",
+  "mohamed bouaksa": "Mohamed Bouaksa", "kail": "Ka\u00efl", "youcef amran": "Youcef Amran"
 };
 
-// Retourne la CLÉ CANONIQUE pour un nom donné (pour matching entre tables)
-const getCanonicalKey = (rawName) => {
-  const normalized = normalizeSalesKey(rawName);
-  return NAME_VARIANTS_TO_CANONICAL[normalized] ?? normalized;
-};
-
-// Retourne le NOM D'AFFICHAGE pour un nom donné
-const displaySalesName = (rawName) => {
-  const canonicalKey = getCanonicalKey(rawName);
-  return CANONICAL_DISPLAY_NAMES[canonicalKey] ?? rawName?.trim() ?? "Unknown";
-};
-
-// Personnes exclues (pas des sales)
-const EXCLUDED_KEYS = new Set([
-  "mohamed bouaksa",
-  "sara benabid",
-  "sarah amroune"
-]);
+const getCanonicalKey = (rawName) => { const n = normalizeSalesKey(rawName); return NAME_VARIANTS_TO_CANONICAL[n] || n; };
+const displaySalesName = (rawName) => { const k = getCanonicalKey(rawName); return CANONICAL_DISPLAY_NAMES[k] || (rawName ? rawName.trim() : "Unknown"); };
+const EXCLUDED_KEYS = new Set(["mohamed bouaksa", "sara benabid", "sarah amroune"]);
 
 export default function MonitoringPerf() {
   const navigate = useNavigate();
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
+  useEffect(() => { localStorage.setItem("darkMode", darkMode); document.body.classList.toggle("dark-mode", darkMode); document.documentElement.classList.toggle("dark-mode", darkMode); }, [darkMode]);
 
-  // ── DARK MODE ───────────────────────────────────────────────────────────────
-  const [darkMode, setDarkMode] = useState(() => {
-    const saved = localStorage.getItem("darkMode");
-    return saved === "true";
-  });
+  const C = { bg: darkMode ? '#1e1f28' : '#ffffff', border: darkMode ? '#2a2b36' : '#e2e6ef', surface: darkMode ? '#13141b' : '#f6f7f9', text: darkMode ? '#eef0f6' : '#1e2330', muted: darkMode ? '#5e6273' : '#9ca3af', subtle: darkMode ? '#252636' : '#f4f6fb', secondary: darkMode ? '#8b8fa0' : '#6b7280', accent: darkMode ? '#7c8adb' : '#5b6abf', shadow: darkMode ? '0 1px 3px rgba(0,0,0,0.2), 0 4px 16px rgba(0,0,0,0.15)' : '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03)' };
 
-  useEffect(() => {
-    localStorage.setItem("darkMode", darkMode);
-    if (darkMode) {
-      document.body.classList.add("dark-mode");
-      document.documentElement.classList.add("dark-mode");
-    } else {
-      document.body.classList.remove("dark-mode");
-      document.documentElement.classList.remove("dark-mode");
-    }
-  }, [darkMode]);
-
-  // ── AUTH & ACCESS CONTROL ───────────────────────────────────────────────────
   const [session, setSession] = useState(null);
   const [hasAccess, setHasAccess] = useState(false);
   const [loading, setLoading] = useState(true);
+  useEffect(() => { const check = async () => { try { const token = apiClient.getToken(); const user = apiClient.getUser(); if (!token || !user) { navigate("/login"); return; } setSession({ user: { email: user.email, user_metadata: { name: user.name, avatar_url: user.avatar_url || null } } }); if (user.role === 'admin' || apiClient.hasAccess('monitoring_perf')) setHasAccess(true); else navigate("/"); } catch { navigate("/login"); } finally { setLoading(false); } }; check(); }, [navigate]);
 
-  useEffect(() => {
-    const checkAccess = async () => {
-      try {
-        // Check JWT auth
-        const token = apiClient.getToken();
-        const user = apiClient.getUser();
-
-        if (!token || !user) {
-          navigate("/login");
-          return;
-        }
-
-        // Create session object for compatibility with SharedNavbar
-        setSession({ user: { email: user.email, user_metadata: { name: user.name, avatar_url: user.avatar_url || null } } });
-
-        // Check if user has monitoring_perf permission
-        if (user.role === 'admin' || apiClient.hasAccess('monitoring_perf')) {
-          setHasAccess(true);
-        } else {
-          navigate("/");
-        }
-      } catch (e) {
-        console.error("Access check error:", e);
-        navigate("/login");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkAccess();
-  }, [navigate]);
-
-  // ── VIEW MODE ───────────────────────────────────────────────────────────────
-  const [viewMode, setViewMode] = useState("perf_sales"); // "perf_sales" | "lead_quality"
-
-  // ── DATA LOADING ────────────────────────────────────────────────────────────
-  const [perfData, setPerfData] = useState(null); // Data from backend API
+  const [viewMode, setViewMode] = useState("perf_sales");
+  const [perfData, setPerfData] = useState(null);
   const [dataLoading, setDataLoading] = useState(true);
-
-  // ── LEAD QUALITY DATA ──────────────────────────────────────────────────────
   const [leadQualityData, setLeadQualityData] = useState(null);
   const [leadQualityLoading, setLeadQualityLoading] = useState(false);
-  const [leadQualityRange, setLeadQualityRange] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  });
-  const [selectedOrigins, setSelectedOrigins] = useState([]); // multi-select origins filter
-
-  // ── FILTERS ─────────────────────────────────────────────────────────────────
-  const [range, setRange] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  });
-  const [canal, setCanal] = useState("global"); // "global" | "ads" | "cc"
-
-  // ── ADS HEADCOUNT DETAIL VIEW ───────────────────────────────────────────
+  const [leadQualityRange, setLeadQualityRange] = useState(() => { const n = new Date(); return n.getFullYear() + '-' + String(n.getMonth()+1).padStart(2,'0'); });
+  const [selectedOrigins, setSelectedOrigins] = useState([]);
+  const [range, setRange] = useState(() => { const n = new Date(); return n.getFullYear() + '-' + String(n.getMonth()+1).padStart(2,'0'); });
+  const [canal, setCanal] = useState("global");
   const [adsDetailView, setAdsDetailView] = useState(false);
   const [headcountData, setHeadcountData] = useState(null);
   const [headcountLoading, setHeadcountLoading] = useState(false);
+  const [detailModal, setDetailModal] = useState(null);
+  const [originsOpen, setOriginsOpen] = useState(false);
+  const [trackingKpis, setTrackingKpis] = useState(null); // from /tracking/perf-sales-kpis
 
-  // ── DETAIL DRILL-DOWN (ADS/CC) ──────────────────────────────────────────
-  const [detailModal, setDetailModal] = useState(null); // { personName, type, data, loading }
+  const openDetail = async (personName) => { if (canal !== "ads" && canal !== "cc") return; setDetailModal({ personName, type: canal, data: null, loading: true }); try { const ep = canal === "ads" ? '/api/v1/monitoring/performance/detail/ads' : '/api/v1/monitoring/performance/detail/cc'; const res = await apiClient.get(ep + '?person_name=' + encodeURIComponent(personName) + '&period=' + range); setDetailModal(prev => prev ? { ...prev, data: res, loading: false } : null); } catch { setDetailModal(prev => prev ? { ...prev, data: null, loading: false } : null); } };
 
-  const openDetail = async (personName) => {
-    if (canal !== "ads" && canal !== "cc") return;
-    setDetailModal({ personName, type: canal, data: null, loading: true });
-    try {
-      const endpoint = canal === "ads"
-        ? `/api/v1/monitoring/performance/detail/ads`
-        : `/api/v1/monitoring/performance/detail/cc`;
-      const res = await apiClient.get(`${endpoint}?person_name=${encodeURIComponent(personName)}&period=${range}`);
-      setDetailModal(prev => prev ? { ...prev, data: res, loading: false } : null);
-    } catch (e) {
-      console.error("Detail fetch error:", e);
-      setDetailModal(prev => prev ? { ...prev, data: null, loading: false } : null);
-    }
-  };
+  useEffect(() => { if (!adsDetailView || canal !== "ads") return; let c = false; (async () => { setHeadcountLoading(true); try { const res = await apiClient.get('/api/v1/monitoring/performance/detail/ads/headcount?period=' + range); if (!c) setHeadcountData(res); } catch { if (!c) setHeadcountData(null); } finally { if (!c) setHeadcountLoading(false); } })(); return () => { c = true; }; }, [adsDetailView, range, canal]);
 
-  // Fetch headcount breakdown when detail view is active
-  useEffect(() => {
-    if (!adsDetailView || canal !== "ads") return;
-    let cancelled = false;
-    const fetchHeadcount = async () => {
-      setHeadcountLoading(true);
-      try {
-        const res = await apiClient.get(`/api/v1/monitoring/performance/detail/ads/headcount?period=${range}`);
-        if (!cancelled) setHeadcountData(res);
-      } catch (e) {
-        console.error("Headcount fetch error:", e);
-        if (!cancelled) setHeadcountData(null);
-      } finally {
-        if (!cancelled) setHeadcountLoading(false);
-      }
-    };
-    fetchHeadcount();
-    return () => { cancelled = true; };
-  }, [adsDetailView, range, canal]);
+  useEffect(() => { if (hasAccess) { setDataLoading(true); const period = range === "all" ? "all" : range.match(/^\d{4}-\d{2}$/) ? range : "current_month"; apiClient.get('/api/v1/monitoring/performance/v2?period=' + period).then(d => setPerfData(d)).catch(err => { if (err.message && err.message.includes('401')) navigate("/login"); }).finally(() => setTimeout(() => setDataLoading(false), 150)); } }, [hasAccess, range]);
 
-  const fetchData = async () => {
-    setDataLoading(true);
-    try {
-      // Convert range to period format for backend
-      let period;
-      if (range === "all") {
-        period = "all";
-      } else if (range.match(/^\d{4}-\d{2}$/)) {
-        // Format: YYYY-MM
-        period = range;
-      } else {
-        period = "current_month";
-      }
+  // Fetch tracking-based R1/R2 KPIs (correct placed/done counts)
+  useEffect(() => { if (hasAccess && range && range !== 'all' && range.match(/^\d{4}-\d{2}$/)) { apiClient.get('/api/v1/tracking/perf-sales-kpis?month=' + range).then(d => setTrackingKpis(d)).catch(() => setTrackingKpis(null)); } else { setTrackingKpis(null); } }, [hasAccess, range]);
 
-      // Fetch performance data from backend API V2
-      console.log("🔍 Fetching performance data V2 with period:", period);
-      const data = await apiClient.get(`/api/v1/monitoring/performance/v2?period=${period}`);
-      console.log("📊 Backend V2 response:", data);
-      console.log("📊 global_view:", data?.global_view);
-      console.log("📊 ads_view:", data?.ads_view);
-      console.log("📊 cc_view:", data?.cc_view);
-      setPerfData(data);
-    } catch (err) {
-      console.error("Fetch error:", err);
-      if (err.message?.includes('401')) {
-        navigate("/login");
-      }
-    } finally {
-      setTimeout(() => setDataLoading(false), 150);
-    }
-  };
+  useEffect(() => { if (hasAccess && viewMode === 'lead_quality') { setLeadQualityLoading(true); let url = '/api/v1/monitoring/lead-quality?period=' + (leadQualityRange || 'current_month'); if (selectedOrigins.length > 0) url += '&' + selectedOrigins.map(o => 'origins=' + encodeURIComponent(o)).join('&'); apiClient.get(url).then(d => setLeadQualityData(d)).catch(err => { if (err.message && err.message.includes('401')) navigate("/login"); }).finally(() => setTimeout(() => setLeadQualityLoading(false), 150)); } }, [hasAccess, viewMode, leadQualityRange, selectedOrigins]);
 
-  useEffect(() => {
-    if (hasAccess) {
-      fetchData();
-    }
-  }, [hasAccess, range]);
+  // Build lookup from tracking KPIs (correct R1/R2 placed/done)
+  const trackingByName = useMemo(() => {
+    if (!trackingKpis || !trackingKpis.by_sales) return {};
+    const map = {};
+    trackingKpis.by_sales.forEach(s => {
+      const key = getCanonicalKey(s.sales_name);
+      map[key] = s;
+    });
+    console.log('[MonitoringPerf] trackingByName keys:', Object.keys(map), 'raw names:', trackingKpis.by_sales.map(s => s.sales_name));
+    return map;
+  }, [trackingKpis]);
 
-  // ── FETCH LEAD QUALITY DATA ────────────────────────────────────────────────
-  const fetchLeadQuality = async () => {
-    setLeadQualityLoading(true);
-    try {
-      const period = leadQualityRange || 'current_month';
-      let url = `/api/v1/monitoring/lead-quality?period=${period}`;
-      if (selectedOrigins.length > 0) {
-        const originsParam = selectedOrigins.map(o => `origins=${encodeURIComponent(o)}`).join('&');
-        url += `&${originsParam}`;
-      }
-      const data = await apiClient.get(url);
-      setLeadQualityData(data);
-    } catch (err) {
-      console.error("Lead quality fetch error:", err);
-      if (err.message?.includes('401')) {
-        navigate("/login");
-      }
-    } finally {
-      setTimeout(() => setLeadQualityLoading(false), 150);
-    }
-  };
-
-  useEffect(() => {
-    if (hasAccess && viewMode === 'lead_quality') {
-      fetchLeadQuality();
-    }
-  }, [hasAccess, viewMode, leadQualityRange, selectedOrigins]);
-
-  // ── KPI CALCULATIONS ────────────────────────────────────────────────────────
-  // Sales Funnel: Appels → Décrochés → R1p → R1r → R2p → R2r → Ventes
   const performanceData = useMemo(() => {
     if (!perfData) return [];
-
-    // Select the appropriate view based on canal
-    let viewData;
-    if (canal === "ads") {
-      viewData = perfData.ads_view;
-    } else if (canal === "cc") {
-      viewData = perfData.cc_view;
-    } else {
-      viewData = perfData.global_view;
-    }
-
-    if (!viewData?.by_person) return [];
-
-    const performanceArray = viewData.by_person
-      .filter(person => !EXCLUDED_KEYS.has(getCanonicalKey(person.name)))
-      .filter(person => (person.leads_assigned || 0) > 0 || (person.nbr_signature || 0) > 0)
-      .map(person => {
-        const calls_total = person.nbr_appel || 0;
-        const calls_answered = person.nbr_appel_d || 0;
-        const r1_placed = person.r1p || 0;
-        const r1_done = person.r1r || 0;
-        const r2_placed = person.r2p || 0;
-        const r2_done = person.r2r || 0;
-        const signatures = person.nbr_signature || 0;
-        const revenue = person.total_revenue || 0;
-        const cashCollected = person.total_cash || 0;
-        const leads_assigned = person.leads_assigned || 0;
-        const leads_ads = person.leads_ads || 0;
-        const leads_cc = person.leads_cc || 0;
-        const unique_attempted = person.unique_attempted || 0;
-        const unique_answered = person.unique_answered || 0;
-
-        // Use API-provided conversion rates, with fallback calculations
-        // Conv. global = Ventes / Leads affectés (not calls_answered anymore)
-        const conv_global = person.conversion_global || (leads_assigned > 0 ? (signatures / leads_assigned) * 100 : 0);
-        const conv_calls_to_answered = person.conv_calls_to_answered || (calls_total > 0 ? (calls_answered / calls_total) * 100 : 0);
-        const conv_answered_to_r1p = person.conv_answered_to_r1p || (calls_answered > 0 ? (r1_placed / calls_answered) * 100 : 0);
-        const conv_r1p_to_r1r = person.conv_r1p_to_r1r || (r1_placed > 0 ? (r1_done / r1_placed) * 100 : 0);
-        const conv_r2p_to_r2r = person.conv_r2p_to_r2r || (r2_placed > 0 ? (r2_done / r2_placed) * 100 : 0);
-        const conv_sales = person.conv_sales || (r2_done > 0 ? (signatures / r2_done) * 100 : 0);
-
-        return {
-          salesName: displaySalesName(person.name),
-          salesKey: getCanonicalKey(person.name),
-          calls_total,
-          calls_answered,
-          r1_placed,
-          r1_done,
-          r2_placed,
-          r2_done,
-          signatures,
-          revenue,
-          cashCollected,
-          leads_assigned,
-          leads_ads,
-          leads_cc,
-          unique_attempted,
-          unique_answered,
-          avatar: "",
-          // Conversion rates (funnel order)
-          conv_global,
-          conv_calls_to_answered,
-          conv_answered_to_r1p,
-          conv_r1p_to_r1r,
-          conv_r2p_to_r2r,
-          conv_sales
-        };
-      });
-
-    // Deduplicate by salesKey (keep first occurrence with highest values)
-    const seen = new Set();
-    const dedupedArray = performanceArray.filter(person => {
-      if (seen.has(person.salesKey)) {
-        return false;
-      }
-      seen.add(person.salesKey);
-      return true;
+    const vd = canal === "ads" ? perfData.ads_view : canal === "cc" ? perfData.cc_view : perfData.global_view;
+    if (!vd || !vd.by_person) return [];
+    const arr = vd.by_person.filter(p => !EXCLUDED_KEYS.has(getCanonicalKey(p.name))).filter(p => (p.leads_assigned||0) > 0 || (p.nbr_signature||0) > 0).map(p => {
+      const ct=p.nbr_appel||0, ca=p.nbr_appel_d||0, sig=p.nbr_signature||0, rev=p.total_revenue||0, cash=p.total_cash||0, la=p.leads_assigned||0, lads=p.leads_ads||0, lcc=p.leads_cc||0, ua=p.unique_attempted||0, uan=p.unique_answered||0;
+      const key = getCanonicalKey(p.name);
+      // Use tracking KPIs for R1/R2 placed/done (correct values from r1_date/r2_date)
+      const tk = trackingByName[key];
+      const r1p = tk ? tk.r1_placed : (p.r1p||0);
+      const r1d = tk ? tk.r1_done : (p.r1r||0);
+      const r2p = tk ? tk.r2_placed : (p.r2p||0);
+      const r2d = tk ? tk.r2_done : (p.r2r||0);
+      // Use conv_v from tracking KPIs (pre-calculated, avoids >100% issues)
+      const convSales = tk && tk.conv_v != null ? tk.conv_v : (r2d>0?(sig/r2d)*100:0);
+      return { salesName: displaySalesName(p.name), salesKey: key, calls_total:ct, calls_answered:ca, r1_placed:r1p, r1_done:r1d, r2_placed:r2p, r2_done:r2d, signatures:sig, revenue:rev, cashCollected:cash, leads_assigned:la, leads_ads:lads, leads_cc:lcc, unique_attempted:ua, unique_answered:uan, conv_global: p.conversion_global||(la>0?(sig/la)*100:0), conv_calls_to_answered: p.conv_calls_to_answered||(ct>0?(ca/ct)*100:0), conv_answered_to_r1p: ca>0?(r1p/ca)*100:0, conv_r1p_to_r1r: r1p>0?(r1d/r1p)*100:0, conv_r2p_to_r2r: r2p>0?(r2d/r2p)*100:0, conv_sales: convSales };
     });
+    const seen = new Set(); const deduped = arr.filter(p => { if (seen.has(p.salesKey)) return false; seen.add(p.salesKey); return true; });
+    deduped.sort((a,b) => b.signatures !== a.signatures ? b.signatures-a.signatures : b.conv_global !== a.conv_global ? b.conv_global-a.conv_global : b.calls_total-a.calls_total);
+    return deduped;
+  }, [perfData, canal, trackingByName]);
 
-    // Sort by signatures (DESC), then conv_global (DESC), then calls (DESC)
-    dedupedArray.sort((a, b) => {
-      if (b.signatures !== a.signatures) {
-        return b.signatures - a.signatures;
-      }
-      if (b.conv_global !== a.conv_global) {
-        return b.conv_global - a.conv_global;
-      }
-      return b.calls_total - a.calls_total;
-    });
-
-    return dedupedArray;
-  }, [perfData, canal]);
-
-  // ── TOTALS ──────────────────────────────────────────────────────────────────
   const totals = useMemo(() => {
-    if (!performanceData || performanceData.length === 0) {
-      return {
-        calls: 0, answered: 0, signatures: 0, revenue: 0, cashCollected: 0,
-        r1_placed: 0, r1_done: 0, r2_placed: 0, r2_done: 0,
-        leads_assigned: 0, unique_attempted: 0, unique_answered: 0,
-        conv_global: 0, conv_calls_to_answered: 0, conv_answered_to_r1p: 0,
-        conv_r1p_to_r1r: 0, conv_r2p_to_r2r: 0, conv_sales: 0,
-        lead_qualifie: 0, closing_r1: 0, closing_r2: 0, closing_audit: 0
-      };
-    }
-
-    const t = performanceData.reduce((acc, stat) => ({
-      calls: acc.calls + stat.calls_total,
-      answered: acc.answered + stat.calls_answered,
-      r1_placed: acc.r1_placed + stat.r1_placed,
-      r1_done: acc.r1_done + stat.r1_done,
-      r2_placed: acc.r2_placed + stat.r2_placed,
-      r2_done: acc.r2_done + stat.r2_done,
-      signatures: acc.signatures + stat.signatures,
-      revenue: acc.revenue + stat.revenue,
-      cashCollected: acc.cashCollected + stat.cashCollected,
-      leads_assigned: acc.leads_assigned + stat.leads_assigned,
-      unique_attempted: acc.unique_attempted + stat.unique_attempted,
-      unique_answered: acc.unique_answered + stat.unique_answered
-    }), { calls: 0, answered: 0, r1_placed: 0, r1_done: 0, r2_placed: 0, r2_done: 0, signatures: 0, revenue: 0, cashCollected: 0, leads_assigned: 0, unique_attempted: 0, unique_answered: 0 });
-
-    // Calculate conversion rates from totals (funnel order)
-    // All KPIs calculated on SUMS, not averages of individual rates
-    return {
-      ...t,
-      // Funnel KPIs (calculated on global sums)
-      lead_qualifie: t.leads_assigned > 0 ? (t.unique_answered / t.leads_assigned) * 100 : 0,
-      closing_r1: t.unique_answered > 0 ? (t.r1_done / t.unique_answered) * 100 : 0,
-      closing_r2: t.r1_done > 0 ? (t.r2_done / t.r1_done) * 100 : 0,
-      closing_audit: t.r2_done > 0 ? (t.signatures / t.r2_done) * 100 : 0,
-      conv_global: t.leads_assigned > 0 ? (t.signatures / t.leads_assigned) * 100 : 0,
-      // Legacy rates (still used in table columns)
-      conv_calls_to_answered: t.calls > 0 ? (t.answered / t.calls) * 100 : 0,
-      conv_answered_to_r1p: t.answered > 0 ? (t.r1_placed / t.answered) * 100 : 0,
-      conv_r1p_to_r1r: t.r1_placed > 0 ? (t.r1_done / t.r1_placed) * 100 : 0,
-      conv_r2p_to_r2r: t.r2_placed > 0 ? (t.r2_done / t.r2_placed) * 100 : 0,
-      conv_sales: t.r2_done > 0 ? (t.signatures / t.r2_done) * 100 : 0
-    };
+    if (!performanceData.length) return { calls:0, answered:0, signatures:0, revenue:0, cashCollected:0, r1_placed:0, r1_done:0, r2_placed:0, r2_done:0, leads_assigned:0, unique_attempted:0, unique_answered:0, conv_global:0, lead_qualifie:0, closing_r1:0, closing_r2:0, closing_audit:0, conv_calls_to_answered:0, conv_answered_to_r1p:0, conv_r1p_to_r1r:0, conv_r2p_to_r2r:0, conv_sales:0 };
+    const t = performanceData.reduce((a,s) => ({ calls:a.calls+s.calls_total, answered:a.answered+s.calls_answered, r1_placed:a.r1_placed+s.r1_placed, r1_done:a.r1_done+s.r1_done, r2_placed:a.r2_placed+s.r2_placed, r2_done:a.r2_done+s.r2_done, signatures:a.signatures+s.signatures, revenue:a.revenue+s.revenue, cashCollected:a.cashCollected+s.cashCollected, leads_assigned:a.leads_assigned+s.leads_assigned, unique_attempted:a.unique_attempted+s.unique_attempted, unique_answered:a.unique_answered+s.unique_answered }), { calls:0, answered:0, r1_placed:0, r1_done:0, r2_placed:0, r2_done:0, signatures:0, revenue:0, cashCollected:0, leads_assigned:0, unique_attempted:0, unique_answered:0 });
+    return { ...t, lead_qualifie:t.leads_assigned>0?(t.unique_answered/t.leads_assigned)*100:0, closing_r1:t.unique_answered>0?(t.r1_done/t.unique_answered)*100:0, closing_r2:t.r1_done>0?(t.r2_done/t.r1_done)*100:0, closing_audit:t.r2_done>0?(t.signatures/t.r2_done)*100:0, conv_global:t.leads_assigned>0?(t.signatures/t.leads_assigned)*100:0, conv_calls_to_answered:t.calls>0?(t.answered/t.calls)*100:0, conv_answered_to_r1p:t.answered>0?(t.r1_placed/t.answered)*100:0, conv_r1p_to_r1r:t.r1_placed>0?(t.r1_done/t.r1_placed)*100:0, conv_r2p_to_r2r:t.r2_placed>0?(t.r2_done/t.r2_placed)*100:0, conv_sales:t.r2_done>0?(t.signatures/t.r2_done)*100:0 };
   }, [performanceData]);
 
-  // ── RENDER ──────────────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: darkMode ? "#1a1a1e" : "#f5f5f7",
-        fontFamily: "sans-serif"
-      }}>
-        <p style={{ color: darkMode ? "#8b8d93" : "#86868b" }}>
-          Vérification des accès...
-        </p>
-      </div>
-    );
-  }
+  const gcColor = (tx) => tx>=5?COLORS.tertiary:tx>=2?COLORS.secondary:C.text;
+  const dcColor = (tx) => tx>=80?COLORS.tertiary:tx>=50?COLORS.secondary:'#ff453a';
+  const rxColor = (tx) => tx>=80?COLORS.tertiary:tx>=50?COLORS.secondary:'#ff453a';
+  const cvColor = (tx) => tx>=40?COLORS.tertiary:tx>=20?COLORS.secondary:C.text;
+  const r1pColor = (tx) => tx>=30?COLORS.tertiary:tx>=15?COLORS.secondary:C.text;
+  const cColor = (r) => r>=10?COLORS.tertiary:r>=5?COLORS.secondary:C.text;
+  const lColor = (r) => r<=30?COLORS.tertiary:r<=50?COLORS.secondary:'#ff453a';
 
-  if (!hasAccess) {
-    return null;
-  }
+  const medal = (i) => i===0?<img src={firstPlace} alt="" style={{width:20,height:20}}/>:i===1?<img src={secondPlace} alt="" style={{width:20,height:20}}/>:i===2?<img src={thirdPlace} alt="" style={{width:20,height:20}}/>:<span style={{fontSize:11,color:C.muted}}>{i+1}</span>;
+
+  const monthOpts = (sy,sm) => { const o=[]; const td=new Date(); const c=new Date(sy,sm-1); const ym=td.getFullYear()*100+td.getMonth(); while(true){ const y=c.getFullYear()*100+c.getMonth(); if(y>ym) break; const v=c.getFullYear()+'-'+String(c.getMonth()+1).padStart(2,'0'); const l=new Intl.DateTimeFormat('fr-FR',{month:'long',year:'numeric'}).format(c); o.unshift({value:v,label:l.charAt(0).toUpperCase()+l.slice(1)}); c.setMonth(c.getMonth()+1); } return o; };
+  const selS = { fontSize:12, fontWeight:500, padding:'6px 10px', borderRadius:8, border:'1px solid '+C.border, background:darkMode?C.subtle:'#fff', color:C.text, cursor:'pointer', outline:'none' };
+  const pillS = (a) => ({ fontSize:11.5, fontWeight:a?600:500, padding:'5px 14px', borderRadius:8, border:'1px solid '+(a?C.accent:C.border), background:a?(darkMode?C.accent+'25':C.accent+'12'):'transparent', color:a?C.accent:C.muted, cursor:'pointer', transition:'all 0.15s', whiteSpace:'nowrap' });
+  const thS = { whiteSpace:'nowrap', textAlign:'center' };
+  const tdS = { textAlign:'center' };
+
+  if (loading) return <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:C.surface}}><span style={{color:C.muted}}>Chargement...</span></div>;
+  if (!hasAccess) return null;
 
   return (
-    <div style={{
-      padding: 0,
-      fontFamily: "sans-serif",
-      background: darkMode ? "#1a1a1e" : "#f5f5f7",
-      minHeight: "100vh",
-      paddingTop: '16px'
-    }}>
+    <>
       <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />
+      <style>{`@keyframes pageReveal{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@keyframes sidebarReveal{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:none}}@keyframes rowIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}html,body{background:${darkMode?'#13141b':'#ffffff'}}.mp-scroll::-webkit-scrollbar{width:3px;height:3px}.mp-scroll::-webkit-scrollbar-track{background:transparent}.mp-scroll::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:4px}`}</style>
 
-      <div className="board-frame" style={{
-        width: 'fit-content',
-        maxWidth: 'none',
-        margin: 'var(--space-xl) auto',
-        minWidth: '1200px',
-        transition: 'all 0.3s ease-out'
-      }}>
-        {/* Title bar */}
-        <div className="title-bar">
-          <img
-            src={darkMode ? myLogoDark : myLogo}
-            className="title-logo"
-            alt="logo"
-          />
-          <h1 className="leaderboard-title">Monitoring Perf. Sales</h1>
-        </div>
+      <div style={{animation:'pageReveal 0.5s cubic-bezier(0.4,0,0.2,1) both',fontFamily:"'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"}}>
+        <div style={{display:'flex',alignItems:'stretch',minHeight:'100vh'}}>
 
-        {/* Controls (Tabs + Filters) */}
-        <div style={{
-          position: 'absolute',
-          top: 'var(--space-xl)',
-          left: 'var(--space-2xl)',
-          right: 'var(--space-2xl)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          zIndex: 10
-        }}>
-          {/* Left: View tabs */}
-          <div style={{ display: 'flex', gap: 'var(--space-md)', alignItems: 'center' }}>
-            <button
-              className={viewMode === "perf_sales" ? "toggle-btn active" : "toggle-btn"}
-              onClick={() => setViewMode("perf_sales")}
-            >
-              Perf.sales
-            </button>
-            <button
-              className={viewMode === "lead_quality" ? "toggle-btn active" : "toggle-btn"}
-              onClick={() => setViewMode("lead_quality")}
-            >
-              Qualité Leads
-            </button>
+          {/* SIDEBAR */}
+          <div style={{width:220,minWidth:220,borderRight:'1px solid '+C.border,display:'flex',flexDirection:'column',background:darkMode?C.subtle:'#eceef2',animation:'sidebarReveal 0.4s ease both'}}>
+            <div style={{padding:'18px 16px 14px',borderBottom:'1px solid '+C.border,marginBottom:12}}>
+              <div style={{display:'flex',alignItems:'center',gap:8,padding:'6px 8px',borderRadius:10,border:'1px solid '+C.border,background:darkMode?'rgba(255,255,255,0.04)':'#fff'}}>
+                <div style={{width:32,height:32,borderRadius:8,background:darkMode?'#fff':'#1e2330',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                  <img src={companyLogo} alt="" style={{width:20,height:20,objectFit:'contain',filter:darkMode?'none':'brightness(0) invert(1)'}} />
+                </div>
+                <div style={{fontSize:15,fontWeight:700,color:C.text}}>Owner</div>
+              </div>
+            </div>
+            {[{key:'perf_sales',label:'Perf. Sales',icon:iconGlobal},{key:'lead_quality',label:'Qualit\u00e9 Leads',icon:iconFinance}].map(it => {
+              const a = viewMode===it.key;
+              return (<div key={it.key} onClick={()=>setViewMode(it.key)} style={{display:'flex',alignItems:'center',gap:6,padding:'9px 12px',margin:'1px 12px',cursor:'pointer',borderRadius:10,background:a?(darkMode?'#fff':'#1e2330'):'transparent',color:a?(darkMode?'#1e2330':'#fff'):C.muted,transition:'all 0.2s ease'}} onMouseEnter={e=>{if(!a)e.currentTarget.style.background=darkMode?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.03)';}} onMouseLeave={e=>{if(!a)e.currentTarget.style.background='transparent';}}>
+                <div style={{width:28,height:28,flexShrink:0,backgroundColor:a?(darkMode?'#1e2330':'#fff'):(darkMode?'rgba(255,255,255,0.45)':'rgba(0,0,0,0.3)'),WebkitMaskImage:'url('+it.icon+')',WebkitMaskSize:'contain',WebkitMaskRepeat:'no-repeat',WebkitMaskPosition:'center',maskImage:'url('+it.icon+')',maskSize:'contain',maskRepeat:'no-repeat',maskPosition:'center'}} />
+                <span style={{fontSize:13,fontWeight:a?600:500,color:a?(darkMode?'#1e2330':'#fff'):C.muted}}>{it.label}</span>
+              </div>);
+            })}
+            <div style={{flex:1}} />
           </div>
 
-          {/* Right: Month selector + Canal buttons (conditional based on viewMode) */}
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            {viewMode === "perf_sales" ? (
-              <>
-                {/* Month selector for Perf Sales (starts Sept 2025) */}
-                <select
-                  value={range}
-                  onChange={(e) => setRange(e.target.value)}
-                  className="range-select"
-                  style={{
-                    padding: '8px 14px',
-                    paddingRight: '32px',
-                    borderRadius: '12px',
-                    border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`,
-                    background: darkMode ? '#2a2b2e' : '#ffffff',
-                    color: darkMode ? '#f5f5f7' : '#1d1d1f',
-                    fontWeight: 500,
-                    fontSize: '14px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {(() => {
-                    const options = [];
-                    const startDate = new Date('2025-09-01');
-                    const today = new Date();
-                    const months = [];
-                    const current = new Date(startDate);
-                    const currentYearMonth = today.getFullYear() * 100 + today.getMonth();
+          {/* RIGHT */}
+          <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column',padding:'8px 8px 8px 0',gap:12}}>
 
-                    while (true) {
-                      const year = current.getFullYear();
-                      const month = current.getMonth();
-                      const iterYearMonth = year * 100 + month;
-                      if (iterYearMonth > currentYearMonth) break;
-
-                      const monthName = new Intl.DateTimeFormat('fr-FR', {
-                        month: 'long',
-                        year: 'numeric'
-                      }).format(current);
-
-                      const value = `${year}-${String(month + 1).padStart(2, '0')}`;
-                      months.unshift({ value, label: monthName.charAt(0).toUpperCase() + monthName.slice(1) });
-                      current.setMonth(current.getMonth() + 1);
-                    }
-
-                    months.forEach(m => {
-                      options.push(<option key={m.value} value={m.value}>{m.label}</option>);
-                    });
-                    options.push(<option key="all" value="all">All time</option>);
-                    return options;
-                  })()}
+            {/* FILTERS HEADER */}
+            <div style={{height:76,background:darkMode?C.bg:'#f6f7f9',borderRadius:8,flexShrink:0,border:'1px solid '+C.border,marginLeft:8,display:'flex',alignItems:'center',padding:'0 20px',gap:10}}>
+              {viewMode==='perf_sales' ? (<>
+                <select value={range} onChange={e=>setRange(e.target.value)} style={selS}>
+                  {monthOpts(2025,9).map(m=><option key={m.value} value={m.value}>{m.label}</option>)}
+                  <option value="all">All time</option>
                 </select>
-
-                {/* Canal selector (Global/ADS/CC) */}
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <button
-                    className={canal === "global" ? "toggle-btn active" : "toggle-btn"}
-                    onClick={() => { setCanal("global"); setAdsDetailView(false); }}
-                  >
-                    Global
-                  </button>
-                  <button
-                    className={canal === "ads" ? "toggle-btn active" : "toggle-btn"}
-                    onClick={() => setCanal("ads")}
-                  >
-                    ADS
-                  </button>
-                  <button
-                    className={canal === "cc" ? "toggle-btn active" : "toggle-btn"}
-                    onClick={() => { setCanal("cc"); setAdsDetailView(false); }}
-                  >
-                    CC
-                  </button>
-                  {canal === "ads" && (
-                    <>
-                      <div style={{ width: 1, height: 20, background: darkMode ? '#444' : '#d0d0d0', margin: '0 4px' }} />
-                      <button
-                        className={adsDetailView ? "toggle-btn active" : "toggle-btn"}
-                        onClick={() => setAdsDetailView(v => !v)}
-                        style={{ fontSize: '0.8rem' }}
-                      >
-                        {adsDetailView ? "Funnel" : "Détail"}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </>
-            ) : (
-              /* Month selector + Origin filter for Lead Quality */
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <select
-                  value={leadQualityRange}
-                  onChange={(e) => setLeadQualityRange(e.target.value)}
-                  className="range-select"
-                  style={{
-                    padding: '8px 14px',
-                    paddingRight: '32px',
-                    borderRadius: '12px',
-                    border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`,
-                    background: darkMode ? '#2a2b2e' : '#ffffff',
-                    color: darkMode ? '#f5f5f7' : '#1d1d1f',
-                    fontWeight: 500,
-                    fontSize: '14px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {(() => {
-                    const options = [];
-                    const startDate = new Date('2026-01-01');
-                    const today = new Date();
-                    const months = [];
-                    const current = new Date(startDate);
-                    const currentYearMonth = today.getFullYear() * 100 + today.getMonth();
-
-                    while (true) {
-                      const year = current.getFullYear();
-                      const month = current.getMonth();
-                      const iterYearMonth = year * 100 + month;
-                      if (iterYearMonth > currentYearMonth) break;
-
-                      const monthName = new Intl.DateTimeFormat('fr-FR', {
-                        month: 'long',
-                        year: 'numeric'
-                      }).format(current);
-
-                      const value = `${year}-${String(month + 1).padStart(2, '0')}`;
-                      months.unshift({ value, label: monthName.charAt(0).toUpperCase() + monthName.slice(1) });
-                      current.setMonth(current.getMonth() + 1);
-                    }
-
-                    months.forEach(m => {
-                      options.push(<option key={m.value} value={m.value}>{m.label}</option>);
-                    });
-                    return options;
-                  })()}
+                <div style={{width:1,height:28,background:C.border}} />
+                {['global','ads','cc'].map(c=>(<button key={c} onClick={()=>{setCanal(c);if(c!=='ads')setAdsDetailView(false);}} style={pillS(canal===c)}>{c==='global'?'Global':c.toUpperCase()}</button>))}
+                {canal==='ads' && (<><div style={{width:1,height:28,background:C.border}} /><button onClick={()=>setAdsDetailView(v=>!v)} style={pillS(adsDetailView)}>{adsDetailView?'Funnel':'D\u00e9tail'}</button></>)}
+              </>) : (<>
+                <select value={leadQualityRange} onChange={e=>setLeadQualityRange(e.target.value)} style={selS}>
+                  {monthOpts(2026,1).map(m=><option key={m.value} value={m.value}>{m.label}</option>)}
                 </select>
-
-                {/* Origin multi-select filter */}
-                {leadQualityData?.available_origins && leadQualityData.available_origins.length > 0 && (
-                  <div style={{ position: 'relative' }}>
-                    <button
-                      onClick={() => {
-                        const el = document.getElementById('origin-dropdown');
-                        if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
-                      }}
-                      style={{
-                        padding: '8px 14px',
-                        borderRadius: '12px',
-                        border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`,
-                        background: selectedOrigins.length > 0
-                          ? (darkMode ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.1)')
-                          : (darkMode ? '#2a2b2e' : '#ffffff'),
-                        color: selectedOrigins.length > 0 ? COLORS.primary : (darkMode ? '#f5f5f7' : '#1d1d1f'),
-                        fontWeight: 500,
-                        fontSize: '14px',
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      {selectedOrigins.length > 0
-                        ? `${selectedOrigins.length} origine${selectedOrigins.length > 1 ? 's' : ''}`
-                        : 'Toutes origines'}
-                      {' ▾'}
+                {leadQualityData && leadQualityData.available_origins && leadQualityData.available_origins.length>0 && (
+                  <div style={{position:'relative'}}>
+                    <button onClick={()=>setOriginsOpen(v=>!v)} style={{...selS,color:selectedOrigins.length>0?C.accent:C.text}}>
+                      {selectedOrigins.length>0?selectedOrigins.length+' origine'+(selectedOrigins.length>1?'s':''):'Toutes origines'} &#9662;
                     </button>
-                    <div
-                      id="origin-dropdown"
-                      style={{
-                        display: 'none',
-                        position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        marginTop: '4px',
-                        background: darkMode ? '#242428' : '#ffffff',
-                        border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`,
-                        borderRadius: '12px',
-                        boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
-                        padding: '8px 0',
-                        zIndex: 100,
-                        maxHeight: '300px',
-                        overflowY: 'auto',
-                        minWidth: '200px'
-                      }}
-                    >
-                      {selectedOrigins.length > 0 && (
-                        <div
-                          onClick={() => setSelectedOrigins([])}
-                          style={{
-                            padding: '8px 16px',
-                            cursor: 'pointer',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            color: '#ff453a',
-                            borderBottom: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`
-                          }}
-                        >
-                          Réinitialiser
-                        </div>
-                      )}
-                      {leadQualityData.available_origins.map(o => (
-                        <label
-                          key={o}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '6px 16px',
-                            cursor: 'pointer',
-                            fontSize: '13px',
-                            fontWeight: selectedOrigins.includes(o) ? 600 : 400,
-                            color: darkMode ? '#f5f5f7' : '#1d1d1f'
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedOrigins.includes(o)}
-                            onChange={() => {
-                              setSelectedOrigins(prev =>
-                                prev.includes(o) ? prev.filter(x => x !== o) : [...prev, o]
-                              );
-                            }}
-                            style={{ accentColor: COLORS.primary }}
-                          />
-                          {o}
-                        </label>
-                      ))}
-                    </div>
+                    {originsOpen && (<div style={{position:'absolute',top:'100%',left:0,marginTop:4,background:darkMode?'#242428':'#fff',border:'1px solid '+C.border,borderRadius:10,boxShadow:C.shadow,padding:'6px 0',zIndex:100,maxHeight:300,overflowY:'auto',minWidth:180}}>
+                      {selectedOrigins.length>0 && <div onClick={()=>{setSelectedOrigins([]);setOriginsOpen(false);}} style={{padding:'6px 14px',cursor:'pointer',fontSize:12,fontWeight:600,color:'#ff453a',borderBottom:'1px solid '+C.border}}>R&eacute;initialiser</div>}
+                      {leadQualityData.available_origins.map(o=>(<label key={o} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 14px',cursor:'pointer',fontSize:12,fontWeight:selectedOrigins.includes(o)?600:400,color:C.text}}><input type="checkbox" checked={selectedOrigins.includes(o)} onChange={()=>setSelectedOrigins(prev=>prev.includes(o)?prev.filter(x=>x!==o):[...prev,o])} style={{accentColor:C.accent}} />{o}</label>))}
+                    </div>)}
                   </div>
                 )}
+              </>)}
+            </div>
+
+            {/* CONTENT */}
+            <div style={{flex:1,marginLeft:8}}>
+              <div className="mp-scroll" style={{background:darkMode?C.bg:'#f6f7f9',borderRadius:8,border:'1px solid '+C.border,overflow:'auto',minHeight:'calc(100vh - 120px)',maxHeight:'calc(100vh - 120px)'}}>
+
+                {viewMode==='perf_sales' && (<div style={{padding:'20px 20px 28px'}}>
+                  <h2 style={{fontSize:20,fontWeight:700,color:C.text,margin:'0 0 4px'}}>Monitoring Perf. Sales</h2>
+
+                  <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:16}}>
+                    {[{l:'Appels',v:totals.calls.toLocaleString('fr-FR')},{l:'D\u00e9croch\u00e9s',v:totals.answered.toLocaleString('fr-FR')},{l:'R1 effectu\u00e9',v:totals.r1_done.toLocaleString('fr-FR')},{l:'Leads',v:totals.leads_assigned.toLocaleString('fr-FR')},{l:'Ventes',v:totals.signatures.toLocaleString('fr-FR'),a:COLORS.tertiary},{l:'Revenue',v:totals.revenue>0?Math.round(totals.revenue).toLocaleString('fr-FR')+'\u20ac':'0\u20ac',a:COLORS.secondary},{l:'Cash',v:totals.cashCollected>0?Math.round(totals.cashCollected).toLocaleString('fr-FR')+'\u20ac':'0\u20ac',a:COLORS.tertiary}].map(k=>(<div key={k.l} style={{flex:1,minWidth:100,padding:'10px 14px',borderRadius:10,background:darkMode?C.subtle:'#fff',border:'1px solid '+C.border,textAlign:'center'}}><div style={{fontSize:10,fontWeight:500,color:C.muted,textTransform:'uppercase',marginBottom:4,letterSpacing:'0.04em'}}>{k.l}</div><div style={{fontSize:18,fontWeight:700,color:k.a||C.text}}>{k.v}</div></div>))}
+                  </div>
+
+                  <div style={{display:'flex',justifyContent:'center',gap:0,marginBottom:20,borderRadius:10,border:'1px solid '+C.border,overflow:'hidden',background:darkMode?C.subtle:'#fff'}}>
+                    {[
+                      ...(canal!=='cc' ? [{l:'Lead Qualifi\u00e9',v:totals.lead_qualifie.toFixed(1)+'%'}] : []),
+                      {l:'Closing R1',v:totals.closing_r1.toFixed(1)+'%'},
+                      {l:'Closing R2',v:totals.closing_r2.toFixed(1)+'%'},
+                      {l:'Closing Audit',v:totals.closing_audit.toFixed(1)+'%'},
+                      {l:'Conv. Globale',v:totals.conv_global.toFixed(2)+'%'},
+                    ].map((k,i,arr)=>(<div key={k.l} style={{flex:1,textAlign:'center',padding:'10px 16px',borderRight:i<arr.length-1?'1px solid '+C.border:'none'}}><div style={{fontSize:12,fontWeight:500,color:C.muted,marginBottom:2}}>{k.l}</div><div style={{fontSize:15,fontWeight:700,color:C.text}}>{k.v}</div></div>))}
+                  </div>
+
+                  {dataLoading && <div style={{textAlign:'center',padding:60,color:C.muted}}>Chargement...</div>}
+
+                  {!dataLoading && canal==='ads' && adsDetailView && (headcountLoading ? <div style={{textAlign:'center',padding:60,color:C.muted}}>Chargement...</div> : !headcountData ? <div style={{textAlign:'center',padding:60,color:C.muted}}>Aucune donn&eacute;e</div> : <table className="leaderboard" style={{width:'100%'}}><thead><tr>{['#','Sales','Leads','1-2','3-4','5-6','7-10','11-19','20+','Inconnu'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>
+                    {[...(headcountData.by_person||[])].sort((a,b)=>(b.leads_assigned||0)-(a.leads_assigned||0)).map((p,i)=>{const hc=p.headcount_breakdown||{};return(<tr key={p.person_name} style={{animation:'rowIn 0.3s cubic-bezier(0.16,1,0.3,1) '+(i*40)+'ms both'}}><td style={tdS}>{medal(i)}</td><td style={{...tdS,textAlign:'left',fontWeight:i<3?700:500,paddingLeft:12}}>{p.person_name}</td><td style={{...tdS,fontWeight:700}}>{(p.leads_assigned||0).toLocaleString('fr-FR')}</td>{['1-2','3-4','5-6','7-10','11-19','20+'].map(b=><td key={b} style={tdS}>{hc[b]||0}</td>)}<td style={{...tdS,color:C.muted}}>{p.unknown||0}</td></tr>);})}
+                    {headcountData.totals && <tr style={{borderTop:'2px solid '+C.border,fontWeight:700,background:darkMode?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.02)'}}><td style={tdS}></td><td style={{...tdS,textAlign:'left',paddingLeft:12}}>Total</td><td style={tdS}>{(headcountData.totals.leads_assigned||0).toLocaleString('fr-FR')}</td>{['1-2','3-4','5-6','7-10','11-19','20+'].map(b=><td key={b} style={tdS}>{(headcountData.totals.headcount_breakdown||{})[b]||0}</td>)}<td style={{...tdS,color:C.muted}}>{headcountData.totals.unknown||0}</td></tr>}
+                  </tbody></table>)}
+
+                  {!dataLoading && performanceData.length>0 && !(canal==='ads'&&adsDetailView) && (<div style={{overflowX:'auto'}}><table className="leaderboard" style={{width:'100%',minWidth:1100}}><thead><tr>{['#','Sales','Leads','Conv.%','Appels','D\u00e9cr.','Tx D\u00e9cr.','R1/D\u00e9cr','R1p','R1E','Tx R1','R2p','R2E','Tx R2','Ventes','Conv.V.','Revenue','Cash'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>
+                    {performanceData.map((s,i)=>(<tr key={canal+'-'+i+'-'+s.salesKey} style={{animation:'rowIn 0.3s cubic-bezier(0.16,1,0.3,1) '+(i*40)+'ms both'}}>
+                      <td style={tdS}>{medal(i)}</td>
+                      <td style={{...tdS,textAlign:'left',paddingLeft:8}}><div style={{display:'flex',alignItems:'center',gap:8}}><div style={{width:28,height:28,borderRadius:'50%',background:i===0?COLORS.tertiary:i===1?COLORS.secondary:COLORS.primary,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'#fff',fontWeight:600,flexShrink:0}}>{s.salesName.charAt(0).toUpperCase()}</div><span style={{fontWeight:i<3?700:500,fontSize:12,whiteSpace:'nowrap',...(canal!=='global'?{cursor:'pointer',textDecoration:'underline',textDecorationColor:'rgba(128,128,128,0.3)',textUnderlineOffset:3}:{})}} onClick={()=>canal!=='global'&&openDetail(s.salesName)}>{s.salesName}</span></div></td>
+                      <td style={{...tdS,fontWeight:700}}>{canal==='ads'?(s.leads_ads||0):canal==='cc'?(s.leads_cc||0):(s.leads_assigned||0)}</td>
+                      <td style={{...tdS,fontWeight:700,color:gcColor(s.conv_global)}}>{s.conv_global.toFixed(2)}%</td>
+                      <td style={tdS}>{s.calls_total.toLocaleString('fr-FR')}</td>
+                      <td style={tdS}>{s.calls_answered.toLocaleString('fr-FR')}</td>
+                      <td style={{...tdS,fontWeight:600,color:dcColor(s.conv_calls_to_answered)}}>{s.conv_calls_to_answered.toFixed(1)}%</td>
+                      <td style={{...tdS,fontWeight:600,color:r1pColor(s.conv_answered_to_r1p)}}>{s.conv_answered_to_r1p.toFixed(1)}%</td>
+                      <td style={tdS}>{s.r1_placed}</td><td style={tdS}>{s.r1_done}</td>
+                      <td style={{...tdS,fontWeight:600,color:rxColor(s.conv_r1p_to_r1r)}}>{s.conv_r1p_to_r1r.toFixed(0)}%</td>
+                      <td style={tdS}>{s.r2_placed}</td><td style={tdS}>{s.r2_done}</td>
+                      <td style={{...tdS,fontWeight:600,color:rxColor(s.conv_r2p_to_r2r)}}>{s.conv_r2p_to_r2r.toFixed(0)}%</td>
+                      <td style={{...tdS,fontWeight:800,fontSize:13,color:COLORS.tertiary}}>{s.signatures}</td>
+                      <td style={{...tdS,fontWeight:600,color:cvColor(s.conv_sales)}}>{s.conv_sales.toFixed(1)}%</td>
+                      <td style={{...tdS,color:COLORS.secondary}}>{s.revenue>0?Math.round(s.revenue).toLocaleString('fr-FR')+'\u20ac':'\u2014'}</td>
+                      <td style={{...tdS,color:COLORS.tertiary}}>{s.cashCollected>0?Math.round(s.cashCollected).toLocaleString('fr-FR')+'\u20ac':'\u2014'}</td>
+                    </tr>))}
+                  </tbody></table></div>)}
+
+                  {!dataLoading && !performanceData.length && !adsDetailView && <div style={{textAlign:'center',padding:60,color:C.muted}}>Aucune donn&eacute;e disponible</div>}
+                </div>)}
+
+                {viewMode==='lead_quality' && (<div style={{padding:'20px 20px 28px'}}>
+                  <h2 style={{fontSize:20,fontWeight:700,color:C.text,margin:'0 0 4px'}}>Qualit&eacute; Leads</h2>
+                  <p style={{fontSize:13,color:C.muted,margin:'0 0 20px'}}>Analyse par origine</p>
+
+                  <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:24}}>
+                    {[{l:'Total Leads',v:(leadQualityData&&leadQualityData.summary?leadQualityData.summary.total_leads:0).toLocaleString('fr-FR')},{l:'Clients r\u00e9els',v:(leadQualityData&&leadQualityData.summary?leadQualityData.summary.total_sales:0).toLocaleString('fr-FR'),a:COLORS.tertiary},{l:'Taux Perte',v:leadQualityData&&leadQualityData.summary&&leadQualityData.summary.global_loss_rate!=null?leadQualityData.summary.global_loss_rate.toFixed(1)+'%':'\u2014'},{l:'Non trait\u00e9s',v:(leadQualityData&&leadQualityData.summary?leadQualityData.summary.total_untreated:0).toLocaleString('fr-FR')},{l:'Tx Conv.',v:(leadQualityData&&leadQualityData.summary?leadQualityData.summary.global_conversion_rate:0).toFixed(1)+'%',a:COLORS.tertiary},{l:'Tx Conv. R\u00e9el',v:(leadQualityData&&leadQualityData.summary?leadQualityData.summary.global_real_conversion_rate:0).toFixed(1)+'%',a:COLORS.tertiary},{l:'Cash Total',v:leadQualityData&&leadQualityData.summary&&leadQualityData.summary.total_cash>0?Math.round(leadQualityData.summary.total_cash).toLocaleString('fr-FR')+'\u20ac':'0\u20ac',a:COLORS.tertiary},{l:'ARR Total',v:leadQualityData&&leadQualityData.summary&&leadQualityData.summary.total_arr>0?Math.round(leadQualityData.summary.total_arr).toLocaleString('fr-FR')+'\u20ac':'0\u20ac',a:COLORS.secondary}].map(k=>(<div key={k.l} style={{flex:1,minWidth:100,padding:'10px 14px',borderRadius:10,background:darkMode?C.subtle:'#fff',border:'1px solid '+C.border}}><div style={{fontSize:10,fontWeight:500,color:C.muted,textTransform:'uppercase',marginBottom:4}}>{k.l}</div><div style={{fontSize:18,fontWeight:700,color:k.a||C.text}}>{k.v}</div></div>))}
+                  </div>
+
+                  {leadQualityLoading && <div style={{textAlign:'center',padding:60,color:C.muted}}>Chargement...</div>}
+
+                  {!leadQualityLoading && leadQualityData && leadQualityData.by_origin && leadQualityData.by_origin.length>0 && (<table className="leaderboard" style={{width:'100%'}}><thead><tr>{['#','Origine','Leads','Non trait\u00e9s','Tx Perte','Ventes','Conv.%','Conv. R\u00e9el','Appels','D\u00e9cr.','Cash','ARR'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>
+                    {leadQualityData.by_origin.sort((a,b)=>(b.conversion_rate||0)-(a.conversion_rate||0)).map((o,i)=>(<tr key={o.origin||i} style={{animation:'rowIn 0.3s cubic-bezier(0.16,1,0.3,1) '+(i*40)+'ms both'}}>
+                      <td style={tdS}>{medal(i)}</td>
+                      <td style={{...tdS,textAlign:'left'}}><span style={{display:'inline-block',padding:'3px 10px',borderRadius:6,fontSize:12,fontWeight:600,background:darkMode?'rgba(99,102,241,0.15)':'rgba(99,102,241,0.1)',color:COLORS.primary}}>{o.origin||'Inconnu'}</span></td>
+                      <td style={{...tdS,fontWeight:700}}>{(o.leads_count||0).toLocaleString('fr-FR')}</td>
+                      <td style={{...tdS,color:o.untreated_count>0?'#ff9500':C.muted}}>{o.untreated_count>0?o.untreated_count:'0'}</td>
+                      <td style={{...tdS,fontWeight:600,color:o.calls_total>0?lColor(o.loss_rate):C.muted}}>{o.calls_total>0?(o.loss_rate||0).toFixed(1)+'%':'\u2014'}</td>
+                      <td style={{...tdS,fontWeight:800,fontSize:13,color:COLORS.tertiary}}>{o.sales_count||0}</td>
+                      <td style={{...tdS,fontWeight:700,color:cColor(o.conversion_rate)}}>{(o.conversion_rate||0).toFixed(1)}%</td>
+                      <td style={{...tdS,fontWeight:700,color:cColor(o.real_conversion_rate)}}>{(o.real_conversion_rate||0).toFixed(1)}%</td>
+                      <td style={{...tdS,color:!o.calls_total?C.muted:C.text}}>{o.calls_total>0?o.calls_total.toLocaleString('fr-FR'):'\u2014'}</td>
+                      <td style={{...tdS,color:!o.calls_total?C.muted:C.text}}>{o.calls_total>0?(o.calls_answered||0).toLocaleString('fr-FR'):'\u2014'}</td>
+                      <td style={{...tdS,color:COLORS.tertiary}}>{o.cash_collected>0?Math.round(o.cash_collected).toLocaleString('fr-FR')+'\u20ac':'\u2014'}</td>
+                      <td style={{...tdS,color:COLORS.secondary}}>{o.arr>0?Math.round(o.arr).toLocaleString('fr-FR')+'\u20ac':'\u2014'}</td>
+                    </tr>))}
+                  </tbody></table>)}
+
+                  {!leadQualityLoading && (!leadQualityData || !leadQualityData.by_origin || !leadQualityData.by_origin.length) && <div style={{textAlign:'center',padding:60,color:C.muted}}>Aucune donn&eacute;e disponible</div>}
+                </div>)}
+
               </div>
-            )}
+            </div>
           </div>
         </div>
-
-        {/* ══════════════════════════════════════════════════════════════════════ */}
-        {/* PERF SALES VIEW */}
-        {/* ══════════════════════════════════════════════════════════════════════ */}
-        {viewMode === "perf_sales" && (
-          <>
-        {/* Totals Block */}
-        <div className="totals-block">
-          <div className="totals-row" style={{ gap: '32px', justifyContent: 'center' }}>
-            <div className="money-float-container">
-              <span className="totals-label">Appels</span><br />
-              <span className="totals-value perf-neutral dot-boost">
-                {totals.calls?.toLocaleString("fr-FR") || 0}
-              </span>
-            </div>
-
-            <div className="money-float-container">
-              <span className="totals-label">Décrochés</span><br />
-              <span className="totals-value perf-neutral dot-boost">
-                {totals.answered?.toLocaleString("fr-FR") || 0}
-              </span>
-            </div>
-
-            <div className="money-float-container">
-              <span className="totals-label">R1 effectué</span><br />
-              <span className="totals-value perf-neutral dot-boost">
-                {totals.r1_done?.toLocaleString("fr-FR") || 0}
-              </span>
-            </div>
-
-            <div className="money-float-container">
-              <span className="totals-label">Leads affectés</span><br />
-              <span className="totals-value perf-neutral dot-boost">
-                {totals.leads_assigned?.toLocaleString("fr-FR") || 0}
-              </span>
-            </div>
-
-            <div className="money-float-container">
-              <span className="totals-label">Ventes</span><br />
-              <span className="totals-value cash dot-boost">
-                {totals.signatures?.toLocaleString("fr-FR") || 0}
-              </span>
-            </div>
-
-            <div className="money-float-container">
-              <span className="totals-label">Revenue</span><br />
-              <span className="totals-value revenu dot-boost">
-                {totals.revenue > 0 ? `${Math.round(totals.revenue).toLocaleString("fr-FR")} €` : '0 €'}
-              </span>
-            </div>
-
-            <div className="money-float-container">
-              <span className="totals-label">Cash</span><br />
-              <span className="totals-value cash dot-boost">
-                {totals.cashCollected > 0 ? `${Math.round(totals.cashCollected).toLocaleString("fr-FR")} €` : '0 €'}
-              </span>
-            </div>
-          </div>
-
-          {/* ── Funnel KPIs ── */}
-          <div className="totals-sales dot-boost" style={{ marginTop: '10px' }}>
-            {canal !== "cc" && <>Lead Qualifié: {totals.lead_qualifie?.toFixed(1) || 0}%&nbsp;&nbsp;&nbsp;</>}Closing R1: {totals.closing_r1?.toFixed(1) || 0}%&nbsp;&nbsp;&nbsp;Closing R2: {totals.closing_r2?.toFixed(1) || 0}%&nbsp;&nbsp;&nbsp;Closing Audit: {totals.closing_audit?.toFixed(1) || 0}%&nbsp;&nbsp;&nbsp;Taux de conversion: {totals.conv_global?.toFixed(2) || 0}%
-          </div>
-        </div>
-
-        {dataLoading && (
-          <div style={{
-            textAlign: 'center',
-            padding: '60px',
-            color: darkMode ? '#8b8d93' : '#86868b',
-            animation: 'fadeIn 0.3s ease-out'
-          }}>
-            <p>Chargement des données...</p>
-          </div>
-        )}
-
-        {!dataLoading && performanceData.length === 0 && (
-          <p style={{
-            textAlign: 'center',
-            padding: '60px',
-            color: darkMode ? '#8b8d93' : '#86868b',
-            animation: 'fadeIn 0.3s ease-out'
-          }}>
-            Aucune donnée disponible
-          </p>
-        )}
-
-        {/* ── ADS HEADCOUNT DETAIL TABLE ─────────────────────────────────── */}
-        {!dataLoading && canal === "ads" && adsDetailView && (
-          <div className="leaderboard-wrapper" style={{ animation: 'fadeIn 0.4s ease-out' }}>
-            {headcountLoading ? (
-              <p style={{ textAlign: 'center', padding: '60px', color: darkMode ? '#8b8d93' : '#86868b' }}>
-                Chargement...
-              </p>
-            ) : !headcountData ? (
-              <p style={{ textAlign: 'center', padding: '60px', color: darkMode ? '#8b8d93' : '#86868b' }}>
-                Aucune donnée disponible
-              </p>
-            ) : (
-              <table className="leaderboard" style={{ fontSize: '0.82rem', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>
-                    <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>#</th>
-                    <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>Sales</th>
-                    <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center', fontWeight: 700 }}>Leads</th>
-                    <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>1-2</th>
-                    <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>3-4</th>
-                    <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>5-6</th>
-                    <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>7-10</th>
-                    <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>11-19</th>
-                    <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>20+</th>
-                    <th style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>Inconnu</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...(headcountData.by_person || [])]
-                    .sort((a, b) => (b.leads_assigned || 0) - (a.leads_assigned || 0))
-                    .map((person, i) => {
-                      const cellBorder = { borderRight: '1px solid rgba(128,128,128,0.15)' };
-                      const hc = person.headcount_breakdown || {};
-                      return (
-                        <tr key={person.person_name}>
-                          <td style={{ textAlign: 'center', ...cellBorder }}>{i + 1}</td>
-                          <td style={{ fontWeight: i < 3 ? 700 : 500, paddingLeft: 12, whiteSpace: 'nowrap', ...cellBorder }}>
-                            {person.person_name}
-                          </td>
-                          <td style={{ textAlign: 'center', fontWeight: 700, ...cellBorder }}>
-                            {(person.leads_assigned || 0).toLocaleString("fr-FR")}
-                          </td>
-                          {["1-2", "3-4", "5-6", "7-10", "11-19", "20+"].map(bracket => (
-                            <td key={bracket} style={{ textAlign: 'center', fontWeight: 500, ...cellBorder }}>
-                              {hc[bracket] || 0}
-                            </td>
-                          ))}
-                          <td style={{ textAlign: 'center', fontWeight: 400, color: darkMode ? '#8b8d93' : '#86868b' }}>
-                            {person.unknown || 0}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  {/* Totals row */}
-                  {headcountData.totals && (
-                    <tr style={{
-                      borderTop: `2px solid ${darkMode ? '#444' : '#d0d0d0'}`,
-                      fontWeight: 700,
-                      background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'
-                    }}>
-                      <td style={{ textAlign: 'center', borderRight: '1px solid rgba(128,128,128,0.15)' }}></td>
-                      <td style={{ textAlign: 'center', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Total</td>
-                      <td style={{ textAlign: 'center', borderRight: '1px solid rgba(128,128,128,0.15)' }}>
-                        {(headcountData.totals.leads_assigned || 0).toLocaleString("fr-FR")}
-                      </td>
-                      {["1-2", "3-4", "5-6", "7-10", "11-19", "20+"].map(bracket => (
-                        <td key={bracket} style={{ textAlign: 'center', borderRight: '1px solid rgba(128,128,128,0.15)' }}>
-                          {(headcountData.totals.headcount_breakdown || {})[bracket] || 0}
-                        </td>
-                      ))}
-                      <td style={{ textAlign: 'center', color: darkMode ? '#8b8d93' : '#86868b' }}>
-                        {headcountData.totals.unknown || 0}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-
-        {!dataLoading && performanceData.length > 0 && !(canal === "ads" && adsDetailView) && (
-          <div className="leaderboard-wrapper" style={{
-            animation: 'fadeIn 0.4s ease-out'
-          }}>
-            {/* Sales Funnel Table: Appels → Décrochés → R1 → R2 → Ventes */}
-            <table className="leaderboard" style={{ fontSize: '0.8rem', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>
-                    <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>#</th>
-                    <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>Sales</th>
-                    <th align="center" title="Leads affectés" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Leads</th>
-                    <th align="center" title="Ventes / Leads affectés" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Conv. %</th>
-                    <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Appels</th>
-                    <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Décrochés</th>
-                    <th align="center" title="Appels Décrochés / Appels Totaux" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Tx Décr.</th>
-                    <th align="center" title="R1 Placés / Appels Décrochés" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>R1/Décr</th>
-                    <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>R1p</th>
-                    <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>R1E</th>
-                    <th align="center" title="R1 Réalisés / R1 Placés" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Tx R1</th>
-                    <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>R2p</th>
-                    <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>R2E</th>
-                    <th align="center" title="R2 Réalisés / R2 Placés" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Tx R2</th>
-                    <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Ventes</th>
-                    <th align="center" title="Ventes / R2 Réalisés" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Conv. V.</th>
-                    <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Revenue</th>
-                    <th align="center" style={{ whiteSpace: 'nowrap' }}>Cash</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {performanceData.map((stat, i) => {
-                    // Color coding helpers
-                    const getConvGlobalColor = (tx) => {
-                      if (tx >= 5) return COLORS.tertiary;
-                      if (tx >= 2) return COLORS.secondary;
-                      return darkMode ? '#f5f5f7' : '#1d1d1f';
-                    };
-                    const getDecrochageColor = (tx) => {
-                      if (tx >= 80) return COLORS.tertiary;
-                      if (tx >= 50) return COLORS.secondary;
-                      return '#ff453a';
-                    };
-                    const getRxColor = (tx) => {
-                      if (tx >= 80) return COLORS.tertiary;
-                      if (tx >= 50) return COLORS.secondary;
-                      return '#ff453a';
-                    };
-                    const getConvVenteColor = (tx) => {
-                      if (tx >= 40) return COLORS.tertiary;
-                      if (tx >= 20) return COLORS.secondary;
-                      return darkMode ? '#f5f5f7' : '#1d1d1f';
-                    };
-                    const getConvToR1pColor = (tx) => {
-                      if (tx >= 30) return COLORS.tertiary;
-                      if (tx >= 15) return COLORS.secondary;
-                      return darkMode ? '#f5f5f7' : '#1d1d1f';
-                    };
-
-                    const cellBorder = { borderRight: '1px solid rgba(128,128,128,0.15)' };
-
-                    return (
-                      <tr key={`${canal}-${i}-${stat.salesKey}`}>
-                        <td style={cellBorder}>
-                          {i === 0 ? (
-                            <img src={firstPlace} alt="1st" style={{ width: 22, height: 22 }} />
-                          ) : i === 1 ? (
-                            <img src={secondPlace} alt="2nd" style={{ width: 22, height: 22 }} />
-                          ) : i === 2 ? (
-                            <img src={thirdPlace} alt="3rd" style={{ width: 22, height: 22 }} />
-                          ) : (
-                            i + 1
-                          )}
-                        </td>
-                        <td className="name-cell" style={cellBorder}>
-                          <div className="avatar-wrap">
-                            {stat.avatar ? (
-                              <img
-                                src={stat.avatar}
-                                className="avatar"
-                                alt={stat.salesName}
-                                style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }}
-                              />
-                            ) : (
-                              <div style={{
-                                width: 28, height: 28, borderRadius: '50%',
-                                background: i === 0 ? COLORS.tertiary : i === 1 ? COLORS.secondary : COLORS.primary,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: '12px', color: '#fff', fontWeight: 600
-                              }}>
-                                {stat.salesName.charAt(0).toUpperCase()}
-                              </div>
-                            )}
-                          </div>
-                          <span
-                            style={{
-                              fontWeight: i < 3 ? 700 : 500,
-                              fontSize: '0.85rem',
-                              whiteSpace: 'nowrap',
-                              ...(canal !== "global" ? { cursor: 'pointer', textDecoration: 'underline', textDecorationColor: 'rgba(128,128,128,0.3)', textUnderlineOffset: '3px' } : {})
-                            }}
-                            onClick={() => canal !== "global" && openDetail(stat.salesName)}
-                          >
-                            {stat.salesName}
-                          </span>
-                        </td>
-                        {/* Leads affectés */}
-                        <td align="center" style={{ fontWeight: 700, ...cellBorder }}>
-                          {canal === "ads" ? (stat.leads_ads?.toLocaleString("fr-FR") || 0) :
-                           canal === "cc" ? (stat.leads_cc?.toLocaleString("fr-FR") || 0) :
-                           (stat.leads_assigned?.toLocaleString("fr-FR") || 0)}
-                        </td>
-                        {/* Conv. Globale (Ventes / Leads affectés) */}
-                        <td align="center" style={{ fontWeight: 700, color: getConvGlobalColor(stat.conv_global), ...cellBorder }}>
-                          {stat.conv_global?.toFixed(2) || 0}%
-                        </td>
-                        {/* Appels Totaux */}
-                        <td align="center" style={{ fontWeight: 500, ...cellBorder }}>
-                          {stat.calls_total?.toLocaleString("fr-FR") || 0}
-                        </td>
-                        {/* Appels Décrochés */}
-                        <td align="center" style={{ fontWeight: 500, ...cellBorder }}>
-                          {stat.calls_answered?.toLocaleString("fr-FR") || 0}
-                        </td>
-                        {/* Taux Décrochage */}
-                        <td align="center" style={{ fontWeight: 600, color: getDecrochageColor(stat.conv_calls_to_answered), ...cellBorder }}>
-                          {stat.conv_calls_to_answered?.toFixed(1) || 0}%
-                        </td>
-                        {/* Conv → R1p */}
-                        <td align="center" style={{ fontWeight: 600, color: getConvToR1pColor(stat.conv_answered_to_r1p), ...cellBorder }}>
-                          {stat.conv_answered_to_r1p?.toFixed(1) || 0}%
-                        </td>
-                        {/* R1 Placés */}
-                        <td align="center" style={{ fontWeight: 500, ...cellBorder }}>
-                          {stat.r1_placed?.toLocaleString("fr-FR") || 0}
-                        </td>
-                        {/* R1 Réalisés */}
-                        <td align="center" style={{ fontWeight: 500, ...cellBorder }}>
-                          {stat.r1_done?.toLocaleString("fr-FR") || 0}
-                        </td>
-                        {/* Taux R1 */}
-                        <td align="center" style={{ fontWeight: 600, color: getRxColor(stat.conv_r1p_to_r1r), ...cellBorder }}>
-                          {stat.conv_r1p_to_r1r?.toFixed(0) || 0}%
-                        </td>
-                        {/* R2 Placés */}
-                        <td align="center" style={{ fontWeight: 500, ...cellBorder }}>
-                          {stat.r2_placed?.toLocaleString("fr-FR") || 0}
-                        </td>
-                        {/* R2 Réalisés */}
-                        <td align="center" style={{ fontWeight: 500, ...cellBorder }}>
-                          {stat.r2_done?.toLocaleString("fr-FR") || 0}
-                        </td>
-                        {/* Taux R2 */}
-                        <td align="center" style={{ fontWeight: 600, color: getRxColor(stat.conv_r2p_to_r2r), ...cellBorder }}>
-                          {stat.conv_r2p_to_r2r?.toFixed(0) || 0}%
-                        </td>
-                        {/* Ventes */}
-                        <td align="center" style={{ fontWeight: 800, fontSize: '0.95rem', color: COLORS.tertiary, ...cellBorder }}>
-                          {stat.signatures?.toLocaleString("fr-FR") || 0}
-                        </td>
-                        {/* Conv. Ventes */}
-                        <td align="center" style={{ fontWeight: 600, color: getConvVenteColor(stat.conv_sales), ...cellBorder }}>
-                          {stat.conv_sales?.toFixed(1) || 0}%
-                        </td>
-                        {/* Revenue */}
-                        <td align="center" style={{ fontWeight: 500, color: COLORS.secondary, ...cellBorder }}>
-                          {stat.revenue > 0 ? `${Math.round(stat.revenue).toLocaleString("fr-FR")}€` : '—'}
-                        </td>
-                        {/* Cash */}
-                        <td align="center" style={{ fontWeight: 500, color: COLORS.tertiary }}>
-                          {stat.cashCollected > 0 ? `${Math.round(stat.cashCollected).toLocaleString("fr-FR")}€` : '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-          </div>
-        )}
-          </>
-        )}
-
-        {/* ══════════════════════════════════════════════════════════════════════ */}
-        {/* LEAD QUALITY VIEW */}
-        {/* ══════════════════════════════════════════════════════════════════════ */}
-        {viewMode === "lead_quality" && (
-          <>
-            {/* Lead Quality Totals Block */}
-            <div className="totals-block">
-              <div className="totals-row" style={{ gap: '32px', justifyContent: 'center' }}>
-                <div className="money-float-container">
-                  <span className="totals-label">Total Leads</span><br />
-                  <span className="totals-value perf-neutral dot-boost">
-                    {leadQualityData?.summary?.total_leads?.toLocaleString("fr-FR") || 0}
-                  </span>
-                </div>
-
-                <div className="money-float-container">
-                  <span className="totals-label">Clients réels</span><br />
-                  <span className="totals-value cash dot-boost">
-                    {leadQualityData?.summary?.total_sales?.toLocaleString("fr-FR") || 0}
-                  </span>
-                </div>
-
-                <div className="money-float-container">
-                  <span className="totals-label">Taux Perte</span><br />
-                  <span className="totals-value revenu dot-boost">
-                    {leadQualityData?.summary?.total_unique_answered > 0
-                      ? `${leadQualityData.summary.global_loss_rate?.toFixed(1) || 0}%`
-                      : '—'}
-                  </span>
-                </div>
-
-                <div className="money-float-container">
-                  <span className="totals-label">Non traités</span><br />
-                  <span className="totals-value perf-neutral dot-boost">
-                    {leadQualityData?.summary?.total_untreated > 0
-                      ? `${leadQualityData.summary.total_untreated.toLocaleString("fr-FR")} (${leadQualityData.summary.total_leads > 0 ? ((leadQualityData.summary.total_untreated / leadQualityData.summary.total_leads) * 100).toFixed(1) : 0}%)`
-                      : '0'}
-                  </span>
-                </div>
-
-                <div className="money-float-container">
-                  <span className="totals-label">Tx Conversion</span><br />
-                  <span className="totals-value cash dot-boost">
-                    {leadQualityData?.summary?.global_conversion_rate?.toFixed(1) || 0}%
-                  </span>
-                </div>
-
-                <div className="money-float-container">
-                  <span className="totals-label">Tx Conv. Réel</span><br />
-                  <span className="totals-value cash dot-boost">
-                    {leadQualityData?.summary?.global_real_conversion_rate?.toFixed(1) || 0}%
-                  </span>
-                </div>
-
-                <div className="money-float-container">
-                  <span className="totals-label">Cash Total</span><br />
-                  <span className="totals-value cash dot-boost">
-                    {leadQualityData?.summary?.total_cash > 0 ? `${Math.round(leadQualityData.summary.total_cash).toLocaleString("fr-FR")} €` : '0 €'}
-                  </span>
-                </div>
-
-                <div className="money-float-container">
-                  <span className="totals-label">ARR Total</span><br />
-                  <span className="totals-value revenu dot-boost">
-                    {leadQualityData?.summary?.total_arr > 0 ? `${Math.round(leadQualityData.summary.total_arr).toLocaleString("fr-FR")} €` : '0 €'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Loading state */}
-            {leadQualityLoading && (
-              <div style={{
-                textAlign: 'center',
-                padding: '60px',
-                color: darkMode ? '#8b8d93' : '#86868b',
-                animation: 'fadeIn 0.3s ease-out'
-              }}>
-                <p>Chargement des données qualité leads...</p>
-              </div>
-            )}
-
-            {/* Empty state */}
-            {!leadQualityLoading && (!leadQualityData?.by_origin || leadQualityData.by_origin.length === 0) && (
-              <p style={{
-                textAlign: 'center',
-                padding: '60px',
-                color: darkMode ? '#8b8d93' : '#86868b',
-                animation: 'fadeIn 0.3s ease-out'
-              }}>
-                Aucune donnée disponible pour cette période
-              </p>
-            )}
-
-            {/* Lead Quality Table */}
-            {!leadQualityLoading && leadQualityData?.by_origin && leadQualityData.by_origin.length > 0 && (
-              <div className="leaderboard-wrapper" style={{ animation: 'fadeIn 0.4s ease-out' }}>
-                <table className="leaderboard" style={{ fontSize: '0.85rem', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>#</th>
-                      <th style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)', textAlign: 'center' }}>Origine</th>
-                      <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Leads</th>
-                      <th align="center" title="Leads avec téléphone mais jamais appelés" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Non traités</th>
-                      <th align="center" title="Leads tentés non décrochés / Leads tentés" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Tx Perte</th>
-                      <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Ventes</th>
-                      <th align="center" title="Ventes / Leads" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Conv. %</th>
-                      <th align="center" title="Ventes / (Leads - Non pertinent - Non traitable)" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Conv. Réel %</th>
-                      <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Appels</th>
-                      <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Décrochés</th>
-                      <th align="center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid rgba(128,128,128,0.15)' }}>Cash</th>
-                      <th align="center" style={{ whiteSpace: 'nowrap' }}>ARR</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {leadQualityData.by_origin
-                      .sort((a, b) => (b.conversion_rate || 0) - (a.conversion_rate || 0))
-                      .map((origin, i) => {
-                        const getConvColor = (rate) => {
-                          if (rate >= 10) return COLORS.tertiary;
-                          if (rate >= 5) return COLORS.secondary;
-                          return darkMode ? '#f5f5f7' : '#1d1d1f';
-                        };
-                        const getLossColor = (rate) => {
-                          if (rate <= 30) return COLORS.tertiary;
-                          if (rate <= 50) return COLORS.secondary;
-                          return '#ff453a';
-                        };
-                        const cellBorder = { borderRight: '1px solid rgba(128,128,128,0.15)' };
-
-                        return (
-                          <tr key={origin.origin || i}>
-                            <td style={{ ...cellBorder, textAlign: 'center' }}>
-                              {i === 0 ? (
-                                <img src={firstPlace} alt="1st" style={{ width: 22, height: 22 }} />
-                              ) : i === 1 ? (
-                                <img src={secondPlace} alt="2nd" style={{ width: 22, height: 22 }} />
-                              ) : i === 2 ? (
-                                <img src={thirdPlace} alt="3rd" style={{ width: 22, height: 22 }} />
-                              ) : (
-                                i + 1
-                              )}
-                            </td>
-                            <td style={{ ...cellBorder, fontWeight: i < 3 ? 700 : 500 }}>
-                              <span style={{
-                                display: 'inline-block',
-                                padding: '4px 12px',
-                                borderRadius: '8px',
-                                fontSize: '13px',
-                                fontWeight: 600,
-                                background: darkMode ? 'rgba(99, 102, 241, 0.15)' : 'rgba(99, 102, 241, 0.1)',
-                                color: COLORS.primary
-                              }}>
-                                {origin.origin || 'Inconnu'}
-                              </span>
-                            </td>
-                            <td align="center" style={{ fontWeight: 700, ...cellBorder }}>
-                              {origin.leads_count?.toLocaleString("fr-FR") || 0}
-                            </td>
-                            <td align="center" style={{ fontWeight: 500, color: (origin.untreated_count > 0) ? '#ff9500' : (darkMode ? '#8b8d93' : '#86868b'), ...cellBorder }}>
-                              {origin.untreated_count > 0 ? origin.untreated_count.toLocaleString("fr-FR") : '0'}
-                            </td>
-                            <td align="center" style={{ fontWeight: 600, color: origin.calls_total > 0 ? getLossColor(origin.loss_rate) : (darkMode ? '#8b8d93' : '#86868b'), ...cellBorder }}>
-                              {origin.calls_total > 0 ? `${origin.loss_rate?.toFixed(1) || 0}%` : '—'}
-                            </td>
-                            <td align="center" style={{ fontWeight: 800, fontSize: '0.95rem', color: COLORS.tertiary, ...cellBorder }}>
-                              {origin.sales_count?.toLocaleString("fr-FR") || 0}
-                            </td>
-                            <td align="center" style={{ fontWeight: 700, color: getConvColor(origin.conversion_rate), ...cellBorder }}>
-                              {origin.conversion_rate?.toFixed(1) || 0}%
-                            </td>
-                            <td align="center" style={{ fontWeight: 700, color: getConvColor(origin.real_conversion_rate), ...cellBorder }}>
-                              {origin.real_conversion_rate?.toFixed(1) || 0}%
-                            </td>
-                            <td align="center" style={{ fontWeight: 500, color: !origin.calls_total ? (darkMode ? '#8b8d93' : '#86868b') : undefined, ...cellBorder }}>
-                              {origin.calls_total > 0 ? origin.calls_total.toLocaleString("fr-FR") : '—'}
-                            </td>
-                            <td align="center" style={{ fontWeight: 500, color: !origin.calls_total ? (darkMode ? '#8b8d93' : '#86868b') : undefined, ...cellBorder }}>
-                              {origin.calls_total > 0 ? (origin.calls_answered?.toLocaleString("fr-FR") || 0) : '—'}
-                            </td>
-                            <td align="center" style={{ fontWeight: 500, color: COLORS.tertiary, ...cellBorder }}>
-                              {origin.cash_collected > 0 ? `${Math.round(origin.cash_collected).toLocaleString("fr-FR")} €` : '—'}
-                            </td>
-                            <td align="center" style={{ fontWeight: 500, color: COLORS.secondary }}>
-                              {origin.arr > 0 ? `${Math.round(origin.arr).toLocaleString("fr-FR")} €` : '—'}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
-        )}
       </div>
 
-      {/* ── Detail Modal (ADS / CC drill-down) ── */}
-      {detailModal && (
-        <div
-          style={{
-            position: 'fixed', inset: 0, zIndex: 9999,
-            background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: '24px'
-          }}
-          onClick={() => setDetailModal(null)}
-        >
-          <div
-            style={{
-              background: darkMode ? '#242428' : '#ffffff',
-              borderRadius: '20px',
-              padding: '28px',
-              maxWidth: '750px',
-              width: '100%',
-              maxHeight: '80vh',
-              overflow: 'auto',
-              boxShadow: '0 24px 64px rgba(0,0,0,0.3)',
-              border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: darkMode ? '#f5f5f7' : '#1d1d1f' }}>
-                  {detailModal.personName}
-                </h3>
-                <span style={{ fontSize: '0.85rem', color: darkMode ? '#8b8d93' : '#86868b' }}>
-                  {detailModal.type === 'ads' ? 'Leads ADS' : 'Cold Calls'} &middot; {detailModal.data?.period || range}
-                </span>
-              </div>
-              <button
-                onClick={() => setDetailModal(null)}
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  fontSize: '1.5rem', lineHeight: 1, padding: '4px 8px',
-                  color: darkMode ? '#8b8d93' : '#86868b', borderRadius: '8px'
-                }}
-              >&times;</button>
-            </div>
-
-            {/* Loading */}
-            {detailModal.loading && (
-              <p style={{ textAlign: 'center', padding: '40px', color: darkMode ? '#8b8d93' : '#86868b' }}>
-                Chargement...
-              </p>
-            )}
-
-            {/* No data */}
-            {!detailModal.loading && !detailModal.data && (
-              <p style={{ textAlign: 'center', padding: '40px', color: darkMode ? '#8b8d93' : '#86868b' }}>
-                Erreur lors du chargement
-              </p>
-            )}
-
-            {/* ADS Table */}
-            {!detailModal.loading && detailModal.data && detailModal.type === 'ads' && (
-              <>
-                <p style={{ fontSize: '0.85rem', color: darkMode ? '#8b8d93' : '#86868b', marginBottom: '12px' }}>
-                  {detailModal.data.total || detailModal.data.leads?.length || 0} leads
-                </p>
-                <table style={{
-                  width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem',
-                  color: darkMode ? '#f5f5f7' : '#1d1d1f'
-                }}>
-                  <thead>
-                    <tr style={{ borderBottom: `2px solid ${darkMode ? '#333338' : '#e5e5e5'}` }}>
-                      <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: darkMode ? '#8b8d93' : '#86868b' }}>Nom</th>
-                      <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: darkMode ? '#8b8d93' : '#86868b' }}>Telephone</th>
-                      <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: darkMode ? '#8b8d93' : '#86868b' }}>Origine</th>
-                      <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: darkMode ? '#8b8d93' : '#86868b' }}>Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(detailModal.data.leads || []).map((lead, idx) => (
-                      <tr key={idx} style={{ borderBottom: `1px solid ${darkMode ? '#2a2b2e' : '#f0f0f0'}` }}>
-                        <td style={{ padding: '8px 10px', fontWeight: 500 }}>{lead.full_name}</td>
-                        <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: '0.8rem' }}>{lead.phone}</td>
-                        <td style={{ padding: '8px 10px' }}>{lead.origin}</td>
-                        <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{lead.date}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </>
-            )}
-
-            {/* CC Table */}
-            {!detailModal.loading && detailModal.data && detailModal.type === 'cc' && (
-              <>
-                <p style={{ fontSize: '0.85rem', color: darkMode ? '#8b8d93' : '#86868b', marginBottom: '12px' }}>
-                  {detailModal.data.total_entries || detailModal.data.entries?.length || 0} jours &middot; {detailModal.data.total_appels?.toLocaleString("fr-FR") || 0} appels
-                </p>
-                <table style={{
-                  width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem',
-                  color: darkMode ? '#f5f5f7' : '#1d1d1f'
-                }}>
-                  <thead>
-                    <tr style={{ borderBottom: `2px solid ${darkMode ? '#333338' : '#e5e5e5'}` }}>
-                      <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: darkMode ? '#8b8d93' : '#86868b' }}>Date</th>
-                      <th style={{ textAlign: 'center', padding: '8px 10px', fontWeight: 600, color: darkMode ? '#8b8d93' : '#86868b' }}>Nombre d'appels</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(detailModal.data.entries || []).map((entry, idx) => (
-                      <tr key={idx} style={{ borderBottom: `1px solid ${darkMode ? '#2a2b2e' : '#f0f0f0'}` }}>
-                        <td style={{ padding: '8px 10px', fontWeight: 500, whiteSpace: 'nowrap' }}>{entry.date}</td>
-                        <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 600 }}>{entry.nbr_appel?.toLocaleString("fr-FR") || 0}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </>
-            )}
+      {detailModal && (<div style={{position:'fixed',inset:0,zIndex:9999,background:'rgba(0,0,0,0.5)',backdropFilter:'blur(4px)',display:'flex',alignItems:'center',justifyContent:'center',padding:24}} onClick={()=>setDetailModal(null)}>
+        <div style={{background:darkMode?'#242428':'#fff',borderRadius:16,padding:24,maxWidth:750,width:'100%',maxHeight:'80vh',overflow:'auto',boxShadow:'0 24px 64px rgba(0,0,0,0.3)',border:'1px solid '+C.border}} onClick={e=>e.stopPropagation()}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+            <div><h3 style={{margin:0,fontSize:18,fontWeight:700,color:C.text}}>{detailModal.personName}</h3><span style={{fontSize:13,color:C.muted}}>{detailModal.type==='ads'?'Leads ADS':'Cold Calls'} &middot; {detailModal.data?detailModal.data.period||range:range}</span></div>
+            <button onClick={()=>setDetailModal(null)} style={{background:'none',border:'none',cursor:'pointer',fontSize:20,color:C.muted,borderRadius:8,padding:'4px 8px'}}>&times;</button>
           </div>
+          {detailModal.loading && <div style={{textAlign:'center',padding:40,color:C.muted}}>Chargement...</div>}
+          {!detailModal.loading && !detailModal.data && <div style={{textAlign:'center',padding:40,color:C.muted}}>Erreur lors du chargement</div>}
+          {!detailModal.loading && detailModal.data && detailModal.type==='ads' && (<><p style={{fontSize:13,color:C.muted,marginBottom:10}}>{detailModal.data.total||detailModal.data.leads&&detailModal.data.leads.length||0} leads</p><table className="leaderboard" style={{width:'100%'}}><thead><tr style={{borderBottom:'2px solid '+C.border}}>{['Nom','T\u00e9l\u00e9phone','Origine','Date'].map(h=><th key={h} style={{...thS,textAlign:'left'}}>{h}</th>)}</tr></thead><tbody>{(detailModal.data.leads||[]).map((l,idx)=>(<tr key={idx}><td style={{...tdS,textAlign:'left',fontWeight:500}}>{l.full_name}</td><td style={{...tdS,textAlign:'left',fontFamily:'monospace',fontSize:11}}>{l.phone}</td><td style={{...tdS,textAlign:'left'}}>{l.origin}</td><td style={{...tdS,textAlign:'left',whiteSpace:'nowrap'}}>{l.date}</td></tr>))}</tbody></table></>)}
+          {!detailModal.loading && detailModal.data && detailModal.type==='cc' && (<><p style={{fontSize:13,color:C.muted,marginBottom:10}}>{detailModal.data.total_entries||detailModal.data.entries&&detailModal.data.entries.length||0} jours &middot; {detailModal.data.total_appels?detailModal.data.total_appels.toLocaleString('fr-FR'):0} appels</p><table className="leaderboard" style={{width:'100%'}}><thead><tr style={{borderBottom:'2px solid '+C.border}}><th style={{...thS,textAlign:'left'}}>Date</th><th style={thS}>Nombre d&apos;appels</th></tr></thead><tbody>{(detailModal.data.entries||[]).map((e,idx)=>(<tr key={idx}><td style={{...tdS,textAlign:'left',fontWeight:500}}>{e.date}</td><td style={{...tdS,fontWeight:600}}>{e.nbr_appel?e.nbr_appel.toLocaleString('fr-FR'):0}</td></tr>))}</tbody></table></>)}
         </div>
-      )}
-    </div>
+      </div>)}
+    </>
   );
 }

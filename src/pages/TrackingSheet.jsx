@@ -7,7 +7,7 @@ import SharedNavbar from "../components/SharedNavbar.jsx";
 import "../index.css";
 
 // ── SIDEBAR ICONS ────────────────────────────────────────────────────────────
-import iconMyLead from "../assets/mylead.png";
+import iconMyLead from "../assets/global.png";
 import iconPlus from "../assets/plus.png";
 import iconEmail from "../assets/email.png";
 import iconCampaigns from "../assets/tar.png";
@@ -18,6 +18,9 @@ import companyLogo from "../assets/my_image.png";
 import campaignImg1 from "../assets/audit-document.jpg";
 import campaignImg2 from "../assets/charges-fatales-2.png";
 import rabbitIcon from "../assets/lapin.png";
+import completedIcon from "../assets/completed.png";
+import meetIcon from "../assets/meet.png";
+import mynoteIcon from "../assets/mynote.svg";
 
 // ── CATEGORIES ────────────────────────────────────────────────────────────────
 const CATEGORIES = [
@@ -102,7 +105,7 @@ export default function TrackingSheet() {
   const C = {
     bg:        darkMode ? '#1e1f28' : '#ffffff',
     border:    darkMode ? '#2a2b36' : '#e2e6ef',
-    surface:   darkMode ? '#13141b' : '#edf0f8',
+    surface:   darkMode ? '#13141b' : '#f6f7f9',
     text:      darkMode ? '#eef0f6' : '#1e2330',
     muted:     darkMode ? '#5e6273' : '#9ca3af',
     subtle:    darkMode ? '#252636' : '#f4f6fb',
@@ -140,6 +143,12 @@ export default function TrackingSheet() {
       const perfResp = await apiClient.get('/api/v1/notifications/performance?period=current_week');
       if (perfResp.alerts) setBackendPerfAlerts(perfResp.alerts);
     } catch (e) { console.warn('Failed to fetch perf alerts:', e); }
+
+    // Fetch personal KPIs
+    try {
+      const kpiResp = await apiClient.get('/api/v1/tracking/my-kpis');
+      setKpis(kpiResp);
+    } catch (e) { console.warn('Failed to fetch KPIs:', e); }
   }, []);
 
   useEffect(() => {
@@ -193,6 +202,10 @@ export default function TrackingSheet() {
   const [leadContracts, setLeadContracts] = useState({}); // { [lead_id]: contract[] }
   const [loadingContracts, setLoadingContracts] = useState(false);
   const [signingCard, setSigningCard] = useState(null); // lead.id when signing animation plays
+  const [completedSticker, setCompletedSticker] = useState(false); // triggers sticker stamp animation on completed container icon
+  const [calendarError, setCalendarError] = useState(null); // { leadId, message } — shown when Google Calendar returns 409
+  const [kpis, setKpis] = useState(null); // { leads_assigned, leads_treated, closing_r1, closing_audit, conversion_rate, revenue, ... }
+  const [noteJustSaved, setNoteJustSaved] = useState(null); // lead.id — triggers mynote sticker appear animation
   const [flyingCard, setFlyingCard] = useState(null); // { lead, sourceRect, dx, dy, catColor, destCatIndex }
   const [glowingTab, setGlowingTab] = useState(null); // category index receiving a card
   const flyCleanupRef = useRef([]);
@@ -210,9 +223,12 @@ export default function TrackingSheet() {
   const [showAddLeadModal, setShowAddLeadModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTags, setFilterTags] = useState([]); // multi-select: r1_result or r2_result values (e.g. ['no_show', 'done'])
+  const [filterOrigins, setFilterOrigins] = useState([]); // multi-select: origin values (e.g. ['BTP', 'cc'])
   const [filterStatuses, setFilterStatuses] = useState([]); // multi-select: ['r1_done', 'r1_not_done', 'r2_done', 'r2_not_done']
   const [sortOrder, setSortOrder] = useState('newest'); // 'newest' | 'oldest'
   const [openFilter, setOpenFilter] = useState(''); // '' | 'tag' | 'status' | 'sort' — which dropdown is open
+  const [showFilters, setShowFilters] = useState(true); // toggle filter sidebar visibility
+  const [openFilterSections, setOpenFilterSections] = useState(new Set()); // which sidebar filter sections are open
   const [dismissedNotifs, setDismissedNotifs] = useState([]); // loaded from backend GET /notifications/dismissed
   const [backendPerfAlerts, setBackendPerfAlerts] = useState(null); // from GET /notifications/performance
   const [notifBadgeFlash, setNotifBadgeFlash] = useState(false); // pulse when new notifs arrive
@@ -255,6 +271,10 @@ export default function TrackingSheet() {
         (l.phone && l.phone.replace(/\s/g, '').includes(q.replace(/\s/g, '')))
       );
     }
+    // Filter by origin (niche)
+    if (filterOrigins.length > 0) {
+      result = result.filter(l => filterOrigins.includes(l.origin));
+    }
     // Filter by tag (qualification result) — tab-contextual field
     if (filterTags.length > 0) {
       if (catKey === 'r1') {
@@ -286,7 +306,7 @@ export default function TrackingSheet() {
       result = [...result].sort((a, b) => (b.assigned_at || '').localeCompare(a.assigned_at || ''));
     }
     return result;
-  }, [leads, activeTab, exitingCards, searchQuery, filterTags, filterStatuses, sortOrder]);
+  }, [leads, activeTab, exitingCards, searchQuery, filterTags, filterStatuses, filterOrigins, sortOrder]);
 
   // Dismiss a notification (optimistic + backend persist)
   const dismissNotif = (key) => {
@@ -385,6 +405,19 @@ export default function TrackingSheet() {
     }
     prevNotifKeysRef.current = currentKeySet;
   }, [leads, perfAlerts, dismissedNotifs]);
+
+  // Auto-dismiss all notifications when user visits the Notifications view
+  useEffect(() => {
+    if (sidebarView !== 'notifications') return;
+    const meetingKeys = leads
+      .filter(l => (l.status === 'r1' && toDateOnly(l.r1) === TODAY) || (l.status === 'r2' && toDateOnly(l.r2) === TODAY))
+      .map(l => l.status === 'r1' ? `r1-${l.id}-${TODAY}` : `r2-${l.id}-${TODAY}`);
+    const allKeys = [...meetingKeys, ...perfAlerts.map(a => a.key)];
+    const unread = allKeys.filter(k => !dismissedNotifs.includes(k));
+    if (unread.length > 0) {
+      unread.forEach(k => dismissNotif(k));
+    }
+  }, [sidebarView]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Badge bounce when counts change
   useEffect(() => {
@@ -538,6 +571,26 @@ export default function TrackingSheet() {
     };
   }, [activeTab, leads.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── TAB KEYBOARD NAVIGATION ─────────────────────────────────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        handleTabChange(Math.min(activeTab + 1, CATEGORIES.length - 1));
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handleTabChange(Math.max(activeTab - 1, 0));
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        // Toggle "effectués" filter (done tag)
+        setFilterTags(prev => prev.includes('done') ? prev.filter(t => t !== 'done') : [...prev, 'done']);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── HANDLERS ──────────────────────────────────────────────────────────────
   const handleTabChange = (idx) => {
     if (idx === activeTab) return;
@@ -548,6 +601,7 @@ export default function TrackingSheet() {
     setTabKey(k => k + 1);
     setFilterTags([]);
     setFilterStatuses([]);
+    setFilterOrigins([]);
     setOpenFilter('');
     // Clear dropping state after animation completes
     setTimeout(() => setDroppingTab(null), 320);
@@ -561,6 +615,19 @@ export default function TrackingSheet() {
     });
   };
 
+  const triggerLeadMovedNotif = (lead, newStatus) => {
+    const destCat = CATEGORIES.find(c => c.key === newStatus);
+    if (!destCat || !lead) return;
+    const firstName = (lead.full_name || '').split(' ')[0];
+    if (newStatus === 'r1' || newStatus === 'r2') {
+      const rdvType = newStatus === 'r1' ? 'R1' : 'R2';
+      setNavNotif({ type: 'calendar_created', firstName, rdvType });
+    } else {
+      setNavNotif({ type: 'lead_moved', name: lead.full_name, destLabel: destCat.label, destColor: destCat.color });
+    }
+    setTimeout(() => setNavNotif(null), 3000);
+  };
+
   const handleStatusChange = async (leadId, newStatus) => {
     if (newStatus === CATEGORIES[activeTab].key) return;
     try {
@@ -570,12 +637,11 @@ export default function TrackingSheet() {
       return;
     }
     if (newStatus === 'signed') {
-      // Signed animation: glow + signature stroke → then fly to Signés tab
       setSigningCard(leadId);
       setTimeout(() => {
         setSigningCard(null);
         const lead = leads.find(l => l.id === leadId);
-        if (lead) triggerFlyAnimation(leadId, lead, 'signed');
+        if (lead) { triggerFlyAnimation(leadId, lead, 'signed'); triggerLeadMovedNotif(lead, 'signed'); }
         if (selectedLead === leadId) setSelectedLead(null);
         setExitingCards(prev => new Set(prev).add(leadId));
       }, 700);
@@ -584,9 +650,8 @@ export default function TrackingSheet() {
         setExitingCards(prev => { const s = new Set(prev); s.delete(leadId); return s; });
       }, 1550);
     } else {
-      // FLIP fly animation to destination tab
       const lead = leads.find(l => l.id === leadId);
-      if (lead) triggerFlyAnimation(leadId, lead, newStatus);
+      if (lead) { triggerFlyAnimation(leadId, lead, newStatus); triggerLeadMovedNotif(lead, newStatus); }
       if (selectedLead === leadId) setSelectedLead(null);
       setExitingCards(prev => new Set(prev).add(leadId));
       setTimeout(() => {
@@ -599,11 +664,17 @@ export default function TrackingSheet() {
   const handleNotesSave = async (leadId) => {
     const newNotes = editingNotes[leadId];
     if (newNotes === undefined) return;
+    const hadNotes = leads.find(l => l.id === leadId)?.notes?.trim();
     try {
       await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, { notes: newNotes });
       setLeads(prev => prev.map(l => l.id === leadId ? { ...l, notes: newNotes } : l));
       setEditingNotes(prev => { const n = { ...prev }; delete n[leadId]; return n; });
       setSelectedLead(null);
+      // Trigger sticker animation if note was just added (didn't have one before)
+      if (!hadNotes && newNotes?.trim()) {
+        setNoteJustSaved(leadId);
+        setTimeout(() => setNoteJustSaved(null), 800);
+      }
     } catch (err) {
       console.error("Erreur sauvegarde notes:", err);
     }
@@ -696,11 +767,39 @@ export default function TrackingSheet() {
   const handleWorkflowSubmit = async (leadId, patchData) => {
     const currentStatus = CATEGORIES[activeTab].key;
     const newStatus = patchData.status;
+    // Check email required for R1/R2 date changes
+    if (patchData.r1_date || patchData.r2_date) {
+      const lead = leads.find(l => l.id === leadId);
+      if (lead && !lead.email) {
+        setCalendarError({ leadId, message: "Remplissez l'email du prospect avant de fixer un rendez-vous" });
+        setTimeout(() => setCalendarError(null), 5000);
+        return;
+      }
+    }
+    let resp;
     try {
-      await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, patchData);
+      resp = await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, patchData);
     } catch (err) {
       console.error("Erreur workflow:", err);
+      // Handle 409 — commercial is busy on this slot
+      if (err.status === 409) {
+        const detail = err.data?.detail;
+        const busyMsg = typeof detail === 'string' ? detail : detail?.message || "Vous êtes occupé sur ce créneau. Vérifiez votre Google Calendar.";
+        setCalendarError({ leadId, message: busyMsg });
+        setTimeout(() => setCalendarError(null), 5000);
+      }
       return;
+    }
+    // Update meet_link from backend response
+    if (resp) {
+      const meetFields = {};
+      if (resp.r1_meet_link) meetFields.r1_meet_link = resp.r1_meet_link;
+      if (resp.r2_meet_link) meetFields.r2_meet_link = resp.r2_meet_link;
+      if (resp.r1_event_id) meetFields.r1_event_id = resp.r1_event_id;
+      if (resp.r2_event_id) meetFields.r2_event_id = resp.r2_event_id;
+      if (Object.keys(meetFields).length > 0) {
+        patchData = { ...patchData, ...meetFields };
+      }
     }
     setActiveWorkflow(null);
     if (newStatus && newStatus !== currentStatus) {
@@ -709,7 +808,7 @@ export default function TrackingSheet() {
         setTimeout(() => {
           setSigningCard(null);
           const lead = leads.find(l => l.id === leadId);
-          if (lead) triggerFlyAnimation(leadId, lead, 'signed');
+          if (lead) { triggerFlyAnimation(leadId, lead, 'signed'); triggerLeadMovedNotif(lead, 'signed'); }
           if (selectedLead === leadId) setSelectedLead(null);
           setExitingCards(prev => new Set(prev).add(leadId));
         }, 700);
@@ -719,7 +818,7 @@ export default function TrackingSheet() {
         }, 1550);
       } else {
         const lead = leads.find(l => l.id === leadId);
-        if (lead) triggerFlyAnimation(leadId, lead, newStatus);
+        if (lead) { triggerFlyAnimation(leadId, lead, newStatus); triggerLeadMovedNotif(lead, newStatus); }
         if (selectedLead === leadId) setSelectedLead(null);
         setExitingCards(prev => new Set(prev).add(leadId));
         setTimeout(() => {
@@ -730,6 +829,11 @@ export default function TrackingSheet() {
     } else {
       // Update in place (no tab change)
       setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...patchData } : l));
+      // Trigger completed sticker animation when R1/R2 marked as done
+      if (patchData.r1_result === 'done' || patchData.r2_result === 'done') {
+        setCompletedSticker(true);
+        setTimeout(() => setCompletedSticker(false), 600);
+      }
     }
   };
 
@@ -960,8 +1064,6 @@ export default function TrackingSheet() {
       padding: 0,
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
       background: C.surface,
-      minHeight: "100vh",
-      paddingTop: "80px",
     }}>
       {/* Keyframe animations */}
       <style>{`
@@ -976,6 +1078,18 @@ export default function TrackingSheet() {
         @keyframes cardStaggerIn {
           from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes stickerRoll {
+          0%   { transform: perspective(800px) rotateY(-90deg); transform-origin: right center; opacity: 0; filter: brightness(0.6); }
+          40%  { transform: perspective(800px) rotateY(-20deg); transform-origin: right center; opacity: 1; filter: brightness(0.85); }
+          70%  { transform: perspective(800px) rotateY(8deg);   transform-origin: right center; filter: brightness(1.05); }
+          85%  { transform: perspective(800px) rotateY(-3deg);  transform-origin: right center; filter: brightness(1); }
+          100% { transform: perspective(800px) rotateY(0deg);   transform-origin: right center; opacity: 1; filter: brightness(1); }
+        }
+        @keyframes noteStickIn {
+          0%   { opacity: 0; transform: scale(0.7) translateY(-8px); }
+          60%  { opacity: 1; transform: scale(1.04) translateY(1px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
         }
         @keyframes cardSlideOut {
           0%   { opacity: 1; transform: translateX(0) scale(1); }
@@ -1141,6 +1255,19 @@ export default function TrackingSheet() {
             transform: translate(-50%, -50%);
           }
         }
+        .leads-scroll::-webkit-scrollbar {
+          width: 3px;
+        }
+        .leads-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .leads-scroll::-webkit-scrollbar-thumb {
+          background: rgba(0, 0, 0, 0.12);
+          border-radius: 4px;
+        }
+        .leads-scroll::-webkit-scrollbar-thumb:hover {
+          background: rgba(0, 0, 0, 0.22);
+        }
       `}</style>
 
       <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} notification={navNotif} />
@@ -1215,158 +1342,20 @@ export default function TrackingSheet() {
 
       {/* ── PAGE CONTAINER ──────────────────────────────────────────────────── */}
       <div style={{
-        maxWidth: 1640,
-        marginTop: sidebarView === 'leads' ? 44 : 16,
-        marginLeft: 'auto',
-        marginRight: 'auto',
-        marginBottom: 20,
-        padding: '10px',
-        background: darkMode ? 'rgba(0,0,0,0.10)' : 'rgba(190,197,215,0.20)',
-        borderRadius: '4px',
         animation: 'pageReveal 0.5s cubic-bezier(0.4,0,0.2,1) both',
-        transition: 'margin-top 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
       }}>
 
-        {/* ── FLEX ROW: board + detail panel ──────────────────────────────── */}
-        <div style={{ display: 'flex', alignItems: 'stretch' }}>
+        {/* ── FLEX ROW: sidebar + board + detail panel ──────────────────────── */}
+        <div style={{ display: 'flex', alignItems: 'stretch', minHeight: '100vh' }}>
 
-        {/* ── INNER BOARD WRAPPER (relative, for tab positioning) ──────────── */}
-        <div style={{ position: 'relative', flex: 1, minWidth: 0, transition: 'flex 0.45s cubic-bezier(0.4,0,0.2,1)' }}>
-
-          {/* ── FOLDER TABS (attached to top of white card) ─────────────────── */}
-          {sidebarView === 'leads' && (
-            <div style={{
-              display: 'flex',
-              position: 'absolute',
-              bottom: '100%',
-              left: 198,
-              right: 0,
-              paddingLeft: 24,
-              paddingRight: 24,
-              zIndex: 3,
-              overflow: 'visible',
-            }}>
-              {/* Bridge: covers card top border behind tabs only (not beyond) */}
-              <div style={{
-                position: 'absolute',
-                bottom: -1,
-                left: 24,
-                right: 24,
-                height: 2,
-                background: C.bg,
-                zIndex: 0,
-                pointerEvents: 'none',
-              }} />
-              {CATEGORIES.map((cat, idx) => {
-                const isActive = idx === activeTab;
-                const count = tabCounts[cat.key];
-                const badgeBounce = animatingBadges.has(idx);
-                const notifCount = tabNotifications[cat.key] || 0;
-                return (
-                  <button
-                    key={cat.key}
-                    data-tab-key={cat.key}
-                    onClick={() => handleTabChange(idx)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: isActive ? '10px 16px 11px' : '8px 14px 9px',
-                      borderRadius: '8px 8px 0 0',
-                      borderTop: 'none',
-                      borderLeft: 'none',
-                      borderRight: 'none',
-                      borderBottom: isActive ? `1px solid ${C.bg}` : `1px solid ${C.border}`,
-                      background: isActive ? C.bg : (darkMode ? cat.softBgDark : cat.softBg),
-                      color: isActive ? C.text : (darkMode ? cat.color : cat.softText),
-                      fontSize: '12.5px',
-                      fontWeight: isActive ? 600 : 550,
-                      cursor: 'pointer',
-                      transition: 'background 0.25s, color 0.25s, border 0.25s, padding 0.25s, font-weight 0.25s, box-shadow 0.3s ease',
-                      whiteSpace: 'nowrap',
-                      position: 'relative',
-                      fontFamily: 'inherit',
-                      letterSpacing: '-0.01em',
-                      marginBottom: -1,
-                      marginRight: idx < CATEGORIES.length - 1 ? -7 : 0,
-                      zIndex: isActive ? 10 : CATEGORIES.length - idx + 1,
-                      transform: isActive ? 'translateY(-8px)' : 'translateY(0)',
-                      boxShadow: (() => {
-                        const insetLeft = idx > 0 && !isActive
-                          ? `inset 18px 0 2px -7px rgba(0,0,0,${darkMode ? '0.25' : '0.12'})`
-                          : '';
-                        if (isActive) {
-                          return `0 -2px 8px rgba(0,0,0,0.06), 0 -1px 3px rgba(0,0,0,0.04)`;
-                        }
-                        return insetLeft || 'none';
-                      })(),
-                      animation: glowingTab === idx
-                        ? 'tabReceive 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards'
-                        : isActive
-                          ? 'tabLift 0.28s cubic-bezier(0.34,1.56,0.64,1) forwards'
-                          : droppingTab === idx
-                            ? 'tabDrop 0.3s cubic-bezier(0.4,0,0.2,1) forwards'
-                            : 'none',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isActive) e.currentTarget.style.background = darkMode ? (cat.color + '28') : (cat.color + '25');
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isActive) e.currentTarget.style.background = darkMode ? cat.softBgDark : cat.softBg;
-                    }}
-                  >
-                    <span>{cat.label}</span>
-                    <span data-tab-badge="" style={{
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      minWidth: '20px', height: '20px', padding: '0 6px', borderRadius: '10px',
-                      fontSize: '11px', fontWeight: 700,
-                      background: `${cat.color}20`, color: cat.color,
-                      animation: badgeBounce ? 'badgePop 0.3s ease both' : (glowingTab === idx ? 'badgeReceive 0.45s cubic-bezier(0.34,1.56,0.64,1) both' : 'none'),
-                      fontFamily: 'inherit',
-                    }}>
-                      {count}
-                    </span>
-                    {/* Notification badges moved to Notifications sidebar view */}
-                    {/* Bridge: covers card top border when tab is lifted */}
-                    {isActive && (
-                      <span style={{
-                        position: 'absolute',
-                        bottom: -10,
-                        left: 0,
-                        right: 0,
-                        height: 12,
-                        background: C.bg,
-                        zIndex: 1,
-                        borderRadius: 0,
-                        pointerEvents: 'none',
-                      }} />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* ── INNER BOARD (white card) ──────────────────────────────────────── */}
-          <div style={{
-            background: C.bg,
-            borderRadius: 4,
-            boxShadow: C.shadow,
-            border: `1px solid ${C.border}`,
-            display: 'flex',
-            height: 'calc(100vh - 200px)',
-            minHeight: '600px',
-            overflow: 'hidden',
-          }}>
-
-          {/* ── LEFT SIDEBAR ────────────────────────────────────────────────── */}
+          {/* ── LEFT SIDEBAR (full height) ──────────────────────────────────── */}
           <div style={{
             width: 220,
             minWidth: 220,
             borderRight: `1px solid ${C.border}`,
             display: 'flex',
             flexDirection: 'column',
-            background: C.subtle,
+            background: darkMode ? C.subtle : '#eceef2',
             animation: 'sidebarReveal 0.4s ease both',
           }}>
             {/* Sidebar header — company logo like Quno */}
@@ -1415,24 +1404,23 @@ export default function TrackingSheet() {
                     display: 'flex', alignItems: 'center', gap: 6,
                     padding: item.iconSize ? '2px 12px' : '9px 12px', margin: '1px 12px', cursor: 'pointer',
                     borderRadius: 10,
-                    background: isActive
-                      ? (darkMode ? '#2a2b36' : '#ffffff')
-                      : 'transparent',
-                    boxShadow: isActive
-                      ? (darkMode ? '0 1px 4px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.06), 0 1px 8px rgba(0,0,0,0.04)')
-                      : 'none',
-                    border: isActive ? `1px solid ${darkMode ? '#35364a' : '#e8eaf0'}` : '1px solid transparent',
+                    background: isActive ? (darkMode ? '#fff' : '#1e2330') : 'transparent',
+                    boxShadow: 'none',
+                    border: '1px solid transparent',
+                    color: isActive ? (darkMode ? '#1e2330' : '#fff') : C.muted,
                     transition: 'all 0.2s ease',
                   }}
                   onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'; }}
                   onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                 >
                   {item.iconSrc && item.keepColor ? (
-                    <img src={item.iconSrc} alt="" style={{ width: 28, height: 28, flexShrink: 0, opacity: isActive ? 1 : 0.5, transition: 'opacity 0.15s' }} />
+                    <div style={{ width: 28, height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <img src={item.iconSrc} alt="" style={{ width: 25, height: 25, opacity: isActive ? 1 : 0.5, transition: 'all 0.15s', filter: isActive ? (darkMode ? 'none' : 'brightness(0) invert(1)') : 'none' }} />
+                    </div>
                   ) : item.iconSrc ? (
                     <div style={{
                       width: item.iconSize || 28, height: item.iconSize || 28, flexShrink: 0, marginRight: item.iconSize ? -((item.iconSize - 28) / 2) : 0, marginLeft: item.iconSize ? -((item.iconSize - 28) / 2) : 0, marginTop: item.iconSize ? -((item.iconSize - 28) / 2) : 0, marginBottom: item.iconSize ? -((item.iconSize - 28) / 2) : 0,
-                      backgroundColor: isActive ? C.text : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)'),
+                      backgroundColor: isActive ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)'),
                       WebkitMaskImage: `url(${item.iconSrc})`,
                       WebkitMaskSize: 'contain',
                       WebkitMaskRepeat: 'no-repeat',
@@ -1446,14 +1434,14 @@ export default function TrackingSheet() {
                   ) : (
                     <span style={{
                       fontSize: 14, fontWeight: 700, width: 28, textAlign: 'center',
-                      color: isActive ? C.text : C.muted, transition: 'color 0.15s',
+                      color: isActive ? (darkMode ? '#1e2330' : '#fff') : C.muted, transition: 'color 0.15s',
                     }}>
                       {item.icon}
                     </span>
                   )}
                   <span style={{
                     fontSize: 13, fontWeight: isActive ? 600 : 500,
-                    color: isActive ? C.text : C.muted, transition: 'color 0.15s',
+                    color: isActive ? (darkMode ? '#1e2330' : '#fff') : C.muted, transition: 'color 0.15s',
                   }}>
                     {item.label}
                   </span>
@@ -1483,6 +1471,123 @@ export default function TrackingSheet() {
             {/* Spacer */}
             <div style={{ flex: 1 }} />
           </div>
+
+        {/* ── RIGHT COLUMN (single top card + content row) ─────────────────── */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: '8px 8px 8px 0', gap: 12 }}>
+
+          {/* ── KPI HEADER CARD (3 left + gap for navbar + 3 right) ────────── */}
+          <div style={{ height: 76, background: darkMode ? C.bg : '#f6f7f9', borderRadius: 8, flexShrink: 0, border: `1px solid ${C.border}`, marginLeft: 8, display: 'flex', alignItems: 'center', padding: '0 24px' }}>
+            {kpis && (() => {
+              const left = [
+                { label: 'Leads', value: kpis.leads_assigned ?? '—' },
+                { label: 'Traités', value: kpis.leads_treated ?? '—' },
+                { label: 'Closing R1', value: kpis.closing_r1 != null ? `${kpis.closing_r1.toFixed(1)}%` : '—' },
+              ];
+              const right = [
+                { label: 'R1 Placés', value: kpis.closing_r1_placed != null ? `${kpis.closing_r1_placed.toFixed(1)}%` : '—' },
+                { label: 'Closing Audit', value: kpis.closing_audit != null ? `${kpis.closing_audit.toFixed(1)}%` : '—' },
+                { label: 'Conv. Globale', value: kpis.conversion_rate != null ? `${kpis.conversion_rate.toFixed(1)}%` : '—' },
+                { label: 'Revenu', value: kpis.revenue != null ? `${kpis.revenue.toLocaleString('fr-FR')}€` : '—' },
+              ];
+              const renderKpi = (kpi, i, arr) => {
+                const valStr = String(kpi.value);
+                const fs = valStr.length > 8 ? 15 : valStr.length > 5 ? 17 : 20;
+                return (
+                <div key={kpi.label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, borderRight: i < arr.length - 1 ? `1px solid ${C.border}` : 'none', padding: '0 36px', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: fs, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>{kpi.value}</span>
+                  <span style={{ fontSize: 11.5, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{kpi.label}</span>
+                </div>
+                );
+              };
+              return <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>{left.map(renderKpi)}</div>
+                <div style={{ flex: 1 }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginRight: 16 }}>{right.map(renderKpi)}</div>
+              </>;
+            })()}
+          </div>
+
+          {/* ── CONTENT ROW (board + detail panel side by side) ──────────────── */}
+          <div style={{ flex: 1, display: 'flex', minHeight: 0, marginLeft: 8 }}>
+
+          {/* ── INNER BOARD WRAPPER ──────────────────────────────────────────── */}
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+
+          {/* ── MAIN CONTENT CARD ────────────────────────────────────────────── */}
+          <div style={{ flex: 1, background: darkMode ? C.bg : '#f6f7f9', borderRadius: 8, border: `1px solid ${C.border}`, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+
+          {/* ── FOLDER TABS (top bar, classic site style) ────────────────────── */}
+          {sidebarView === 'leads' && (
+            <div style={{
+              display: 'flex', gap: 6,
+              padding: '10px 20px',
+              borderBottom: `1px solid ${C.border}`,
+              background: 'transparent',
+              zIndex: 3,
+              overflow: 'visible',
+              flexWrap: 'wrap',
+            }}>
+              {CATEGORIES.map((cat, idx) => {
+                const isActive = idx === activeTab;
+                const count = tabCounts[cat.key];
+                const badgeBounce = animatingBadges.has(idx);
+                return (
+                  <button
+                    key={cat.key}
+                    data-tab-key={cat.key}
+                    onClick={() => handleTabChange(idx)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '7px 14px',
+                      borderRadius: 8,
+                      border: `1px solid ${isActive ? C.border : 'transparent'}`,
+                      background: isActive ? (darkMode ? 'rgba(255,255,255,0.06)' : '#ffffff') : 'transparent',
+                      color: isActive ? C.text : C.muted,
+                      fontSize: '12.5px',
+                      fontWeight: isActive ? 650 : 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      whiteSpace: 'nowrap',
+                      position: 'relative',
+                      fontFamily: 'inherit',
+                      letterSpacing: '-0.01em',
+                      boxShadow: isActive ? (darkMode ? 'none' : '0 1px 3px rgba(0,0,0,0.04)') : 'none',
+                      animation: glowingTab === idx ? 'tabReceive 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards' : 'none',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isActive) { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'; e.currentTarget.style.color = C.text; }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.muted; }
+                    }}
+                  >
+                    <span>{cat.label}</span>
+                    <span data-tab-badge="" style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      minWidth: '18px', height: '18px', padding: '0 5px', borderRadius: '9px',
+                      fontSize: '10.5px', fontWeight: 700,
+                      background: `${cat.color}20`, color: cat.color,
+                      animation: badgeBounce ? 'badgePop 0.3s ease both' : (glowingTab === idx ? 'badgeReceive 0.45s cubic-bezier(0.34,1.56,0.64,1) both' : 'none'),
+                      fontFamily: 'inherit',
+                    }}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── INNER BOARD ───────────────────────────────────────────────────── */}
+          <div style={{
+            background: 'transparent',
+            display: 'flex',
+            flex: 1,
+            minHeight: 0,
+            overflow: 'hidden',
+          }}>
 
           {/* ── RIGHT MAIN CONTENT ──────────────────────────────────────────── */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -2105,12 +2210,212 @@ export default function TrackingSheet() {
         {/* ════ VIEW: LEADS (content) ═══════════════════════════════════════ */}
         {sidebarView === 'leads' && (
         <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
+
+        {/* ── FILTER SIDEBAR (pixel-match Freshsales) ────────────────────── */}
+        {showFilters && (() => {
+          const catKey = CATEGORIES[activeTab].key;
+          const R1_TAGS = [
+            { value: 'no_show', label: 'Lapin', color: '#f59e0b' },
+            { value: 'rescheduled', label: 'Reporté', color: '#3b82f6' },
+            { value: 'done', label: 'R1 effectué', color: '#10b981' },
+            { value: 'cancelled', label: 'Annulé', color: '#ef4444' },
+          ];
+          const R2_TAGS = [
+            { value: 'done', label: 'R2 effectué', color: '#10b981' },
+            { value: 'comptable', label: 'Comptable', color: '#8b5cf6' },
+            { value: 'associe', label: 'Associé', color: '#6366f1' },
+            { value: 'reflexion', label: 'Réflexion', color: '#3b82f6' },
+            { value: 'tresorerie', label: 'Trésorerie', color: '#f59e0b' },
+            { value: 'reporte', label: 'Reporté', color: '#fb923c' },
+            { value: 'pas_interesse', label: 'Pas intéressé', color: '#ef4444' },
+            { value: 'annule', label: 'Annulé', color: '#ef4444' },
+          ];
+          const tagOptions = catKey === 'r1' ? R1_TAGS : catKey === 'r2' ? R2_TAGS : catKey === 'new' ? [] : [...R1_TAGS, ...R2_TAGS.filter(t => t.value !== 'done')];
+          const statusOptions = catKey === 'new'
+            ? [{ value: 'contacted', label: 'Contacté', color: '#10b981' }, { value: 'not_contacted', label: 'Pas contacté', color: '#94a3b8' }]
+            : catKey === 'r1'
+              ? [{ value: 'r1_done', label: 'R1 qualifié', color: '#3b82f6' }, { value: 'r1_not_done', label: 'R1 non qualifié', color: '#94a3b8' }]
+              : catKey === 'r2'
+                ? [{ value: 'r2_done', label: 'R2 qualifié', color: '#fb923c' }, { value: 'r2_not_done', label: 'R2 non qualifié', color: '#94a3b8' }]
+                : [{ value: 'r1_done', label: 'R1 qualifié', color: '#3b82f6' }, { value: 'r1_not_done', label: 'R1 non qualifié', color: '#94a3b8' }, { value: 'r2_done', label: 'R2 qualifié', color: '#fb923c' }, { value: 'r2_not_done', label: 'R2 non qualifié', color: '#94a3b8' }];
+
+          // Shared colors
+          const greyBorder = darkMode ? '#3a3b46' : '#d4d4d8';
+          const accentDot = darkMode ? '#818cf8' : '#6366f1';
+          const optionsBg = darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)';
+
+          // Toggle a filter section open/closed (stable state, survives re-renders)
+          const toggleSection = (key) => setOpenFilterSections(prev => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key); else next.add(key);
+            return next;
+          });
+
+          // Render a filter item row (icon + label + chevron)
+          const renderFilterRow = (key, icon, label, hasChildren) => {
+            const isOpen = openFilterSections.has(key);
+            return (
+              <div
+                onClick={() => hasChildren ? toggleSection(key) : null}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '9px 14px 9px 16px', cursor: hasChildren ? 'pointer' : 'default',
+                }}
+              >
+                <span style={{ color: C.muted, flexShrink: 0, display: 'flex', alignItems: 'center' }}>{icon}</span>
+                <span style={{ flex: 1, fontSize: 13.5, fontWeight: isOpen ? 600 : 500, color: C.text }}>{label}</span>
+                {hasChildren && (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                    style={{ flexShrink: 0, transition: 'transform 0.2s ease', transform: isOpen ? 'rotate(0)' : 'rotate(-90deg)' }}>
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                )}
+              </div>
+            );
+          };
+
+          // Render radio option
+          const renderRadio = (selected, label, color, onClick) => (
+            <div onClick={onClick} style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '5px 0',
+              cursor: 'pointer', fontSize: 13, color: C.text, fontFamily: 'inherit',
+            }}>
+              <div style={{
+                width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                border: `2px solid ${selected ? (color || accentDot) : greyBorder}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'border-color 0.15s',
+              }}>
+                {selected && <div style={{ width: 8, height: 8, borderRadius: '50%', background: color || accentDot }} />}
+              </div>
+              <span style={{ fontWeight: selected ? 500 : 400, color: selected ? C.text : C.secondary }}>{label}</span>
+            </div>
+          );
+
+          // Options container (mini grey container with radius)
+          const renderOptionsBox = (children) => (
+            <div style={{
+              margin: '0 10px 10px 16px', padding: '8px 12px 8px 26px',
+              background: optionsBg, borderRadius: 10,
+            }}>
+              {children}
+            </div>
+          );
+
+          return (
+              <div style={{
+                width: 220, flexShrink: 0, alignSelf: 'flex-start',
+                background: darkMode ? C.bg : '#fafafb',
+                border: `1px solid ${C.border}`,
+                borderRadius: 10,
+                marginTop: 10, marginLeft: 4,
+                overflowY: 'auto', display: 'flex', flexDirection: 'column',
+                scrollbarWidth: 'thin', scrollbarColor: `${darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'} transparent`,
+                boxShadow: darkMode ? 'none' : '0 1px 3px rgba(0,0,0,0.04)',
+              }}>
+
+              {/* ── "Filtres" title ── */}
+              <div style={{ padding: '16px 16px 12px', borderBottom: `1px solid ${C.border}` }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Filtres</span>
+              </div>
+
+              {/* ═══ GROUP: PROPRIÉTÉS DU LEAD ═══ */}
+              <div style={{ borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ padding: '14px 14px 8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Propriétés du lead</span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                </div>
+
+                {/* Qualification */}
+                {tagOptions.length > 0 && (
+                  <>
+                    {renderFilterRow('qualification', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>, 'Qualification', true)}
+                    {openFilterSections.has('qualification') && renderOptionsBox(
+                      tagOptions.map(opt => <div key={opt.value}>{renderRadio(filterTags.includes(opt.value), opt.label, opt.color, () => setFilterTags(prev => prev.includes(opt.value) ? prev.filter(v => v !== opt.value) : [...prev, opt.value]))}</div>)
+                    )}
+                  </>
+                )}
+
+                {/* Statut */}
+                {statusOptions.length > 0 && (
+                  <>
+                    {renderFilterRow('statut', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>, 'Statut', true)}
+                    {openFilterSections.has('statut') && renderOptionsBox(
+                      statusOptions.map(opt => <div key={opt.value}>{renderRadio(filterStatuses.includes(opt.value), opt.label, opt.color, () => setFilterStatuses(prev => prev.includes(opt.value) ? prev.filter(v => v !== opt.value) : [...prev, opt.value]))}</div>)
+                    )}
+                  </>
+                )}
+
+                {/* Origine */}
+                {renderFilterRow('origine', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>, 'Origine', true)}
+                {openFilterSections.has('origine') && (() => {
+                  const uniqueOrigins = [...new Set(leads.map(l => l.origin).filter(Boolean))].sort();
+                  return renderOptionsBox(
+                    uniqueOrigins.map(o => (
+                      <div key={o}>{renderRadio(filterOrigins.includes(o), o, C.accent, () => setFilterOrigins(prev => prev.includes(o) ? prev.filter(v => v !== o) : [...prev, o]))}</div>
+                    ))
+                  );
+                })()}
+              </div>
+
+              {/* ═══ GROUP: TRI & DATES ═══ */}
+              <div style={{ borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ padding: '14px 14px 8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tri & dates</span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                </div>
+
+                {/* Ordre */}
+                {renderFilterRow('ordre', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>, 'Ordre', true)}
+                {openFilterSections.has('ordre') && renderOptionsBox(
+                  [{ value: 'newest', label: 'Plus récents' }, { value: 'oldest', label: 'Plus anciens' }].map(opt => <div key={opt.value}>{renderRadio(sortOrder === opt.value, opt.label, null, () => setSortOrder(opt.value))}</div>)
+                )}
+
+                {/* Date d'assignation */}
+                {renderFilterRow('date_assign', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>, "Date d'assignation", false)}
+
+                {/* Dernière activité */}
+                {renderFilterRow('last_activity', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>, 'Dernière activité', false)}
+              </div>
+
+              {/* ═══ GROUP: AUTRES ═══ */}
+              <div>
+                <div style={{ padding: '14px 14px 8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Autres</span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                </div>
+
+                {renderFilterRow('notes', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>, 'Notes', false)}
+              </div>
+
+              <div style={{ flex: 1 }} />
+
+              {/* Clear all — bottom */}
+              {(filterTags.length > 0 || filterStatuses.length > 0 || filterOrigins.length > 0 || sortOrder !== 'newest') && (
+                <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}` }}>
+                  <button onClick={() => { setFilterTags([]); setFilterStatuses([]); setFilterOrigins([]); setSortOrder('newest'); }} style={{
+                    width: '100%', padding: '8px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                    border: `1px solid ${C.accent}40`, background: `${C.accent}08`, color: C.accent,
+                    cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                  }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = `${C.accent}18`; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = `${C.accent}08`; }}
+                  >Effacer tous les filtres</button>
+                </div>
+              )}
+              </div>
+          );
+        })()}
+
+
         {/* ── LEFT: Lead list ──────────────────────────────────────────── */}
-        <div style={{
+        <div className="leads-scroll" style={{
           flex: 1,
           minWidth: 0,
           padding: '24px 24px 32px',
           overflowY: 'auto',
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'rgba(0,0,0,0.12) transparent',
         }}>
           {/* Tab header */}
           <div key={`header-${tabKey}`} style={{
@@ -2149,7 +2454,7 @@ export default function TrackingSheet() {
                   title="Ajouter un lead"
                   style={{
                     width: 28, height: 28, borderRadius: 8,
-                    border: `1px solid ${C.border}`, background: darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)',
+                    border: `1px solid ${C.border}`, background: darkMode ? 'rgba(255,255,255,0.05)' : '#ffffff',
                     cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                     transition: 'all 0.15s', flexShrink: 0, padding: 0,
                   }}
@@ -2172,7 +2477,28 @@ export default function TrackingSheet() {
           <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
             {/* Search input row */}
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <div style={{ flex: 1, position: 'relative' }}>
+              {/* Hide/Show Filters toggle */}
+              <button
+                onClick={() => setShowFilters(prev => !prev)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '7px 10px', borderRadius: 8, flexShrink: 0,
+                  border: `1px solid ${C.border}`, background: C.bg,
+                  color: C.secondary, fontSize: 11.5, fontWeight: 500,
+                  cursor: 'pointer', fontFamily: 'inherit',
+                  transition: 'all 0.15s', whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.text; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.secondary; }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" />
+                  <line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" />
+                </svg>
+                {showFilters ? 'Masquer filtres' : 'Afficher filtres'}
+              </button>
+
+              <div style={{ width: 200, flexShrink: 0, position: 'relative' }}>
                 <input
                   type="text"
                   value={searchQuery}
@@ -2180,12 +2506,12 @@ export default function TrackingSheet() {
                   placeholder="Rechercher..."
                   style={{
                     width: '100%',
-                    padding: '9px 14px 9px 34px',
-                    borderRadius: 50,
+                    padding: '7px 12px 7px 30px',
+                    borderRadius: 8,
                     border: `1px solid ${C.border}`,
-                    background: darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
+                    background: darkMode ? 'rgba(255,255,255,0.04)' : '#ffffff',
                     color: C.text,
-                    fontSize: '12.5px',
+                    fontSize: '12px',
                     fontFamily: 'inherit',
                     outline: 'none',
                     transition: 'border-color 0.15s, box-shadow 0.15s',
@@ -2200,14 +2526,14 @@ export default function TrackingSheet() {
                     e.currentTarget.style.boxShadow = 'none';
                   }}
                 />
-                <svg style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
                 </svg>
                 {searchQuery && (
                   <button onClick={() => setSearchQuery('')} style={{
-                    position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                    position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
                     background: 'none', border: 'none', cursor: 'pointer', padding: '2px',
-                    color: C.muted, fontSize: '14px', lineHeight: 1, fontFamily: 'inherit',
+                    color: C.muted, fontSize: '13px', lineHeight: 1, fontFamily: 'inherit',
                   }}>×</button>
                 )}
               </div>
@@ -2249,7 +2575,7 @@ export default function TrackingSheet() {
                     {hasTagFilter && (
                       <button onClick={() => setOpenFilter(prev => prev === 'tag' ? '' : 'tag')} style={{
                         width: 34, height: 34, borderRadius: 10, border: `1px solid ${filterTags.length > 0 ? C.accent : C.border}`,
-                        background: filterTags.length > 0 ? `${C.accent}12` : (darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)'),
+                        background: filterTags.length > 0 ? `${C.accent}12` : (darkMode ? 'rgba(255,255,255,0.04)' : '#ffffff'),
                         color: filterTags.length > 0 ? C.accent : C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                         transition: 'all 0.15s', flexShrink: 0, position: 'relative',
                       }}
@@ -2265,7 +2591,7 @@ export default function TrackingSheet() {
                     {hasStatusFilter && (
                       <button onClick={() => setOpenFilter(prev => prev === 'status' ? '' : 'status')} style={{
                         width: 34, height: 34, borderRadius: 10, border: `1px solid ${filterStatuses.length > 0 ? C.accent : C.border}`,
-                        background: filterStatuses.length > 0 ? `${C.accent}12` : (darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)'),
+                        background: filterStatuses.length > 0 ? `${C.accent}12` : (darkMode ? 'rgba(255,255,255,0.04)' : '#ffffff'),
                         color: filterStatuses.length > 0 ? C.accent : C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                         transition: 'all 0.15s', flexShrink: 0, position: 'relative',
                       }}
@@ -2280,7 +2606,7 @@ export default function TrackingSheet() {
                     )}
                     <button onClick={() => setOpenFilter(prev => prev === 'sort' ? '' : 'sort')} style={{
                       width: 34, height: 34, borderRadius: 10, border: `1px solid ${sortOrder === 'oldest' ? C.accent : C.border}`,
-                      background: sortOrder === 'oldest' ? `${C.accent}12` : (darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)'),
+                      background: sortOrder === 'oldest' ? `${C.accent}12` : (darkMode ? 'rgba(255,255,255,0.04)' : '#ffffff'),
                       color: sortOrder === 'oldest' ? C.accent : C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                       transition: 'all 0.15s', flexShrink: 0,
                     }}
@@ -2447,25 +2773,44 @@ export default function TrackingSheet() {
             )}
           </div>
 
-          {/* Lead cards */}
-          <div key={`cards-${tabKey}`} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {filteredLeads.length === 0 ? (
-              <div style={{
-                textAlign: 'center',
-                padding: '60px 20px',
-                animation: 'emptyFade 0.4s ease both',
-              }}>
-                <p style={{ color: C.muted, fontSize: '14px', margin: 0 }}>
-                  {searchQuery.trim() ? 'Aucun résultat pour cette recherche' : 'Aucun lead dans cette catégorie'}
-                </p>
-              </div>
-            ) : (
-              filteredLeads.map((lead, index) => {
-                const isExiting = exitingCards.has(lead.id);
-                const isSelected = selectedLead === lead.id;
-                const origin = ORIGIN_COLORS[lead.origin] || DEFAULT_ORIGIN;
+          {/* Lead cards — with grouped containers for R1/R2 tabs */}
+          {(() => {
+            const isR1Tab = activeCat.key === 'r1';
+            const isR2Tab = activeCat.key === 'r2';
+            const isGroupedTab = isR1Tab || isR2Tab;
 
-                return (
+            // R1 groups
+            const r1Scheduled  = isR1Tab ? filteredLeads.filter(l => !l.r1_result || l.r1_result === 'rescheduled') : [];
+            const r1Pending    = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'no_show') : [];
+            const r1Cancelled  = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'cancelled') : [];
+            const r1Completed  = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'done') : [];
+
+            // R2 groups
+            const R2_PENDING_STATES = ['comptable', 'associe', 'reflexion', 'relire_contrat', 'pas_decision_jour', 'tresorerie'];
+            const r2Scheduled  = isR2Tab ? filteredLeads.filter(l => !l.r2_result || l.r2_result === 'reporte') : [];
+            const r2Pending    = isR2Tab ? filteredLeads.filter(l => R2_PENDING_STATES.includes(l.r2_result)) : [];
+            const r2Cancelled  = isR2Tab ? filteredLeads.filter(l => l.r2_result === 'pas_interesse' || l.r2_result === 'annule') : [];
+            const r2Completed  = isR2Tab ? filteredLeads.filter(l => l.r2_result === 'done') : [];
+
+            // Unified groups array for the active tab
+            const groups = isR1Tab ? [
+              { key: 'scheduled', leads: r1Scheduled, label: 'Planifiés', color: '#3b82f6' },
+              { key: 'pending',   leads: r1Pending,   label: 'En attente', color: '#f59e0b' },
+              { key: 'completed', leads: r1Completed, label: 'Effectués',  color: '#10b981' },
+              { key: 'cancelled', leads: r1Cancelled, label: 'Annulés',     color: '#ef4444' },
+            ] : isR2Tab ? [
+              { key: 'scheduled', leads: r2Scheduled, label: 'Planifiés', color: '#fb923c' },
+              { key: 'pending',   leads: r2Pending,   label: 'En attente', color: '#f59e0b' },
+              { key: 'completed', leads: r2Completed, label: 'Effectués',  color: '#10b981' },
+              { key: 'cancelled', leads: r2Cancelled, label: 'Annulés',     color: '#ef4444' },
+            ] : [];
+
+            // Renders a single lead card (reused for both groups)
+            const renderLeadCard = (lead, index) => {
+              const isExiting = exitingCards.has(lead.id);
+              const isSelected = selectedLead === lead.id;
+              const origin = ORIGIN_COLORS[lead.origin] || DEFAULT_ORIGIN;
+              return (
                   <div
                     key={lead.id}
                     id={`lead-card-${lead.id}`}
@@ -2499,6 +2844,30 @@ export default function TrackingSheet() {
                     }}
                     onClick={() => { if (!isExiting) setSelectedLead(isSelected ? null : lead.id); }}
                   >
+
+                    {/* ═══ NOTE STICKER ═══ */}
+                    {lead.notes && lead.notes.trim() && (
+                      <img
+                        src={mynoteIcon}
+                        alt="Note"
+                        style={{
+                          position: 'absolute',
+                          top: -7,
+                          left: -14,
+                          width: 50,
+                          height: 50,
+                          objectFit: 'contain',
+                          pointerEvents: 'auto',
+                          zIndex: 2,
+                          filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.12))',
+                          transition: 'transform 0.2s ease',
+                          cursor: 'default',
+                          ...(noteJustSaved === lead.id ? { animation: 'noteStickIn 0.6s cubic-bezier(0.34,1.56,0.64,1) both' } : {}),
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.08)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                      />
+                    )}
 
                     {/* ═══ PILL VIEW ═══ */}
                     <div
@@ -2588,6 +2957,25 @@ export default function TrackingSheet() {
                           <span style={{ fontSize: '11px', fontWeight: 600, color: C.accent, flexShrink: 0 }}>
                             {lead.sector}
                           </span>
+                        </>
+                      )}
+
+                      {/* Google Meet link */}
+                      {(lead.r1_meet_link || lead.r2_meet_link) && (
+                        <>
+                          <span style={{ width: '1px', height: '14px', background: C.border, flexShrink: 0 }} />
+                          <a
+                            href={lead.r2_meet_link || lead.r1_meet_link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            title="Rejoindre le Google Meet"
+                            style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0, borderRadius: 6, padding: '2px 4px', transition: 'background 0.15s' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                          >
+                            <img src={meetIcon} alt="Meet" style={{ width: 18, height: 18, objectFit: 'contain' }} />
+                          </a>
                         </>
                       )}
 
@@ -2705,9 +3093,63 @@ export default function TrackingSheet() {
 
                   </div>
                 );
-              })
-            )}
-          </div>
+              };
+
+            return (
+              <div key={`cards-${tabKey}`} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {filteredLeads.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '60px 20px', animation: 'emptyFade 0.4s ease both' }}>
+                    <p style={{ color: C.muted, fontSize: '14px', margin: 0 }}>
+                      {searchQuery.trim() ? 'Aucun résultat pour cette recherche' : 'Aucun lead dans cette catégorie'}
+                    </p>
+                  </div>
+                ) : isGroupedTab ? (
+                  (() => {
+                    let runningIdx = 0;
+                    return (
+                      <>
+                        {groups.map(grp => {
+                          const startIdx = runningIdx;
+                          runningIdx += grp.leads.length;
+                          if (grp.leads.length === 0) return null;
+                          return (
+                            <div key={grp.key} style={{
+                              border: `1.5px solid ${darkMode ? 'rgba(255,255,255,0.06)' : '#dfe1e6'}`,
+                              borderRadius: 14,
+                              background: darkMode ? 'rgba(255,255,255,0.04)' : '#fafafb',
+                              padding: '14px 10px 10px',
+                              marginBottom: 8,
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, padding: '0 6px' }}>
+                                <span style={{
+                                  display: 'inline-flex', alignItems: 'center',
+                                  padding: grp.key === 'completed' ? '4px 4px 4px 14px' : '4px 14px', borderRadius: 50,
+                                  border: `1.5px solid ${grp.color}35`,
+                                  background: `${grp.color}10`,
+                                  fontSize: 12.5, fontWeight: 600, color: grp.color,
+                                }}>{grp.label}{grp.key === 'completed' && <span style={{ width: 28, height: 28, overflow: 'hidden', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: -1 }}><img src={completedIcon} alt="" style={{ width: 84, height: 84 }} /></span>}</span>
+                                <span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>{grp.leads.length}</span>
+                                <div style={{ flex: 1 }} />
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.45 }}>
+                                  <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+                                </svg>
+                                <span style={{ fontSize: 15, color: C.muted, lineHeight: 1, fontWeight: 300 }}>+</span>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                {grp.leads.map((lead, i) => renderLeadCard(lead, startIdx + i))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    );
+                  })()
+                ) : (
+                  filteredLeads.map((lead, i) => renderLeadCard(lead, i))
+                )}
+              </div>
+            );
+          })()}
         </div>{/* end left column */}
 
         {/* ── RIGHT: Lead Detail Panel (portaled to separate card) ──────── */}
@@ -2731,7 +3173,7 @@ export default function TrackingSheet() {
               overflowY: 'auto',
               overflowX: 'hidden',
               animation: 'detailSlideIn 0.4s cubic-bezier(0.4,0,0.2,1) both',
-              background: C.bg,
+              background: darkMode ? C.bg : '#fafafb',
               borderRadius: 8,
               border: `1px solid ${C.border}`,
               boxShadow: C.shadow,
@@ -2970,7 +3412,47 @@ export default function TrackingSheet() {
                     </div>
                   </div>
                 )}
+                {/* Google Meet */}
+                {(lead.r1_meet_link || lead.r2_meet_link) && (
+                  <a
+                    href={lead.r2_meet_link || lead.r1_meet_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none',
+                      borderRadius: 8, padding: '4px 6px', margin: '-4px -6px', transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <div style={{
+                      width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+                      background: darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <img src={meetIcon} alt="Meet" style={{ width: 16, height: 16, objectFit: 'contain' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Google Meet</div>
+                      <div style={{ fontSize: 12, color: '#1a73e8', fontWeight: 600 }}>Rejoindre le meeting</div>
+                    </div>
+                  </a>
+                )}
               </div>
+
+              {/* ─── CALENDAR ERROR ─── */}
+              {calendarError?.leadId === lead.id && (
+                <div style={{
+                  padding: '8px 14px', borderRadius: 10, marginBottom: 10,
+                  background: darkMode ? 'rgba(239,68,68,0.12)' : 'rgba(239,68,68,0.08)',
+                  border: `1px solid ${darkMode ? 'rgba(239,68,68,0.25)' : 'rgba(239,68,68,0.2)'}`,
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both',
+                }}>
+                  <span style={{ fontSize: 14 }}>⚠</span>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: '#ef4444' }}>{calendarError.message}</span>
+                </div>
+              )}
 
               {/* ─── CONTACTED INDICATOR (NEW tab) ─── */}
               {activeCat.key === 'new' && (
@@ -3078,8 +3560,8 @@ export default function TrackingSheet() {
                   if (!val) return;
                   if (val === 'done') return handleWorkflowSubmit(lead.id, { r2_result: 'done', r2_completed_at: new Date().toISOString() });
                   if (val === 'reporte') return setActiveWorkflow({ leadId: lead.id, r2Result: 'reporte', newDate: '' });
-                  if (val === 'pas_interesse') return handleWorkflowSubmit(lead.id, { r2_result: 'pas_interesse', status: 'not_relevant' });
-                  if (val === 'annule') return handleWorkflowSubmit(lead.id, { r2_result: 'annule', status: 'not_relevant' });
+                  if (val === 'pas_interesse') return handleWorkflowSubmit(lead.id, { r2_result: 'pas_interesse' });
+                  if (val === 'annule') return handleWorkflowSubmit(lead.id, { r2_result: 'annule' });
                   handleWorkflowSubmit(lead.id, { r2_result: val });
                 };
                 return (
@@ -3468,7 +3950,7 @@ export default function TrackingSheet() {
                           {wfPill('Lapin', '#f59e0b', rabbitIcon, 30, () => handleWorkflowSubmit(lead.id, { r1_result: 'no_show' }), true)}
                           {wfPill('Reporter', '#3b82f6', '↻', 70, () => setActiveWorkflow(prev => ({ ...prev, r1Result: 'rescheduled', newDate: '' })))}
                           {wfPill('R1 effectué', '#10b981', '✓', 110, () => handleWorkflowSubmit(lead.id, { r1_result: 'done', r1_completed_at: new Date().toISOString() }))}
-                          {wfPill('Annulé', '#ef4444', '✕', 150, () => handleWorkflowSubmit(lead.id, { r1_result: 'cancelled', status: 'not_relevant' }))}
+                          {wfPill('Annulé', '#ef4444', '✕', 150, () => handleWorkflowSubmit(lead.id, { r1_result: 'cancelled' }))}
                         </div>
                         <button onClick={() => setActiveWorkflow(null)}
                           style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', marginTop: 2, opacity: 0.7, animation: 'wfSplitIn 0.3s ease 190ms both' }}
@@ -3697,22 +4179,36 @@ export default function TrackingSheet() {
 
           </div>{/* end right main */}
         </div>{/* end inner board */}
-        </div>{/* end inner board wrapper */}
+          </div>{/* end main content card */}
+          </div>{/* end inner board wrapper */}
 
-        {/* ── DETAIL PANEL PORTAL TARGET (separate card) ─────────────────── */}
-        <div
-          ref={detailContainerRef}
-          style={{
-            width: selectedLead ? 380 : 0,
+          {/* ── DETAIL PANEL AREA (portal only) ──────────────────────────────── */}
+          <div style={{
+            width: selectedLead ? 396 : 0,
             flexShrink: 0,
+            overflow: 'hidden',
             transition: 'width 0.45s cubic-bezier(0.4,0,0.2,1), margin-left 0.45s cubic-bezier(0.4,0,0.2,1)',
             marginLeft: selectedLead ? 12 : 0,
-            overflow: 'hidden',
-            position: 'relative',
-            height: 'calc(100vh - 200px)',
-            minHeight: '600px',
-          }}
-        />
+            position: 'sticky',
+            top: 8,
+            alignSelf: 'flex-start',
+            maxHeight: 'calc(100vh - 120px)',
+          }}>
+            {/* Portal target */}
+            <div
+              ref={detailContainerRef}
+              style={{
+                height: '100%',
+                overflow: 'hidden',
+                position: 'relative',
+                borderRadius: 8,
+                border: `1px solid ${C.border}`,
+              }}
+            />
+          </div>
+
+          </div>{/* end content row */}
+        </div>{/* end right column */}
 
         </div>{/* end flex row */}
       </div>{/* end outer wrapper */}
