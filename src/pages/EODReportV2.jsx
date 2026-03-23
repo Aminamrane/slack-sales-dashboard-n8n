@@ -160,15 +160,20 @@ export default function EODReportV2() {
         // Check EOD status
         try {
           const status = await apiClient.get('/api/v1/eod/status');
+          console.log('[EOD V2] status:', status);
           setEodStatus(status);
-          // is_first_eod handled in step flow (step 1)
+          // If today already submitted via status check, block the form
+          if (status.today?.submitted || status.today_submitted) {
+            setTodayReport({ fromStatus: true });
+          }
         } catch { /* fallback: no onboarding */ }
 
         // Check if already submitted today
         try {
           const today = await apiClient.get('/api/v1/eod/today');
-          if (today && today.id) setTodayReport(today);
-        } catch { /* no report yet */ }
+          console.log('[EOD V2] today report check:', today);
+          if (today && (today.id || today.report_date || today.submitted)) setTodayReport(today);
+        } catch (e) { console.log('[EOD V2] No report today:', e?.status || e); }
 
         // Load projects + questions in parallel
         const [projResp, questResp] = await Promise.all([
