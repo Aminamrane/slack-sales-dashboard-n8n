@@ -775,8 +775,11 @@ export default function EODReportV2() {
                   </h2>
                   <div style={{ opacity: typingDone ? 1 : 0, transform: typingDone ? 'none' : 'translateY(12px)', transition: 'opacity 0.5s ease, transform 0.5s ease', pointerEvents: typingDone ? 'auto' : 'none' }}>
                     {renderAnswerTextarea(aiStartAnswer, setAiStartAnswer, 'ai-start', null, true)}
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16, opacity: aiStartAnswer.trim() ? 1 : 0, transform: aiStartAnswer.trim() ? 'none' : 'translateY(8px)', transition: 'opacity 0.35s ease, transform 0.35s ease' }}>
-                      <button onClick={handleNextStep} style={{ padding: '10px 28px', background: C.accent, color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Suivant</button>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+                      <button onClick={() => setStep(0)} style={{ padding: '10px 20px', background: 'transparent', color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>← Retour</button>
+                      <div style={{ opacity: aiStartAnswer.trim() ? 1 : 0, transform: aiStartAnswer.trim() ? 'none' : 'translateY(8px)', transition: 'opacity 0.35s ease, transform 0.35s ease' }}>
+                        <button onClick={handleNextStep} style={{ padding: '10px 28px', background: C.accent, color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Suivant</button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -809,9 +812,11 @@ export default function EODReportV2() {
                   </h2>
                   <div style={{ opacity: typingDone ? 1 : 0, transform: typingDone ? 'none' : 'translateY(12px)', transition: 'opacity 0.5s ease, transform 0.5s ease', pointerEvents: typingDone ? 'auto' : 'none' }}>
                     {renderAnswerTextarea(currentBankAnswer, setCurrentBankAnswer, `bank-${bankIndex}`, null, true)}
-                    <div style={{ display: 'flex', justifyContent: bankIndex > 0 ? 'space-between' : 'flex-end', marginTop: 16 }}>
-                      {bankIndex > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+                      {bankIndex > 0 ? (
                         <button onClick={() => { const prev = bankAnswers[bankAnswers.length - 1]; setBankAnswers(bankAnswers.slice(0, -1)); setBankIndex(bankIndex - 1); setCurrentBankAnswer(prev?.answer || ''); }} style={{ padding: '10px 20px', background: 'transparent', color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>← Précédent</button>
+                      ) : (
+                        <button onClick={() => { if (aiQuestionStart) setStep(2); else setStep(0); }} style={{ padding: '10px 20px', background: 'transparent', color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>← Retour</button>
                       )}
                       <div style={{ opacity: currentBankAnswer.trim() ? 1 : 0, transform: currentBankAnswer.trim() ? 'none' : 'translateY(8px)', transition: 'opacity 0.35s ease, transform 0.35s ease' }}>
                         <button onClick={handleBankNext} style={{ padding: '10px 28px', background: C.accent, color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
@@ -840,10 +845,13 @@ export default function EODReportV2() {
                       </h2>
                       <div style={{ opacity: typingDone ? 1 : 0, transform: typingDone ? 'none' : 'translateY(12px)', transition: 'opacity 0.5s ease, transform 0.5s ease', pointerEvents: typingDone ? 'auto' : 'none' }}>
                         {renderAnswerTextarea(aiEndAnswer, setAiEndAnswer, 'ai-end', null, true)}
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16, opacity: aiEndAnswer.trim() ? 1 : 0, transform: aiEndAnswer.trim() ? 'none' : 'translateY(8px)', transition: 'opacity 0.35s ease, transform 0.35s ease' }}>
-                          <button onClick={handleSubmit} disabled={submitting} style={{ padding: '12px 32px', background: submitting ? C.muted : C.accent, color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer' }}>
-                            {submitting ? 'Envoi...' : 'Soumettre le rapport'}
-                          </button>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+                          <button onClick={() => { setStep(3); setBankIndex(bankQuestions.length - 1); setCurrentBankAnswer(bankAnswers[bankAnswers.length - 1]?.answer || ''); setBankAnswers(bankAnswers.slice(0, -1)); }} style={{ padding: '10px 20px', background: 'transparent', color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>← Retour</button>
+                          <div style={{ opacity: aiEndAnswer.trim() ? 1 : 0, transform: aiEndAnswer.trim() ? 'none' : 'translateY(8px)', transition: 'opacity 0.35s ease, transform 0.35s ease' }}>
+                            <button onClick={handleSubmit} disabled={submitting} style={{ padding: '12px 32px', background: submitting ? C.muted : C.accent, color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer' }}>
+                              {submitting ? 'Envoi...' : 'Soumettre le rapport'}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </>
