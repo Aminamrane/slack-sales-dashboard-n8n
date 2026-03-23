@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import "../index.css";
-import minecraftFontUrl from "../assets/Minecraft.ttf";
 
 // ── CONSTANTS ────────────────────────────────────────────────────────────────
 const LIMITS = { TASK_NAME_MAX: 300, ANSWER_MAX: 3000, MAX_TASKS: 20, MAX_SUBTASKS: 15, HOURS_MAX: 24 };
@@ -567,7 +566,6 @@ export default function EODReportV2() {
       <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} hideDarkToggle />
 
       <style>{`
-        @font-face { font-family: 'Minecraft'; src: url('${minecraftFontUrl}') format('truetype'); font-weight: normal; font-style: normal; }
         @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
         @keyframes undertaleWave { 0%, 100% { transform: translateY(0); } 25% { transform: translateY(-3px); } 50% { transform: translateY(0); } 75% { transform: translateY(2px); } }
         @keyframes compactIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
