@@ -3095,6 +3095,7 @@ export default function TrackingSheet() {
                     style={{
                       position: 'relative',
                       borderRadius: '14px',
+                      overflow: 'hidden',
                       border: `1px solid ${highlightedLeadId === String(lead.id) ? '#f59e0b' : isRemoteFocused ? focusColor : isSelected ? (C.accent + '50') : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)')}`,
                       background: highlightedLeadId === String(lead.id)
                         ? (darkMode ? 'rgba(245,158,11,0.12)' : 'rgba(245,158,11,0.08)')
@@ -3348,7 +3349,7 @@ export default function TrackingSheet() {
                           padding: '2px 8px', borderRadius: '4px',
                           background: lead.r2 ? (darkMode ? 'rgba(251,146,60,0.12)' : 'rgba(251,146,60,0.08)') : (darkMode ? 'rgba(59,130,246,0.12)' : 'rgba(59,130,246,0.08)'),
                           color: lead.r2 ? '#fb923c' : '#3b82f6',
-                          flexShrink: 0,
+                          flexShrink: 0, whiteSpace: 'nowrap',
                         }}>
                           {lead.r2 ? 'R2' : 'R1'} {formatDate(lead.r2 || lead.r1)}
                         </span>
@@ -4445,12 +4446,12 @@ export default function TrackingSheet() {
                             title={!hasRange ? "Sélectionnez une tranche salariale d'abord" : ''}
                             style={{
                               padding: '5px 12px', borderRadius: 8, border: 'none',
-                              background: hasRange && hasCompanyCount && !isSending ? '#10b981' : (darkMode ? '#2a2b36' : '#e2e6ef'),
-                              color: hasRange && hasCompanyCount && !isSending ? '#fff' : C.muted,
+                              background: hasRange && !isSending ? '#10b981' : (darkMode ? '#2a2b36' : '#e2e6ef'),
+                              color: hasRange && !isSending ? '#fff' : C.muted,
                               fontSize: 11, fontWeight: 600,
-                              cursor: hasRange && hasCompanyCount && !isSending ? 'pointer' : 'not-allowed',
+                              cursor: hasRange && !isSending ? 'pointer' : 'not-allowed',
                               transition: 'all 0.15s', fontFamily: 'inherit',
-                              opacity: hasRange && hasCompanyCount && !isSending ? 1 : 0.6,
+                              opacity: hasRange && !isSending ? 1 : 0.6,
                             }}
                           >{isSending ? 'Envoi...' : 'Envoyer le contrat'}</button>
                         </>
