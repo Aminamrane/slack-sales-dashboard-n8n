@@ -20,6 +20,7 @@ import ResetPassword    from "./pages/ResetPassword.jsx";
 import Profile          from "./pages/Profile.jsx";
 import Campaigns        from "./pages/Campaigns.jsx";
 import PerfClosing      from "./pages/PerfClosing.jsx";
+import TrackingSheetAdmin from "./pages/TrackingSheetAdmin.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import MouseDot from "./components/MouseDot.jsx";
@@ -44,6 +45,7 @@ function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/campaigns" element={<Campaigns />} />
         <Route path="/perf-closing" element={<PerfClosing />} />
+        <Route path="/tracking-sheets" element={<TrackingSheetAdmin />} />
         <Route path="/change-password" element={<Navigate to="/profile" replace />} />
 
         {/* Protected routes */}

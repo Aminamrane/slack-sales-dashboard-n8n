@@ -1302,10 +1302,14 @@ export default function EODDashboard() {
                               const next = !showDetail;
                               setShowDetail(next);
                               if (next && !detailDate) {
-                                // Default to today or the most recent day with data
-                                const today = new Date().toISOString().split("T")[0];
-                                setDetailDate(today);
-                                fetchDayDetail(today);
+                                // Default to the most recent day with data for this person
+                                const personCollab = collaborators.find(c => c.user_id === selectedPerson);
+                                const sortedDays = (personCollab?.days || [])
+                                  .filter(d => d.report_date)
+                                  .sort((a, b) => b.report_date.localeCompare(a.report_date));
+                                const lastDate = sortedDays.length > 0 ? sortedDays[0].report_date : new Date().toISOString().split("T")[0];
+                                setDetailDate(lastDate);
+                                fetchDayDetail(lastDate);
                               }
                             }}
                             style={{

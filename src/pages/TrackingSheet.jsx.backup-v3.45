@@ -120,17 +120,9 @@ export default function TrackingSheet() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ── ADMIN VIEW: viewing another sales rep's sheet ──────────────────────────
-  const viewingSheetId = new URLSearchParams(window.location.search).get('sheet_id');
-  const isAdminView = !!viewingSheetId;
-
   // ── REFRESH DATA (reusable — called on mount + polling) ────────────────────
   const refreshData = useCallback(async () => {
-    // If admin is viewing another user's sheet, use the admin endpoint
-    const leadsUrl = isAdminView
-      ? `/api/v1/tracking/leads?assigned_to=${encodeURIComponent(viewingSheetId)}`
-      : '/api/v1/tracking/my-leads';
-    const leadsResp = await apiClient.get(leadsUrl);
+    const leadsResp = await apiClient.get('/api/v1/tracking/my-leads');
     const mappedLeads = (leadsResp.leads || []).map(l => ({
       ...l,
       status: EXTRA_STATUS_MAP[l.status] || l.status,
@@ -146,22 +138,18 @@ export default function TrackingSheet() {
       if (dismissedResp.dismissed) setDismissedNotifs(dismissedResp.dismissed);
     } catch (e) { console.warn('Failed to fetch dismissed notifs:', e); }
 
-    // Fetch performance alerts from backend (skip in admin view)
-    if (!isAdminView) {
-      try {
-        const perfResp = await apiClient.get('/api/v1/notifications/performance?period=current_week');
-        if (perfResp.alerts) setBackendPerfAlerts(perfResp.alerts);
-      } catch (e) { console.warn('Failed to fetch perf alerts:', e); }
-    }
+    // Fetch performance alerts from backend
+    try {
+      const perfResp = await apiClient.get('/api/v1/notifications/performance?period=current_week');
+      if (perfResp.alerts) setBackendPerfAlerts(perfResp.alerts);
+    } catch (e) { console.warn('Failed to fetch perf alerts:', e); }
 
-    // Fetch personal KPIs (skip in admin view)
-    if (!isAdminView) {
-      try {
-        const kpiResp = await apiClient.get('/api/v1/tracking/my-kpis');
-        setKpis(kpiResp);
-      } catch (e) { console.warn('Failed to fetch KPIs:', e); }
-    }
-  }, [isAdminView, viewingSheetId]);
+    // Fetch personal KPIs
+    try {
+      const kpiResp = await apiClient.get('/api/v1/tracking/my-kpis');
+      setKpis(kpiResp);
+    } catch (e) { console.warn('Failed to fetch KPIs:', e); }
+  }, []);
 
   useEffect(() => {
     const check = async () => {
@@ -171,16 +159,15 @@ export default function TrackingSheet() {
         if (!token || !user) { navigate("/login"); return; }
         setSession({ user: { email: user.email, user_metadata: { name: user.name, avatar_url: user.avatar_url || null } } });
 
-        // Access check — skip if admin view OR user has tracking_sheet permission
-        const hasPermission = user.role === 'admin' || apiClient.hasAccess('tracking_sheet');
-        if (!isAdminView && !hasPermission) {
+        // Access check
+        const sheetsResp = await apiClient.get('/api/v1/tracking/my-sheets');
+        if (!sheetsResp.sheets || sheetsResp.sheets.length === 0) {
           navigate("/");
           return;
         }
 
         await refreshData();
-      } catch (e) {
-        console.error('[TrackingSheet] Init failed:', e);
+      } catch {
         navigate("/login");
       } finally {
         setLoading(false);
@@ -197,119 +184,6 @@ export default function TrackingSheet() {
     }, 30000);
     return () => clearInterval(interval);
   }, [loading, refreshData]);
-
-  // ── WEBSOCKET CONNECTION ──────────────────────────────────────────────────
-  useEffect(() => {
-    if (loading) return;
-    const user = apiClient.getUser();
-    if (!user?.email) return;
-
-    // Admin can view another sales rep's sheet via ?sheet_id= query param
-    const urlParams = new URLSearchParams(window.location.search);
-    const sheetId = urlParams.get('sheet_id') || user.email;
-
-    const wsUrl = `wss://ws.ownertechnology.com/ws?sheet_id=${encodeURIComponent(sheetId)}`;
-    let ws;
-    try { ws = new WebSocket(wsUrl); } catch { return; }
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      setWsConnected(true);
-      ws.send(JSON.stringify({ type: 'join', email: user.email, full_name: user.name || user.full_name || '' }));
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        switch (msg.type) {
-          case 'presence_list':
-            setPresenceUsers(msg.users || []);
-            break;
-          case 'user_joined':
-            setPresenceUsers(prev => [...prev.filter(u => u.email !== msg.email), { email: msg.email, full_name: msg.full_name }]);
-            break;
-          case 'user_left':
-            setPresenceUsers(prev => prev.filter(u => u.email !== msg.email));
-            setRemoteCursors(prev => { const next = { ...prev }; delete next[msg.email]; return next; });
-            break;
-          case 'cursor_move':
-            if (msg.email === user.email) break; // ignore own cursor
-            setRemoteCursors(prev => ({
-              ...prev,
-              [msg.email]: { full_name: msg.full_name, x: msg.x, y: msg.y, lastSeen: Date.now(), color: getCursorColor(msg.email) },
-            }));
-            break;
-          case 'action_toast':
-            setActionToasts(prev => [...prev, { ...msg, id: Date.now() + Math.random(), ts: Date.now() }].slice(-5));
-            setTimeout(() => setActionToasts(prev => prev.filter(t => Date.now() - t.ts < 3000)), 3500);
-            // Highlight the lead card briefly
-            if (msg.lead_id) {
-              setHighlightedLeadId(String(msg.lead_id));
-              setTimeout(() => setHighlightedLeadId(null), 2500);
-              // Debounced single-lead re-fetch for real-time sync
-              const lid = String(msg.lead_id);
-              if (leadFetchTimers.current[lid]) clearTimeout(leadFetchTimers.current[lid]);
-              leadFetchTimers.current[lid] = setTimeout(async () => {
-                delete leadFetchTimers.current[lid];
-                try {
-                  const updated = await apiClient.get(`/api/v1/tracking/leads/${lid}`);
-                  if (updated && updated.id) {
-                    setLeads(prev => {
-                      const exists = prev.some(l => String(l.id) === lid);
-                      if (exists) {
-                        return prev.map(l => String(l.id) === lid ? { ...l, ...updated } : l);
-                      } else {
-                        // New lead (cold call created by someone else)
-                        return [...prev, updated];
-                      }
-                    });
-                  }
-                } catch (err) {
-                  // Lead might have been reassigned away — remove it
-                  if (err.status === 404 || err.status === 403) {
-                    setLeads(prev => prev.filter(l => String(l.id) !== lid));
-                  }
-                }
-              }, 300);
-            }
-            break;
-        }
-      } catch { /* ignore parse errors */ }
-    };
-
-    ws.onclose = (e) => {
-      setWsConnected(false);
-      if (e.code === 4001) console.warn('[WS] Room full (max 3)');
-    };
-
-    // Send own cursor position (throttled ~15/sec)
-    let lastSend = 0;
-    const handleMouseMove = (e) => {
-      if (!ws || ws.readyState !== 1) return;
-      if (Date.now() - lastSend < 66) return;
-      lastSend = Date.now();
-      ws.send(JSON.stringify({ type: 'cursor_move', x: e.clientX, y: e.clientY }));
-    };
-    document.addEventListener('mousemove', handleMouseMove);
-
-    // Idle cursor cleanup (hide after 30s without movement)
-    const idleInterval = setInterval(() => {
-      setRemoteCursors(prev => {
-        const next = { ...prev };
-        Object.keys(next).forEach(email => {
-          if (Date.now() - next[email].lastSeen > 30000) delete next[email];
-        });
-        return next;
-      });
-    }, 5000);
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      clearInterval(idleInterval);
-      if (ws.readyState === 1) ws.close();
-      wsRef.current = null;
-    };
-  }, [loading]);
 
   // ── LEAD STATE ────────────────────────────────────────────────────────────
   const [leads, setLeads] = useState([]);
@@ -338,24 +212,6 @@ export default function TrackingSheet() {
   const prevTabRef = useRef(0); // track previous tab for tabDrop animation
   const [droppingTab, setDroppingTab] = useState(null); // index of tab that just became inactive
   const detailContainerRef = useRef(null); // portal target for detail panel (separate card)
-
-  // ── WEBSOCKET: PRESENCE + CURSORS + TOASTS ────────────────────────────────
-  const [remoteCursors, setRemoteCursors] = useState({}); // { email: { full_name, x, y, lastSeen, color } }
-  const [actionToasts, setActionToasts] = useState([]); // [{ id, user_name, action, lead_id, email, ts }]
-  const [presenceUsers, setPresenceUsers] = useState([]); // [{ email, full_name }]
-  const [wsConnected, setWsConnected] = useState(false);
-  const [highlightedLeadId, setHighlightedLeadId] = useState(null);
-  const wsRef = useRef(null);
-  const leadFetchTimers = useRef({}); // debounce re-fetch per lead_id
-  const cursorColorsRef = useRef({});
-  const CURSOR_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899'];
-  const getCursorColor = (email) => {
-    if (!cursorColorsRef.current[email]) {
-      const idx = Object.keys(cursorColorsRef.current).length % CURSOR_COLORS.length;
-      cursorColorsRef.current[email] = CURSOR_COLORS[idx];
-    }
-    return cursorColorsRef.current[email];
-  };
 
   // ── SIDEBAR NAV + FORM STATE ────────────────────────────────────────────
   const [sidebarView, setSidebarView] = useState('leads'); // 'leads' | 'add_lead' | 'calendar' | 'notifications' | 'kpis' | 'campaigns'
@@ -2957,14 +2813,11 @@ export default function TrackingSheet() {
                     style={{
                       position: 'relative',
                       borderRadius: '14px',
-                      border: `1px solid ${highlightedLeadId === String(lead.id) ? '#f59e0b' : isSelected ? (C.accent + '50') : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)')}`,
-                      background: highlightedLeadId === String(lead.id)
-                        ? (darkMode ? 'rgba(245,158,11,0.12)' : 'rgba(245,158,11,0.08)')
-                        : isSelected
+                      border: `1px solid ${isSelected ? (C.accent + '50') : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)')}`,
+                      background: isSelected
                         ? (darkMode ? `${C.accent}12` : `${C.accent}08`)
                         : (darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)'),
-                      boxShadow: highlightedLeadId === String(lead.id) ? '0 0 0 2px rgba(245,158,11,0.3), 0 4px 12px rgba(245,158,11,0.15)' : undefined,
-                      transition: 'all 0.3s ease',
+                      transition: 'all 0.2s ease',
                       animation: signingCard === lead.id
                         ? 'signedGlow 0.8s ease both'
                         : isExiting
@@ -4713,83 +4566,6 @@ export default function TrackingSheet() {
           </div>
         );
       })()}
-
-      {/* ── REMOTE CURSORS OVERLAY ──────────────────────────────────────────── */}
-      {Object.entries(remoteCursors).map(([email, cur]) => (
-        <div key={email} style={{
-          position: 'fixed', left: cur.x, top: cur.y, zIndex: 99998, pointerEvents: 'none',
-          transition: 'left 0.08s linear, top 0.08s linear',
-        }}>
-          {/* Cursor arrow */}
-          <svg width="16" height="20" viewBox="0 0 16 20" fill={cur.color} style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}>
-            <path d="M0 0L16 12L8 12L12 20L8 18L4 12L0 16Z" />
-          </svg>
-          {/* Name label */}
-          <div style={{
-            position: 'absolute', left: 14, top: 14,
-            background: cur.color, color: '#fff', fontSize: 10, fontWeight: 600,
-            padding: '2px 8px', borderRadius: 4, whiteSpace: 'nowrap',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-          }}>
-            {(cur.full_name || email).split(' ')[0]}
-          </div>
-          {/* Action toast bubble (if any active toast for this user) */}
-          {actionToasts.filter(t => (t.email === email || t.user_name === cur.full_name)).map(toast => (
-            <div key={toast.id} style={{
-              position: 'absolute', left: 20, top: -28,
-              background: darkMode ? '#2a2b36' : '#fff', color: darkMode ? '#eef0f6' : '#1e2330',
-              fontSize: 11, fontWeight: 500, padding: '5px 12px', borderRadius: 8, whiteSpace: 'nowrap',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: `1px solid ${cur.color}40`,
-              animation: 'fadeUp 0.3s cubic-bezier(0.16,1,0.3,1) both',
-            }}>
-              {toast.action}{toast.lead_name ? ` sur ${toast.lead_name}` : ''}
-            </div>
-          ))}
-        </div>
-      ))}
-
-      {/* Fallback toasts (no cursor visible for user) */}
-      {actionToasts.filter(t => {
-        const matchEmail = Object.keys(remoteCursors).find(e => e === t.email || remoteCursors[e]?.full_name === t.user_name);
-        return !matchEmail;
-      }).map((toast, i) => (
-        <div key={toast.id} style={{
-          position: 'fixed', top: 80 + i * 50, right: 20, zIndex: 99997,
-          background: darkMode ? '#2a2b36' : '#fff', color: darkMode ? '#eef0f6' : '#1e2330',
-          fontSize: 12, fontWeight: 500, padding: '8px 16px', borderRadius: 10, whiteSpace: 'nowrap',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.15)', border: `1px solid ${C.border}`,
-          animation: 'fadeUp 0.3s cubic-bezier(0.16,1,0.3,1) both',
-          display: 'flex', alignItems: 'center', gap: 8,
-        }}>
-          <span style={{ fontWeight: 600 }}>{toast.user_name}</span>
-          <span style={{ color: C.muted }}>·</span>
-          <span>{toast.action}{toast.lead_name ? ` sur ${toast.lead_name}` : ''}</span>
-        </div>
-      ))}
-
-      {/* Presence indicator (bottom-left) */}
-      {presenceUsers.length > 0 && (
-        <div style={{
-          position: 'fixed', bottom: 16, left: 236, zIndex: 99996,
-          display: 'flex', gap: -6, alignItems: 'center',
-        }}>
-          {presenceUsers.slice(0, 3).map((u, i) => (
-            <div key={u.email} title={u.full_name} style={{
-              width: 28, height: 28, borderRadius: '50%', border: '2px solid ' + (darkMode ? '#1e1f28' : '#fff'),
-              background: getCursorColor(u.email), display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 11, fontWeight: 700, color: '#fff', marginLeft: i > 0 ? -8 : 0,
-              boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
-            }}>
-              {(u.full_name || u.email).charAt(0).toUpperCase()}
-            </div>
-          ))}
-          {presenceUsers.length > 0 && (
-            <span style={{ fontSize: 10, color: C.muted, marginLeft: 6, fontWeight: 500 }}>
-              {presenceUsers.length} en ligne
-            </span>
-          )}
-        </div>
-      )}
     </div>
   );
 }

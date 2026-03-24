@@ -133,6 +133,8 @@ export default function EODReportV2() {
   const [newProjectName, setNewProjectName] = useState('');
   const [creatingProject, setCreatingProject] = useState(false);
   const [composerMode, setComposerMode] = useState('project'); // 'project' | 'task'
+  const [projectStatusMenu, setProjectStatusMenu] = useState(null); // project id or null
+  const [dismissingProjectId, setDismissingProjectId] = useState(null); // project shrinking away
   const [removingTaskId, setRemovingTaskId] = useState(null);
   const [editingTaskId, setEditingTaskId] = useState(null);
 
@@ -690,9 +692,73 @@ export default function EODReportV2() {
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
                       {projects.map(p => {
                         const isSel = selectedProjectId === p.id;
+                        const statusColors = { en_cours: '#6366f1', termine: '#10b981', en_pause: '#f59e0b', bloque: '#ef4444' };
+                        const statusLabels = { en_cours: 'En cours', termine: 'Terminé', en_pause: 'En pause', bloque: 'Bloqué' };
+                        const statusIcons = { en_cours: '▶', termine: '✓', en_pause: '⏸', bloque: '✕' };
+                        const pStatus = p.status || 'en_cours';
+                        const sColor = statusColors[pStatus] || statusColors.en_cours;
+                        const isMenuOpen = projectStatusMenu === p.id;
+                        const isDismissing = dismissingProjectId === p.id;
                         return (
-                          <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 0, borderRadius: 50, border: `1px solid ${isSel ? C.accent : C.border}`, background: isSel ? C.accent+'12' : 'transparent', transition: 'all 0.15s', overflow: 'hidden' }}>
-                            <button onClick={() => { setSelectedProjectId(p.id); setNewTaskName(p.name); }} style={{ padding: '6px 14px', border: 'none', background: 'transparent', color: isSel ? C.accent : C.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>{p.name}</button>
+                          <div key={p.id} style={{
+                            position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 0, borderRadius: 50,
+                            border: isDismissing ? '0px solid transparent' : `1px solid ${isSel ? C.accent : sColor + '40'}`,
+                            background: isDismissing ? statusColors.termine + '20' : (isSel ? C.accent+'12' : sColor + '08'),
+                            transition: 'transform 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.35s ease, max-width 0.4s cubic-bezier(0.4,0,0.2,1), max-height 0.4s cubic-bezier(0.4,0,0.2,1), margin 0.4s cubic-bezier(0.4,0,0.2,1), padding 0.4s cubic-bezier(0.4,0,0.2,1), border 0.3s ease, background 0.15s',
+                            overflow: isMenuOpen ? 'visible' : 'hidden',
+                            transform: isDismissing ? 'scale(0.3)' : 'scale(1)',
+                            opacity: isDismissing ? 0 : 1,
+                            maxWidth: isDismissing ? 0 : 300,
+                            maxHeight: isDismissing ? 0 : 50,
+                            margin: isDismissing ? '0 -4px' : '0',
+                            padding: isDismissing ? '0' : undefined,
+                          }}>
+                            {/* Status dot */}
+                            <button onClick={(e) => { e.stopPropagation(); setProjectStatusMenu(isMenuOpen ? null : p.id); }}
+                              style={{ padding: '6px 0 6px 12px', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: 10 }}
+                              title={statusLabels[pStatus]}
+                            >
+                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: sColor, display: 'inline-block' }} />
+                            </button>
+                            {/* Status dropdown menu */}
+                            {isMenuOpen && (
+                              <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: darkMode ? '#2a2b36' : '#fff', border: `1px solid ${C.border}`, borderRadius: 10, padding: 4, zIndex: 100, minWidth: 130, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
+                                {Object.entries(statusLabels).map(([key, label]) => (
+                                  <button key={key} onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      await apiClient.patch(`/api/v1/eod/projects/${p.id}`, { status: key });
+                                      if (key === 'termine') {
+                                        setProjectStatusMenu(null);
+                                        setDismissingProjectId(p.id);
+                                        setTimeout(() => {
+                                          setProjects(prev => prev.filter(pp => pp.id !== p.id));
+                                          setDismissingProjectId(null);
+                                          if (selectedProjectId === p.id) { setSelectedProjectId(null); setNewTaskName(''); }
+                                        }, 450);
+                                      } else {
+                                        setProjects(prev => prev.map(pp => pp.id === p.id ? { ...pp, status: key } : pp));
+                                      }
+                                    } catch(err) { console.warn('Update project status failed:', err); }
+                                    setProjectStatusMenu(null);
+                                  }} style={{
+                                    display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 10px', border: 'none',
+                                    background: pStatus === key ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)') : 'transparent',
+                                    color: statusColors[key], fontSize: 12, fontWeight: 600, cursor: 'pointer', borderRadius: 6, fontFamily: 'inherit',
+                                    transition: 'background 0.15s',
+                                  }}
+                                    onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)'}
+                                    onMouseLeave={(e) => e.currentTarget.style.background = pStatus === key ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)') : 'transparent'}
+                                  >
+                                    <span style={{ fontSize: 11 }}>{statusIcons[key]}</span>
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            {/* Project name */}
+                            <button onClick={() => { setSelectedProjectId(p.id); setNewTaskName(p.name); setProjectStatusMenu(null); }} style={{ padding: '6px 10px 6px 6px', border: 'none', background: 'transparent', color: isSel ? C.accent : C.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>{p.name}</button>
+                            {/* Delete button */}
                             <button onClick={async (e) => { e.stopPropagation(); try { await apiClient.delete(`/api/v1/eod/projects/${p.id}`); setProjects(prev => prev.filter(pp => pp.id !== p.id)); if (selectedProjectId === p.id) setSelectedProjectId(null); } catch(err) { console.warn('Delete project failed:', err); } }}
                               style={{ padding: '4px 8px 4px 0', border: 'none', background: 'transparent', color: C.muted, cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', transition: 'color 0.15s' }}
                               onMouseEnter={(e) => e.currentTarget.style.color = '#ef4444'}
