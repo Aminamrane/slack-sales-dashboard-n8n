@@ -987,7 +987,6 @@ export default function TrackingSheet() {
 
   const handleSendContract = async (lead) => {
     if (!lead.employee_range) return;
-    if (!lead.company_count) { alert('Veuillez renseigner le nombre de sociétés avant d\'envoyer le contrat.'); return; }
     setSendingContract(lead.id);
     setNavNotif('sending');
     try {
