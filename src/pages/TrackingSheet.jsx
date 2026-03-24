@@ -241,15 +241,49 @@ export default function TrackingSheet() {
               [msg.email]: { full_name: msg.full_name, x: msg.x, y: msg.y, lastSeen: Date.now(), color: getCursorColor(msg.email) },
             }));
             break;
-          case 'action_toast':
+          case 'action_toast': {
             setActionToasts(prev => [...prev, { ...msg, id: Date.now() + Math.random(), ts: Date.now() }].slice(-5));
             setTimeout(() => setActionToasts(prev => prev.filter(t => Date.now() - t.ts < 3000)), 3500);
             // Highlight the lead card briefly
             if (msg.lead_id) {
               setHighlightedLeadId(String(msg.lead_id));
               setTimeout(() => setHighlightedLeadId(null), 2500);
-              // Debounced single-lead re-fetch for real-time sync
               const lid = String(msg.lead_id);
+
+              // Contract signed — move lead to "signed" tab immediately
+              if (msg.action === 'Contrat signé') {
+                setTimeout(async () => {
+                  try {
+                    const updated = await apiClient.get(`/api/v1/tracking/leads/${lid}`);
+                    if (updated && updated.id) {
+                      const oldLead = leadsRef.current.find(l => String(l.id) === lid);
+                      setLeads(prev => prev.map(l => String(l.id) === lid ? { ...l, ...updated, status: 'signed' } : l));
+                      if (oldLead && oldLead.status !== 'signed') {
+                        triggerFlyAnimation(lid, oldLead, 'signed');
+                        triggerLeadMovedNotif(oldLead, 'signed');
+                      }
+                    }
+                  } catch {}
+                }, 300);
+                break;
+              }
+
+              // Contract expired — re-fetch lead to update contract status
+              if (msg.action === 'Contrat expiré') {
+                setTimeout(async () => {
+                  try {
+                    const updated = await apiClient.get(`/api/v1/tracking/leads/${lid}`);
+                    if (updated && updated.id) {
+                      setLeads(prev => prev.map(l => String(l.id) === lid ? { ...l, ...updated } : l));
+                      // Re-fetch contracts for this lead
+                      if (typeof fetchLeadContracts === 'function') fetchLeadContracts(updated.id);
+                    }
+                  } catch {}
+                }, 300);
+                break;
+              }
+
+              // Default: debounced single-lead re-fetch for real-time sync
               if (leadFetchTimers.current[lid]) clearTimeout(leadFetchTimers.current[lid]);
               leadFetchTimers.current[lid] = setTimeout(async () => {
                 delete leadFetchTimers.current[lid];
@@ -261,13 +295,11 @@ export default function TrackingSheet() {
                       if (exists) {
                         return prev.map(l => String(l.id) === lid ? { ...l, ...updated } : l);
                       } else {
-                        // New lead (cold call created by someone else)
                         return [...prev, updated];
                       }
                     });
                   }
                 } catch (err) {
-                  // Lead might have been reassigned away — remove it
                   if (err.status === 404 || err.status === 403) {
                     setLeads(prev => prev.filter(l => String(l.id) !== lid));
                   }
@@ -275,6 +307,7 @@ export default function TrackingSheet() {
               }, 300);
             }
             break;
+          }
           case 'tab_change':
             if (msg.email === user.email) break;
             setRemoteUserTabs(prev => ({ ...prev, [msg.email]: msg.tab }));
@@ -328,6 +361,8 @@ export default function TrackingSheet() {
 
   // ── LEAD STATE ────────────────────────────────────────────────────────────
   const [leads, setLeads] = useState([]);
+  const leadsRef = useRef([]);
+  useEffect(() => { leadsRef.current = leads; }, [leads]);
   const [activeTab, setActiveTab] = useState(0);
   const [selectedLead, setSelectedLead] = useState(null);
   const [copiedField, setCopiedField] = useState(null); // 'phone-{id}' or 'email-{id}'
@@ -353,6 +388,78 @@ export default function TrackingSheet() {
   const prevTabRef = useRef(0); // track previous tab for tabDrop animation
   const [droppingTab, setDroppingTab] = useState(null); // index of tab that just became inactive
   const detailContainerRef = useRef(null); // portal target for detail panel (separate card)
+
+  // ── SALE DECLARATION MODAL (signed tab) ────────────────────────────────────
+  const [showSaleModal, setShowSaleModal] = useState(null); // lead.id when modal is open
+  const [saleForm, setSaleForm] = useState({ email: '', paymentModality: 'M', employeeRange: '' });
+  const [saleSubmitting, setSaleSubmitting] = useState(false);
+  const [saleSuccess, setSaleSuccess] = useState(false);
+  const EMPLOYEE_RANGES = [
+    '1-2','3-5','6-10','11-19','20-29','30-39','40-49','50-74','75-99',
+    '100-149','150-199','200-249','250-299','300-349','350-400',
+  ];
+
+  const [saleClientNumero, setSaleClientNumero] = useState(null);
+
+  const handleSaleSubmit = async (leadId) => {
+    setSaleSubmitting(true);
+    try {
+      const user = apiClient.getUser();
+      const lead = leads.find(l => l.id === leadId);
+      const paymentMode = saleForm.paymentModality === 'M' ? 'MONTHLY' : 'YEARLY';
+      const emailVal = saleForm.email.trim().toLowerCase();
+
+      // Step 1: Backend — create client
+      let clientNumero = null;
+      try {
+        const res = await apiClient.post(`/api/v1/tracking/leads/${leadId}/declare-sale`, {
+          email: emailVal,
+          payment_mode: paymentMode,
+          employee_band: saleForm.employeeRange,
+        });
+        clientNumero = res.client_numero || null;
+      } catch (err) {
+        const msg = err?.message || err?.detail || '';
+        if (err?.status === 400) { alert(msg || 'Les dates Onboarding et Lancement doivent être remplies.'); setSaleSubmitting(false); return; }
+        if (err?.status === 409) { alert(msg || 'Un client avec cet email existe déjà.'); setSaleSubmitting(false); return; }
+        if (err?.status === 403 || err?.status === 404) { alert(msg || 'Lead introuvable ou accès refusé.'); setSaleSubmitting(false); return; }
+        console.warn('declare-sale failed, continuing with webhook:', err);
+      }
+
+      // Step 2: Webhook n8n (fire-and-forget with retries, same as Leaderboard)
+      const webhookUrl = import.meta.env.VITE_N8N_SALES_WEBHOOK_URL || 'https://n8nmay.xyz/webhook/6c57e2c2-79c7-4e21-ad42-6dfe0abc6839';
+      const payload = {
+        email: emailVal,
+        payment_mode: paymentMode,
+        employee_band: saleForm.employeeRange,
+        submitted_at: new Date().toISOString(),
+        source: 'TRACKING_SHEET',
+        reporter_name: user?.full_name || user?.name || '',
+        reporter_first_name: (user?.full_name || user?.name || '').split(' ')[0],
+        reporter_email: user?.email || null,
+        lead_id: leadId,
+        lead_name: lead?.full_name || '',
+      };
+      // Fire-and-forget with retries (non-blocking)
+      (async () => {
+        for (let attempt = 1; attempt <= 5; attempt++) {
+          try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 15000 + (attempt - 1) * 5000);
+            const res = await fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: controller.signal });
+            clearTimeout(timeout);
+            if (res.ok) break;
+          } catch { if (attempt < 5) await new Promise(r => setTimeout(r, 2000 * Math.pow(2, attempt - 1))); }
+        }
+      })();
+
+      // Step 3: Success
+      setSaleClientNumero(clientNumero);
+      setSaleSuccess(true);
+      setTimeout(() => { setSaleSuccess(false); setSaleClientNumero(null); setShowSaleModal(null); setSaleForm({ email: '', paymentModality: 'M', employeeRange: '' }); }, 2500);
+    } catch (e) { console.error('Sale submit error:', e); }
+    setSaleSubmitting(false);
+  };
 
   // ── WEBSOCKET: PRESENCE + CURSORS + TOASTS ────────────────────────────────
   const [remoteCursors, setRemoteCursors] = useState({}); // { email: { full_name, x, y, lastSeen, color } }
@@ -880,6 +987,7 @@ export default function TrackingSheet() {
 
   const handleSendContract = async (lead) => {
     if (!lead.employee_range) return;
+    if (!lead.company_count) { alert('Veuillez renseigner le nombre de sociétés avant d\'envoyer le contrat.'); return; }
     setSendingContract(lead.id);
     setNavNotif('sending');
     try {
@@ -3893,6 +4001,38 @@ export default function TrackingSheet() {
                         </div>
                       </div>
                     )}
+                    {/* Company count (only after qualification) */}
+                    {lead.r2_result && (
+                      <div style={{ marginBottom: 12 }}>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                          Nbr de sociétés
+                        </div>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={lead.company_count || ''}
+                          placeholder="Ex: 3"
+                          onChange={async (e) => {
+                            const val = e.target.value.replace(/[^0-9]/g, '');
+                            setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, company_count: val } : l));
+                          }}
+                          onBlur={async (e) => {
+                            const val = e.target.value.trim();
+                            if (val !== (lead._prevCompanyCount || '')) {
+                              try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { company_count: val || null }); } catch {}
+                            }
+                          }}
+                          onFocus={() => { lead._prevCompanyCount = lead.company_count || ''; }}
+                          style={{
+                            width: 80, padding: '5px 10px', borderRadius: 6,
+                            border: `1px solid ${lead.company_count ? '#fb923c' : C.border}`,
+                            background: lead.company_count ? (darkMode ? 'rgba(251,146,60,0.1)' : 'rgba(251,146,60,0.05)') : 'transparent',
+                            color: C.text, fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+                            outline: 'none', transition: 'all 0.15s',
+                          }}
+                        />
+                      </div>
+                    )}
                   </>
                 );
               })()}
@@ -4212,6 +4352,7 @@ export default function TrackingSheet() {
               {/* ═══ CONTRACT (R2 only) ═══ */}
               {activeCat.key === 'r2' && (() => {
                 const hasRange = !!lead.employee_range;
+                const hasCompanyCount = !!lead.company_count;
                 const isSending = sendingContract === lead.id;
                 const isResending = resendingContract === lead.id;
                 const contracts = leadContracts[lead.id] || [];
@@ -4304,17 +4445,99 @@ export default function TrackingSheet() {
                             title={!hasRange ? "Sélectionnez une tranche salariale d'abord" : ''}
                             style={{
                               padding: '5px 12px', borderRadius: 8, border: 'none',
-                              background: hasRange && !isSending ? '#10b981' : (darkMode ? '#2a2b36' : '#e2e6ef'),
-                              color: hasRange && !isSending ? '#fff' : C.muted,
+                              background: hasRange && hasCompanyCount && !isSending ? '#10b981' : (darkMode ? '#2a2b36' : '#e2e6ef'),
+                              color: hasRange && hasCompanyCount && !isSending ? '#fff' : C.muted,
                               fontSize: 11, fontWeight: 600,
-                              cursor: hasRange && !isSending ? 'pointer' : 'not-allowed',
+                              cursor: hasRange && hasCompanyCount && !isSending ? 'pointer' : 'not-allowed',
                               transition: 'all 0.15s', fontFamily: 'inherit',
-                              opacity: hasRange && !isSending ? 1 : 0.6,
+                              opacity: hasRange && hasCompanyCount && !isSending ? 1 : 0.6,
                             }}
                           >{isSending ? 'Envoi...' : 'Envoyer le contrat'}</button>
                         </>
                       )}
                     </div>
+                  </div>
+                );
+              })()}
+
+              {/* ═══ SIGNED TAB: Onboarding + Lancement + Déclarer vente ═══ */}
+              {activeCat.key === 'signed' && (() => {
+                const hasOnboarding = !!lead.rdv_onboarding_date;
+                const hasLancement = !!lead.rdv_lancement_date;
+                const canDeclare = hasOnboarding && hasLancement;
+                return (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Post-signature</div>
+
+                    {/* RDV Onboarding */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 5, flex: 1, padding: '8px 12px', borderRadius: 10,
+                        background: darkMode ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.05)',
+                        border: `1px solid ${darkMode ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.15)'}`,
+                      }}>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Onboarding</span>
+                        <input type="datetime-local" value={lead.rdv_onboarding_date ? toDatetimeLocal(lead.rdv_onboarding_date) : ''}
+                          onChange={async (e) => {
+                            const val = e.target.value;
+                            setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_onboarding_date: val } : l));
+                            try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { rdv_onboarding_date: val || null }); }
+                            catch { setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_onboarding_date: lead.rdv_onboarding_date } : l)); }
+                          }}
+                          style={{ border: 'none', background: 'transparent', color: C.text, fontSize: 12, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', padding: 0, outline: 'none', flex: 1, minWidth: 0 }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* RDV Lancement */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 5, flex: 1, padding: '8px 12px', borderRadius: 10,
+                        background: darkMode ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)',
+                        border: `1px solid ${darkMode ? 'rgba(99,102,241,0.2)' : 'rgba(99,102,241,0.15)'}`,
+                      }}>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Lancement</span>
+                        <input type="datetime-local" value={lead.rdv_lancement_date ? toDatetimeLocal(lead.rdv_lancement_date) : ''}
+                          onChange={async (e) => {
+                            const val = e.target.value;
+                            setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_lancement_date: val } : l));
+                            try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { rdv_lancement_date: val || null }); }
+                            catch { setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_lancement_date: lead.rdv_lancement_date } : l)); }
+                          }}
+                          style={{ border: 'none', background: 'transparent', color: C.text, fontSize: 12, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', padding: 0, outline: 'none', flex: 1, minWidth: 0 }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Déclarer une vente button */}
+                    <button
+                      onClick={() => {
+                        if (!canDeclare) return;
+                        setSaleForm({ email: lead.email || '', paymentModality: 'M', employeeRange: lead.employee_range || '' });
+                        setShowSaleModal(lead.id);
+                      }}
+                      disabled={!canDeclare}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                        padding: '10px 16px', borderRadius: 10, border: 'none', cursor: canDeclare ? 'pointer' : 'default',
+                        background: canDeclare ? '#10b981' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
+                        color: canDeclare ? '#fff' : C.muted,
+                        fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                        transition: 'all 0.2s ease', opacity: canDeclare ? 1 : 0.6,
+                      }}
+                      onMouseEnter={(e) => { if (canDeclare) e.currentTarget.style.background = '#059669'; }}
+                      onMouseLeave={(e) => { if (canDeclare) e.currentTarget.style.background = '#10b981'; }}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                      Déclarer une vente
+                    </button>
+                    {!canDeclare && (
+                      <div style={{ fontSize: 11, color: C.muted, textAlign: 'center', marginTop: 6, fontStyle: 'italic' }}>
+                        Remplissez les dates Onboarding et Lancement pour déclarer
+                      </div>
+                    )}
+
+                    <div style={{ height: 1, background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', margin: '14px 0 12px' }} />
                   </div>
                 );
               })()}
@@ -4768,9 +4991,9 @@ export default function TrackingSheet() {
           position: 'fixed', left: cur.x, top: cur.y, zIndex: 99998, pointerEvents: 'none',
           transition: 'left 0.08s linear, top 0.08s linear',
         }}>
-          {/* Cursor arrow */}
-          <svg width="16" height="20" viewBox="0 0 16 20" fill={cur.color} style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}>
-            <path d="M0 0L16 12L8 12L12 20L8 18L4 12L0 16Z" />
+          {/* Cursor arrow — Figma style without stem */}
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.25))', transform: 'rotate(-12deg)' }}>
+            <path d="M2 1L2 16L6.5 11.5L14 11.5L2 1Z" fill={cur.color} stroke="#fff" strokeWidth="1.5" strokeLinejoin="round" />
           </svg>
           {/* Name label + current tab */}
           <div style={{
@@ -4847,6 +5070,107 @@ export default function TrackingSheet() {
           )}
         </div>
       )}
+      {/* ═══ SALE DECLARATION MODAL ═══ */}
+      {showSaleModal && (() => {
+        const lead = leads.find(l => l.id === showSaleModal);
+        return (
+          <>
+            <div onClick={() => { if (!saleSubmitting) { setShowSaleModal(null); setSaleSuccess(false); } }}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both' }} />
+            <div style={{
+              position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
+              width: 420, maxWidth: '90vw', background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`,
+              boxShadow: '0 24px 48px rgba(0,0,0,0.2)', padding: '28px 28px 24px',
+              animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
+            }}>
+              {/* Close */}
+              <button onClick={() => { if (!saleSubmitting) { setShowSaleModal(null); setSaleSuccess(false); } }}
+                style={{ position: 'absolute', top: 16, right: 16, width: 28, height: 28, borderRadius: '50%', border: 'none',
+                  background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted, fontSize: 14,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+
+              {saleSuccess ? (
+                <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#10b98120', margin: '0 auto 14px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>✓</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 6 }}>Vente déclarée !</div>
+                  {saleClientNumero && <div style={{ fontSize: 14, fontWeight: 600, color: '#10b981', marginBottom: 4 }}>{saleClientNumero}</div>}
+                  <div style={{ fontSize: 13, color: C.muted }}>La vente a été enregistrée avec succès</div>
+                </div>
+              ) : (
+                <>
+                  {/* Header */}
+                  <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: darkMode ? '#10b98120' : '#ecfdf5', margin: '0 auto 10px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>💼</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Déclarer une vente</div>
+                    {lead && <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>{lead.full_name}</div>}
+                  </div>
+
+                  {/* Email */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: C.secondary, display: 'block', marginBottom: 4 }}>Email client</label>
+                    <input value={saleForm.email} onChange={(e) => setSaleForm(p => ({ ...p, email: e.target.value }))}
+                      placeholder="client@exemple.com" type="email"
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`,
+                        background: darkMode ? '#252636' : '#f9fafb', color: C.text, fontSize: 13, fontFamily: 'inherit',
+                        outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.2s' }}
+                      onFocus={(e) => e.target.style.borderColor = C.accent}
+                      onBlur={(e) => e.target.style.borderColor = C.border}
+                    />
+                  </div>
+
+                  {/* Payment toggle */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: C.secondary, display: 'block', marginBottom: 6 }}>Mode de paiement</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {[{ key: 'M', label: 'Mensuel' }, { key: 'A', label: 'Annuel' }].map(opt => (
+                        <button key={opt.key} onClick={() => setSaleForm(p => ({ ...p, paymentModality: opt.key }))}
+                          style={{
+                            flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+                            border: `1px solid ${saleForm.paymentModality === opt.key ? C.accent : C.border}`,
+                            background: saleForm.paymentModality === opt.key ? (darkMode ? C.accent + '20' : '#f0f1ff') : 'transparent',
+                            color: saleForm.paymentModality === opt.key ? C.accent : C.muted,
+                            transition: 'all 0.2s',
+                          }}>{opt.label}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Employee range grid */}
+                  <div style={{ marginBottom: 18 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: C.secondary, display: 'block', marginBottom: 6 }}>Tranche salariale</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 4 }}>
+                      {EMPLOYEE_RANGES.map(r => (
+                        <button key={r} onClick={() => setSaleForm(p => ({ ...p, employeeRange: r }))}
+                          style={{
+                            padding: '6px 2px', borderRadius: 6, fontSize: 11, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer',
+                            border: `1px solid ${saleForm.employeeRange === r ? C.accent : C.border}`,
+                            background: saleForm.employeeRange === r ? (darkMode ? C.accent + '20' : '#f0f1ff') : 'transparent',
+                            color: saleForm.employeeRange === r ? C.accent : C.muted,
+                            transition: 'all 0.15s',
+                          }}>{r}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Submit */}
+                  <button onClick={() => handleSaleSubmit(showSaleModal)}
+                    disabled={!saleForm.email.trim() || !saleForm.employeeRange || saleSubmitting}
+                    style={{
+                      width: '100%', padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600,
+                      fontFamily: 'inherit', cursor: saleForm.email.trim() && saleForm.employeeRange && !saleSubmitting ? 'pointer' : 'default',
+                      background: saleForm.email.trim() && saleForm.employeeRange ? '#10b981' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
+                      color: saleForm.email.trim() && saleForm.employeeRange ? '#fff' : C.muted,
+                      opacity: saleSubmitting ? 0.7 : 1, transition: 'all 0.2s',
+                    }}
+                  >{saleSubmitting ? 'Envoi en cours...' : 'Déclarer la vente'}</button>
+                </>
+              )}
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }

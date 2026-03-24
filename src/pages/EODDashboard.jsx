@@ -20,6 +20,8 @@ import iconRapport from "../assets/rapport.png";
 import iconFiles from "../assets/files.png";
 import iconMarketing from "../assets/marketing.png";
 import iconFinance from "../assets/finance.png";
+import iconCommercial from "../assets/tar.png";
+import iconDirection from "../assets/ship.png";
 
 ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip);
 
@@ -66,9 +68,11 @@ const DEPARTMENTS = [
   { key: "marketing", label: "Marketing", iconSrc: iconMarketing, expectedEods: 2 },
   { key: "rh", label: "RH", iconSrc: iconRh, expectedEods: 1 },
   { key: "finance", label: "Finance", iconSrc: iconFinance, expectedEods: 2 },
+  { key: "commercial", label: "Commercial", iconSrc: iconCommercial, expectedEods: 3 },
+  { key: "direction", label: "Direction", iconSrc: iconDirection, expectedEods: 0 },
 ];
 
-const DEPT_MAP = { admin: "tech", hr: "rh", finance_director: "finance", finance_team: "finance" };
+const DEPT_MAP = { admin: "tech", hr: "rh", finance_director: "finance", finance_team: "finance", sales: "commercial", head_of_sales: "commercial", head_of_sales_manager: "commercial", ceo: "direction" };
 
 // Total expected EOD collaborators across all departments
 const TOTAL_EXPECTED_COLLABS = DEPARTMENTS.reduce((s, d) => s + d.expectedEods, 0);
@@ -78,6 +82,8 @@ const DEPT_ACCENT = {
   marketing: "#f59e0b",
   rh: "#ec4899",
   finance: "#059669",
+  commercial: "#3b82f6",
+  direction: "#8b5cf6",
 };
 
 // ── HELPERS ─────────────────────────────────────────────────────────────────────
