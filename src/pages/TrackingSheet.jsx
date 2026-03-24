@@ -231,6 +231,8 @@ export default function TrackingSheet() {
           case 'user_left':
             setPresenceUsers(prev => prev.filter(u => u.email !== msg.email));
             setRemoteCursors(prev => { const next = { ...prev }; delete next[msg.email]; return next; });
+            setRemoteUserTabs(prev => { const next = { ...prev }; delete next[msg.email]; return next; });
+            setRemoteLeadFocus(prev => { const next = { ...prev }; delete next[msg.email]; return next; });
             break;
           case 'cursor_move':
             if (msg.email === user.email) break; // ignore own cursor
@@ -271,6 +273,19 @@ export default function TrackingSheet() {
                   }
                 }
               }, 300);
+            }
+            break;
+          case 'tab_change':
+            if (msg.email === user.email) break;
+            setRemoteUserTabs(prev => ({ ...prev, [msg.email]: msg.tab }));
+            break;
+          case 'lead_focus':
+            if (msg.email === user.email) break;
+            if (msg.lead_id) {
+              const cursorColor = getCursorColor(msg.email);
+              setRemoteLeadFocus(prev => ({ ...prev, [msg.email]: { lead_id: String(msg.lead_id), full_name: msg.full_name, color: cursorColor } }));
+            } else {
+              setRemoteLeadFocus(prev => { const next = { ...prev }; delete next[msg.email]; return next; });
             }
             break;
         }
@@ -341,6 +356,8 @@ export default function TrackingSheet() {
 
   // ── WEBSOCKET: PRESENCE + CURSORS + TOASTS ────────────────────────────────
   const [remoteCursors, setRemoteCursors] = useState({}); // { email: { full_name, x, y, lastSeen, color } }
+  const [remoteUserTabs, setRemoteUserTabs] = useState({}); // { email: 'r1' }
+  const [remoteLeadFocus, setRemoteLeadFocus] = useState({}); // { email: { lead_id, full_name, color } }
   const [actionToasts, setActionToasts] = useState([]); // [{ id, user_name, action, lead_id, email, ts }]
   const [presenceUsers, setPresenceUsers] = useState([]); // [{ email, full_name }]
   const [wsConnected, setWsConnected] = useState(false);
@@ -749,6 +766,13 @@ export default function TrackingSheet() {
     setOpenFilter('');
     // Clear dropping state after animation completes
     setTimeout(() => setDroppingTab(null), 320);
+    // Broadcast lead deselection + tab change to other WebSocket users
+    if (wsRef.current && wsRef.current.readyState === 1) {
+      wsRef.current.send(JSON.stringify({ type: 'lead_focus', lead_id: null }));
+    }
+    if (wsRef.current && wsRef.current.readyState === 1) {
+      wsRef.current.send(JSON.stringify({ type: 'tab_change', tab: CATEGORIES[idx]?.key || 'new' }));
+    }
   };
 
   const copyToClipboard = (text, fieldKey) => {
@@ -1003,6 +1027,8 @@ export default function TrackingSheet() {
       if (formData.email.trim()) payload.email = formData.email.trim();
       if (formData.sector.trim()) payload.sector = formData.sector.trim();
       if (formData.company_type.trim()) payload.company_type = formData.company_type.trim();
+      // Admin viewing another commercial's sheet → assign to that commercial
+      if (isAdminView && viewingSheetId) payload.assigned_to = viewingSheetId;
       const resp = await apiClient.post('/api/v1/tracking/leads', payload);
       const newLead = resp.lead;
       if (newLead) {
@@ -2950,6 +2976,10 @@ export default function TrackingSheet() {
               const isExiting = exitingCards.has(lead.id);
               const isSelected = selectedLead === lead.id;
               const origin = ORIGIN_COLORS[lead.origin] || DEFAULT_ORIGIN;
+              // Check if a remote user is focusing this lead
+              const remoteFocuser = Object.values(remoteLeadFocus).find(f => f.lead_id === String(lead.id));
+              const isRemoteFocused = !!remoteFocuser;
+              const focusColor = remoteFocuser?.color || '#6366f1';
               return (
                   <div
                     key={lead.id}
@@ -2957,13 +2987,19 @@ export default function TrackingSheet() {
                     style={{
                       position: 'relative',
                       borderRadius: '14px',
-                      border: `1px solid ${highlightedLeadId === String(lead.id) ? '#f59e0b' : isSelected ? (C.accent + '50') : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)')}`,
+                      border: `1px solid ${highlightedLeadId === String(lead.id) ? '#f59e0b' : isRemoteFocused ? focusColor : isSelected ? (C.accent + '50') : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)')}`,
                       background: highlightedLeadId === String(lead.id)
                         ? (darkMode ? 'rgba(245,158,11,0.12)' : 'rgba(245,158,11,0.08)')
+                        : isRemoteFocused
+                        ? `${focusColor}15`
                         : isSelected
                         ? (darkMode ? `${C.accent}12` : `${C.accent}08`)
                         : (darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)'),
-                      boxShadow: highlightedLeadId === String(lead.id) ? '0 0 0 2px rgba(245,158,11,0.3), 0 4px 12px rgba(245,158,11,0.15)' : undefined,
+                      boxShadow: highlightedLeadId === String(lead.id)
+                        ? '0 0 0 2px rgba(245,158,11,0.3), 0 4px 12px rgba(245,158,11,0.15)'
+                        : isRemoteFocused
+                        ? `0 0 0 2px ${focusColor}40, 0 4px 12px ${focusColor}20`
+                        : undefined,
                       transition: 'all 0.3s ease',
                       animation: signingCard === lead.id
                         ? 'signedGlow 0.8s ease both'
@@ -2985,7 +3021,16 @@ export default function TrackingSheet() {
                         e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)';
                       }
                     }}
-                    onClick={() => { if (!isExiting) setSelectedLead(isSelected ? null : lead.id); }}
+                    onClick={() => {
+                      if (!isExiting) {
+                        const newVal = isSelected ? null : lead.id;
+                        setSelectedLead(newVal);
+                        // Broadcast lead focus to other WS users
+                        if (wsRef.current && wsRef.current.readyState === 1) {
+                          wsRef.current.send(JSON.stringify({ type: 'lead_focus', lead_id: newVal ? String(newVal) : null }));
+                        }
+                      }
+                    }}
                   >
 
                     {/* ═══ NOTE STICKER ═══ */}
@@ -3328,7 +3373,10 @@ export default function TrackingSheet() {
               {/* Close button */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
                 <button
-                  onClick={() => { setSelectedLead(null); setActiveWorkflow(null); }}
+                  onClick={() => {
+                    setSelectedLead(null); setActiveWorkflow(null);
+                    if (wsRef.current && wsRef.current.readyState === 1) wsRef.current.send(JSON.stringify({ type: 'lead_focus', lead_id: null }));
+                  }}
                   style={{
                     width: 28, height: 28, borderRadius: '50%', border: 'none',
                     background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
@@ -4724,14 +4772,23 @@ export default function TrackingSheet() {
           <svg width="16" height="20" viewBox="0 0 16 20" fill={cur.color} style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}>
             <path d="M0 0L16 12L8 12L12 20L8 18L4 12L0 16Z" />
           </svg>
-          {/* Name label */}
+          {/* Name label + current tab */}
           <div style={{
             position: 'absolute', left: 14, top: 14,
             background: cur.color, color: '#fff', fontSize: 10, fontWeight: 600,
             padding: '2px 8px', borderRadius: 4, whiteSpace: 'nowrap',
             boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            display: 'flex', alignItems: 'center', gap: 4,
           }}>
             {(cur.full_name || email).split(' ')[0]}
+            {remoteUserTabs[email] && (() => {
+              const tabCat = CATEGORIES.find(c => c.key === remoteUserTabs[email]);
+              return tabCat ? (
+                <span style={{ opacity: 0.8, fontSize: 9, fontWeight: 500 }}>
+                  · {tabCat.label}
+                </span>
+              ) : null;
+            })()}
           </div>
           {/* Action toast bubble (if any active toast for this user) */}
           {actionToasts.filter(t => (t.email === email || t.user_name === cur.full_name)).map(toast => (
