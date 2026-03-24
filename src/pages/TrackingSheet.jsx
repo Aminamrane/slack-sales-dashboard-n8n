@@ -3173,6 +3173,8 @@ export default function TrackingSheet() {
                         alignItems: 'center',
                         gap: '10px',
                         padding: '11px 18px',
+                        overflow: 'hidden',
+                        minWidth: 0,
                       }}
                     >
                       {/* Category color dot */}
