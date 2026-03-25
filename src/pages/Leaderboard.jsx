@@ -2365,8 +2365,13 @@ export default function Leaderboard() {
 
   };
 
+  // Monthly sales objectives
+  const MONTHLY_OBJECTIVES = { '2026-03': 50, '2026-04': 70, '2026-05': 100, '2026-06': 130 };
+  const viewingMonth = range && range !== 'all' ? range : new Date().toISOString().slice(0, 7);
+  const monthlyObjective = MONTHLY_OBJECTIVES[viewingMonth] || 45;
+
   // Progress percentage for objective
-  const progressPct = Math.min((totals.ventes / 45) * 100, 100);
+  const progressPct = Math.min((totals.ventes / monthlyObjective) * 100, 100);
   const CARD = {
     bg: darkMode ? '#1e1f28' : '#ffffff',
     border: darkMode ? '#2a2b36' : '#e2e6ef',
@@ -2586,7 +2591,7 @@ export default function Leaderboard() {
               fontWeight: 700,
               color: CARD.accent,
             }}>
-              {totals.ventes} / 45
+              {totals.ventes} / {monthlyObjective}
             </span>
           </div>
           <div style={{
@@ -2617,7 +2622,7 @@ export default function Leaderboard() {
               alignItems: 'center',
               zIndex: 3,
               transition: 'left 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 1s ease',
-              opacity: (totals.ventes / 45) >= 0.9 ? Math.max(0, 1 - ((totals.ventes / 45) - 0.9) / 0.1) : 1,
+              opacity: (totals.ventes / monthlyObjective) >= 0.9 ? Math.max(0, 1 - ((totals.ventes / monthlyObjective) - 0.9) / 0.1) : 1,
             }}>
               <img src={flameIcon} alt="" style={{
                 width: '20px', height: '20px', objectFit: 'contain', marginRight: '-8px',

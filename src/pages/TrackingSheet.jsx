@@ -567,8 +567,10 @@ export default function TrackingSheet() {
         });
       });
     }
-    // Sort by arrival date
-    if (sortOrder === 'oldest') {
+    // Sort: signed tab by most recent signature, others by assigned_at
+    if (catKey === 'signed') {
+      result = [...result].sort((a, b) => (b.signed_at || b.assigned_at || '').localeCompare(a.signed_at || a.assigned_at || ''));
+    } else if (sortOrder === 'oldest') {
       result = [...result].sort((a, b) => (a.assigned_at || '').localeCompare(b.assigned_at || ''));
     } else {
       result = [...result].sort((a, b) => (b.assigned_at || '').localeCompare(a.assigned_at || ''));
@@ -4335,8 +4337,8 @@ export default function TrackingSheet() {
               })()}
 
 
-              {/* ═══ OTHER TABS: Déplacer vers ═══ */}
-              {!['new', 'r1', 'r2'].includes(activeCat.key) && (
+              {/* ═══ OTHER TABS: Déplacer vers (not for signed) ═══ */}
+              {!['new', 'r1', 'r2', 'signed'].includes(activeCat.key) && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                   <span style={{ fontSize: 11, color: C.muted, fontWeight: 500 }}>Déplacer vers</span>
                   <select value=""
@@ -4565,23 +4567,35 @@ export default function TrackingSheet() {
                     Commenter
                   </button>
                 )}
+                {(() => {
+                  const ndaDone = !!(leadContracts[lead.id]?.length || lead.sector);
+                  const ndaColor = ndaDone ? '#10b981' : '#6366f1';
+                  return (
                 <button
                   onClick={() => openNdaPopup(lead)}
                   style={{
                     flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    padding: '9px 14px', borderRadius: 10, border: `1px solid ${darkMode ? 'rgba(99,102,241,0.25)' : 'rgba(91,106,191,0.2)'}`,
-                    background: 'transparent', color: '#6366f1',
+                    padding: '9px 14px', borderRadius: 10,
+                    border: `1px solid ${ndaDone ? 'rgba(16,185,129,0.25)' : (darkMode ? 'rgba(99,102,241,0.25)' : 'rgba(91,106,191,0.2)')}`,
+                    background: ndaDone ? (darkMode ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.04)') : 'transparent',
+                    color: ndaColor,
                     fontSize: 12, fontWeight: 600, cursor: 'pointer',
                     transition: 'all 0.15s', fontFamily: 'inherit',
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = '#6366f1'; e.currentTarget.style.color = '#fff'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6366f1'; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = ndaColor; e.currentTarget.style.color = '#fff'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = ndaDone ? (darkMode ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.04)') : 'transparent'; e.currentTarget.style.color = ndaColor; }}
                 >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-                  </svg>
-                  Générer NDA
+                  {ndaDone ? (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  ) : (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                  )}
+                  {ndaDone ? 'NDA généré ✓' : 'Générer NDA'}
                 </button>
+                  );
+                })()}
               </div>
 
             </div>{/* end detail padding */}
@@ -4615,7 +4629,7 @@ export default function TrackingSheet() {
               ref={detailContainerRef}
               style={{
                 height: '100%',
-                overflow: 'hidden',
+                overflow: 'visible',
                 position: 'relative',
                 borderRadius: 8,
                 border: `1px solid ${C.border}`,

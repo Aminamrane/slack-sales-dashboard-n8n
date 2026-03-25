@@ -132,9 +132,23 @@ export default function EODReportV2() {
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [newProjectName, setNewProjectName] = useState('');
   const [creatingProject, setCreatingProject] = useState(false);
+  // Project creation popup
+  const [showProjectPopup, setShowProjectPopup] = useState(null); // { name, fromComposer?: boolean } or null
+  const [projectPopupForm, setProjectPopupForm] = useState({ deadline: '', version: 'V1', description: '' });
+  const MIN_DESCRIPTION_LENGTH = 50;
   const [composerMode, setComposerMode] = useState('project'); // 'project' | 'task'
   const [projectStatusMenu, setProjectStatusMenu] = useState(null); // project id or null
+  const projectMenuRef = useRef(null);
+  useEffect(() => {
+    if (!projectStatusMenu) return;
+    const close = (e) => { if (projectMenuRef.current && !projectMenuRef.current.contains(e.target)) setProjectStatusMenu(null); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [projectStatusMenu]);
   const [dismissingProjectId, setDismissingProjectId] = useState(null); // project shrinking away
+  const [confirmTermineId, setConfirmTermineId] = useState(null); // project id awaiting "terminé" confirmation
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null); // project id awaiting delete confirmation
+  const [localTerminatedIds, setLocalTerminatedIds] = useState(new Set()); // projects marked terminé locally (not yet sent to backend)
   const [removingTaskId, setRemovingTaskId] = useState(null);
   const [editingTaskId, setEditingTaskId] = useState(null);
 
@@ -256,15 +270,41 @@ export default function EODReportV2() {
   };
 
   // ── PROJECT HANDLERS ───────────────────────────────────────────────────────
-  const handleCreateProject = async () => {
+  const handleCreateProject = () => {
     if (!newProjectName.trim() || creatingProject) return;
+    // Check if project already exists
+    const existing = projects.find(p => p.name.toLowerCase() === newProjectName.trim().toLowerCase());
+    if (existing) {
+      setSelectedProjectId(existing.id);
+      setNewProjectName('');
+      return;
+    }
+    // Open popup for project details
+    setShowProjectPopup({ name: newProjectName.trim(), fromComposer: false });
+    setProjectPopupForm({ deadline: '', version: 'V1', description: '' });
+  };
+
+  const handleProjectPopupSubmit = async () => {
+    if (!showProjectPopup || creatingProject) return;
+    if (!projectPopupForm.deadline || projectPopupForm.description.trim().length < MIN_DESCRIPTION_LENGTH) return;
     setCreatingProject(true);
     try {
-      const resp = await apiClient.post('/api/v1/eod/projects', { name: newProjectName.trim() });
+      const resp = await apiClient.post('/api/v1/eod/projects', {
+        name: showProjectPopup.name,
+        deadline: projectPopupForm.deadline,
+        version: projectPopupForm.version,
+        description: projectPopupForm.description.trim(),
+      });
       const newProj = resp.project || resp;
       setProjects(prev => [...prev, newProj]);
       setSelectedProjectId(newProj.id);
-      setNewProjectName('');
+      if (showProjectPopup.fromComposer) {
+        setNewTaskName(showProjectPopup.name);
+      } else {
+        setNewProjectName('');
+      }
+      setShowProjectPopup(null);
+      setProjectPopupForm({ deadline: '', version: 'V1', description: '' });
     } catch (err) { console.warn('Project creation failed:', err); }
     setCreatingProject(false);
   };
@@ -284,12 +324,10 @@ export default function EODReportV2() {
         if (existing) {
           projId = existing.id;
         } else {
-          try {
-            const resp = await apiClient.post('/api/v1/eod/projects', { name: newTaskName.trim() });
-            const newProj = resp.project || resp;
-            setProjects(prev => [...prev, newProj]);
-            projId = newProj.id;
-          } catch { /* continue without project_id */ }
+          // Open project popup — user must fill details before project is created
+          setShowProjectPopup({ name: newTaskName.trim(), fromComposer: true });
+          setProjectPopupForm({ deadline: '', version: 'V1', description: '' });
+          return false; // Abort save — will resume after popup
         }
       }
     }
@@ -434,16 +472,29 @@ export default function EODReportV2() {
         ? eodStatus.yesterday.date
         : new Date().toISOString().split('T')[0];
 
-      const payload = {
-        report_date: reportDate,
-        pool_key: null,
-        question_answers: questionAnswers,
-        tasks: tasks.map(t => ({
+      // Include terminated projects that have no tasks logged today
+      const terminatedProjects = projects.filter(p => p.status === 'termine');
+      const terminatedWithoutTasks = terminatedProjects.filter(p => !tasks.some(t => t.project_id === p.id));
+      const allTasks = [
+        ...tasks.map(t => ({
           task_name: t.task_name,
           hours_spent: 0,
           project_id: t.project_id || null,
           subtasks: t.subtasks,
         })),
+        ...terminatedWithoutTasks.map(p => ({
+          task_name: `Projet terminé : ${p.name}`,
+          hours_spent: 0,
+          project_id: p.id,
+          subtasks: [],
+        })),
+      ];
+
+      const payload = {
+        report_date: reportDate,
+        pool_key: null,
+        question_answers: questionAnswers,
+        tasks: allTasks,
         custom_answer: aiQuestionStart && aiStartAnswer.trim() ? {
           question_id: aiQuestionStart.id,
           question: aiQuestionStart.question,
@@ -452,6 +503,14 @@ export default function EODReportV2() {
       };
 
       await apiClient.post('/api/v1/eod/submit', payload);
+
+      // Mark locally terminated projects as terminé in backend (fire-and-forget)
+      if (localTerminatedIds.size > 0) {
+        localTerminatedIds.forEach(pid => {
+          apiClient.patch(`/api/v1/eod/projects/${pid}`, { status: 'termine' }).catch(err => console.warn('Failed to terminate project:', pid, err));
+        });
+        setLocalTerminatedIds(new Set());
+      }
 
       // Fire-and-forget to OpenClaw (AI analysis for EOD Dashboard)
       const openclawUrl = import.meta.env.VITE_OPENCLAW_WEBHOOK_URL;
@@ -700,25 +759,30 @@ export default function EODReportV2() {
                         const isMenuOpen = projectStatusMenu === p.id;
                         const isDismissing = dismissingProjectId === p.id;
                         return (
-                          <div key={p.id} style={{
+                          <div key={p.id} ref={isMenuOpen ? projectMenuRef : undefined} style={{
                             position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 0, borderRadius: 50,
                             border: isDismissing ? '0px solid transparent' : `1px solid ${isSel ? C.accent : sColor + '40'}`,
                             background: isDismissing ? statusColors.termine + '20' : (isSel ? C.accent+'12' : sColor + '08'),
-                            transition: 'transform 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.35s ease, max-width 0.4s cubic-bezier(0.4,0,0.2,1), max-height 0.4s cubic-bezier(0.4,0,0.2,1), margin 0.4s cubic-bezier(0.4,0,0.2,1), padding 0.4s cubic-bezier(0.4,0,0.2,1), border 0.3s ease, background 0.15s',
-                            overflow: isMenuOpen ? 'visible' : 'hidden',
-                            transform: isDismissing ? 'scale(0.3)' : 'scale(1)',
+                            transition: isDismissing ? 'transform 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.35s ease, max-width 0.4s cubic-bezier(0.4,0,0.2,1), max-height 0.4s cubic-bezier(0.4,0,0.2,1), margin 0.4s cubic-bezier(0.4,0,0.2,1), padding 0.4s cubic-bezier(0.4,0,0.2,1), border 0.3s ease, background 0.15s' : 'border 0.3s ease, background 0.15s',
+                            overflow: isDismissing ? 'hidden' : 'visible',
+                            transform: isDismissing ? 'scale(0.3)' : undefined,
                             opacity: isDismissing ? 0 : 1,
-                            maxWidth: isDismissing ? 0 : 300,
-                            maxHeight: isDismissing ? 0 : 50,
+                            maxWidth: isDismissing ? 0 : undefined,
+                            maxHeight: isDismissing ? 0 : undefined,
                             margin: isDismissing ? '0 -4px' : '0',
                             padding: isDismissing ? '0' : undefined,
                           }}>
-                            {/* Status dot */}
+                            {/* Status dot + label */}
                             <button onClick={(e) => { e.stopPropagation(); setProjectStatusMenu(isMenuOpen ? null : p.id); }}
-                              style={{ padding: '6px 0 6px 12px', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: 10 }}
+                              style={{ padding: '6px 0 6px 12px', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 10 }}
                               title={statusLabels[pStatus]}
                             >
-                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: sColor, display: 'inline-block' }} />
+                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: sColor, display: 'inline-block', flexShrink: 0 }} />
+                              {pStatus !== 'en_cours' && (
+                                <span style={{ fontSize: 10, fontWeight: 600, color: sColor, whiteSpace: 'nowrap' }}>
+                                  {statusIcons[pStatus]} {statusLabels[pStatus]}
+                                </span>
+                              )}
                             </button>
                             {/* Status dropdown menu */}
                             {isMenuOpen && (
@@ -726,17 +790,18 @@ export default function EODReportV2() {
                                 {Object.entries(statusLabels).map(([key, label]) => (
                                   <button key={key} onClick={async (e) => {
                                     e.stopPropagation();
+                                    if (key === 'termine') {
+                                      setProjectStatusMenu(null);
+                                      setConfirmTermineId(p.id);
+                                      return;
+                                    }
                                     try {
-                                      await apiClient.patch(`/api/v1/eod/projects/${p.id}`, { status: key });
-                                      if (key === 'termine') {
-                                        setProjectStatusMenu(null);
-                                        setDismissingProjectId(p.id);
-                                        setTimeout(() => {
-                                          setProjects(prev => prev.filter(pp => pp.id !== p.id));
-                                          setDismissingProjectId(null);
-                                          if (selectedProjectId === p.id) { setSelectedProjectId(null); setNewTaskName(''); }
-                                        }, 450);
+                                      // If reverting from local terminé, just update locally
+                                      if (localTerminatedIds.has(p.id)) {
+                                        setLocalTerminatedIds(prev => { const n = new Set(prev); n.delete(p.id); return n; });
+                                        setProjects(prev => prev.map(pp => pp.id === p.id ? { ...pp, status: key } : pp));
                                       } else {
+                                        await apiClient.patch(`/api/v1/eod/projects/${p.id}`, { status: key });
                                         setProjects(prev => prev.map(pp => pp.id === p.id ? { ...pp, status: key } : pp));
                                       }
                                     } catch(err) { console.warn('Update project status failed:', err); }
@@ -757,9 +822,23 @@ export default function EODReportV2() {
                               </div>
                             )}
                             {/* Project name */}
-                            <button onClick={() => { setSelectedProjectId(p.id); setNewTaskName(p.name); setProjectStatusMenu(null); }} style={{ padding: '6px 10px 6px 6px', border: 'none', background: 'transparent', color: isSel ? C.accent : C.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>{p.name}</button>
+                            {(() => {
+                              const alreadyHasTask = tasks.some(t => t.project_id === p.id);
+                              const isTermine = pStatus === 'termine';
+                              // Disabled only if already has task AND is not terminated (terminated can still add missions)
+                              const isDisabled = alreadyHasTask && !isTermine;
+                              return (
+                            <button onClick={() => { if (isDisabled) return; setSelectedProjectId(p.id); setNewTaskName(p.name); setProjectStatusMenu(null); }} style={{
+                              padding: '6px 10px 6px 6px', border: 'none', background: 'transparent',
+                              color: isDisabled ? C.muted : (isTermine ? '#10b981' : (isSel ? C.accent : C.muted)),
+                              fontSize: 12, fontWeight: 600, cursor: isDisabled ? 'default' : 'pointer', fontFamily: 'inherit',
+                              textDecoration: isTermine ? 'line-through' : 'none',
+                              opacity: isDisabled ? 0.45 : (isTermine ? 0.8 : 1),
+                            }}>{p.name}{isDisabled && ' ✓'}</button>
+                              );
+                            })()}
                             {/* Delete button */}
-                            <button onClick={async (e) => { e.stopPropagation(); try { await apiClient.delete(`/api/v1/eod/projects/${p.id}`); setProjects(prev => prev.filter(pp => pp.id !== p.id)); if (selectedProjectId === p.id) setSelectedProjectId(null); } catch(err) { console.warn('Delete project failed:', err); } }}
+                            <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(p.id); setProjectStatusMenu(null); }}
                               style={{ padding: '4px 8px 4px 0', border: 'none', background: 'transparent', color: C.muted, cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', transition: 'color 0.15s' }}
                               onMouseEnter={(e) => e.currentTarget.style.color = '#ef4444'}
                               onMouseLeave={(e) => e.currentTarget.style.color = C.muted}
@@ -803,6 +882,23 @@ export default function EODReportV2() {
                         </div>
                       );
                     })}
+                    {/* Terminated projects without tasks today */}
+                    {projects.filter(p => p.status === 'termine' && !tasks.some(t => t.project_id === p.id)).map(p => (
+                      <div key={`term-${p.id}`} onClick={() => { setSelectedProjectId(p.id); setNewTaskName(p.name); }} style={{
+                        display: 'flex', alignItems: 'center', gap: 10, width: '100%', maxWidth: 560, padding: '12px 16px',
+                        background: 'rgba(16,185,129,0.06)', borderRadius: 50,
+                        border: '1px solid rgba(16,185,129,0.2)', cursor: 'pointer',
+                        animation: 'compactIn 0.5s cubic-bezier(0.34,1.56,0.64,1) both',
+                        transition: 'background 0.15s',
+                      }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(16,185,129,0.12)'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(16,185,129,0.06)'}
+                      >
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#10b981', padding: '2px 8px', borderRadius: 4, background: 'rgba(16,185,129,0.12)', letterSpacing: '0.04em' }}>TERMINÉ</span>
+                        <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#10b981', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                        <span style={{ fontSize: 11, color: C.muted, fontStyle: 'italic', flexShrink: 0 }}>+ Ajouter une mission</span>
+                      </div>
+                    ))}
                   </div>
 
                   {/* Task composer (pill input + subtasks) */}
@@ -1025,6 +1121,277 @@ export default function EODReportV2() {
         </div>
       </div>
     </div>
+
+    {/* ═══ CONFIRM TERMINÉ MODAL ═══ */}
+    {confirmTermineId && (() => {
+      const proj = projects.find(pp => pp.id === confirmTermineId);
+      return (
+        <>
+          <div onClick={() => setConfirmTermineId(null)} style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)',
+            zIndex: 9998, animation: 'modalOverlayIn 0.2s ease both',
+          }} />
+          <div style={{
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
+            width: 360, maxWidth: '90vw', borderRadius: 18, padding: '28px 24px 22px',
+            background: C.subtle, border: `1px solid ${C.border}`,
+            boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+            animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: 18 }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: '50%', margin: '0 auto 12px',
+                background: C.accent + '20', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2.5" strokeLinecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 6 }}>Terminer ce projet ?</div>
+              {proj && <div style={{ fontSize: 13, color: C.accent, fontWeight: 500 }}>{proj.name}</div>}
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>
+                Le projet sera marqué comme terminé et retiré de votre liste active.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setConfirmTermineId(null)} style={{
+                flex: 1, padding: '10px 0', borderRadius: 10, fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = C.text; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.muted; }}
+              >Annuler</button>
+              <button onClick={() => {
+                const pid = confirmTermineId;
+                setConfirmTermineId(null);
+                // Store locally only — PATCH will be sent at EOD submission
+                setLocalTerminatedIds(prev => new Set([...prev, pid]));
+                setProjects(prev => prev.map(pp => pp.id === pid ? { ...pp, status: 'termine' } : pp));
+              }} style={{
+                flex: 1, padding: '10px 0', borderRadius: 10, fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                border: 'none', background: C.accent, color: '#fff', cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+                onMouseEnter={(e) => e.currentTarget.style.opacity = '0.85'}
+                onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+              >Oui, terminer</button>
+            </div>
+          </div>
+        </>
+      );
+    })()}
+
+    {/* ═══ CONFIRM DELETE MODAL ═══ */}
+    {confirmDeleteId && (() => {
+      const proj = projects.find(pp => pp.id === confirmDeleteId);
+      return (
+        <>
+          <div onClick={() => setConfirmDeleteId(null)} style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)',
+            zIndex: 9998, animation: 'modalOverlayIn 0.2s ease both',
+          }} />
+          <div style={{
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
+            width: 360, maxWidth: '90vw', borderRadius: 18, padding: '28px 24px 22px',
+            background: C.subtle, border: `1px solid ${C.border}`,
+            boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+            animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: 18 }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: '50%', margin: '0 auto 12px',
+                background: 'rgba(239,68,68,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 6 }}>Supprimer ce projet ?</div>
+              {proj && <div style={{ fontSize: 13, color: '#ef4444', fontWeight: 500 }}>{proj.name}</div>}
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>
+                Le projet et ses missions associées seront supprimés définitivement.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setConfirmDeleteId(null)} style={{
+                flex: 1, padding: '10px 0', borderRadius: 10, fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = C.text; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.muted; }}
+              >Annuler</button>
+              <button onClick={async () => {
+                const pid = confirmDeleteId;
+                setConfirmDeleteId(null);
+                try {
+                  await apiClient.delete(`/api/v1/eod/projects/${pid}`);
+                  setProjects(prev => prev.filter(pp => pp.id !== pid));
+                  // Remove tasks associated with this project
+                  setTasks(prev => prev.filter(t => t.project_id !== pid));
+                  if (selectedProjectId === pid) { setSelectedProjectId(null); setNewTaskName(''); }
+                } catch(err) { console.warn('Delete project failed:', err); }
+              }} style={{
+                flex: 1, padding: '10px 0', borderRadius: 10, fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                border: 'none', background: '#ef4444', color: '#fff', cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+                onMouseEnter={(e) => e.currentTarget.style.opacity = '0.85'}
+                onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+              >Oui, supprimer</button>
+            </div>
+          </div>
+        </>
+      );
+    })()}
+
+    {/* ═══ PROJECT CREATION POPUP ═══ */}
+    {showProjectPopup && (() => {
+      const descLen = projectPopupForm.description.trim().length;
+      const canSubmit = projectPopupForm.deadline && descLen >= MIN_DESCRIPTION_LENGTH && !creatingProject;
+      const activeProjects = projects.filter(p => p.status === 'en_cours' || p.status === 'en_pause' || p.status === 'bloque');
+      return (
+        <>
+          <div onClick={() => {}} style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)',
+            zIndex: 9998, animation: 'modalOverlayIn 0.2s ease both',
+          }} />
+          <div style={{
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
+            width: 480, maxWidth: '92vw', maxHeight: '85vh', overflowY: 'auto',
+            borderRadius: 20, padding: '32px 28px 24px',
+            background: C.subtle, border: `1px solid ${C.border}`,
+            boxShadow: '0 24px 48px rgba(0,0,0,0.4)',
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+            animation: 'modalCardIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both',
+          }}>
+            {/* Header */}
+            <div style={{ textAlign: 'center', marginBottom: 24 }}>
+              <div style={{
+                width: 48, height: 48, borderRadius: '50%', margin: '0 auto 14px',
+                background: C.accent + '20', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Nouveau projet</div>
+              <div style={{ fontSize: 14, color: C.accent, fontWeight: 600, marginTop: 4 }}>{showProjectPopup.name}</div>
+            </div>
+
+            {/* Active projects reminder */}
+            {activeProjects.length > 0 && (
+              <div style={{
+                padding: '10px 14px', borderRadius: 10, marginBottom: 18,
+                background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)',
+              }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: C.accent, marginBottom: 4 }}>
+                  {activeProjects.length} projet{activeProjects.length > 1 ? 's' : ''} en cours
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>
+                  Pensez à prendre en compte vos projets existants pour estimer une deadline réaliste.
+                </div>
+              </div>
+            )}
+
+            {/* Deadline */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: C.text, display: 'block', marginBottom: 6 }}>
+                Deadline estimée <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <input type="date" value={projectPopupForm.deadline}
+                onChange={(e) => setProjectPopupForm(p => ({ ...p, deadline: e.target.value }))}
+                style={{
+                  width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`,
+                  background: darkMode ? 'rgba(255,255,255,0.04)' : '#fff', color: C.text,
+                  fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            {/* Version */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: C.text, display: 'block', marginBottom: 6 }}>
+                Version visée
+              </label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {['V1', 'V2', 'V3', 'MVP', 'Autre'].map(v => (
+                  <button key={v} onClick={() => setProjectPopupForm(p => ({ ...p, version: v }))}
+                    style={{
+                      padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+                      border: `1px solid ${projectPopupForm.version === v ? C.accent : C.border}`,
+                      background: projectPopupForm.version === v ? C.accent + '20' : 'transparent',
+                      color: projectPopupForm.version === v ? C.accent : C.muted,
+                      transition: 'all 0.15s',
+                    }}
+                  >{v}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Description */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: C.text, display: 'block', marginBottom: 6 }}>
+                Description du projet <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, lineHeight: 1.4 }}>
+                Quel est le but du projet ? À quoi devrait ressembler la version finie dans la deadline ?
+              </div>
+              <div style={{ position: 'relative' }}>
+                <textarea
+                  value={projectPopupForm.description}
+                  onChange={(e) => setProjectPopupForm(p => ({ ...p, description: e.target.value }))}
+                  placeholder="Décrivez le projet en détail : objectifs, livrables attendus, contraintes..."
+                  rows={5}
+                  style={{
+                    width: '100%', padding: '12px 40px 12px 14px', borderRadius: 10,
+                    border: `1px solid ${descLen > 0 && descLen < MIN_DESCRIPTION_LENGTH ? '#f59e0b' : C.border}`,
+                    background: darkMode ? 'rgba(255,255,255,0.04)' : '#fff', color: C.text,
+                    fontSize: 13, fontFamily: 'inherit', outline: 'none', resize: 'vertical',
+                    boxSizing: 'border-box', lineHeight: 1.5,
+                    transition: 'border-color 0.2s',
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = C.accent}
+                  onBlur={(e) => e.target.style.borderColor = descLen > 0 && descLen < MIN_DESCRIPTION_LENGTH ? '#f59e0b' : C.border}
+                />
+                <div style={{ position: 'absolute', top: 10, right: 8 }}>
+                  {renderMicBtn('project-desc', (text) => setProjectPopupForm(p => ({ ...p, description: (p.description ? p.description + ' ' : '') + text })))}
+                </div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                <span style={{
+                  fontSize: 11,
+                  color: descLen === 0 ? C.muted : descLen < MIN_DESCRIPTION_LENGTH ? '#f59e0b' : '#10b981',
+                }}>
+                  {descLen < MIN_DESCRIPTION_LENGTH
+                    ? `${MIN_DESCRIPTION_LENGTH - descLen} caractères restants (minimum ${MIN_DESCRIPTION_LENGTH})`
+                    : 'Description suffisante'}
+                </span>
+                <span style={{ fontSize: 11, color: C.muted }}>{descLen}</span>
+              </div>
+            </div>
+
+            {/* Buttons */}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => { setShowProjectPopup(null); setProjectPopupForm({ deadline: '', version: 'V1', description: '' }); }} style={{
+                flex: 1, padding: '11px 0', borderRadius: 10, fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = C.text; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.muted; }}
+              >Annuler</button>
+              <button onClick={handleProjectPopupSubmit} disabled={!canSubmit} style={{
+                flex: 1, padding: '11px 0', borderRadius: 10, fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                border: 'none', background: canSubmit ? C.accent : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
+                color: canSubmit ? '#fff' : C.muted, cursor: canSubmit ? 'pointer' : 'default',
+                transition: 'all 0.2s', opacity: creatingProject ? 0.7 : 1,
+              }}
+                onMouseEnter={(e) => { if (canSubmit) e.currentTarget.style.opacity = '0.85'; }}
+                onMouseLeave={(e) => { if (canSubmit) e.currentTarget.style.opacity = '1'; }}
+              >{creatingProject ? 'Création...' : 'Créer le projet'}</button>
+            </div>
+          </div>
+        </>
+      );
+    })()}
 
     </>
   );
