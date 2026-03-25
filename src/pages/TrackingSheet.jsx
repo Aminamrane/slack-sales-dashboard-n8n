@@ -3468,6 +3468,7 @@ export default function TrackingSheet() {
           return createPortal(
           <div
             key={`detail-${lead.id}`}
+            className="pc-scroll"
             style={{
               width: 380,
               overflowY: 'auto',
@@ -3478,6 +3479,7 @@ export default function TrackingSheet() {
               border: `1px solid ${C.border}`,
               boxShadow: C.shadow,
               height: '100%',
+              maxHeight: 'calc(100vh - 120px)',
             }}
           >
             <div style={{ padding: '10px 20px 20px' }}>
@@ -4436,7 +4438,7 @@ export default function TrackingSheet() {
                           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#fb923c'; }}
                         >{isResending ? 'Renvoi...' : (status === 'failed' ? 'Réessayer' : 'Renvoyer')}</button>
                       )}
-                      {(!latestContract || status === 'canceled' || status === 'expired' || status === 'failed') && (
+                      {(!latestContract || status === 'canceled' || status === 'expired' || status === 'failed' || status === 'draft') && (
                         <>
                           <button onClick={() => openNdaPopup(lead)}
                             style={actionBtnStyle('#6366f1')}
@@ -4616,7 +4618,7 @@ export default function TrackingSheet() {
           <div style={{
             width: selectedLead ? 396 : 0,
             flexShrink: 0,
-            overflow: 'hidden',
+            overflow: selectedLead ? 'visible' : 'hidden',
             transition: 'width 0.45s cubic-bezier(0.4,0,0.2,1), margin-left 0.45s cubic-bezier(0.4,0,0.2,1)',
             marginLeft: selectedLead ? 12 : 0,
             position: 'sticky',
@@ -4629,7 +4631,7 @@ export default function TrackingSheet() {
               ref={detailContainerRef}
               style={{
                 height: '100%',
-                overflow: 'visible',
+                overflow: 'hidden',
                 position: 'relative',
                 borderRadius: 8,
                 border: `1px solid ${C.border}`,
