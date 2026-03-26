@@ -14,7 +14,6 @@ import iconCampaigns from "../assets/tar.png";
 import iconKpis from "../assets/finance.png";
 import iconCalendrier from "../assets/calendrier.png";
 import iconNotif from "../assets/icon2.png";
-import iconSheets from "../assets/files.png";
 import companyLogo from "../assets/my_image.png";
 import campaignImg1 from "../assets/audit-document.jpg";
 import campaignImg2 from "../assets/charges-fatales-2.png";
@@ -122,10 +121,8 @@ export default function TrackingSheet() {
   const [loading, setLoading] = useState(true);
 
   // ── ADMIN VIEW: viewing another sales rep's sheet ──────────────────────────
-  const urlParams = new URLSearchParams(window.location.search);
-  const viewingSheetId = urlParams.get('sheet_id');
+  const viewingSheetId = new URLSearchParams(window.location.search).get('sheet_id');
   const isAdminView = !!viewingSheetId;
-  const initialView = urlParams.get('view');
 
   // ── REFRESH DATA (reusable — called on mount + polling) ────────────────────
   const refreshData = useCallback(async () => {
@@ -184,12 +181,6 @@ export default function TrackingSheet() {
         await refreshData();
       } catch (e) {
         console.error('[TrackingSheet] Init failed:', e);
-        if (e?.status === 401) { navigate("/login"); return; }
-        if (e?.status === 403 || e?.detail?.includes?.('Accès') || e?.message?.includes?.('403')) {
-          // Not authorized — redirect to own sheet instead
-          if (isAdminView) { window.location.href = '/tracking-sheet'; return; }
-          navigate("/"); return;
-        }
         navigate("/login");
       } finally {
         setLoading(false);
@@ -224,8 +215,7 @@ export default function TrackingSheet() {
 
     ws.onopen = () => {
       setWsConnected(true);
-      const urlGhost = new URLSearchParams(window.location.search).get('ghost') === 'true';
-      ws.send(JSON.stringify({ type: 'join', email: user.email, full_name: user.name || user.full_name || '', role: user.role || '', ghost: urlGhost }));
+      ws.send(JSON.stringify({ type: 'join', email: user.email, full_name: user.name || user.full_name || '', role: user.role || '' }));
     };
 
     ws.onmessage = (event) => {
@@ -334,12 +324,6 @@ export default function TrackingSheet() {
           case 'global_notification':
             window.dispatchEvent(new CustomEvent('global_notification', { detail: msg.notification }));
             break;
-          case 'invitation_revoked':
-            if (msg.target_email === user.email) {
-              setContractErrorModal({ message: 'Vos accès ont été révoqués. Vous allez être redirigé vers votre tracking sheet.', isNdaMissing: false });
-              setTimeout(() => { window.location.href = '/tracking-sheet'; }, 2500);
-            }
-            break;
         }
       } catch { /* ignore parse errors */ }
     };
@@ -408,7 +392,6 @@ export default function TrackingSheet() {
   const [droppingTab, setDroppingTab] = useState(null); // index of tab that just became inactive
   const detailContainerRef = useRef(null); // portal target for detail panel (separate card)
   const [contractErrorModal, setContractErrorModal] = useState(null); // { message, isNdaMissing } or null
-  const [confirmModal, setConfirmModal] = useState(null); // { title, message, icon, color, confirmLabel, onConfirm } or null
 
   // ── SALE DECLARATION MODAL (signed tab) ────────────────────────────────────
   const [showSaleModal, setShowSaleModal] = useState(null); // lead.id when modal is open
@@ -503,143 +486,7 @@ export default function TrackingSheet() {
   };
 
   // ── SIDEBAR NAV + FORM STATE ────────────────────────────────────────────
-  const [cancelledExpanded, setCancelledExpanded] = useState(false);
-  const [sidebarView, setSidebarView] = useState(initialView || 'leads');
-
-  // ── TRACKING SHEETS MANAGEMENT (admin, HoS only) ──────────────────────────
-  const [allSheets, setAllSheets] = useState([]); // [{ email, full_name, lead_count, status, team_id, avatar_url }]
-  const [sheetsLoading, setSheetsLoading] = useState(false);
-  const [ghostMode, setGhostMode] = useState(false);
-  const [selectedSheetEmail, setSelectedSheetEmail] = useState(null); // email of sheet being viewed
-  const [sheetInvitations, setSheetInvitations] = useState([]); // invitations for current killed sheet
-  const [reassignTarget, setReassignTarget] = useState(null); // { leadId, showDropdown: true }
-  const [assignableUsers, setAssignableUsers] = useState([]); // users available for reassignment
-  const [solarTeams, setSolarTeams] = useState([]); // teams for solar system view
-  const [solarHovered, setSolarHovered] = useState(null); // email string
-  const [solarTooltipPos, setSolarTooltipPos] = useState({ x: 0, y: 0 }); // tooltip position
-  const [solarPaused, setSolarPaused] = useState(false); // pause rotation on hover
-  const [inviteModal, setInviteModal] = useState(null); // { sheetEmail } or null
-  const [inviteSearch, setInviteSearch] = useState('');
-  const [myInvitations, setMyInvitations] = useState([]); // invitations received by current user
-  const [invitationsSeen, setInvitationsSeen] = useState(false); // true after visiting notifications tab
-
-  const fetchMyInvitations = useCallback(async () => {
-    try {
-      const resp = await apiClient.get('/api/v1/tracking/invitations');
-      const myEmail = apiClient.getUser()?.email;
-      const mine = (resp?.invitations || []).filter(inv => inv.status === 'pending' && inv.invited_email === myEmail);
-      setMyInvitations(mine);
-    } catch {}
-  }, []);
-
-  // Fetch invitations on mount + when switching to notifications tab
-  useEffect(() => { fetchMyInvitations(); }, []);
-  useEffect(() => { if (sidebarView === 'notifications') { fetchMyInvitations(); setInvitationsSeen(true); } }, [sidebarView]);
-
-  // Refresh invitations when a sheet_invitation notification arrives via WebSocket
-  useEffect(() => {
-    const handler = (e) => {
-      if (e.detail?.type === 'sheet_invitation') { fetchMyInvitations(); setInvitationsSeen(false); }
-    };
-    window.addEventListener('global_notification', handler);
-    return () => window.removeEventListener('global_notification', handler);
-  }, [fetchMyInvitations]);
-  const currentUser = apiClient.getUser();
-  const canManageSheets = currentUser?.role === 'admin' || currentUser?.role === 'head_of_sales' || currentUser?.role === 'head_of_sales_manager';
-  const isAdmin = currentUser?.role === 'admin';
-
-  const fetchAllSheets = async () => {
-    setSheetsLoading(true);
-    try {
-      const resp = await apiClient.get('/api/v1/tracking/sheets');
-      const sheets = resp.sheets || [];
-      // Build avatar map from multiple sources (same as PerfClosing)
-      const avatarMap = {};
-      const normalize = (n) => (n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-      const addToMap = (name, avatar) => {
-        if (!name || !avatar) return;
-        const norm = normalize(name);
-        avatarMap[norm] = avatar;
-        norm.split(/\s+/).forEach(part => { if (part.length >= 3 && !avatarMap[part]) avatarMap[part] = avatar; });
-      };
-      // Source 1: getUsers()
-      try {
-        const users = await apiClient.getUsers();
-        (users || []).forEach(u => addToMap(u.full_name || u.name, u.avatar_url || u.slack_image || u.photo_url || ''));
-      } catch {}
-      // Source 2: leaderboard (all time)
-      try {
-        const lb = await apiClient.getLeaderboardStats('all');
-        (lb.all_sellers || []).forEach(s => addToMap(s.name, s.avatar_url));
-        (lb.teams || []).forEach(t => {
-          addToMap(t.captain?.name, t.captain?.avatar_url);
-          (t.members || []).forEach(m => addToMap(m.name, m.avatar_url));
-        });
-      } catch {}
-      // Match sheets to avatars
-      sheets.forEach(s => {
-        if (!s.avatar_url) {
-          const norm = normalize(s.full_name);
-          if (avatarMap[norm]) { s.avatar_url = avatarMap[norm]; return; }
-          // Fallback: match by any part of name (first/last name)
-          const parts = norm.split(/\s+/);
-          for (const part of parts) {
-            if (part.length >= 3 && avatarMap[part]) { s.avatar_url = avatarMap[part]; return; }
-          }
-        }
-      });
-      setAllSheets(sheets);
-    } catch (e) { console.warn('Failed to fetch sheets:', e); }
-    setSheetsLoading(false);
-  };
-
-  const handleKillSheet = async (email) => {
-    try {
-      await apiClient.post(`/api/v1/tracking/sheets/${encodeURIComponent(email)}/kill`);
-      setAllSheets(prev => prev.map(s => s.email === email ? { ...s, status: 'killed' } : s));
-    } catch (e) { console.warn('Kill sheet failed:', e); }
-  };
-
-  const handleRestoreSheet = async (email) => {
-    try {
-      await apiClient.post(`/api/v1/tracking/sheets/${encodeURIComponent(email)}/restore`);
-      setAllSheets(prev => prev.map(s => s.email === email ? { ...s, status: 'active' } : s));
-    } catch (e) { console.warn('Restore sheet failed:', e); }
-  };
-
-  const handleReassignLead = async (leadId, toEmail) => {
-    try {
-      await apiClient.post(`/api/v1/tracking/leads/${leadId}/reassign`, { assigned_to: toEmail });
-      // Remove lead from current view (it moved to the other sheet)
-      setLeads(prev => prev.filter(l => l.id !== leadId));
-      setSelectedLead(null);
-      setReassignTarget(null);
-    } catch (e) {
-      console.warn('Reassign failed:', e);
-      setContractErrorModal({ message: 'Erreur lors de la réaffectation. ' + (e?.message || ''), isNdaMissing: false });
-    }
-  };
-
-  const handleInviteSales = async (sheetEmail, invitedEmail) => {
-    try {
-      await apiClient.post('/api/v1/tracking/invitations', { sheet_email: sheetEmail, invited_email: invitedEmail });
-      // Refresh invitations
-      const resp = await apiClient.get(`/api/v1/tracking/invitations?sheet_email=${encodeURIComponent(sheetEmail)}`);
-      setSheetInvitations(resp.invitations || []);
-    } catch (e) { console.warn('Invite failed:', e); }
-  };
-
-  const handleRevokeInvitation = async (invitationId, sheetEmail) => {
-    try {
-      await apiClient.delete(`/api/v1/tracking/invitations/${invitationId}`);
-      setSheetInvitations(prev => prev.filter(i => i.id !== invitationId));
-    } catch (e) { console.warn('Revoke failed:', e); }
-  };
-
-  const enterSheet = (email) => {
-    const ghostParam = isAdmin && ghostMode ? '&ghost=true' : '';
-    window.location.href = `/tracking-sheet?sheet_id=${encodeURIComponent(email)}${ghostParam}`;
-  }; // 'leads' | 'add_lead' | 'calendar' | 'notifications' | 'kpis' | 'campaigns'
+  const [sidebarView, setSidebarView] = useState('leads'); // 'leads' | 'add_lead' | 'calendar' | 'notifications' | 'kpis' | 'campaigns'
   const [calendarWeekOffset, setCalendarWeekOffset] = useState(0);
   const [formData, setFormData] = useState({ full_name: '', phone: '', email: '', sector: '', company_type: '' });
   const [formSubmitting, setFormSubmitting] = useState(false);
@@ -1179,51 +1026,34 @@ export default function TrackingSheet() {
     }
   };
 
-  const handleResendContract = (contractId, leadId) => {
-    setConfirmModal({
-      title: 'Renvoyer le contrat ?',
-      message: 'Un nouveau contrat sera créé et envoyé au client. L\'ancien sera annulé.',
-      icon: '↻', color: '#fb923c', confirmLabel: 'Renvoyer',
-      onConfirm: async () => {
-        setConfirmModal(null);
-        setResendingContract(leadId);
-        setNavNotif('sending');
-        try {
-          await apiClient.post(`/api/v1/contracts/${contractId}/resend`);
-          await fetchLeadContracts(leadId);
-          setNavNotif('sent');
-        } catch (err) {
-          console.error("Erreur renvoi contrat:", err);
-          setNavNotif(null);
-          const message = err?.response?.data?.detail || err?.message || '';
-          setContractErrorModal({ message: `Une erreur est survenue lors du renvoi. ${message}`, isNdaMissing: false });
-        } finally {
-          setResendingContract(null);
-        }
-      },
-    });
+  const handleResendContract = async (contractId, leadId) => {
+    if (!window.confirm("Renvoyer ce contrat ? Un nouveau contrat sera créé et envoyé au client.")) return;
+    setResendingContract(leadId);
+    try {
+      await apiClient.post(`/api/v1/contracts/${contractId}/resend`);
+      await fetchLeadContracts(leadId);
+    } catch (err) {
+      console.error("Erreur renvoi contrat:", err);
+      const message = err?.response?.data?.detail || err?.message || "Erreur inconnue";
+      alert(`Erreur lors du renvoi : ${message}`);
+    } finally {
+      setResendingContract(null);
+    }
   };
 
-  const handleCancelContract = (contractId, leadId) => {
-    setConfirmModal({
-      title: 'Annuler ce contrat ?',
-      message: 'Le client ne pourra plus signer ce contrat. Cette action est irréversible.',
-      icon: '✕', color: '#ef4444', confirmLabel: 'Annuler le contrat',
-      onConfirm: async () => {
-        setConfirmModal(null);
-        setCancelingContract(contractId);
-        try {
-          await apiClient.post(`/api/v1/contracts/${contractId}/cancel`);
-          await fetchLeadContracts(leadId);
-        } catch (err) {
-          console.error("Erreur annulation contrat:", err);
-          const message = err?.response?.data?.detail || err?.message || '';
-          setContractErrorModal({ message: `Une erreur est survenue lors de l'annulation. ${message}`, isNdaMissing: false });
-        } finally {
-          setCancelingContract(null);
-        }
-      },
-    });
+  const handleCancelContract = async (contractId, leadId) => {
+    if (!window.confirm("Annuler ce contrat ? Le client ne pourra plus signer.")) return;
+    setCancelingContract(contractId);
+    try {
+      await apiClient.post(`/api/v1/contracts/${contractId}/cancel`);
+      await fetchLeadContracts(leadId);
+    } catch (err) {
+      console.error("Erreur annulation contrat:", err);
+      const message = err?.response?.data?.detail || err?.message || "Erreur inconnue";
+      alert(`Erreur lors de l'annulation : ${message}`);
+    } finally {
+      setCancelingContract(null);
+    }
   };
 
   // ── WORKFLOW HANDLER ─────────────────────────────────────────────────────
@@ -1536,8 +1366,6 @@ export default function TrackingSheet() {
           from { opacity: 0; transform: translateY(10px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        @keyframes solarOrbit { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes solarFadeIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
         @keyframes cardStaggerIn {
           from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -1856,12 +1684,11 @@ export default function TrackingSheet() {
                   ...leads.filter(l => l.status === 'r2' && toDateOnly(l.r2) === TODAY).map(l => `r2-${l.id}-${TODAY}`),
                 ];
                 const allKeys = [...meetingKeys, ...perfAlerts.map(a => a.key)];
-                return allKeys.filter(k => !dismissedNotifs.includes(k)).length + (invitationsSeen ? 0 : myInvitations.length);
+                return allKeys.filter(k => !dismissedNotifs.includes(k)).length;
               })() },
               { key: 'email', label: 'Relance', iconSrc: iconEmail, accent: C.accent },
               { key: 'campaigns', label: 'Campagnes', iconSrc: iconCampaigns, accent: '#f59e0b' },
               { key: 'kpis', label: 'KPIs & Stats', iconSrc: iconKpis, accent: '#6366f1' },
-              ...(canManageSheets ? [{ key: 'sheets', label: 'Tracking Sheets', iconSrc: iconSheets, accent: '#8b5cf6' }] : []),
             ].map(item => {
               const isActive = sidebarView === item.key;
               return (
@@ -1917,8 +1744,7 @@ export default function TrackingSheet() {
                     <span style={{
                       marginLeft: 'auto', fontSize: 10, fontWeight: 600,
                       padding: '2px 6px', borderRadius: 4,
-                      background: isActive ? (darkMode ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.25)') : C.subtle,
-                      color: isActive ? (darkMode ? '#1e2330' : '#fff') : C.muted,
+                      background: C.subtle, color: C.muted,
                     }}>
                       {leads.length}
                     </span>
@@ -1945,29 +1771,8 @@ export default function TrackingSheet() {
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: '8px 8px 8px 0', gap: 12 }}>
 
           {/* ── KPI HEADER CARD (3 left + gap for navbar + 3 right) ────────── */}
-          <div style={{ height: 76, background: darkMode ? C.bg : '#f6f7f9', borderRadius: 8, flexShrink: 0, border: `1px solid ${isAdminView ? '#8b5cf640' : C.border}`, marginLeft: 8, display: 'flex', alignItems: 'center', padding: '0 24px' }}>
-            {isAdminView && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 'auto' }}>
-                <button onClick={() => { window.location.href = '/tracking-sheet'; }} style={{
-                  display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8,
-                  border: `1px solid ${C.border}`, background: 'transparent', color: C.muted,
-                  fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-                }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'; e.currentTarget.style.color = C.text; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.muted; }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="m15 18-6-6 6-6"/></svg>
-                  Retour
-                </button>
-                <span style={{ fontSize: 12, color: '#8b5cf6', fontWeight: 600 }}>
-                  {viewingSheetId}
-                </span>
-                {new URLSearchParams(window.location.search).get('ghost') === 'true' && (
-                  <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 6, background: 'rgba(139,92,246,0.1)', color: '#8b5cf6' }}>GHOST</span>
-                )}
-              </div>
-            )}
-            {!isAdminView && kpis && (() => {
+          <div style={{ height: 76, background: darkMode ? C.bg : '#f6f7f9', borderRadius: 8, flexShrink: 0, border: `1px solid ${C.border}`, marginLeft: 8, display: 'flex', alignItems: 'center', padding: '0 24px' }}>
+            {kpis && (() => {
               const left = [
                 { label: 'Leads', value: kpis.leads_assigned ?? '—' },
                 { label: 'Traités', value: kpis.leads_treated ?? '—' },
@@ -2662,74 +2467,6 @@ export default function TrackingSheet() {
                   </div>
                 )}
 
-                {/* ══ INVITATIONS ══ */}
-                {(() => {
-                  if (myInvitations.length === 0) return null;
-                  return (
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#8b5cf6', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                        </svg>
-                        Invitations
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {myInvitations.map((inv, i) => (
-                          <div key={inv.id} style={{
-                            padding: '16px 18px', borderRadius: 14,
-                            background: darkMode ? 'rgba(139,92,246,0.06)' : 'rgba(139,92,246,0.03)',
-                            border: `1px solid ${darkMode ? 'rgba(139,92,246,0.2)' : 'rgba(139,92,246,0.15)'}`,
-                            animation: `cardStaggerIn 0.3s ease ${i * 50}ms both`,
-                          }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                              <div style={{
-                                width: 32, height: 32, borderRadius: 10, flexShrink: 0,
-                                background: 'rgba(139,92,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              }}>
-                                <span style={{ fontSize: 15 }}>📋</span>
-                              </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 14, fontWeight: 650, color: C.text }}>Invitation à réaffecter</div>
-                                <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
-                                  Sheet de <strong>{inv.sheet_email}</strong>
-                                  {inv.inviter_name && <> — invité par {inv.inviter_name}</>}
-                                </div>
-                              </div>
-                            </div>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <button onClick={() => {
-                                window.location.href = `/tracking-sheet?sheet_id=${encodeURIComponent(inv.sheet_email)}`;
-                              }} style={{
-                                flex: 1, padding: '9px 0', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 600,
-                                fontFamily: 'inherit', cursor: 'pointer', letterSpacing: '-0.01em',
-                                background: '#8b5cf6', color: '#fff', transition: 'opacity 0.15s',
-                              }}
-                                onMouseEnter={(e) => e.currentTarget.style.opacity = '0.85'}
-                                onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
-                              >Accéder à la sheet</button>
-                              <button onClick={async () => {
-                                try {
-                                  await apiClient.post(`/api/v1/tracking/invitations/${inv.id}/complete`);
-                                } catch (e) { console.warn('Complete invitation failed:', e); }
-                                // Remove from UI regardless (stale invitations)
-                                setMyInvitations(prev => prev.filter(i => i.id !== inv.id));
-                              }} style={{
-                                padding: '9px 16px', borderRadius: 10, fontSize: 13, fontWeight: 600,
-                                fontFamily: 'inherit', cursor: 'pointer', letterSpacing: '-0.01em',
-                                border: `1px solid ${C.border}`, background: 'transparent', color: C.muted,
-                                transition: 'all 0.15s',
-                              }}
-                                onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'; e.currentTarget.style.color = C.text; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.muted; }}
-                              >Finaliser</button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-
                 {/* ══ HISTORIQUE ══ */}
                 {historyPerf.length > 0 && (
                   <div>
@@ -2764,162 +2501,6 @@ export default function TrackingSheet() {
             </div>
           </div>
         )}
-
-        {/* ════ VIEW: TRACKING SHEETS MANAGEMENT ══════════════════════════════ */}
-        {sidebarView === 'sheets' && canManageSheets && (() => {
-          if (allSheets.length === 0 && !sheetsLoading) fetchAllSheets();
-          if (solarTeams.length === 0 && allSheets.length > 0) {
-            apiClient.get('/api/v1/teams').then(data => setSolarTeams(data || [])).catch(() => {});
-          }
-          // Group sheets by team
-          const normalize = (n) => (n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-          const findSheet = (name, email) => allSheets.find(s => s.email === email || (name && normalize(s.full_name).includes(normalize(name).split(' ')[0])));
-
-          const renderSheetRow = (sheet, isCaptain) => {
-            if (!sheet) return null;
-            const isKilled = sheet.status === 'killed';
-            return (
-              <div key={sheet.email} style={{
-                display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
-                borderRadius: 12, border: `1px solid ${isKilled ? (darkMode ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.12)') : C.border}`,
-                background: isKilled ? (darkMode ? 'rgba(239,68,68,0.04)' : 'rgba(239,68,68,0.02)') : (darkMode ? 'rgba(255,255,255,0.02)' : '#fff'),
-                transition: 'all 0.2s', cursor: 'pointer',
-              }}
-                onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.05)' : '#fafafb'}
-                onMouseLeave={(e) => e.currentTarget.style.background = isKilled ? (darkMode ? 'rgba(239,68,68,0.04)' : 'rgba(239,68,68,0.02)') : (darkMode ? 'rgba(255,255,255,0.02)' : '#fff')}
-                onClick={() => enterSheet(sheet.email)}
-              >
-                {sheet.avatar_url ? (
-                  <img src={sheet.avatar_url} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, filter: isKilled ? 'grayscale(1)' : 'none', opacity: isKilled ? 0.5 : 1, transition: 'all 0.3s' }} />
-                ) : (
-                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: isKilled ? '#94a3b8' : '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
-                    {(sheet.full_name || '?').slice(0, 2).toUpperCase()}
-                  </div>
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 13.5, fontWeight: 600, color: isKilled ? C.muted : C.text }}>{sheet.full_name || sheet.email}</span>
-                    {isCaptain && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted }}>CHEF</span>}
-                    {isKilled && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>KILLED</span>}
-                  </div>
-                  <div style={{ fontSize: 11, color: C.muted }}>{sheet.lead_count || 0} leads</div>
-                </div>
-                <div style={{ display: 'flex', gap: 4 }} onClick={(e) => e.stopPropagation()}>
-                  {isAdmin && !isKilled && (
-                    <button onClick={() => handleKillSheet(sheet.email)} style={{
-                      padding: '5px 10px', borderRadius: 8, border: 'none', fontSize: 10.5, fontWeight: 600,
-                      background: darkMode ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.06)', color: '#ef4444',
-                      cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-                    }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = '#ef4444'; e.currentTarget.style.color = '#fff'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.06)'; e.currentTarget.style.color = '#ef4444'; }}
-                    >Kill</button>
-                  )}
-                  {isAdmin && isKilled && (
-                    <>
-                      <button onClick={() => handleRestoreSheet(sheet.email)} style={{
-                        padding: '5px 10px', borderRadius: 8, border: 'none', fontSize: 10.5, fontWeight: 600,
-                        background: darkMode ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)', color: '#10b981',
-                        cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-                      }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = '#10b981'; e.currentTarget.style.color = '#fff'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)'; e.currentTarget.style.color = '#10b981'; }}
-                      >Réactiver</button>
-                      <button onClick={async () => {
-                        setInviteModal({ sheetEmail: sheet.email }); setInviteSearch('');
-                        if (assignableUsers.length === 0) { try { const r = await apiClient.getAssignableUsers(); setAssignableUsers(Array.isArray(r) ? r : (r?.users || [])); } catch {} }
-                      }} style={{
-                        padding: '5px 10px', borderRadius: 8, border: 'none', fontSize: 10.5, fontWeight: 600,
-                        background: darkMode ? 'rgba(139,92,246,0.08)' : 'rgba(139,92,246,0.06)', color: '#8b5cf6',
-                        cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-                      }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = '#8b5cf6'; e.currentTarget.style.color = '#fff'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(139,92,246,0.08)' : 'rgba(139,92,246,0.06)'; e.currentTarget.style.color = '#8b5cf6'; }}
-                      >Inviter</button>
-                    </>
-                  )}
-                </div>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" style={{ opacity: 0.3, flexShrink: 0 }}><path d="m9 18 6-6-6-6" /></svg>
-              </div>
-            );
-          };
-
-          return (
-            <div style={{ padding: 24, overflowY: 'auto' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-                <div>
-                  <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: 0 }}>Tracking Sheets</h2>
-                  <p style={{ fontSize: 13, color: C.muted, margin: '4px 0 0' }}>Équipes commerciales</p>
-                </div>
-                {isAdmin && (
-                  <button onClick={() => setGhostMode(!ghostMode)} style={{
-                    display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10,
-                    border: `1px solid ${ghostMode ? '#8b5cf6' : C.border}`,
-                    background: ghostMode ? 'rgba(139,92,246,0.1)' : 'transparent',
-                    color: ghostMode ? '#8b5cf6' : C.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                  }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      {ghostMode ? <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></> : <><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></>}
-                    </svg>
-                    {ghostMode ? 'Ghost actif' : 'Ghost'}
-                  </button>
-                )}
-              </div>
-
-              {sheetsLoading ? (
-                <div style={{ textAlign: 'center', padding: 40, color: C.muted }}>Chargement...</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                  {solarTeams.filter(team => {
-                    if (isAdmin) return true;
-                    const normUser = normalize(currentUser?.full_name || currentUser?.name || '');
-                    const captName = normalize(team.captain?.name);
-                    if (captName && normUser && captName.includes(normUser.split(' ')[0])) return true;
-                    return (team.members || []).some(m => normalize(m.name).includes(normUser.split(' ')[0]));
-                  }).map(team => (
-                    <div key={team.id || team.label}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: team.color || C.accent }} />
-                        <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{team.label}</span>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 18 }}>
-                        {renderSheetRow(findSheet(team.captain?.name, team.captain?.email), true)}
-                        {(team.members || []).map(m => renderSheetRow(findSheet(m.name, m.email), false))}
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Sheets without a team */}
-                  {(() => {
-                    const teamEmails = new Set();
-                    solarTeams.forEach(t => {
-                      const cap = findSheet(t.captain?.name, t.captain?.email);
-                      if (cap) teamEmails.add(cap.email);
-                      (t.members || []).forEach(m => { const ms = findSheet(m.name, m.email); if (ms) teamEmails.add(ms.email); });
-                    });
-                    const orphans = allSheets.filter(s => !teamEmails.has(s.email));
-                    if (orphans.length === 0) return null;
-                    return (
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                          <div style={{ width: 10, height: 10, borderRadius: '50%', background: C.muted }} />
-                          <span style={{ fontSize: 14, fontWeight: 700, color: C.muted }}>Autres</span>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 18 }}>
-                          {orphans.map(s => renderSheetRow(s, false))}
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {allSheets.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: 40, color: C.muted, fontSize: 13 }}>Aucune tracking sheet trouvée</div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })()}
 
         {/* ════ VIEW: LEADS (content) ═══════════════════════════════════════ */}
         {sidebarView === 'leads' && (
@@ -3633,8 +3214,8 @@ export default function TrackingSheet() {
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
-                        minWidth: '60px',
-                        flexShrink: 1,
+                        minWidth: 0,
+                        maxWidth: '160px',
                         letterSpacing: '-0.01em',
                         transition: 'color 0.2s ease',
                       }}>
@@ -3851,20 +3432,15 @@ export default function TrackingSheet() {
                           const startIdx = runningIdx;
                           runningIdx += grp.leads.length;
                           if (grp.leads.length === 0) return null;
-                          const isCancelled = grp.key === 'cancelled';
-                          const isCollapsed = isCancelled && !cancelledExpanded;
                           return (
                             <div key={grp.key} style={{
                               border: `1.5px solid ${darkMode ? 'rgba(255,255,255,0.06)' : '#dfe1e6'}`,
                               borderRadius: 14,
                               background: darkMode ? 'rgba(255,255,255,0.04)' : '#fafafb',
-                              padding: isCollapsed ? '14px 10px' : '14px 10px 10px',
+                              padding: '14px 10px 10px',
                               marginBottom: 8,
-                              cursor: isCancelled ? 'pointer' : undefined,
-                            }}
-                              onClick={isCancelled ? () => setCancelledExpanded(prev => !prev) : undefined}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: isCollapsed ? 0 : 10, padding: '0 6px' }}>
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, padding: '0 6px' }}>
                                 <span style={{
                                   display: 'inline-flex', alignItems: 'center',
                                   padding: grp.key === 'completed' ? '4px 4px 4px 14px' : '4px 14px', borderRadius: 50,
@@ -3874,25 +3450,14 @@ export default function TrackingSheet() {
                                 }}>{grp.label}{grp.key === 'completed' && <span style={{ width: 28, height: 28, overflow: 'hidden', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: -1 }}><img src={completedIcon} alt="" style={{ width: 84, height: 84 }} /></span>}</span>
                                 <span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>{grp.leads.length}</span>
                                 <div style={{ flex: 1 }} />
-                                {isCancelled ? (
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round"
-                                    style={{ transition: 'transform 0.25s ease', transform: cancelledExpanded ? 'rotate(180deg)' : 'rotate(0deg)', opacity: 0.5 }}>
-                                    <path d="m6 9 6 6 6-6" />
-                                  </svg>
-                                ) : (
-                                  <>
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.45 }}>
-                                      <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
-                                    </svg>
-                                    <span style={{ fontSize: 15, color: C.muted, lineHeight: 1, fontWeight: 300 }}>+</span>
-                                  </>
-                                )}
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.45 }}>
+                                  <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+                                </svg>
+                                <span style={{ fontSize: 15, color: C.muted, lineHeight: 1, fontWeight: 300 }}>+</span>
                               </div>
-                              {!isCollapsed && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }} onClick={isCancelled ? (e) => e.stopPropagation() : undefined}>
-                                  {grp.leads.map((lead, i) => renderLeadCard(lead, startIdx + i))}
-                                </div>
-                              )}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                {grp.leads.map((lead, i) => renderLeadCard(lead, startIdx + i))}
+                              </div>
                             </div>
                           );
                         })}
@@ -4893,8 +4458,7 @@ export default function TrackingSheet() {
                           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#fb923c'; }}
                         >{isResending ? 'Renvoi...' : (status === 'failed' ? 'Réessayer' : 'Renvoyer')}</button>
                       )}
-                      {/* First time — no contract ever sent */}
-                      {!latestContract && (
+                      {(!latestContract || status === 'canceled' || status === 'expired' || status === 'failed' || status === 'draft') && (
                         <>
                           <button onClick={() => openNdaPopup(lead)}
                             style={actionBtnStyle('#6366f1')}
@@ -4905,29 +4469,6 @@ export default function TrackingSheet() {
                             onClick={() => hasRange && !isSending ? handleSendContract(lead) : null}
                             disabled={!hasRange || isSending}
                             title={!hasRange ? "Sélectionnez une tranche salariale d'abord" : ''}
-                            style={{
-                              padding: '5px 12px', borderRadius: 8, border: 'none',
-                              background: hasRange && !isSending ? '#10b981' : (darkMode ? '#2a2b36' : '#e2e6ef'),
-                              color: hasRange && !isSending ? '#fff' : C.muted,
-                              fontSize: 11, fontWeight: 600,
-                              cursor: hasRange && !isSending ? 'pointer' : 'not-allowed',
-                              transition: 'all 0.15s', fontFamily: 'inherit',
-                              opacity: hasRange && !isSending ? 1 : 0.6,
-                            }}
-                          >{isSending ? 'Envoi...' : 'Envoyer le contrat'}</button>
-                        </>
-                      )}
-                      {/* Draft — treat like no contract */}
-                      {latestContract && status === 'draft' && (
-                        <>
-                          <button onClick={() => openNdaPopup(lead)}
-                            style={actionBtnStyle('#6366f1')}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = '#6366f1'; e.currentTarget.style.color = '#fff'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6366f1'; }}
-                          >Générer NDA</button>
-                          <button
-                            onClick={() => hasRange && !isSending ? handleSendContract(lead) : null}
-                            disabled={!hasRange || isSending}
                             style={{
                               padding: '5px 12px', borderRadius: 8, border: 'none',
                               background: hasRange && !isSending ? '#10b981' : (darkMode ? '#2a2b36' : '#e2e6ef'),
@@ -5049,7 +4590,7 @@ export default function TrackingSheet() {
                   </button>
                 )}
                 {(() => {
-                  const ndaDone = !!(lead.has_client_data);
+                  const ndaDone = !!(leadContracts[lead.id]?.length || lead.has_client_data);
                   const ndaColor = ndaDone ? '#10b981' : '#6366f1';
                   return (
                 <button
@@ -5078,63 +4619,6 @@ export default function TrackingSheet() {
                   );
                 })()}
               </div>
-
-              {/* ═══ REASSIGN (killed sheet only) ═══ */}
-              {isAdminView && allSheets.find(s => s.email === viewingSheetId)?.status === 'killed' && (
-                <div style={{ marginTop: 16, padding: '14px 0', borderTop: `1px solid ${C.border}` }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
-                    Réaffecter ce lead
-                  </div>
-                  {reassignTarget?.leadId === lead.id ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <select
-                        onChange={(e) => { if (e.target.value) handleReassignLead(lead.id, e.target.value); }}
-                        defaultValue=""
-                        style={{
-                          width: '100%', padding: '9px 12px', borderRadius: 10,
-                          border: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#fff',
-                          color: C.text, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer',
-                        }}
-                      >
-                        <option value="" disabled>Choisir un destinataire...</option>
-                        {assignableUsers.map(u => (
-                          <option key={u.email} value={u.email}>{u.full_name || u.name} — {u.email}</option>
-                        ))}
-                      </select>
-                      <button onClick={() => setReassignTarget(null)} style={{
-                        padding: '6px 0', borderRadius: 8, border: `1px solid ${C.border}`,
-                        background: 'transparent', color: C.muted, fontSize: 12, fontWeight: 500,
-                        cursor: 'pointer', fontFamily: 'inherit',
-                      }}>Annuler</button>
-                    </div>
-                  ) : (
-                    <button onClick={async () => {
-                      setReassignTarget({ leadId: lead.id });
-                      if (assignableUsers.length === 0) {
-                        try {
-                          const resp = await apiClient.getAssignableUsers();
-                          setAssignableUsers(Array.isArray(resp) ? resp : (resp?.users || []));
-                        } catch {}
-                      }
-                    }} style={{
-                      width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                      padding: '10px 14px', borderRadius: 10,
-                      border: `1px solid ${darkMode ? 'rgba(139,92,246,0.25)' : 'rgba(139,92,246,0.2)'}`,
-                      background: darkMode ? 'rgba(139,92,246,0.08)' : 'rgba(139,92,246,0.04)',
-                      color: '#8b5cf6', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                      transition: 'all 0.15s',
-                    }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = '#8b5cf6'; e.currentTarget.style.color = '#fff'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(139,92,246,0.08)' : 'rgba(139,92,246,0.04)'; e.currentTarget.style.color = '#8b5cf6'; }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/>
-                      </svg>
-                      Réaffecter
-                    </button>
-                  )}
-                </div>
-              )}
 
             </div>{/* end detail padding */}
           </div>,
@@ -5624,155 +5108,11 @@ export default function TrackingSheet() {
           )}
         </div>
       )}
-      {/* ═══ INVITE MODAL ═══ */}
-      {inviteModal && createPortal(
-        <>
-          <div onClick={() => setInviteModal(null)} style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
-            zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both',
-          }} />
-          <div style={{
-            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
-            width: 420, maxWidth: '90vw', maxHeight: '70vh', background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`,
-            boxShadow: darkMode ? '0 24px 48px rgba(0,0,0,0.4)' : '0 24px 48px rgba(0,0,0,0.08), 0 8px 16px rgba(0,0,0,0.04)',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif',
-            animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
-            display: 'flex', flexDirection: 'column',
-          }}>
-            {/* Header */}
-            <div style={{ padding: '24px 24px 16px', borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <div>
-                  <div style={{ fontSize: 17, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>Inviter un commercial</div>
-                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Sélectionnez qui peut réaffecter les leads</div>
-                </div>
-                <button onClick={() => setInviteModal(null)} style={{
-                  width: 28, height: 28, borderRadius: '50%', border: 'none',
-                  background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-                  color: C.muted, fontSize: 14, cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>✕</button>
-              </div>
-              {/* Search */}
-              <div style={{ position: 'relative' }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round"
-                  style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }}>
-                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                </svg>
-                <input value={inviteSearch} onChange={(e) => setInviteSearch(e.target.value)}
-                  placeholder="Rechercher par nom ou email..."
-                  style={{
-                    width: '100%', padding: '9px 12px 9px 34px', borderRadius: 10,
-                    border: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#f9fafb',
-                    color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none',
-                  }}
-                />
-              </div>
-            </div>
-            {/* User list */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px' }}>
-              {assignableUsers
-                .filter(u => {
-                  if (!inviteSearch) return true;
-                  const q = inviteSearch.toLowerCase();
-                  return (u.full_name || u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q);
-                })
-                .map(u => (
-                  <button key={u.email} onClick={async () => {
-                    await handleInviteSales(inviteModal.sheetEmail, u.email);
-                    setInviteModal(null);
-                  }} style={{
-                    display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 12px',
-                    borderRadius: 10, border: 'none', background: 'transparent', cursor: 'pointer',
-                    fontFamily: 'inherit', transition: 'background 0.15s', textAlign: 'left',
-                  }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <div style={{
-                      width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-                      background: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#fff', fontSize: 12, fontWeight: 700,
-                    }}>{(u.full_name || u.name || u.email || '?').slice(0, 2).toUpperCase()}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{u.full_name || u.name}</div>
-                      <div style={{ fontSize: 11, color: C.muted }}>{u.email}</div>
-                    </div>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" style={{ opacity: 0.3 }}>
-                      <path d="m9 18 6-6-6-6" />
-                    </svg>
-                  </button>
-                ))}
-              {assignableUsers.length === 0 && (
-                <div style={{ textAlign: 'center', padding: 20, color: C.muted, fontSize: 13 }}>Chargement...</div>
-              )}
-            </div>
-          </div>
-        </>,
-        document.body
-      )}
-
-      {/* ═══ CONFIRM MODAL (resend/cancel contract) ═══ */}
-      {confirmModal && createPortal(
-        <>
-          <div onClick={() => setConfirmModal(null)} style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
-            zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both',
-          }} />
-          <div style={{
-            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
-            width: 380, maxWidth: '90vw', background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`,
-            boxShadow: darkMode ? '0 24px 48px rgba(0,0,0,0.4)' : '0 24px 48px rgba(0,0,0,0.08), 0 8px 16px rgba(0,0,0,0.04)',
-            padding: '32px 28px 26px',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, system-ui, sans-serif',
-            animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
-          }}>
-            <div style={{ textAlign: 'center', marginBottom: 22 }}>
-              <div style={{
-                width: 52, height: 52, borderRadius: 16, margin: '0 auto 16px',
-                background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 22, fontWeight: 700, color: darkMode ? '#8b8fa0' : '#9ca3af',
-              }}>{confirmModal.icon}</div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 8, letterSpacing: '-0.02em' }}>
-                {confirmModal.title}
-              </div>
-              <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6, letterSpacing: '-0.01em', maxWidth: 300, margin: '0 auto' }}>
-                {confirmModal.message}
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setConfirmModal(null)} style={{
-                flex: 1, padding: '12px 0', borderRadius: 12, fontSize: 14, fontWeight: 600,
-                fontFamily: 'inherit', cursor: 'pointer', letterSpacing: '-0.01em',
-                border: `1px solid ${C.border}`, background: 'transparent', color: C.muted,
-                transition: 'all 0.15s',
-              }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'; e.currentTarget.style.color = C.text; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.muted; }}
-              >Annuler</button>
-              <button onClick={confirmModal.onConfirm} style={{
-                flex: 1, padding: '12px 0', borderRadius: 12, fontSize: 14, fontWeight: 600,
-                fontFamily: 'inherit', cursor: 'pointer', letterSpacing: '-0.01em',
-                border: 'none',
-                background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
-                color: C.secondary,
-                transition: 'all 0.15s',
-              }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'; }}
-              >{confirmModal.confirmLabel}</button>
-            </div>
-          </div>
-        </>,
-        document.body
-      )}
-
       {/* ═══ CONTRACT ERROR MODAL ═══ */}
       {contractErrorModal && createPortal(
         <>
           <div onClick={() => setContractErrorModal(null)} style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
             zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both',
           }} />
           <div style={{
@@ -5786,13 +5126,15 @@ export default function TrackingSheet() {
             <div style={{ textAlign: 'center', marginBottom: 22 }}>
               <div style={{
                 width: 52, height: 52, borderRadius: 16, margin: '0 auto 16px',
-                background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                background: contractErrorModal.isNdaMissing
+                  ? (darkMode ? 'rgba(251,146,60,0.12)' : 'rgba(251,146,60,0.08)')
+                  : (darkMode ? 'rgba(239,68,68,0.12)' : 'rgba(239,68,68,0.08)'),
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 {contractErrorModal.isNdaMissing ? (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={darkMode ? '#8b8fa0' : '#9ca3af'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="12" x2="12" y2="16"/><circle cx="12" cy="18" r="0.5"/></svg>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fb923c" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="12" x2="12" y2="16"/><circle cx="12" cy="18" r="0.5"/></svg>
                 ) : (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={darkMode ? '#8b8fa0' : '#9ca3af'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                 )}
               </div>
               <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 8, letterSpacing: '-0.02em' }}>
@@ -5805,12 +5147,14 @@ export default function TrackingSheet() {
             <button onClick={() => setContractErrorModal(null)} style={{
               width: '100%', padding: '12px 0', borderRadius: 12, border: 'none', fontSize: 14, fontWeight: 600,
               fontFamily: 'inherit', cursor: 'pointer', letterSpacing: '-0.01em',
-              background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
-              color: C.secondary,
+              background: contractErrorModal.isNdaMissing
+                ? (darkMode ? 'rgba(251,146,60,0.15)' : 'rgba(251,146,60,0.1)')
+                : (darkMode ? 'rgba(91,106,191,0.15)' : 'rgba(91,106,191,0.1)'),
+              color: contractErrorModal.isNdaMissing ? '#fb923c' : C.accent,
               transition: 'all 0.2s ease',
             }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = contractErrorModal.isNdaMissing ? 'rgba(251,146,60,0.2)' : 'rgba(91,106,191,0.18)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = contractErrorModal.isNdaMissing ? (darkMode ? 'rgba(251,146,60,0.15)' : 'rgba(251,146,60,0.1)') : (darkMode ? 'rgba(91,106,191,0.15)' : 'rgba(91,106,191,0.1)'); }}
             >Compris</button>
           </div>
         </>,
@@ -5823,7 +5167,7 @@ export default function TrackingSheet() {
         return (
           <>
             <div onClick={() => { if (!saleSubmitting) { setShowSaleModal(null); setSaleSuccess(false); } }}
-              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both' }} />
+              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both' }} />
             <div style={{
               position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
               width: 420, maxWidth: '90vw', background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`,

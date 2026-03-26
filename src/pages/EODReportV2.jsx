@@ -363,7 +363,7 @@ export default function EODReportV2() {
     setNewTaskName(task.task_name);
     setSelectedProjectId(task.project_id);
     setNewSubtasks(task.subtasks.map(s => ({ name: s.task_name, hours: String(s.hours_spent) })));
-    setTasks(prev => prev.filter(t => t._id !== task._id));
+    // Keep task in array — saveComposerToTasks will replace it via .map() using editingTaskId
   };
 
   const updateNewSubtask = (idx, field, value) => {
@@ -854,7 +854,7 @@ export default function EODReportV2() {
 
                   {/* Saved tasks (compact cards) */}
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                    {tasks.map(task => {
+                    {tasks.filter(t => t._id !== editingTaskId).map(task => {
                       const totalH = task.subtasks.reduce((s, st) => s + (st.hours_spent || 0), 0);
                       return (
                         <div key={task._id} style={{
@@ -937,7 +937,7 @@ export default function EODReportV2() {
                                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-2 14H7L5 6" /></svg>
                                 </button>
                               )}
-                              {idx === 0 && newSubtasks.length === 1 && sub.name.trim() && (
+                              {idx === newSubtasks.length - 1 && sub.name.trim() && newSubtasks.length < LIMITS.MAX_SUBTASKS && (
                                 <button onClick={() => setNewSubtasks(prev => [...prev, { name: '', hours: '' }])} style={{ width: 28, height: 28, borderRadius: '50%', border: 'none', background: darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} onMouseEnter={(e) => { e.currentTarget.style.color = C.accent; e.currentTarget.style.background = `${C.accent}15`; }} onMouseLeave={(e) => { e.currentTarget.style.color = C.muted; e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'; }}>
                                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                                 </button>

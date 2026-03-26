@@ -411,6 +411,7 @@ export default function EODDashboard() {
   const [dataLoading, setDataLoading] = useState(false);
   const fallbackAttempted = useRef(false);
   const [eodExpectedData, setEodExpectedData] = useState(null); // from GET /eod/dashboard/expected
+  const [userAvatars, setUserAvatars] = useState({}); // user_id → avatar_url
 
   const weekOptions = useMemo(() => getWeekOptions(), []);
   const C = useMemo(() => CARD(darkMode), [darkMode]);
@@ -424,6 +425,15 @@ export default function EODDashboard() {
         setHasAccess(access);
         if (!access) { navigate("/"); return; }
         setTimeout(() => setFadeIn(true), 50);
+        // Fetch avatars by user_id (backend confirmed id = user_id)
+        try {
+          const users = await apiClient.getUsers();
+          const map = {};
+          (users || []).forEach(u => {
+            if (u.id && u.avatar_url) map[u.id] = u.avatar_url;
+          });
+          setUserAvatars(map);
+        } catch {}
       } catch { navigate("/login"); }
       finally { setLoading(false); }
     };
@@ -454,6 +464,8 @@ export default function EODDashboard() {
         byUser[uid] = {
           user_id: uid,
           name: entry.full_name || entry.name || "Inconnu",
+          email: entry.email || "",
+          avatar_url: entry.avatar_url || null,
           department: DEPT_MAP[rawDept] || rawDept,
           days: [],
         };
@@ -469,7 +481,7 @@ export default function EODDashboard() {
       const avg_global = u.days.reduce((s, d) => s + (d.global_score || 0), 0) / n;
       const latestSummary = u.days[u.days.length - 1]?.ressenti_individuel || "";
       const userExpected = expectedData?.by_user?.[u.user_id]?.expected || 5;
-      return { user_id: u.user_id, name: u.name, department: u.department, avg_scores, avg_global, eods_submitted: n, eods_expected: userExpected, summary: latestSummary, days: u.days };
+      return { user_id: u.user_id, name: u.name, email: u.email, avatar_url: u.avatar_url, department: u.department, avg_scores, avg_global, eods_submitted: n, eods_expected: userExpected, summary: latestSummary, days: u.days };
     });
   }
 
@@ -868,28 +880,14 @@ export default function EODDashboard() {
                         C={C}
                         darkMode={darkMode}
                         indent
+                        avatarUrl={p.avatar_url || userAvatars[p.user_id]}
                       />
                     ))}
                 </>
               )}
 
-              {/* Alerts badge at bottom */}
+              {/* Alerts now shown via navbar global notifications */}
               <div style={{ flex: 1 }} />
-              {alerts.length > 0 && (
-                <div style={{
-                  margin: "8px 16px 20px",
-                  padding: "10px 14px",
-                  borderRadius: 10,
-                  background: darkMode ? "rgba(239,68,68,0.08)" : "rgba(239,68,68,0.06)",
-                  border: `1px solid ${darkMode ? "rgba(239,68,68,0.2)" : "rgba(239,68,68,0.15)"}`,
-                  display: "flex", alignItems: "center", gap: 8,
-                }}>
-                  <span style={{ fontSize: 14 }}>!</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: C.danger }}>
-                    {alerts.length} alerte{alerts.length > 1 ? "s" : ""}
-                  </span>
-                </div>
-              )}
             </div>
 
             {/* ══════════════════════════════════════════════════════════════════
@@ -1161,6 +1159,7 @@ export default function EODDashboard() {
                               style={{
                                 display: "grid",
                                 gridTemplateColumns: "1fr repeat(6, 70px) 80px 70px",
+                                alignItems: "center",
                                 padding: "14px 20px",
                                 borderBottom: i < currentDeptData.people.length - 1 ? `1px solid ${C.border}` : "none",
                                 cursor: "pointer",
@@ -1169,9 +1168,18 @@ export default function EODDashboard() {
                               onMouseEnter={e => e.currentTarget.style.background = C.subtle}
                               onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                             >
-                              <span style={{ fontSize: 14, fontWeight: 600, color: C.text }}>
-                                {person.name}
-                              </span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                                {(person.avatar_url || userAvatars[person.user_id]) ? (
+                                  <img src={person.avatar_url || userAvatars[person.user_id]} alt="" style={{ width: 34, height: 34, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+                                ) : (
+                                  <div style={{ width: 34, height: 34, borderRadius: 8, background: darkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: C.muted, flexShrink: 0 }}>
+                                    {(person.name || "?").charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                                <span style={{ fontSize: 14, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {person.name}
+                                </span>
+                              </div>
                               {DIMENSION_KEYS.map((k) => (
                                 <div key={k} style={{ display: "flex", justifyContent: "center" }}>
                                   <ScorePill value={person.avg_scores[k]} C={C} />
@@ -1587,39 +1595,7 @@ export default function EODDashboard() {
                     </>
                   )}
 
-                  {/* ── Alerts Section (bottom, all views) ───────────────────── */}
-                  {filteredAlerts.length > 0 && (
-                    <div style={{
-                      background: C.bg, borderRadius: 14, border: `1px solid ${C.border}`,
-                      padding: "16px 20px", marginTop: 24,
-                    }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: C.danger, display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
-                        <span>!</span> Alertes — EODs manqués
-                      </span>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {filteredAlerts.map((alert) => (
-                          <div key={alert.user_id} style={{
-                            display: "flex", alignItems: "center", justifyContent: "space-between",
-                            padding: "10px 14px", borderRadius: 8,
-                            background: darkMode ? "rgba(239,68,68,0.06)" : "rgba(239,68,68,0.03)",
-                            border: `1px solid ${darkMode ? "rgba(239,68,68,0.15)" : "rgba(239,68,68,0.1)"}`,
-                          }}>
-                            <div>
-                              <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>
-                                {alert.full_name || alert.name}
-                              </span>
-                              <span style={{ fontSize: 11, marginLeft: 8, color: C.muted, textTransform: "capitalize" }}>
-                                ({alert.department})
-                              </span>
-                            </div>
-                            <span style={{ fontSize: 12, color: C.danger, fontWeight: 500 }}>
-                              {alert.message || `${(alert.missed_dates || []).length} EODs manqués`}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  {/* Alerts now shown via navbar global notifications */}
                 </>
               )}
             </div>
@@ -1632,7 +1608,7 @@ export default function EODDashboard() {
 
 // ── SIDEBAR ITEM ────────────────────────────────────────────────────────────────
 
-function SidebarItem({ icon, iconSrc, label, badge, score, active, accent, onClick, C, indent, darkMode }) {
+function SidebarItem({ icon, iconSrc, label, badge, score, active, accent, onClick, C, indent, darkMode, avatarUrl }) {
   return (
     <div
       onClick={onClick}
@@ -1646,7 +1622,23 @@ function SidebarItem({ icon, iconSrc, label, badge, score, active, accent, onCli
         transition: "all 0.15s",
       }}
     >
-      {(iconSrc || (!icon && indent)) && (
+      {avatarUrl ? (
+        <img src={avatarUrl} alt="" style={{
+          width: 32, height: 32, borderRadius: 8, objectFit: "cover", flexShrink: 0,
+          border: active ? `2px solid ${accent || C.accent}` : `2px solid ${C.border}`,
+        }} />
+      ) : indent && !iconSrc && !icon ? (
+        <div style={{
+          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+          background: active ? (accent || C.accent) : (darkMode ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)"),
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 12, fontWeight: 700, color: active ? "#fff" : C.muted,
+          border: active ? `2px solid ${accent || C.accent}` : `2px solid ${C.border}`,
+        }}>
+          {(label || "?").charAt(0).toUpperCase()}
+        </div>
+      ) : null}
+      {(iconSrc || (!icon && !indent && !avatarUrl)) && !avatarUrl && iconSrc && (
         <div style={{
           width: 30, height: 30, flexShrink: 0,
           backgroundColor: active ? (accent || C.accent) : darkMode ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.35)",
@@ -1661,7 +1653,7 @@ function SidebarItem({ icon, iconSrc, label, badge, score, active, accent, onCli
           transition: "all 0.15s",
         }} />
       )}
-      {icon && !iconSrc && (
+      {icon && !iconSrc && !avatarUrl && (
         <span style={{ fontSize: 14, width: 20, textAlign: "center", flexShrink: 0 }}>{icon}</span>
       )}
       <span style={{

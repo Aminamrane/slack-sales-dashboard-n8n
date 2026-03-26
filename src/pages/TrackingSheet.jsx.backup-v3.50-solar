@@ -514,10 +514,6 @@ export default function TrackingSheet() {
   const [sheetInvitations, setSheetInvitations] = useState([]); // invitations for current killed sheet
   const [reassignTarget, setReassignTarget] = useState(null); // { leadId, showDropdown: true }
   const [assignableUsers, setAssignableUsers] = useState([]); // users available for reassignment
-  const [solarTeams, setSolarTeams] = useState([]); // teams for solar system view
-  const [solarHovered, setSolarHovered] = useState(null); // email string
-  const [solarTooltipPos, setSolarTooltipPos] = useState({ x: 0, y: 0 }); // tooltip position
-  const [solarPaused, setSolarPaused] = useState(false); // pause rotation on hover
   const [inviteModal, setInviteModal] = useState(null); // { sheetEmail } or null
   const [inviteSearch, setInviteSearch] = useState('');
   const [myInvitations, setMyInvitations] = useState([]); // invitations received by current user
@@ -1536,8 +1532,6 @@ export default function TrackingSheet() {
           from { opacity: 0; transform: translateY(10px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        @keyframes solarOrbit { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes solarFadeIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
         @keyframes cardStaggerIn {
           from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -2768,100 +2762,27 @@ export default function TrackingSheet() {
         {/* ════ VIEW: TRACKING SHEETS MANAGEMENT ══════════════════════════════ */}
         {sidebarView === 'sheets' && canManageSheets && (() => {
           if (allSheets.length === 0 && !sheetsLoading) fetchAllSheets();
-          if (solarTeams.length === 0 && allSheets.length > 0) {
-            apiClient.get('/api/v1/teams').then(data => setSolarTeams(data || [])).catch(() => {});
-          }
-          // Group sheets by team
-          const normalize = (n) => (n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-          const findSheet = (name, email) => allSheets.find(s => s.email === email || (name && normalize(s.full_name).includes(normalize(name).split(' ')[0])));
-
-          const renderSheetRow = (sheet, isCaptain) => {
-            if (!sheet) return null;
-            const isKilled = sheet.status === 'killed';
-            return (
-              <div key={sheet.email} style={{
-                display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
-                borderRadius: 12, border: `1px solid ${isKilled ? (darkMode ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.12)') : C.border}`,
-                background: isKilled ? (darkMode ? 'rgba(239,68,68,0.04)' : 'rgba(239,68,68,0.02)') : (darkMode ? 'rgba(255,255,255,0.02)' : '#fff'),
-                transition: 'all 0.2s', cursor: 'pointer',
-              }}
-                onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.05)' : '#fafafb'}
-                onMouseLeave={(e) => e.currentTarget.style.background = isKilled ? (darkMode ? 'rgba(239,68,68,0.04)' : 'rgba(239,68,68,0.02)') : (darkMode ? 'rgba(255,255,255,0.02)' : '#fff')}
-                onClick={() => enterSheet(sheet.email)}
-              >
-                {sheet.avatar_url ? (
-                  <img src={sheet.avatar_url} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, filter: isKilled ? 'grayscale(1)' : 'none', opacity: isKilled ? 0.5 : 1, transition: 'all 0.3s' }} />
-                ) : (
-                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: isKilled ? '#94a3b8' : '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
-                    {(sheet.full_name || '?').slice(0, 2).toUpperCase()}
-                  </div>
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 13.5, fontWeight: 600, color: isKilled ? C.muted : C.text }}>{sheet.full_name || sheet.email}</span>
-                    {isCaptain && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted }}>CHEF</span>}
-                    {isKilled && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>KILLED</span>}
-                  </div>
-                  <div style={{ fontSize: 11, color: C.muted }}>{sheet.lead_count || 0} leads</div>
-                </div>
-                <div style={{ display: 'flex', gap: 4 }} onClick={(e) => e.stopPropagation()}>
-                  {isAdmin && !isKilled && (
-                    <button onClick={() => handleKillSheet(sheet.email)} style={{
-                      padding: '5px 10px', borderRadius: 8, border: 'none', fontSize: 10.5, fontWeight: 600,
-                      background: darkMode ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.06)', color: '#ef4444',
-                      cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-                    }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = '#ef4444'; e.currentTarget.style.color = '#fff'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.06)'; e.currentTarget.style.color = '#ef4444'; }}
-                    >Kill</button>
-                  )}
-                  {isAdmin && isKilled && (
-                    <>
-                      <button onClick={() => handleRestoreSheet(sheet.email)} style={{
-                        padding: '5px 10px', borderRadius: 8, border: 'none', fontSize: 10.5, fontWeight: 600,
-                        background: darkMode ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)', color: '#10b981',
-                        cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-                      }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = '#10b981'; e.currentTarget.style.color = '#fff'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)'; e.currentTarget.style.color = '#10b981'; }}
-                      >Réactiver</button>
-                      <button onClick={async () => {
-                        setInviteModal({ sheetEmail: sheet.email }); setInviteSearch('');
-                        if (assignableUsers.length === 0) { try { const r = await apiClient.getAssignableUsers(); setAssignableUsers(Array.isArray(r) ? r : (r?.users || [])); } catch {} }
-                      }} style={{
-                        padding: '5px 10px', borderRadius: 8, border: 'none', fontSize: 10.5, fontWeight: 600,
-                        background: darkMode ? 'rgba(139,92,246,0.08)' : 'rgba(139,92,246,0.06)', color: '#8b5cf6',
-                        cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-                      }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = '#8b5cf6'; e.currentTarget.style.color = '#fff'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(139,92,246,0.08)' : 'rgba(139,92,246,0.06)'; e.currentTarget.style.color = '#8b5cf6'; }}
-                      >Inviter</button>
-                    </>
-                  )}
-                </div>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" style={{ opacity: 0.3, flexShrink: 0 }}><path d="m9 18 6-6-6-6" /></svg>
-              </div>
-            );
-          };
-
           return (
-            <div style={{ padding: 24, overflowY: 'auto' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            <div style={{ padding: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
                 <div>
                   <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: 0 }}>Tracking Sheets</h2>
-                  <p style={{ fontSize: 13, color: C.muted, margin: '4px 0 0' }}>Équipes commerciales</p>
+                  <p style={{ fontSize: 13, color: C.muted, margin: '4px 0 0' }}>Gérer les tracking sheets des commerciaux</p>
                 </div>
                 {isAdmin && (
                   <button onClick={() => setGhostMode(!ghostMode)} style={{
-                    display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10,
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '8px 14px', borderRadius: 10,
                     border: `1px solid ${ghostMode ? '#8b5cf6' : C.border}`,
                     background: ghostMode ? 'rgba(139,92,246,0.1)' : 'transparent',
-                    color: ghostMode ? '#8b5cf6' : C.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                    color: ghostMode ? '#8b5cf6' : C.muted,
+                    fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                    transition: 'all 0.2s',
                   }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                       {ghostMode ? <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></> : <><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></>}
                     </svg>
-                    {ghostMode ? 'Ghost actif' : 'Ghost'}
+                    {ghostMode ? 'Mode Ghost actif' : 'Mode Ghost'}
                   </button>
                 )}
               </div>
@@ -2869,50 +2790,116 @@ export default function TrackingSheet() {
               {sheetsLoading ? (
                 <div style={{ textAlign: 'center', padding: 40, color: C.muted }}>Chargement...</div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                  {solarTeams.filter(team => {
-                    if (isAdmin) return true;
-                    const normUser = normalize(currentUser?.full_name || currentUser?.name || '');
-                    const captName = normalize(team.captain?.name);
-                    if (captName && normUser && captName.includes(normUser.split(' ')[0])) return true;
-                    return (team.members || []).some(m => normalize(m.name).includes(normUser.split(' ')[0]));
-                  }).map(team => (
-                    <div key={team.id || team.label}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: team.color || C.accent }} />
-                        <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{team.label}</span>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 18 }}>
-                        {renderSheetRow(findSheet(team.captain?.name, team.captain?.email), true)}
-                        {(team.members || []).map(m => renderSheetRow(findSheet(m.name, m.email), false))}
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Sheets without a team */}
-                  {(() => {
-                    const teamEmails = new Set();
-                    solarTeams.forEach(t => {
-                      const cap = findSheet(t.captain?.name, t.captain?.email);
-                      if (cap) teamEmails.add(cap.email);
-                      (t.members || []).forEach(m => { const ms = findSheet(m.name, m.email); if (ms) teamEmails.add(ms.email); });
-                    });
-                    const orphans = allSheets.filter(s => !teamEmails.has(s.email));
-                    if (orphans.length === 0) return null;
-                    return (
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                          <div style={{ width: 10, height: 10, borderRadius: '50%', background: C.muted }} />
-                          <span style={{ fontSize: 14, fontWeight: 700, color: C.muted }}>Autres</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {/* Active sheets */}
+                  {allSheets.filter(s => s.status === 'active').length > 0 && (
+                    <>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', padding: '8px 0 4px' }}>Actives</div>
+                      {allSheets.filter(s => s.status === 'active').map(sheet => (
+                        <div key={sheet.email} style={{
+                          display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
+                          borderRadius: 12, border: `1px solid ${C.border}`,
+                          background: darkMode ? 'rgba(255,255,255,0.03)' : '#fff',
+                          transition: 'all 0.15s', cursor: 'pointer',
+                        }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : '#fafafb'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.03)' : '#fff'}
+                          onClick={() => enterSheet(sheet.email)}
+                        >
+                          {/* Avatar */}
+                          {sheet.avatar_url ? (
+                            <img src={sheet.avatar_url} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                          ) : (
+                            <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+                              {(sheet.full_name || sheet.email || '?').slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                          {/* Info */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{sheet.full_name || sheet.email}</div>
+                            <div style={{ fontSize: 11, color: C.muted }}>{sheet.email}</div>
+                          </div>
+                          {/* Lead count */}
+                          <span style={{ fontSize: 12, fontWeight: 600, color: C.muted, padding: '3px 8px', borderRadius: 6, background: darkMode ? C.subtle : '#f4f5f8' }}>
+                            {sheet.lead_count || 0} leads
+                          </span>
+                          {/* Actions */}
+                          {isAdmin && (
+                            <button onClick={(e) => { e.stopPropagation(); handleKillSheet(sheet.email); }} title="Désactiver cette sheet"
+                              style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, transition: 'all 0.15s' }}
+                              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#ef4444'; e.currentTarget.style.color = '#ef4444'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                            </button>
+                          )}
+                          {/* Arrow */}
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" style={{ opacity: 0.4, flexShrink: 0 }}>
+                            <path d="m9 18 6-6-6-6" />
+                          </svg>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 18 }}>
-                          {orphans.map(s => renderSheetRow(s, false))}
-                        </div>
-                      </div>
-                    );
-                  })()}
+                      ))}
+                    </>
+                  )}
 
-                  {allSheets.length === 0 && (
+                  {/* Killed sheets */}
+                  {allSheets.filter(s => s.status === 'killed').length > 0 && (
+                    <>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '16px 0 4px' }}>Désactivées</div>
+                      {allSheets.filter(s => s.status === 'killed').map(sheet => (
+                        <div key={sheet.email} style={{
+                          display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
+                          borderRadius: 12, border: `1px solid ${darkMode ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.15)'}`,
+                          background: darkMode ? 'rgba(239,68,68,0.05)' : 'rgba(239,68,68,0.03)',
+                          transition: 'all 0.15s', cursor: 'pointer',
+                        }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.06)'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = darkMode ? 'rgba(239,68,68,0.05)' : 'rgba(239,68,68,0.03)'}
+                          onClick={() => enterSheet(sheet.email)}
+                        >
+                          {sheet.avatar_url ? (
+                            <img src={sheet.avatar_url} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, opacity: 0.6, filter: 'grayscale(0.5)' }} />
+                          ) : (
+                            <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+                              {(sheet.full_name || sheet.email || '?').slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: C.text, opacity: 0.7 }}>{sheet.full_name || sheet.email}</div>
+                            <div style={{ fontSize: 11, color: '#ef4444' }}>Sheet désactivée — {sheet.lead_count || 0} leads à réaffecter</div>
+                          </div>
+                          {/* Invite a sales */}
+                          <button onClick={async (e) => {
+                            e.stopPropagation();
+                            setInviteModal({ sheetEmail: sheet.email });
+                            setInviteSearch('');
+                            if (assignableUsers.length === 0) {
+                              try {
+                                const resp = await apiClient.getAssignableUsers();
+                                setAssignableUsers(Array.isArray(resp) ? resp : (resp?.users || []));
+                              } catch {}
+                            }
+                          }} title="Inviter un commercial à réaffecter"
+                            style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid #8b5cf640`, background: 'transparent', color: '#8b5cf6', cursor: 'pointer', fontSize: 11, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = '#8b5cf6'; e.currentTarget.style.color = '#fff'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#8b5cf6'; }}
+                          >Inviter</button>
+                          {isAdmin && (
+                            <button onClick={(e) => { e.stopPropagation(); handleRestoreSheet(sheet.email); }} title="Réactiver cette sheet"
+                              style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid #10b98140`, background: 'transparent', color: '#10b981', cursor: 'pointer', fontSize: 11, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.15s' }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = '#10b981'; e.currentTarget.style.color = '#fff'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#10b981'; }}
+                            >Réactiver</button>
+                          )}
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" style={{ opacity: 0.4, flexShrink: 0 }}>
+                            <path d="m9 18 6-6-6-6" />
+                          </svg>
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  {allSheets.length === 0 && !sheetsLoading && (
                     <div style={{ textAlign: 'center', padding: 40, color: C.muted, fontSize: 13 }}>Aucune tracking sheet trouvée</div>
                   )}
                 </div>
@@ -5079,8 +5066,8 @@ export default function TrackingSheet() {
                 })()}
               </div>
 
-              {/* ═══ REASSIGN (killed sheet only) ═══ */}
-              {isAdminView && allSheets.find(s => s.email === viewingSheetId)?.status === 'killed' && (
+              {/* ═══ REASSIGN (admin view only) ═══ */}
+              {isAdminView && (
                 <div style={{ marginTop: 16, padding: '14px 0', borderTop: `1px solid ${C.border}` }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
                     Réaffecter ce lead
