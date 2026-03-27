@@ -247,6 +247,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
   // ── NOTIFICATION ISLAND STATE ────────────────────────────────────────────────
   const [notifIslandOpen, setNotifIslandOpen] = useState(false);
   const [notifBellShake, setNotifBellShake] = useState(false);
+  const [notifTab, setNotifTab] = useState('unread'); // 'unread' | 'read'
   const notifIslandRef = useRef(null);
 
   const [globalNotifs, setGlobalNotifs] = useState([]);
@@ -933,7 +934,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
         >
           {/* Notification pill */}
           <button
-            onClick={() => setNotifIslandOpen(!notifIslandOpen)}
+            onClick={() => { setNotifIslandOpen(!notifIslandOpen); if (!notifIslandOpen) setNotifTab('unread'); }}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '8px 12px', height: 52,
@@ -982,30 +983,49 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
               overflow: 'hidden',
               animation: 'notifPanelExpand 0.5s cubic-bezier(0.16, 1, 0.3, 1) both',
             }}>
-              {/* Header */}
-              <div style={{
-                padding: '16px 18px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                borderBottom: `1px solid ${darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'}`,
-              }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: darkMode ? '#f5f5f7' : '#1d1d1f', letterSpacing: '-0.02em' }}>
-                  Notifications
-                </span>
-                <button onClick={() => {
-                  markAllRead();
-                  setTimeout(() => { setNotifIslandOpen(false); setIslandOpen(false); }, 200);
-                }} style={{
-                  border: 'none', background: 'transparent', fontSize: 11, fontWeight: 600,
-                  color: COLORS.primary, cursor: 'pointer', fontFamily: 'inherit',
-                  padding: '2px 6px', borderRadius: 6,
-                }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                >Tout lire</button>
+              {/* Header + Tabs */}
+              <div style={{ borderBottom: `1px solid ${darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'}` }}>
+                <div style={{ padding: '14px 18px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: darkMode ? '#f5f5f7' : '#1d1d1f', letterSpacing: '-0.02em' }}>
+                    Notifications
+                  </span>
+                  {notifTab === 'unread' && unreadCount > 0 && (
+                    <button onClick={() => {
+                      markAllRead();
+                    }} style={{
+                      border: 'none', background: 'transparent', fontSize: 11, fontWeight: 600,
+                      color: COLORS.primary, cursor: 'pointer', fontFamily: 'inherit',
+                      padding: '2px 6px', borderRadius: 6,
+                    }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >Tout lire</button>
+                  )}
+                </div>
+                {/* Tabs */}
+                <div style={{ display: 'flex', padding: '8px 18px 0', gap: 0 }}>
+                  {[{ key: 'unread', label: 'Non lues' }, { key: 'read', label: 'Lues' }].map(tab => (
+                    <button key={tab.key} onClick={() => setNotifTab(tab.key)} style={{
+                      padding: '6px 14px', border: 'none', background: 'transparent',
+                      fontSize: 12, fontWeight: notifTab === tab.key ? 650 : 500, fontFamily: 'inherit',
+                      color: notifTab === tab.key ? (darkMode ? '#f5f5f7' : '#1d1d1f') : (darkMode ? '#5e6273' : '#9ca3af'),
+                      cursor: 'pointer', borderBottom: `2px solid ${notifTab === tab.key ? COLORS.primary : 'transparent'}`,
+                      transition: 'all 0.15s', marginBottom: -1,
+                    }}>{tab.label}{tab.key === 'unread' && unreadCount > 0 && (
+                      <span style={{ marginLeft: 5, fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#ef4444', color: '#fff' }}>{unreadCount}</span>
+                    )}</button>
+                  ))}
+                </div>
               </div>
 
               {/* Notification list */}
               <div style={{ padding: '6px 0', overflowY: 'auto', maxHeight: 340 }}>
-                {globalNotifs.map((notif, idx) => {
+                {globalNotifs.filter(n => notifTab === 'unread' ? !n.read : n.read).length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '24px 16px', color: darkMode ? '#5e6273' : '#9ca3af', fontSize: 12.5 }}>
+                    {notifTab === 'unread' ? 'Aucune nouvelle notification' : 'Aucune notification lue'}
+                  </div>
+                )}
+                {globalNotifs.filter(n => notifTab === 'unread' ? !n.read : n.read).map((notif, idx) => {
                   const nConfig = NOTIF_ICONS[notif.type] || NOTIF_ICONS.default;
                   return (
                     <div key={notif.id} onClick={() => {

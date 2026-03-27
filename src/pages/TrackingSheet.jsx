@@ -10,11 +10,24 @@ import "../index.css";
 import iconMyLead from "../assets/global.png";
 import iconPlus from "../assets/plus.png";
 import iconEmail from "../assets/email.png";
+import iconEmailDetail from "../assets/eamail.svg";
+import iconScalier from "../assets/scalier.svg";
+import iconQualLead from "../assets/Lead.svg";
+import iconQualQualifie from "../assets/qualifié.svg";
+import iconQualProposition from "../assets/proposition.svg";
+import iconQualNegociation from "../assets/négociation.svg";
+import iconQualGagne from "../assets/gagné.svg";
+import iconQualPerdu from "../assets/perdu.svg";
+import iconPrio from "../assets/prio.svg";
+import iconPrioHigh from "../assets/high.svg";
+import iconPrioMedium from "../assets/medium.svg";
+import iconPrioLow from "../assets/low.svg";
 import iconCampaigns from "../assets/tar.png";
 import iconKpis from "../assets/finance.png";
 import iconCalendrier from "../assets/calendrier.png";
 import iconNotif from "../assets/icon2.png";
 import iconSheets from "../assets/files.png";
+import iconBuilding from "../assets/building.svg";
 import companyLogo from "../assets/my_image.png";
 import campaignImg1 from "../assets/audit-document.jpg";
 import campaignImg2 from "../assets/charges-fatales-2.png";
@@ -25,7 +38,7 @@ import mynoteIcon from "../assets/mynote.svg";
 
 // ── CATEGORIES ────────────────────────────────────────────────────────────────
 const CATEGORIES = [
-  { key: "new",          label: "Nouveaux leads",  color: "#6366f1", softBg: "#f0f1fb", softBgDark: "rgba(99,102,241,0.18)",  softText: "#7578c4", description: "Leads assignés, pas encore contactés" },
+  { key: "new",          label: "Nouveaux leads",  color: "#6366f1", dotColor: "#a8c8f0", softBg: "#f0f1fb", softBgDark: "rgba(99,102,241,0.18)",  softText: "#7578c4", description: "Leads assignés, pas encore contactés" },
   { key: "r1",           label: "R1 Placés",       color: "#3b82f6", softBg: "#edf4fc", softBgDark: "rgba(59,130,246,0.18)",  softText: "#6a9fd8", description: "Premier rendez-vous programmé" },
   { key: "r2",           label: "R2 Placés",       color: "#fb923c", softBg: "#fdf3eb", softBgDark: "rgba(251,146,60,0.18)",  softText: "#c48a5a", description: "Rendez-vous audit programmé" },
   { key: "callback",     label: "À rappeler",      color: "#94a3b8", softBg: "#f4f5f7", softBgDark: "rgba(148,163,184,0.18)", softText: "#8993a4", description: "Prospect souhaite être rappelé" },
@@ -408,6 +421,10 @@ export default function TrackingSheet() {
   const [droppingTab, setDroppingTab] = useState(null); // index of tab that just became inactive
   const detailContainerRef = useRef(null); // portal target for detail panel (separate card)
   const [contractErrorModal, setContractErrorModal] = useState(null); // { message, isNdaMissing } or null
+  const [qualDropdown, setQualDropdown] = useState(null); // lead id with open qualification dropdown
+  const [qualDropdownPos, setQualDropdownPos] = useState({ x: 0, y: 0 });
+  const [prioDropdown, setPrioDropdown] = useState(null); // lead id with open priority dropdown
+  const [prioDropdownPos, setPrioDropdownPos] = useState({ x: 0, y: 0 });
   const [confirmModal, setConfirmModal] = useState(null); // { title, message, icon, color, confirmLabel, onConfirm } or null
 
   // ── SALE DECLARATION MODAL (signed tab) ────────────────────────────────────
@@ -493,11 +510,13 @@ export default function TrackingSheet() {
   const wsRef = useRef(null);
   const leadFetchTimers = useRef({}); // debounce re-fetch per lead_id
   const cursorColorsRef = useRef({});
-  const CURSOR_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899'];
+  const CURSOR_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#8b5cf6', '#06b6d4', '#d946ef', '#84cc16'];
   const getCursorColor = (email) => {
     if (!cursorColorsRef.current[email]) {
-      const idx = Object.keys(cursorColorsRef.current).length % CURSOR_COLORS.length;
-      cursorColorsRef.current[email] = CURSOR_COLORS[idx];
+      // Hash email to get a stable, unique color index
+      let hash = 0;
+      for (let i = 0; i < email.length; i++) { hash = ((hash << 5) - hash) + email.charCodeAt(i); hash |= 0; }
+      cursorColorsRef.current[email] = CURSOR_COLORS[Math.abs(hash) % CURSOR_COLORS.length];
     }
     return cursorColorsRef.current[email];
   };
@@ -522,6 +541,7 @@ export default function TrackingSheet() {
   const [inviteSearch, setInviteSearch] = useState('');
   const [myInvitations, setMyInvitations] = useState([]); // invitations received by current user
   const [invitationsSeen, setInvitationsSeen] = useState(false); // true after visiting notifications tab
+  // Wait for backend fix — finalized invitations should not be returned by GET /tracking/invitations
 
   const fetchMyInvitations = useCallback(async () => {
     try {
@@ -724,6 +744,9 @@ export default function TrackingSheet() {
           if (s === 'r2_done') return l.r2_result === 'done';
           if (s === 'r2_cancelled') return l.r2_result === 'pas_interesse' || l.r2_result === 'annule';
           if (s === 'r2_not_done') return !l.r2_result || l.r2_result !== 'done';
+          if (s === 'prio_high') return (l.lead_priority || 'medium') === 'high';
+          if (s === 'prio_medium') return (l.lead_priority || 'medium') === 'medium';
+          if (s === 'prio_low') return (l.lead_priority || 'medium') === 'low';
           if (s === 'contacted') return !!l.first_contact_date;
           if (s === 'not_contacted') return !l.first_contact_date;
           return false;
@@ -2667,8 +2690,8 @@ export default function TrackingSheet() {
                   if (myInvitations.length === 0) return null;
                   return (
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#8b5cf6', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
                         </svg>
                         Invitations
@@ -2677,14 +2700,14 @@ export default function TrackingSheet() {
                         {myInvitations.map((inv, i) => (
                           <div key={inv.id} style={{
                             padding: '16px 18px', borderRadius: 14,
-                            background: darkMode ? 'rgba(139,92,246,0.06)' : 'rgba(139,92,246,0.03)',
-                            border: `1px solid ${darkMode ? 'rgba(139,92,246,0.2)' : 'rgba(139,92,246,0.15)'}`,
+                            background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                            border: `1px solid ${C.border}`,
                             animation: `cardStaggerIn 0.3s ease ${i * 50}ms both`,
                           }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                               <div style={{
                                 width: 32, height: 32, borderRadius: 10, flexShrink: 0,
-                                background: 'rgba(139,92,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                               }}>
                                 <span style={{ fontSize: 15 }}>📋</span>
                               </div>
@@ -2702,17 +2725,18 @@ export default function TrackingSheet() {
                               }} style={{
                                 flex: 1, padding: '9px 0', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 600,
                                 fontFamily: 'inherit', cursor: 'pointer', letterSpacing: '-0.01em',
-                                background: '#8b5cf6', color: '#fff', transition: 'opacity 0.15s',
+                                background: darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                                color: C.secondary, transition: 'all 0.15s',
                               }}
-                                onMouseEnter={(e) => e.currentTarget.style.opacity = '0.85'}
-                                onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.1)'; e.currentTarget.style.color = C.text; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'; e.currentTarget.style.color = C.secondary; }}
                               >Accéder à la sheet</button>
                               <button onClick={async () => {
                                 try {
                                   await apiClient.post(`/api/v1/tracking/invitations/${inv.id}/complete`);
+                                  // Re-fetch to get clean state from backend
+                                  await fetchMyInvitations();
                                 } catch (e) { console.warn('Complete invitation failed:', e); }
-                                // Remove from UI regardless (stale invitations)
-                                setMyInvitations(prev => prev.filter(i => i.id !== inv.id));
                               }} style={{
                                 padding: '9px 16px', borderRadius: 10, fontSize: 13, fontWeight: 600,
                                 fontFamily: 'inherit', cursor: 'pointer', letterSpacing: '-0.01em',
@@ -2946,12 +2970,12 @@ export default function TrackingSheet() {
           ];
           const tagOptions = catKey === 'r1' ? R1_TAGS : catKey === 'r2' ? R2_TAGS : catKey === 'new' ? [] : [...R1_TAGS, ...R2_TAGS.filter(t => t.value !== 'done')];
           const statusOptions = catKey === 'new'
-            ? [{ value: 'contacted', label: 'Contacté', color: '#10b981' }, { value: 'not_contacted', label: 'Pas contacté', color: '#94a3b8' }]
+            ? [{ value: 'prio_high', label: 'High', color: '#ef4444' }, { value: 'prio_medium', label: 'Medium', color: '#f59e0b' }, { value: 'prio_low', label: 'Low', color: '#94a3b8' }]
             : catKey === 'r1'
               ? [{ value: 'r1_scheduled', label: 'Planifiés', color: '#3b82f6' }, { value: 'r1_waiting', label: 'En attente', color: '#f59e0b' }, { value: 'r1_done', label: 'Effectués', color: '#10b981' }, { value: 'r1_cancelled', label: 'Annulés', color: '#ef4444' }]
               : catKey === 'r2'
-                ? [{ value: 'r2_done', label: 'R2 qualifié', color: '#fb923c' }, { value: 'r2_not_done', label: 'R2 non qualifié', color: '#94a3b8' }]
-                : [{ value: 'r1_done', label: 'R1 qualifié', color: '#3b82f6' }, { value: 'r1_not_done', label: 'R1 non qualifié', color: '#94a3b8' }, { value: 'r2_done', label: 'R2 qualifié', color: '#fb923c' }, { value: 'r2_not_done', label: 'R2 non qualifié', color: '#94a3b8' }];
+                ? [{ value: 'r2_scheduled', label: 'Planifiés', color: '#fb923c' }, { value: 'r2_pending', label: 'En attente', color: '#f59e0b' }, { value: 'r2_done', label: 'Effectués', color: '#10b981' }, { value: 'r2_cancelled', label: 'Annulés', color: '#ef4444' }]
+                : [{ value: 'prio_high', label: 'High', color: '#ef4444' }, { value: 'prio_medium', label: 'Medium', color: '#f59e0b' }, { value: 'prio_low', label: 'Low', color: '#94a3b8' }];
 
           // Shared colors
           const greyBorder = darkMode ? '#3a3b46' : '#d4d4d8';
@@ -3053,7 +3077,7 @@ export default function TrackingSheet() {
                 {/* Statut */}
                 {statusOptions.length > 0 && (
                   <>
-                    {renderFilterRow('statut', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>, 'Statut', true)}
+                    {renderFilterRow('statut', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>, catKey === 'new' ? 'Priorité' : 'Statut', true)}
                     {openFilterSections.has('statut') && renderOptionsBox(
                       statusOptions.map(opt => <div key={opt.value}>{renderRadio(filterStatuses.includes(opt.value), opt.label, opt.color, () => setFilterStatuses(prev => prev.includes(opt.value) ? prev.filter(v => v !== opt.value) : [...prev, opt.value]))}</div>)
                     )}
@@ -3143,7 +3167,7 @@ export default function TrackingSheet() {
               width: '10px',
               height: '10px',
               borderRadius: '50%',
-              background: activeCat.color,
+              background: activeCat.dotColor || activeCat.color,
               flexShrink: 0,
             }} />
             <div>
@@ -3273,12 +3297,12 @@ export default function TrackingSheet() {
                 ];
                 const tagOptions = catKey === 'r1' ? R1_TAGS : catKey === 'r2' ? R2_TAGS : catKey === 'new' ? [] : [...R1_TAGS, ...R2_TAGS.filter(t => t.value !== 'done')];
                 const statusOptions = catKey === 'new'
-                  ? [{ value: 'contacted', label: 'Contacté', color: '#10b981' }, { value: 'not_contacted', label: 'Pas contacté', color: '#94a3b8' }]
+                  ? [{ value: 'prio_high', label: 'High', color: '#ef4444' }, { value: 'prio_medium', label: 'Medium', color: '#f59e0b' }, { value: 'prio_low', label: 'Low', color: '#94a3b8' }]
                   : catKey === 'r1'
                     ? [{ value: 'r1_scheduled', label: 'Planifiés', color: '#3b82f6' }, { value: 'r1_waiting', label: 'En attente', color: '#f59e0b' }, { value: 'r1_done', label: 'Effectués', color: '#10b981' }, { value: 'r1_cancelled', label: 'Annulés', color: '#ef4444' }]
                     : catKey === 'r2'
                       ? [{ value: 'r2_scheduled', label: 'Planifiés', color: '#fb923c' }, { value: 'r2_pending', label: 'En attente', color: '#f59e0b' }, { value: 'r2_done', label: 'Effectués', color: '#10b981' }, { value: 'r2_cancelled', label: 'Annulés', color: '#ef4444' }]
-                      : [{ value: 'r1_done', label: 'R1 qualifié', color: '#3b82f6' }, { value: 'r1_not_done', label: 'R1 non qualifié', color: '#94a3b8' }, { value: 'r2_done', label: 'R2 qualifié', color: '#fb923c' }, { value: 'r2_not_done', label: 'R2 non qualifié', color: '#94a3b8' }];
+                      : [{ value: 'prio_high', label: 'High', color: '#ef4444' }, { value: 'prio_medium', label: 'Medium', color: '#f59e0b' }, { value: 'prio_low', label: 'Low', color: '#94a3b8' }];
                 const hasTagFilter = tagOptions.length > 0;
                 const hasStatusFilter = statusOptions.length > 0;
                 const toggleTag = (val) => setFilterTags(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
@@ -3621,7 +3645,7 @@ export default function TrackingSheet() {
                       {/* Category color dot */}
                       <div style={{
                         width: 8, height: 8, borderRadius: '50%',
-                        background: activeCat.color,
+                        background: activeCat.dotColor || activeCat.color,
                         flexShrink: 0,
                       }} />
 
@@ -3890,7 +3914,10 @@ export default function TrackingSheet() {
                               </div>
                               {!isCollapsed && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }} onClick={isCancelled ? (e) => e.stopPropagation() : undefined}>
-                                  {grp.leads.map((lead, i) => renderLeadCard(lead, startIdx + i))}
+                                  {[...grp.leads].sort((a, b) => {
+                                    const prioOrder = { high: 0, medium: 1, low: 2 };
+                                    return (prioOrder[a.lead_priority] ?? 1) - (prioOrder[b.lead_priority] ?? 1);
+                                  }).map((lead, i) => renderLeadCard(lead, startIdx + i))}
                                 </div>
                               )}
                             </div>
@@ -3900,7 +3927,10 @@ export default function TrackingSheet() {
                     );
                   })()
                 ) : (
-                  filteredLeads.map((lead, i) => renderLeadCard(lead, i))
+                  [...filteredLeads].sort((a, b) => {
+                    const prioOrder = { high: 0, medium: 1, low: 2 };
+                    return (prioOrder[a.lead_priority] ?? 1) - (prioOrder[b.lead_priority] ?? 1);
+                  }).map((lead, i) => renderLeadCard(lead, i))
                 )}
               </div>
             );
@@ -3975,6 +4005,14 @@ export default function TrackingSheet() {
                     <button onClick={cancelFieldEdit} style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
                   </div>
                 ) : (
+                  <>
+                  {/* Origin badge above name */}
+                  <span style={{
+                    padding: '1px 7px', borderRadius: 50, fontSize: 10, fontWeight: 600,
+                    background: origin.bg, color: origin.text, marginBottom: 3, alignSelf: 'flex-start',
+                  }}>
+                    {lead.origin}
+                  </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
                     <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>
                       {lead.full_name}
@@ -3986,15 +4024,10 @@ export default function TrackingSheet() {
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
                   </div>
+                  </>
                 )}
-                {/* Origin badge + company_name */}
+                {/* Company name with building icon */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <span style={{
-                    padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 600,
-                    background: origin.bg, color: origin.text,
-                  }}>
-                    {lead.origin}
-                  </span>
                   {/* Company name (editable inline) */}
                   {editingField?.leadId === lead.id && editingField?.field === 'company_name' ? (
                     <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
@@ -4012,14 +4045,16 @@ export default function TrackingSheet() {
                       title={lead.company_name ? 'Modifier la société' : 'Ajouter le nom de la société'}
                       style={{
                         fontSize: 12, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3,
-                        color: lead.company_name ? C.secondary : C.muted,
+                        color: '#949293',
                         fontStyle: lead.company_name ? 'normal' : 'italic',
+                        fontSize: 13, fontWeight: 600,
                         borderRadius: 6, padding: '1px 5px', margin: '-1px -5px',
                         transition: 'background 0.15s',
                       }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                     >
+                      <img src={iconBuilding} alt="" style={{ width: 16, height: 16, marginTop: -1 }} />
                       {lead.company_name || '+ Société'}
                       <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </span>
@@ -4057,7 +4092,7 @@ export default function TrackingSheet() {
                 {/* Phone */}
                 {editingField?.leadId === lead.id && editingField?.field === 'phone' ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ width: 30, height: 30, borderRadius: 8, flexShrink: 0, background: darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: 22, height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
                     </div>
                     <input ref={editInputRef} value={editingField.value} onChange={(e) => setEditingField(prev => ({ ...prev, value: e.target.value }))}
@@ -4074,11 +4109,10 @@ export default function TrackingSheet() {
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                 >
                   <div style={{
-                    width: 30, height: 30, borderRadius: 8, flexShrink: 0,
-                    background: darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)',
+                    width: 22, height: 22, flexShrink: 0,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#949293" stroke="#949293" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
                     </svg>
                   </div>
@@ -4107,8 +4141,8 @@ export default function TrackingSheet() {
                 {/* Email */}
                 {editingField?.leadId === lead.id && editingField?.field === 'email' ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ width: 30, height: 30, borderRadius: 8, flexShrink: 0, background: darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    <div style={{ width: 22, height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <img src={iconEmailDetail} alt="" style={{ width: 17, height: 17, objectFit: 'contain' }} />
                     </div>
                     <input ref={editInputRef} value={editingField.value} onChange={(e) => setEditingField(prev => ({ ...prev, value: e.target.value }))}
                       onKeyDown={(e) => { if (e.key === 'Enter') saveFieldEdit(); if (e.key === 'Escape') cancelFieldEdit(); }}
@@ -4124,13 +4158,10 @@ export default function TrackingSheet() {
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                 >
                   <div style={{
-                    width: 30, height: 30, borderRadius: 8, flexShrink: 0,
-                    background: darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)',
+                    width: 22, height: 22, flexShrink: 0,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
-                    </svg>
+                    <img src={iconEmailDetail} alt="" style={{ width: 17, height: 17, objectFit: 'contain' }} />
                   </div>
                   <div onClick={() => copyToClipboard(lead.email, `email-detail-${lead.id}`)} style={{ flex: 1, minWidth: 0, cursor: lead.email ? 'pointer' : 'default' }}>
                     <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email</div>
@@ -4154,15 +4185,85 @@ export default function TrackingSheet() {
                   )}
                 </div>
                 )}
+                {/* Sales Qualification */}
+                {(() => {
+                  const QUAL_OPTIONS = [
+                    { key: 'lead', label: 'Lead', icon: iconQualLead },
+                    { key: 'qualifie', label: 'Qualifié', icon: iconQualQualifie },
+                    { key: 'proposition', label: 'Proposition', icon: iconQualProposition },
+                    { key: 'negociation', label: 'Négociation', icon: iconQualNegociation },
+                    { key: 'gagne', label: 'Gagné', icon: iconQualGagne },
+                    { key: 'perdu', label: 'Perdu', icon: iconQualPerdu },
+                  ];
+                  const current = lead.sales_qualification || 'lead';
+                  const currentOpt = QUAL_OPTIONS.find(q => q.key === current) || QUAL_OPTIONS[0];
+                  const isQualOpen = qualDropdown === lead.id;
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, position: 'relative' }}>
+                      <div style={{ width: 22, height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
+                        <img src={iconScalier} alt="" style={{ width: 18, height: 18 }} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Qualification</div>
+                        <button ref={el => { if (el) el._qualBtn = true; }} onClick={(e) => {
+                          if (isQualOpen) { setQualDropdown(null); return; }
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setQualDropdownPos({ x: rect.left, y: rect.bottom + 4 });
+                          setQualDropdown(lead.id);
+                        }} style={{
+                          display: 'flex', alignItems: 'center', gap: 5, padding: '2px 0',
+                          border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
+                        }}>
+                          <img src={currentOpt.icon} alt="" style={{ height: 18, objectFit: 'contain' }} />
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round"><path d="m6 9 6 6 6-6"/></svg>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Lead Priority */}
+                {(() => {
+                  const PRIO_OPTIONS = [
+                    { key: 'high', icon: iconPrioHigh },
+                    { key: 'medium', icon: iconPrioMedium },
+                    { key: 'low', icon: iconPrioLow },
+                  ];
+                  const currentPrio = lead.lead_priority || 'medium';
+                  const currentPrioOpt = PRIO_OPTIONS.find(p => p.key === currentPrio) || PRIO_OPTIONS[1];
+                  const isPrioOpen = prioDropdown === lead.id;
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, position: 'relative' }}>
+                      <div style={{ width: 22, height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
+                        <img src={iconPrio} alt="" style={{ width: 18, height: 18 }} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Priorité</div>
+                        <button onClick={(e) => {
+                          if (isPrioOpen) { setPrioDropdown(null); return; }
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setPrioDropdownPos({ x: rect.left, y: rect.bottom + 4 });
+                          setPrioDropdown(lead.id);
+                        }} style={{
+                          display: 'flex', alignItems: 'center', gap: 5, padding: '2px 0',
+                          border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
+                        }}>
+                          <img src={currentPrioOpt.icon} alt="" style={{ height: 18, objectFit: 'contain' }} />
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round"><path d="m6 9 6 6 6-6"/></svg>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Sector */}
                 {lead.sector && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{
-                      width: 30, height: 30, borderRadius: 8, flexShrink: 0,
-                      background: darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)',
+                      width: 22, height: 22, flexShrink: 0,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
                       </svg>
                     </div>
@@ -4186,8 +4287,7 @@ export default function TrackingSheet() {
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                   >
                     <div style={{
-                      width: 30, height: 30, borderRadius: 8, flexShrink: 0,
-                      background: darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)',
+                      width: 22, height: 22, flexShrink: 0,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
                       <img src={meetIcon} alt="Meet" style={{ width: 16, height: 16, objectFit: 'contain' }} />
@@ -4524,11 +4624,11 @@ export default function TrackingSheet() {
                         onClick={() => setActiveWorkflow({ leadId: lead.id, contactResult: '', appointmentResult: '', newDate: '' })}
                         style={{
                           width: '100%', padding: '10px 16px', borderRadius: 50, border: 'none',
-                          background: C.accent, color: '#fff', fontSize: 13, fontWeight: 600,
+                          background: '#E8F2FD', color: '#3b82f6', fontSize: 13, fontWeight: 600,
                           cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)', fontFamily: 'inherit',
                         }}
-                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = `0 4px 16px ${C.accent}40`; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.background = '#d4e8fa'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.background = '#E8F2FD'; }}
                       >
                         Premier contact
                       </button>
@@ -5079,8 +5179,8 @@ export default function TrackingSheet() {
                 })()}
               </div>
 
-              {/* ═══ REASSIGN (killed sheet only) ═══ */}
-              {isAdminView && allSheets.find(s => s.email === viewingSheetId)?.status === 'killed' && (
+              {/* ═══ REASSIGN (killed sheet or invitation) ═══ */}
+              {isAdminView && (allSheets.find(s => s.email === viewingSheetId)?.status === 'killed' || myInvitations.some(inv => inv.sheet_email === viewingSheetId)) && (
                 <div style={{ marginTop: 16, padding: '14px 0', borderTop: `1px solid ${C.border}` }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
                     Réaffecter ce lead
@@ -5624,6 +5724,97 @@ export default function TrackingSheet() {
           )}
         </div>
       )}
+      {/* ═══ QUALIFICATION DROPDOWN (portaled) ═══ */}
+      {qualDropdown && (() => {
+        const lead = leads.find(l => l.id === qualDropdown);
+        if (!lead) return null;
+        const QUAL_OPTIONS = [
+          { key: 'lead', label: 'Lead', icon: iconQualLead },
+          { key: 'qualifie', label: 'Qualifié', icon: iconQualQualifie },
+          { key: 'proposition', label: 'Proposition', icon: iconQualProposition },
+          { key: 'negociation', label: 'Négociation', icon: iconQualNegociation },
+          { key: 'gagne', label: 'Gagné', icon: iconQualGagne },
+          { key: 'perdu', label: 'Perdu', icon: iconQualPerdu },
+        ];
+        const current = lead.sales_qualification || 'lead';
+        return createPortal(
+          <>
+            <div onClick={() => setQualDropdown(null)} style={{ position: 'fixed', inset: 0, zIndex: 9990 }} />
+            <div style={{
+              position: 'fixed', top: qualDropdownPos.y, left: qualDropdownPos.x, zIndex: 9991,
+              background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12,
+              boxShadow: darkMode ? '0 8px 24px rgba(0,0,0,0.4)' : '0 8px 24px rgba(0,0,0,0.1)',
+              padding: 4, minWidth: 180,
+            }}>
+              {QUAL_OPTIONS.map(q => (
+                <button key={q.key} onClick={async () => {
+                  setQualDropdown(null);
+                  const prev = current;
+                  setLeads(p => p.map(l => l.id === lead.id ? { ...l, sales_qualification: q.key } : l));
+                  try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { sales_qualification: q.key }); }
+                  catch { setLeads(p => p.map(l => l.id === lead.id ? { ...l, sales_qualification: prev } : l)); }
+                }} style={{
+                  display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px',
+                  border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
+                  background: current === q.key ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)') : 'transparent',
+                  transition: 'background 0.15s',
+                }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = current === q.key ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)') : 'transparent'}
+                >
+                  <img src={q.icon} alt="" style={{ height: 20, objectFit: 'contain' }} />
+                </button>
+              ))}
+            </div>
+          </>,
+          document.body
+        );
+      })()}
+
+      {/* ═══ PRIORITY DROPDOWN (portaled) ═══ */}
+      {prioDropdown && (() => {
+        const lead = leads.find(l => l.id === prioDropdown);
+        if (!lead) return null;
+        const PRIO_OPTIONS = [
+          { key: 'high', icon: iconPrioHigh },
+          { key: 'medium', icon: iconPrioMedium },
+          { key: 'low', icon: iconPrioLow },
+        ];
+        const current = lead.lead_priority || 'medium';
+        return createPortal(
+          <>
+            <div onClick={() => setPrioDropdown(null)} style={{ position: 'fixed', inset: 0, zIndex: 9990 }} />
+            <div style={{
+              position: 'fixed', top: prioDropdownPos.y, left: prioDropdownPos.x, zIndex: 9991,
+              background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12,
+              boxShadow: darkMode ? '0 8px 24px rgba(0,0,0,0.4)' : '0 8px 24px rgba(0,0,0,0.1)',
+              padding: 4, minWidth: 140,
+            }}>
+              {PRIO_OPTIONS.map(p => (
+                <button key={p.key} onClick={async () => {
+                  setPrioDropdown(null);
+                  const prev = current;
+                  setLeads(pr => pr.map(l => l.id === lead.id ? { ...l, lead_priority: p.key } : l));
+                  try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { lead_priority: p.key }); }
+                  catch { setLeads(pr => pr.map(l => l.id === lead.id ? { ...l, lead_priority: prev } : l)); }
+                }} style={{
+                  display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px',
+                  border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
+                  background: current === p.key ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)') : 'transparent',
+                  transition: 'background 0.15s',
+                }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = current === p.key ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)') : 'transparent'}
+                >
+                  <img src={p.icon} alt="" style={{ height: 20, objectFit: 'contain' }} />
+                </button>
+              ))}
+            </div>
+          </>,
+          document.body
+        );
+      })()}
+
       {/* ═══ INVITE MODAL ═══ */}
       {inviteModal && createPortal(
         <>

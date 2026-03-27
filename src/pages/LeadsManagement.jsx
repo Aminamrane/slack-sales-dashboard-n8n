@@ -382,611 +382,192 @@ export default function LeadsManagement() {
     );
   }
 
-  if (!hasAccess) {
-    return null;
-  }
+  if (!hasAccess) return null;
+
+  const C = {
+    bg: darkMode ? '#1e1f28' : '#ffffff', border: darkMode ? '#2a2b36' : '#e2e6ef',
+    surface: darkMode ? '#13141b' : '#f6f7f9', text: darkMode ? '#eef0f6' : '#1e2330',
+    muted: darkMode ? '#5e6273' : '#9ca3af', subtle: darkMode ? '#252636' : '#f4f6fb',
+    secondary: darkMode ? '#8b8fa0' : '#6b7280', accent: darkMode ? '#7c8adb' : '#5b6abf',
+    shadow: darkMode ? '0 1px 3px rgba(0,0,0,0.2), 0 4px 16px rgba(0,0,0,0.15)' : '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03)',
+  };
 
   return (
-    <div style={{
-      padding: 0,
-      fontFamily: "sans-serif",
-      background: darkMode ? "#1a1a1e" : "#f5f5f7",
-      minHeight: "100vh",
-      paddingTop: '16px'
-    }}>
-      {/* ═══════════════════════════════════════════════════════════════════
-          SHARED NAVBAR
-      ═══════════════════════════════════════════════════════════════════ */}
+    <>
       <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          LEADS MANAGEMENT BOARD-FRAME
-      ═══════════════════════════════════════════════════════════════════ */}
-      <div className="board-frame">
-        {/* Board Controls */}
-        <div style={{
-          position: 'absolute',
-          top: 'var(--space-xl)',
-          left: 'var(--space-2xl)',
-          right: 'var(--space-2xl)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          zIndex: 10
-        }}>
-          {/* Left: Title */}
-          <div style={{
-            display: 'flex',
-            gap: 'var(--space-md)',
-            alignItems: 'center'
-          }}>
-            <h2 style={{
-              margin: 0,
-              fontSize: '18px',
-              fontWeight: 600,
-              color: darkMode ? '#f5f5f7' : '#1d1d1f'
-            }}>
-              Gestion des Leads
-            </h2>
-            <span style={{
-              fontSize: '11px',
-              color: darkMode ? '#8b8d93' : '#86868b',
-              padding: '4px 8px',
-              borderRadius: '6px',
-              background: darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
-              fontWeight: 500
-            }}>
-              200 plus récents
-            </span>
-          </div>
+      <style>{`
+        html, body { background: ${darkMode ? '#13141b' : '#ffffff'}; scrollbar-gutter: stable; }
+        @keyframes lmReveal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+        @keyframes lmRowIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+        .lm-scroll::-webkit-scrollbar { width: 3px; } .lm-scroll::-webkit-scrollbar-track { background: transparent; } .lm-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 4px; }
+      `}</style>
 
-          {/* Right: Month filter */}
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="range-select"
-            style={{
-              padding: "8px 14px",
-              paddingRight: "32px",
-              borderRadius: "12px",
-              border: `1px solid ${darkMode ? "#333338" : "#e5e5e5"}`,
-              background: darkMode ? "#2a2b2e" : "#ffffff",
-              color: darkMode ? "#f5f5f7" : "#1d1d1f",
-              fontWeight: 500,
-              fontSize: "14px",
-              cursor: "pointer"
-            }}
-          >
-            {monthOptions.map(opt => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div style={{ animation: 'lmReveal 0.5s ease both', fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif' }}>
+        <div style={{ display: 'flex', minHeight: '100vh', paddingTop: 80 }}>
 
-        {/* Board Content */}
-        <div style={{
-          marginTop: '80px',
-          padding: '0 var(--space-2xl) var(--space-2xl)',
-        }}>
-          {dataLoading ? (
-            /* ── SKELETON LOADER ───────────────────────────────────────── */
-            <div style={{
-              textAlign: 'center',
-              marginBottom: 'var(--space-2xl)'
-            }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '16px',
-                marginBottom: '24px'
-              }}>
-                <div style={{
-                  fontSize: '42px',
-                  opacity: 0.3
-                }}>
-                  🎯
-                </div>
-                <div className="skeleton" style={{
-                  width: '300px',
-                  height: '42px'
-                }}></div>
+          {/* ── MAIN CONTENT ──────────────────────────────────────────── */}
+          <div style={{ flex: 1, padding: '20px 28px', minWidth: 0 }}>
+
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+              <div>
+                <h1 style={{ fontSize: 22, fontWeight: 700, color: C.text, margin: 0, letterSpacing: '-0.02em' }}>Gestion des Leads</h1>
+                <p style={{ fontSize: 13, color: C.muted, margin: '4px 0 0' }}>{leads.length} leads chargés</p>
               </div>
-
-              {/* Skeleton KPIs */}
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: '16px',
-                maxWidth: '1200px',
-                margin: '0 auto 32px'
+              <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} style={{
+                padding: '8px 32px 8px 14px', borderRadius: 10, border: `1px solid ${C.border}`,
+                background: C.bg, color: C.text, fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+                appearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='${darkMode ? '%235e6273' : '%239ca3af'}' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
               }}>
-                {[1, 2, 3, 4].map(i => (
-                  <div key={i} className="skeleton" style={{
-                    height: '120px'
-                  }}></div>
-                ))}
-              </div>
-
-              {/* Skeleton Table */}
-              <div className="skeleton" style={{
-                height: '400px',
-                borderRadius: '16px'
-              }}></div>
+                {monthOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+              </select>
             </div>
-          ) : (
-            /* ── ACTUAL CONTENT ────────────────────────────────────────── */
-            <div className="content-fade-in">
-              {/* ── STATS SECTION ───────────────────────────────────────── */}
-              <div style={{
-                textAlign: 'center',
-                marginBottom: 'var(--space-2xl)'
-              }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '16px',
-                  marginBottom: '24px'
-                }}>
-                  <div style={{
-                    fontSize: '42px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    🎯
-                  </div>
-                  <h1 style={{
-                    fontSize: '32px',
-                    fontWeight: 700,
-                    margin: 0,
-                    color: darkMode ? '#f5f5f7' : '#1d1d1f'
-                  }}>
-                    Gestion des Leads
-                  </h1>
+
+            {dataLoading ? (
+              <div style={{ textAlign: 'center', padding: 60, color: C.muted }}>Chargement...</div>
+            ) : (
+              <>
+                {/* KPIs */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 20 }}>
+                  {[
+                    { label: 'Taux de conversion', value: `${stats.conversionRate.toFixed(1)}%`, sub: `${stats.matchedCount} / ${stats.totalLeads}`, color: C.accent },
+                    { label: 'Revenu total', value: formatCurrency(stats.totalRevenue), color: '#10b981' },
+                    { label: 'Ventes du mois', value: String(stats.monthlySales), color: '#fb923c' },
+                  ].map((kpi, i) => (
+                    <div key={i} style={{
+                      padding: '18px 20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`,
+                      boxShadow: C.shadow, animation: `lmReveal 0.4s ease ${i * 80}ms both`,
+                    }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>{kpi.label}</div>
+                      <div style={{ fontSize: 26, fontWeight: 800, color: kpi.color, letterSpacing: '-0.02em' }}>{kpi.value}</div>
+                      {kpi.sub && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{kpi.sub}</div>}
+                    </div>
+                  ))}
                 </div>
 
-                {/* KPIs Grid */}
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  gap: '20px',
-                  maxWidth: '1000px',
-                  margin: '0 auto 32px'
-                }}>
-              {/* Conversion Rate */}
-              <div style={{
-                padding: '24px 32px',
-                borderRadius: '16px',
-                background: darkMode ? 'rgba(255,255,255,0.03)' : '#ffffff',
-                border: `1px solid ${darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}`,
-                textAlign: 'center',
-                minWidth: '200px',
-                boxShadow: darkMode ? 'none' : '0 2px 8px rgba(0,0,0,0.04)'
-              }}>
-                <div style={{
-                  fontSize: '11px',
-                  color: darkMode ? '#8b8d93' : '#86868b',
-                  marginBottom: '8px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px'
-                }}>
-                  Taux de Conversion
-                </div>
-                <div style={{
-                  fontSize: '36px',
-                  fontWeight: 700,
-                  color: COLORS.primary
-                }}>
-                  {stats.conversionRate.toFixed(1)}%
-                </div>
-                <div style={{
-                  fontSize: '11px',
-                  color: darkMode ? '#8b8d93' : '#86868b',
-                  marginTop: '4px'
-                }}>
-                  {stats.matchedCount} / {stats.totalLeads}
-                </div>
-              </div>
-
-              {/* Total Revenue */}
-              <div style={{
-                padding: '24px 32px',
-                borderRadius: '16px',
-                background: darkMode ? 'rgba(255,255,255,0.03)' : '#ffffff',
-                border: `1px solid ${darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}`,
-                textAlign: 'center',
-                minWidth: '200px',
-                boxShadow: darkMode ? 'none' : '0 2px 8px rgba(0,0,0,0.04)'
-              }}>
-                <div style={{
-                  fontSize: '11px',
-                  color: darkMode ? '#8b8d93' : '#86868b',
-                  marginBottom: '8px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px'
-                }}>
-                  Revenu Total
-                </div>
-                <div style={{
-                  fontSize: '28px',
-                  fontWeight: 700,
-                  color: COLORS.tertiary
-                }}>
-                  {formatCurrency(stats.totalRevenue)}
-                </div>
-              </div>
-
-              {/* Monthly Sales */}
-              <div style={{
-                padding: '24px 32px',
-                borderRadius: '16px',
-                background: darkMode ? 'rgba(255,255,255,0.03)' : '#ffffff',
-                border: `1px solid ${darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}`,
-                textAlign: 'center',
-                minWidth: '200px',
-                boxShadow: darkMode ? 'none' : '0 2px 8px rgba(0,0,0,0.04)'
-              }}>
-                <div style={{
-                  fontSize: '11px',
-                  color: darkMode ? '#8b8d93' : '#86868b',
-                  marginBottom: '8px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px'
-                }}>
-                  Ventes du Mois
-                </div>
-                <div style={{
-                  fontSize: '36px',
-                  fontWeight: 700,
-                  color: COLORS.secondary
-                }}>
-                  {stats.monthlySales}
-                </div>
-              </div>
-            </div>
-          </div>
-
-                {/* ── TABLE SECTION ───────────────────────────────────────── */}
-                <div style={{
-                  background: darkMode ? '#1e1e22' : '#ffffff',
-                  borderRadius: '16px',
-                  overflow: 'hidden',
-                  boxShadow: darkMode
-                    ? '0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)'
-                    : '0 4px 24px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)'
+                {/* Table */}
+                <div className="lm-scroll" style={{
+                  background: C.bg, borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: C.shadow,
+                  overflow: 'auto', maxHeight: 'calc(100vh - 280px)',
                 }}>
                   {leads.length === 0 ? (
-                    <div style={{ padding: "60px", textAlign: "center" }}>
-                      <p style={{
-                        color: darkMode ? "#8b8d93" : "#86868b",
-                        fontSize: '14px'
-                      }}>
-                        Aucun lead trouvé
-                      </p>
-                    </div>
+                    <div style={{ padding: 60, textAlign: 'center', color: C.muted, fontSize: 13 }}>Aucun lead trouvé</div>
                   ) : (
-                    <div style={{ overflowX: "auto" }}>
-                      <table style={{
-                        width: "100%",
-                        borderCollapse: "separate",
-                        borderSpacing: 0
-                      }}>
-                        <thead>
-                          <tr>
-                            {[
-                              { label: 'Origine', width: '130px', align: 'left' },
-                              { label: 'Date', width: '110px', align: 'center' },
-                              { label: 'Nom & Prénom', width: '200px', align: 'left' },
-                              { label: 'Nb Salariés', width: '110px', align: 'center' },
-                              { label: 'CA', width: '180px', align: 'left' },
-                              { label: 'Assigné à', width: '200px', align: 'center' }
-                            ].map((col, idx, arr) => (
-                              <th key={col.label} style={{
-                                padding: '16px 20px',
-                                textAlign: col.align,
-                                fontSize: '11px',
-                                fontWeight: 700,
-                                color: darkMode ? '#9ca3af' : '#6b7280',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.8px',
-                                background: darkMode ? '#252529' : '#f8fafc',
-                                borderBottom: `2px solid ${darkMode ? '#3f3f46' : '#e2e8f0'}`,
-                                borderRight: idx < arr.length - 1 ? `1px solid ${darkMode ? '#3f3f46' : '#e2e8f0'}` : 'none',
-                                width: col.width,
-                                whiteSpace: 'nowrap'
-                              }}>
-                                {col.label}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {leads.map((lead, index) => {
-                            const isEven = index % 2 === 0;
-                            const rowBg = isEven
-                              ? (darkMode ? 'transparent' : 'transparent')
-                              : (darkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)');
-
-                            return (
-                              <tr
-                                key={lead.id || index}
-                                onClick={() => openModal(lead)}
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          {['Origine', 'Date', 'Nom & Prénom', 'Salariés', 'CA', 'Assigné à'].map((h, i) => (
+                            <th key={h} style={{
+                              padding: '12px 16px', fontSize: 10.5, fontWeight: 700, color: C.muted,
+                              textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'left',
+                              background: darkMode ? C.subtle : '#f8f9fb', borderBottom: `1px solid ${C.border}`,
+                              position: 'sticky', top: 0, zIndex: 2,
+                            }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {leads.map((lead, idx) => (
+                          <tr key={lead.id || idx} onClick={() => openModal(lead)} style={{
+                            cursor: 'pointer', transition: 'background 0.15s',
+                            animation: idx < 30 ? `lmRowIn 0.25s ease ${idx * 20}ms both` : undefined,
+                          }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.03)' : '#fafafb'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                          >
+                            <td style={{ padding: '11px 16px', borderBottom: `1px solid ${C.border}`, fontSize: 12 }}>
+                              <span style={{
+                                padding: '3px 9px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                                background: `${C.accent}12`, color: C.accent,
+                              }}>{lead.origin || '—'}</span>
+                            </td>
+                            <td style={{ padding: '11px 16px', borderBottom: `1px solid ${C.border}`, fontSize: 12, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>
+                              {formatDate(lead.created_at)}
+                            </td>
+                            <td style={{ padding: '11px 16px', borderBottom: `1px solid ${C.border}`, fontSize: 13, fontWeight: 600, color: C.text }}>
+                              {lead.full_name || '—'}
+                            </td>
+                            <td style={{ padding: '11px 16px', borderBottom: `1px solid ${C.border}`, fontSize: 12, color: C.secondary, textAlign: 'center' }}>
+                              {lead.headcount || '—'}
+                            </td>
+                            <td style={{ padding: '11px 16px', borderBottom: `1px solid ${C.border}`, fontSize: 12, color: C.secondary }}>
+                              {lead.revenue || '—'}
+                            </td>
+                            <td style={{ padding: '8px 12px', borderBottom: `1px solid ${C.border}` }} onClick={(e) => e.stopPropagation()}>
+                              <select value={lead.assigned_to || ''} onChange={(e) => handleAssignLead(lead.id, e.target.value, e)}
+                                disabled={assigningLeads.has(lead.id)}
                                 style={{
-                                  background: rowBg,
-                                  cursor: "pointer",
-                                  transition: "all 0.15s ease"
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = darkMode ? 'rgba(99, 102, 241, 0.08)' : 'rgba(99, 102, 241, 0.04)';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.background = rowBg;
-                                }}
-                              >
-                                {/* Origine */}
-                                <td style={{
-                                  padding: '14px 20px',
-                                  fontSize: '13px',
-                                  color: darkMode ? '#f5f5f7' : '#1d1d1f',
-                                  borderBottom: `1px solid ${darkMode ? '#2d2d32' : '#f1f5f9'}`,
-                                  borderRight: `1px solid ${darkMode ? '#2d2d32' : '#f1f5f9'}`,
-                                  fontWeight: 500
+                                  padding: '6px 24px 6px 10px', borderRadius: 8, fontSize: 12, fontWeight: lead.assigned_to ? 600 : 400,
+                                  border: `1px solid ${lead.assigned_to ? '#10b98130' : C.border}`,
+                                  background: lead.assigned_to ? (darkMode ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.04)') : 'transparent',
+                                  color: lead.assigned_to ? '#10b981' : C.muted,
+                                  cursor: assigningLeads.has(lead.id) ? 'wait' : 'pointer',
+                                  fontFamily: 'inherit', width: '100%', maxWidth: 170,
+                                  opacity: assigningLeads.has(lead.id) ? 0.5 : 1,
+                                  appearance: 'none',
+                                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='${darkMode ? '%235e6273' : '%239ca3af'}' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
+                                  backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center',
                                 }}>
-                                  <span style={{
-                                    display: 'inline-block',
-                                    padding: '4px 10px',
-                                    borderRadius: '6px',
-                                    fontSize: '12px',
-                                    fontWeight: 500,
-                                    background: darkMode ? 'rgba(99, 102, 241, 0.15)' : 'rgba(99, 102, 241, 0.08)',
-                                    color: COLORS.primary,
-                                    border: `1px solid ${darkMode ? 'rgba(99, 102, 241, 0.3)' : 'rgba(99, 102, 241, 0.2)'}`
-                                  }}>
-                                    {lead.origin || "-"}
-                                  </span>
-                                </td>
-
-                                {/* Date */}
-                                <td style={{
-                                  padding: '14px 20px',
-                                  fontSize: '13px',
-                                  color: darkMode ? '#a1a1aa' : '#71717a',
-                                  borderBottom: `1px solid ${darkMode ? '#2d2d32' : '#f1f5f9'}`,
-                                  borderRight: `1px solid ${darkMode ? '#2d2d32' : '#f1f5f9'}`,
-                                  textAlign: 'center',
-                                  fontFamily: 'monospace',
-                                  letterSpacing: '0.5px'
-                                }}>
-                                  {formatDate(lead.created_at)}
-                                </td>
-
-                                {/* Nom & Prénom */}
-                                <td style={{
-                                  padding: '14px 20px',
-                                  fontSize: '14px',
-                                  color: darkMode ? '#f5f5f7' : '#1d1d1f',
-                                  borderBottom: `1px solid ${darkMode ? '#2d2d32' : '#f1f5f9'}`,
-                                  borderRight: `1px solid ${darkMode ? '#2d2d32' : '#f1f5f9'}`,
-                                  fontWeight: 600
-                                }}>
-                                  {lead.full_name || "-"}
-                                </td>
-
-                                {/* Nb Salariés */}
-                                <td style={{
-                                  padding: '14px 20px',
-                                  fontSize: '13px',
-                                  color: darkMode ? '#a1a1aa' : '#52525b',
-                                  borderBottom: `1px solid ${darkMode ? '#2d2d32' : '#f1f5f9'}`,
-                                  borderRight: `1px solid ${darkMode ? '#2d2d32' : '#f1f5f9'}`,
-                                  textAlign: 'center',
-                                  fontWeight: 500
-                                }}>
-                                  {lead.headcount || "-"}
-                                </td>
-
-                                {/* CA */}
-                                <td style={{
-                                  padding: '14px 20px',
-                                  fontSize: '13px',
-                                  color: darkMode ? '#a1a1aa' : '#52525b',
-                                  borderBottom: `1px solid ${darkMode ? '#2d2d32' : '#f1f5f9'}`,
-                                  borderRight: `1px solid ${darkMode ? '#2d2d32' : '#f1f5f9'}`,
-                                  fontWeight: 500
-                                }}>
-                                  {lead.revenue || "-"}
-                                </td>
-
-                                {/* Assigné à */}
-                                <td style={{
-                                  padding: '14px 16px',
-                                  borderBottom: `1px solid ${darkMode ? '#2d2d32' : '#f1f5f9'}`,
-                                  textAlign: 'center'
-                                }}>
-                                  <select
-                                    value={lead.assigned_to || ''}
-                                    onChange={(e) => handleAssignLead(lead.id, e.target.value, e)}
-                                    onClick={(e) => e.stopPropagation()}
-                                    disabled={assigningLeads.has(lead.id)}
-                                    style={{
-                                      padding: '8px 12px',
-                                      paddingRight: '28px',
-                                      borderRadius: '8px',
-                                      border: lead.assigned_to
-                                        ? `2px solid ${COLORS.tertiary}40`
-                                        : `1px solid ${darkMode ? '#3f3f46' : '#e2e8f0'}`,
-                                      background: lead.assigned_to
-                                        ? (darkMode ? 'rgba(16, 185, 129, 0.1)' : 'rgba(16, 185, 129, 0.05)')
-                                        : (darkMode ? '#2a2b2e' : '#ffffff'),
-                                      color: lead.assigned_to
-                                        ? COLORS.tertiary
-                                        : (darkMode ? '#9ca3af' : '#6b7280'),
-                                      fontSize: '13px',
-                                      fontWeight: lead.assigned_to ? 600 : 400,
-                                      cursor: assigningLeads.has(lead.id) ? 'wait' : 'pointer',
-                                      width: '100%',
-                                      maxWidth: '180px',
-                                      transition: 'all 0.2s ease',
-                                      opacity: assigningLeads.has(lead.id) ? 0.5 : 1,
-                                      appearance: 'none',
-                                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='${darkMode ? '%239ca3af' : '%236b7280'}' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-                                      backgroundRepeat: 'no-repeat',
-                                      backgroundPosition: 'right 10px center'
-                                    }}
-                                  >
-                                    <option value="">
-                                      {assigningLeads.has(lead.id) ? 'Assignation...' : 'Non assigné'}
-                                    </option>
-                                    {assignableUsers.length > 0 ? (
-                                      assignableUsers.map((user) => (
-                                        <option key={user.id} value={user.email || user.id}>
-                                          {user.full_name} ({user.role})
-                                        </option>
-                                      ))
-                                    ) : (
-                                      salesTeam.map((member) => (
-                                        <option key={member.sales_email} value={member.sales_email}>
-                                          {SALES_TEAM_NAMES[member.sales_email] || member.sales_email}
-                                        </option>
-                                      ))
-                                    )}
-                                  </select>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                                <option value="">{assigningLeads.has(lead.id) ? 'Assignation...' : 'Non assigné'}</option>
+                                {(assignableUsers.length > 0 ? assignableUsers : []).map(u => (
+                                  <option key={u.id || u.email} value={u.email || u.id}>{u.full_name} ({u.role})</option>
+                                ))}
+                              </select>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   )}
                 </div>
-              </div>
+              </>
             )}
-      </div>
-    </div>
-
-      {/* ── MODAL ─────────────────────────────────────────────────────────── */}
-      {showModal && selectedLead && (
-        <div
-          onClick={closeModal}
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0, 0, 0, 0.7)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 2000,
-            padding: "24px"
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: darkMode ? "#242428" : "#fff",
-              borderRadius: "20px",
-              maxWidth: "600px",
-              width: "100%",
-              maxHeight: "90vh",
-              overflow: "auto",
-              border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`,
-              boxShadow: "0 20px 60px rgba(0,0,0,0.5)"
-            }}
-          >
-            {/* Modal Header */}
-            <div style={{
-              padding: "24px",
-              borderBottom: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center"
-            }}>
-              <h2 style={{
-                margin: 0,
-                fontSize: "20px",
-                fontWeight: 600,
-                color: darkMode ? "#f5f5f7" : "#1d1d1f"
-              }}>
-                Détails du Lead
-              </h2>
-              <button
-                onClick={closeModal}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  fontSize: "28px",
-                  cursor: "pointer",
-                  color: darkMode ? "#8b8d93" : "#86868b",
-                  padding: "0",
-                  width: "32px",
-                  height: "32px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  lineHeight: 1
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div style={{ padding: "24px" }}>
-              <div style={{
-                display: "grid",
-                gap: "20px"
-              }}>
-                {[
-                  { label: "Origine", value: selectedLead.origin },
-                  { label: "Date", value: formatDate(selectedLead.created_at) },
-                  { label: "Nom & Prénom", value: selectedLead.full_name },
-                  { label: "Téléphone", value: selectedLead.phone },
-                  { label: "Email", value: selectedLead.email },
-                  { label: "Plateforme", value: selectedLead.platform },
-                  { label: "Source", value: selectedLead.source },
-                  { label: "Nombre de Salariés", value: selectedLead.headcount },
-                  { label: "Chiffre d'Affaires", value: selectedLead.revenue },
-                  { label: "Projet", value: selectedLead.project },
-                  { label: "Assigné à", value: (() => {
-                    const user = assignableUsers.find(u => u.email === selectedLead.assigned_to || u.id === selectedLead.assigned_to);
-                    return user ? user.full_name : (SALES_TEAM_NAMES[selectedLead.assigned_to] || selectedLead.assigned_to || "Non assigné");
-                  })() },
-                  { label: "Statut", value: selectedLead.status || "À traiter" },
-                  { label: "Notes", value: selectedLead.notes, isMultiline: true }
-                ].map((field, idx) => (
-                  <div key={idx}>
-                    <div style={{
-                      fontSize: "11px",
-                      color: darkMode ? "#8b8d93" : "#86868b",
-                      marginBottom: "6px",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px"
-                    }}>
-                      {field.label}
-                    </div>
-                    <div style={{
-                      fontSize: "15px",
-                      color: darkMode ? "#f5f5f7" : "#1d1d1f",
-                      wordBreak: "break-word",
-                      whiteSpace: field.isMultiline ? 'pre-wrap' : 'normal'
-                    }}>
-                      {field.value || "-"}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         </div>
+      </div>
+
+      {/* ── DETAIL MODAL ─────────────────────────────────────────────── */}
+      {showModal && selectedLead && (
+        <>
+          <div onClick={closeModal} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 2000 }} />
+          <div onClick={(e) => e.stopPropagation()} style={{
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 2001,
+            width: 480, maxWidth: '90vw', maxHeight: '80vh', overflow: 'auto',
+            background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`,
+            boxShadow: darkMode ? '0 24px 48px rgba(0,0,0,0.4)' : '0 24px 48px rgba(0,0,0,0.1)',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif',
+          }}>
+            <div style={{ padding: '20px 24px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: 17, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>Détails du Lead</div>
+              <button onClick={closeModal} style={{ width: 28, height: 28, borderRadius: '50%', border: 'none', background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+            </div>
+            <div style={{ padding: '20px 24px', display: 'grid', gap: 16 }}>
+              {[
+                { label: 'Origine', value: selectedLead.origin },
+                { label: 'Date', value: formatDate(selectedLead.created_at) },
+                { label: 'Nom & Prénom', value: selectedLead.full_name },
+                { label: 'Téléphone', value: selectedLead.phone },
+                { label: 'Email', value: selectedLead.email },
+                { label: 'Salariés', value: selectedLead.headcount },
+                { label: "Chiffre d'Affaires", value: selectedLead.revenue },
+                { label: 'Assigné à', value: (() => {
+                  const u = assignableUsers.find(u => u.email === selectedLead.assigned_to);
+                  return u ? u.full_name : (selectedLead.assigned_to || 'Non assigné');
+                })() },
+                { label: 'Statut', value: selectedLead.status || 'À traiter' },
+                { label: 'Notes', value: selectedLead.notes },
+              ].map((f, i) => (
+                <div key={i}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{f.label}</div>
+                  <div style={{ fontSize: 14, color: C.text, wordBreak: 'break-word' }}>{f.value || '—'}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
       )}
-    </div>
+    </>
   );
 }
-
