@@ -194,6 +194,17 @@ export default function TrackingSheet() {
           return;
         }
 
+        // If admin view, fetch the sheet status (active/killed)
+        if (isAdminView) {
+          try {
+            const sheetsResp = await apiClient.get('/api/v1/tracking/sheets');
+            const sheets = sheetsResp.sheets || [];
+            setAllSheets(sheets);
+            const viewedSheet = sheets.find(s => s.email === viewingSheetId);
+            setViewingSheetStatus(viewedSheet?.status || 'active');
+          } catch { setViewingSheetStatus('active'); }
+        }
+
         await refreshData();
       } catch (e) {
         console.error('[TrackingSheet] Init failed:', e);
@@ -531,6 +542,7 @@ export default function TrackingSheet() {
   const [ghostMode, setGhostMode] = useState(false);
   const [selectedSheetEmail, setSelectedSheetEmail] = useState(null); // email of sheet being viewed
   const [sheetInvitations, setSheetInvitations] = useState([]); // invitations for current killed sheet
+  const [viewingSheetStatus, setViewingSheetStatus] = useState(null); // 'active' | 'killed' for the sheet being viewed
   const [reassignTarget, setReassignTarget] = useState(null); // { leadId, showDropdown: true }
   const [assignableUsers, setAssignableUsers] = useState([]); // users available for reassignment
   const [solarTeams, setSolarTeams] = useState([]); // teams for solar system view
@@ -5180,7 +5192,7 @@ export default function TrackingSheet() {
               </div>
 
               {/* ═══ REASSIGN (killed sheet or invitation) ═══ */}
-              {isAdminView && (allSheets.find(s => s.email === viewingSheetId)?.status === 'killed' || myInvitations.some(inv => inv.sheet_email === viewingSheetId)) && (
+              {isAdminView && (viewingSheetStatus === 'killed' || myInvitations.some(inv => inv.sheet_email === viewingSheetId)) && (
                 <div style={{ marginTop: 16, padding: '14px 0', borderTop: `1px solid ${C.border}` }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
                     Réaffecter ce lead
