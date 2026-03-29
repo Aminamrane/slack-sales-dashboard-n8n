@@ -700,6 +700,7 @@ export default function TrackingSheet() {
   const [ndaPopup, setNdaPopup] = useState(null); // { leadId } or null — which lead's NDA popup is open
   const [ndaData, setNdaData] = useState(null); // AI-prefilled company data for popup
   const [ndaLoading, setNdaLoading] = useState(false); // ai-prefill loading state
+  const [ndaPappersUrl, setNdaPappersUrl] = useState(''); // pappers URL after prefill
   const [ndaError, setNdaError] = useState('');
   const [ndaSuccess, setNdaSuccess] = useState(false);
   const [ndaGenerating, setNdaGenerating] = useState(false); // PDF generation in progress
@@ -746,13 +747,13 @@ export default function TrackingSheet() {
     if (filterStatuses.length > 0) {
       result = result.filter(l => {
         return filterStatuses.some(s => {
-          if (s === 'r1_scheduled') return !l.r1_result || l.r1_result === 'rescheduled';
-          if (s === 'r1_waiting') return l.r1_result === 'no_show';
+          if (s === 'r1_scheduled') { const dp = l.r1 ? l.r1.slice(0,10) < new Date().toISOString().slice(0,10) : false; return (!l.r1_result || l.r1_result === 'rescheduled') && !dp; }
+          if (s === 'r1_waiting') { const dp = l.r1 ? l.r1.slice(0,10) < new Date().toISOString().slice(0,10) : false; return l.r1_result === 'no_show' || ((!l.r1_result || l.r1_result === 'rescheduled') && dp); }
           if (s === 'r1_done') return l.r1_result === 'done';
           if (s === 'r1_cancelled') return l.r1_result === 'cancelled';
           if (s === 'r1_not_done') return !l.r1_result || l.r1_result !== 'done';
-          if (s === 'r2_scheduled') return !l.r2_result || l.r2_result === 'reporte';
-          if (s === 'r2_pending') return ['comptable', 'associe', 'reflexion', 'relire_contrat', 'pas_decision_jour', 'tresorerie'].includes(l.r2_result);
+          if (s === 'r2_scheduled') { const dp = l.r2 ? l.r2.slice(0,10) < new Date().toISOString().slice(0,10) : false; return (!l.r2_result || l.r2_result === 'reporte') && !dp; }
+          if (s === 'r2_pending') { const dp = l.r2 ? l.r2.slice(0,10) < new Date().toISOString().slice(0,10) : false; return ['comptable', 'associe', 'reflexion', 'relire_contrat', 'pas_decision_jour', 'tresorerie'].includes(l.r2_result) || ((!l.r2_result || l.r2_result === 'reporte') && dp); }
           if (s === 'r2_done') return l.r2_result === 'done';
           if (s === 'r2_cancelled') return l.r2_result === 'pas_interesse' || l.r2_result === 'annule';
           if (s === 'r2_not_done') return !l.r2_result || l.r2_result !== 'done';
@@ -1417,6 +1418,7 @@ export default function TrackingSheet() {
 
   const openNdaPopup = (lead) => {
     setNdaPopup({ leadId: lead.id });
+    setNdaPappersUrl('');
     setNdaData({
       legalName: lead.company_name || '',
       legalForm: 'SARL',
@@ -1471,6 +1473,7 @@ export default function TrackingSheet() {
         updates.businessType = data.business_type;
       }
       setNdaData(prev => ({ ...prev, ...updates }));
+      if (data.pappers_url) setNdaPappersUrl(data.pappers_url);
       setNdaSuccess(true);
       setTimeout(() => setNdaSuccess(false), 4000);
     } catch (err) {
@@ -2981,13 +2984,14 @@ export default function TrackingSheet() {
             { value: 'annule', label: 'Annulé', color: '#ef4444' },
           ];
           const tagOptions = catKey === 'r1' ? R1_TAGS : catKey === 'r2' ? R2_TAGS : catKey === 'new' ? [] : [...R1_TAGS, ...R2_TAGS.filter(t => t.value !== 'done')];
+          const prioOptions = [{ value: 'prio_high', label: 'High', color: '#ef4444' }, { value: 'prio_medium', label: 'Medium', color: '#f59e0b' }, { value: 'prio_low', label: 'Low', color: '#94a3b8' }];
           const statusOptions = catKey === 'new'
-            ? [{ value: 'prio_high', label: 'High', color: '#ef4444' }, { value: 'prio_medium', label: 'Medium', color: '#f59e0b' }, { value: 'prio_low', label: 'Low', color: '#94a3b8' }]
+            ? prioOptions
             : catKey === 'r1'
-              ? [{ value: 'r1_scheduled', label: 'Planifiés', color: '#3b82f6' }, { value: 'r1_waiting', label: 'En attente', color: '#f59e0b' }, { value: 'r1_done', label: 'Effectués', color: '#10b981' }, { value: 'r1_cancelled', label: 'Annulés', color: '#ef4444' }]
+              ? [{ value: 'r1_scheduled', label: 'Planifiés', color: '#3b82f6' }, { value: 'r1_waiting', label: 'En attente', color: '#f59e0b' }, { value: 'r1_done', label: 'Effectués', color: '#10b981' }, { value: 'r1_cancelled', label: 'Annulés', color: '#ef4444' }, ...prioOptions]
               : catKey === 'r2'
-                ? [{ value: 'r2_scheduled', label: 'Planifiés', color: '#fb923c' }, { value: 'r2_pending', label: 'En attente', color: '#f59e0b' }, { value: 'r2_done', label: 'Effectués', color: '#10b981' }, { value: 'r2_cancelled', label: 'Annulés', color: '#ef4444' }]
-                : [{ value: 'prio_high', label: 'High', color: '#ef4444' }, { value: 'prio_medium', label: 'Medium', color: '#f59e0b' }, { value: 'prio_low', label: 'Low', color: '#94a3b8' }];
+                ? [{ value: 'r2_scheduled', label: 'Planifiés', color: '#fb923c' }, { value: 'r2_pending', label: 'En attente', color: '#f59e0b' }, { value: 'r2_done', label: 'Effectués', color: '#10b981' }, { value: 'r2_cancelled', label: 'Annulés', color: '#ef4444' }, ...prioOptions]
+                : prioOptions;
 
           // Shared colors
           const greyBorder = darkMode ? '#3a3b46' : '#d4d4d8';
@@ -3089,7 +3093,7 @@ export default function TrackingSheet() {
                 {/* Statut */}
                 {statusOptions.length > 0 && (
                   <>
-                    {renderFilterRow('statut', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>, catKey === 'new' ? 'Priorité' : 'Statut', true)}
+                    {renderFilterRow('statut', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>, catKey === 'new' ? 'Priorité' : 'Statut & Priorité', true)}
                     {openFilterSections.has('statut') && renderOptionsBox(
                       statusOptions.map(opt => <div key={opt.value}>{renderRadio(filterStatuses.includes(opt.value), opt.label, opt.color, () => setFilterStatuses(prev => prev.includes(opt.value) ? prev.filter(v => v !== opt.value) : [...prev, opt.value]))}</div>)
                     )}
@@ -3308,13 +3312,14 @@ export default function TrackingSheet() {
                   { value: 'annule', label: 'Annulé', color: '#ef4444' },
                 ];
                 const tagOptions = catKey === 'r1' ? R1_TAGS : catKey === 'r2' ? R2_TAGS : catKey === 'new' ? [] : [...R1_TAGS, ...R2_TAGS.filter(t => t.value !== 'done')];
+                const prioOpts = [{ value: 'prio_high', label: 'High', color: '#ef4444' }, { value: 'prio_medium', label: 'Medium', color: '#f59e0b' }, { value: 'prio_low', label: 'Low', color: '#94a3b8' }];
                 const statusOptions = catKey === 'new'
-                  ? [{ value: 'prio_high', label: 'High', color: '#ef4444' }, { value: 'prio_medium', label: 'Medium', color: '#f59e0b' }, { value: 'prio_low', label: 'Low', color: '#94a3b8' }]
+                  ? prioOpts
                   : catKey === 'r1'
-                    ? [{ value: 'r1_scheduled', label: 'Planifiés', color: '#3b82f6' }, { value: 'r1_waiting', label: 'En attente', color: '#f59e0b' }, { value: 'r1_done', label: 'Effectués', color: '#10b981' }, { value: 'r1_cancelled', label: 'Annulés', color: '#ef4444' }]
+                    ? [{ value: 'r1_scheduled', label: 'Planifiés', color: '#3b82f6' }, { value: 'r1_waiting', label: 'En attente', color: '#f59e0b' }, { value: 'r1_done', label: 'Effectués', color: '#10b981' }, { value: 'r1_cancelled', label: 'Annulés', color: '#ef4444' }, ...prioOpts]
                     : catKey === 'r2'
-                      ? [{ value: 'r2_scheduled', label: 'Planifiés', color: '#fb923c' }, { value: 'r2_pending', label: 'En attente', color: '#f59e0b' }, { value: 'r2_done', label: 'Effectués', color: '#10b981' }, { value: 'r2_cancelled', label: 'Annulés', color: '#ef4444' }]
-                      : [{ value: 'prio_high', label: 'High', color: '#ef4444' }, { value: 'prio_medium', label: 'Medium', color: '#f59e0b' }, { value: 'prio_low', label: 'Low', color: '#94a3b8' }];
+                      ? [{ value: 'r2_scheduled', label: 'Planifiés', color: '#fb923c' }, { value: 'r2_pending', label: 'En attente', color: '#f59e0b' }, { value: 'r2_done', label: 'Effectués', color: '#10b981' }, { value: 'r2_cancelled', label: 'Annulés', color: '#ef4444' }, ...prioOpts]
+                      : prioOpts;
                 const hasTagFilter = tagOptions.length > 0;
                 const hasStatusFilter = statusOptions.length > 0;
                 const toggleTag = (val) => setFilterTags(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
@@ -3527,20 +3532,28 @@ export default function TrackingSheet() {
           {(() => {
             const isR1Tab = activeCat.key === 'r1';
             const isR2Tab = activeCat.key === 'r2';
-            const isGroupedTab = isR1Tab || isR2Tab;
+            const isCallTab = activeCat.key === 'callback' || activeCat.key === 'voicemail';
+            const isGroupedTab = isR1Tab || isR2Tab || isCallTab;
 
-            // R1 groups
-            const r1Scheduled  = isR1Tab ? filteredLeads.filter(l => !l.r1_result || l.r1_result === 'rescheduled') : [];
-            const r1Pending    = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'no_show') : [];
+            // R1 groups — leads with past date + no result go to pending
+            const todayDate = new Date().toISOString().slice(0, 10);
+            const isDatePast = (d) => { if (!d) return false; const ds = typeof d === 'string' ? d.slice(0, 10) : ''; return ds && ds < todayDate; };
+            const r1Scheduled  = isR1Tab ? filteredLeads.filter(l => (!l.r1_result || l.r1_result === 'rescheduled') && !isDatePast(l.r1)) : [];
+            const r1Pending    = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'no_show' || ((!l.r1_result || l.r1_result === 'rescheduled') && isDatePast(l.r1))) : [];
             const r1Cancelled  = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'cancelled') : [];
             const r1Completed  = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'done') : [];
 
             // R2 groups
             const R2_PENDING_STATES = ['comptable', 'associe', 'reflexion', 'relire_contrat', 'pas_decision_jour', 'tresorerie'];
-            const r2Scheduled  = isR2Tab ? filteredLeads.filter(l => !l.r2_result || l.r2_result === 'reporte') : [];
-            const r2Pending    = isR2Tab ? filteredLeads.filter(l => R2_PENDING_STATES.includes(l.r2_result)) : [];
+            const r2Scheduled  = isR2Tab ? filteredLeads.filter(l => (!l.r2_result || l.r2_result === 'reporte') && !isDatePast(l.r2)) : [];
+            const r2Pending    = isR2Tab ? filteredLeads.filter(l => R2_PENDING_STATES.includes(l.r2_result) || ((!l.r2_result || l.r2_result === 'reporte') && isDatePast(l.r2))) : [];
             const r2Cancelled  = isR2Tab ? filteredLeads.filter(l => l.r2_result === 'pas_interesse' || l.r2_result === 'annule') : [];
             const r2Completed  = isR2Tab ? filteredLeads.filter(l => l.r2_result === 'done') : [];
+
+            // Call attempt groups (callback + voicemail tabs)
+            const callLow     = isCallTab ? filteredLeads.filter(l => (l.call_attempts || 0) <= 2) : [];
+            const callMedium  = isCallTab ? filteredLeads.filter(l => (l.call_attempts || 0) >= 3 && (l.call_attempts || 0) <= 5) : [];
+            const callHigh    = isCallTab ? filteredLeads.filter(l => (l.call_attempts || 0) >= 6) : [];
 
             // Unified groups array for the active tab
             const groups = isR1Tab ? [
@@ -3553,6 +3566,10 @@ export default function TrackingSheet() {
               { key: 'pending',   leads: r2Pending,   label: 'En attente', color: '#f59e0b' },
               { key: 'completed', leads: r2Completed, label: 'Effectués',  color: '#10b981' },
               { key: 'cancelled', leads: r2Cancelled, label: 'Annulés',     color: '#ef4444' },
+            ] : isCallTab ? [
+              { key: 'call_low',    leads: callLow,    label: '1 à 2 tentatives',   color: '#3b82f6', canBulkMove: true },
+              { key: 'call_medium', leads: callMedium, label: '3 à 5 tentatives',   color: '#f59e0b', canBulkMove: true },
+              { key: 'call_high',   leads: callHigh,   label: '6+ tentatives',       color: '#ef4444', canBulkMove: true },
             ] : [];
 
             // Renders a single lead card (reused for both groups)
@@ -3910,6 +3927,23 @@ export default function TrackingSheet() {
                                 }}>{grp.label}{grp.key === 'completed' && <span style={{ width: 28, height: 28, overflow: 'hidden', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: -1 }}><img src={completedIcon} alt="" style={{ width: 84, height: 84 }} /></span>}</span>
                                 <span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>{grp.leads.length}</span>
                                 <div style={{ flex: 1 }} />
+                                {grp.canBulkMove && (
+                                  <button onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (!window.confirm(`Envoyer les ${grp.leads.length} leads vers Non-pertinents ?`)) return;
+                                    grp.leads.forEach(l => {
+                                      handleStatusChange(l.id, 'not_relevant');
+                                      apiClient.patch(`/api/v1/tracking/leads/${l.id}`, { notes: (l.notes ? l.notes + '\n' : '') + "N'a jamais répondu" }).catch(() => {});
+                                    });
+                                  }} style={{
+                                    padding: '3px 8px', borderRadius: 6, border: 'none', fontSize: 10, fontWeight: 600,
+                                    background: 'rgba(239,68,68,0.08)', color: '#ef4444',
+                                    cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                                  }}
+                                    onMouseEnter={(e) => { e.currentTarget.style.background = '#ef4444'; e.currentTarget.style.color = '#fff'; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.color = '#ef4444'; }}
+                                  >Tout → Non-pertinent</button>
+                                )}
                                 {isCancelled ? (
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round"
                                     style={{ transition: 'transform 0.25s ease', transform: cancelledExpanded ? 'rotate(180deg)' : 'rotate(0deg)', opacity: 0.5 }}>
@@ -4669,9 +4703,10 @@ export default function TrackingSheet() {
                           <span style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Suite ?</span>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                          {wfPill('RDV fixé', '#3b82f6', '📅', 30, () => setActiveWorkflow(prev => ({ ...prev, appointmentResult: 'appointment_set', newDate: '' })))}
-                          {wfPill('Pas de RDV', '#94a3b8', '↩', 70, () => handleWorkflowSubmit(lead.id, { first_contact_date: today, contact_result: 'reached', appointment_result: 'no_appointment', status: 'callback' }))}
-                          {wfPill('Pas intéressé', '#ef4444', '✕', 110, () => handleWorkflowSubmit(lead.id, { first_contact_date: today, contact_result: 'reached', appointment_result: 'not_interested', status: 'not_relevant' }))}
+                          {wfPill('RDV R1', '#3b82f6', '📅', 30, () => setActiveWorkflow(prev => ({ ...prev, appointmentResult: 'appointment_set', newDate: '' })))}
+                          {wfPill('R2 direct', '#fb923c', '⚡', 70, () => setActiveWorkflow(prev => ({ ...prev, appointmentResult: 'r2_direct', newDate: '' })))}
+                          {wfPill('Pas de RDV', '#94a3b8', '↩', 110, () => handleWorkflowSubmit(lead.id, { first_contact_date: today, contact_result: 'reached', appointment_result: 'no_appointment', status: 'callback' }))}
+                          {wfPill('Pas intéressé', '#ef4444', '✕', 150, () => handleWorkflowSubmit(lead.id, { first_contact_date: today, contact_result: 'reached', appointment_result: 'not_interested', status: 'not_relevant' }))}
                         </div>
                         <button onClick={() => setActiveWorkflow(prev => ({ ...prev, contactResult: '', appointmentResult: '' }))}
                           style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', marginTop: 2, opacity: 0.7, animation: 'wfSplitIn 0.3s ease 150ms both' }}
@@ -4739,6 +4774,55 @@ export default function TrackingSheet() {
                             onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(59,130,246,0.35)'; }}
                             onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
                           >Confirmer → R1</button>
+                        )}
+                        <button onClick={() => setActiveWorkflow(prev => ({ ...prev, appointmentResult: '', newDate: '' }))}
+                          style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', opacity: 0.7 }}
+                        >← Retour</button>
+                      </div>
+                    ) : wf.contactResult === 'reached' && wf.appointmentResult === 'r2_direct' ? (
+                      /* ── Step 3b: Date picker for R2 direct ── */
+                      <div style={{
+                        display: 'flex', flexDirection: 'column', gap: 10,
+                        padding: '16px 18px', borderRadius: 16,
+                        background: darkMode ? 'rgba(251,146,60,0.08)' : 'rgba(251,146,60,0.04)',
+                        border: `1px solid ${darkMode ? 'rgba(251,146,60,0.2)' : 'rgba(251,146,60,0.12)'}`,
+                        animation: 'wfDateCardIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 15 }}>⚡</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#fb923c' }}>Planifier le R2 directement</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Date</div>
+                            <input type="date" value={wf.newDate ? wf.newDate.slice(0, 10) : ''}
+                              onChange={(e) => { const time = wf.newDate?.slice(10) || 'T09:00'; setActiveWorkflow(prev => ({ ...prev, newDate: e.target.value + time })); }}
+                              style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
+                            />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
+                            <input type="time" value={wf.newDate?.slice(11, 16) || '09:00'}
+                              onChange={(e) => { const date = wf.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + e.target.value })); }}
+                              style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
+                            />
+                          </div>
+                        </div>
+                        {wf.newDate && wf.newDate.length >= 10 && (
+                          <button onClick={() => handleWorkflowSubmit(lead.id, {
+                              first_contact_date: today, contact_result: 'reached', appointment_result: 'appointment_set',
+                              r2_date: wf.newDate, status: 'r2',
+                            })}
+                            style={{
+                              padding: '10px 20px', borderRadius: 50, border: 'none',
+                              background: '#fb923c', color: '#fff', fontSize: 12.5, fontWeight: 700,
+                              cursor: 'pointer', fontFamily: 'inherit',
+                              animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both',
+                              transition: 'transform 0.15s, box-shadow 0.15s',
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(251,146,60,0.35)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                          >Confirmer → R2</button>
                         )}
                         <button onClick={() => setActiveWorkflow(prev => ({ ...prev, appointmentResult: '', newDate: '' }))}
                           style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', opacity: 0.7 }}
@@ -4906,6 +4990,136 @@ export default function TrackingSheet() {
               })()}
 
 
+              {/* ═══ CALLBACK/VOICEMAIL: Appelé workflow ═══ */}
+              {(activeCat.key === 'callback' || activeCat.key === 'voicemail') && (() => {
+                const callWf = activeWorkflow?.leadId === lead.id && activeWorkflow?.callFlow ? activeWorkflow : null;
+                return (
+                  <div style={{ marginBottom: 16 }}>
+                    {!callWf ? (
+                      <button
+                        onClick={() => setActiveWorkflow({ leadId: lead.id, callFlow: true, callResult: '' })}
+                        style={{
+                          width: '100%', padding: '10px 16px', borderRadius: 50, border: 'none',
+                          background: '#E8F2FD', color: '#3b82f6', fontSize: 13, fontWeight: 600,
+                          cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)', fontFamily: 'inherit',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.background = '#d4e8fa'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.background = '#E8F2FD'; }}
+                      >
+                        Appelé
+                      </button>
+                    ) : !callWf.callResult ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>
+                          Résultat de l'appel
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                          <button onClick={() => setActiveWorkflow(prev => ({ ...prev, callResult: 'answered' }))} style={{
+                            padding: '12px 8px', borderRadius: 12, border: `1.5px solid #10b98135`,
+                            background: 'rgba(16,185,129,0.06)', color: '#10b981',
+                            fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          }}>
+                            <span style={{ fontSize: 14 }}>✓</span> A répondu
+                          </button>
+                          <button onClick={() => setActiveWorkflow(prev => ({ ...prev, callResult: 'no_answer' }))} style={{
+                            padding: '12px 8px', borderRadius: 12, border: `1.5px solid ${C.border}`,
+                            background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', color: C.muted,
+                            fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          }}>
+                            <span style={{ fontSize: 14 }}>✕</span> N'a pas répondu
+                          </button>
+                        </div>
+                        <button onClick={() => setActiveWorkflow(null)}
+                          style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', opacity: 0.7 }}
+                        >← Retour</button>
+                      </div>
+                    ) : callWf.callResult === 'answered' ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>
+                          A répondu — Envoyer vers
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                          <button onClick={async () => {
+                            const currentLead = leads.find(l => l.id === lead.id) || lead;
+                            const newAttempts = (currentLead.call_attempts || 0) + 1;
+                            await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { call_attempts: newAttempts });
+                            handleStatusChange(lead.id, 'new');
+                            setActiveWorkflow(null);
+                          }} style={{
+                            padding: '12px 8px', borderRadius: 12, border: `1.5px solid #3b82f635`,
+                            background: 'rgba(59,130,246,0.06)', color: '#3b82f6',
+                            fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          }}>
+                            Nouveau lead
+                          </button>
+                          <button onClick={async () => {
+                            const currentLead = leads.find(l => l.id === lead.id) || lead;
+                            const newAttempts = (currentLead.call_attempts || 0) + 1;
+                            await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { call_attempts: newAttempts });
+                            handleStatusChange(lead.id, 'not_relevant');
+                            setActiveWorkflow(null);
+                          }} style={{
+                            padding: '12px 8px', borderRadius: 12, border: `1.5px solid #ef444435`,
+                            background: 'rgba(239,68,68,0.06)', color: '#ef4444',
+                            fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          }}>
+                            Non pertinent
+                          </button>
+                        </div>
+                        <button onClick={() => setActiveWorkflow(prev => ({ ...prev, callResult: '' }))}
+                          style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', opacity: 0.7 }}
+                        >← Retour</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>
+                          N'a pas répondu
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                          <button onClick={async () => {
+                            setLeads(prev => {
+                              const current = prev.find(l => l.id === lead.id);
+                              const newAttempts = (current?.call_attempts || 0) + 1;
+                              apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { call_attempts: newAttempts }).catch(() => {});
+                              return prev.map(l => l.id === lead.id ? { ...l, call_attempts: newAttempts } : l);
+                            });
+                            setActiveWorkflow(null);
+                          }} style={{
+                            padding: '12px 8px', borderRadius: 12, border: `1.5px solid ${C.border}`,
+                            background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', color: C.secondary,
+                            fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          }}>
+                            Laisser
+                          </button>
+                          <button onClick={async () => {
+                            const currentLead = leads.find(l => l.id === lead.id) || lead;
+                            const newAttempts = (currentLead.call_attempts || 0) + 1;
+                            await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { call_attempts: newAttempts, notes: (currentLead.notes ? currentLead.notes + '\n' : '') + "N'a jamais répondu" });
+                            handleStatusChange(lead.id, 'not_relevant');
+                            setActiveWorkflow(null);
+                          }} style={{
+                            padding: '12px 8px', borderRadius: 12, border: `1.5px solid #ef444435`,
+                            background: 'rgba(239,68,68,0.06)', color: '#ef4444',
+                            fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          }}>
+                            Non pertinent
+                          </button>
+                        </div>
+                        <button onClick={() => setActiveWorkflow(prev => ({ ...prev, callResult: '' }))}
+                          style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', opacity: 0.7 }}
+                        >← Retour</button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* ═══ OTHER TABS: Déplacer vers (not for signed) ═══ */}
               {!['new', 'r1', 'r2', 'signed'].includes(activeCat.key) && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
@@ -4915,7 +5129,13 @@ export default function TrackingSheet() {
                     style={selectStyle}
                   >
                     <option value="" disabled>Choisir...</option>
-                    {CATEGORIES.filter(cat => cat.key !== activeCat.key && cat.key !== 'signed').map(cat => (
+                    {CATEGORIES.filter(cat => {
+                      if (cat.key === activeCat.key || cat.key === 'signed') return false;
+                      // Répondeurs & Non-pertinents can only go back to Nouveaux leads
+                      if (activeCat.key === 'not_relevant') return cat.key === 'new';
+                      if (activeCat.key === 'voicemail' || activeCat.key === 'callback') return cat.key === 'new' || cat.key === 'not_relevant';
+                      return true;
+                    }).map(cat => (
                       <option key={cat.key} value={cat.key}>{cat.label}</option>
                     ))}
                   </select>
@@ -5495,6 +5715,23 @@ export default function TrackingSheet() {
                   }}
                 >{ndaLoading ? 'Recherche...' : 'Pré-remplir'}</button>
               </div>
+
+              {/* Pappers link */}
+              {ndaPappersUrl && (
+                <a href={ndaPappersUrl} target="_blank" rel="noopener noreferrer" style={{
+                  display: 'flex', alignItems: 'center', gap: 5, alignSelf: 'flex-start',
+                  fontSize: 11, fontWeight: 600, color: '#34c759', textDecoration: 'none',
+                  padding: '4px 12px', borderRadius: 50, marginTop: -4,
+                  border: '1px solid rgba(52,199,89,0.3)', background: 'rgba(52,199,89,0.06)',
+                  transition: 'background 0.2s',
+                }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(52,199,89,0.12)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(52,199,89,0.06)'}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  Voir sur Pappers
+                </a>
+              )}
 
               {/* Success / Error messages */}
               {ndaSuccess && (
