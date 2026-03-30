@@ -2159,32 +2159,7 @@ export default function TrackingSheet() {
 
         {/* ════ VIEW: CAMPAIGNS ═══════════════════════════════════════════ */}
         {sidebarView === 'campaigns' && (() => {
-          const MOCK_CAMPAIGNS = [
-            {
-              id: 1,
-              niche: 'Ambulances internes',
-              date: '04 mars 2026',
-              image: campaignImg1,
-              status: 'En cours',
-              objectif: "Générer des leads qualifiés d'ambulanciers / structures d'ambulance avec besoin de structuration et optimisation.",
-              angle: 'Audit + optimisation charges / conformité.',
-              canaux: 'Cold email + SMS + retargeting.',
-              message: '"Réduisez vos charges et sécurisez votre structure en 30 min."',
-              cta: 'Prendre rendez-vous / Demander un audit.',
-            },
-            {
-              id: 2,
-              niche: 'BTP Interne',
-              date: '12 février 2026',
-              image: campaignImg2,
-              status: 'En cours',
-              objectif: "Cibler les entreprises BTP avec des besoins de structuration interne et d'optimisation des charges.",
-              angle: 'Audit conformité + optimisation charges sociales BTP.',
-              canaux: 'Cold email + LinkedIn Ads + call.',
-              message: '"Structurez votre entreprise BTP et réduisez vos charges en 30 min."',
-              cta: 'Demander un audit gratuit.',
-            },
-          ];
+          const MOCK_CAMPAIGNS = [];
           return (
           <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
             <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
