@@ -1283,7 +1283,7 @@ export default function TrackingSheet() {
       // Handle 409 — commercial is busy on this slot
       if (err.status === 409) {
         const detail = err.data?.detail;
-        const busyMsg = typeof detail === 'string' ? detail : detail?.message || "Vous êtes occupé sur ce créneau. Vérifiez votre Google Calendar.";
+        const busyMsg = typeof detail === 'string' ? detail : detail?.message || "Vous êtes déjà occupé(e) sur ce créneau. Le rendez-vous a quand même été créé sur votre agenda.";
         setCalendarError({ leadId, message: busyMsg });
         setTimeout(() => setCalendarError(null), 5000);
       }
