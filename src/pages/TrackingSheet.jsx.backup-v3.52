@@ -37,82 +37,6 @@ import meetIcon from "../assets/meet.png";
 import mynoteIcon from "../assets/mynote.svg";
 
 // ── CATEGORIES ────────────────────────────────────────────────────────────────
-// ── CUSTOM DATETIME PICKER (date input + hour/minute selects, 5min step) ────
-const HOURS = Array.from({ length: 13 }, (_, i) => String(i + 8).padStart(2, '0')); // 08-20
-const MINUTES = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
-function DateTimePicker({ value, onChange, color = '#3b82f6', C, darkMode }) {
-  const [localDate, setLocalDate] = useState(value ? value.slice(0, 10) : '');
-  const [localHour, setLocalHour] = useState(value ? value.slice(11, 13) : '09');
-  const [localMin, setLocalMin] = useState(() => {
-    const m = value ? value.slice(14, 16) : '00';
-    return MINUTES.reduce((prev, curr) => Math.abs(parseInt(curr) - parseInt(m)) < Math.abs(parseInt(prev) - parseInt(m)) ? curr : prev, '00');
-  });
-  // Sync from parent when value changes externally (polling, etc.)
-  useEffect(() => {
-    if (value) { setLocalDate(value.slice(0, 10)); setLocalHour(value.slice(11, 13)); const m = value.slice(14, 16); setLocalMin(MINUTES.reduce((prev, curr) => Math.abs(parseInt(curr) - parseInt(m)) < Math.abs(parseInt(prev) - parseInt(m)) ? curr : prev, '00')); }
-  }, [value]);
-  const currentFull = localDate + 'T' + localHour + ':' + localMin;
-  const hasChanged = value && currentFull !== (value.slice(0, 16));
-  const isNew = !value || value.length < 10;
-  const confirm = () => { if (localDate) onChange(currentFull); };
-  const selectStyle = {
-    padding: '7px 8px', borderRadius: 8, border: `1px solid ${C.border}`,
-    background: darkMode ? C.subtle : '#f9fafb', color: C.text,
-    fontSize: 13, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', outline: 'none',
-    appearance: 'none', textAlign: 'center', minWidth: 52,
-    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='${darkMode ? '%235e6273' : '%239ca3af'}' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
-    backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center', paddingRight: 20,
-  };
-  return (
-    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-      <input type="date" value={localDate} onChange={(e) => { setLocalDate(e.target.value); if (isNew && e.target.value) onChange(e.target.value + 'T' + localHour + ':' + localMin); }}
-        style={{
-          flex: 1, padding: '7px 10px', borderRadius: 8, border: `1px solid ${C.border}`,
-          background: darkMode ? C.subtle : '#f9fafb', color: C.text,
-          fontSize: 13, fontWeight: 500, fontFamily: 'inherit', outline: 'none', cursor: 'pointer',
-        }}
-      />
-      <select value={localHour} onChange={(e) => { setLocalHour(e.target.value); if (isNew) onChange(localDate + 'T' + e.target.value + ':' + localMin); }} style={selectStyle}>
-        {HOURS.map(h => <option key={h} value={h}>{h}h</option>)}
-      </select>
-      <span style={{ color: C.muted, fontSize: 12, fontWeight: 600 }}>:</span>
-      <select value={localMin} onChange={(e) => { setLocalMin(e.target.value); if (isNew) onChange(localDate + 'T' + localHour + ':' + e.target.value); }} style={selectStyle}>
-        {MINUTES.map(m => <option key={m} value={m}>{m}</option>)}
-      </select>
-      {hasChanged && (
-        <button onClick={confirm} style={{
-          width: 28, height: 28, borderRadius: 8, border: 'none',
-          background: '#10b981', color: '#fff', fontSize: 14, fontWeight: 700,
-          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0, transition: 'transform 0.15s',
-          animation: 'solarFadeIn 0.2s ease both',
-        }}
-          onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-        >✓</button>
-      )}
-    </div>
-  );
-}
-
-function TimeSelect({ value, onChange, C, darkMode }) {
-  const h = (value || '09:00').slice(0, 2);
-  const m = (value || '09:00').slice(3, 5);
-  const roundedM = MINUTES.reduce((prev, curr) => Math.abs(parseInt(curr) - parseInt(m)) < Math.abs(parseInt(prev) - parseInt(m)) ? curr : prev, '00');
-  const ss = { padding: '8px 10px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', outline: 'none', appearance: 'none', paddingRight: 22, backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='${darkMode ? '%235e6273' : '%239ca3af'}' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center' };
-  return (
-    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-      <select value={h} onChange={(e) => onChange(e.target.value + ':' + roundedM)} style={{ ...ss, width: 58 }}>
-        {HOURS.map(hr => <option key={hr} value={hr}>{hr}h</option>)}
-      </select>
-      <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>:</span>
-      <select value={roundedM} onChange={(e) => onChange(h + ':' + e.target.value)} style={{ ...ss, width: 58 }}>
-        {MINUTES.map(mi => <option key={mi} value={mi}>{mi}</option>)}
-      </select>
-    </div>
-  );
-}
-
 const CATEGORIES = [
   { key: "new",          label: "Nouveaux leads",  color: "#6366f1", dotColor: "#a8c8f0", softBg: "#f0f1fb", softBgDark: "rgba(99,102,241,0.18)",  softText: "#7578c4", description: "Leads assignés, pas encore contactés" },
   { key: "r1",           label: "R1 Placés",       color: "#3b82f6", softBg: "#edf4fc", softBgDark: "rgba(59,130,246,0.18)",  softText: "#6a9fd8", description: "Premier rendez-vous programmé" },
@@ -4621,7 +4545,9 @@ export default function TrackingSheet() {
                       border: `1px solid ${darkMode ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.12)'}`,
                     }}>
                       <span style={{ fontSize: 9, fontWeight: 700, color: '#3b82f6', textTransform: 'uppercase' }}>R1</span>
-                      <DateTimePicker value={toDatetimeLocal(lead.r1)} onChange={(val) => handleDateChange(lead.id, 'r1', val)} color="#3b82f6" C={C} darkMode={darkMode} />
+                      <input type="datetime-local" step="300" value={toDatetimeLocal(lead.r1)} onChange={(e) => handleDateChange(lead.id, 'r1', e.target.value)}
+                        style={{ border: 'none', background: 'transparent', color: C.text, fontSize: 11, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', padding: 0, outline: 'none', width: 145 }}
+                      />
                     </div>
                   )}
                   {lead.r2 && (
@@ -4631,7 +4557,9 @@ export default function TrackingSheet() {
                       border: `1px solid ${darkMode ? 'rgba(251,146,60,0.2)' : 'rgba(251,146,60,0.12)'}`,
                     }}>
                       <span style={{ fontSize: 9, fontWeight: 700, color: '#fb923c', textTransform: 'uppercase' }}>R2</span>
-                      <DateTimePicker value={toDatetimeLocal(lead.r2)} onChange={(val) => handleDateChange(lead.id, 'r2', val)} color="#fb923c" C={C} darkMode={darkMode} />
+                      <input type="datetime-local" step="300" value={toDatetimeLocal(lead.r2)} onChange={(e) => handleDateChange(lead.id, 'r2', e.target.value)}
+                        style={{ border: 'none', background: 'transparent', color: C.text, fontSize: 11, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', padding: 0, outline: 'none', width: 145 }}
+                      />
                     </div>
                   )}
                 </div>
@@ -4795,7 +4723,10 @@ export default function TrackingSheet() {
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
-                            <TimeSelect value={wfLocal.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wfLocal.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
+                            <input type="time" value={wfLocal.newDate?.slice(11, 16) || '09:00'}
+                              onChange={(e) => { const date = wfLocal.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + e.target.value })); }}
+                              style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
+                            />
                           </div>
                         </div>
                         {wfLocal.newDate && wfLocal.newDate.length >= 10 && (
@@ -4972,7 +4903,18 @@ export default function TrackingSheet() {
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
-                            <TimeSelect value={wf.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wf.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
+                            <input type="time"
+                              value={wf.newDate?.slice(11, 16) || '09:00'}
+                              onChange={(e) => {
+                                const date = wf.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10);
+                                setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + e.target.value }));
+                              }}
+                              style={{
+                                width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500,
+                                border: `1px solid ${C.border}`, background: C.bg, color: C.text,
+                                fontFamily: 'inherit', outline: 'none',
+                              }}
+                            />
                           </div>
                         </div>
                         {wf.newDate && wf.newDate.length >= 10 && (
@@ -5020,7 +4962,10 @@ export default function TrackingSheet() {
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
-                            <TimeSelect value={wf.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wf.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
+                            <input type="time" value={wf.newDate?.slice(11, 16) || '09:00'}
+                              onChange={(e) => { const date = wf.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + e.target.value })); }}
+                              style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
+                            />
                           </div>
                         </div>
                         {wf.newDate && wf.newDate.length >= 10 && (
@@ -5124,7 +5069,10 @@ export default function TrackingSheet() {
                               </div>
                               <div style={{ flex: 1 }}>
                                 <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
-                                <TimeSelect value={wfR2.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wfR2.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
+                                <input type="time" value={wfR2.newDate?.slice(11, 16) || '09:00'}
+                                  onChange={(e) => { const date = wfR2.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + e.target.value })); }}
+                                  style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
+                                />
                               </div>
                             </div>
                             {wfR2.newDate && wfR2.newDate.length >= 10 && (
@@ -5179,7 +5127,10 @@ export default function TrackingSheet() {
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
-                            <TimeSelect value={wf.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wf.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
+                            <input type="time" value={wf.newDate?.slice(11, 16) || '09:00'}
+                              onChange={(e) => { const date = wf.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + e.target.value })); }}
+                              style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
+                            />
                           </div>
                         </div>
                         {wf.newDate && wf.newDate.length >= 10 && (
@@ -5503,11 +5454,15 @@ export default function TrackingSheet() {
                         border: `1px solid ${darkMode ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.15)'}`,
                       }}>
                         <span style={{ fontSize: 9, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Onboarding</span>
-                        <DateTimePicker value={lead.rdv_onboarding_date ? toDatetimeLocal(lead.rdv_onboarding_date) : ''} onChange={async (val) => {
+                        <input type="datetime-local" step="300" value={lead.rdv_onboarding_date ? toDatetimeLocal(lead.rdv_onboarding_date) : ''}
+                          onChange={async (e) => {
+                            const val = e.target.value;
                             setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_onboarding_date: val } : l));
                             try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { rdv_onboarding_date: val || null }); }
                             catch { setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_onboarding_date: lead.rdv_onboarding_date } : l)); }
-                          }} C={C} darkMode={darkMode} />
+                          }}
+                          style={{ border: 'none', background: 'transparent', color: C.text, fontSize: 12, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', padding: 0, outline: 'none', flex: 1, minWidth: 0 }}
+                        />
                       </div>
                     </div>
 
@@ -5519,11 +5474,15 @@ export default function TrackingSheet() {
                         border: `1px solid ${darkMode ? 'rgba(99,102,241,0.2)' : 'rgba(99,102,241,0.15)'}`,
                       }}>
                         <span style={{ fontSize: 9, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Lancement</span>
-                        <DateTimePicker value={lead.rdv_lancement_date ? toDatetimeLocal(lead.rdv_lancement_date) : ''} onChange={async (val) => {
+                        <input type="datetime-local" step="300" value={lead.rdv_lancement_date ? toDatetimeLocal(lead.rdv_lancement_date) : ''}
+                          onChange={async (e) => {
+                            const val = e.target.value;
                             setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_lancement_date: val } : l));
                             try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { rdv_lancement_date: val || null }); }
                             catch { setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_lancement_date: lead.rdv_lancement_date } : l)); }
-                          }} C={C} darkMode={darkMode} />
+                          }}
+                          style={{ border: 'none', background: 'transparent', color: C.text, fontSize: 12, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', padding: 0, outline: 'none', flex: 1, minWidth: 0 }}
+                        />
                       </div>
                     </div>
 

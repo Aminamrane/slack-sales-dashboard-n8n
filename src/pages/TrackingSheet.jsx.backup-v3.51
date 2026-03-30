@@ -37,82 +37,6 @@ import meetIcon from "../assets/meet.png";
 import mynoteIcon from "../assets/mynote.svg";
 
 // ── CATEGORIES ────────────────────────────────────────────────────────────────
-// ── CUSTOM DATETIME PICKER (date input + hour/minute selects, 5min step) ────
-const HOURS = Array.from({ length: 13 }, (_, i) => String(i + 8).padStart(2, '0')); // 08-20
-const MINUTES = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
-function DateTimePicker({ value, onChange, color = '#3b82f6', C, darkMode }) {
-  const [localDate, setLocalDate] = useState(value ? value.slice(0, 10) : '');
-  const [localHour, setLocalHour] = useState(value ? value.slice(11, 13) : '09');
-  const [localMin, setLocalMin] = useState(() => {
-    const m = value ? value.slice(14, 16) : '00';
-    return MINUTES.reduce((prev, curr) => Math.abs(parseInt(curr) - parseInt(m)) < Math.abs(parseInt(prev) - parseInt(m)) ? curr : prev, '00');
-  });
-  // Sync from parent when value changes externally (polling, etc.)
-  useEffect(() => {
-    if (value) { setLocalDate(value.slice(0, 10)); setLocalHour(value.slice(11, 13)); const m = value.slice(14, 16); setLocalMin(MINUTES.reduce((prev, curr) => Math.abs(parseInt(curr) - parseInt(m)) < Math.abs(parseInt(prev) - parseInt(m)) ? curr : prev, '00')); }
-  }, [value]);
-  const currentFull = localDate + 'T' + localHour + ':' + localMin;
-  const hasChanged = value && currentFull !== (value.slice(0, 16));
-  const isNew = !value || value.length < 10;
-  const confirm = () => { if (localDate) onChange(currentFull); };
-  const selectStyle = {
-    padding: '7px 8px', borderRadius: 8, border: `1px solid ${C.border}`,
-    background: darkMode ? C.subtle : '#f9fafb', color: C.text,
-    fontSize: 13, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', outline: 'none',
-    appearance: 'none', textAlign: 'center', minWidth: 52,
-    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='${darkMode ? '%235e6273' : '%239ca3af'}' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
-    backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center', paddingRight: 20,
-  };
-  return (
-    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-      <input type="date" value={localDate} onChange={(e) => { setLocalDate(e.target.value); if (isNew && e.target.value) onChange(e.target.value + 'T' + localHour + ':' + localMin); }}
-        style={{
-          flex: 1, padding: '7px 10px', borderRadius: 8, border: `1px solid ${C.border}`,
-          background: darkMode ? C.subtle : '#f9fafb', color: C.text,
-          fontSize: 13, fontWeight: 500, fontFamily: 'inherit', outline: 'none', cursor: 'pointer',
-        }}
-      />
-      <select value={localHour} onChange={(e) => { setLocalHour(e.target.value); if (isNew) onChange(localDate + 'T' + e.target.value + ':' + localMin); }} style={selectStyle}>
-        {HOURS.map(h => <option key={h} value={h}>{h}h</option>)}
-      </select>
-      <span style={{ color: C.muted, fontSize: 12, fontWeight: 600 }}>:</span>
-      <select value={localMin} onChange={(e) => { setLocalMin(e.target.value); if (isNew) onChange(localDate + 'T' + localHour + ':' + e.target.value); }} style={selectStyle}>
-        {MINUTES.map(m => <option key={m} value={m}>{m}</option>)}
-      </select>
-      {hasChanged && (
-        <button onClick={confirm} style={{
-          width: 28, height: 28, borderRadius: 8, border: 'none',
-          background: '#10b981', color: '#fff', fontSize: 14, fontWeight: 700,
-          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0, transition: 'transform 0.15s',
-          animation: 'solarFadeIn 0.2s ease both',
-        }}
-          onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-        >✓</button>
-      )}
-    </div>
-  );
-}
-
-function TimeSelect({ value, onChange, C, darkMode }) {
-  const h = (value || '09:00').slice(0, 2);
-  const m = (value || '09:00').slice(3, 5);
-  const roundedM = MINUTES.reduce((prev, curr) => Math.abs(parseInt(curr) - parseInt(m)) < Math.abs(parseInt(prev) - parseInt(m)) ? curr : prev, '00');
-  const ss = { padding: '8px 10px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', outline: 'none', appearance: 'none', paddingRight: 22, backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='${darkMode ? '%235e6273' : '%239ca3af'}' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center' };
-  return (
-    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-      <select value={h} onChange={(e) => onChange(e.target.value + ':' + roundedM)} style={{ ...ss, width: 58 }}>
-        {HOURS.map(hr => <option key={hr} value={hr}>{hr}h</option>)}
-      </select>
-      <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>:</span>
-      <select value={roundedM} onChange={(e) => onChange(h + ':' + e.target.value)} style={{ ...ss, width: 58 }}>
-        {MINUTES.map(mi => <option key={mi} value={mi}>{mi}</option>)}
-      </select>
-    </div>
-  );
-}
-
 const CATEGORIES = [
   { key: "new",          label: "Nouveaux leads",  color: "#6366f1", dotColor: "#a8c8f0", softBg: "#f0f1fb", softBgDark: "rgba(99,102,241,0.18)",  softText: "#7578c4", description: "Leads assignés, pas encore contactés" },
   { key: "r1",           label: "R1 Placés",       color: "#3b82f6", softBg: "#edf4fc", softBgDark: "rgba(59,130,246,0.18)",  softText: "#6a9fd8", description: "Premier rendez-vous programmé" },
@@ -510,13 +434,6 @@ export default function TrackingSheet() {
   const [contractErrorModal, setContractErrorModal] = useState(null); // { message, isNdaMissing } or null
   const [qualDropdown, setQualDropdown] = useState(null); // lead id with open qualification dropdown
   const [qualDropdownPos, setQualDropdownPos] = useState({ x: 0, y: 0 });
-  const [spotlightOpen, setSpotlightOpen] = useState(false); // Ctrl+F search overlay
-  const [calSettings, setCalSettings] = useState(null); // calendar settings from backend
-  const [calSettingsLoading, setCalSettingsLoading] = useState(false);
-  const [calSettingsSaving, setCalSettingsSaving] = useState(false);
-  const [calSettingsSaved, setCalSettingsSaved] = useState(false);
-  const [spotlightQuery, setSpotlightQuery] = useState('');
-  const spotlightInputRef = useRef(null);
   const [prioDropdown, setPrioDropdown] = useState(null); // lead id with open priority dropdown
   const [prioDropdownPos, setPrioDropdownPos] = useState({ x: 0, y: 0 });
   const [confirmModal, setConfirmModal] = useState(null); // { title, message, icon, color, confirmLabel, onConfirm } or null
@@ -1126,15 +1043,6 @@ export default function TrackingSheet() {
   // ── TAB KEYBOARD NAVIGATION ─────────────────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Ctrl+K — open spotlight search
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-        e.preventDefault();
-        setSpotlightOpen(true);
-        setSpotlightQuery('');
-        setTimeout(() => spotlightInputRef.current?.focus(), 50);
-        return;
-      }
-      if (e.key === 'Escape' && spotlightOpen) { setSpotlightOpen(false); return; }
       if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
       if (e.key === 'ArrowRight') {
         e.preventDefault();
@@ -1150,7 +1058,7 @@ export default function TrackingSheet() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTab, spotlightOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── HANDLERS ──────────────────────────────────────────────────────────────
   const handleTabChange = (idx) => {
@@ -2852,193 +2760,24 @@ export default function TrackingSheet() {
           );
         })()}
 
-        {/* ════ VIEW: RELANCE — Calendar Settings ═════════════════════════════ */}
-        {sidebarView === 'email' && (() => {
-          // Fetch settings on first view
-          if (!calSettings && !calSettingsLoading) {
-            setCalSettingsLoading(true);
-            apiClient.get('/api/v1/tracking/calendar-settings').then(data => {
-              setCalSettings(data);
-            }).catch(() => {
-              setCalSettings({ calendar_enabled: true, r1_title_template: '', r1_description_template: '', r1_duration: 30, r2_title_template: '', r2_description_template: '', r2_duration: 60 });
-            }).finally(() => setCalSettingsLoading(false));
-          }
-          const updateField = (key, value) => setCalSettings(prev => ({ ...prev, [key]: value }));
-          const saveSettings = async () => {
-            if (!calSettings) return;
-            setCalSettingsSaving(true);
-            try {
-              await apiClient.put('/api/v1/tracking/calendar-settings', calSettings);
-              setCalSettingsSaved(true);
-              setTimeout(() => setCalSettingsSaved(false), 2000);
-            } catch (e) { console.warn('Save calendar settings failed:', e); }
-            setCalSettingsSaving(false);
-          };
-          const inputStyle = {
-            width: '100%', padding: '10px 14px', borderRadius: 10,
-            border: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#f9fafb',
-            color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none',
-            transition: 'border-color 0.2s',
-          };
-          const textareaStyle = { ...inputStyle, minHeight: 200, resize: 'vertical', lineHeight: 1.5 };
-          const labelStyle = { fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6, display: 'block' };
-          return (
-          <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif',
-          }}>
-            <div style={{ maxWidth: 1100 }}>
-              <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>
-                Paramètres Calendar
-              </h2>
-              <p style={{ fontSize: 13, color: C.muted, margin: '0 0 28px' }}>
-                Configurez vos rendez-vous Google Calendar
-              </p>
-
-              {calSettingsLoading || !calSettings ? (
-                <div style={{ padding: 40, textAlign: 'center', color: C.muted }}>Chargement...</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-
-                  {/* Toggle */}
-                  <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '16px 20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`,
-                  }}>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Google Calendar</div>
-                      <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Créer automatiquement des événements pour les R1/R2</div>
-                    </div>
-                    <button onClick={async () => {
-                      const newVal = !calSettings.calendar_enabled;
-                      updateField('calendar_enabled', newVal);
-                      try { await apiClient.put('/api/v1/tracking/calendar-settings', { calendar_enabled: newVal }); } catch {}
-                    }} style={{
-                      width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
-                      background: calSettings.calendar_enabled ? '#10b981' : (darkMode ? '#3a3b46' : '#d1d5db'),
-                      position: 'relative', transition: 'background 0.2s',
-                    }}>
-                      <div style={{
-                        width: 18, height: 18, borderRadius: '50%', background: '#fff',
-                        position: 'absolute', top: 3,
-                        left: calSettings.calendar_enabled ? 23 : 3,
-                        transition: 'left 0.2s cubic-bezier(0.34,1.56,0.64,1)',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                      }} />
-                    </button>
-                  </div>
-
-                  {/* R1 + R2 Settings side by side */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 16, opacity: calSettings.calendar_enabled ? 1 : 0.4, pointerEvents: calSettings.calendar_enabled ? 'auto' : 'none', transition: 'opacity 0.3s' }}>
-                  {/* R1 Settings */}
-                  <div style={{
-                    padding: '20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`,
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Premier rendez-vous</span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                      <div>
-                        <label style={labelStyle}>Titre de l'événement</label>
-                        <input value={calSettings.r1_title_template} onChange={(e) => updateField('r1_title_template', e.target.value)}
-                          placeholder="OWNER – Pré-audit : échange initial ({name})" style={inputStyle}
-                          onFocus={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
-                          onBlur={(e) => e.currentTarget.style.borderColor = C.border}
-                        />
-                      </div>
-                      <div>
-                        <label style={labelStyle}>Description</label>
-                        <textarea value={calSettings.r1_description_template} onChange={(e) => updateField('r1_description_template', e.target.value)}
-                          placeholder="Réservé par&#10;{name}&#10;{email}&#10;{phone}" style={textareaStyle}
-                          onFocus={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
-                          onBlur={(e) => e.currentTarget.style.borderColor = C.border}
-                        />
-                      </div>
-                      <div>
-                        <label style={labelStyle}>Durée</label>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          {[15, 30].map(d => (
-                            <button key={d} onClick={() => updateField('r1_duration', d)} style={{
-                              padding: '8px 20px', borderRadius: 8, border: `1px solid ${calSettings.r1_duration === d ? '#3b82f6' : C.border}`,
-                              background: calSettings.r1_duration === d ? 'rgba(59,130,246,0.08)' : 'transparent',
-                              color: calSettings.r1_duration === d ? '#3b82f6' : C.secondary,
-                              fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-                            }}>{d} min</button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* R2 Settings */}
-                  <div style={{
-                    padding: '20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`,
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Audit</span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                      <div>
-                        <label style={labelStyle}>Titre de l'événement</label>
-                        <input value={calSettings.r2_title_template} onChange={(e) => updateField('r2_title_template', e.target.value)}
-                          placeholder="AUDIT : {name} & Owner (optimisation fiscale/sociale)" style={inputStyle}
-                          onFocus={(e) => e.currentTarget.style.borderColor = '#fb923c'}
-                          onBlur={(e) => e.currentTarget.style.borderColor = C.border}
-                        />
-                      </div>
-                      <div>
-                        <label style={labelStyle}>Description</label>
-                        <textarea value={calSettings.r2_description_template} onChange={(e) => updateField('r2_description_template', e.target.value)}
-                          placeholder="Réservé par&#10;{name}&#10;{email}&#10;{phone}" style={textareaStyle}
-                          onFocus={(e) => e.currentTarget.style.borderColor = '#fb923c'}
-                          onBlur={(e) => e.currentTarget.style.borderColor = C.border}
-                        />
-                      </div>
-                      <div>
-                        <label style={labelStyle}>Durée</label>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          {[30, 60].map(d => (
-                            <button key={d} onClick={() => updateField('r2_duration', d)} style={{
-                              padding: '8px 20px', borderRadius: 8, border: `1px solid ${calSettings.r2_duration === d ? '#fb923c' : C.border}`,
-                              background: calSettings.r2_duration === d ? 'rgba(251,146,60,0.08)' : 'transparent',
-                              color: calSettings.r2_duration === d ? '#fb923c' : C.secondary,
-                              fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-                            }}>{d} min</button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  {/* Variables — third column */}
-                  <div style={{ padding: '20px 16px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, alignSelf: 'start' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>Variables</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {['{name}', '{email}', '{phone}'].map(v => (
-                        <button key={v} onClick={() => { navigator.clipboard.writeText(v); setCopiedField('calvar-' + v); setTimeout(() => setCopiedField(null), 1500); }}
-                          style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 6, background: copiedField === 'calvar-' + v ? 'rgba(16,185,129,0.12)' : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'), color: copiedField === 'calvar-' + v ? '#10b981' : C.accent, fontFamily: 'monospace', textAlign: 'center', border: 'none', cursor: 'pointer', transition: 'all 0.15s' }}
-                        >{copiedField === 'calvar-' + v ? 'Copié ✓' : v}</button>
-                      ))}
-                    </div>
-                  </div>
-                  </div>{/* end grid R1+R2 */}
-
-                  {/* Save button */}
-                  <button onClick={saveSettings} disabled={calSettingsSaving} style={{
-                    padding: '12px 24px', borderRadius: 10, border: 'none',
-                    background: calSettingsSaved ? '#10b981' : (darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
-                    color: calSettingsSaved ? '#fff' : C.text,
-                    fontSize: 14, fontWeight: 600, cursor: calSettingsSaving ? 'wait' : 'pointer',
-                    fontFamily: 'inherit', transition: 'all 0.2s', alignSelf: 'flex-start',
-                  }}
-                    onMouseEnter={(e) => { if (!calSettingsSaved) { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.09)'; } }}
-                    onMouseLeave={(e) => { if (!calSettingsSaved) { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'; } }}
-                  >{calSettingsSaving ? 'Enregistrement...' : calSettingsSaved ? 'Enregistré ✓' : 'Enregistrer'}</button>
-
-                </div>
-              )}
+        {/* ════ VIEW: EMAIL (placeholder) ══════════════════════════════════ */}
+        {sidebarView === 'email' && (
+          <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
+              Relance
+            </h2>
+            <p style={{ fontSize: 13, color: C.muted, margin: '0 0 28px' }}>
+              Relancez vos prospects par email
+            </p>
+            <div style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              padding: '60px 20px', borderRadius: 16, border: `1.5px dashed ${C.border}`,
+              background: darkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
+            }}>
+              <p style={{ fontSize: 12, color: C.muted, margin: 0 }}>Cette fonctionnalité sera bientôt disponible</p>
             </div>
           </div>
-          );
-        })()}
+        )}
 
         {/* ════ VIEW: TRACKING SHEETS MANAGEMENT ══════════════════════════════ */}
         {sidebarView === 'sheets' && canManageSheets && (() => {
@@ -4621,7 +4360,9 @@ export default function TrackingSheet() {
                       border: `1px solid ${darkMode ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.12)'}`,
                     }}>
                       <span style={{ fontSize: 9, fontWeight: 700, color: '#3b82f6', textTransform: 'uppercase' }}>R1</span>
-                      <DateTimePicker value={toDatetimeLocal(lead.r1)} onChange={(val) => handleDateChange(lead.id, 'r1', val)} color="#3b82f6" C={C} darkMode={darkMode} />
+                      <input type="datetime-local" value={toDatetimeLocal(lead.r1)} onChange={(e) => handleDateChange(lead.id, 'r1', e.target.value)}
+                        style={{ border: 'none', background: 'transparent', color: C.text, fontSize: 11, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', padding: 0, outline: 'none', width: 145 }}
+                      />
                     </div>
                   )}
                   {lead.r2 && (
@@ -4631,7 +4372,9 @@ export default function TrackingSheet() {
                       border: `1px solid ${darkMode ? 'rgba(251,146,60,0.2)' : 'rgba(251,146,60,0.12)'}`,
                     }}>
                       <span style={{ fontSize: 9, fontWeight: 700, color: '#fb923c', textTransform: 'uppercase' }}>R2</span>
-                      <DateTimePicker value={toDatetimeLocal(lead.r2)} onChange={(val) => handleDateChange(lead.id, 'r2', val)} color="#fb923c" C={C} darkMode={darkMode} />
+                      <input type="datetime-local" value={toDatetimeLocal(lead.r2)} onChange={(e) => handleDateChange(lead.id, 'r2', e.target.value)}
+                        style={{ border: 'none', background: 'transparent', color: C.text, fontSize: 11, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', padding: 0, outline: 'none', width: 145 }}
+                      />
                     </div>
                   )}
                 </div>
@@ -4795,7 +4538,10 @@ export default function TrackingSheet() {
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
-                            <TimeSelect value={wfLocal.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wfLocal.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
+                            <input type="time" value={wfLocal.newDate?.slice(11, 16) || '09:00'}
+                              onChange={(e) => { const date = wfLocal.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + e.target.value })); }}
+                              style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
+                            />
                           </div>
                         </div>
                         {wfLocal.newDate && wfLocal.newDate.length >= 10 && (
@@ -4972,7 +4718,18 @@ export default function TrackingSheet() {
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
-                            <TimeSelect value={wf.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wf.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
+                            <input type="time"
+                              value={wf.newDate?.slice(11, 16) || '09:00'}
+                              onChange={(e) => {
+                                const date = wf.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10);
+                                setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + e.target.value }));
+                              }}
+                              style={{
+                                width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500,
+                                border: `1px solid ${C.border}`, background: C.bg, color: C.text,
+                                fontFamily: 'inherit', outline: 'none',
+                              }}
+                            />
                           </div>
                         </div>
                         {wf.newDate && wf.newDate.length >= 10 && (
@@ -5020,7 +4777,10 @@ export default function TrackingSheet() {
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
-                            <TimeSelect value={wf.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wf.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
+                            <input type="time" value={wf.newDate?.slice(11, 16) || '09:00'}
+                              onChange={(e) => { const date = wf.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + e.target.value })); }}
+                              style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
+                            />
                           </div>
                         </div>
                         {wf.newDate && wf.newDate.length >= 10 && (
@@ -5124,7 +4884,10 @@ export default function TrackingSheet() {
                               </div>
                               <div style={{ flex: 1 }}>
                                 <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
-                                <TimeSelect value={wfR2.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wfR2.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
+                                <input type="time" value={wfR2.newDate?.slice(11, 16) || '09:00'}
+                                  onChange={(e) => { const date = wfR2.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + e.target.value })); }}
+                                  style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
+                                />
                               </div>
                             </div>
                             {wfR2.newDate && wfR2.newDate.length >= 10 && (
@@ -5179,7 +4942,10 @@ export default function TrackingSheet() {
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
-                            <TimeSelect value={wf.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wf.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
+                            <input type="time" value={wf.newDate?.slice(11, 16) || '09:00'}
+                              onChange={(e) => { const date = wf.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + e.target.value })); }}
+                              style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
+                            />
                           </div>
                         </div>
                         {wf.newDate && wf.newDate.length >= 10 && (
@@ -5503,11 +5269,15 @@ export default function TrackingSheet() {
                         border: `1px solid ${darkMode ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.15)'}`,
                       }}>
                         <span style={{ fontSize: 9, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Onboarding</span>
-                        <DateTimePicker value={lead.rdv_onboarding_date ? toDatetimeLocal(lead.rdv_onboarding_date) : ''} onChange={async (val) => {
+                        <input type="datetime-local" value={lead.rdv_onboarding_date ? toDatetimeLocal(lead.rdv_onboarding_date) : ''}
+                          onChange={async (e) => {
+                            const val = e.target.value;
                             setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_onboarding_date: val } : l));
                             try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { rdv_onboarding_date: val || null }); }
                             catch { setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_onboarding_date: lead.rdv_onboarding_date } : l)); }
-                          }} C={C} darkMode={darkMode} />
+                          }}
+                          style={{ border: 'none', background: 'transparent', color: C.text, fontSize: 12, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', padding: 0, outline: 'none', flex: 1, minWidth: 0 }}
+                        />
                       </div>
                     </div>
 
@@ -5519,11 +5289,15 @@ export default function TrackingSheet() {
                         border: `1px solid ${darkMode ? 'rgba(99,102,241,0.2)' : 'rgba(99,102,241,0.15)'}`,
                       }}>
                         <span style={{ fontSize: 9, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Lancement</span>
-                        <DateTimePicker value={lead.rdv_lancement_date ? toDatetimeLocal(lead.rdv_lancement_date) : ''} onChange={async (val) => {
+                        <input type="datetime-local" value={lead.rdv_lancement_date ? toDatetimeLocal(lead.rdv_lancement_date) : ''}
+                          onChange={async (e) => {
+                            const val = e.target.value;
                             setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_lancement_date: val } : l));
                             try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { rdv_lancement_date: val || null }); }
                             catch { setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_lancement_date: lead.rdv_lancement_date } : l)); }
-                          }} C={C} darkMode={darkMode} />
+                          }}
+                          style={{ border: 'none', background: 'transparent', color: C.text, fontSize: 12, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', padding: 0, outline: 'none', flex: 1, minWidth: 0 }}
+                        />
                       </div>
                     </div>
 
@@ -6174,107 +5948,6 @@ export default function TrackingSheet() {
           )}
         </div>
       )}
-      {/* ═══ SPOTLIGHT SEARCH (Ctrl+K) ═══ */}
-      {spotlightOpen && createPortal(
-        <>
-          <div onClick={() => setSpotlightOpen(false)} style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
-            zIndex: 9996, animation: 'modalOverlayIn 0.15s ease both',
-          }} />
-          <div style={{
-            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-            width: 520, maxWidth: '90vw', maxHeight: '60vh',
-            background: C.bg, borderRadius: 16, border: `1px solid ${C.border}`,
-            boxShadow: darkMode ? '0 24px 48px rgba(0,0,0,0.5)' : '0 24px 48px rgba(0,0,0,0.12)',
-            zIndex: 9997, display: 'flex', flexDirection: 'column', overflow: 'hidden',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif',
-            animation: 'modalCardIn 0.2s cubic-bezier(0.34,1.56,0.64,1) both',
-          }}>
-            {/* Search input */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: `1px solid ${C.border}` }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round">
-                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
-              <input
-                ref={spotlightInputRef}
-                value={spotlightQuery}
-                onChange={(e) => setSpotlightQuery(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Escape') setSpotlightOpen(false); }}
-                placeholder="Rechercher un lead dans tous les onglets..."
-                style={{
-                  flex: 1, border: 'none', outline: 'none', background: 'transparent',
-                  fontSize: 15, color: C.text, fontFamily: 'inherit', fontWeight: 500,
-                }}
-              />
-              <span style={{ fontSize: 10, color: C.muted, padding: '2px 6px', borderRadius: 4, background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', fontWeight: 600 }}>ESC</span>
-            </div>
-            {/* Results */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '6px 0' }}>
-              {(() => {
-                if (!spotlightQuery.trim()) return (
-                  <div style={{ padding: '24px 18px', textAlign: 'center', color: C.muted, fontSize: 13 }}>
-                    Tapez pour rechercher par nom, email ou téléphone
-                  </div>
-                );
-                const q = spotlightQuery.toLowerCase().trim();
-                const results = leads.filter(l =>
-                  (l.full_name || '').toLowerCase().includes(q) ||
-                  (l.email || '').toLowerCase().includes(q) ||
-                  (l.phone || '').replace(/\s/g, '').includes(q.replace(/\s/g, '')) ||
-                  (l.company_name || '').toLowerCase().includes(q)
-                ).slice(0, 15);
-                if (results.length === 0) return (
-                  <div style={{ padding: '24px 18px', textAlign: 'center', color: C.muted, fontSize: 13 }}>
-                    Aucun résultat pour "{spotlightQuery}"
-                  </div>
-                );
-                return results.map((lead, idx) => {
-                  const cat = CATEGORIES.find(c => c.key === lead.status) || CATEGORIES[0];
-                  return (
-                    <button key={lead.id} onClick={() => {
-                      setSpotlightOpen(false);
-                      // Switch to the correct tab
-                      const tabIdx = CATEGORIES.findIndex(c => c.key === lead.status);
-                      if (tabIdx >= 0 && tabIdx !== activeTab) handleTabChange(tabIdx);
-                      // Select the lead
-                      setSidebarView('leads');
-                      setTimeout(() => {
-                        setSelectedLead(lead.id);
-                        // Scroll to the lead card
-                        const el = document.getElementById(`lead-card-${lead.id}`);
-                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                      }, 150);
-                    }} style={{
-                      display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 18px',
-                      border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
-                      transition: 'background 0.1s', textAlign: 'left',
-                    }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                    >
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: cat.color, flexShrink: 0 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13.5, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {lead.full_name || '—'}
-                        </div>
-                        <div style={{ fontSize: 11, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {lead.email || lead.phone || lead.company_name || ''}
-                        </div>
-                      </div>
-                      <span style={{
-                        fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 50,
-                        background: `${cat.color}15`, color: cat.color, flexShrink: 0,
-                      }}>{cat.label}</span>
-                    </button>
-                  );
-                });
-              })()}
-            </div>
-          </div>
-        </>,
-        document.body
-      )}
-
       {/* ═══ QUALIFICATION DROPDOWN (portaled) ═══ */}
       {qualDropdown && (() => {
         const lead = leads.find(l => l.id === qualDropdown);
