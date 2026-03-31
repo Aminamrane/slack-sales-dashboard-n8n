@@ -125,7 +125,7 @@ export default function LeadsManagement() {
       // Fetch all data in parallel for faster loading
       const [leadsResult, clientsResult, salesResult, salesTeamResult, assignableResult] = await Promise.all([
         // Fetch leads from backend API (limit 200)
-        apiClient.get('/api/v1/leads?page=1&limit=200').catch(err => {
+        apiClient.get(`/api/v1/leads?limit=1000&created_after=${(() => { const d = new Date(); d.setDate(d.getDate() - 3); return d.toISOString().slice(0, 10); })()}`).catch(err => {
           console.error("Error fetching leads:", err);
           return { leads: [], items: [], data: [] };
         }),
