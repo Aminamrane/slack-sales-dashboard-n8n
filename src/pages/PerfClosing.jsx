@@ -1,6 +1,10 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { Radar } from "react-chartjs-2";
+import { Chart as ChartJS, RadialLinearScale, PointElement, LineElement, Filler, Tooltip } from "chart.js";
 import apiClient from "../services/apiClient";
+
+ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip);
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import "../index.css";
 
@@ -106,6 +110,7 @@ export default function PerfClosing() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(0);
   const [dashboard, setDashboard] = useState(null);
+  const [eodScores, setEodScores] = useState(null); // EOD scores for current week
   const [clients, setClients] = useState([]);
   const [coordonnees, setCoordonnees] = useState([]);
   const [updatingEtat, setUpdatingEtat] = useState(null);
@@ -194,7 +199,29 @@ export default function PerfClosing() {
     })();
   }, [navigate]);
 
-  const fetchDashboard = async () => { try { const r = await apiClient.get('/api/v1/perf-closing/dashboard'); setDashboard(r); } catch (e) { console.warn('Dashboard fetch failed:', e); } };
+  const fetchDashboard = async () => {
+    try { const r = await apiClient.get('/api/v1/perf-closing/dashboard'); setDashboard(r); } catch (e) { console.warn('Dashboard fetch failed:', e); }
+    // Fetch EOD scores for current week
+    try {
+      const now = new Date();
+      const day = now.getDay() || 7; // 1=Mon, 7=Sun
+      const monday = new Date(now); monday.setDate(now.getDate() - day + 1);
+      const year = monday.getFullYear();
+      const jan1 = new Date(year, 0, 1);
+      const week = Math.ceil(((monday - jan1) / 86400000 + jan1.getDay() + 1) / 7);
+      const weekStr = `${year}-W${String(week).padStart(2, '0')}`;
+      const resp = await apiClient.get(`/api/v1/eod/dashboard/scores?period=${weekStr}`);
+      if (resp?.scores) {
+        const DIMS = ['charge', 'energie', 'clarte', 'efficacite', 'relations', 'alignement'];
+        const scores = resp.scores;
+        const n = scores.length || 1;
+        const avgGlobal = scores.reduce((s, d) => s + (d.global_score || 0), 0) / n;
+        const dimAvgs = {};
+        DIMS.forEach(dim => { dimAvgs[dim] = scores.reduce((s, d) => s + (d[dim] || 0), 0) / n; });
+        setEodScores({ avgGlobal, dims: dimAvgs, count: scores.length, week: weekStr });
+      }
+    } catch (e) { console.warn('EOD scores fetch failed:', e); }
+  };
   const fetchClients = async () => { try { const r = await apiClient.get('/api/v1/perf-closing/clients'); setClients(r.clients || []); } catch (e) { console.warn('Clients fetch failed:', e); } };
   const fetchCoordonnees = async () => { try { const r = await apiClient.get('/api/v1/perf-closing/coordonnees'); setCoordonnees(r.coordonnees || []); } catch (e) { console.warn('Coordonnees fetch failed:', e); } };
 
@@ -625,63 +652,89 @@ export default function PerfClosing() {
                       )}
                       </div>{/* end left column */}
 
-                      {/* Counter breakdown card */}
-                      <div style={{
-                        background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`,
-                        boxShadow: C.shadow, overflow: 'hidden',
-                      }}>
-                        <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}` }}>
-                          <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Répartition Clients</div>
-                          <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Par statut actuel</div>
-                        </div>
-                        <div style={{ padding: '4px 0' }}>
-                          {COUNTER_DEFS.map((cd, i) => {
-                            const val = dashboard.counters?.[cd.key] ?? 0;
-                            const total = dashboard.counters?.total || 1;
-                            const pct = ((val / total) * 100).toFixed(0);
-                            return (
-                              <div key={cd.key} style={{
-                                display: 'flex', alignItems: 'center', padding: '12px 20px', gap: 12,
-                                borderBottom: i < COUNTER_DEFS.length - 1 ? `1px solid ${C.border}` : 'none',
-                                animation: `pcRowIn 0.3s ease ${i * 50}ms both`,
-                              }}>
-                                <div style={{
-                                  width: 10, height: 10, borderRadius: 3, background: cd.color, flexShrink: 0,
-                                }} />
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontSize: 13, fontWeight: 500, color: C.text }}>{cd.label}</div>
-                                </div>
-                                <div style={{ width: 80, height: 6, borderRadius: 3, background: C.subtle, overflow: 'hidden', flexShrink: 0 }}>
-                                  <div style={{
-                                    height: '100%', borderRadius: 3, width: `${pct}%`,
-                                    background: cd.color, transition: 'width 0.8s ease',
-                                  }} />
-                                </div>
-                                <span style={{
-                                  fontSize: 13, fontWeight: 600, color: C.muted, minWidth: 32, textAlign: 'right',
-                                  fontVariantNumeric: 'tabular-nums',
-                                }}>{pct}%</span>
-                                <span style={{
-                                  fontSize: 18, fontWeight: 700, color: C.text, minWidth: 32, textAlign: 'right',
-                                  fontVariantNumeric: 'tabular-nums',
-                                }}>{val}</span>
+                      {/* EOD Scores — Two separate containers */}
+                      {eodScores ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                          {/* Radar container */}
+                          <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: C.shadow, padding: '20px' }}>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4 }}>Moyenne globale</div>
+                            <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Semaine en cours</div>
+                            <div style={{ display: 'flex', justifyContent: 'center' }}>
+                              <div style={{ width: 300, height: 300 }}>
+                                <Radar
+                                  data={{
+                                    labels: ['Charge', 'Énergie', 'Clarté', 'Efficacité', 'Relations', 'Alignement'],
+                                    datasets: [{
+                                      data: ['charge', 'energie', 'clarte', 'efficacite', 'relations', 'alignement'].map(k => eodScores.dims[k] || 0),
+                                      backgroundColor: darkMode ? 'rgba(99,102,241,0.15)' : 'rgba(91,106,191,0.12)',
+                                      borderColor: C.accent, borderWidth: 2,
+                                      pointBackgroundColor: C.accent, pointBorderColor: C.accent,
+                                      pointRadius: 4, pointHoverRadius: 6,
+                                    }],
+                                  }}
+                                  options={{
+                                    responsive: true, maintainAspectRatio: true,
+                                    plugins: { legend: { display: false }, tooltip: { enabled: true }, datalabels: false },
+                                    scales: { r: {
+                                      min: 0, max: 5,
+                                      ticks: { stepSize: 1, display: true, font: { size: 9 }, color: C.muted, backdropColor: 'transparent' },
+                                      pointLabels: { font: { size: 11, weight: 600 }, color: C.text },
+                                      grid: { color: darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' },
+                                      angleLines: { color: darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' },
+                                    }},
+                                  }}
+                                />
                               </div>
-                            );
-                          })}
-                          {/* Total row */}
-                          <div style={{
-                            display: 'flex', alignItems: 'center', padding: '14px 20px', gap: 12,
-                            background: darkMode ? C.accent + '08' : '#f8f9ff',
-                            borderTop: `1px solid ${C.accent}20`,
-                          }}>
-                            <div style={{ width: 10, height: 10, borderRadius: 3, background: C.accent, flexShrink: 0 }} />
-                            <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.accent }}>Total</div>
-                            <span style={{ fontSize: 22, fontWeight: 800, color: C.accent, fontVariantNumeric: 'tabular-nums' }}>
-                              {dashboard.counters?.total ?? 0}
-                            </span>
+                            </div>
+                            <div style={{ textAlign: 'center', marginTop: 12 }}>
+                              <span style={{
+                                fontSize: 32, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+                                color: eodScores.avgGlobal >= 3.5 ? '#10b981' : eodScores.avgGlobal >= 2.5 ? '#f59e0b' : '#ef4444',
+                              }}>{eodScores.avgGlobal.toFixed(1)}</span>
+                              <span style={{ fontSize: 16, fontWeight: 500, color: C.muted }}>/5</span>
+                            </div>
+                          </div>
+
+                          {/* Dimensions container */}
+                          <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: C.shadow, overflow: 'hidden' }}>
+                            <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}` }}>
+                              <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Détail par dimension</div>
+                              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Score moyen /5</div>
+                            </div>
+                            <div style={{ padding: '4px 0' }}>
+                              {[
+                                { key: 'charge', label: 'Charge', color: '#6366f1' },
+                                { key: 'energie', label: 'Énergie', color: '#f59e0b' },
+                                { key: 'clarte', label: 'Clarté', color: '#3b82f6' },
+                                { key: 'efficacite', label: 'Efficacité', color: '#10b981' },
+                                { key: 'relations', label: 'Relations', color: '#ec4899' },
+                                { key: 'alignement', label: 'Alignement', color: '#8b5cf6' },
+                              ].map((dim, i) => {
+                                const val = eodScores.dims[dim.key] || 0;
+                                const pct = (val / 5 * 100).toFixed(0);
+                                return (
+                                  <div key={dim.key} style={{
+                                    display: 'flex', alignItems: 'center', padding: '12px 20px', gap: 12,
+                                    borderBottom: i < 5 ? `1px solid ${C.border}` : 'none',
+                                    animation: `pcRowIn 0.3s ease ${i * 50}ms both`,
+                                  }}>
+                                    <div style={{ width: 10, height: 10, borderRadius: 3, background: dim.color, flexShrink: 0 }} />
+                                    <div style={{ flex: 1, fontSize: 13, fontWeight: 500, color: C.text }}>{dim.label}</div>
+                                    <div style={{ width: 80, height: 6, borderRadius: 3, background: C.subtle, overflow: 'hidden', flexShrink: 0 }}>
+                                      <div style={{ height: '100%', borderRadius: 3, width: `${pct}%`, background: dim.color, transition: 'width 0.8s ease' }} />
+                                    </div>
+                                    <span style={{ fontSize: 14, fontWeight: 700, color: C.text, minWidth: 28, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                                      {val.toFixed(1)}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div style={{ padding: '40px 20px', textAlign: 'center', color: C.muted, fontSize: 13 }}>Chargement des scores EOD...</div>
+                      )}
                     </div>
                   </>) : (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 80 }}>

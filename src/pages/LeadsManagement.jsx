@@ -113,10 +113,22 @@ export default function LeadsManagement() {
   const ROLE_COLORS = { head_of_sales_manager: '#3b82f6', head_of_sales: '#ef4444', sales: '#10b981', admin: '#94a3b8' };
   const ROLE_ORDER = { head_of_sales_manager: 0, head_of_sales: 1, sales: 2, admin: 3 };
   // Override roles for users whose backend role doesn't match their actual team role
-  const ROLE_OVERRIDES = { 'k.dif@ownertechnology.com': 'head_of_sales_manager', 'y.zairi@ownertechnology.com': 'head_of_sales_manager' };
+  const ROLE_OVERRIDES = { 'y.zairi@ownertechnology.com': 'head_of_sales_manager' };
+  // Custom color overrides per email (takes priority over role color)
+  const COLOR_OVERRIDES = {
+    'l.mafrici@ownertechnology.com': '#ef4444',
+    's.itema@ownertechnology.com': '#ef4444',
+    'd.dubois@ownertechnology.com': '#10b981',
+    'g.derouet@ownertechnology.com': '#10b981',
+  };
+  // Hide specific users from the assign dropdown
+  const HIDDEN_USERS = ['k.dif@ownertechnology.com'];
   const getUserRole = (u) => ROLE_OVERRIDES[u.email] || u.role;
+  const NAME_COLOR_OVERRIDES = { 'léo mafrici': '#ef4444', 'leo mafrici': '#ef4444', 'sébastien itema': '#ef4444', 'sebastien itema': '#ef4444' };
+  const getUserColor = (u) => COLOR_OVERRIDES[u.email] || NAME_COLOR_OVERRIDES[(u.full_name || '').toLowerCase()] || ROLE_COLORS[getUserRole(u)] || C.secondary;
+  const COLOR_ORDER = { '#3b82f6': 0, '#10b981': 1, '#ef4444': 2, '#94a3b8': 3 };
   const sortedAssignableUsers = useMemo(() =>
-    [...(assignableUsers.length > 0 ? assignableUsers : [])].sort((a, b) => (ROLE_ORDER[getUserRole(a)] ?? 9) - (ROLE_ORDER[getUserRole(b)] ?? 9)),
+    [...(assignableUsers.length > 0 ? assignableUsers : [])].filter(u => !HIDDEN_USERS.includes(u.email)).sort((a, b) => (COLOR_ORDER[getUserColor(a)] ?? 9) - (COLOR_ORDER[getUserColor(b)] ?? 9)),
   [assignableUsers]);
 
   const fetchData = async () => {
@@ -509,7 +521,7 @@ export default function LeadsManagement() {
                             <td style={{ padding: '8px 12px', borderBottom: `1px solid ${C.border}`, position: 'relative' }} onClick={(e) => e.stopPropagation()}>
                               {(() => {
                                 const assignedUser = sortedAssignableUsers.find(u => u.email === lead.assigned_to);
-                                const assignedColor = assignedUser ? (ROLE_COLORS[getUserRole(assignedUser)] || C.secondary) : C.secondary;
+                                const assignedColor = assignedUser ? getUserColor(assignedUser) : C.secondary;
                                 const isOpen = assignDropdown === lead.id;
                                 return (
                                   <>
@@ -574,7 +586,7 @@ export default function LeadsManagement() {
               >Non assigné</button>
               {/* Users grouped by role color */}
               {sortedAssignableUsers.map(u => {
-                const color = ROLE_COLORS[getUserRole(u)] || C.secondary;
+                const color = getUserColor(u);
                 const isActive = lead.assigned_to === u.email;
                 return (
                   <button key={u.email} onClick={() => { setAssignDropdown(null); handleAssignLead(lead.id, u.email, { stopPropagation: () => {} }); }}
