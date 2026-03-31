@@ -832,7 +832,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                   Campagnes
                 </button>
 
-                {apiClient.getUser()?.role === 'admin' && (
+                {(apiClient.getUser()?.role === 'admin' || apiClient.getUser()?.role === 'ceo') && (
                   <button
                     onClick={() => navigate("/perf-closing")}
                     style={{
@@ -844,7 +844,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                     onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? '#2a2b2e' : '#f5f5f7'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    Perf.Closing
+                    CEO Dashboard
                   </button>
                 )}
 

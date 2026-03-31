@@ -19,7 +19,7 @@ import thirdPlace from "../assets/3st-place.png";
 /* ─── Config ──────────────────────────────────────────────────────────── */
 const TABS = [
   { key: "dashboard",    label: "Dashboard",     icon: "📊" },
-  { key: "perf_closing", label: "Perf.Closing",  icon: "📋" },
+  { key: "perf_closing", label: "Clients",  icon: "📋" },
   { key: "coordonnees",  label: "Coordonnées",   icon: "📇" },
 ];
 
@@ -152,7 +152,7 @@ export default function PerfClosing() {
         const token = apiClient.getToken();
         const user = apiClient.getUser();
         if (!token || !user) { navigate("/login"); return; }
-        if (user.role !== 'admin') { navigate("/"); return; }
+        if (user.role !== 'admin' && user.role !== 'ceo') { navigate("/"); return; }
         await fetchDashboard();
         // Fetch user avatars from multiple sources
         try {
@@ -213,12 +213,22 @@ export default function PerfClosing() {
       const resp = await apiClient.get(`/api/v1/eod/dashboard/scores?period=${weekStr}`);
       if (resp?.scores) {
         const DIMS = ['charge', 'energie', 'clarte', 'efficacite', 'relations', 'alignement'];
+        const DM = { admin: 'tech', hr: 'rh', finance_director: 'finance', finance_team: 'finance', sales: 'commercial', head_of_sales: 'commercial', head_of_sales_manager: 'commercial', ceo: 'direction' };
+        const DC = { tech: '#6366f1', marketing: '#f59e0b', rh: '#ec4899', finance: '#059669', commercial: '#3b82f6', direction: '#8b5cf6' };
+        const DL = { tech: 'Tech', marketing: 'Marketing', rh: 'RH', finance: 'Finance', commercial: 'Commercial', direction: 'Direction' };
         const scores = resp.scores;
         const n = scores.length || 1;
         const avgGlobal = scores.reduce((s, d) => s + (d.global_score || 0), 0) / n;
         const dimAvgs = {};
         DIMS.forEach(dim => { dimAvgs[dim] = scores.reduce((s, d) => s + (d[dim] || 0), 0) / n; });
-        setEodScores({ avgGlobal, dims: dimAvgs, count: scores.length, week: weekStr });
+        const dg = {};
+        scores.forEach(s => { const dept = DM[(s.department || '').toLowerCase()] || (s.department || '').toLowerCase(); if (!dg[dept]) dg[dept] = []; dg[dept].push(s); });
+        const deptStats = Object.keys(dg).map(k => {
+          const g = dg[k]; const gn = g.length || 1; const avg = {};
+          DIMS.forEach(dim => { avg[dim] = g.reduce((s, d) => s + (d[dim] || 0), 0) / gn; });
+          return { key: k, label: DL[k] || k, color: DC[k] || '#94a3b8', count: g.length, avg, avgGlobal: g.reduce((s, d) => s + (d.global_score || 0), 0) / gn };
+        }).sort((a, b) => b.avgGlobal - a.avgGlobal);
+        setEodScores({ avgGlobal, dims: dimAvgs, count: scores.length, week: weekStr, deptStats });
       }
     } catch (e) { console.warn('EOD scores fetch failed:', e); }
   };
@@ -531,7 +541,7 @@ export default function PerfClosing() {
                     </div>
 
                     {/* Main content: Delays + Leaderboard | Counters */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, alignItems: 'start' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'start' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {/* Delays card */}
                       <div style={{
@@ -652,78 +662,54 @@ export default function PerfClosing() {
                       )}
                       </div>{/* end left column */}
 
-                      {/* EOD Scores — Two separate containers (direct grid children) */}
+                      {/* EOD Scores — two separate containers */}
                       {eodScores ? (
                         <>
-                          {/* Radar container */}
-                          <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: C.shadow, padding: '20px' }}>
-                            <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4 }}>Moyenne globale</div>
-                            <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Semaine en cours</div>
-                            <div style={{ display: 'flex', justifyContent: 'center' }}>
-                              <div style={{ width: 360, height: 360 }}>
-                                <Radar
-                                  data={{
-                                    labels: ['Charge', 'Énergie', 'Clarté', 'Efficacité', 'Relations', 'Alignement'],
-                                    datasets: [{
-                                      data: ['charge', 'energie', 'clarte', 'efficacite', 'relations', 'alignement'].map(k => eodScores.dims[k] || 0),
-                                      backgroundColor: darkMode ? 'rgba(99,102,241,0.15)' : 'rgba(91,106,191,0.12)',
-                                      borderColor: C.accent, borderWidth: 2,
-                                      pointBackgroundColor: C.accent, pointBorderColor: C.accent,
-                                      pointRadius: 4, pointHoverRadius: 6,
-                                    }],
-                                  }}
-                                  options={{
-                                    responsive: true, maintainAspectRatio: true,
-                                    plugins: { legend: { display: false }, tooltip: { enabled: true }, datalabels: false },
-                                    scales: { r: {
-                                      min: 0, max: 5,
-                                      ticks: { stepSize: 1, display: true, font: { size: 9 }, color: C.muted, backdropColor: 'transparent' },
-                                      pointLabels: { font: { size: 11, weight: 600 }, color: C.text },
-                                      grid: { color: darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' },
-                                      angleLines: { color: darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' },
-                                    }},
-                                  }}
-                                />
-                              </div>
-                            </div>
-                            <div style={{ height: 0 }} />
-                          </div>
-
-                          {/* Dimensions container */}
+                          {/* Comparaison inter-pôles */}
                           <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: C.shadow, overflow: 'hidden' }}>
                             <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}` }}>
-                              <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Détail par dimension</div>
-                              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Score moyen /5</div>
+                              <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Comparaison inter-pôles</div>
+                              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Semaine en cours</div>
                             </div>
-                            <div style={{ padding: '4px 0' }}>
-                              {[
-                                { key: 'charge', label: 'Charge', color: '#6366f1' },
-                                { key: 'energie', label: 'Énergie', color: '#f59e0b' },
-                                { key: 'clarte', label: 'Clarté', color: '#3b82f6' },
-                                { key: 'efficacite', label: 'Efficacité', color: '#10b981' },
-                                { key: 'relations', label: 'Relations', color: '#ec4899' },
-                                { key: 'alignement', label: 'Alignement', color: '#8b5cf6' },
-                              ].map((dim, i) => {
-                                const val = eodScores.dims[dim.key] || 0;
-                                const pct = (val / 5 * 100).toFixed(0);
-                                return (
-                                  <div key={dim.key} style={{
-                                    display: 'flex', alignItems: 'center', padding: '12px 20px', gap: 12,
-                                    borderBottom: i < 5 ? `1px solid ${C.border}` : 'none',
-                                    animation: `pcRowIn 0.3s ease ${i * 50}ms both`,
-                                  }}>
-                                    <div style={{ width: 10, height: 10, borderRadius: 3, background: dim.color, flexShrink: 0 }} />
-                                    <div style={{ flex: 1, fontSize: 13, fontWeight: 500, color: C.text }}>{dim.label}</div>
-                                    <div style={{ width: 80, height: 6, borderRadius: 3, background: C.subtle, overflow: 'hidden', flexShrink: 0 }}>
-                                      <div style={{ height: '100%', borderRadius: 3, width: `${pct}%`, background: dim.color, transition: 'width 0.8s ease' }} />
-                                    </div>
-                                    <span style={{ fontSize: 14, fontWeight: 700, color: C.text, minWidth: 28, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                                      {val.toFixed(1)}
-                                    </span>
+                            {/* Table header */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '140px repeat(6, 1fr) 70px', padding: '10px 16px', borderBottom: `1px solid ${C.border}`, background: C.subtle }}>
+                              <span style={{ fontSize: 10, fontWeight: 600, color: C.muted }}>Pôle</span>
+                              {['Char.', 'Éner.', 'Clar.', 'Effi.', 'Rela.', 'Alig.'].map(h => (
+                                <span key={h} style={{ fontSize: 10, fontWeight: 600, color: C.muted, textAlign: 'center' }}>{h}</span>
+                              ))}
+                              <span style={{ fontSize: 10, fontWeight: 600, color: C.muted, textAlign: 'right' }}>Global</span>
+                            </div>
+                            {/* Dept rows */}
+                            {(eodScores.deptStats || []).map((dept, i) => {
+                              const getColor = (v) => v >= 4 ? '#10b981' : v >= 3 ? '#f59e0b' : '#ef4444';
+                              return (
+                                <div key={dept.key} style={{
+                                  display: 'grid', gridTemplateColumns: '140px repeat(6, 1fr) 70px', padding: '12px 16px',
+                                  borderBottom: i < (eodScores.deptStats || []).length - 1 ? `1px solid ${C.border}` : 'none',
+                                  animation: `pcRowIn 0.3s ease ${i * 40}ms both`,
+                                }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: dept.color, flexShrink: 0 }} />
+                                    <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{dept.label}</span>
+                                    <span style={{ fontSize: 10, color: C.muted }}>({dept.count})</span>
                                   </div>
-                                );
-                              })}
-                            </div>
+                                  {['charge', 'energie', 'clarte', 'efficacite', 'relations', 'alignement'].map(dim => {
+                                    const v = dept.avg[dim] || 0;
+                                    return (
+                                      <div key={dim} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <span style={{
+                                          fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 6,
+                                          background: `${getColor(v)}15`, color: getColor(v),
+                                        }}>{v.toFixed(1)}</span>
+                                      </div>
+                                    );
+                                  })}
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                    <span style={{ fontSize: 14, fontWeight: 700, color: getColor(dept.avgGlobal) }}>{dept.avgGlobal.toFixed(1)}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         </>
                       ) : (
