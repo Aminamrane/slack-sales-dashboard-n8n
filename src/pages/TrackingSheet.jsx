@@ -1237,7 +1237,6 @@ export default function TrackingSheet() {
       await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, { notes: newNotes });
       setLeads(prev => prev.map(l => l.id === leadId ? { ...l, notes: newNotes } : l));
       setEditingNotes(prev => { const n = { ...prev }; delete n[leadId]; return n; });
-      setSelectedLead(null);
       // Trigger sticker animation if note was just added (didn't have one before)
       if (!hadNotes && newNotes?.trim()) {
         setNoteJustSaved(leadId);
