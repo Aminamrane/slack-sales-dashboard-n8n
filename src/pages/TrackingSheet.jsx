@@ -1248,14 +1248,22 @@ export default function TrackingSheet() {
     }
   };
 
+  const dateChangeTimers = useRef({}); // debounce per lead+field
   const handleDateChange = async (leadId, field, value) => {
     const backendField = field === 'r1' ? 'r1_date' : field === 'r2' ? 'r2_date' : field;
-    try {
-      await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, { [backendField]: value || null });
-      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, [field]: value } : l));
-    } catch (err) {
-      console.error("Erreur mise à jour date:", err);
-    }
+    // Optimistic update immediately
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, [field]: value } : l));
+    // Debounce the PATCH — cancel previous timer for same lead+field
+    const key = `${leadId}-${field}`;
+    if (dateChangeTimers.current[key]) clearTimeout(dateChangeTimers.current[key]);
+    dateChangeTimers.current[key] = setTimeout(async () => {
+      delete dateChangeTimers.current[key];
+      try {
+        await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, { [backendField]: value || null });
+      } catch (err) {
+        console.error("Erreur mise à jour date:", err);
+      }
+    }, 500);
   };
 
   const handleEmployeeRangeChange = async (leadId, range) => {
@@ -1355,7 +1363,12 @@ export default function TrackingSheet() {
   };
 
   // ── WORKFLOW HANDLER ─────────────────────────────────────────────────────
+  const workflowSubmittingRef = useRef(false);
   const handleWorkflowSubmit = async (leadId, patchData) => {
+    // Prevent double-submit (double-click, etc.)
+    if (workflowSubmittingRef.current) return;
+    workflowSubmittingRef.current = true;
+    setTimeout(() => { workflowSubmittingRef.current = false; }, 2000);
     const currentStatus = CATEGORIES[activeTab].key;
     const newStatus = patchData.status;
     // Check email required for R1/R2 date changes

@@ -531,8 +531,8 @@ export default function PerfClosing() {
                     </div>
 
                     {/* Main content: Delays + Leaderboard | Counters */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 12 }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 420 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, alignItems: 'start' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {/* Delays card */}
                       <div style={{
                         background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`,
@@ -652,15 +652,15 @@ export default function PerfClosing() {
                       )}
                       </div>{/* end left column */}
 
-                      {/* EOD Scores — Two separate containers */}
+                      {/* EOD Scores — Two separate containers (direct grid children) */}
                       {eodScores ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <>
                           {/* Radar container */}
                           <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: C.shadow, padding: '20px' }}>
                             <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4 }}>Moyenne globale</div>
                             <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Semaine en cours</div>
                             <div style={{ display: 'flex', justifyContent: 'center' }}>
-                              <div style={{ width: 300, height: 300 }}>
+                              <div style={{ width: 360, height: 360 }}>
                                 <Radar
                                   data={{
                                     labels: ['Charge', 'Énergie', 'Clarté', 'Efficacité', 'Relations', 'Alignement'],
@@ -686,13 +686,7 @@ export default function PerfClosing() {
                                 />
                               </div>
                             </div>
-                            <div style={{ textAlign: 'center', marginTop: 12 }}>
-                              <span style={{
-                                fontSize: 32, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
-                                color: eodScores.avgGlobal >= 3.5 ? '#10b981' : eodScores.avgGlobal >= 2.5 ? '#f59e0b' : '#ef4444',
-                              }}>{eodScores.avgGlobal.toFixed(1)}</span>
-                              <span style={{ fontSize: 16, fontWeight: 500, color: C.muted }}>/5</span>
-                            </div>
+                            <div style={{ height: 0 }} />
                           </div>
 
                           {/* Dimensions container */}
@@ -731,9 +725,9 @@ export default function PerfClosing() {
                               })}
                             </div>
                           </div>
-                        </div>
+                        </>
                       ) : (
-                        <div style={{ padding: '40px 20px', textAlign: 'center', color: C.muted, fontSize: 13 }}>Chargement des scores EOD...</div>
+                        <div style={{ gridColumn: '2 / -1', padding: '40px 20px', textAlign: 'center', color: C.muted, fontSize: 13 }}>Chargement des scores EOD...</div>
                       )}
                     </div>
                   </>) : (
