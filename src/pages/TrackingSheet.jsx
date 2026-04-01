@@ -5211,123 +5211,6 @@ export default function TrackingSheet() {
                           onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.text; e.currentTarget.style.transform = 'scale(1)'; }}
                         >Qualifier le R1</button>
 
-                        {/* ── Shortcut: Envoyer le contrat directly from R1 ── */}
-                        {r1ShortcutContract === lead.id ? (() => {
-                          const hasRange = !!lead.employee_range;
-                          const ndaDone = !!(lead.has_client_data);
-                          const isSending = sendingContract === lead.id;
-                          const contracts = leadContracts[lead.id] || [];
-                          const latestContract = contracts[0] || null;
-                          const status = latestContract?.yousign_status;
-                          // Fetch contracts if not loaded
-                          if (!leadContracts[lead.id] && typeof fetchLeadContracts === 'function') fetchLeadContracts(lead.id);
-                          return (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 16px', borderRadius: 14, border: `1px solid ${darkMode ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.15)'}`, background: darkMode ? 'rgba(16,185,129,0.04)' : 'rgba(16,185,129,0.02)', animation: 'wfDateCardIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both' }}>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: '#10b981' }}>Envoi rapide du contrat</div>
-                              <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>R1 et R2 seront marqués effectués. Pas de rendez-vous Calendar.</div>
-
-                              {/* Employee range selector */}
-                              <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tranche salariale</div>
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                                {EMPLOYEE_RANGES.map(range => {
-                                  const isSel = lead.employee_range === range;
-                                  return (
-                                    <button key={range} onClick={() => handleEmployeeRangeChange(lead.id, range)} style={{
-                                      padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: isSel ? 600 : 500,
-                                      border: `1px solid ${isSel ? '#fb923c' : C.border}`,
-                                      background: isSel ? 'rgba(251,146,60,0.1)' : 'transparent',
-                                      color: isSel ? '#fb923c' : C.muted, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-                                    }}>{range}</button>
-                                  );
-                                })}
-                              </div>
-
-                              {/* NDA + Send buttons */}
-                              <div style={{ display: 'flex', gap: 6 }}>
-                                <button onClick={() => openNdaPopup(lead)} style={{
-                                  flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${ndaDone ? 'rgba(16,185,129,0.25)' : C.border}`,
-                                  background: ndaDone ? 'rgba(16,185,129,0.04)' : 'transparent',
-                                  color: ndaDone ? '#10b981' : C.accent, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                                }}>{ndaDone ? 'NDA généré ✓' : 'Générer NDA'}</button>
-                                <button
-                                  onClick={async () => {
-                                    if (!hasRange || isSending) return;
-                                    // Send contract
-                                    setNavNotif('sending');
-                                    setSendingContract(lead.id);
-                                    try {
-                                      await apiClient.post('/api/v1/contracts/send', { lead_id: lead.id, employee_range: lead.employee_range });
-                                      setNavNotif('sent');
-                                      // Auto-fill R1+R2 dates to today, mark done, move to R2
-                                      const today = new Date().toISOString().slice(0, 10);
-                                      await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, {
-                                        r1_date: today, r2_date: today,
-                                        r1_result: 'done', r1_completed_at: new Date().toISOString(),
-                                        r2_result: 'done', r2_completed_at: new Date().toISOString(),
-                                        status: 'r2',
-                                      });
-                                      // Update local state
-                                      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, r1: today, r2: today, r1_result: 'done', r2_result: 'done', status: 'r2' } : l));
-                                      // Fly to R2 + follow
-                                      triggerFlyAnimation(lead.id, lead, 'r2');
-                                      triggerLeadMovedNotif(lead, 'r2');
-                                      setR1ShortcutContract(null);
-                                      // Switch to R2 tab and select the lead
-                                      setTimeout(() => {
-                                        const r2TabIdx = CATEGORIES.findIndex(c => c.key === 'r2');
-                                        if (r2TabIdx >= 0) handleTabChange(r2TabIdx);
-                                        setTimeout(() => {
-                                          setSelectedLead(lead.id);
-                                          const el = document.getElementById(`lead-card-${lead.id}`);
-                                          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                        }, 300);
-                                      }, 900);
-                                    } catch (err) {
-                                      console.error('R1 shortcut contract error:', err);
-                                      setNavNotif(null);
-                                      const message = err?.response?.data?.detail || err?.detail || err?.message || '';
-                                      const isNdaMissing = message.toLowerCase().includes('client data missing') || message.toLowerCase().includes('nda');
-                                      setContractErrorModal({ message: isNdaMissing ? 'Le NDA n\'a pas encore été généré. Générez-le d\'abord.' : `Erreur : ${message}`, isNdaMissing });
-                                    } finally {
-                                      setSendingContract(null);
-                                    }
-                                  }}
-                                  disabled={!hasRange || isSending}
-                                  style={{
-                                    flex: 1, padding: '8px 12px', borderRadius: 8, border: 'none',
-                                    background: hasRange && !isSending ? '#10b981' : (darkMode ? '#2a2b36' : '#e2e6ef'),
-                                    color: hasRange && !isSending ? '#fff' : C.muted,
-                                    fontSize: 11, fontWeight: 600, cursor: hasRange && !isSending ? 'pointer' : 'not-allowed',
-                                    fontFamily: 'inherit', opacity: hasRange && !isSending ? 1 : 0.6, transition: 'all 0.15s',
-                                  }}
-                                >{isSending ? 'Envoi...' : 'Envoyer le contrat'}</button>
-                              </div>
-
-                              {/* Contract status if exists */}
-                              {latestContract && (
-                                <div style={{ fontSize: 11, color: status === 'ongoing' ? '#3b82f6' : status === 'done' ? '#10b981' : C.muted, fontWeight: 600 }}>
-                                  {status === 'ongoing' ? 'En attente de signature' : status === 'done' ? 'Signé ✓' : status}
-                                </div>
-                              )}
-
-                              <button onClick={() => setR1ShortcutContract(null)}
-                                style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', opacity: 0.7 }}
-                              >← Fermer</button>
-                            </div>
-                          );
-                        })() : (
-                          <button onClick={() => setR1ShortcutContract(lead.id)} style={{
-                            width: '100%', padding: '10px 16px', borderRadius: 50,
-                            border: `1px solid ${darkMode ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.2)'}`,
-                            background: darkMode ? 'rgba(16,185,129,0.06)' : 'rgba(16,185,129,0.03)',
-                            color: '#10b981', fontSize: 13, fontWeight: 600,
-                            cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)', fontFamily: 'inherit',
-                          }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.06)'; e.currentTarget.style.transform = 'scale(1.02)'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(16,185,129,0.06)' : 'rgba(16,185,129,0.03)'; e.currentTarget.style.transform = 'scale(1)'; }}
-                          >Envoyer le contrat</button>
-                        )}
-
                         {/* ── R2 placé: separate standalone button (only after R1 qualified) ── */}
                         {!lead.r1_result ? null : !wfR2 ? (
                           <button
@@ -5380,6 +5263,54 @@ export default function TrackingSheet() {
                               style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', opacity: 0.7 }}
                             >← Retour</button>
                           </div>
+                        )}
+
+                        {/* ── Shortcut: Envoyer le contrat directly from R1 ── */}
+                        {r1ShortcutContract === lead.id ? (() => {
+                          const hasRange = !!lead.employee_range;
+                          const ndaDone = !!(lead.has_client_data);
+                          const isSending = sendingContract === lead.id;
+                          const contracts = leadContracts[lead.id] || [];
+                          const latestContract = contracts[0] || null;
+                          const cStatus = latestContract?.yousign_status;
+                          if (!leadContracts[lead.id] && typeof fetchLeadContracts === 'function') fetchLeadContracts(lead.id);
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 16px', borderRadius: 14, border: `1px solid ${darkMode ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.15)'}`, background: darkMode ? 'rgba(16,185,129,0.04)' : 'rgba(16,185,129,0.02)', animation: 'wfDateCardIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both' }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: '#10b981' }}>Envoi rapide du contrat</div>
+                              <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>R1 et R2 seront marqués effectués. Pas de rendez-vous Calendar.</div>
+                              <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tranche salariale</div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                {EMPLOYEE_RANGES.map(range => {
+                                  const isSel = lead.employee_range === range;
+                                  return <button key={range} onClick={() => handleEmployeeRangeChange(lead.id, range)} style={{ padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: isSel ? 600 : 500, border: `1px solid ${isSel ? '#fb923c' : C.border}`, background: isSel ? 'rgba(251,146,60,0.1)' : 'transparent', color: isSel ? '#fb923c' : C.muted, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' }}>{range}</button>;
+                                })}
+                              </div>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <button onClick={() => openNdaPopup(lead)} style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${ndaDone ? 'rgba(16,185,129,0.25)' : C.border}`, background: ndaDone ? 'rgba(16,185,129,0.04)' : 'transparent', color: ndaDone ? '#10b981' : C.accent, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>{ndaDone ? 'NDA généré ✓' : 'Générer NDA'}</button>
+                                <button onClick={async () => {
+                                  if (!hasRange || isSending) return;
+                                  setNavNotif('sending'); setSendingContract(lead.id);
+                                  try {
+                                    await apiClient.post('/api/v1/contracts/send', { lead_id: lead.id, employee_range: lead.employee_range });
+                                    setNavNotif('sent');
+                                    const today = new Date().toISOString().slice(0, 10);
+                                    await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { r1_date: today, r2_date: today, r1_result: 'done', r1_completed_at: new Date().toISOString(), r2_result: 'done', r2_completed_at: new Date().toISOString(), status: 'r2' });
+                                    setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, r1: today, r2: today, r1_result: 'done', r2_result: 'done', status: 'r2' } : l));
+                                    triggerFlyAnimation(lead.id, lead, 'r2'); triggerLeadMovedNotif(lead, 'r2'); setR1ShortcutContract(null);
+                                    setTimeout(() => { const r2TabIdx = CATEGORIES.findIndex(c => c.key === 'r2'); if (r2TabIdx >= 0) handleTabChange(r2TabIdx); setTimeout(() => { setSelectedLead(lead.id); const el = document.getElementById(`lead-card-${lead.id}`); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 300); }, 900);
+                                  } catch (err) { console.error('R1 shortcut contract error:', err); setNavNotif(null); const msg = err?.response?.data?.detail || err?.detail || err?.message || ''; setContractErrorModal({ message: msg.toLowerCase().includes('client data') ? 'Le NDA n\'a pas encore été généré.' : `Erreur : ${msg}`, isNdaMissing: msg.toLowerCase().includes('client data') }); }
+                                  finally { setSendingContract(null); }
+                                }} disabled={!hasRange || isSending} style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: 'none', background: hasRange && !isSending ? '#10b981' : (darkMode ? '#2a2b36' : '#e2e6ef'), color: hasRange && !isSending ? '#fff' : C.muted, fontSize: 11, fontWeight: 600, cursor: hasRange && !isSending ? 'pointer' : 'not-allowed', fontFamily: 'inherit', opacity: hasRange && !isSending ? 1 : 0.6 }}>{isSending ? 'Envoi...' : 'Envoyer le contrat'}</button>
+                              </div>
+                              {latestContract && <div style={{ fontSize: 11, color: cStatus === 'ongoing' ? '#3b82f6' : cStatus === 'done' ? '#10b981' : C.muted, fontWeight: 600 }}>{cStatus === 'ongoing' ? 'En attente de signature' : cStatus === 'done' ? 'Signé ✓' : cStatus}</div>}
+                              <button onClick={() => setR1ShortcutContract(null)} style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', opacity: 0.7 }}>← Fermer</button>
+                            </div>
+                          );
+                        })() : (
+                          <button onClick={() => setR1ShortcutContract(lead.id)} style={{ width: '100%', padding: '10px 16px', borderRadius: 50, border: `1px solid ${darkMode ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.2)'}`, background: darkMode ? 'rgba(16,185,129,0.06)' : 'rgba(16,185,129,0.03)', color: '#10b981', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)', fontFamily: 'inherit' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.06)'; e.currentTarget.style.transform = 'scale(1.02)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(16,185,129,0.06)' : 'rgba(16,185,129,0.03)'; e.currentTarget.style.transform = 'scale(1)'; }}
+                          >Envoyer le contrat</button>
                         )}
                       </>
                     ) : !wf.r1Result ? (
