@@ -18,6 +18,7 @@ import iconQualProposition from "../assets/proposition.svg";
 import iconQualNegociation from "../assets/négociation.svg";
 import iconQualGagne from "../assets/gagné.svg";
 import iconQualPerdu from "../assets/perdu.svg";
+import iconQualSansSuite from "../assets/Sans suite.svg";
 import iconPrio from "../assets/prio.svg";
 import iconPrioHigh from "../assets/high.svg";
 import iconPrioMedium from "../assets/medium.svg";
@@ -518,6 +519,8 @@ export default function TrackingSheet() {
   const [spotlightQuery, setSpotlightQuery] = useState('');
   const spotlightInputRef = useRef(null);
   const [prioDropdown, setPrioDropdown] = useState(null); // lead id with open priority dropdown
+  const [sansSuiteModal, setSansSuiteModal] = useState(null); // { leadId } — sans suite comment modal
+  const [sansSuiteComment, setSansSuiteComment] = useState('');
   const [prioDropdownPos, setPrioDropdownPos] = useState({ x: 0, y: 0 });
   const [confirmModal, setConfirmModal] = useState(null); // { title, message, icon, color, confirmLabel, onConfirm } or null
 
@@ -4493,6 +4496,7 @@ export default function TrackingSheet() {
                     { key: 'negociation', label: 'Négociation', icon: iconQualNegociation },
                     { key: 'gagne', label: 'Gagné', icon: iconQualGagne },
                     { key: 'perdu', label: 'Perdu', icon: iconQualPerdu },
+                    { key: 'sans_suite', label: 'Sans suite', icon: iconQualSansSuite },
                   ];
                   const current = lead.sales_qualification || 'lead';
                   const currentOpt = QUAL_OPTIONS.find(q => q.key === current) || QUAL_OPTIONS[0];
@@ -4951,7 +4955,7 @@ export default function TrackingSheet() {
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                           {wfPill('RDV R1', '#3b82f6', '📅', 30, () => setActiveWorkflow(prev => ({ ...prev, appointmentResult: 'appointment_set', newDate: '' })))}
                           {wfPill('R2 direct', '#fb923c', '⚡', 70, () => setActiveWorkflow(prev => ({ ...prev, appointmentResult: 'r2_direct', newDate: '' })))}
-                          {wfPill('Pas de RDV', '#94a3b8', '↩', 110, () => handleWorkflowSubmit(lead.id, { first_contact_date: today, contact_result: 'reached', appointment_result: 'no_appointment', status: 'callback' }))}
+                          {wfPill('À rappeler', '#94a3b8', '↩', 110, () => handleWorkflowSubmit(lead.id, { first_contact_date: today, contact_result: 'reached', appointment_result: 'no_appointment', status: 'callback' }))}
                           {wfPill('Pas intéressé', '#ef4444', '✕', 150, () => handleWorkflowSubmit(lead.id, { first_contact_date: today, contact_result: 'reached', appointment_result: 'not_interested', status: 'not_relevant' }))}
                         </div>
                         <button onClick={() => setActiveWorkflow(prev => ({ ...prev, contactResult: '', appointmentResult: '' }))}
@@ -6303,6 +6307,7 @@ export default function TrackingSheet() {
           { key: 'negociation', label: 'Négociation', icon: iconQualNegociation },
           { key: 'gagne', label: 'Gagné', icon: iconQualGagne },
           { key: 'perdu', label: 'Perdu', icon: iconQualPerdu },
+          { key: 'sans_suite', label: 'Sans suite', icon: iconQualSansSuite },
         ];
         const current = lead.sales_qualification || 'lead';
         return createPortal(
@@ -6317,6 +6322,11 @@ export default function TrackingSheet() {
               {QUAL_OPTIONS.map(q => (
                 <button key={q.key} onClick={async () => {
                   setQualDropdown(null);
+                  if (q.key === 'sans_suite') {
+                    setSansSuiteModal({ leadId: lead.id });
+                    setSansSuiteComment('');
+                    return;
+                  }
                   const prev = current;
                   setLeads(p => p.map(l => l.id === lead.id ? { ...l, sales_qualification: q.key } : l));
                   try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { sales_qualification: q.key }); }
@@ -6465,6 +6475,71 @@ export default function TrackingSheet() {
               {assignableUsers.length === 0 && (
                 <div style={{ textAlign: 'center', padding: 20, color: C.muted, fontSize: 13 }}>Chargement...</div>
               )}
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
+
+      {/* ═══ SANS SUITE MODAL ═══ */}
+      {sansSuiteModal && createPortal(
+        <>
+          <div onClick={() => setSansSuiteModal(null)} style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+            zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both',
+          }} />
+          <div style={{
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
+            width: 400, maxWidth: '90vw', background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`,
+            boxShadow: darkMode ? '0 24px 48px rgba(0,0,0,0.4)' : '0 24px 48px rgba(0,0,0,0.08)',
+            padding: '28px 24px 22px',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif',
+            animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
+          }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 6, letterSpacing: '-0.02em' }}>Sans suite</div>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Ajoutez un commentaire obligatoire avant d'archiver ce lead.</div>
+            <textarea
+              value={sansSuiteComment}
+              onChange={(e) => setSansSuiteComment(e.target.value)}
+              placeholder="Raison de la clôture sans suite..."
+              style={{
+                width: '100%', minHeight: 100, padding: '10px 14px', borderRadius: 10,
+                border: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#f9fafb',
+                color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', resize: 'vertical',
+                lineHeight: 1.5,
+              }}
+              autoFocus
+            />
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <button onClick={() => setSansSuiteModal(null)} style={{
+                flex: 1, padding: '11px 0', borderRadius: 12, fontSize: 14, fontWeight: 600,
+                fontFamily: 'inherit', cursor: 'pointer', border: `1px solid ${C.border}`,
+                background: 'transparent', color: C.muted, transition: 'all 0.15s',
+              }}>Annuler</button>
+              <button onClick={async () => {
+                if (!sansSuiteComment.trim()) return;
+                const leadId = sansSuiteModal.leadId;
+                try {
+                  await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, {
+                    sales_qualification: 'sans_suite',
+                    notes: (leads.find(l => l.id === leadId)?.notes ? leads.find(l => l.id === leadId).notes + '\n' : '') + 'Sans suite : ' + sansSuiteComment.trim(),
+                  });
+                  await apiClient.post(`/api/v1/tracking/leads/${leadId}/archive`);
+                  setLeads(prev => prev.filter(l => l.id !== leadId));
+                  setSelectedLead(null);
+                } catch (e) {
+                  console.warn('Archive failed:', e);
+                  setLeads(prev => prev.map(l => l.id === leadId ? { ...l, sales_qualification: 'sans_suite' } : l));
+                }
+                setSansSuiteModal(null);
+              }} disabled={!sansSuiteComment.trim()} style={{
+                flex: 1, padding: '11px 0', borderRadius: 12, fontSize: 14, fontWeight: 600,
+                fontFamily: 'inherit', cursor: sansSuiteComment.trim() ? 'pointer' : 'not-allowed',
+                border: 'none',
+                background: sansSuiteComment.trim() ? (darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)') : (darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'),
+                color: sansSuiteComment.trim() ? C.text : C.muted, transition: 'all 0.15s',
+                opacity: sansSuiteComment.trim() ? 1 : 0.5,
+              }}>Archiver</button>
             </div>
           </div>
         </>,
