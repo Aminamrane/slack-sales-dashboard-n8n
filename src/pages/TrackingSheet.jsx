@@ -443,6 +443,10 @@ export default function TrackingSheet() {
               setTimeout(() => { window.location.href = '/tracking-sheet'; }, 2500);
             }
             break;
+          case 'calendar_settings':
+          case 'calendar_settings_update':
+            setCalSettings(prev => ({ ...prev, r3_enabled: msg.r3_enabled, calendar_enabled: msg.calendar_enabled }));
+            break;
         }
       } catch { /* ignore parse errors */ }
     };
@@ -514,7 +518,10 @@ export default function TrackingSheet() {
   const [qualDropdown, setQualDropdown] = useState(null); // lead id with open qualification dropdown
   const [qualDropdownPos, setQualDropdownPos] = useState({ x: 0, y: 0 });
   const [spotlightOpen, setSpotlightOpen] = useState(false); // Ctrl+F search overlay
-  const [calSettings, setCalSettings] = useState(null); // calendar settings from backend
+  const [calSettings, setCalSettings] = useState(() => {
+    // Load from localStorage for instant render (r3 tab visibility)
+    try { const saved = localStorage.getItem('calSettings'); return saved ? JSON.parse(saved) : null; } catch { return null; }
+  });
   const [calSettingsLoading, setCalSettingsLoading] = useState(false);
   const [calSettingsSaving, setCalSettingsSaving] = useState(false);
   const [calSettingsSaved, setCalSettingsSaved] = useState(false);
