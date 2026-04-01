@@ -501,10 +501,31 @@ export default function LeadsManagement() {
                             onMouseLeave={(e) => { e.currentTarget.style.background = isDuplicate ? (darkMode ? 'rgba(251,191,36,0.08)' : 'rgba(251,191,36,0.1)') : 'transparent'; }}
                           >
                             <td style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}` }}>
-                              <span style={{
-                                padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                                background: `${C.accent}12`, color: C.accent,
-                              }}>{lead.origin || '—'}</span>
+                              {(() => {
+                                const ORIGIN_COLORS = {
+                                  'btp interne': { bg: '#EFF6FF', color: '#3B82F6' },
+                                  'générale interne': { bg: '#F0FDF4', color: '#22C55E' },
+                                  'generale interne': { bg: '#F0FDF4', color: '#22C55E' },
+                                  'interne mc': { bg: '#FFF7ED', color: '#F97316' },
+                                  'leadclub': { bg: '#FAF5FF', color: '#A855F7' },
+                                  'lead club': { bg: '#FAF5FF', color: '#A855F7' },
+                                  'lead club lp': { bg: '#FDF2F8', color: '#EC4899' },
+                                  'konket': { bg: '#FEF3C7', color: '#D97706' },
+                                  'konket lp': { bg: '#FFE4E6', color: '#E11D48' },
+                                  'ads': { bg: '#FFFBEB', color: '#F59E0B' },
+                                  'meta': { bg: '#EFF6FF', color: '#2563EB' },
+                                  'systeme.io': { bg: '#F0F9FF', color: '#0EA5E9' },
+                                  'cc': { bg: '#F1F5F9', color: '#64748B' },
+                                };
+                                const key = (lead.origin || '').toLowerCase().trim();
+                                const oc = ORIGIN_COLORS[key] || { bg: '#F5F3FF', color: '#6366F1' };
+                                return (
+                                  <span style={{
+                                    padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                                    background: oc.bg, color: oc.color,
+                                  }}>{lead.origin || '—'}</span>
+                                );
+                              })()}
                             </td>
                             <td style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}`, fontSize: 13, color: C.secondary, fontVariantNumeric: 'tabular-nums' }}>
                               {formatDate(lead.created_at)}
