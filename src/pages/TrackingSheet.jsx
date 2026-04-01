@@ -4354,6 +4354,11 @@ export default function TrackingSheet() {
                     </span>
                   )}
                 </div>
+                {(activeCat.key === 'callback' || activeCat.key === 'voicemail') && lead.call_attempts > 0 && (
+                  <div style={{ fontSize: 12, color: C.muted, fontStyle: 'italic', marginTop: 2 }}>
+                    Appelé {lead.call_attempts} fois
+                  </div>
+                )}
               </div>
 
               {/* ─── STATS ROW ─── */}
