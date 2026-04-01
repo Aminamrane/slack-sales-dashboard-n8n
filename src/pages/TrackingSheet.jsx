@@ -2172,7 +2172,7 @@ export default function TrackingSheet() {
               overflow: 'visible',
               flexWrap: 'wrap',
             }}>
-              {CATEGORIES.filter(cat => cat.key !== 'r3' || calSettings?.r3_enabled).map((cat, idx) => {
+              {CATEGORIES.filter(cat => cat.key !== 'r3' || calSettings?.r3_enabled === true).map((cat, idx) => {
                 const realIdx = CATEGORIES.indexOf(cat);
                 const isActive = realIdx === activeTab;
                 const count = tabCounts[cat.key];
