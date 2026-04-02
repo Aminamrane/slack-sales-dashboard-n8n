@@ -285,6 +285,11 @@ export default function TrackingSheet() {
         }
 
         await refreshData();
+        // Fetch calendar settings immediately (for R3 tab visibility)
+        try {
+          const cs = await apiClient.get('/api/v1/tracking/calendar-settings');
+          setCalSettings(cs);
+        } catch {};
       } catch (e) {
         console.error('[TrackingSheet] Init failed:', e);
         if (e?.status === 401) { navigate("/login"); return; }
