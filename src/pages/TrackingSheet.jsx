@@ -3199,6 +3199,34 @@ export default function TrackingSheet() {
                             </button>
                           </div>
 
+                          {/* SMS toggle */}
+                          <div style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            padding: '16px 20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`,
+                          }}>
+                            <div>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>SMS Répondeur</div>
+                              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Envoyer un SMS automatique quand un lead passe en Répondeur</div>
+                            </div>
+                            <button onClick={async () => {
+                              const newVal = !relanceSettings.sms_enabled;
+                              updateRelance('sms_enabled', newVal);
+                              try { await apiClient.put('/api/v1/tracking/relance-settings', { sms_enabled: newVal }); } catch {}
+                            }} style={{
+                              width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+                              background: relanceSettings.sms_enabled ? '#10b981' : (darkMode ? '#3a3b46' : '#d1d5db'),
+                              position: 'relative', transition: 'background 0.2s',
+                            }}>
+                              <div style={{
+                                width: 18, height: 18, borderRadius: '50%', background: '#fff',
+                                position: 'absolute', top: 3,
+                                left: relanceSettings.sms_enabled ? 23 : 3,
+                                transition: 'left 0.2s cubic-bezier(0.34,1.56,0.64,1)',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                              }} />
+                            </button>
+                          </div>
+
                           {/* Relance templates */}
                           <div style={{
                             display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16,
