@@ -530,6 +530,10 @@ export default function TrackingSheet() {
   const [calSettingsLoading, setCalSettingsLoading] = useState(false);
   const [calSettingsSaving, setCalSettingsSaving] = useState(false);
   const [calSettingsSaved, setCalSettingsSaved] = useState(false);
+  const [relanceSettings, setRelanceSettings] = useState(null);
+  const [relanceLoading, setRelanceLoading] = useState(false);
+  const [relanceSaving, setRelanceSaving] = useState(false);
+  const [relanceSaved, setRelanceSaved] = useState(false);
   const [spotlightQuery, setSpotlightQuery] = useState('');
   const spotlightInputRef = useRef(null);
   const [prioDropdown, setPrioDropdown] = useState(null); // lead id with open priority dropdown
@@ -3131,6 +3135,150 @@ export default function TrackingSheet() {
                     onMouseEnter={(e) => { if (!calSettingsSaved) { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.09)'; } }}
                     onMouseLeave={(e) => { if (!calSettingsSaved) { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'; } }}
                   >{calSettingsSaving ? 'Enregistrement...' : calSettingsSaved ? 'Enregistré ✓' : 'Enregistrer'}</button>
+
+                  {/* ═══ RELANCES EMAIL ═══ */}
+                  <div style={{ marginTop: 32 }}>
+                    <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>
+                      Relances email
+                    </h2>
+                    <p style={{ fontSize: 13, color: C.muted, margin: '0 0 20px' }}>
+                      Envoi automatique d'emails de relance aux prospects
+                    </p>
+
+                    {(() => {
+                      // Fetch relance settings on first view
+                      if (!relanceSettings && !relanceLoading) {
+                        setRelanceLoading(true);
+                        apiClient.get('/api/v1/tracking/relance-settings').then(data => {
+                          setRelanceSettings(data);
+                        }).catch(() => {
+                          setRelanceSettings({ relances_enabled: false, relance1_subject: '', relance1_body: '', relance2_subject: '', relance2_body: '' });
+                        }).finally(() => setRelanceLoading(false));
+                      }
+                      if (!relanceSettings) return <div style={{ padding: 20, textAlign: 'center', color: C.muted }}>Chargement...</div>;
+
+                      const updateRelance = (key, value) => setRelanceSettings(prev => ({ ...prev, [key]: value }));
+                      const saveRelance = async () => {
+                        if (!relanceSettings) return;
+                        setRelanceSaving(true);
+                        try {
+                          await apiClient.put('/api/v1/tracking/relance-settings', relanceSettings);
+                          setRelanceSaved(true);
+                          setTimeout(() => setRelanceSaved(false), 2000);
+                        } catch (e) { console.warn('Save relance settings failed:', e); }
+                        setRelanceSaving(false);
+                      };
+
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                          {/* Toggle */}
+                          <div style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            padding: '16px 20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`,
+                          }}>
+                            <div>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Relances automatiques</div>
+                              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Envoyer des emails de relance après le R1 et avant le R2</div>
+                            </div>
+                            <button onClick={async () => {
+                              const newVal = !relanceSettings.relances_enabled;
+                              updateRelance('relances_enabled', newVal);
+                              try { await apiClient.put('/api/v1/tracking/relance-settings', { relances_enabled: newVal }); } catch {}
+                            }} style={{
+                              width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+                              background: relanceSettings.relances_enabled ? '#3b82f6' : (darkMode ? '#3a3b46' : '#d1d5db'),
+                              position: 'relative', transition: 'background 0.2s',
+                            }}>
+                              <div style={{
+                                width: 18, height: 18, borderRadius: '50%', background: '#fff',
+                                position: 'absolute', top: 3,
+                                left: relanceSettings.relances_enabled ? 23 : 3,
+                                transition: 'left 0.2s cubic-bezier(0.34,1.56,0.64,1)',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                              }} />
+                            </button>
+                          </div>
+
+                          {/* Relance templates */}
+                          <div style={{
+                            display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16,
+                            opacity: relanceSettings.relances_enabled ? 1 : 0.4,
+                            pointerEvents: relanceSettings.relances_enabled ? 'auto' : 'none',
+                            transition: 'opacity 0.3s',
+                          }}>
+                            {/* Relance 1 */}
+                            <div style={{ padding: '20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}` }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                                <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Relance 1</span>
+                                <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 50, background: 'rgba(59,130,246,0.08)', color: '#3b82f6' }}>Au placement du R2</span>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                <div>
+                                  <label style={labelStyle}>Objet</label>
+                                  <input value={relanceSettings.relance1_subject || ''} onChange={(e) => updateRelance('relance1_subject', e.target.value)}
+                                    placeholder="OWNER - Préparation de votre Audit" style={inputStyle}
+                                    onFocus={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                                    onBlur={(e) => e.currentTarget.style.borderColor = C.border} />
+                                </div>
+                                <div>
+                                  <label style={labelStyle}>Corps de l'email</label>
+                                  <textarea value={relanceSettings.relance1_body || ''} onChange={(e) => updateRelance('relance1_body', e.target.value)}
+                                    placeholder="Bonjour {lead_name},&#10;&#10;Suite à notre échange..." style={textareaStyle}
+                                    onFocus={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                                    onBlur={(e) => e.currentTarget.style.borderColor = C.border} />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Relance 2 */}
+                            <div style={{ padding: '20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}` }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                                <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Relance 2</span>
+                                <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 50, background: 'rgba(251,146,60,0.08)', color: '#fb923c' }}>48h avant R2</span>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                <div>
+                                  <label style={labelStyle}>Objet</label>
+                                  <input value={relanceSettings.relance2_subject || ''} onChange={(e) => updateRelance('relance2_subject', e.target.value)}
+                                    placeholder="Urgent – documents nécessaires pour votre Audit" style={inputStyle}
+                                    onFocus={(e) => e.currentTarget.style.borderColor = '#fb923c'}
+                                    onBlur={(e) => e.currentTarget.style.borderColor = C.border} />
+                                </div>
+                                <div>
+                                  <label style={labelStyle}>Corps de l'email</label>
+                                  <textarea value={relanceSettings.relance2_body || ''} onChange={(e) => updateRelance('relance2_body', e.target.value)}
+                                    placeholder="Bonjour {lead_name},&#10;&#10;Votre rendez-vous d'audit approche..." style={textareaStyle}
+                                    onFocus={(e) => e.currentTarget.style.borderColor = '#fb923c'}
+                                    onBlur={(e) => e.currentTarget.style.borderColor = C.border} />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Variables info */}
+                          <div style={{ padding: '14px 16px', borderRadius: 10, background: darkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)', border: `1px solid ${C.border}` }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6 }}>Variables disponibles</div>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              {['{lead_name}', '{commercial_email}', '{r2_date_formatted}', '{r2_time}'].map(v => (
+                                <button key={v} onClick={() => { navigator.clipboard.writeText(v); setCopiedField('relvar-' + v); setTimeout(() => setCopiedField(null), 1500); }}
+                                  style={{ fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 6, background: copiedField === 'relvar-' + v ? 'rgba(16,185,129,0.12)' : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'), color: copiedField === 'relvar-' + v ? '#10b981' : C.accent, fontFamily: 'monospace', textAlign: 'center', border: 'none', cursor: 'pointer', transition: 'all 0.15s' }}
+                                >{copiedField === 'relvar-' + v ? 'Copié ✓' : v}</button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Save */}
+                          <button onClick={saveRelance} disabled={relanceSaving} style={{
+                            padding: '12px 24px', borderRadius: 10, border: 'none',
+                            background: relanceSaved ? '#10b981' : (darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
+                            color: relanceSaved ? '#fff' : C.text,
+                            fontSize: 14, fontWeight: 600, cursor: relanceSaving ? 'wait' : 'pointer',
+                            fontFamily: 'inherit', transition: 'all 0.2s', alignSelf: 'flex-start',
+                          }}>{relanceSaving ? 'Enregistrement...' : relanceSaved ? 'Enregistré ✓' : 'Enregistrer les relances'}</button>
+                        </div>
+                      );
+                    })()}
+                  </div>
 
                 </div>
               )}
