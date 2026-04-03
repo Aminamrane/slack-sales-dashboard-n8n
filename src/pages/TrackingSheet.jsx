@@ -65,25 +65,25 @@ function DateTimePicker({ value, onChange, color = '#3b82f6', C, darkMode }) {
     backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center', paddingRight: 20,
   };
   return (
-    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
       <input type="date" value={localDate} onChange={(e) => { setLocalDate(e.target.value); if (isNew && e.target.value) onChange(e.target.value + 'T' + localHour + ':' + localMin); }}
         style={{
-          flex: 1, padding: '7px 10px', borderRadius: 8, border: `1px solid ${C.border}`,
+          width: 105, flexShrink: 1, padding: '6px 4px', borderRadius: 8, border: `1px solid ${C.border}`,
           background: darkMode ? C.subtle : '#f9fafb', color: C.text,
-          fontSize: 13, fontWeight: 500, fontFamily: 'inherit', outline: 'none', cursor: 'pointer',
+          fontSize: 12, fontWeight: 500, fontFamily: 'inherit', outline: 'none', cursor: 'pointer',
         }}
       />
-      <select value={localHour} onChange={(e) => { setLocalHour(e.target.value); if (isNew) onChange(localDate + 'T' + e.target.value + ':' + localMin); }} style={selectStyle}>
+      <select value={localHour} onChange={(e) => { setLocalHour(e.target.value); if (isNew) onChange(localDate + 'T' + e.target.value + ':' + localMin); }} style={{ ...selectStyle, minWidth: 44, fontSize: 12, padding: '6px 6px 6px 6px', paddingRight: 18 }}>
         {HOURS.map(h => <option key={h} value={h}>{h}h</option>)}
       </select>
-      <span style={{ color: C.muted, fontSize: 12, fontWeight: 600 }}>:</span>
-      <select value={localMin} onChange={(e) => { setLocalMin(e.target.value); if (isNew) onChange(localDate + 'T' + localHour + ':' + e.target.value); }} style={selectStyle}>
+      <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>:</span>
+      <select value={localMin} onChange={(e) => { setLocalMin(e.target.value); if (isNew) onChange(localDate + 'T' + localHour + ':' + e.target.value); }} style={{ ...selectStyle, minWidth: 44, fontSize: 12, padding: '6px 6px 6px 6px', paddingRight: 18 }}>
         {MINUTES.map(m => <option key={m} value={m}>{m}</option>)}
       </select>
       {hasChanged && (
         <button onClick={confirm} style={{
-          width: 28, height: 28, borderRadius: 8, border: 'none',
-          background: '#10b981', color: '#fff', fontSize: 14, fontWeight: 700,
+          width: 26, height: 26, borderRadius: 6, border: 'none',
+          background: '#10b981', color: '#fff', fontSize: 13, fontWeight: 700,
           cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
           flexShrink: 0, transition: 'transform 0.15s',
           animation: 'solarFadeIn 0.2s ease both',
