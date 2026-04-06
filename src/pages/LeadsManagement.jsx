@@ -11,16 +11,18 @@ const COLORS = {
   tertiary: "#10b981",
 };
 
-export default function LeadsManagement() {
+export default function LeadsManagement({ embedded = false, darkModeOverride, C: externalC } = {}) {
   const navigate = useNavigate();
 
   // ── DARK MODE ───────────────────────────────────────────────────────────────
   const [darkMode, setDarkMode] = useState(() => {
+    if (embedded && darkModeOverride !== undefined) return darkModeOverride;
     const saved = localStorage.getItem("darkMode");
     return saved === "true";
   });
 
   useEffect(() => {
+    if (embedded) return; // Parent manages dark mode
     localStorage.setItem("darkMode", darkMode);
     if (darkMode) {
       document.body.classList.add("dark-mode");
@@ -29,7 +31,7 @@ export default function LeadsManagement() {
       document.body.classList.remove("dark-mode");
       document.documentElement.classList.remove("dark-mode");
     }
-  }, [darkMode]);
+  }, [darkMode, embedded]);
 
   // ── AUTH & ACCESS CONTROL ───────────────────────────────────────────────────
   const [session, setSession] = useState(null);
@@ -38,6 +40,13 @@ export default function LeadsManagement() {
   const [isAdminUser, setIsAdminUser] = useState(false);
 
   useEffect(() => {
+    if (embedded) {
+      // In embedded mode, skip auth check — parent (TrackingSheet) handles access
+      setHasAccess(true);
+      setIsAdminUser(true);
+      setLoading(false);
+      return;
+    }
     const checkAccess = async () => {
       try {
         // Check JWT auth
@@ -68,7 +77,7 @@ export default function LeadsManagement() {
     };
 
     checkAccess();
-  }, [navigate]);
+  }, [navigate, embedded]);
 
   // ── LOGOUT ──────────────────────────────────────────────────────────────────
   // Logout is now handled by SharedNavbar using apiClient.logout()
@@ -101,6 +110,11 @@ export default function LeadsManagement() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
+  const [filterOrigine, setFilterOrigine] = useState([]);
+  const [filterStatut, setFilterStatut] = useState([]);
+  const [filterAssigne, setFilterAssigne] = useState([]);
+  const [openFilter, setOpenFilter] = useState(null); // 'origine' | 'statut' | 'assigne' | null
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Modal state
   const [selectedLead, setSelectedLead] = useState(null);
@@ -406,7 +420,7 @@ export default function LeadsManagement() {
 
   if (!hasAccess) return null;
 
-  const C = {
+  const C = externalC || {
     bg: darkMode ? '#1e1f28' : '#ffffff', border: darkMode ? '#2a2b36' : '#e2e6ef',
     surface: darkMode ? '#13141b' : '#f6f7f9', text: darkMode ? '#eef0f6' : '#1e2330',
     muted: darkMode ? '#5e6273' : '#9ca3af', subtle: darkMode ? '#252636' : '#f4f6fb',
@@ -414,25 +428,20 @@ export default function LeadsManagement() {
     shadow: darkMode ? '0 1px 3px rgba(0,0,0,0.2), 0 4px 16px rgba(0,0,0,0.15)' : '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03)',
   };
 
-  return (
+  // ── EMBEDDED CONTENT (rendered inside TrackingSheet) ──────────────────────
+  const mainContent = (
     <>
-      <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />
-
       <style>{`
-        html, body { background: ${darkMode ? '#13141b' : '#ffffff'}; scrollbar-gutter: stable; }
         @keyframes lmReveal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
         @keyframes lmRowIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
         .lm-scroll::-webkit-scrollbar { width: 3px; } .lm-scroll::-webkit-scrollbar-track { background: transparent; } .lm-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 4px; }
       `}</style>
 
-      <div style={{ animation: 'lmReveal 0.5s ease both', fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif' }}>
-        <div style={{ display: 'flex', minHeight: '100vh', paddingTop: 80 }}>
-
           {/* ── MAIN CONTENT ──────────────────────────────────────────── */}
           <div style={{ flex: 1, padding: '20px 28px', minWidth: 0 }}>
 
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
               <div>
                 <h1 style={{ fontSize: 22, fontWeight: 700, color: C.text, margin: 0, letterSpacing: '-0.02em' }}>Gestion des Leads</h1>
                 <p style={{ fontSize: 13, color: C.muted, margin: '4px 0 0' }}>{leads.filter(l => {
@@ -451,6 +460,128 @@ export default function LeadsManagement() {
               </select>
             </div>
 
+            {/* ── FILTER BAR ──────────────────────────────────────────── */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+              {/* Search input */}
+              <div style={{ position: 'relative', flex: '0 0 220px' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                <input
+                  value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Rechercher..."
+                  style={{
+                    width: '100%', padding: '8px 12px 8px 34px', borderRadius: 10, border: `1px solid ${C.border}`,
+                    background: C.bg, color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none',
+                    transition: 'border-color 0.2s',
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = C.accent}
+                  onBlur={(e) => e.target.style.borderColor = C.border}
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 14, padding: 2 }}>✕</button>
+                )}
+              </div>
+
+              {/* Filter pills */}
+              {[
+                {
+                  key: 'origine', label: 'Origine', state: filterOrigine, setter: setFilterOrigine,
+                  icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>,
+                  options: (() => {
+                    const origins = new Set();
+                    leads.forEach(l => { const o = (l.origin || '').trim(); if (o && o.toLowerCase() !== 'cc') origins.add(o); });
+                    return [...origins].sort();
+                  })(),
+                },
+                {
+                  key: 'statut', label: 'Statut', state: filterStatut, setter: setFilterStatut,
+                  icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>,
+                  options: ['Non assigné', 'Assigné', ...LEAD_STATUS_OPTIONS],
+                },
+                {
+                  key: 'assigne', label: 'Assigné à', state: filterAssigne, setter: setFilterAssigne,
+                  icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+                  options: sortedAssignableUsers.map(u => u.full_name),
+                },
+              ].map(filter => {
+                const isOpen = openFilter === filter.key;
+                const hasActive = filter.state.length > 0;
+                return (
+                  <div key={filter.key} style={{ position: 'relative' }}>
+                    <button
+                      onClick={() => setOpenFilter(isOpen ? null : filter.key)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px',
+                        borderRadius: 10, border: `1px solid ${hasActive ? C.accent : C.border}`,
+                        background: hasActive ? (darkMode ? 'rgba(124,138,219,0.1)' : 'rgba(91,106,191,0.06)') : C.bg,
+                        color: hasActive ? C.accent : C.secondary, fontSize: 13, fontWeight: 500,
+                        cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s',
+                      }}
+                    >
+                      {filter.icon}
+                      <span>{filter.label}</span>
+                      {hasActive && <span style={{ background: C.accent, color: '#fff', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 6px', minWidth: 16, textAlign: 'center' }}>{filter.state.length}</span>}
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ marginLeft: 2, transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'none' }}><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    {isOpen && (
+                      <>
+                        <div onClick={() => setOpenFilter(null)} style={{ position: 'fixed', inset: 0, zIndex: 99 }} />
+                        <div style={{
+                          position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 100,
+                          background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12,
+                          boxShadow: darkMode ? '0 8px 24px rgba(0,0,0,0.4)' : '0 8px 24px rgba(0,0,0,0.12)',
+                          padding: 6, minWidth: 200, maxHeight: 280, overflowY: 'auto',
+                        }}>
+                          {filter.state.length > 0 && (
+                            <button onClick={() => { filter.setter([]); }} style={{
+                              width: '100%', padding: '6px 12px', border: 'none', borderRadius: 6, background: 'transparent',
+                              fontSize: 12, color: C.accent, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                              marginBottom: 2,
+                            }}>Effacer</button>
+                          )}
+                          {filter.options.map(opt => {
+                            const isSelected = filter.state.includes(opt);
+                            return (
+                              <button key={opt} onClick={() => {
+                                filter.setter(prev => isSelected ? prev.filter(v => v !== opt) : [...prev, opt]);
+                              }} style={{
+                                display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 12px',
+                                border: 'none', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit',
+                                background: isSelected ? (darkMode ? 'rgba(124,138,219,0.12)' : 'rgba(91,106,191,0.06)') : 'transparent',
+                                fontSize: 13, fontWeight: isSelected ? 600 : 400, color: isSelected ? C.accent : C.text,
+                                transition: 'background 0.15s',
+                              }}
+                                onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : '#f8f9fb'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = isSelected ? (darkMode ? 'rgba(124,138,219,0.12)' : 'rgba(91,106,191,0.06)') : 'transparent'; }}
+                              >
+                                <div style={{
+                                  width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                                  border: isSelected ? 'none' : `1.5px solid ${C.muted}`,
+                                  background: isSelected ? C.accent : 'transparent',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                }}>
+                                  {isSelected && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><path d="M20 6 9 17l-5-5"/></svg>}
+                                </div>
+                                {opt}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Active filter chips */}
+              {(filterOrigine.length + filterStatut.length + filterAssigne.length > 0) && (
+                <button onClick={() => { setFilterOrigine([]); setFilterStatut([]); setFilterAssigne([]); }} style={{
+                  padding: '6px 12px', borderRadius: 8, border: 'none',
+                  background: darkMode ? 'rgba(239,68,68,0.12)' : 'rgba(239,68,68,0.06)',
+                  color: '#ef4444', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                }}>Tout effacer</button>
+              )}
+            </div>
+
             {dataLoading ? (
               <div style={{ textAlign: 'center', padding: 60, color: C.muted }}>Chargement...</div>
             ) : (
@@ -458,7 +589,7 @@ export default function LeadsManagement() {
                 {/* Table */}
                 <div className="lm-scroll" style={{
                   background: C.bg, borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: C.shadow,
-                  overflow: 'auto', maxHeight: 'calc(100vh - 280px)',
+                  overflow: 'auto', maxHeight: 'calc(100vh - 340px)',
                 }}>
                   {leads.length === 0 ? (
                     <div style={{ padding: 60, textAlign: 'center', color: C.muted, fontSize: 13 }}>Aucun lead trouvé</div>
@@ -478,11 +609,33 @@ export default function LeadsManagement() {
                       </thead>
                       <tbody>
                         {(() => {
-                          const filtered = leads.filter(l => {
+                          let filtered = leads.filter(l => {
                             if ((l.origin || '').toLowerCase() === 'cc') return false;
                             const d = new Date(l.created_at); const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 3); cutoff.setHours(0,0,0,0);
                             return d >= cutoff;
                           });
+                          // Apply filters
+                          if (filterOrigine.length > 0) filtered = filtered.filter(l => filterOrigine.includes((l.origin || '').trim()));
+                          if (filterStatut.length > 0) filtered = filtered.filter(l => {
+                            return filterStatut.some(s => {
+                              if (s === 'Non assigné') return !l.assigned_to;
+                              if (s === 'Assigné') return !!l.assigned_to;
+                              return (l.status || 'À traiter') === s;
+                            });
+                          });
+                          if (filterAssigne.length > 0) filtered = filtered.filter(l => {
+                            const u = sortedAssignableUsers.find(u => u.email === l.assigned_to);
+                            return u && filterAssigne.includes(u.full_name);
+                          });
+                          if (searchQuery.trim()) {
+                            const q = searchQuery.toLowerCase().trim();
+                            filtered = filtered.filter(l =>
+                              (l.full_name || '').toLowerCase().includes(q) ||
+                              (l.email || '').toLowerCase().includes(q) ||
+                              (l.phone || '').replace(/\s/g, '').includes(q.replace(/\s/g, '')) ||
+                              (l.origin || '').toLowerCase().includes(q)
+                            );
+                          }
                           // Detect duplicates by email — most recent (first) is NOT duplicate, older ones are
                           const emailCount = {};
                           const emailSeen = {};
@@ -578,8 +731,6 @@ export default function LeadsManagement() {
               </>
             )}
           </div>
-        </div>
-      </div>
 
       {/* ── ASSIGN DROPDOWN (portaled) ─────────────────────────────── */}
       {assignDropdown && (() => {
@@ -670,6 +821,20 @@ export default function LeadsManagement() {
           </div>
         </>
       )}
+    </>
+  );
+
+  if (embedded) return mainContent;
+
+  return (
+    <>
+      <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />
+      <style>{`html, body { background: ${darkMode ? '#13141b' : '#ffffff'}; scrollbar-gutter: stable; }`}</style>
+      <div style={{ animation: 'lmReveal 0.5s ease both', fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif' }}>
+        <div style={{ display: 'flex', minHeight: '100vh', paddingTop: 80 }}>
+          {mainContent}
+        </div>
+      </div>
     </>
   );
 }

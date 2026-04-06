@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import { supabase } from "../lib/supabaseClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
+import LeadsManagement from "./LeadsManagement.jsx";
 import "../index.css";
 
 // ── SIDEBAR ICONS ────────────────────────────────────────────────────────────
@@ -36,6 +37,7 @@ import rabbitIcon from "../assets/lapin.png";
 import completedIcon from "../assets/completed.png";
 import meetIcon from "../assets/meet.png";
 import mynoteIcon from "../assets/mynote.svg";
+import iconFuse from "../assets/Fuse.svg";
 
 // ── CATEGORIES ────────────────────────────────────────────────────────────────
 // ── CUSTOM DATETIME PICKER (date input + hour/minute selects, 5min step) ────
@@ -759,6 +761,7 @@ export default function TrackingSheet() {
   }, [fetchMyInvitations]);
   const currentUser = apiClient.getUser();
   const canManageSheets = currentUser?.role === 'admin' || currentUser?.role === 'head_of_sales' || currentUser?.role === 'head_of_sales_manager';
+  const canManageLeads = currentUser?.role === 'admin' || currentUser?.role === 'head_of_sales_manager';
   const isAdmin = currentUser?.role === 'admin';
 
   const fetchAllSheets = async () => {
@@ -2118,6 +2121,7 @@ export default function TrackingSheet() {
               { key: 'email', label: 'Relance', iconSrc: iconEmail, accent: C.accent },
               { key: 'campaigns', label: 'Campagnes', iconSrc: iconCampaigns, accent: '#f59e0b' },
               { key: 'kpis', label: 'KPIs & Stats', iconSrc: iconKpis, accent: '#6366f1' },
+              ...(canManageLeads ? [{ key: 'leads_management', label: 'Gestion des leads', iconSrc: iconFuse, accent: '#6366f1', keepColor: true, iconSize: 19 }] : []),
               ...(canManageSheets ? [{ key: 'sheets', label: 'Tracking Sheets', iconSrc: iconSheets, accent: '#8b5cf6' }] : []),
             ].map(item => {
               const isActive = sidebarView === item.key;
@@ -2140,7 +2144,7 @@ export default function TrackingSheet() {
                 >
                   {item.iconSrc && item.keepColor ? (
                     <div style={{ width: 28, height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <img src={item.iconSrc} alt="" style={{ width: 25, height: 25, opacity: isActive ? 1 : 0.5, transition: 'all 0.15s', filter: isActive ? (darkMode ? 'none' : 'brightness(0) invert(1)') : 'none' }} />
+                      <img src={item.iconSrc} alt="" style={{ width: item.iconSize || 25, height: item.iconSize || 25, opacity: isActive ? 1 : 0.5, transition: 'all 0.15s', filter: isActive ? (darkMode ? 'none' : 'brightness(0) invert(1)') : 'none' }} />
                     </div>
                   ) : item.iconSrc ? (
                     <div style={{
@@ -3498,6 +3502,13 @@ export default function TrackingSheet() {
           </div>
           );
         })()}
+
+        {/* ════ VIEW: LEADS MANAGEMENT (admin + head_of_sales_manager only) ═══ */}
+        {sidebarView === 'leads_management' && canManageLeads && (
+          <div style={{ flex: 1, overflow: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
+            <LeadsManagement embedded={true} darkModeOverride={darkMode} C={C} />
+          </div>
+        )}
 
         {/* ════ VIEW: TRACKING SHEETS MANAGEMENT ══════════════════════════════ */}
         {sidebarView === 'sheets' && canManageSheets && (() => {
