@@ -111,6 +111,8 @@ export default function PerfClosing() {
   const [activeTab, setActiveTab] = useState(0);
   const [dashboard, setDashboard] = useState(null);
   const [eodScores, setEodScores] = useState(null); // EOD scores for current week
+  const [currentMissions, setCurrentMissions] = useState(null); // missions by dept
+  const [perfSalesData, setPerfSalesData] = useState(null); // monitoring perf sales for current month
   const [clients, setClients] = useState([]);
   const [coordonnees, setCoordonnees] = useState([]);
   const [updatingEtat, setUpdatingEtat] = useState(null);
@@ -201,6 +203,40 @@ export default function PerfClosing() {
 
   const fetchDashboard = async () => {
     try { const r = await apiClient.get('/api/v1/perf-closing/dashboard'); setDashboard(r); } catch (e) { console.warn('Dashboard fetch failed:', e); }
+    // Fetch monitoring perf sales for current month
+    try {
+      const now = new Date();
+      const month = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+      const [perfResp, kpiResp] = await Promise.all([
+        apiClient.get('/api/v1/monitoring/performance/v2?period=' + month),
+        apiClient.get('/api/v1/tracking/perf-sales-kpis?month=' + month),
+      ]);
+      const byPerson = perfResp?.global_view?.by_person || [];
+      const kpiByEmail = {};
+      (kpiResp?.by_sales || []).forEach(s => { if (s.email) kpiByEmail[s.email.trim().toLowerCase()] = s; });
+      const rows = byPerson
+        .filter(p => (p.leads_assigned || 0) > 0 || (p.nbr_signature || 0) > 0)
+        .map(p => {
+          const nameIsEmail = (p.name || '').includes('@');
+          const email = (p.email || (nameIsEmail ? p.name : '') || '').trim().toLowerCase();
+          const tk = email ? kpiByEmail[email] : null;
+          const name = nameIsEmail && tk?.sales_name ? tk.sales_name : (p.name || 'Unknown');
+          return {
+            name,
+            leads: p.leads_assigned || 0,
+            conv: p.conversion_global || ((p.leads_assigned || 0) > 0 ? ((p.nbr_signature || 0) / (p.leads_assigned || 1)) * 100 : 0),
+            calls: p.nbr_appel || 0,
+            answered: p.nbr_appel_d || 0,
+            txDecr: (p.nbr_appel || 0) > 0 ? ((p.nbr_appel_d || 0) / (p.nbr_appel || 1)) * 100 : 0,
+            signatures: p.nbr_signature || 0,
+          };
+        })
+        .sort((a, b) => b.signatures !== a.signatures ? b.signatures - a.signatures : b.conv - a.conv);
+      // Dedup by normalized name
+      const seen = new Set();
+      const deduped = rows.filter(r => { const k = r.name.toLowerCase().trim(); if (seen.has(k)) return false; seen.add(k); return true; });
+      setPerfSalesData(deduped);
+    } catch (e) { console.warn('Perf sales fetch failed:', e); }
     // Fetch EOD scores for current week
     try {
       const now = new Date();
@@ -210,8 +246,18 @@ export default function PerfClosing() {
       const jan1 = new Date(year, 0, 1);
       const week = Math.ceil(((monday - jan1) / 86400000 + jan1.getDay() + 1) / 7);
       const weekStr = `${year}-W${String(week).padStart(2, '0')}`;
-      const resp = await apiClient.get(`/api/v1/eod/dashboard/scores?period=${weekStr}`);
-      if (resp?.scores) {
+      let resp = await apiClient.get(`/api/v1/eod/dashboard/scores?period=${weekStr}`);
+      let usedWeek = weekStr;
+      // Fallback to previous week if current week has no data
+      if (!resp?.scores || resp.scores.length === 0) {
+        const prevMonday = new Date(monday); prevMonday.setDate(prevMonday.getDate() - 7);
+        const pYear = prevMonday.getFullYear();
+        const pJan1 = new Date(pYear, 0, 1);
+        const pWeek = Math.ceil(((prevMonday - pJan1) / 86400000 + pJan1.getDay() + 1) / 7);
+        usedWeek = `${pYear}-W${String(pWeek).padStart(2, '0')}`;
+        resp = await apiClient.get(`/api/v1/eod/dashboard/scores?period=${usedWeek}`);
+      }
+      if (resp?.scores && resp.scores.length > 0) {
         const DIMS = ['charge', 'energie', 'clarte', 'efficacite', 'relations', 'alignement'];
         const DM = { admin: 'tech', hr: 'rh', finance_director: 'finance', finance_team: 'finance', sales: 'commercial', head_of_sales: 'commercial', head_of_sales_manager: 'commercial', ceo: 'direction' };
         const DC = { tech: '#6366f1', marketing: '#f59e0b', rh: '#ec4899', finance: '#059669', commercial: '#3b82f6', direction: '#8b5cf6' };
@@ -228,9 +274,24 @@ export default function PerfClosing() {
           DIMS.forEach(dim => { avg[dim] = g.reduce((s, d) => s + (d[dim] || 0), 0) / gn; });
           return { key: k, label: DL[k] || k, color: DC[k] || '#94a3b8', count: g.length, avg, avgGlobal: g.reduce((s, d) => s + (d.global_score || 0), 0) / gn };
         }).sort((a, b) => b.avgGlobal - a.avgGlobal);
-        setEodScores({ avgGlobal, dims: dimAvgs, count: scores.length, week: weekStr, deptStats });
+        setEodScores({ avgGlobal, dims: dimAvgs, count: scores.length, week: usedWeek, isFallback: usedWeek !== weekStr, deptStats });
       }
     } catch (e) { console.warn('EOD scores fetch failed:', e); }
+    // Fetch current missions (Tech, Marketing, Finance) — backend auto-fallback 7→14 days
+    try {
+      const mr = await apiClient.get('/api/v1/eod/dashboard/current-missions');
+      const DM = { admin: 'tech', hr: 'rh', finance_director: 'finance', finance_team: 'finance' };
+      const grouped = {};
+      (mr?.missions || []).forEach(u => {
+        const dept = DM[(u.department || '').toLowerCase()] || (u.department || '').toLowerCase();
+        if (!grouped[dept]) grouped[dept] = [];
+        grouped[dept].push(u);
+      });
+      setCurrentMissions(grouped);
+    } catch (e) {
+      console.error('Missions fetch failed:', e);
+      setCurrentMissions({});
+    }
   };
   const fetchClients = async () => { try { const r = await apiClient.get('/api/v1/perf-closing/clients'); setClients(r.clients || []); } catch (e) { console.warn('Clients fetch failed:', e); } };
   const fetchCoordonnees = async () => { try { const r = await apiClient.get('/api/v1/perf-closing/coordonnees'); setCoordonnees(r.coordonnees || []); } catch (e) { console.warn('Coordonnees fetch failed:', e); } };
@@ -660,16 +721,62 @@ export default function PerfClosing() {
                           </div>
                         </div>
                       )}
+                      {/* Mini Perf Sales */}
+                      {perfSalesData && perfSalesData.length > 0 && (
+                        <div style={{
+                          background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`,
+                          boxShadow: C.shadow, overflow: 'hidden',
+                          animation: 'pcCardPop 0.4s cubic-bezier(0.4,0,0.2,1) 0.3s both',
+                        }}>
+                          <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}` }}>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Performance commerciale</div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</div>
+                          </div>
+                          {/* Table header */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr 50px 55px 50px 50px 55px', padding: '8px 16px', borderBottom: `1px solid ${C.border}`, background: C.subtle }}>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: C.muted }}>#</span>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: C.muted }}>Sales</span>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: C.muted, textAlign: 'right' }}>Leads</span>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: C.muted, textAlign: 'right' }}>Conv.%</span>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: C.muted, textAlign: 'right' }}>Appels</span>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: C.muted, textAlign: 'right' }}>Décr.</span>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: C.muted, textAlign: 'right' }}>Tx Décr.</span>
+                          </div>
+                          {/* Rows */}
+                          <div style={{ padding: '2px 0' }}>
+                            {perfSalesData.map((row, i) => {
+                              const txColor = row.txDecr >= 80 ? '#10b981' : row.txDecr >= 50 ? '#f59e0b' : '#ef4444';
+                              const convColor = row.conv >= 5 ? '#10b981' : row.conv >= 2 ? '#f59e0b' : '#ef4444';
+                              return (
+                                <div key={i} style={{
+                                  display: 'grid', gridTemplateColumns: '24px 1fr 50px 55px 50px 50px 55px', padding: '8px 16px', alignItems: 'center',
+                                  borderBottom: i < perfSalesData.length - 1 ? `1px solid ${C.border}` : 'none',
+                                  background: i === 0 ? (darkMode ? 'rgba(99,102,241,0.06)' : 'rgba(99,102,241,0.03)') : 'transparent',
+                                  animation: `pcRowIn 0.3s ease ${i * 40}ms both`,
+                                }}>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>{i + 1}</span>
+                                  <span style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
+                                  <span style={{ fontSize: 13, fontWeight: 700, color: C.text, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{row.leads}</span>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: convColor, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{row.conv.toFixed(1)}%</span>
+                                  <span style={{ fontSize: 13, fontWeight: 600, color: C.secondary, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{row.calls}</span>
+                                  <span style={{ fontSize: 13, fontWeight: 600, color: C.secondary, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{row.answered}</span>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: txColor, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{row.txDecr.toFixed(1)}%</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                       </div>{/* end left column */}
 
-                      {/* EOD Scores — two separate containers */}
+                      {/* EOD Scores — right column */}
                       {eodScores ? (
-                        <>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                           {/* Comparaison inter-pôles */}
                           <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: C.shadow, overflow: 'hidden' }}>
                             <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}` }}>
                               <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Comparaison inter-pôles</div>
-                              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Semaine en cours</div>
+                              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{eodScores.isFallback ? `Semaine précédente (${eodScores.week})` : 'Semaine en cours'}</div>
                             </div>
                             {/* Table header */}
                             <div style={{ display: 'grid', gridTemplateColumns: '140px repeat(6, 1fr) 70px', padding: '10px 16px', borderBottom: `1px solid ${C.border}`, background: C.subtle }}>
@@ -711,9 +818,67 @@ export default function PerfClosing() {
                               );
                             })}
                           </div>
-                        </>
+
+                          {/* ═══ MISSIONS EN COURS ═══ */}
+                          {currentMissions !== null && (
+                            <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, boxShadow: C.shadow, overflow: 'hidden', marginTop: 12 }}>
+                              <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}` }}>
+                                <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Missions en cours</div>
+                                <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Projets actifs</div>
+                              </div>
+                              {Object.keys(currentMissions).length === 0 ? (
+                                <div style={{ padding: '30px 20px', textAlign: 'center', color: C.muted, fontSize: 13 }}>Aucun projet actif cette semaine</div>
+                              ) : (() => {
+                                const DEPT_META = { tech: { label: 'Tech', color: '#6366f1' }, marketing: { label: 'Marketing', color: '#f59e0b' }, finance: { label: 'Finance', color: '#059669' }, rh: { label: 'RH', color: '#ec4899' }, direction: { label: 'Direction', color: '#8b5cf6' } };
+                                const STATUS_STYLE = { en_cours: { label: 'En cours', color: '#3b82f6' }, en_pause: { label: 'En pause', color: '#f59e0b' } };
+                                return Object.entries(currentMissions).map(([deptKey, users]) => {
+                                  const meta = DEPT_META[deptKey] || { label: deptKey, color: '#94a3b8' };
+                                  return (
+                                    <div key={deptKey}>
+                                      {/* Dept header */}
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', background: C.subtle, borderBottom: `1px solid ${C.border}` }}>
+                                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: meta.color, flexShrink: 0 }} />
+                                        <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{meta.label}</span>
+                                        <span style={{ fontSize: 11, color: C.muted }}>({users.length})</span>
+                                      </div>
+                                      {/* Table header */}
+                                      <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 24, padding: '8px 20px', borderBottom: `1px solid ${C.border}`, background: darkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)' }}>
+                                        <span style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Personne</span>
+                                        <span style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Projet</span>
+                                      </div>
+                                      {/* Rows — one per project */}
+                                      {users.map((user, ui) => {
+                                        const projects = user.projects || [];
+                                        if (projects.length === 0) return null;
+                                        return projects.map((proj, pi) => (
+                                          <div key={`${user.user_id}-${pi}`} style={{
+                                            display: 'grid', gridTemplateColumns: '180px 1fr', gap: 24, padding: '10px 20px',
+                                            borderBottom: pi === projects.length - 1 && ui < users.length - 1 ? `1px solid ${C.border}` : pi < projects.length - 1 ? `1px dashed ${darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'}` : 'none',
+                                            animation: `pcRowIn 0.3s ease ${(ui * 3 + pi) * 30}ms both`,
+                                          }}>
+                                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                                              {pi === 0 && <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{user.full_name}</span>}
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                              <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>{proj.name}</span>
+                                              <span style={{
+                                                fontSize: 10, fontWeight: 600, padding: '1px 8px', borderRadius: 50,
+                                                background: `${(STATUS_STYLE[proj.status] || STATUS_STYLE.en_cours).color}15`,
+                                                color: (STATUS_STYLE[proj.status] || STATUS_STYLE.en_cours).color,
+                                              }}>{(STATUS_STYLE[proj.status] || STATUS_STYLE.en_cours).label}</span>
+                                            </div>
+                                          </div>
+                                        ));
+                                      })}
+                                    </div>
+                                  );
+                                });
+                              })()}
+                            </div>
+                          )}
+                        </div>
                       ) : (
-                        <div style={{ gridColumn: '2 / -1', padding: '40px 20px', textAlign: 'center', color: C.muted, fontSize: 13 }}>Chargement des scores EOD...</div>
+                        <div style={{ padding: '40px 20px', textAlign: 'center', color: C.muted, fontSize: 13 }}>Chargement...</div>
                       )}
                     </div>
                   </>) : (

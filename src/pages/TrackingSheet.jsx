@@ -538,12 +538,84 @@ export default function TrackingSheet() {
   const [relanceLoading, setRelanceLoading] = useState(false);
   const [relanceSaving, setRelanceSaving] = useState(false);
   const [relanceSaved, setRelanceSaved] = useState(false);
+  const [sendingSms, setSendingSms] = useState(null); // { leadId, smsType } while sending
+  const [smsJustSent, setSmsJustSent] = useState(null); // { leadId, smsType } flash feedback
   const [spotlightQuery, setSpotlightQuery] = useState('');
   const spotlightInputRef = useRef(null);
   const [prioDropdown, setPrioDropdown] = useState(null); // lead id with open priority dropdown
   const [sansSuiteModal, setSansSuiteModal] = useState(null); // { leadId } — sans suite comment modal
   const [r1ShortcutContract, setR1ShortcutContract] = useState(null); // lead id — show contract UI in R1 tab
   const [sansSuiteComment, setSansSuiteComment] = useState('');
+  // ── SPEECH-TO-TEXT (notes + sans suite modal) ──────────────────────────────
+  const [micRecording, setMicRecording] = useState(false);
+  const [micTranscribing, setMicTranscribing] = useState(false);
+  const [micError, setMicError] = useState(null); // flash error message
+  const micRecorderRef = useRef(null);
+  const micChunksRef = useRef([]);
+  const getMicMimeType = () => {
+    for (const t of ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4', '']) {
+      if (!t || MediaRecorder.isTypeSupported(t)) return t || undefined;
+    }
+    return undefined;
+  };
+  const micStartRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = getMicMimeType();
+      const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      micChunksRef.current = [];
+      mr.ondataavailable = (e) => { if (e.data.size > 0) micChunksRef.current.push(e.data); };
+      mr.start();
+      micRecorderRef.current = mr;
+      setMicRecording(true);
+      setMicError(null);
+    } catch (err) {
+      console.warn('Microphone error:', err);
+      setMicError('Micro non autorisé');
+      setTimeout(() => setMicError(null), 3000);
+    }
+  };
+  const micStopAndTranscribe = (onText) => {
+    const mr = micRecorderRef.current;
+    if (!mr || mr.state === 'inactive') return;
+    mr.onstop = async () => {
+      setMicRecording(false);
+      setMicTranscribing(true);
+      const ext = (mr.mimeType || '').includes('mp4') ? 'recording.mp4' : (mr.mimeType || '').includes('ogg') ? 'recording.ogg' : 'recording.webm';
+      const blob = new Blob(micChunksRef.current, { type: mr.mimeType || 'audio/webm' });
+      try {
+        const formData = new FormData();
+        formData.append('audio', blob, ext);
+        const token = apiClient.getToken();
+        const resp = await fetch(`${apiClient.baseUrl}/api/v1/tracking/transcribe`, {
+          method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData,
+        });
+        if (!resp.ok) {
+          const errBody = await resp.text().catch(() => '');
+          console.error(`Transcription HTTP ${resp.status}:`, errBody);
+          let errDetail = '';
+          try { const j = JSON.parse(errBody); errDetail = j.detail || j.message || j.error || ''; } catch { errDetail = errBody.slice(0, 80); }
+          setMicError(`Erreur ${resp.status}${errDetail ? ' : ' + errDetail : resp.status === 401 ? ' (non autorisé)' : resp.status === 413 ? ' (fichier trop gros)' : resp.status === 404 ? ' (endpoint introuvable)' : ''}`);
+          setTimeout(() => setMicError(null), 5000);
+          return;
+        }
+        const data = await resp.json();
+        if (data.text) { onText(data.text); }
+        else { setMicError('Aucun texte détecté'); setTimeout(() => setMicError(null), 3000); }
+      } catch (err) {
+        console.error('Transcription error:', err);
+        setMicError(err.message === 'Failed to fetch' ? 'Erreur réseau' : 'Erreur de transcription');
+        setTimeout(() => setMicError(null), 4000);
+      }
+      finally { setMicTranscribing(false); }
+      mr.stream.getTracks().forEach(t => t.stop());
+    };
+    mr.stop();
+  };
+  const micCleanup = () => {
+    if (micRecorderRef.current?.state === 'recording') { micRecorderRef.current.stream.getTracks().forEach(t => t.stop()); micRecorderRef.current.stop(); }
+    setMicRecording(false); setMicTranscribing(false);
+  };
   const [prioDropdownPos, setPrioDropdownPos] = useState({ x: 0, y: 0 });
   const [confirmModal, setConfirmModal] = useState(null); // { title, message, icon, color, confirmLabel, onConfirm } or null
 
@@ -791,6 +863,7 @@ export default function TrackingSheet() {
   const [filterTags, setFilterTags] = useState([]); // multi-select: r1_result or r2_result values (e.g. ['no_show', 'done'])
   const [filterOrigins, setFilterOrigins] = useState([]); // multi-select: origin values (e.g. ['BTP', 'cc'])
   const [filterStatuses, setFilterStatuses] = useState([]); // multi-select: ['r1_done', 'r1_not_done', 'r2_done', 'r2_not_done']
+  const [filterCallTime, setFilterCallTime] = useState([]); // multi-select: ['matin', 'apres_midi', 'soir'] — first_call_at time-of-day filter
   const [sortOrder, setSortOrder] = useState('newest'); // 'newest' | 'oldest'
   const [openFilter, setOpenFilter] = useState(''); // '' | 'tag' | 'status' | 'sort' — which dropdown is open
   const [showFilters, setShowFilters] = useState(true); // toggle filter sidebar visibility
@@ -875,6 +948,19 @@ export default function TrackingSheet() {
         });
       });
     }
+    // Filter by first_call_at time-of-day (voicemail/callback tabs)
+    if (filterCallTime.length > 0 && (catKey === 'voicemail' || catKey === 'callback')) {
+      result = result.filter(l => {
+        if (!l.first_call_at) return false;
+        const h = new Date(l.first_call_at).getHours();
+        return filterCallTime.some(t => {
+          if (t === 'matin') return h >= 8 && h < 12;
+          if (t === 'apres_midi') return h >= 12 && h < 18;
+          if (t === 'soir') return h >= 18 || h < 8;
+          return false;
+        });
+      });
+    }
     // Sort: signed tab by most recent signature, others by assigned_at
     if (catKey === 'signed') {
       result = [...result].sort((a, b) => (b.signed_at || b.assigned_at || '').localeCompare(a.signed_at || a.assigned_at || ''));
@@ -884,7 +970,7 @@ export default function TrackingSheet() {
       result = [...result].sort((a, b) => (b.assigned_at || '').localeCompare(a.assigned_at || ''));
     }
     return result;
-  }, [leads, activeTab, exitingCards, searchQuery, filterTags, filterStatuses, filterOrigins, sortOrder]);
+  }, [leads, activeTab, exitingCards, searchQuery, filterTags, filterStatuses, filterOrigins, filterCallTime, sortOrder]);
 
   // Dismiss a notification (optimistic + backend persist)
   const dismissNotif = (key) => {
@@ -1189,6 +1275,7 @@ export default function TrackingSheet() {
     setFilterTags([]);
     setFilterStatuses([]);
     setFilterOrigins([]);
+    setFilterCallTime([]);
     setOpenFilter('');
     // Clear dropping state after animation completes
     setTimeout(() => setDroppingTab(null), 320);
@@ -1753,6 +1840,8 @@ export default function TrackingSheet() {
           from { opacity: 0; transform: scale(0.96); }
           to   { opacity: 1; transform: scale(1); }
         }
+        @keyframes gentlePulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.1); } }
+        @keyframes loaderSpin { to { transform: rotate(360deg); } }
         @keyframes modalOverlayIn {
           from { opacity: 0; }
           to   { opacity: 1; }
@@ -3156,7 +3245,7 @@ export default function TrackingSheet() {
                         apiClient.get('/api/v1/tracking/relance-settings').then(data => {
                           setRelanceSettings(data);
                         }).catch(() => {
-                          setRelanceSettings({ relances_enabled: false, relance1_subject: '', relance1_body: '', relance2_subject: '', relance2_body: '' });
+                          setRelanceSettings({ relances_enabled: false, sms_enabled: false, sms_mode: 'auto', sms_repondeur_template: '', sms_noshow_enabled: false, sms_noshow_template: '', sms_reminder_enabled: false, sms_reminder_template: '', relance1_subject: '', relance1_body: '', relance2_subject: '', relance2_body: '' });
                         }).finally(() => setRelanceLoading(false));
                       }
                       if (!relanceSettings) return <div style={{ padding: 20, textAlign: 'center', color: C.muted }}>Chargement...</div>;
@@ -3203,32 +3292,123 @@ export default function TrackingSheet() {
                             </button>
                           </div>
 
-                          {/* SMS toggle */}
-                          <div style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                            padding: '16px 20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`,
-                          }}>
-                            <div>
-                              <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>SMS Répondeur</div>
-                              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Envoyer un SMS automatique quand un lead passe en Répondeur</div>
+                          {/* ═══ SMS SETTINGS ═══ */}
+                          <div style={{ marginTop: 8 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                              SMS
                             </div>
-                            <button onClick={async () => {
-                              const newVal = !relanceSettings.sms_enabled;
-                              updateRelance('sms_enabled', newVal);
-                              try { await apiClient.put('/api/v1/tracking/relance-settings', { sms_enabled: newVal }); } catch {}
-                            }} style={{
-                              width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
-                              background: relanceSettings.sms_enabled ? '#10b981' : (darkMode ? '#3a3b46' : '#d1d5db'),
-                              position: 'relative', transition: 'background 0.2s',
-                            }}>
-                              <div style={{
-                                width: 18, height: 18, borderRadius: '50%', background: '#fff',
-                                position: 'absolute', top: 3,
-                                left: relanceSettings.sms_enabled ? 23 : 3,
-                                transition: 'left 0.2s cubic-bezier(0.34,1.56,0.64,1)',
-                                boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                              }} />
-                            </button>
+
+                            {/* SMS Répondeur */}
+                            <div style={{ padding: '16px 20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, marginBottom: 12 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: relanceSettings.sms_enabled ? 14 : 0 }}>
+                                <div>
+                                  <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>SMS Répondeur</div>
+                                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Envoyer un SMS quand un lead passe en Répondeur</div>
+                                </div>
+                                <button onClick={async () => {
+                                  const newVal = !relanceSettings.sms_enabled;
+                                  updateRelance('sms_enabled', newVal);
+                                  try { await apiClient.put('/api/v1/tracking/relance-settings', { sms_enabled: newVal }); } catch {}
+                                }} style={{
+                                  width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+                                  background: relanceSettings.sms_enabled ? '#10b981' : (darkMode ? '#3a3b46' : '#d1d5db'),
+                                  position: 'relative', transition: 'background 0.2s',
+                                }}>
+                                  <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: relanceSettings.sms_enabled ? 23 : 3, transition: 'left 0.2s cubic-bezier(0.34,1.56,0.64,1)', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                                </button>
+                              </div>
+                              {relanceSettings.sms_enabled && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, opacity: 1, transition: 'opacity 0.3s' }}>
+                                  <div>
+                                    <label style={labelStyle}>Mode d'envoi</label>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                      {[{ value: 'auto', label: 'Automatique' }, { value: 'manual', label: 'Manuel' }].map(m => (
+                                        <button key={m.value} onClick={async () => {
+                                          updateRelance('sms_mode', m.value);
+                                          try { await apiClient.put('/api/v1/tracking/relance-settings', { sms_mode: m.value }); } catch {}
+                                        }} style={{
+                                          padding: '8px 20px', borderRadius: 8, border: `1px solid ${relanceSettings.sms_mode === m.value ? '#10b981' : C.border}`,
+                                          background: relanceSettings.sms_mode === m.value ? 'rgba(16,185,129,0.08)' : 'transparent',
+                                          color: relanceSettings.sms_mode === m.value ? '#10b981' : C.secondary,
+                                          fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                                        }}>{m.label}</button>
+                                      ))}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
+                                      {relanceSettings.sms_mode === 'auto' ? 'Le SMS sera envoyé automatiquement dès passage en Répondeur' : 'Le SMS sera envoyé uniquement via le bouton sur la fiche du lead'}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label style={labelStyle}>Template SMS</label>
+                                    <textarea value={relanceSettings.sms_repondeur_template || ''} onChange={(e) => updateRelance('sms_repondeur_template', e.target.value)}
+                                      placeholder="Bonjour {lead_name}, je vous ai appelé concernant votre entreprise..." style={{ ...inputStyle, minHeight: 80, resize: 'vertical', lineHeight: 1.5 }}
+                                      onFocus={(e) => e.currentTarget.style.borderColor = '#10b981'}
+                                      onBlur={(e) => e.currentTarget.style.borderColor = C.border} />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* SMS Lapin / No-show */}
+                            <div style={{ padding: '16px 20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, marginBottom: 12 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: relanceSettings.sms_noshow_enabled ? 14 : 0 }}>
+                                <div>
+                                  <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>SMS Lapin / No-show</div>
+                                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Envoyer un SMS quand un R1/R2/R3 est marqué no-show ou annulé</div>
+                                </div>
+                                <button onClick={async () => {
+                                  const newVal = !relanceSettings.sms_noshow_enabled;
+                                  updateRelance('sms_noshow_enabled', newVal);
+                                  try { await apiClient.put('/api/v1/tracking/relance-settings', { sms_noshow_enabled: newVal }); } catch {}
+                                }} style={{
+                                  width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+                                  background: relanceSettings.sms_noshow_enabled ? '#f59e0b' : (darkMode ? '#3a3b46' : '#d1d5db'),
+                                  position: 'relative', transition: 'background 0.2s',
+                                }}>
+                                  <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: relanceSettings.sms_noshow_enabled ? 23 : 3, transition: 'left 0.2s cubic-bezier(0.34,1.56,0.64,1)', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                                </button>
+                              </div>
+                              {relanceSettings.sms_noshow_enabled && (
+                                <div>
+                                  <label style={labelStyle}>Template SMS</label>
+                                  <textarea value={relanceSettings.sms_noshow_template || ''} onChange={(e) => updateRelance('sms_noshow_template', e.target.value)}
+                                    placeholder="Bonjour {lead_name}, nous avions rendez-vous aujourd'hui..." style={{ ...inputStyle, minHeight: 80, resize: 'vertical', lineHeight: 1.5 }}
+                                    onFocus={(e) => e.currentTarget.style.borderColor = '#f59e0b'}
+                                    onBlur={(e) => e.currentTarget.style.borderColor = C.border} />
+                                </div>
+                              )}
+                            </div>
+
+                            {/* SMS Rappel veille */}
+                            <div style={{ padding: '16px 20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, marginBottom: 12 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: relanceSettings.sms_reminder_enabled ? 14 : 0 }}>
+                                <div>
+                                  <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>SMS Rappel veille</div>
+                                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Envoyer un SMS la veille d'un R1 ou R2 (uniquement si &gt;48h entre le placement et le RDV)</div>
+                                </div>
+                                <button onClick={async () => {
+                                  const newVal = !relanceSettings.sms_reminder_enabled;
+                                  updateRelance('sms_reminder_enabled', newVal);
+                                  try { await apiClient.put('/api/v1/tracking/relance-settings', { sms_reminder_enabled: newVal }); } catch {}
+                                }} style={{
+                                  width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+                                  background: relanceSettings.sms_reminder_enabled ? '#3b82f6' : (darkMode ? '#3a3b46' : '#d1d5db'),
+                                  position: 'relative', transition: 'background 0.2s',
+                                }}>
+                                  <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: relanceSettings.sms_reminder_enabled ? 23 : 3, transition: 'left 0.2s cubic-bezier(0.34,1.56,0.64,1)', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                                </button>
+                              </div>
+                              {relanceSettings.sms_reminder_enabled && (
+                                <div>
+                                  <label style={labelStyle}>Template SMS</label>
+                                  <textarea value={relanceSettings.sms_reminder_template || ''} onChange={(e) => updateRelance('sms_reminder_template', e.target.value)}
+                                    placeholder="Bonjour {lead_name}, je vous rappelle notre rendez-vous demain à {rdv_time} ({rdv_date})..." style={{ ...inputStyle, minHeight: 80, resize: 'vertical', lineHeight: 1.5 }}
+                                    onFocus={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                                    onBlur={(e) => e.currentTarget.style.borderColor = C.border} />
+                                </div>
+                              )}
+                            </div>
                           </div>
 
                           {/* Relance templates */}
@@ -3289,9 +3469,9 @@ export default function TrackingSheet() {
 
                           {/* Variables info */}
                           <div style={{ padding: '14px 16px', borderRadius: 10, background: darkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)', border: `1px solid ${C.border}` }}>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6 }}>Variables disponibles</div>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6 }}>Variables disponibles (emails & SMS)</div>
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                              {['{lead_name}', '{commercial_email}', '{r2_date_formatted}', '{r2_time}'].map(v => (
+                              {['{lead_name}', '{commercial_last_name}', '{commercial_email}', '{r2_date_formatted}', '{r2_time}', '{rdv_date}', '{rdv_time}'].map(v => (
                                 <button key={v} onClick={() => { navigator.clipboard.writeText(v); setCopiedField('relvar-' + v); setTimeout(() => setCopiedField(null), 1500); }}
                                   style={{ fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 6, background: copiedField === 'relvar-' + v ? 'rgba(16,185,129,0.12)' : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'), color: copiedField === 'relvar-' + v ? '#10b981' : C.accent, fontFamily: 'monospace', textAlign: 'center', border: 'none', cursor: 'pointer', transition: 'all 0.15s' }}
                                 >{copiedField === 'relvar-' + v ? 'Copié ✓' : v}</button>
@@ -3642,6 +3822,18 @@ export default function TrackingSheet() {
                   [{ value: 'newest', label: 'Plus récents' }, { value: 'oldest', label: 'Plus anciens' }].map(opt => <div key={opt.value}>{renderRadio(sortOrder === opt.value, opt.label, null, () => setSortOrder(opt.value))}</div>)
                 )}
 
+                {/* Heure du 1er appel (voicemail/callback only) */}
+                {(catKey === 'voicemail' || catKey === 'callback') && (
+                  <>
+                    {renderFilterRow('call_time', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>, 'Heure du 1er appel', true)}
+                    {openFilterSections.has('call_time') && renderOptionsBox(
+                      [{ value: 'matin', label: 'Matin (8h–12h)', color: '#f59e0b' }, { value: 'apres_midi', label: 'Après-midi (12h–18h)', color: '#3b82f6' }, { value: 'soir', label: 'Soir (18h–8h)', color: '#8b5cf6' }].map(opt => (
+                        <div key={opt.value}>{renderRadio(filterCallTime.includes(opt.value), opt.label, opt.color, () => setFilterCallTime(prev => prev.includes(opt.value) ? prev.filter(v => v !== opt.value) : [...prev, opt.value]))}</div>
+                      ))
+                    )}
+                  </>
+                )}
+
                 {/* Date d'assignation */}
                 {renderFilterRow('date_assign', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>, "Date d'assignation", false)}
 
@@ -3662,9 +3854,9 @@ export default function TrackingSheet() {
               <div style={{ flex: 1 }} />
 
               {/* Clear all — bottom */}
-              {(filterTags.length > 0 || filterStatuses.length > 0 || filterOrigins.length > 0 || sortOrder !== 'newest') && (
+              {(filterTags.length > 0 || filterStatuses.length > 0 || filterOrigins.length > 0 || filterCallTime.length > 0 || sortOrder !== 'newest') && (
                 <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}` }}>
-                  <button onClick={() => { setFilterTags([]); setFilterStatuses([]); setFilterOrigins([]); setSortOrder('newest'); }} style={{
+                  <button onClick={() => { setFilterTags([]); setFilterStatuses([]); setFilterOrigins([]); setFilterCallTime([]); setSortOrder('newest'); }} style={{
                     width: '100%', padding: '8px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
                     border: `1px solid ${C.accent}40`, background: `${C.accent}08`, color: C.accent,
                     cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
@@ -4306,6 +4498,19 @@ export default function TrackingSheet() {
                       {/* Spacer */}
                       <div style={{ flex: 1 }} />
 
+                      {/* SMS count badge */}
+                      {lead.sms_count > 0 && (
+                        <span title={`${lead.sms_count} SMS envoyé${lead.sms_count > 1 ? 's' : ''}`} style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 3,
+                          padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 650, flexShrink: 0,
+                          background: darkMode ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.08)',
+                          color: '#10b981', border: `1px solid rgba(16,185,129,0.2)`,
+                        }}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                          {lead.sms_count}
+                        </span>
+                      )}
+
                       {/* R1 qualification badge */}
                       {activeCat.key === 'r1' && lead.r1_result && (() => {
                         const R1_BADGES = {
@@ -4358,6 +4563,24 @@ export default function TrackingSheet() {
                           }}>
                             <span style={{ fontSize: 13, lineHeight: 1 }}>{badge.icon}</span>
                             {badge.label}
+                          </span>
+                        );
+                      })()}
+
+                      {/* First call time (voicemail/callback) */}
+                      {(activeCat.key === 'voicemail' || activeCat.key === 'callback') && lead.first_call_at && (() => {
+                        const d = new Date(lead.first_call_at);
+                        const hh = String(d.getHours()).padStart(2, '0');
+                        const mm = String(d.getMinutes()).padStart(2, '0');
+                        return (
+                          <span title={`Premier appel le ${d.toLocaleDateString('fr-FR')}`} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 3,
+                            padding: '2px 7px', borderRadius: 50, fontSize: 10, fontWeight: 600, flexShrink: 0,
+                            background: darkMode ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.06)',
+                            color: '#6366f1',
+                          }}>
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            {hh}h{mm}
                           </span>
                         );
                       })()}
@@ -4638,9 +4861,13 @@ export default function TrackingSheet() {
                     </span>
                   )}
                 </div>
-                {(activeCat.key === 'callback' || activeCat.key === 'voicemail') && lead.call_attempts > 0 && (
-                  <div style={{ fontSize: 12, color: C.muted, fontStyle: 'italic', marginTop: 2 }}>
-                    Appelé {lead.call_attempts} fois
+                {(activeCat.key === 'callback' || activeCat.key === 'voicemail') && (lead.call_attempts > 0 || lead.first_call_at) && (
+                  <div style={{ fontSize: 12, color: C.muted, fontStyle: 'italic', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {lead.call_attempts > 0 && <span>Appelé {lead.call_attempts} fois</span>}
+                    {lead.first_call_at && (() => {
+                      const d = new Date(lead.first_call_at);
+                      return <span style={{ fontStyle: 'normal', fontWeight: 600, color: '#6366f1', fontSize: 11 }}>1er appel : {String(d.getHours()).padStart(2,'0')}h{String(d.getMinutes()).padStart(2,'0')}</span>;
+                    })()}
                   </div>
                 )}
               </div>
@@ -4962,22 +5189,55 @@ export default function TrackingSheet() {
               )}
               {editingNotes.hasOwnProperty(lead.id) && (
                 <div style={{ marginBottom: 10 }}>
-                  <textarea
-                    value={notesVal}
-                    onChange={(e) => setEditingNotes(prev => ({ ...prev, [lead.id]: e.target.value }))}
-                    placeholder="Ajouter un commentaire..."
-                    style={{
-                      width: '100%', minHeight: 60, padding: '8px 10px', borderRadius: 8,
-                      border: `1px solid ${C.border}`, background: darkMode ? '#252636' : '#f8f9fc',
-                      color: C.text, fontSize: 13, fontFamily: 'inherit', resize: 'vertical',
-                      outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box',
-                    }}
-                    onFocus={(e) => e.target.style.borderColor = C.accent}
-                    onBlur={(e) => e.target.style.borderColor = C.border}
-                  />
+                  <div style={{ position: 'relative' }}>
+                    <textarea
+                      value={notesVal}
+                      onChange={(e) => setEditingNotes(prev => ({ ...prev, [lead.id]: e.target.value }))}
+                      placeholder="Ajouter un commentaire..."
+                      style={{
+                        width: '100%', minHeight: 60, padding: '8px 40px 8px 10px', borderRadius: 8,
+                        border: `1px solid ${C.border}`, background: darkMode ? '#252636' : '#f8f9fc',
+                        color: C.text, fontSize: 13, fontFamily: 'inherit', resize: 'vertical',
+                        outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box',
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = C.accent}
+                      onBlur={(e) => e.target.style.borderColor = C.border}
+                    />
+                    <button type="button" onClick={() => {
+                      if (micRecording) {
+                        const lid = lead.id;
+                        micStopAndTranscribe((text) => setEditingNotes(prev => ({ ...prev, [lid]: (prev[lid] ? prev[lid] + ' ' : '') + text })));
+                      } else if (!micTranscribing) { micStartRecording(); }
+                    }} disabled={micTranscribing}
+                      style={{
+                        position: 'absolute', right: 6, bottom: 6,
+                        width: 28, height: 28, borderRadius: '50%', border: 'none',
+                        background: micRecording ? '#ef4444' : micTranscribing ? C.muted : (darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
+                        color: micRecording ? '#fff' : micTranscribing ? '#fff' : C.muted,
+                        cursor: micTranscribing ? 'not-allowed' : 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all 0.2s ease',
+                        animation: micRecording ? 'gentlePulse 1.5s ease-in-out infinite' : 'none',
+                      }}
+                      title={micRecording ? 'Arrêter et transcrire' : micTranscribing ? 'Transcription...' : 'Dicter'}
+                    >
+                      {micTranscribing ? (
+                        <div style={{ width: 14, height: 14, border: `2px solid ${C.border}`, borderTopColor: '#fff', borderRadius: '50%', animation: 'loaderSpin 0.8s linear infinite' }} />
+                      ) : (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          {micRecording ? (<><line x1="4" y1="4" x2="20" y2="20" /><line x1="20" y1="4" x2="4" y2="20" /></>) : (
+                            <><rect x="9" y="1" width="6" height="12" rx="3" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></>
+                          )}
+                        </svg>
+                      )}
+                    </button>
+                    {micError && (
+                      <div style={{ position: 'absolute', right: 40, bottom: 8, padding: '3px 10px', borderRadius: 6, background: '#ef4444', color: '#fff', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', animation: 'copiedToastIn 0.3s ease both' }}>{micError}</div>
+                    )}
+                  </div>
                   <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
                     <button
-                      onClick={() => setEditingNotes(prev => { const n = { ...prev }; delete n[lead.id]; return n; })}
+                      onClick={() => { micCleanup(); setEditingNotes(prev => { const n = { ...prev }; delete n[lead.id]; return n; }); }}
                       style={{ padding: '6px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.secondary, fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}
                     >Annuler</button>
                     <button
@@ -5715,6 +5975,89 @@ export default function TrackingSheet() {
                   </select>
                 </div>
               )}
+
+              {/* ═══ SMS SECTION ═══ */}
+              {lead.phone && (activeCat.key === 'voicemail' || activeCat.key === 'callback' || lead.sms_count > 0) && (() => {
+                const smsTypes = [
+                  { key: 'sms_repondeur', label: 'SMS Répondeur', color: '#10b981', icon: '📱' },
+                  { key: 'sms_noshow', label: 'SMS Lapin', color: '#f59e0b', icon: '🐰' },
+                  { key: 'sms_reminder', label: 'SMS Rappel', color: '#3b82f6', icon: '🔔' },
+                ];
+                const history = lead.sms_history || [];
+                const sentTypes = new Set(history.map(h => h.type));
+                const isSending = sendingSms?.leadId === lead.id;
+                const justSent = smsJustSent?.leadId === lead.id ? smsJustSent.smsType : null;
+                const handleSendSms = async (smsType) => {
+                  if (isSending) return;
+                  setSendingSms({ leadId: lead.id, smsType });
+                  try {
+                    const resp = await apiClient.post(`/api/v1/tracking/leads/${lead.id}/send-sms`, { sms_type: smsType });
+                    if (resp.sent) {
+                      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, sms_count: resp.sms_count, sms_history: resp.sms_history } : l));
+                      setSmsJustSent({ leadId: lead.id, smsType });
+                      setTimeout(() => setSmsJustSent(null), 2000);
+                    } else {
+                      alert(resp.reason === 'already_sent' ? 'Ce SMS a déjà été envoyé à ce prospect' : (resp.reason || 'Erreur'));
+                    }
+                  } catch (e) { console.error('SMS send failed:', e); alert('Erreur lors de l\'envoi du SMS'); }
+                  setSendingSms(null);
+                };
+                return (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                      SMS {lead.sms_count > 0 && <span style={{ fontWeight: 700, color: '#10b981' }}>· {lead.sms_count} envoyé{lead.sms_count > 1 ? 's' : ''}</span>}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {smsTypes.map(sms => {
+                        const alreadySent = sentTypes.has(sms.key);
+                        const isThisSending = isSending && sendingSms.smsType === sms.key;
+                        const wasJustSent = justSent === sms.key;
+                        return (
+                          <button key={sms.key} onClick={() => !alreadySent && !isThisSending && handleSendSms(sms.key)}
+                            disabled={alreadySent || isThisSending}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 8,
+                              padding: '8px 12px', borderRadius: 10,
+                              border: `1px solid ${alreadySent ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)') : `${sms.color}30`}`,
+                              background: wasJustSent ? `${sms.color}15` : alreadySent ? (darkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)') : 'transparent',
+                              color: alreadySent ? C.muted : sms.color,
+                              fontSize: 12, fontWeight: 600, cursor: alreadySent ? 'default' : 'pointer',
+                              fontFamily: 'inherit', transition: 'all 0.15s', width: '100%', textAlign: 'left',
+                              opacity: alreadySent ? 0.6 : 1,
+                            }}
+                            onMouseEnter={(e) => { if (!alreadySent) { e.currentTarget.style.background = `${sms.color}12`; e.currentTarget.style.borderColor = `${sms.color}50`; } }}
+                            onMouseLeave={(e) => { if (!alreadySent) { e.currentTarget.style.background = wasJustSent ? `${sms.color}15` : 'transparent'; e.currentTarget.style.borderColor = `${sms.color}30`; } }}
+                          >
+                            <span style={{ fontSize: 14, lineHeight: 1 }}>{sms.icon}</span>
+                            <span style={{ flex: 1 }}>{sms.label}</span>
+                            {isThisSending && <span style={{ fontSize: 10, opacity: 0.7 }}>Envoi...</span>}
+                            {wasJustSent && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                            {alreadySent && !wasJustSent && <span style={{ fontSize: 10, fontStyle: 'italic' }}>Envoyé</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* SMS history */}
+                    {history.length > 0 && (
+                      <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: darkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)' }}>
+                        <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Historique</div>
+                        {history.map((h, i) => {
+                          const smsInfo = smsTypes.find(s => s.key === h.type) || { label: h.type, color: C.muted, icon: '📱' };
+                          return (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0', fontSize: 11, color: C.secondary }}>
+                              <span style={{ fontSize: 11 }}>{smsInfo.icon}</span>
+                              <span style={{ fontWeight: 500 }}>{smsInfo.label}</span>
+                              <span style={{ flex: 1 }} />
+                              <span style={{ fontSize: 10, color: C.muted }}>{new Date(h.sent_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} {new Date(h.sent_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* ═══ PLACE R3 (R2 tab, after R2 effectué, only if R3 enabled) ═══ */}
               {activeCat.key === 'r2' && lead.r2_result === 'done' && calSettings?.r3_enabled && (() => {
@@ -6886,7 +7229,7 @@ export default function TrackingSheet() {
       {/* ═══ SANS SUITE MODAL ═══ */}
       {sansSuiteModal && createPortal(
         <>
-          <div onClick={() => setSansSuiteModal(null)} style={{
+          <div onClick={() => { micCleanup(); setSansSuiteModal(null); }} style={{
             position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
             zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both',
           }} />
@@ -6900,20 +7243,52 @@ export default function TrackingSheet() {
           }}>
             <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 6, letterSpacing: '-0.02em' }}>Sans suite</div>
             <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Ajoutez un commentaire obligatoire avant d'archiver ce lead.</div>
-            <textarea
-              value={sansSuiteComment}
-              onChange={(e) => setSansSuiteComment(e.target.value)}
-              placeholder="Raison de la clôture sans suite..."
-              style={{
-                width: '100%', minHeight: 100, padding: '10px 14px', borderRadius: 10,
-                border: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#f9fafb',
-                color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', resize: 'vertical',
-                lineHeight: 1.5,
-              }}
-              autoFocus
-            />
+            <div style={{ position: 'relative' }}>
+              <textarea
+                value={sansSuiteComment}
+                onChange={(e) => setSansSuiteComment(e.target.value)}
+                placeholder="Raison de la clôture sans suite..."
+                style={{
+                  width: '100%', minHeight: 100, padding: '10px 44px 10px 14px', borderRadius: 10,
+                  border: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#f9fafb',
+                  color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', resize: 'vertical',
+                  lineHeight: 1.5,
+                }}
+                autoFocus
+              />
+              <button type="button" onClick={() => {
+                if (micRecording) {
+                  micStopAndTranscribe((text) => setSansSuiteComment(prev => (prev ? prev + ' ' : '') + text));
+                } else if (!micTranscribing) { micStartRecording(); }
+              }} disabled={micTranscribing}
+                style={{
+                  position: 'absolute', right: 8, bottom: 8,
+                  width: 32, height: 32, borderRadius: '50%', border: 'none',
+                  background: micRecording ? '#ef4444' : micTranscribing ? C.muted : (darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
+                  color: micRecording ? '#fff' : micTranscribing ? '#fff' : C.muted,
+                  cursor: micTranscribing ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.2s ease',
+                  animation: micRecording ? 'gentlePulse 1.5s ease-in-out infinite' : 'none',
+                }}
+                title={micRecording ? 'Arrêter et transcrire' : micTranscribing ? 'Transcription...' : 'Dicter votre commentaire'}
+              >
+                {micTranscribing ? (
+                  <div style={{ width: 16, height: 16, border: `2px solid ${C.border}`, borderTopColor: '#fff', borderRadius: '50%', animation: 'loaderSpin 0.8s linear infinite' }} />
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    {micRecording ? (<><line x1="4" y1="4" x2="20" y2="20" /><line x1="20" y1="4" x2="4" y2="20" /></>) : (
+                      <><rect x="9" y="1" width="6" height="12" rx="3" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></>
+                    )}
+                  </svg>
+                )}
+              </button>
+              {micError && (
+                <div style={{ position: 'absolute', right: 44, bottom: 10, padding: '4px 12px', borderRadius: 6, background: '#ef4444', color: '#fff', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', animation: 'copiedToastIn 0.3s ease both' }}>{micError}</div>
+              )}
+            </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-              <button onClick={() => setSansSuiteModal(null)} style={{
+              <button onClick={() => { micCleanup(); setSansSuiteModal(null); }} style={{
                 flex: 1, padding: '11px 0', borderRadius: 12, fontSize: 14, fontWeight: 600,
                 fontFamily: 'inherit', cursor: 'pointer', border: `1px solid ${C.border}`,
                 background: 'transparent', color: C.muted, transition: 'all 0.15s',

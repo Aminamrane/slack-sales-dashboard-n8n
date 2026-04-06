@@ -29,23 +29,25 @@ const NAME_VARIANTS_TO_CANONICAL = {
   "sebastien": "sebastien itema", "sebastien itema": "sebastien itema", "itema": "sebastien itema",
   "quentin": "quentin rattez", "quentin rattez": "quentin rattez", "rattez": "quentin rattez",
   "gwenael": "gwenael", "gwenaelle": "gwenael",
-  "david": "david", "eva": "eva",
+  "david": "david dubois", "david dubois": "david dubois", "dubois": "david dubois",
+  "eva": "eva meilhac", "eva meilhac": "eva meilhac", "meilhac": "eva meilhac",
+  "gwenael derouet": "gwenael", "derouet": "gwenael",
   "aurelie": "aurelie briquet", "aurelie briquet": "aurelie briquet", "briquet": "aurelie briquet",
   "selim": "selim kouay", "selim kouay": "selim kouay", "kouay": "selim kouay",
   "mehdi": "mehdi bouffessil", "mehdi bouffessil": "mehdi bouffessil", "bouffessil": "mehdi bouffessil",
   "sarah": "sarah amroune", "sarah amroune": "sarah amroune", "amroune": "sarah amroune",
   "sara": "sara benabid", "sara benabid": "sara benabid", "benabid": "sara benabid",
   "mohamed": "mohamed bouaksa", "mohamed bouaksa": "mohamed bouaksa", "bouaksa": "mohamed bouaksa",
-  "youcef": "youcef amran", "youcef amran": "youcef amran", "amran": "youcef amran"
+  "youcef": "youcef amrane", "youcef amran": "youcef amrane", "youcef amrane": "youcef amrane", "amran": "youcef amrane", "amrane": "youcef amrane"
 };
 
 const CANONICAL_DISPLAY_NAMES = {
   "yohan debowski": "Yohan Debowski", "leo mafrici": "L\u00e9o Mafrici", "mourad derradji": "Mourad Derradji",
   "youness el boukhrissi": "Youness El Boukhrissi", "yanis zairi": "Yanis Za\u00efri", "alex gaudrillet": "Alex Gaudrillet",
-  "sebastien itema": "S\u00e9bastien ITEMA", "selim kouay": "Selim Kouay", "eva": "Eva", "david": "David",
-  "aurelie briquet": "Aur\u00e9lie Briquet", "gwenael": "Gwena\u00ebl", "quentin rattez": "Quentin Rattez",
+  "sebastien itema": "S\u00e9bastien ITEMA", "selim kouay": "Selim Kouay", "eva meilhac": "Eva Meilhac", "david dubois": "David Dubois",
+  "aurelie briquet": "Aur\u00e9lie Briquet", "gwenael": "Gwena\u00ebl Derouet", "quentin rattez": "Quentin Rattez",
   "mehdi bouffessil": "Mehdi BOUFFESSIL", "sarah amroune": "Sarah Amroune", "sara benabid": "Sara BENABID",
-  "mohamed bouaksa": "Mohamed Bouaksa", "kail": "Ka\u00efl", "youcef amran": "Youcef Amran"
+  "mohamed bouaksa": "Mohamed Bouaksa", "kail": "Ka\u00efl", "youcef amrane": "Youcef Amrane"
 };
 
 const getCanonicalKey = (rawName) => { const n = normalizeSalesKey(rawName); return NAME_VARIANTS_TO_CANONICAL[n] || n; };
@@ -91,16 +93,17 @@ export default function MonitoringPerf() {
 
   useEffect(() => { if (hasAccess && viewMode === 'lead_quality') { setLeadQualityLoading(true); let url = '/api/v1/monitoring/lead-quality?period=' + (leadQualityRange || 'current_month'); if (selectedOrigins.length > 0) url += '&' + selectedOrigins.map(o => 'origins=' + encodeURIComponent(o)).join('&'); apiClient.get(url).then(d => setLeadQualityData(d)).catch(err => { if (err.message && err.message.includes('401')) navigate("/login"); }).finally(() => setTimeout(() => setLeadQualityLoading(false), 150)); } }, [hasAccess, viewMode, leadQualityRange, selectedOrigins]);
 
-  // Build lookup from tracking KPIs (correct R1/R2 placed/done)
-  const trackingByName = useMemo(() => {
-    if (!trackingKpis || !trackingKpis.by_sales) return {};
-    const map = {};
+  // Build lookup from tracking KPIs — by email (primary) + canonical name (fallback)
+  const trackingLookup = useMemo(() => {
+    if (!trackingKpis || !trackingKpis.by_sales) return { byEmail: {}, byName: {} };
+    const byEmail = {};
+    const byName = {};
     trackingKpis.by_sales.forEach(s => {
+      if (s.email) byEmail[s.email.trim().toLowerCase()] = s;
       const key = getCanonicalKey(s.sales_name);
-      map[key] = s;
+      byName[key] = s;
     });
-    console.log('[MonitoringPerf] trackingByName keys:', Object.keys(map), 'raw names:', trackingKpis.by_sales.map(s => s.sales_name));
-    return map;
+    return { byEmail, byName };
   }, [trackingKpis]);
 
   const performanceData = useMemo(() => {
@@ -110,20 +113,24 @@ export default function MonitoringPerf() {
     const arr = vd.by_person.filter(p => !EXCLUDED_KEYS.has(getCanonicalKey(p.name))).filter(p => (p.leads_assigned||0) > 0 || (p.nbr_signature||0) > 0).map(p => {
       const ct=p.nbr_appel||0, ca=p.nbr_appel_d||0, sig=p.nbr_signature||0, rev=p.total_revenue||0, cash=p.total_cash||0, la=p.leads_assigned||0, lads=p.leads_ads||0, lcc=p.leads_cc||0, ua=p.unique_attempted||0, uan=p.unique_answered||0;
       const key = getCanonicalKey(p.name);
-      // Use tracking KPIs for R1/R2 placed/done (correct values from r1_date/r2_date)
-      const tk = trackingByName[key];
+      // Use tracking KPIs for R1/R2 placed/done — match by email (primary) then canonical name (fallback)
+      const nameIsEmail = (p.name || '').includes('@');
+      const pEmail = (p.email || (nameIsEmail ? p.name : '') || '').trim().toLowerCase();
+      const tk = (pEmail && trackingLookup.byEmail[pEmail]) || trackingLookup.byName[key] || null;
       const r1p = tk ? tk.r1_placed : (p.r1p||0);
       const r1d = tk ? tk.r1_done : (p.r1r||0);
       const r2p = tk ? tk.r2_placed : (p.r2p||0);
       const r2d = tk ? tk.r2_done : (p.r2r||0);
       // Use conv_v from tracking KPIs (pre-calculated, avoids >100% issues)
       const convSales = tk && tk.conv_v != null ? tk.conv_v : (r2d>0?(sig/r2d)*100:0);
-      return { salesName: displaySalesName(p.name), salesKey: key, calls_total:ct, calls_answered:ca, r1_placed:r1p, r1_done:r1d, r2_placed:r2p, r2_done:r2d, signatures:sig, revenue:rev, cashCollected:cash, leads_assigned:la, leads_ads:lads, leads_cc:lcc, unique_attempted:ua, unique_answered:uan, conv_global: p.conversion_global||(la>0?(sig/la)*100:0), conv_calls_to_answered: p.conv_calls_to_answered||(ct>0?(ca/ct)*100:0), conv_answered_to_r1p: ca>0?(r1p/ca)*100:0, conv_r1p_to_r1r: r1p>0?(r1d/r1p)*100:0, conv_r2p_to_r2r: r2p>0?(r2d/r2p)*100:0, conv_sales: convSales };
+      const resolvedName = nameIsEmail && tk?.sales_name ? tk.sales_name : displaySalesName(p.name);
+      const resolvedKey = nameIsEmail && tk ? getCanonicalKey(tk.sales_name) : key;
+      return { salesName: resolvedName, salesKey: resolvedKey, calls_total:ct, calls_answered:ca, r1_placed:r1p, r1_done:r1d, r2_placed:r2p, r2_done:r2d, signatures:sig, revenue:rev, cashCollected:cash, leads_assigned:la, leads_ads:lads, leads_cc:lcc, unique_attempted:ua, unique_answered:uan, conv_global: p.conversion_global||(la>0?(sig/la)*100:0), conv_calls_to_answered: p.conv_calls_to_answered||(ct>0?(ca/ct)*100:0), conv_answered_to_r1p: ca>0?(r1p/ca)*100:0, conv_r1p_to_r1r: r1p>0?(r1d/r1p)*100:0, conv_r2p_to_r2r: r2p>0?(r2d/r2p)*100:0, conv_sales: convSales };
     });
     const seen = new Set(); const deduped = arr.filter(p => { if (seen.has(p.salesKey)) return false; seen.add(p.salesKey); return true; });
     deduped.sort((a,b) => b.signatures !== a.signatures ? b.signatures-a.signatures : b.conv_global !== a.conv_global ? b.conv_global-a.conv_global : b.calls_total-a.calls_total);
     return deduped;
-  }, [perfData, canal, trackingByName]);
+  }, [perfData, canal, trackingLookup]);
 
   const totals = useMemo(() => {
     if (!performanceData.length) return { calls:0, answered:0, signatures:0, revenue:0, cashCollected:0, r1_placed:0, r1_done:0, r2_placed:0, r2_done:0, leads_assigned:0, unique_attempted:0, unique_answered:0, conv_global:0, lead_qualifie:0, closing_r1:0, closing_r2:0, closing_audit:0, conv_calls_to_answered:0, conv_answered_to_r1p:0, conv_r1p_to_r1r:0, conv_r2p_to_r2r:0, conv_sales:0 };
