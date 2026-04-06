@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient"; // Still needed for clients, Info, tracking_sheets
 import apiClient from "../services/apiClient";
@@ -123,7 +124,7 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
   // Assignment state
   const [assigningLeads, setAssigningLeads] = useState(new Set());
   const [assignDropdown, setAssignDropdown] = useState(null); // lead id with open assign dropdown
-  const [assignDropdownPos, setAssignDropdownPos] = useState({ x: 0, y: 0 });
+  const assignDropdownRef = useRef({ right: 0, top: 0, bottom: 0, openUp: false });
   const ROLE_COLORS = { head_of_sales_manager: '#3b82f6', head_of_sales: '#ef4444', sales: '#10b981', admin: '#94a3b8' };
   const ROLE_ORDER = { head_of_sales_manager: 0, head_of_sales: 1, sales: 2, admin: 3 };
   // Override roles for users whose backend role doesn't match their actual team role
@@ -150,8 +151,8 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
     try {
       // Fetch all data in parallel for faster loading
       const [leadsResult, clientsResult, salesResult, salesTeamResult, assignableResult] = await Promise.all([
-        // Fetch leads from backend API (limit 200)
-        apiClient.get(`/api/v1/leads?limit=1000&created_after=${(() => { const d = new Date(); d.setDate(d.getDate() - 3); return d.toISOString().slice(0, 10); })()}`).catch(err => {
+        // Fetch leads from backend API
+        apiClient.get(`/api/v1/leads?limit=400&deduplicate=true`).catch(err => {
           console.error("Error fetching leads:", err);
           return { leads: [], items: [], data: [] };
         }),
@@ -444,11 +445,7 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
               <div>
                 <h1 style={{ fontSize: 22, fontWeight: 700, color: C.text, margin: 0, letterSpacing: '-0.02em' }}>Gestion des Leads</h1>
-                <p style={{ fontSize: 13, color: C.muted, margin: '4px 0 0' }}>{leads.filter(l => {
-                  if ((l.origin || '').toLowerCase() === 'cc') return false;
-                  const d = new Date(l.created_at); const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 3); cutoff.setHours(0,0,0,0);
-                  return d >= cutoff;
-                }).length} leads — 4 derniers jours</p>
+                <p style={{ fontSize: 13, color: C.muted, margin: '4px 0 0' }}>{leads.filter(l => (l.origin || '').toLowerCase() !== 'cc').length} leads</p>
               </div>
               <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} style={{
                 padding: '8px 32px 8px 14px', borderRadius: 10, border: `1px solid ${C.border}`,
@@ -609,11 +606,7 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
                       </thead>
                       <tbody>
                         {(() => {
-                          let filtered = leads.filter(l => {
-                            if ((l.origin || '').toLowerCase() === 'cc') return false;
-                            const d = new Date(l.created_at); const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 3); cutoff.setHours(0,0,0,0);
-                            return d >= cutoff;
-                          });
+                          let filtered = leads.filter(l => (l.origin || '').toLowerCase() !== 'cc');
                           // Apply filters
                           if (filterOrigine.length > 0) filtered = filtered.filter(l => filterOrigine.includes((l.origin || '').trim()));
                           if (filterStatut.length > 0) filtered = filtered.filter(l => {
@@ -636,22 +629,13 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
                               (l.origin || '').toLowerCase().includes(q)
                             );
                           }
-                          // Detect duplicates by email — most recent (first) is NOT duplicate, older ones are
-                          const emailCount = {};
-                          const emailSeen = {};
-                          filtered.forEach(l => { const e = (l.email || '').toLowerCase().trim(); if (e) emailCount[e] = (emailCount[e] || 0) + 1; });
-                          return filtered.map((lead, idx) => {
-                          const email = (lead.email || '').toLowerCase().trim();
-                          const isDuplicate = email && emailCount[email] > 1 && emailSeen[email];
-                          if (email && emailCount[email] > 1) emailSeen[email] = true;
-                          return (
+                          return filtered.map((lead, idx) => (
                           <tr key={lead.id || idx} onClick={() => openModal(lead)} style={{
                             cursor: 'pointer', transition: 'background 0.15s',
-                            background: isDuplicate ? (darkMode ? 'rgba(251,191,36,0.08)' : 'rgba(251,191,36,0.1)') : 'transparent',
                             animation: idx < 30 ? `lmRowIn 0.25s ease ${idx * 20}ms both` : undefined,
                           }}
-                            onMouseEnter={(e) => { if (!isDuplicate) e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.03)' : '#fafafb'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = isDuplicate ? (darkMode ? 'rgba(251,191,36,0.08)' : 'rgba(251,191,36,0.1)') : 'transparent'; }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.03)' : '#fafafb'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                           >
                             <td style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}` }}>
                               {(() => {
@@ -697,33 +681,74 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
                                 const assignedUser = sortedAssignableUsers.find(u => u.email === lead.assigned_to);
                                 const assignedColor = assignedUser ? getUserColor(assignedUser) : C.secondary;
                                 const isOpen = assignDropdown === lead.id;
+                                const btnRef = (el) => { if (el) el.__leadId = lead.id; };
                                 return (
                                   <>
-                                    <button onClick={(e) => {
-                                      if (assigningLeads.has(lead.id)) return;
-                                      if (isOpen) { setAssignDropdown(null); return; }
-                                      const rect = e.currentTarget.getBoundingClientRect();
-                                      setAssignDropdownPos({ x: rect.left, y: rect.bottom + 4 });
-                                      setAssignDropdown(lead.id);
-                                    }} style={{
-                                      display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
-                                      borderRadius: 8, border: `1px solid ${C.border}`,
-                                      background: 'transparent', cursor: assigningLeads.has(lead.id) ? 'wait' : 'pointer',
-                                      fontFamily: 'inherit', fontSize: 13, fontWeight: 500, color: assignedColor,
-                                      width: '100%', maxWidth: 200, textAlign: 'left',
-                                      opacity: assigningLeads.has(lead.id) ? 0.5 : 1, transition: 'all 0.15s',
-                                    }}>
-                                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {assigningLeads.has(lead.id) ? 'Assignation...' : (assignedUser?.full_name || 'Non assigné')}
-                                      </span>
-                                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}><path d="m6 9 6 6 6-6"/></svg>
+                                    <button ref={btnRef} data-assign-btn={lead.id} onClick={(e) => {
+                                        if (assigningLeads.has(lead.id)) return;
+                                        if (isOpen) { setAssignDropdown(null); return; }
+                                        const r = e.currentTarget.getBoundingClientRect();
+                                        assignDropdownRef.current = { right: window.innerWidth - r.right, top: r.bottom + 4 };
+                                        setAssignDropdown(lead.id);
+                                      }} style={{
+                                        display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+                                        borderRadius: 8, border: `1px solid ${C.border}`,
+                                        background: 'transparent', cursor: assigningLeads.has(lead.id) ? 'wait' : 'pointer',
+                                        fontFamily: 'inherit', fontSize: 13, fontWeight: 500, color: assignedColor,
+                                        width: '100%', maxWidth: 200, textAlign: 'left',
+                                        opacity: assigningLeads.has(lead.id) ? 0.5 : 1, transition: 'all 0.15s',
+                                      }}>
+                                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                          {assigningLeads.has(lead.id) ? 'Assignation...' : (assignedUser?.full_name || 'Non assigné')}
+                                        </span>
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}><path d="m6 9 6 6 6-6"/></svg>
                                     </button>
+                                    {isOpen && createPortal(
+                                      <>
+                                        <div onClick={() => setAssignDropdown(null)} style={{ position: 'fixed', inset: 0, zIndex: 9990 }} />
+                                        <div style={{
+                                          position: 'fixed', top: assignDropdownRef.current.top, right: assignDropdownRef.current.right, zIndex: 9991,
+                                          background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12,
+                                          boxShadow: darkMode ? '0 8px 24px rgba(0,0,0,0.4)' : '0 8px 24px rgba(0,0,0,0.12)',
+                                          padding: 4, minWidth: 200, maxHeight: 300, overflowY: 'auto',
+                                        }}>
+                                          <button onClick={() => { setAssignDropdown(null); handleAssignLead(lead.id, '', { stopPropagation: () => {} }); }}
+                                            style={{
+                                              display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px',
+                                              border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
+                                              background: !lead.assigned_to ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)') : 'transparent',
+                                              fontSize: 13, fontWeight: 500, color: C.muted, transition: 'background 0.15s',
+                                            }}
+                                            onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)'}
+                                            onMouseLeave={(e) => e.currentTarget.style.background = !lead.assigned_to ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)') : 'transparent'}
+                                          >Non assigné</button>
+                                          {sortedAssignableUsers.map(u => {
+                                            const color = getUserColor(u);
+                                            const isActive = lead.assigned_to === u.email;
+                                            return (
+                                              <button key={u.email} onClick={() => { setAssignDropdown(null); handleAssignLead(lead.id, u.email, { stopPropagation: () => {} }); }}
+                                                style={{
+                                                  display: 'flex', alignItems: 'center', width: '100%', padding: '8px 12px',
+                                                  border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
+                                                  background: isActive ? `${color}10` : 'transparent',
+                                                  fontSize: 13, fontWeight: isActive ? 600 : 500, color: color,
+                                                  transition: 'background 0.15s', whiteSpace: 'nowrap',
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.background = `${color}15`}
+                                                onMouseLeave={(e) => e.currentTarget.style.background = isActive ? `${color}10` : 'transparent'}
+                                              >{u.full_name}</button>
+                                            );
+                                          })}
+                                        </div>
+                                      </>,
+                                      document.body
+                                    )}
                                   </>
                                 );
                               })()}
                             </td>
                           </tr>
-                        ); }); })()}
+                        )); })()}
                       </tbody>
                     </table>
                   )}
@@ -731,55 +756,6 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
               </>
             )}
           </div>
-
-      {/* ── ASSIGN DROPDOWN (portaled) ─────────────────────────────── */}
-      {assignDropdown && (() => {
-        const lead = leads.find(l => l.id === assignDropdown);
-        if (!lead) return null;
-        return (
-          <>
-            <div onClick={() => setAssignDropdown(null)} style={{ position: 'fixed', inset: 0, zIndex: 9990 }} />
-            <div style={{
-              position: 'fixed', top: assignDropdownPos.y, left: assignDropdownPos.x, zIndex: 9991,
-              background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12,
-              boxShadow: darkMode ? '0 8px 24px rgba(0,0,0,0.4)' : '0 8px 24px rgba(0,0,0,0.1)',
-              padding: 4, minWidth: 200, maxHeight: 300, overflowY: 'auto',
-            }}>
-              {/* Unassign option */}
-              <button onClick={() => { setAssignDropdown(null); handleAssignLead(lead.id, '', { stopPropagation: () => {} }); }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px',
-                  border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
-                  background: !lead.assigned_to ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)') : 'transparent',
-                  fontSize: 13, fontWeight: 500, color: C.muted, transition: 'background 0.15s',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = !lead.assigned_to ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)') : 'transparent'}
-              >Non assigné</button>
-              {/* Users grouped by role color */}
-              {sortedAssignableUsers.map(u => {
-                const color = getUserColor(u);
-                const isActive = lead.assigned_to === u.email;
-                return (
-                  <button key={u.email} onClick={() => { setAssignDropdown(null); handleAssignLead(lead.id, u.email, { stopPropagation: () => {} }); }}
-                    style={{
-                      display: 'flex', alignItems: 'center', width: '100%', padding: '8px 12px',
-                      border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
-                      background: isActive ? `${color}10` : 'transparent',
-                      fontSize: 13, fontWeight: isActive ? 600 : 500, color: color,
-                      transition: 'background 0.15s',
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = `${color}15`}
-                    onMouseLeave={(e) => e.currentTarget.style.background = isActive ? `${color}10` : 'transparent'}
-                  >
-                    {u.full_name}
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        );
-      })()}
 
       {/* ── DETAIL MODAL ─────────────────────────────────────────────── */}
       {showModal && selectedLead && (
