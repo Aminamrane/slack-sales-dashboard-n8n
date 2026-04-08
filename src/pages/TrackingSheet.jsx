@@ -38,6 +38,8 @@ import completedIcon from "../assets/completed.png";
 import meetIcon from "../assets/meet.png";
 import mynoteIcon from "../assets/mynote.svg";
 import iconFuse from "../assets/Fuse.svg";
+import iconMessage from "../assets/message.svg";
+import smsRecuIcon from "../assets/smsrecu.svg";
 
 // ── CATEGORIES ────────────────────────────────────────────────────────────────
 // ── CUSTOM DATETIME PICKER (date input + hour/minute selects, 5min step) ────
@@ -448,6 +450,38 @@ export default function TrackingSheet() {
           case 'global_notification':
             window.dispatchEvent(new CustomEvent('global_notification', { detail: msg.notification }));
             break;
+          case 'sms_notification': {
+            // Live SMS confirmation/error — anchored popover (no persistence anywhere)
+            console.log('[WS] sms_notification received:', msg);
+            const notif = {
+              id: `sms-${msg.lead_id}-${msg.sms_type}-${msg.sent_at || Date.now()}`,
+              status: msg.status, // 'pending' | 'sent' | 'failed'
+              lead_id: msg.lead_id,
+              lead_name: msg.lead_name || '',
+              lead_phone: msg.lead_phone || '',
+              sms_type: msg.sms_type,
+              sms_text: msg.sms_text || '',
+              segments: msg.segments || 1,
+              error: msg.error || null,
+              sent_at: msg.sent_at || new Date().toISOString(),
+            };
+            // If a popover is already showing for this lead+type, update it in place (pending → sent/failed)
+            // so the same UI smoothly transitions instead of opening a second popover.
+            setSmsNotifPopover(prev => {
+              if (prev && prev.lead_id === notif.lead_id && prev.sms_type === notif.sms_type) {
+                return { ...notif, openedAt: prev.openedAt };
+              }
+              return { ...notif, openedAt: Date.now() };
+            });
+            if (smsNotifTimerRef.current) clearTimeout(smsNotifTimerRef.current);
+            // Pending stays open until real sent/failed arrives (5-15s via Make callback).
+            // Sent/failed auto-closes after a few seconds.
+            if (notif.status !== 'pending') {
+              const dwell = notif.status === 'sent' ? 4500 : 7000;
+              smsNotifTimerRef.current = setTimeout(() => setSmsNotifPopover(null), dwell);
+            }
+            break;
+          }
           case 'invitation_revoked':
             if (msg.target_email === user.email) {
               setContractErrorModal({ message: 'Vos accès ont été révoqués. Vous allez être redirigé vers votre tracking sheet.', isNdaMissing: false });
@@ -540,6 +574,10 @@ export default function TrackingSheet() {
   const [relanceLoading, setRelanceLoading] = useState(false);
   const [relanceSaving, setRelanceSaving] = useState(false);
   const [relanceSaved, setRelanceSaved] = useState(false);
+  const [relanceError, setRelanceError] = useState(null);
+  const smsRepondeurRef = useRef(null);
+  const smsNoshowRef = useRef(null);
+  const smsReminderRef = useRef(null);
   const [sendingSms, setSendingSms] = useState(null); // { leadId, smsType } while sending
   const [smsJustSent, setSmsJustSent] = useState(null); // { leadId, smsType } flash feedback
   const [spotlightQuery, setSpotlightQuery] = useState('');
@@ -850,6 +888,11 @@ export default function TrackingSheet() {
   const [dismissedNotifs, setDismissedNotifs] = useState([]); // loaded from backend GET /notifications/dismissed
   const [backendPerfAlerts, setBackendPerfAlerts] = useState(null); // from GET /notifications/performance
   const [notifBadgeFlash, setNotifBadgeFlash] = useState(false); // pulse when new notifs arrive
+  // SMS notifications (live via WebSocket sms_notification events)
+  // SMS popover (live via WebSocket sms_notification events) — ephemeral, anchored to navbar notif item
+  const [smsNotifPopover, setSmsNotifPopover] = useState(null); // current { id, status, lead_id, lead_name, lead_phone, sms_type, sms_text, segments, error, sent_at }
+  const smsNotifTimerRef = useRef(null);
+  const notifNavItemRef = useRef(null); // ref to sidebar notif nav item for popover anchoring
   const prevNotifKeysRef = useRef(null); // track notif keys across polls
   const [activeWorkflow, setActiveWorkflow] = useState(null); // { leadId, contactResult, appointmentResult, r1Result, r1FollowUp, r2Result, newDate }
 
@@ -1807,6 +1850,32 @@ export default function TrackingSheet() {
           70%  { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
           100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
         }
+        @keyframes smsPopoverIn {
+          0%   { opacity: 0; transform: translateX(-18px) scale(0.86); filter: blur(6px); }
+          55%  { opacity: 1; transform: translateX(3px) scale(1.015); filter: blur(0); }
+          100% { opacity: 1; transform: translateX(0) scale(1); filter: blur(0); }
+        }
+        @keyframes smsNotifExpand {
+          0%   { opacity: 0; max-height: 0; transform: translateY(-4px); }
+          60%  { opacity: 1; }
+          100% { opacity: 1; max-height: 360px; transform: translateY(0); }
+        }
+        @keyframes smsNotifSpin {
+          to { transform: rotate(360deg); }
+        }
+        @keyframes smsCheckPop {
+          0%   { transform: scale(0); opacity: 0; }
+          60%  { transform: scale(1.25); opacity: 1; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes smsDotBounce {
+          0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+          40%           { transform: translateY(-4px); opacity: 1; }
+        }
+        @keyframes navDotPulse {
+          0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+          40%           { opacity: 1; transform: translateY(-3px); }
+        }
         @keyframes notifBadgeFlash {
           0%   { transform: scale(1); box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
           15%  { transform: scale(1.6); box-shadow: 0 0 12px 4px rgba(239,68,68,0.4); }
@@ -2104,6 +2173,7 @@ export default function TrackingSheet() {
               return (
                 <div
                   key={item.key}
+                  ref={item.key === 'notifications' ? notifNavItemRef : undefined}
                   onClick={() => { setSidebarView(item.key); if (item.key !== 'leads') setSelectedLead(null); }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6,
@@ -3225,21 +3295,130 @@ export default function TrackingSheet() {
                         apiClient.get('/api/v1/tracking/relance-settings').then(data => {
                           setRelanceSettings(data);
                         }).catch(() => {
-                          setRelanceSettings({ relances_enabled: false, sms_enabled: false, sms_mode: 'auto', sms_repondeur_template: '', sms_noshow_enabled: false, sms_noshow_template: '', sms_reminder_enabled: false, sms_reminder_template: '', relance1_subject: '', relance1_body: '', relance2_subject: '', relance2_body: '' });
+                          setRelanceSettings({ relances_enabled: false, sms_enabled: false, sms_mode: 'auto', sms_repondeur_template: '', sms_noshow_enabled: false, sms_noshow_template: '', sms_reminder_enabled: false, sms_reminder_template: '', relance1_subject: '', relance1_body: '', relance2_subject: '', relance2_body: '', sms_max_single: 276, sms_max_split: 552, sms_split_marker: '[SPLIT]', sms_split_enabled: true });
                         }).finally(() => setRelanceLoading(false));
                       }
                       if (!relanceSettings) return <div style={{ padding: 20, textAlign: 'center', color: C.muted }}>Chargement...</div>;
 
-                      const updateRelance = (key, value) => setRelanceSettings(prev => ({ ...prev, [key]: value }));
+                      const updateRelance = (key, value) => { setRelanceError(null); setRelanceSettings(prev => ({ ...prev, [key]: value })); };
                       const saveRelance = async () => {
                         if (!relanceSettings) return;
                         setRelanceSaving(true);
+                        setRelanceError(null);
                         try {
                           await apiClient.put('/api/v1/tracking/relance-settings', relanceSettings);
                           setRelanceSaved(true);
                           setTimeout(() => setRelanceSaved(false), 2000);
-                        } catch (e) { console.warn('Save relance settings failed:', e); }
+                        } catch (e) {
+                          console.warn('Save relance settings failed:', e);
+                          const msg = e?.data?.detail || e?.message || 'Erreur lors de l\'enregistrement.';
+                          setRelanceError(msg);
+                          setTimeout(() => setRelanceError(null), 6000);
+                        }
                         setRelanceSaving(false);
+                      };
+
+                      // ── SMS Editor (renders inline, supports split mode) ─
+                      const SMS_MAX_SINGLE = relanceSettings.sms_max_single ?? 276;
+                      const SMS_MAX_SPLIT = relanceSettings.sms_max_split ?? 552;
+                      const SMS_MARKER = relanceSettings.sms_split_marker || '[SPLIT]';
+                      const SMS_SPLIT_ENABLED = relanceSettings.sms_split_enabled ?? true;
+                      const counterColor = (len, max) => {
+                        if (len >= max) return '#ef4444';
+                        if (len >= max - 25) return '#f59e0b';
+                        return '#10b981';
+                      };
+                      const renderSmsEditor = (fieldKey, accentColor, refObj, placeholder) => {
+                        const value = relanceSettings[fieldKey] || '';
+                        if (!SMS_SPLIT_ENABLED) {
+                          // Mode 1 SMS — block input at maxSingle
+                          const handleChange = (e) => {
+                            const v = e.target.value;
+                            if (v.length > SMS_MAX_SINGLE) return;
+                            updateRelance(fieldKey, v);
+                          };
+                          return (
+                            <div>
+                              <label style={labelStyle}>Template SMS</label>
+                              <textarea ref={refObj} value={value} onChange={handleChange} maxLength={SMS_MAX_SINGLE}
+                                placeholder={placeholder}
+                                style={{ ...inputStyle, minHeight: 80, resize: 'vertical', lineHeight: 1.5 }}
+                                onFocus={(e) => e.currentTarget.style.borderColor = accentColor}
+                                onBlur={(e) => e.currentTarget.style.borderColor = C.border} />
+                              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: counterColor(value.length, SMS_MAX_SINGLE), fontVariantNumeric: 'tabular-nums', fontFamily: 'inherit' }}>
+                                  {value.length} / {SMS_MAX_SINGLE}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        }
+                        // Mode 2 SMS — split enabled
+                        const markerIdx = value.indexOf(SMS_MARKER);
+                        const hasMarker = markerIdx !== -1;
+                        const seg1 = hasMarker ? value.slice(0, markerIdx) : value;
+                        const seg2 = hasMarker ? value.slice(markerIdx + SMS_MARKER.length) : '';
+                        const totalNoMarker = hasMarker ? (value.length - SMS_MARKER.length) : value.length;
+                        const handleChange = (e) => {
+                          const v = e.target.value;
+                          if (v.length > SMS_MAX_SPLIT + SMS_MARKER.length) return;
+                          updateRelance(fieldKey, v);
+                        };
+                        const insertMarker = () => {
+                          const ta = refObj.current;
+                          if (!ta || hasMarker) return;
+                          const start = ta.selectionStart || 0;
+                          const end = ta.selectionEnd || 0;
+                          const newVal = value.slice(0, start) + SMS_MARKER + value.slice(end);
+                          updateRelance(fieldKey, newVal);
+                          setTimeout(() => {
+                            if (refObj.current) {
+                              refObj.current.focus();
+                              const pos = start + SMS_MARKER.length;
+                              refObj.current.setSelectionRange(pos, pos);
+                            }
+                          }, 0);
+                        };
+                        return (
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                              <label style={{ ...labelStyle, marginBottom: 0 }}>Template SMS (2 messages)</label>
+                              <button type="button" onClick={insertMarker} disabled={hasMarker} style={{
+                                fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6,
+                                border: `1px solid ${hasMarker ? C.border : accentColor}`,
+                                background: hasMarker ? 'transparent' : `${accentColor}12`,
+                                color: hasMarker ? C.muted : accentColor,
+                                cursor: hasMarker ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                                transition: 'all 0.15s',
+                              }}>{hasMarker ? 'Coupure insérée' : 'Insérer la coupure'}</button>
+                            </div>
+                            <textarea ref={refObj} value={value} onChange={handleChange}
+                              placeholder={placeholder}
+                              style={{ ...inputStyle, minHeight: 110, resize: 'vertical', lineHeight: 1.5 }}
+                              onFocus={(e) => e.currentTarget.style.borderColor = accentColor}
+                              onBlur={(e) => e.currentTarget.style.borderColor = C.border} />
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, gap: 12, flexWrap: 'wrap' }}>
+                              <div style={{ display: 'flex', gap: 14 }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: counterColor(seg1.length, SMS_MAX_SINGLE), fontVariantNumeric: 'tabular-nums', fontFamily: 'inherit' }}>
+                                  SMS 1 : {seg1.length} / {SMS_MAX_SINGLE}
+                                </span>
+                                {hasMarker && (
+                                  <span style={{ fontSize: 11, fontWeight: 700, color: counterColor(seg2.length, SMS_MAX_SINGLE), fontVariantNumeric: 'tabular-nums', fontFamily: 'inherit' }}>
+                                    SMS 2 : {seg2.length} / {SMS_MAX_SINGLE}
+                                  </span>
+                                )}
+                              </div>
+                              <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, fontVariantNumeric: 'tabular-nums', fontFamily: 'inherit' }}>
+                                Total : {totalNoMarker} / {SMS_MAX_SPLIT}
+                              </span>
+                            </div>
+                            {!hasMarker && value.length > SMS_MAX_SINGLE && (
+                              <div style={{ marginTop: 6, fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>
+                                Insérez la coupure pour découper en 2 SMS
+                              </div>
+                            )}
+                          </div>
+                        );
                       };
 
                       return (
@@ -3277,6 +3456,30 @@ export default function TrackingSheet() {
                             <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                               SMS
+                            </div>
+
+                            {/* Global Split toggle */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, marginBottom: 12 }}>
+                              <div>
+                                <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Découper en 2 SMS</div>
+                                <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Place <span style={{ fontFamily: 'monospace', padding: '1px 5px', borderRadius: 4, background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }}>{SMS_MARKER}</span> dans tes templates pour couper en 2 messages (max {SMS_MAX_SPLIT} chars total). Sinon, 1 SMS de {SMS_MAX_SINGLE} chars max.</div>
+                              </div>
+                              <button onClick={async () => {
+                                const newVal = !SMS_SPLIT_ENABLED;
+                                updateRelance('sms_split_enabled', newVal);
+                                try { await apiClient.put('/api/v1/tracking/relance-settings', { sms_split_enabled: newVal }); } catch (e) {
+                                  const msg = e?.data?.detail || e?.message || 'Erreur';
+                                  setRelanceError(msg);
+                                  setTimeout(() => setRelanceError(null), 6000);
+                                  updateRelance('sms_split_enabled', !newVal); // rollback
+                                }
+                              }} style={{
+                                width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+                                background: SMS_SPLIT_ENABLED ? C.accent : (darkMode ? '#3a3b46' : '#d1d5db'),
+                                position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+                              }}>
+                                <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: SMS_SPLIT_ENABLED ? 23 : 3, transition: 'left 0.2s cubic-bezier(0.34,1.56,0.64,1)', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                              </button>
                             </div>
 
                             {/* SMS Répondeur */}
@@ -3319,13 +3522,7 @@ export default function TrackingSheet() {
                                       {relanceSettings.sms_mode === 'auto' ? 'Le SMS sera envoyé automatiquement dès passage en Répondeur' : 'Le SMS sera envoyé uniquement via le bouton sur la fiche du lead'}
                                     </div>
                                   </div>
-                                  <div>
-                                    <label style={labelStyle}>Template SMS</label>
-                                    <textarea value={relanceSettings.sms_repondeur_template || ''} onChange={(e) => updateRelance('sms_repondeur_template', e.target.value)}
-                                      placeholder="Bonjour {lead_name}, je vous ai appelé concernant votre entreprise..." style={{ ...inputStyle, minHeight: 80, resize: 'vertical', lineHeight: 1.5 }}
-                                      onFocus={(e) => e.currentTarget.style.borderColor = '#10b981'}
-                                      onBlur={(e) => e.currentTarget.style.borderColor = C.border} />
-                                  </div>
+                                  {renderSmsEditor('sms_repondeur_template', '#10b981', smsRepondeurRef, 'Bonjour {lead_name}, je vous ai appelé concernant votre entreprise...')}
                                 </div>
                               )}
                             </div>
@@ -3349,15 +3546,7 @@ export default function TrackingSheet() {
                                   <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: relanceSettings.sms_noshow_enabled ? 23 : 3, transition: 'left 0.2s cubic-bezier(0.34,1.56,0.64,1)', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                                 </button>
                               </div>
-                              {relanceSettings.sms_noshow_enabled && (
-                                <div>
-                                  <label style={labelStyle}>Template SMS</label>
-                                  <textarea value={relanceSettings.sms_noshow_template || ''} onChange={(e) => updateRelance('sms_noshow_template', e.target.value)}
-                                    placeholder="Bonjour {lead_name}, nous avions rendez-vous aujourd'hui..." style={{ ...inputStyle, minHeight: 80, resize: 'vertical', lineHeight: 1.5 }}
-                                    onFocus={(e) => e.currentTarget.style.borderColor = '#f59e0b'}
-                                    onBlur={(e) => e.currentTarget.style.borderColor = C.border} />
-                                </div>
-                              )}
+                              {relanceSettings.sms_noshow_enabled && renderSmsEditor('sms_noshow_template', '#f59e0b', smsNoshowRef, "Bonjour {lead_name}, nous avions rendez-vous aujourd'hui...")}
                             </div>
 
                             {/* SMS Rappel veille */}
@@ -3379,15 +3568,7 @@ export default function TrackingSheet() {
                                   <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: relanceSettings.sms_reminder_enabled ? 23 : 3, transition: 'left 0.2s cubic-bezier(0.34,1.56,0.64,1)', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
                                 </button>
                               </div>
-                              {relanceSettings.sms_reminder_enabled && (
-                                <div>
-                                  <label style={labelStyle}>Template SMS</label>
-                                  <textarea value={relanceSettings.sms_reminder_template || ''} onChange={(e) => updateRelance('sms_reminder_template', e.target.value)}
-                                    placeholder="Bonjour {lead_name}, je vous rappelle notre rendez-vous demain à {rdv_time} ({rdv_date})..." style={{ ...inputStyle, minHeight: 80, resize: 'vertical', lineHeight: 1.5 }}
-                                    onFocus={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
-                                    onBlur={(e) => e.currentTarget.style.borderColor = C.border} />
-                                </div>
-                              )}
+                              {relanceSettings.sms_reminder_enabled && renderSmsEditor('sms_reminder_template', '#3b82f6', smsReminderRef, 'Bonjour {lead_name}, je vous rappelle notre rendez-vous demain à {rdv_time} ({rdv_date})...')}
                             </div>
                           </div>
 
@@ -3458,6 +3639,22 @@ export default function TrackingSheet() {
                               ))}
                             </div>
                           </div>
+
+                          {/* Error toast */}
+                          {relanceError && (
+                            <div style={{
+                              padding: '12px 16px', borderRadius: 10,
+                              background: darkMode ? 'rgba(239,68,68,0.10)' : 'rgba(239,68,68,0.06)',
+                              border: '1px solid rgba(239,68,68,0.30)',
+                              color: '#ef4444', fontSize: 13, fontWeight: 600,
+                              display: 'flex', alignItems: 'center', gap: 10,
+                              animation: 'toastSlideIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
+                            }}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                              <span style={{ flex: 1 }}>{relanceError}</span>
+                              <button onClick={() => setRelanceError(null)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 16, padding: 0, lineHeight: 1 }}>✕</button>
+                            </div>
+                          )}
 
                           {/* Save */}
                           <button onClick={saveRelance} disabled={relanceSaving} style={{
@@ -4482,6 +4679,11 @@ export default function TrackingSheet() {
                         </>
                       )}
 
+                      {/* SMS reçu indicator */}
+                      {lead.sms_count > 0 && (
+                        <img src={smsRecuIcon} alt="SMS reçu" title={`${lead.sms_count} SMS envoyé${lead.sms_count > 1 ? 's' : ''}`} style={{ width: 72, height: 72, objectFit: 'contain', flexShrink: 0, marginLeft: 2, marginTop: -24, marginBottom: -24 }} />
+                      )}
+
                       {/* Spacer */}
                       <div style={{ flex: 1 }} />
 
@@ -5436,10 +5638,23 @@ export default function TrackingSheet() {
                 );
               })()}
 
-              {/* ═══ NEW TAB WORKFLOW ═══ */}
-              {activeCat.key === 'new' && (() => {
-                const wf = activeWorkflow?.leadId === lead.id ? activeWorkflow : null;
+              {/* ═══ NEW / CALLBACK / VOICEMAIL TAB WORKFLOW ═══ */}
+              {(activeCat.key === 'new' || activeCat.key === 'callback' || activeCat.key === 'voicemail') && (() => {
+                const wf = activeWorkflow?.leadId === lead.id && !activeWorkflow?.callFlow ? activeWorkflow : null;
                 const today = new Date().toISOString().split('T')[0];
+                // Preserve original first contact date if already set (callback/voicemail leads have been contacted before)
+                const firstContactDate = lead.first_contact_date ? lead.first_contact_date.slice(0, 10) : today;
+                const isReContact = activeCat.key === 'callback' || activeCat.key === 'voicemail';
+                // On callback/voicemail tabs, "Répondeur" / "À rappeler" should NOT move the lead — just bump call_attempts
+                const bumpCallAttempts = async () => {
+                  const currentLead = leads.find(l => l.id === lead.id) || lead;
+                  const newAttempts = (currentLead.call_attempts || 0) + 1;
+                  setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, call_attempts: newAttempts, first_contact_date: l.first_contact_date || today } : l));
+                  try {
+                    await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { call_attempts: newAttempts, first_contact_date: firstContactDate });
+                  } catch (e) { console.error('bump call_attempts failed:', e); }
+                  setActiveWorkflow(null);
+                };
                 const wfPill = (label, color, icon, delay, onClick) => (
                   <button key={label} onClick={onClick} style={{
                     display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 50,
@@ -5468,7 +5683,7 @@ export default function TrackingSheet() {
                         onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.background = '#d4e8fa'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.background = '#E8F2FD'; }}
                       >
-                        Premier contact
+                        {activeCat.key === 'new' ? 'Premier contact' : 'Re-contacter'}
                       </button>
                     ) : !wf.contactResult ? (
                       /* ── Step 1: Contact result pills ── */
@@ -5478,9 +5693,9 @@ export default function TrackingSheet() {
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                           {wfPill('A décroché', '#10b981', '✓', 30, () => setActiveWorkflow(prev => ({ ...prev, contactResult: 'reached', appointmentResult: '', newDate: '' })))}
-                          {wfPill('Répondeur', '#64748b', '📞', 70, () => handleWorkflowSubmit(lead.id, { first_contact_date: today, contact_result: 'voicemail', status: 'voicemail' }))}
-                          {wfPill('Non pertinent', '#ef4444', '✕', 110, () => handleWorkflowSubmit(lead.id, { first_contact_date: today, contact_result: 'not_relevant', status: 'not_relevant' }))}
-                          {wfPill('Non traitable', '#f59e0b', '⚠', 150, () => handleWorkflowSubmit(lead.id, { first_contact_date: today, contact_result: 'not_processable', status: 'not_relevant' }))}
+                          {wfPill('Répondeur', '#64748b', '📞', 70, () => isReContact ? bumpCallAttempts() : handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, contact_result: 'voicemail', status: 'voicemail' }))}
+                          {wfPill('Non pertinent', '#ef4444', '✕', 110, () => handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, contact_result: 'not_relevant', status: 'not_relevant' }))}
+                          {wfPill('Non traitable', '#f59e0b', '⚠', 150, () => handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, contact_result: 'not_processable', status: 'not_relevant' }))}
                         </div>
                         <button onClick={() => setActiveWorkflow(null)}
                           style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', marginTop: 2, opacity: 0.7, animation: 'wfSplitIn 0.3s ease 200ms both' }}
@@ -5497,8 +5712,8 @@ export default function TrackingSheet() {
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                           {wfPill('RDV R1', '#3b82f6', '📅', 30, () => setActiveWorkflow(prev => ({ ...prev, appointmentResult: 'appointment_set', newDate: '' })))}
                           {wfPill('R2 direct', '#fb923c', '⚡', 70, () => setActiveWorkflow(prev => ({ ...prev, appointmentResult: 'r2_direct', newDate: '' })))}
-                          {wfPill('À rappeler', '#94a3b8', '↩', 110, () => handleWorkflowSubmit(lead.id, { first_contact_date: today, contact_result: 'reached', appointment_result: 'no_appointment', status: 'callback' }))}
-                          {wfPill('Pas intéressé', '#ef4444', '✕', 150, () => handleWorkflowSubmit(lead.id, { first_contact_date: today, contact_result: 'reached', appointment_result: 'not_interested', status: 'not_relevant' }))}
+                          {wfPill('À rappeler', '#94a3b8', '↩', 110, () => isReContact ? bumpCallAttempts() : handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, contact_result: 'reached', appointment_result: 'no_appointment', status: 'callback' }))}
+                          {wfPill('Pas intéressé', '#ef4444', '✕', 150, () => handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, contact_result: 'reached', appointment_result: 'not_interested', status: 'not_relevant' }))}
                         </div>
                         <button onClick={() => setActiveWorkflow(prev => ({ ...prev, contactResult: '', appointmentResult: '' }))}
                           style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', marginTop: 2, opacity: 0.7, animation: 'wfSplitIn 0.3s ease 150ms both' }}
@@ -5541,7 +5756,7 @@ export default function TrackingSheet() {
                         {wf.newDate && wf.newDate.length >= 10 && (
                           <button
                             onClick={() => handleWorkflowSubmit(lead.id, {
-                              first_contact_date: today,
+                              first_contact_date: firstContactDate,
                               contact_result: 'reached', appointment_result: 'appointment_set',
                               r1_date: wf.newDate, status: 'r1',
                             })}
@@ -5588,7 +5803,7 @@ export default function TrackingSheet() {
                         </div>
                         {wf.newDate && wf.newDate.length >= 10 && (
                           <button onClick={() => handleWorkflowSubmit(lead.id, {
-                              first_contact_date: today, contact_result: 'reached', appointment_result: 'appointment_set',
+                              first_contact_date: firstContactDate, contact_result: 'reached', appointment_result: 'appointment_set',
                               r2_date: wf.newDate, status: 'r2',
                             })}
                             style={{
@@ -5811,138 +6026,8 @@ export default function TrackingSheet() {
               })()}
 
 
-              {/* ═══ CALLBACK/VOICEMAIL: Appelé workflow ═══ */}
-              {(activeCat.key === 'callback' || activeCat.key === 'voicemail') && (() => {
-                const callWf = activeWorkflow?.leadId === lead.id && activeWorkflow?.callFlow ? activeWorkflow : null;
-                return (
-                  <div style={{ marginBottom: 16 }}>
-                    {!callWf ? (
-                      <button
-                        onClick={() => setActiveWorkflow({ leadId: lead.id, callFlow: true, callResult: '' })}
-                        style={{
-                          width: '100%', padding: '10px 16px', borderRadius: 50, border: 'none',
-                          background: '#E8F2FD', color: '#3b82f6', fontSize: 13, fontWeight: 600,
-                          cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)', fontFamily: 'inherit',
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.background = '#d4e8fa'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.background = '#E8F2FD'; }}
-                      >
-                        Appelé
-                      </button>
-                    ) : !callWf.callResult ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>
-                          Résultat de l'appel
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                          <button onClick={() => setActiveWorkflow(prev => ({ ...prev, callResult: 'answered' }))} style={{
-                            padding: '12px 8px', borderRadius: 12, border: `1.5px solid #10b98135`,
-                            background: 'rgba(16,185,129,0.06)', color: '#10b981',
-                            fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                          }}>
-                            <span style={{ fontSize: 14 }}>✓</span> A répondu
-                          </button>
-                          <button onClick={() => setActiveWorkflow(prev => ({ ...prev, callResult: 'no_answer' }))} style={{
-                            padding: '12px 8px', borderRadius: 12, border: `1.5px solid ${C.border}`,
-                            background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', color: C.muted,
-                            fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                          }}>
-                            <span style={{ fontSize: 14 }}>✕</span> N'a pas répondu
-                          </button>
-                        </div>
-                        <button onClick={() => setActiveWorkflow(null)}
-                          style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', opacity: 0.7 }}
-                        >← Retour</button>
-                      </div>
-                    ) : callWf.callResult === 'answered' ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>
-                          A répondu — Envoyer vers
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                          <button onClick={async () => {
-                            const currentLead = leads.find(l => l.id === lead.id) || lead;
-                            const newAttempts = (currentLead.call_attempts || 0) + 1;
-                            await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { call_attempts: newAttempts });
-                            handleStatusChange(lead.id, 'new');
-                            setActiveWorkflow(null);
-                          }} style={{
-                            padding: '12px 8px', borderRadius: 12, border: `1.5px solid #3b82f635`,
-                            background: 'rgba(59,130,246,0.06)', color: '#3b82f6',
-                            fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                          }}>
-                            Nouveau lead
-                          </button>
-                          <button onClick={async () => {
-                            const currentLead = leads.find(l => l.id === lead.id) || lead;
-                            const newAttempts = (currentLead.call_attempts || 0) + 1;
-                            await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { call_attempts: newAttempts });
-                            handleStatusChange(lead.id, 'not_relevant');
-                            setActiveWorkflow(null);
-                          }} style={{
-                            padding: '12px 8px', borderRadius: 12, border: `1.5px solid #ef444435`,
-                            background: 'rgba(239,68,68,0.06)', color: '#ef4444',
-                            fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                          }}>
-                            Non pertinent
-                          </button>
-                        </div>
-                        <button onClick={() => setActiveWorkflow(prev => ({ ...prev, callResult: '' }))}
-                          style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', opacity: 0.7 }}
-                        >← Retour</button>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>
-                          N'a pas répondu
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                          <button onClick={async () => {
-                            setLeads(prev => {
-                              const current = prev.find(l => l.id === lead.id);
-                              const newAttempts = (current?.call_attempts || 0) + 1;
-                              apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { call_attempts: newAttempts }).catch(() => {});
-                              return prev.map(l => l.id === lead.id ? { ...l, call_attempts: newAttempts } : l);
-                            });
-                            setActiveWorkflow(null);
-                          }} style={{
-                            padding: '12px 8px', borderRadius: 12, border: `1.5px solid ${C.border}`,
-                            background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', color: C.secondary,
-                            fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                          }}>
-                            Laisser
-                          </button>
-                          <button onClick={async () => {
-                            const currentLead = leads.find(l => l.id === lead.id) || lead;
-                            const newAttempts = (currentLead.call_attempts || 0) + 1;
-                            await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { call_attempts: newAttempts, notes: (currentLead.notes ? currentLead.notes + '\n' : '') + "N'a jamais répondu" });
-                            handleStatusChange(lead.id, 'not_relevant');
-                            setActiveWorkflow(null);
-                          }} style={{
-                            padding: '12px 8px', borderRadius: 12, border: `1.5px solid #ef444435`,
-                            background: 'rgba(239,68,68,0.06)', color: '#ef4444',
-                            fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                          }}>
-                            Non pertinent
-                          </button>
-                        </div>
-                        <button onClick={() => setActiveWorkflow(prev => ({ ...prev, callResult: '' }))}
-                          style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', opacity: 0.7 }}
-                        >← Retour</button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
               {/* ═══ OTHER TABS: Déplacer vers (not for signed) ═══ */}
-              {!['new', 'r1', 'r2', 'r3', 'signed'].includes(activeCat.key) && (
+              {!['new', 'r1', 'r2', 'r3', 'signed', 'callback', 'voicemail'].includes(activeCat.key) && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                   <span style={{ fontSize: 11, color: C.muted, fontWeight: 500 }}>Déplacer vers</span>
                   <select value=""
@@ -7514,6 +7599,152 @@ export default function TrackingSheet() {
               )}
             </div>
           </>
+        );
+      })(), document.body)}
+
+      {/* ── ANCHORED SMS POPOVER (auto-opens from navbar notifications item) ── */}
+      {smsNotifPopover && createPortal((() => {
+        const n = smsNotifPopover;
+        const segs = n.sms_text ? n.sms_text.split('[SPLIT]') : [''];
+        const isPending = n.status === 'pending';
+        const isSent = n.status === 'sent';
+        const isFailed = n.status === 'failed';
+        const accentColor = isFailed ? '#ef4444' : isSent ? '#10b981' : '#5b6abf';
+        const SMS_TYPE_LABELS = {
+          sms_repondeur: 'SMS Répondeur',
+          sms_noshow: 'SMS Lapin',
+          sms_reminder: 'SMS Rappel veille',
+        };
+        const subtitle = isFailed ? "Erreur d'envoi" : isPending ? 'Envoi en cours…' : 'Message envoyé';
+        const close = () => {
+          if (smsNotifTimerRef.current) clearTimeout(smsNotifTimerRef.current);
+          setSmsNotifPopover(null);
+        };
+        return (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'fixed', bottom: 24, left: 24, zIndex: 10000,
+              width: 340, maxWidth: 'calc(100vw - 48px)',
+              background: darkMode ? 'rgba(26,28,38,0.97)' : 'rgba(255,255,255,0.99)',
+              backdropFilter: 'blur(24px) saturate(180%)', WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+              border: `1px solid ${darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}`,
+              borderRadius: 18,
+              boxShadow: darkMode
+                ? '0 20px 60px rgba(0,0,0,0.55), 0 4px 16px rgba(0,0,0,0.35)'
+                : '0 20px 60px rgba(15,23,42,0.18), 0 4px 16px rgba(15,23,42,0.08)',
+              overflow: 'hidden',
+              transformOrigin: 'left bottom',
+              animation: 'smsPopoverIn 0.55s cubic-bezier(0.34,1.56,0.64,1) both',
+            }}
+          >
+
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px' }}>
+              <div style={{
+                width: 38, height: 38, borderRadius: 12, flexShrink: 0,
+                background: `${accentColor}14`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                position: 'relative',
+                transition: 'background 0.4s ease',
+              }}>
+                <img src={iconMessage} alt="" style={{ width: 20, height: 20, display: 'block' }} />
+                {isPending && (
+                  <div style={{
+                    position: 'absolute', right: -4, bottom: -4, width: 16, height: 16,
+                    borderRadius: '50%', background: darkMode ? '#1e1f28' : '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
+                  }}>
+                    <span style={{ display: 'inline-flex', gap: 1.5 }}>
+                      <span style={{ width: 2.5, height: 2.5, borderRadius: '50%', background: accentColor, animation: 'navDotPulse 1.2s ease-in-out 0s infinite' }} />
+                      <span style={{ width: 2.5, height: 2.5, borderRadius: '50%', background: accentColor, animation: 'navDotPulse 1.2s ease-in-out 0.2s infinite' }} />
+                      <span style={{ width: 2.5, height: 2.5, borderRadius: '50%', background: accentColor, animation: 'navDotPulse 1.2s ease-in-out 0.4s infinite' }} />
+                    </span>
+                  </div>
+                )}
+                {isSent && (
+                  <div style={{ position: 'absolute', right: -4, bottom: -4, width: 16, height: 16, background: '#10b981', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(16,185,129,0.45)', animation: 'smsCheckPop 0.5s cubic-bezier(0.34,1.56,0.64,1) both' }}>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                )}
+                {isFailed && (
+                  <div style={{ position: 'absolute', right: -4, bottom: -4, width: 16, height: 16, background: '#ef4444', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(239,68,68,0.45)', animation: 'smsCheckPop 0.5s cubic-bezier(0.34,1.56,0.64,1) both' }}>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </div>
+                )}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {n.lead_name || 'Prospect'}
+                </div>
+                <div style={{ fontSize: 11.5, color: isFailed ? '#ef4444' : isSent ? '#10b981' : C.muted, marginTop: 1, fontWeight: 600, transition: 'color 0.4s ease' }}>
+                  {SMS_TYPE_LABELS[n.sms_type] || 'SMS'} · {subtitle}
+                </div>
+              </div>
+              <button onClick={close} style={{
+                width: 24, height: 24, borderRadius: 8, border: 'none',
+                background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+
+            {/* Body — auto-expanded with delay */}
+            <div style={{
+              padding: '0 16px 14px',
+              animation: 'smsNotifExpand 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.22s both',
+              overflow: 'hidden',
+            }}>
+              {isFailed ? (
+                <div style={{
+                  padding: '10px 12px', borderRadius: 10,
+                  background: darkMode ? 'rgba(239,68,68,0.10)' : 'rgba(239,68,68,0.06)',
+                  border: '1px solid rgba(239,68,68,0.25)',
+                  display: 'flex', alignItems: 'flex-start', gap: 8,
+                }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <div style={{ fontSize: 12, color: '#ef4444', fontWeight: 600, lineHeight: 1.45 }}>
+                    {n.error || "L'envoi du SMS a échoué."}
+                  </div>
+                </div>
+              ) : isPending ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 10, background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', border: `1px solid ${C.border}`, fontSize: 12, color: C.muted, fontWeight: 500 }}>
+                  <span style={{ display: 'inline-flex', gap: 4 }}>
+                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: accentColor, animation: 'navDotPulse 1.2s ease-in-out 0s infinite' }} />
+                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: accentColor, animation: 'navDotPulse 1.2s ease-in-out 0.2s infinite' }} />
+                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: accentColor, animation: 'navDotPulse 1.2s ease-in-out 0.4s infinite' }} />
+                  </span>
+                  En attente de la confirmation d'envoi…
+                </div>
+              ) : n.sms_text ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {segs.map((seg, i) => (
+                    <div key={i} style={{
+                      padding: '10px 12px', borderRadius: 12,
+                      background: darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)',
+                      border: `1px solid ${darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'}`,
+                      fontSize: 12.5, color: C.text, lineHeight: 1.5, whiteSpace: 'pre-wrap',
+                      position: 'relative',
+                    }}>
+                      {segs.length > 1 && (
+                        <span style={{
+                          position: 'absolute', top: -7, left: 10,
+                          padding: '1px 7px', borderRadius: 6,
+                          background: accentColor, color: '#fff',
+                          fontSize: 9, fontWeight: 700, letterSpacing: '0.04em',
+                          transition: 'background 0.4s ease',
+                        }}>SMS {i + 1}/{segs.length}</span>
+                      )}
+                      {seg.trim()}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </div>
         );
       })(), document.body)}
     </div>
