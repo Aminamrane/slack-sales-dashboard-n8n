@@ -641,7 +641,7 @@ export default function TrackingSheet() {
       const paymentMode = saleForm.paymentModality === 'M' ? 'MONTHLY' : 'YEARLY';
       const emailVal = saleForm.email.trim().toLowerCase();
 
-      // Step 1: Backend — create client
+      // Backend — create client + trigger n8n webhooks server-side (fire-and-forget)
       let clientNumero = null;
       try {
         const res = await apiClient.post(`/api/v1/tracking/leads/${leadId}/declare-sale`, {
@@ -655,37 +655,13 @@ export default function TrackingSheet() {
         if (err?.status === 400) { alert(msg || 'Les dates Onboarding et Lancement doivent être remplies.'); setSaleSubmitting(false); return; }
         if (err?.status === 409) { alert(msg || 'Un client avec cet email existe déjà.'); setSaleSubmitting(false); return; }
         if (err?.status === 403 || err?.status === 404) { alert(msg || 'Lead introuvable ou accès refusé.'); setSaleSubmitting(false); return; }
-        console.warn('declare-sale failed, continuing with webhook:', err);
+        console.error('declare-sale failed:', err);
+        alert(msg || 'Erreur lors de la déclaration de vente.');
+        setSaleSubmitting(false);
+        return;
       }
 
-      // Step 2: Webhook n8n (fire-and-forget with retries, same as Leaderboard)
-      const webhookUrl = import.meta.env.VITE_N8N_SALES_WEBHOOK_URL || 'https://n8nmay.xyz/webhook/6c57e2c2-79c7-4e21-ad42-6dfe0abc6839';
-      const payload = {
-        email: emailVal,
-        payment_mode: paymentMode,
-        employee_band: saleForm.employeeRange,
-        submitted_at: new Date().toISOString(),
-        source: 'TRACKING_SHEET',
-        reporter_name: user?.full_name || user?.name || '',
-        reporter_first_name: (user?.full_name || user?.name || '').split(' ')[0],
-        reporter_email: user?.email || null,
-        lead_id: leadId,
-        lead_name: lead?.full_name || '',
-      };
-      // Fire-and-forget with retries (non-blocking)
-      (async () => {
-        for (let attempt = 1; attempt <= 5; attempt++) {
-          try {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 15000 + (attempt - 1) * 5000);
-            const res = await fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: controller.signal });
-            clearTimeout(timeout);
-            if (res.ok) break;
-          } catch { if (attempt < 5) await new Promise(r => setTimeout(r, 2000 * Math.pow(2, attempt - 1))); }
-        }
-      })();
-
-      // Step 3: Success
+      // Success
       setSaleClientNumero(clientNumero);
       setSaleSuccess(true);
       setTimeout(() => { setSaleSuccess(false); setSaleClientNumero(null); setShowSaleModal(null); setSaleForm({ email: '', paymentModality: 'M', employeeRange: '' }); }, 2500);
