@@ -474,11 +474,21 @@ export default function TrackingSheet() {
               return { ...notif, openedAt: Date.now() };
             });
             if (smsNotifTimerRef.current) clearTimeout(smsNotifTimerRef.current);
-            // Pending stays open until real sent/failed arrives (5-15s via Make callback).
-            // Sent/failed auto-closes after a few seconds.
-            if (notif.status !== 'pending') {
-              const dwell = notif.status === 'sent' ? 4500 : 7000;
-              smsNotifTimerRef.current = setTimeout(() => setSmsNotifPopover(null), dwell);
+            if (notif.status === 'pending') {
+              // After 5s: if no real sent/failed arrived, flip to "will be sent" (not "sent")
+              const fallbackKey = `${notif.lead_id}:${notif.sms_type}`;
+              smsNotifTimerRef.current = setTimeout(() => {
+                setSmsNotifPopover(prev => {
+                  if (!prev || `${prev.lead_id}:${prev.sms_type}` !== fallbackKey || prev.status !== 'pending') return prev;
+                  return { ...prev, status: 'queued' }; // "Le message sera envoyé"
+                });
+                // Auto-close 2s after transitioning to queued
+                setTimeout(() => closeSmsPopover(), 2000);
+              }, 5000);
+            } else {
+              // Real sent/failed — show for 2s then close
+              const dwell = notif.status === 'sent' ? 2000 : 5000;
+              smsNotifTimerRef.current = setTimeout(() => closeSmsPopover(), dwell);
             }
             break;
           }
@@ -577,7 +587,6 @@ export default function TrackingSheet() {
   const [relanceError, setRelanceError] = useState(null);
   const smsRepondeurRef = useRef(null);
   const smsNoshowRef = useRef(null);
-  const smsReminderRef = useRef(null);
   const [sendingSms, setSendingSms] = useState(null); // { leadId, smsType } while sending
   const [smsJustSent, setSmsJustSent] = useState(null); // { leadId, smsType } flash feedback
   const [spotlightQuery, setSpotlightQuery] = useState('');
@@ -891,8 +900,12 @@ export default function TrackingSheet() {
   // SMS notifications (live via WebSocket sms_notification events)
   // SMS popover (live via WebSocket sms_notification events) — ephemeral, anchored to navbar notif item
   const [smsNotifPopover, setSmsNotifPopover] = useState(null); // current { id, status, lead_id, lead_name, lead_phone, sms_type, sms_text, segments, error, sent_at }
+  const [smsNotifClosing, setSmsNotifClosing] = useState(false); // triggers exit animation
   const smsNotifTimerRef = useRef(null);
-  const notifNavItemRef = useRef(null); // ref to sidebar notif nav item for popover anchoring
+  const closeSmsPopover = () => {
+    setSmsNotifClosing(true);
+    setTimeout(() => { setSmsNotifPopover(null); setSmsNotifClosing(false); }, 450);
+  };
   const prevNotifKeysRef = useRef(null); // track notif keys across polls
   const [activeWorkflow, setActiveWorkflow] = useState(null); // { leadId, contactResult, appointmentResult, r1Result, r1FollowUp, r2Result, newDate }
 
@@ -1855,6 +1868,10 @@ export default function TrackingSheet() {
           55%  { opacity: 1; transform: translateX(3px) scale(1.015); filter: blur(0); }
           100% { opacity: 1; transform: translateX(0) scale(1); filter: blur(0); }
         }
+        @keyframes smsPopoverOut {
+          0%   { opacity: 1; transform: translateY(0) scale(1); }
+          100% { opacity: 0; transform: translateY(14px) scale(0.96); }
+        }
         @keyframes smsNotifExpand {
           0%   { opacity: 0; max-height: 0; transform: translateY(-4px); }
           60%  { opacity: 1; }
@@ -2173,7 +2190,6 @@ export default function TrackingSheet() {
               return (
                 <div
                   key={item.key}
-                  ref={item.key === 'notifications' ? notifNavItemRef : undefined}
                   onClick={() => { setSidebarView(item.key); if (item.key !== 'leads') setSelectedLead(null); }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6,
@@ -3318,11 +3334,8 @@ export default function TrackingSheet() {
                         setRelanceSaving(false);
                       };
 
-                      // ── SMS Editor (renders inline, supports split mode) ─
-                      const SMS_MAX_SINGLE = relanceSettings.sms_max_single ?? 276;
-                      const SMS_MAX_SPLIT = relanceSettings.sms_max_split ?? 552;
-                      const SMS_MARKER = relanceSettings.sms_split_marker || '[SPLIT]';
-                      const SMS_SPLIT_ENABLED = relanceSettings.sms_split_enabled ?? true;
+                      // ── SMS Editor (single SMS, 276 chars max) ─
+                      const SMS_MAX = relanceSettings.sms_max_single ?? 276;
                       const counterColor = (len, max) => {
                         if (len >= max) return '#ef4444';
                         if (len >= max - 25) return '#f59e0b';
@@ -3330,93 +3343,24 @@ export default function TrackingSheet() {
                       };
                       const renderSmsEditor = (fieldKey, accentColor, refObj, placeholder) => {
                         const value = relanceSettings[fieldKey] || '';
-                        if (!SMS_SPLIT_ENABLED) {
-                          // Mode 1 SMS — block input at maxSingle
-                          const handleChange = (e) => {
-                            const v = e.target.value;
-                            if (v.length > SMS_MAX_SINGLE) return;
-                            updateRelance(fieldKey, v);
-                          };
-                          return (
-                            <div>
-                              <label style={labelStyle}>Template SMS</label>
-                              <textarea ref={refObj} value={value} onChange={handleChange} maxLength={SMS_MAX_SINGLE}
-                                placeholder={placeholder}
-                                style={{ ...inputStyle, minHeight: 80, resize: 'vertical', lineHeight: 1.5 }}
-                                onFocus={(e) => e.currentTarget.style.borderColor = accentColor}
-                                onBlur={(e) => e.currentTarget.style.borderColor = C.border} />
-                              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: counterColor(value.length, SMS_MAX_SINGLE), fontVariantNumeric: 'tabular-nums', fontFamily: 'inherit' }}>
-                                  {value.length} / {SMS_MAX_SINGLE}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        }
-                        // Mode 2 SMS — split enabled
-                        const markerIdx = value.indexOf(SMS_MARKER);
-                        const hasMarker = markerIdx !== -1;
-                        const seg1 = hasMarker ? value.slice(0, markerIdx) : value;
-                        const seg2 = hasMarker ? value.slice(markerIdx + SMS_MARKER.length) : '';
-                        const totalNoMarker = hasMarker ? (value.length - SMS_MARKER.length) : value.length;
                         const handleChange = (e) => {
                           const v = e.target.value;
-                          if (v.length > SMS_MAX_SPLIT + SMS_MARKER.length) return;
+                          if (v.length > SMS_MAX) return;
                           updateRelance(fieldKey, v);
-                        };
-                        const insertMarker = () => {
-                          const ta = refObj.current;
-                          if (!ta || hasMarker) return;
-                          const start = ta.selectionStart || 0;
-                          const end = ta.selectionEnd || 0;
-                          const newVal = value.slice(0, start) + SMS_MARKER + value.slice(end);
-                          updateRelance(fieldKey, newVal);
-                          setTimeout(() => {
-                            if (refObj.current) {
-                              refObj.current.focus();
-                              const pos = start + SMS_MARKER.length;
-                              refObj.current.setSelectionRange(pos, pos);
-                            }
-                          }, 0);
                         };
                         return (
                           <div>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                              <label style={{ ...labelStyle, marginBottom: 0 }}>Template SMS (2 messages)</label>
-                              <button type="button" onClick={insertMarker} disabled={hasMarker} style={{
-                                fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6,
-                                border: `1px solid ${hasMarker ? C.border : accentColor}`,
-                                background: hasMarker ? 'transparent' : `${accentColor}12`,
-                                color: hasMarker ? C.muted : accentColor,
-                                cursor: hasMarker ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
-                                transition: 'all 0.15s',
-                              }}>{hasMarker ? 'Coupure insérée' : 'Insérer la coupure'}</button>
-                            </div>
-                            <textarea ref={refObj} value={value} onChange={handleChange}
+                            <label style={labelStyle}>Template SMS</label>
+                            <textarea ref={refObj} value={value} onChange={handleChange} maxLength={SMS_MAX}
                               placeholder={placeholder}
-                              style={{ ...inputStyle, minHeight: 110, resize: 'vertical', lineHeight: 1.5 }}
+                              style={{ ...inputStyle, minHeight: 80, resize: 'vertical', lineHeight: 1.5 }}
                               onFocus={(e) => e.currentTarget.style.borderColor = accentColor}
                               onBlur={(e) => e.currentTarget.style.borderColor = C.border} />
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, gap: 12, flexWrap: 'wrap' }}>
-                              <div style={{ display: 'flex', gap: 14 }}>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: counterColor(seg1.length, SMS_MAX_SINGLE), fontVariantNumeric: 'tabular-nums', fontFamily: 'inherit' }}>
-                                  SMS 1 : {seg1.length} / {SMS_MAX_SINGLE}
-                                </span>
-                                {hasMarker && (
-                                  <span style={{ fontSize: 11, fontWeight: 700, color: counterColor(seg2.length, SMS_MAX_SINGLE), fontVariantNumeric: 'tabular-nums', fontFamily: 'inherit' }}>
-                                    SMS 2 : {seg2.length} / {SMS_MAX_SINGLE}
-                                  </span>
-                                )}
-                              </div>
-                              <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, fontVariantNumeric: 'tabular-nums', fontFamily: 'inherit' }}>
-                                Total : {totalNoMarker} / {SMS_MAX_SPLIT}
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: counterColor(value.length, SMS_MAX), fontVariantNumeric: 'tabular-nums', fontFamily: 'inherit' }}>
+                                {value.length} / {SMS_MAX}
                               </span>
                             </div>
-                            {!hasMarker && value.length > SMS_MAX_SINGLE && (
-                              <div style={{ marginTop: 6, fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>
-                                Insérez la coupure pour découper en 2 SMS
-                              </div>
-                            )}
                           </div>
                         );
                       };
@@ -3458,36 +3402,12 @@ export default function TrackingSheet() {
                               SMS
                             </div>
 
-                            {/* Global Split toggle */}
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, marginBottom: 12 }}>
-                              <div>
-                                <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Découper en 2 SMS</div>
-                                <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Place <span style={{ fontFamily: 'monospace', padding: '1px 5px', borderRadius: 4, background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }}>{SMS_MARKER}</span> dans tes templates pour couper en 2 messages (max {SMS_MAX_SPLIT} chars total). Sinon, 1 SMS de {SMS_MAX_SINGLE} chars max.</div>
-                              </div>
-                              <button onClick={async () => {
-                                const newVal = !SMS_SPLIT_ENABLED;
-                                updateRelance('sms_split_enabled', newVal);
-                                try { await apiClient.put('/api/v1/tracking/relance-settings', { sms_split_enabled: newVal }); } catch (e) {
-                                  const msg = e?.data?.detail || e?.message || 'Erreur';
-                                  setRelanceError(msg);
-                                  setTimeout(() => setRelanceError(null), 6000);
-                                  updateRelance('sms_split_enabled', !newVal); // rollback
-                                }
-                              }} style={{
-                                width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
-                                background: SMS_SPLIT_ENABLED ? C.accent : (darkMode ? '#3a3b46' : '#d1d5db'),
-                                position: 'relative', transition: 'background 0.2s', flexShrink: 0,
-                              }}>
-                                <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: SMS_SPLIT_ENABLED ? 23 : 3, transition: 'left 0.2s cubic-bezier(0.34,1.56,0.64,1)', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
-                              </button>
-                            </div>
-
                             {/* SMS Répondeur */}
                             <div style={{ padding: '16px 20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, marginBottom: 12 }}>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: relanceSettings.sms_enabled ? 14 : 0 }}>
                                 <div>
                                   <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>SMS Répondeur</div>
-                                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Envoyer un SMS quand un lead passe en Répondeur</div>
+                                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>SMS envoyé manuellement via le bouton sur la fiche du lead</div>
                                 </div>
                                 <button onClick={async () => {
                                   const newVal = !relanceSettings.sms_enabled;
@@ -3503,25 +3423,6 @@ export default function TrackingSheet() {
                               </div>
                               {relanceSettings.sms_enabled && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, opacity: 1, transition: 'opacity 0.3s' }}>
-                                  <div>
-                                    <label style={labelStyle}>Mode d'envoi</label>
-                                    <div style={{ display: 'flex', gap: 8 }}>
-                                      {[{ value: 'auto', label: 'Automatique' }, { value: 'manual', label: 'Manuel' }].map(m => (
-                                        <button key={m.value} onClick={async () => {
-                                          updateRelance('sms_mode', m.value);
-                                          try { await apiClient.put('/api/v1/tracking/relance-settings', { sms_mode: m.value }); } catch {}
-                                        }} style={{
-                                          padding: '8px 20px', borderRadius: 8, border: `1px solid ${relanceSettings.sms_mode === m.value ? '#10b981' : C.border}`,
-                                          background: relanceSettings.sms_mode === m.value ? 'rgba(16,185,129,0.08)' : 'transparent',
-                                          color: relanceSettings.sms_mode === m.value ? '#10b981' : C.secondary,
-                                          fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-                                        }}>{m.label}</button>
-                                      ))}
-                                    </div>
-                                    <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
-                                      {relanceSettings.sms_mode === 'auto' ? 'Le SMS sera envoyé automatiquement dès passage en Répondeur' : 'Le SMS sera envoyé uniquement via le bouton sur la fiche du lead'}
-                                    </div>
-                                  </div>
                                   {renderSmsEditor('sms_repondeur_template', '#10b981', smsRepondeurRef, 'Bonjour {lead_name}, je vous ai appelé concernant votre entreprise...')}
                                 </div>
                               )}
@@ -3532,7 +3433,7 @@ export default function TrackingSheet() {
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: relanceSettings.sms_noshow_enabled ? 14 : 0 }}>
                                 <div>
                                   <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>SMS Lapin / No-show</div>
-                                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Envoyer un SMS quand un R1/R2/R3 est marqué no-show ou annulé</div>
+                                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>SMS envoyé manuellement quand un RDV est marqué no-show</div>
                                 </div>
                                 <button onClick={async () => {
                                   const newVal = !relanceSettings.sms_noshow_enabled;
@@ -3549,27 +3450,6 @@ export default function TrackingSheet() {
                               {relanceSettings.sms_noshow_enabled && renderSmsEditor('sms_noshow_template', '#f59e0b', smsNoshowRef, "Bonjour {lead_name}, nous avions rendez-vous aujourd'hui...")}
                             </div>
 
-                            {/* SMS Rappel veille */}
-                            <div style={{ padding: '16px 20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, marginBottom: 12 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: relanceSettings.sms_reminder_enabled ? 14 : 0 }}>
-                                <div>
-                                  <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>SMS Rappel veille</div>
-                                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Envoyer un SMS la veille d'un R1 ou R2 (uniquement si &gt;48h entre le placement et le RDV)</div>
-                                </div>
-                                <button onClick={async () => {
-                                  const newVal = !relanceSettings.sms_reminder_enabled;
-                                  updateRelance('sms_reminder_enabled', newVal);
-                                  try { await apiClient.put('/api/v1/tracking/relance-settings', { sms_reminder_enabled: newVal }); } catch {}
-                                }} style={{
-                                  width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
-                                  background: relanceSettings.sms_reminder_enabled ? '#3b82f6' : (darkMode ? '#3a3b46' : '#d1d5db'),
-                                  position: 'relative', transition: 'background 0.2s',
-                                }}>
-                                  <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: relanceSettings.sms_reminder_enabled ? 23 : 3, transition: 'left 0.2s cubic-bezier(0.34,1.56,0.64,1)', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
-                                </button>
-                              </div>
-                              {relanceSettings.sms_reminder_enabled && renderSmsEditor('sms_reminder_template', '#3b82f6', smsReminderRef, 'Bonjour {lead_name}, je vous rappelle notre rendez-vous demain à {rdv_time} ({rdv_date})...')}
-                            </div>
                           </div>
 
                           {/* Relance templates */}
@@ -6053,7 +5933,6 @@ export default function TrackingSheet() {
                 const smsTypes = [
                   { key: 'sms_repondeur', label: 'SMS Répondeur', color: '#10b981', icon: '📱' },
                   { key: 'sms_noshow', label: 'SMS Lapin', color: '#f59e0b', icon: '🐰' },
-                  { key: 'sms_reminder', label: 'SMS Rappel', color: '#3b82f6', icon: '🔔' },
                 ];
                 const history = lead.sms_history || [];
                 const sentTypes = new Set(history.map(h => h.type));
@@ -6064,14 +5943,22 @@ export default function TrackingSheet() {
                   setSendingSms({ leadId: lead.id, smsType });
                   try {
                     const resp = await apiClient.post(`/api/v1/tracking/leads/${lead.id}/send-sms`, { sms_type: smsType });
-                    if (resp.sent) {
-                      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, sms_count: resp.sms_count, sms_history: resp.sms_history } : l));
+                    if (resp.sent || resp.queued) {
+                      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, sms_count: (l.sms_count || 0) + 1, sms_history: resp.sms_history || l.sms_history } : l));
                       setSmsJustSent({ leadId: lead.id, smsType });
                       setTimeout(() => setSmsJustSent(null), 2000);
                     } else {
-                      alert(resp.reason === 'already_sent' ? 'Ce SMS a déjà été envoyé à ce prospect' : (resp.reason || 'Erreur'));
+                      const REASON_MESSAGES = {
+                        already_sent: 'Ce prospect a déjà reçu cette relance.',
+                        daily_limit_reached: `Limite quotidienne atteinte (${resp.sent_today || '?'}/${resp.daily_limit || resp.limit || 30}). Vos SMS reprendront demain.`,
+                        monthly_limit_reached: 'Limite mensuelle atteinte.',
+                        not_french_mobile: 'Ce numéro n\'est pas un mobile français (06/07).',
+                        message_too_long: 'Le message dépasse 276 caractères.',
+                        links_not_allowed: 'Les liens ne sont pas autorisés dans les SMS.',
+                      };
+                      alert(REASON_MESSAGES[resp.reason] || resp.reason || 'Erreur');
                     }
-                  } catch (e) { console.error('SMS send failed:', e); alert('Erreur lors de l\'envoi du SMS'); }
+                  } catch (e) { console.error('SMS send failed:', e); alert(e?.data?.detail || e?.message || 'Erreur lors de l\'envoi du SMS'); }
                   setSendingSms(null);
                 };
                 return (
@@ -7609,16 +7496,16 @@ export default function TrackingSheet() {
         const isPending = n.status === 'pending';
         const isSent = n.status === 'sent';
         const isFailed = n.status === 'failed';
-        const accentColor = isFailed ? '#ef4444' : isSent ? '#10b981' : '#5b6abf';
+        const isQueued = n.status === 'queued';
+        const accentColor = isFailed ? '#ef4444' : isSent ? '#10b981' : isQueued ? '#5b6abf' : '#5b6abf';
         const SMS_TYPE_LABELS = {
           sms_repondeur: 'SMS Répondeur',
           sms_noshow: 'SMS Lapin',
-          sms_reminder: 'SMS Rappel veille',
         };
-        const subtitle = isFailed ? "Erreur d'envoi" : isPending ? 'Envoi en cours…' : 'Message envoyé';
+        const subtitle = isFailed ? "Erreur d'envoi" : isSent ? 'Message envoyé' : isQueued ? 'Le message sera envoyé' : 'Envoi en cours…';
         const close = () => {
           if (smsNotifTimerRef.current) clearTimeout(smsNotifTimerRef.current);
-          setSmsNotifPopover(null);
+          closeSmsPopover();
         };
         return (
           <div
@@ -7635,7 +7522,9 @@ export default function TrackingSheet() {
                 : '0 20px 60px rgba(15,23,42,0.18), 0 4px 16px rgba(15,23,42,0.08)',
               overflow: 'hidden',
               transformOrigin: 'left bottom',
-              animation: 'smsPopoverIn 0.55s cubic-bezier(0.34,1.56,0.64,1) both',
+              animation: smsNotifClosing
+                ? 'smsPopoverOut 0.4s cubic-bezier(0.4, 0, 1, 1) both'
+                : 'smsPopoverIn 0.55s cubic-bezier(0.34,1.56,0.64,1) both',
             }}
           >
 
@@ -7668,6 +7557,11 @@ export default function TrackingSheet() {
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                   </div>
                 )}
+                {isQueued && (
+                  <div style={{ position: 'absolute', right: -4, bottom: -4, width: 16, height: 16, background: '#5b6abf', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(91,106,191,0.45)', animation: 'smsCheckPop 0.5s cubic-bezier(0.34,1.56,0.64,1) both' }}>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                )}
                 {isFailed && (
                   <div style={{ position: 'absolute', right: -4, bottom: -4, width: 16, height: 16, background: '#ef4444', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(239,68,68,0.45)', animation: 'smsCheckPop 0.5s cubic-bezier(0.34,1.56,0.64,1) both' }}>
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -7678,7 +7572,7 @@ export default function TrackingSheet() {
                 <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {n.lead_name || 'Prospect'}
                 </div>
-                <div style={{ fontSize: 11.5, color: isFailed ? '#ef4444' : isSent ? '#10b981' : C.muted, marginTop: 1, fontWeight: 600, transition: 'color 0.4s ease' }}>
+                <div style={{ fontSize: 11.5, color: isFailed ? '#ef4444' : isSent ? '#10b981' : isQueued ? '#5b6abf' : C.muted, marginTop: 1, fontWeight: 600, transition: 'color 0.4s ease' }}>
                   {SMS_TYPE_LABELS[n.sms_type] || 'SMS'} · {subtitle}
                 </div>
               </div>
@@ -7710,18 +7604,21 @@ export default function TrackingSheet() {
                     {n.error || "L'envoi du SMS a échoué."}
                   </div>
                 </div>
-              ) : isPending ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 10, background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', border: `1px solid ${C.border}`, fontSize: 12, color: C.muted, fontWeight: 500 }}>
-                  <span style={{ display: 'inline-flex', gap: 4 }}>
-                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: accentColor, animation: 'navDotPulse 1.2s ease-in-out 0s infinite' }} />
-                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: accentColor, animation: 'navDotPulse 1.2s ease-in-out 0.2s infinite' }} />
-                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: accentColor, animation: 'navDotPulse 1.2s ease-in-out 0.4s infinite' }} />
-                  </span>
-                  En attente de la confirmation d'envoi…
-                </div>
-              ) : n.sms_text ? (
+              ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {segs.map((seg, i) => (
+                  {/* Pending dots indicator */}
+                  {isPending && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', border: `1px solid ${C.border}`, fontSize: 12, color: C.muted, fontWeight: 500 }}>
+                      <span style={{ display: 'inline-flex', gap: 4 }}>
+                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: accentColor, animation: 'navDotPulse 1.2s ease-in-out 0s infinite' }} />
+                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: accentColor, animation: 'navDotPulse 1.2s ease-in-out 0.2s infinite' }} />
+                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: accentColor, animation: 'navDotPulse 1.2s ease-in-out 0.4s infinite' }} />
+                      </span>
+                      Envoi en cours…
+                    </div>
+                  )}
+                  {/* SMS text preview (shown for pending, sent, queued) */}
+                  {n.sms_text && segs.map((seg, i) => (
                     <div key={i} style={{
                       padding: '10px 12px', borderRadius: 12,
                       background: darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)',
@@ -7742,7 +7639,7 @@ export default function TrackingSheet() {
                     </div>
                   ))}
                 </div>
-              ) : null}
+              )}
             </div>
           </div>
         );
