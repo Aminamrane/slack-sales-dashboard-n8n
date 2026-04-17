@@ -1211,15 +1211,16 @@ export default function TrackingSheet() {
     }
   };
 
-  // Fetch contracts for all R2 leads when R2 tab is active
+  // Fetch contracts for all R2/R3 leads when R2 or R3 tab is active
   // Auto-move leads with signed contracts to "signed" tab
   const r2CatIndex = CATEGORIES.findIndex(c => c.key === 'r2');
+  const r3CatIndex = CATEGORIES.findIndex(c => c.key === 'r3');
   useEffect(() => {
-    if (activeTab !== r2CatIndex) return;
-    const r2Leads = leads.filter(l => l.status === 'r2');
-    if (r2Leads.length === 0) return;
+    if (activeTab !== r2CatIndex && activeTab !== r3CatIndex) return;
+    const contractLeads = leads.filter(l => l.status === 'r2' || l.status === 'r3');
+    if (contractLeads.length === 0) return;
     setLoadingContracts(true);
-    Promise.all(r2Leads.map(async (l) => {
+    Promise.all(contractLeads.map(async (l) => {
       const contracts = await fetchLeadContracts(l.id);
       const latest = contracts[0];
       if (latest?.yousign_status === 'done') {
@@ -1229,13 +1230,13 @@ export default function TrackingSheet() {
     })).finally(() => setLoadingContracts(false));
   }, [activeTab, leads.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── SUPABASE REALTIME: contract status updates ──────────────────────────
+  // ── SUPABASE REALTIME: contract status updates (R2 + R3) ─────────────────
   useEffect(() => {
-    if (activeTab !== r2CatIndex) return;
-    const r2Leads = leads.filter(l => l.status === 'r2');
-    if (r2Leads.length === 0) return;
+    if (activeTab !== r2CatIndex && activeTab !== r3CatIndex) return;
+    const contractLeads = leads.filter(l => l.status === 'r2' || l.status === 'r3');
+    if (contractLeads.length === 0) return;
 
-    const r2LeadIds = r2Leads.map(l => l.id);
+    const contractLeadIds = contractLeads.map(l => l.id);
     const channel = supabase
       .channel('contract-updates')
       .on(
@@ -1243,7 +1244,7 @@ export default function TrackingSheet() {
         { event: 'UPDATE', schema: 'public', table: 'contracts' },
         (payload) => {
           const updated = payload.new;
-          if (!updated.lead_id || !r2LeadIds.includes(updated.lead_id)) return;
+          if (!updated.lead_id || !contractLeadIds.includes(updated.lead_id)) return;
           fetchLeadContracts(updated.lead_id);
           // Auto-move lead to "signed" tab when contract is signed
           if (updated.yousign_status === 'done') {
