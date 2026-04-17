@@ -1222,8 +1222,8 @@ export default function TrackingSheet() {
     setLoadingContracts(true);
     Promise.all(contractLeads.map(async (l) => {
       const contracts = await fetchLeadContracts(l.id);
-      const latest = contracts[0];
-      if (latest?.yousign_status === 'done') {
+      const hasSigned = contracts.some(c => c.yousign_status === 'done');
+      if (hasSigned) {
         apiClient.patch(`/api/v1/tracking/leads/${l.id}`, { status: 'signed' }).catch(() => {});
         setLeads(prev => prev.map(ld => ld.id === l.id ? { ...ld, status: 'signed' } : ld));
       }
