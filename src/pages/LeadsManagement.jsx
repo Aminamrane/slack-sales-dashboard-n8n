@@ -133,6 +133,7 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
   const COLOR_OVERRIDES = {
     'l.mafrici@ownertechnology.com': '#ef4444',
     's.itema@ownertechnology.com': '#ef4444',
+    'm.mestiri@ownertechnology.com': '#ef4444',
     'd.dubois@ownertechnology.com': '#10b981',
     'g.derouet@ownertechnology.com': '#10b981',
   };
@@ -143,7 +144,11 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
   const getUserColor = (u) => COLOR_OVERRIDES[u.email] || NAME_COLOR_OVERRIDES[(u.full_name || '').toLowerCase()] || ROLE_COLORS[getUserRole(u)] || C.secondary;
   const COLOR_ORDER = { '#3b82f6': 0, '#10b981': 1, '#ef4444': 2, '#94a3b8': 3 };
   const sortedAssignableUsers = useMemo(() =>
-    [...(assignableUsers.length > 0 ? assignableUsers : [])].filter(u => !HIDDEN_USERS.includes(u.email)).sort((a, b) => (COLOR_ORDER[getUserColor(a)] ?? 9) - (COLOR_ORDER[getUserColor(b)] ?? 9)),
+    [...(assignableUsers.length > 0 ? assignableUsers : [])].filter(u => !HIDDEN_USERS.includes(u.email)).sort((a, b) => {
+      const colorDiff = (COLOR_ORDER[getUserColor(a)] ?? 9) - (COLOR_ORDER[getUserColor(b)] ?? 9);
+      if (colorDiff !== 0) return colorDiff;
+      return (ROLE_ORDER[getUserRole(a)] ?? 9) - (ROLE_ORDER[getUserRole(b)] ?? 9);
+    }),
   [assignableUsers]);
 
   const fetchData = async () => {
