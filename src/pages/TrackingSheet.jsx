@@ -1553,6 +1553,38 @@ export default function TrackingSheet() {
         patchData = { ...patchData, ...meetFields };
       }
     }
+    // Optimistic SMS popover — when voicemail transition + auto mode enabled,
+    // show "SMS en préparation…" instantly (doesn't wait for WS pending event)
+    // The WS handler's lead_id+sms_type merge will replace this state when real events arrive.
+    if (
+      patchData.contact_result === 'voicemail' &&
+      relanceSettings?.sms_enabled &&
+      (relanceSettings?.sms_mode || 'manual') === 'auto' &&
+      activeTab === 'new'
+    ) {
+      const lead = leads.find(l => l.id === leadId);
+      setSmsNotifPopover({
+        id: `sms-optimistic-${leadId}-${Date.now()}`,
+        status: 'preparing',
+        lead_id: leadId,
+        lead_name: lead?.full_name || '',
+        lead_phone: lead?.phone || '',
+        sms_type: 'sms_repondeur',
+        sms_text: '',
+        segments: 1,
+        error: null,
+        sent_at: new Date().toISOString(),
+        openedAt: Date.now(),
+      });
+      // Fallback: no WS event within 10s → flip to "unconfirmed"
+      if (smsNotifTimerRef.current) clearTimeout(smsNotifTimerRef.current);
+      smsNotifTimerRef.current = setTimeout(() => {
+        setSmsNotifPopover(prev => {
+          if (!prev || prev.lead_id !== leadId || prev.status !== 'preparing') return prev;
+          return { ...prev, status: 'unconfirmed' };
+        });
+      }, 10000);
+    }
     setActiveWorkflow(null);
     if (newStatus && newStatus !== currentStatus) {
       if (newStatus === 'signed') {
@@ -7553,16 +7585,18 @@ export default function TrackingSheet() {
       {smsNotifPopover && createPortal((() => {
         const n = smsNotifPopover;
         const segs = n.sms_text ? n.sms_text.split('[SPLIT]') : [''];
+        const isPreparing = n.status === 'preparing';
         const isPending = n.status === 'pending';
         const isSent = n.status === 'sent';
         const isFailed = n.status === 'failed';
         const isQueued = n.status === 'queued';
-        const accentColor = isFailed ? '#ef4444' : isSent ? '#10b981' : isQueued ? '#5b6abf' : '#5b6abf';
+        const isUnconfirmed = n.status === 'unconfirmed';
+        const accentColor = isFailed || isUnconfirmed ? (isUnconfirmed ? '#f59e0b' : '#ef4444') : isSent ? '#10b981' : '#5b6abf';
         const SMS_TYPE_LABELS = {
           sms_repondeur: 'SMS Répondeur',
           sms_noshow: 'SMS Lapin',
         };
-        const subtitle = isFailed ? "Erreur d'envoi" : isSent ? 'Message envoyé' : isQueued ? 'Le message sera envoyé' : 'Envoi en cours…';
+        const subtitle = isUnconfirmed ? 'SMS non confirmé' : isFailed ? "Erreur d'envoi" : isSent ? 'Message envoyé' : isQueued ? 'Le message sera envoyé' : isPreparing ? 'En préparation…' : 'Envoi en cours…';
         const close = () => {
           if (smsNotifTimerRef.current) clearTimeout(smsNotifTimerRef.current);
           closeSmsPopover();
@@ -7598,7 +7632,7 @@ export default function TrackingSheet() {
                 transition: 'background 0.4s ease',
               }}>
                 <img src={iconMessage} alt="" style={{ width: 20, height: 20, display: 'block' }} />
-                {isPending && (
+                {(isPending || isPreparing) && (
                   <div style={{
                     position: 'absolute', right: -4, bottom: -4, width: 16, height: 16,
                     borderRadius: '50%', background: darkMode ? '#1e1f28' : '#fff',
@@ -7610,6 +7644,11 @@ export default function TrackingSheet() {
                       <span style={{ width: 2.5, height: 2.5, borderRadius: '50%', background: accentColor, animation: 'navDotPulse 1.2s ease-in-out 0.2s infinite' }} />
                       <span style={{ width: 2.5, height: 2.5, borderRadius: '50%', background: accentColor, animation: 'navDotPulse 1.2s ease-in-out 0.4s infinite' }} />
                     </span>
+                  </div>
+                )}
+                {isUnconfirmed && (
+                  <div style={{ position: 'absolute', right: -4, bottom: -4, width: 16, height: 16, background: '#f59e0b', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(245,158,11,0.45)', animation: 'smsCheckPop 0.5s cubic-bezier(0.34,1.56,0.64,1) both' }}>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                   </div>
                 )}
                 {isSent && (
@@ -7632,7 +7671,7 @@ export default function TrackingSheet() {
                 <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {n.lead_name || 'Prospect'}
                 </div>
-                <div style={{ fontSize: 11.5, color: isFailed ? '#ef4444' : isSent ? '#10b981' : isQueued ? '#5b6abf' : C.muted, marginTop: 1, fontWeight: 600, transition: 'color 0.4s ease' }}>
+                <div style={{ fontSize: 11.5, color: isUnconfirmed ? '#f59e0b' : isFailed ? '#ef4444' : isSent ? '#10b981' : isQueued ? '#5b6abf' : C.muted, marginTop: 1, fontWeight: 600, transition: 'color 0.4s ease' }}>
                   {SMS_TYPE_LABELS[n.sms_type] || 'SMS'} · {subtitle}
                 </div>
               </div>
@@ -7652,7 +7691,19 @@ export default function TrackingSheet() {
               animation: 'smsNotifExpand 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.22s both',
               overflow: 'hidden',
             }}>
-              {isFailed ? (
+              {isUnconfirmed ? (
+                <div style={{
+                  padding: '10px 12px', borderRadius: 10,
+                  background: darkMode ? 'rgba(245,158,11,0.10)' : 'rgba(245,158,11,0.08)',
+                  border: '1px solid rgba(245,158,11,0.25)',
+                  display: 'flex', alignItems: 'flex-start', gap: 8,
+                }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <div style={{ fontSize: 12, color: darkMode ? '#fbbf24' : '#92400e', fontWeight: 600, lineHeight: 1.45 }}>
+                    Aucune confirmation reçue du serveur. Vérifie tes paramètres SMS ou contacte l'admin.
+                  </div>
+                </div>
+              ) : isFailed ? (
                 <div style={{
                   padding: '10px 12px', borderRadius: 10,
                   background: darkMode ? 'rgba(239,68,68,0.10)' : 'rgba(239,68,68,0.06)',
@@ -7666,15 +7717,15 @@ export default function TrackingSheet() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {/* Pending dots indicator */}
-                  {isPending && (
+                  {/* Pending / Preparing dots indicator */}
+                  {(isPending || isPreparing) && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', border: `1px solid ${C.border}`, fontSize: 12, color: C.muted, fontWeight: 500 }}>
                       <span style={{ display: 'inline-flex', gap: 4 }}>
                         <span style={{ width: 5, height: 5, borderRadius: '50%', background: accentColor, animation: 'navDotPulse 1.2s ease-in-out 0s infinite' }} />
                         <span style={{ width: 5, height: 5, borderRadius: '50%', background: accentColor, animation: 'navDotPulse 1.2s ease-in-out 0.2s infinite' }} />
                         <span style={{ width: 5, height: 5, borderRadius: '50%', background: accentColor, animation: 'navDotPulse 1.2s ease-in-out 0.4s infinite' }} />
                       </span>
-                      Envoi en cours…
+                      {isPreparing ? 'SMS en préparation…' : 'Envoi en cours…'}
                     </div>
                   )}
                   {/* SMS text preview (shown for pending, sent, queued) */}
