@@ -3312,7 +3312,7 @@ export default function TrackingSheet() {
                         apiClient.get('/api/v1/tracking/relance-settings').then(data => {
                           setRelanceSettings(data);
                         }).catch(() => {
-                          setRelanceSettings({ relances_enabled: false, sms_enabled: false, sms_mode: 'auto', sms_repondeur_template: '', sms_noshow_enabled: false, sms_noshow_template: '', sms_reminder_enabled: false, sms_reminder_template: '', relance1_subject: '', relance1_body: '', relance2_subject: '', relance2_body: '', sms_max_single: 276, sms_max_split: 552, sms_split_marker: '[SPLIT]', sms_split_enabled: true });
+                          setRelanceSettings({ relances_enabled: false, sms_enabled: false, sms_mode: 'manual', sms_repondeur_template: '', sms_noshow_enabled: false, sms_noshow_template: '', sms_reminder_enabled: false, sms_reminder_template: '', relance1_subject: '', relance1_body: '', relance2_subject: '', relance2_body: '', sms_max_single: 276, sms_max_split: 552, sms_split_marker: '[SPLIT]', sms_split_enabled: true });
                         }).finally(() => setRelanceLoading(false));
                       }
                       if (!relanceSettings) return <div style={{ padding: 20, textAlign: 'center', color: C.muted }}>Chargement...</div>;
@@ -3424,6 +3424,65 @@ export default function TrackingSheet() {
                               </div>
                               {relanceSettings.sms_enabled && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, opacity: 1, transition: 'opacity 0.3s' }}>
+                                  {/* Mode d'envoi — Manuel / Auto (segmented control) */}
+                                  <div>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 8 }}>Mode d'envoi</div>
+                                    <div style={{
+                                      display: 'inline-flex', padding: 3, borderRadius: 10,
+                                      background: darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
+                                      border: `1px solid ${C.border}`,
+                                    }}>
+                                      {[
+                                        { key: 'manual', label: 'Manuel' },
+                                        { key: 'auto',   label: 'Auto'   },
+                                      ].map(opt => {
+                                        const active = (relanceSettings.sms_mode || 'manual') === opt.key;
+                                        return (
+                                          <button
+                                            key={opt.key}
+                                            onClick={async () => {
+                                              if (active) return;
+                                              updateRelance('sms_mode', opt.key);
+                                              try { await apiClient.put('/api/v1/tracking/relance-settings', { sms_mode: opt.key }); } catch {}
+                                            }}
+                                            style={{
+                                              padding: '6px 16px', borderRadius: 8, border: 'none',
+                                              fontSize: 13, fontWeight: 600, cursor: active ? 'default' : 'pointer',
+                                              background: active ? (darkMode ? '#2a2b36' : '#fff') : 'transparent',
+                                              color: active ? C.text : C.muted,
+                                              boxShadow: active ? (darkMode ? '0 1px 3px rgba(0,0,0,0.3)' : '0 1px 2px rgba(0,0,0,0.08)') : 'none',
+                                              transition: 'all 0.15s',
+                                              fontFamily: 'inherit',
+                                            }}
+                                          >
+                                            {opt.label}
+                                            {active && <span style={{ marginLeft: 6, color: '#10b981' }}>✓</span>}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                    {/* Contextual helper text */}
+                                    {(relanceSettings.sms_mode || 'manual') === 'manual' ? (
+                                      <div style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>
+                                        Tu cliques sur le bouton <strong style={{ color: C.text }}>Envoyer SMS</strong> depuis la fiche du lead.
+                                      </div>
+                                    ) : (
+                                      <div style={{
+                                        fontSize: 12, marginTop: 8, lineHeight: 1.5,
+                                        padding: '10px 12px', borderRadius: 8,
+                                        background: darkMode ? 'rgba(245,158,11,0.10)' : 'rgba(245,158,11,0.08)',
+                                        border: '1px solid rgba(245,158,11,0.25)',
+                                        color: darkMode ? '#fbbf24' : '#92400e',
+                                        display: 'flex', alignItems: 'flex-start', gap: 8,
+                                      }}>
+                                        <span style={{ fontSize: 14, lineHeight: 1 }}>⚠️</span>
+                                        <span>
+                                          Le SMS répondeur partira <strong>automatiquement</strong> dès que tu classeras un lead en répondeur. Les horaires et rate limits s'appliquent toujours.
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+
                                   {renderSmsEditor('sms_repondeur_template', '#10b981', smsRepondeurRef, 'Bonjour {lead_name}, je vous ai appelé concernant votre entreprise...')}
                                 </div>
                               )}
