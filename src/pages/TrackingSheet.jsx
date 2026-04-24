@@ -4728,20 +4728,47 @@ export default function TrackingSheet() {
                         );
                       })()}
 
-                      {/* First call time (voicemail/callback) */}
+                      {/* Call timestamps (voicemail/callback). Two pills side-by-side:
+                          "1er" = first_call_at (existing, now shows date + time) in indigo,
+                          "Dernier" = last_call_at (new field) in teal. The sales rep
+                          needs to know when they last tried — not just the first attempt. */}
                       {(activeCat.key === 'voicemail' || activeCat.key === 'callback') && lead.first_call_at && (() => {
                         const d = new Date(lead.first_call_at);
+                        const dd = String(d.getDate()).padStart(2, '0');
+                        const mo = String(d.getMonth() + 1).padStart(2, '0');
                         const hh = String(d.getHours()).padStart(2, '0');
-                        const mm = String(d.getMinutes()).padStart(2, '0');
+                        const mi = String(d.getMinutes()).padStart(2, '0');
                         return (
-                          <span title={`Premier appel le ${d.toLocaleDateString('fr-FR')}`} style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 3,
-                            padding: '2px 7px', borderRadius: 50, fontSize: 10, fontWeight: 600, flexShrink: 0,
+                          <span title={`Premier appel : ${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à ${hh}h${mi}`} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 600, flexShrink: 0,
                             background: darkMode ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.06)',
                             color: '#6366f1',
                           }}>
                             <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                            {hh}h{mm}
+                            1er {dd}/{mo} {hh}h{mi}
+                          </span>
+                        );
+                      })()}
+                      {(activeCat.key === 'voicemail' || activeCat.key === 'callback') && lead.last_call_at && lead.last_call_at !== lead.first_call_at && (() => {
+                        // Hide "Dernier" when it equals "1er" — avoids the redundant
+                        // case after a single call (or on backfilled historical rows
+                        // where backend set last = first). Absence carries meaning:
+                        // no "Dernier" pill ⇒ rep has only called once.
+                        const d = new Date(lead.last_call_at);
+                        const dd = String(d.getDate()).padStart(2, '0');
+                        const mo = String(d.getMonth() + 1).padStart(2, '0');
+                        const hh = String(d.getHours()).padStart(2, '0');
+                        const mi = String(d.getMinutes()).padStart(2, '0');
+                        return (
+                          <span title={`Dernier appel : ${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à ${hh}h${mi}`} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 600, flexShrink: 0,
+                            background: darkMode ? 'rgba(20,184,166,0.14)' : 'rgba(20,184,166,0.08)',
+                            color: '#14b8a6',
+                          }}>
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            Dernier {dd}/{mo} {hh}h{mi}
                           </span>
                         );
                       })()}
@@ -5022,12 +5049,24 @@ export default function TrackingSheet() {
                     </span>
                   )}
                 </div>
-                {(activeCat.key === 'callback' || activeCat.key === 'voicemail') && (lead.call_attempts > 0 || lead.first_call_at) && (
-                  <div style={{ fontSize: 12, color: C.muted, fontStyle: 'italic', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+                {(activeCat.key === 'callback' || activeCat.key === 'voicemail') && (lead.call_attempts > 0 || lead.first_call_at || lead.last_call_at) && (
+                  <div style={{ fontSize: 12, color: C.muted, fontStyle: 'italic', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     {lead.call_attempts > 0 && <span>Appelé {lead.call_attempts} fois</span>}
                     {lead.first_call_at && (() => {
                       const d = new Date(lead.first_call_at);
-                      return <span style={{ fontStyle: 'normal', fontWeight: 600, color: '#6366f1', fontSize: 11 }}>1er appel : {String(d.getHours()).padStart(2,'0')}h{String(d.getMinutes()).padStart(2,'0')}</span>;
+                      const dateLabel = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+                      const hh = String(d.getHours()).padStart(2,'0');
+                      const mi = String(d.getMinutes()).padStart(2,'0');
+                      return <span style={{ fontStyle: 'normal', fontWeight: 600, color: '#6366f1', fontSize: 11 }}>1er appel : {dateLabel} à {hh}h{mi}</span>;
+                    })()}
+                    {lead.last_call_at && lead.last_call_at !== lead.first_call_at && (() => {
+                      // See note on the compact badge: hide when equal to first_call_at
+                      // (single-call leads or backfilled historical rows).
+                      const d = new Date(lead.last_call_at);
+                      const dateLabel = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+                      const hh = String(d.getHours()).padStart(2,'0');
+                      const mi = String(d.getMinutes()).padStart(2,'0');
+                      return <span style={{ fontStyle: 'normal', fontWeight: 600, color: '#14b8a6', fontSize: 11 }}>Dernier appel : {dateLabel} à {hh}h{mi}</span>;
                     })()}
                   </div>
                 )}
@@ -5617,13 +5656,17 @@ export default function TrackingSheet() {
                 // Preserve original first contact date if already set (callback/voicemail leads have been contacted before)
                 const firstContactDate = lead.first_contact_date ? lead.first_contact_date.slice(0, 10) : today;
                 const isReContact = activeCat.key === 'callback' || activeCat.key === 'voicemail';
-                // On callback/voicemail tabs, "Répondeur" / "À rappeler" should NOT move the lead — just bump call_attempts
+                // On callback/voicemail tabs, "Répondeur" / "À rappeler" should NOT move the lead — just bump call_attempts.
+                // We also send `status: activeCat.key` (voicemail or callback — same value as current tab) so the backend's
+                // `last_call_at` hook fires. The hook is guarded by `status in ("voicemail", "callback")` in the payload;
+                // sending the current status is a no-op for the lead's position but satisfies that condition.
                 const bumpCallAttempts = async () => {
                   const currentLead = leads.find(l => l.id === lead.id) || lead;
                   const newAttempts = (currentLead.call_attempts || 0) + 1;
-                  setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, call_attempts: newAttempts, first_contact_date: l.first_contact_date || today } : l));
+                  const nowIso = new Date().toISOString();
+                  setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, call_attempts: newAttempts, first_contact_date: l.first_contact_date || today, last_call_at: nowIso, first_call_at: l.first_call_at || nowIso } : l));
                   try {
-                    await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { call_attempts: newAttempts, first_contact_date: firstContactDate });
+                    await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { call_attempts: newAttempts, first_contact_date: firstContactDate, status: activeCat.key });
                   } catch (e) { console.error('bump call_attempts failed:', e); }
                   setActiveWorkflow(null);
                 };
