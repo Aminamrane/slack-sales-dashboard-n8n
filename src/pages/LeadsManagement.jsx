@@ -599,7 +599,7 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead>
                         <tr>
-                          {['Origine', 'Date', 'Nom & Prénom', 'Salariés', 'CA', 'Assigné à'].map((h, i) => (
+                          {['Origine', 'Date', 'Nom & Prénom', 'Salariés', 'CA', 'Campagne', 'Assigné à'].map((h, i) => (
                             <th key={h} style={{
                               padding: '12px 16px', fontSize: 10.5, fontWeight: 700, color: C.muted,
                               textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: h === 'Salariés' ? 'center' : 'left',
@@ -680,6 +680,11 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
                             </td>
                             <td style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}`, fontSize: 13, color: C.text, fontWeight: 500 }}>
                               {lead.revenue || '—'}
+                            </td>
+                            <td style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}`, fontSize: 13, color: C.text, fontWeight: 500, maxWidth: 220 }} title={lead.campaign_name || undefined}>
+                              <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {lead.campaign_name || ''}
+                              </span>
                             </td>
                             <td style={{ padding: '8px 12px', borderBottom: `1px solid ${C.border}`, position: 'relative' }} onClick={(e) => e.stopPropagation()}>
                               {(() => {
