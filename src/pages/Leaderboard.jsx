@@ -2366,7 +2366,7 @@ export default function Leaderboard() {
   };
 
   // Monthly sales objectives
-  const MONTHLY_OBJECTIVES = { '2026-03': 50, '2026-04': 50, '2026-05': 100, '2026-06': 130 };
+  const MONTHLY_OBJECTIVES = { '2026-03': 50, '2026-04': 50, '2026-05': 60, '2026-06': 130 };
   const viewingMonth = range && range !== 'all' ? range : new Date().toISOString().slice(0, 7);
   const monthlyObjective = MONTHLY_OBJECTIVES[viewingMonth] || 45;
 
