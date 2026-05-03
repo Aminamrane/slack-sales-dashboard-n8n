@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
+// ── TIME PICKER 24h FR ────────────────────────────────────────────────────────
+// Inspired by TimeSelect in TrackingSheet.jsx (sacred zone — duplicated, not imported).
+// Plages : 08h → 20h, pas de 5 minutes. Tout en 24h, pas d'AM/PM.
+const HOURS_FR = Array.from({ length: 13 }, (_, i) => String(i + 8).padStart(2, "0")); // 08 → 20
+const MINUTES_FR = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
+
 /**
  * Modale Place R1 / Place R2.
  * - kind="r1" ou "r2"
@@ -174,11 +180,11 @@ export default function PlaceR1R2Modal({
                 />
               </Field>
               <Field label="Heure" darkMode={darkMode}>
-                <input
-                  type="time"
+                <TimeSelectFR
                   value={time}
-                  onChange={(e) => setTime(e.target.value)}
-                  style={inputStyle(C)}
+                  onChange={setTime}
+                  C={C}
+                  darkMode={darkMode}
                 />
               </Field>
             </div>
@@ -305,4 +311,83 @@ function btnGhost(C, disabled) {
     opacity: disabled ? 0.6 : 1,
     fontFamily: "inherit",
   };
+}
+
+/**
+ * TimeSelectFR — picker 24h FR (heure + minutes) en 2 selects natifs.
+ * Format value/onChange : "HH:MM" sur 24h. Plages : 08h → 20h, pas de 5 min.
+ * Auto-arrondi : si la minute reçue n'est pas un multiple de 5, on prend le
+ * cran le plus proche (idem TimeSelect TrackingSheet).
+ */
+function TimeSelectFR({ value, onChange, C, darkMode }) {
+  const safe = value && /^\d{2}:\d{2}$/.test(value) ? value : "10:00";
+  const h = safe.slice(0, 2);
+  const rawMin = safe.slice(3, 5);
+  const m = MINUTES_FR.reduce(
+    (prev, curr) =>
+      Math.abs(parseInt(curr) - parseInt(rawMin)) <
+      Math.abs(parseInt(prev) - parseInt(rawMin))
+        ? curr
+        : prev,
+    "00"
+  );
+  // Si l'heure n'est pas dans la plage 08–20, on garde quand même la value
+  // affichée en option custom pour ne pas perdre l'état (edge case).
+  const hOptions = HOURS_FR.includes(h) ? HOURS_FR : [h, ...HOURS_FR];
+
+  const selectStyle = {
+    padding: "9px 22px 9px 11px",
+    borderRadius: 10,
+    border: `1px solid ${C.border}`,
+    background: C.inputBg,
+    color: C.text,
+    fontSize: 13.5,
+    fontWeight: 500,
+    fontFamily: "inherit",
+    cursor: "pointer",
+    outline: "none",
+    appearance: "none",
+    WebkitAppearance: "none",
+    MozAppearance: "none",
+    textAlign: "center",
+    flex: 1,
+    minWidth: 0,
+    boxSizing: "border-box",
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='${
+      darkMode ? "%235e6273" : "%239ca3af"
+    }' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
+    backgroundRepeat: "no-repeat",
+    backgroundPosition: "right 8px center",
+    transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 6, alignItems: "center", width: "100%" }}>
+      <select
+        value={h}
+        onChange={(e) => onChange(e.target.value + ":" + m)}
+        style={selectStyle}
+        aria-label="Heure"
+      >
+        {hOptions.map((hr) => (
+          <option key={hr} value={hr}>
+            {hr}h
+          </option>
+        ))}
+      </select>
+      <span style={{ color: C.muted, fontSize: 13, fontWeight: 600 }}>:</span>
+      <select
+        value={m}
+        onChange={(e) => onChange(h + ":" + e.target.value)}
+        style={selectStyle}
+        aria-label="Minutes"
+      >
+        {MINUTES_FR.map((mi) => (
+          <option key={mi} value={mi}>
+            {mi}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 }
