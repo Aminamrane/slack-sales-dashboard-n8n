@@ -434,6 +434,36 @@ export default function TrackingSheet() {
             }
             break;
           }
+          case 'setter_called': {
+            // Un setter vient d'appeler un lead du sales propriétaire de la sheet.
+            // Refetch le lead pour récupérer les valeurs serveur officielles
+            // (`setter_called_by_name`, `setter_called_at`, `setter_call_count`)
+            // — le payload WS contient `setter_name` mais pas le timestamp serveur.
+            // Highlight bref + remontée en tête de liste via le tri sur `setter_called_at`.
+            if (!msg.lead_id) break;
+            const lid = String(msg.lead_id);
+            setHighlightedLeadId(lid);
+            setTimeout(() => setHighlightedLeadId(null), 2500);
+            if (leadFetchTimers.current[lid]) clearTimeout(leadFetchTimers.current[lid]);
+            leadFetchTimers.current[lid] = setTimeout(async () => {
+              delete leadFetchTimers.current[lid];
+              try {
+                const updated = await apiClient.get(`/api/v1/tracking/leads/${lid}`);
+                if (updated && updated.id) {
+                  setLeads(prev => {
+                    const exists = prev.some(l => String(l.id) === lid);
+                    if (exists) return prev.map(l => String(l.id) === lid ? { ...l, ...updated } : l);
+                    return [...prev, updated];
+                  });
+                }
+              } catch (err) {
+                if (err.status === 404 || err.status === 403) {
+                  setLeads(prev => prev.filter(l => String(l.id) !== lid));
+                }
+              }
+            }, 300);
+            break;
+          }
           case 'tab_change':
             if (msg.email === user.email) break;
             setRemoteUserTabs(prev => ({ ...prev, [msg.email]: msg.tab }));
@@ -4773,16 +4803,17 @@ export default function TrackingSheet() {
                         );
                       })()}
 
-                      {/* Anti-spam : badge "Setter <nom> ×N" affiché en voicemail/callback
-                          quand un setter a déjà rappelé ce lead, pour éviter un double
-                          appel par le sales propriétaire. Lecture seule, aucun handler.
-                          Champs sources : `setter_called_by_name` (fallback `setter_called_by`,
-                          puis 'Setter') + `setter_call_count`. */}
-                      {(activeCat.key === 'voicemail' || activeCat.key === 'callback')
-                        && (lead.setter_called_by_name || lead.setter_called_by) && (() => {
+                      {/* Bandeau "En traitement par <setter>" — TOUJOURS visible sur la card
+                          pliée, peu importe l'onglet (R1, R2, voicemail, callback, etc.).
+                          Signal fort pour éviter qu'un sales appelle un lead qu'un setter
+                          est en train de retravailler. Lecture seule, aucun handler.
+                          Champs sources (payload WS `setter_called` + lead refetch) :
+                            `setter_called_by_name` (fallback `setter_called_by`, puis 'Setter')
+                            + `setter_call_count` + `setter_called_at`. */}
+                      {(lead.setter_called_by_name || lead.setter_called_by) && (() => {
                         const setterName = lead.setter_called_by_name || lead.setter_called_by || 'Setter';
                         const cnt = Number(lead.setter_call_count || 0);
-                        const tooltipParts = [`Setter : ${setterName}`];
+                        const tooltipParts = [`En traitement par ${setterName}`];
                         if (cnt > 0) tooltipParts.push(`Tentatives setter : ${cnt}`);
                         if (lead.setter_called_at) {
                           try {
@@ -4796,17 +4827,19 @@ export default function TrackingSheet() {
                         }
                         return (
                           <span title={tooltipParts.join(' • ')} style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 4,
-                            padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 600, flexShrink: 0,
-                            background: darkMode ? 'rgba(245,158,11,0.16)' : 'rgba(245,158,11,0.10)',
-                            color: '#f59e0b',
-                            border: `1px solid ${darkMode ? 'rgba(245,158,11,0.30)' : 'rgba(245,158,11,0.22)'}`,
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            padding: '3px 10px', borderRadius: 50, fontSize: 10.5, fontWeight: 700, flexShrink: 0,
+                            background: darkMode ? 'rgba(245,158,11,0.20)' : 'rgba(245,158,11,0.13)',
+                            color: '#d97706',
+                            border: `1.5px solid ${darkMode ? 'rgba(245,158,11,0.45)' : 'rgba(245,158,11,0.35)'}`,
+                            letterSpacing: '0.01em',
+                            boxShadow: darkMode ? '0 0 0 1px rgba(245,158,11,0.10)' : '0 1px 2px rgba(245,158,11,0.10)',
                           }}>
-                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                               <path d="M3 11l18-5v12L3 14v-3z" />
                               <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
                             </svg>
-                            Setter {setterName}{cnt > 1 ? ` ×${cnt}` : ''}
+                            En traitement par {setterName}{cnt > 1 ? ` ×${cnt}` : ''}
                           </span>
                         );
                       })()}
@@ -4942,6 +4975,12 @@ export default function TrackingSheet() {
                               {!isCollapsed && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }} onClick={isCancelled ? (e) => e.stopPropagation() : undefined}>
                                   {[...grp.leads].sort((a, b) => {
+                                    // 1) Leads avec un appel setter récent en tête (desc).
+                                    //    Signal d'urgence : un setter vient de retravailler ce lead.
+                                    const sa = a.setter_called_at ? new Date(a.setter_called_at).getTime() : 0;
+                                    const sb = b.setter_called_at ? new Date(b.setter_called_at).getTime() : 0;
+                                    if (sa !== sb) return sb - sa;
+                                    // 2) Sinon, priorité métier classique.
                                     const prioOrder = { high: 0, medium: 1, low: 2 };
                                     return (prioOrder[a.lead_priority] ?? 1) - (prioOrder[b.lead_priority] ?? 1);
                                   }).map((lead, i) => renderLeadCard(lead, startIdx + i))}
@@ -4955,6 +4994,12 @@ export default function TrackingSheet() {
                   })()
                 ) : (
                   [...filteredLeads].sort((a, b) => {
+                    // 1) Leads avec un appel setter récent en tête (desc).
+                    //    Signal d'urgence : un setter vient de retravailler ce lead.
+                    const sa = a.setter_called_at ? new Date(a.setter_called_at).getTime() : 0;
+                    const sb = b.setter_called_at ? new Date(b.setter_called_at).getTime() : 0;
+                    if (sa !== sb) return sb - sa;
+                    // 2) Sinon, priorité métier classique.
                     const prioOrder = { high: 0, medium: 1, low: 2 };
                     return (prioOrder[a.lead_priority] ?? 1) - (prioOrder[b.lead_priority] ?? 1);
                   }).map((lead, i) => renderLeadCard(lead, i))
