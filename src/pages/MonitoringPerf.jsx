@@ -35,6 +35,7 @@ const NAME_VARIANTS_TO_CANONICAL = {
   "aurelie": "aurelie briquet", "aurelie briquet": "aurelie briquet", "briquet": "aurelie briquet",
   "selim": "selim kouay", "selim kouay": "selim kouay", "kouay": "selim kouay",
   "mehdi": "mehdi bouffessil", "mehdi bouffessil": "mehdi bouffessil", "bouffessil": "mehdi bouffessil",
+  "mehdi mestiri": "mehdi mestiri", "mestiri": "mehdi mestiri",
   "sarah": "sarah amroune", "sarah amroune": "sarah amroune", "amroune": "sarah amroune",
   "sara": "sara benabid", "sara benabid": "sara benabid", "benabid": "sara benabid",
   "mohamed": "mohamed bouaksa", "mohamed bouaksa": "mohamed bouaksa", "bouaksa": "mohamed bouaksa",
@@ -46,7 +47,7 @@ const CANONICAL_DISPLAY_NAMES = {
   "youness el boukhrissi": "Youness El Boukhrissi", "yanis zairi": "Yanis Za\u00efri", "alex gaudrillet": "Alex Gaudrillet",
   "sebastien itema": "S\u00e9bastien ITEMA", "selim kouay": "Selim Kouay", "eva meilhac": "Eva Meilhac", "david dubois": "David Dubois",
   "aurelie briquet": "Aur\u00e9lie Briquet", "gwenael": "Gwena\u00ebl Derouet", "quentin rattez": "Quentin Rattez",
-  "mehdi bouffessil": "Mehdi BOUFFESSIL", "sarah amroune": "Sarah Amroune", "sara benabid": "Sara BENABID",
+  "mehdi bouffessil": "Mehdi BOUFFESSIL", "mehdi mestiri": "Mehdi Mestiri", "sarah amroune": "Sarah Amroune", "sara benabid": "Sara BENABID",
   "mohamed bouaksa": "Mohamed Bouaksa", "kail": "Ka\u00efl", "youcef amrane": "Youcef Amrane"
 };
 
