@@ -4773,6 +4773,44 @@ export default function TrackingSheet() {
                         );
                       })()}
 
+                      {/* Anti-spam : badge "Setter <nom> ×N" affiché en voicemail/callback
+                          quand un setter a déjà rappelé ce lead, pour éviter un double
+                          appel par le sales propriétaire. Lecture seule, aucun handler.
+                          Champs sources : `setter_called_by_name` (fallback `setter_called_by`,
+                          puis 'Setter') + `setter_call_count`. */}
+                      {(activeCat.key === 'voicemail' || activeCat.key === 'callback')
+                        && (lead.setter_called_by_name || lead.setter_called_by) && (() => {
+                        const setterName = lead.setter_called_by_name || lead.setter_called_by || 'Setter';
+                        const cnt = Number(lead.setter_call_count || 0);
+                        const tooltipParts = [`Setter : ${setterName}`];
+                        if (cnt > 0) tooltipParts.push(`Tentatives setter : ${cnt}`);
+                        if (lead.setter_called_at) {
+                          try {
+                            const sd = new Date(lead.setter_called_at);
+                            const sdd = String(sd.getDate()).padStart(2, '0');
+                            const smo = String(sd.getMonth() + 1).padStart(2, '0');
+                            const shh = String(sd.getHours()).padStart(2, '0');
+                            const smi = String(sd.getMinutes()).padStart(2, '0');
+                            tooltipParts.push(`Dernier appel setter : ${sdd}/${smo} ${shh}h${smi}`);
+                          } catch {}
+                        }
+                        return (
+                          <span title={tooltipParts.join(' • ')} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 600, flexShrink: 0,
+                            background: darkMode ? 'rgba(245,158,11,0.16)' : 'rgba(245,158,11,0.10)',
+                            color: '#f59e0b',
+                            border: `1px solid ${darkMode ? 'rgba(245,158,11,0.30)' : 'rgba(245,158,11,0.22)'}`,
+                          }}>
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M3 11l18-5v12L3 14v-3z" />
+                              <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+                            </svg>
+                            Setter {setterName}{cnt > 1 ? ` ×${cnt}` : ''}
+                          </span>
+                        );
+                      })()}
+
                       {/* Right side indicators */}
                       {lead.notes && (
                         <span style={{ fontSize: '11px', color: C.muted, flexShrink: 0 }}>

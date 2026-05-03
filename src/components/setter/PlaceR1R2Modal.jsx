@@ -204,12 +204,12 @@ export default function PlaceR1R2Modal({
               </Field>
             )}
 
-            <Field label="Notes (facultatif)" darkMode={darkMode}>
+            <Field label="Note pour le sales (facultatif)" darkMode={darkMode}>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
-                placeholder="Contexte du RDV, points à transmettre…"
+                placeholder="Contexte du RDV, points à transmettre au sales…"
                 style={{ ...inputStyle(C), resize: "vertical", minHeight: 70, fontFamily: "inherit" }}
               />
             </Field>
