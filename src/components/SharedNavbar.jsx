@@ -349,6 +349,8 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
     sheet_invitation: { icon: '📋', color: '#8b5cf6' },
     eod_missed: { icon: '⚠', color: '#f59e0b' },
     eod_low_score: { icon: '📉', color: '#ef4444' },
+    setter_placed_r1: { icon: 'R1', color: '#3b82f6' },
+    setter_placed_r2: { icon: 'R2', color: '#fb923c' },
     default: { icon: '●', color: '#94a3b8' },
   };
 
@@ -1051,6 +1053,10 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                       // Navigate for invitation notifications → go to notifications tab in tracking sheet
                       if (notif.type === 'sheet_invitation') {
                         navigate('/tracking-sheet?view=notifications');
+                      }
+                      // Navigate for setter R1/R2 notifications → tracking sheet
+                      if (notif.type === 'setter_placed_r1' || notif.type === 'setter_placed_r2') {
+                        navigate('/tracking-sheet');
                       }
                     }} style={{
                       display: 'flex', alignItems: 'flex-start', gap: 10,
