@@ -4456,9 +4456,13 @@ export default function TrackingSheet() {
             const r3Completed  = isR3Tab ? filteredLeads.filter(l => l.r3_result === 'done') : [];
 
             // Call attempt groups (callback + voicemail tabs)
-            const callLow     = isCallTab ? filteredLeads.filter(l => (l.call_attempts || 0) <= 2) : [];
-            const callMedium  = isCallTab ? filteredLeads.filter(l => (l.call_attempts || 0) >= 3 && (l.call_attempts || 0) <= 5) : [];
-            const callHigh    = isCallTab ? filteredLeads.filter(l => (l.call_attempts || 0) >= 6) : [];
+            // Conteneur dédié "Traité par le setter" : leads pour lesquels un setter
+            // a déjà passé un appel (`setter_called_by` non null). Ces leads sont
+            // exclus des 3 conteneurs tentatives pour éviter le doublon.
+            const callBySetter = isCallTab ? filteredLeads.filter(l => l.setter_called_by != null) : [];
+            const callLow     = isCallTab ? filteredLeads.filter(l => l.setter_called_by == null && (l.call_attempts || 0) <= 2) : [];
+            const callMedium  = isCallTab ? filteredLeads.filter(l => l.setter_called_by == null && (l.call_attempts || 0) >= 3 && (l.call_attempts || 0) <= 5) : [];
+            const callHigh    = isCallTab ? filteredLeads.filter(l => l.setter_called_by == null && (l.call_attempts || 0) >= 6) : [];
 
             // Unified groups array for the active tab
             const groups = isR1Tab ? [
@@ -4477,6 +4481,13 @@ export default function TrackingSheet() {
               { key: 'completed', leads: r3Completed, label: 'Effectués',  color: '#10b981' },
               { key: 'cancelled', leads: r3Cancelled, label: 'Annulés',     color: '#ef4444' },
             ] : isCallTab ? [
+              // Conteneur "Traité par le setter" : ambre, en tête, uniquement si non vide.
+              // canBulkMove=false : ces leads sont en cours de retravail setter, pas de
+              // bascule en masse vers Non-pertinents.
+              ...(callBySetter.length > 0 ? [{
+                key: 'call_setter', leads: callBySetter, label: 'Traité par le setter',
+                color: '#f59e0b', canBulkMove: false,
+              }] : []),
               { key: 'call_low',    leads: callLow,    label: '1 à 2 tentatives',   color: '#3b82f6', canBulkMove: true },
               { key: 'call_medium', leads: callMedium, label: '3 à 5 tentatives',   color: '#f59e0b', canBulkMove: true },
               { key: 'call_high',   leads: callHigh,   label: '6+ tentatives',       color: '#ef4444', canBulkMove: true },
@@ -4975,12 +4986,14 @@ export default function TrackingSheet() {
                               {!isCollapsed && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }} onClick={isCancelled ? (e) => e.stopPropagation() : undefined}>
                                   {[...grp.leads].sort((a, b) => {
-                                    // 1) Leads avec un appel setter récent en tête (desc).
-                                    //    Signal d'urgence : un setter vient de retravailler ce lead.
-                                    const sa = a.setter_called_at ? new Date(a.setter_called_at).getTime() : 0;
-                                    const sb = b.setter_called_at ? new Date(b.setter_called_at).getTime() : 0;
-                                    if (sa !== sb) return sb - sa;
-                                    // 2) Sinon, priorité métier classique.
+                                    // Conteneur "Traité par le setter" : tri par
+                                    // setter_called_at desc (plus récent en haut).
+                                    if (grp.key === 'call_setter') {
+                                      const sa = a.setter_called_at ? new Date(a.setter_called_at).getTime() : 0;
+                                      const sb = b.setter_called_at ? new Date(b.setter_called_at).getTime() : 0;
+                                      return sb - sa;
+                                    }
+                                    // Tous les autres groupes : priorité métier classique.
                                     const prioOrder = { high: 0, medium: 1, low: 2 };
                                     return (prioOrder[a.lead_priority] ?? 1) - (prioOrder[b.lead_priority] ?? 1);
                                   }).map((lead, i) => renderLeadCard(lead, startIdx + i))}
@@ -4994,12 +5007,6 @@ export default function TrackingSheet() {
                   })()
                 ) : (
                   [...filteredLeads].sort((a, b) => {
-                    // 1) Leads avec un appel setter récent en tête (desc).
-                    //    Signal d'urgence : un setter vient de retravailler ce lead.
-                    const sa = a.setter_called_at ? new Date(a.setter_called_at).getTime() : 0;
-                    const sb = b.setter_called_at ? new Date(b.setter_called_at).getTime() : 0;
-                    if (sa !== sb) return sb - sa;
-                    // 2) Sinon, priorité métier classique.
                     const prioOrder = { high: 0, medium: 1, low: 2 };
                     return (prioOrder[a.lead_priority] ?? 1) - (prioOrder[b.lead_priority] ?? 1);
                   }).map((lead, i) => renderLeadCard(lead, i))
