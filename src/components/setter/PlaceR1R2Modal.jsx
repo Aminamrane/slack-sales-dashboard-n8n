@@ -1,0 +1,308 @@
+import { useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+
+/**
+ * Modale Place R1 / Place R2.
+ * - kind="r1" ou "r2"
+ * - mode="team" (Scénario 1, sales déjà assigné, target_sales_email ignoré côté backend)
+ *   OU mode="mine" (Scénario 2, lead créé par le setter, target_sales_email OBLIGATOIRE).
+ * - teamSales : array [{ email, full_name }] pour le dropdown du Scénario 2.
+ *
+ * Soumission : onConfirm({ when: ISOString, target_sales_email?: string, notes?: string }).
+ */
+export default function PlaceR1R2Modal({
+  open,
+  onClose,
+  onConfirm,
+  kind = "r1",
+  mode = "team",
+  lead = null,
+  teamSales = [],
+  darkMode = false,
+  submitting = false,
+}) {
+  const C = {
+    overlay: "rgba(0,0,0,0.45)",
+    panel: darkMode ? "#1e1f28" : "#ffffff",
+    border: darkMode ? "#2a2b36" : "#e2e6ef",
+    text: darkMode ? "#eef0f6" : "#1e2330",
+    muted: darkMode ? "#9ca3af" : "#5e6273",
+    accent: darkMode ? "#7c8adb" : "#5b6abf",
+    danger: "#ef4444",
+    inputBg: darkMode ? "#13141b" : "#f6f7f9",
+  };
+
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [targetSales, setTargetSales] = useState("");
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState(null);
+  const dateRef = useRef(null);
+
+  // Reset state when modal opens / lead changes
+  useEffect(() => {
+    if (!open) return;
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    setDate(`${yyyy}-${mm}-${dd}`);
+    setTime("10:00");
+    setTargetSales("");
+    setNotes("");
+    setError(null);
+    setTimeout(() => dateRef.current?.focus(), 80);
+  }, [open, lead?.id, kind, mode]);
+
+  // Esc to close
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => {
+      if (e.key === "Escape" && !submitting) onClose?.();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, submitting, onClose]);
+
+  const handleSubmit = (e) => {
+    e?.preventDefault?.();
+    setError(null);
+
+    if (!date || !time) {
+      setError("Date et heure requises.");
+      return;
+    }
+    if (mode === "mine" && !targetSales) {
+      setError("Choisis le sales propriétaire.");
+      return;
+    }
+
+    // Build local ISO with timezone — backend stores TIMESTAMPTZ
+    const local = new Date(`${date}T${time}:00`);
+    if (Number.isNaN(local.getTime())) {
+      setError("Date / heure invalide.");
+      return;
+    }
+
+    const payload = {
+      when: local.toISOString(),
+      notes: notes.trim() || undefined,
+    };
+    if (mode === "mine") {
+      payload.target_sales_email = targetSales;
+    }
+
+    onConfirm?.(payload);
+  };
+
+  const title = kind === "r2" ? "Placer un R2" : "Placer un R1";
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 2000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            pointerEvents: "none",
+          }}
+        >
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            onClick={() => !submitting && onClose?.()}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: C.overlay,
+              backdropFilter: "blur(4px)",
+              WebkitBackdropFilter: "blur(4px)",
+              pointerEvents: "auto",
+            }}
+          />
+
+          {/* Panel */}
+          <motion.form
+            onSubmit={handleSubmit}
+            initial={{ opacity: 0, y: 12, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.97 }}
+            transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+            style={{
+              pointerEvents: "auto",
+              position: "relative",
+              width: "min(440px, 92vw)",
+              background: C.panel,
+              borderRadius: 18,
+              border: `1px solid ${C.border}`,
+              boxShadow: darkMode
+                ? "0 24px 60px rgba(0,0,0,0.5)"
+                : "0 24px 60px rgba(15,23,42,0.18)",
+              padding: 22,
+              display: "flex",
+              flexDirection: "column",
+              gap: 14,
+              fontFamily: "inherit",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: C.text, letterSpacing: "-0.015em" }}>
+                {title}
+              </div>
+              {lead?.full_name && (
+                <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4 }}>
+                  Lead : <strong style={{ color: C.text, fontWeight: 600 }}>{lead.full_name}</strong>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <Field label="Date" darkMode={darkMode}>
+                <input
+                  ref={dateRef}
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  style={inputStyle(C)}
+                />
+              </Field>
+              <Field label="Heure" darkMode={darkMode}>
+                <input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  style={inputStyle(C)}
+                />
+              </Field>
+            </div>
+
+            {mode === "mine" && (
+              <Field
+                label="Sales propriétaire"
+                darkMode={darkMode}
+                hint="Le lead sera assigné à ce commercial."
+              >
+                <select
+                  value={targetSales}
+                  onChange={(e) => setTargetSales(e.target.value)}
+                  style={inputStyle(C)}
+                >
+                  <option value="">— Choisir —</option>
+                  {teamSales.map((s) => (
+                    <option key={s.email} value={s.email}>
+                      {s.full_name || s.name || s.email}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+
+            <Field label="Notes (facultatif)" darkMode={darkMode}>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                placeholder="Contexte du RDV, points à transmettre…"
+                style={{ ...inputStyle(C), resize: "vertical", minHeight: 70, fontFamily: "inherit" }}
+              />
+            </Field>
+
+            {error && (
+              <div style={{ fontSize: 12.5, color: C.danger, fontWeight: 500 }}>{error}</div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
+              <button
+                type="button"
+                onClick={() => !submitting && onClose?.()}
+                disabled={submitting}
+                style={btnGhost(C, submitting)}
+              >
+                Annuler
+              </button>
+              <button type="submit" disabled={submitting} style={btnPrimary(C, submitting)}>
+                {submitting ? "Envoi…" : "Confirmer"}
+              </button>
+            </div>
+          </motion.form>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function Field({ label, hint, children, darkMode }) {
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+      <span
+        style={{
+          fontSize: 11.5,
+          fontWeight: 600,
+          letterSpacing: "0.02em",
+          textTransform: "uppercase",
+          color: darkMode ? "#9ca3af" : "#6b7280",
+        }}
+      >
+        {label}
+      </span>
+      {children}
+      {hint && (
+        <span style={{ fontSize: 11, color: darkMode ? "#5e6273" : "#9ca3af" }}>{hint}</span>
+      )}
+    </label>
+  );
+}
+
+function inputStyle(C) {
+  return {
+    width: "100%",
+    padding: "9px 11px",
+    borderRadius: 10,
+    border: `1px solid ${C.border}`,
+    background: C.inputBg,
+    color: C.text,
+    fontSize: 13.5,
+    fontFamily: "inherit",
+    outline: "none",
+    transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+    boxSizing: "border-box",
+  };
+}
+
+function btnPrimary(C, disabled) {
+  return {
+    padding: "9px 16px",
+    borderRadius: 10,
+    border: "none",
+    background: C.accent,
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.6 : 1,
+    transition: "transform 0.12s ease, opacity 0.15s ease",
+    fontFamily: "inherit",
+  };
+}
+
+function btnGhost(C, disabled) {
+  return {
+    padding: "9px 14px",
+    borderRadius: 10,
+    border: `1px solid ${C.border}`,
+    background: "transparent",
+    color: C.text,
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.6 : 1,
+    fontFamily: "inherit",
+  };
+}

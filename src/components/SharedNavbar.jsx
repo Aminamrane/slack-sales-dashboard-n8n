@@ -786,6 +786,22 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                   </button>
                 )}
 
+                {apiClient.hasAccess('tracking_sheet_setter') && (
+                  <button
+                    onClick={() => navigate("/tracking-setter")}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px',
+                      borderRadius: '8px', border: 'none', background: 'transparent',
+                      color: darkMode ? '#f5f5f7' : '#1d1d1f', fontSize: '14px', fontWeight: 500,
+                      cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? '#2a2b2e' : '#f5f5f7'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    Tracking Setter
+                  </button>
+                )}
+
                 {apiClient.hasAccess('eod_reports') && (
                   <button
                     onClick={() => navigate("/eod-report")}

@@ -21,6 +21,7 @@ import Profile          from "./pages/Profile.jsx";
 import Campaigns        from "./pages/Campaigns.jsx";
 import PerfClosing      from "./pages/PerfClosing.jsx";
 import TrackingSheetAdmin from "./pages/TrackingSheetAdmin.jsx";
+import TrackingSheetSetter from "./pages/TrackingSheetSetter.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import MouseDot from "./components/MouseDot.jsx";
@@ -39,6 +40,7 @@ function App() {
         <Route path="/admin/leads" element={<AdminLeads />} />
         <Route path="/leads-management" element={<LeadsManagement />} />
         <Route path="/tracking-sheet" element={<TrackingSheet />} />
+        <Route path="/tracking-setter" element={<TrackingSheetSetter />} />
         <Route path="/monitoring-perf" element={<MonitoringPerf />} />
         <Route path="/eod-report" element={<EODReport />} />
         <Route path="/eod-dashboard" element={<EODDashboard />} />
