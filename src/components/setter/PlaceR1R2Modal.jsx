@@ -82,6 +82,10 @@ export default function PlaceR1R2Modal({
       setError("Choisis le sales propriétaire.");
       return;
     }
+    if (!lead?.email?.trim()) {
+      setError("Email obligatoire pour placer un R1/R2. Renseigne l'email du prospect avant de réserver le créneau.");
+      return;
+    }
 
     // Build local ISO with timezone — backend stores TIMESTAMPTZ
     const local = new Date(`${date}T${time}:00`);
