@@ -8102,15 +8102,22 @@ export default function TrackingSheetSetter() {
             darkMode={darkMode}
             submitting={setterSubmitting}
             onConfirm={async (payload) => {
+              // Retourne true en cas de succès / false en cas d'échec.
+              // Le modal s'appuie sur ce retour pour afficher son toast inline
+              // "Lead ajouté avec succès" (parité visuelle TS sales).
               setSetterSubmitting(true);
               try {
-                await apiClient.post('/api/v1/tracking/setter/cold-leads', payload);
+                await apiClient.post('/api/v1/tracking/setter/leads', payload);
                 showSetterToast('Cold call créé.');
-                setSetterModal(null);
                 refreshData().catch(() => {});
+                // Délai 1.2s avant fermeture pour laisser le toast inline
+                // s'afficher (cohérence UX avec TrackingSheet sales).
+                setTimeout(() => setSetterModal(null), 1200);
+                return true;
               } catch (e) {
                 console.error('[Setter] create cold lead failed', e);
                 showSetterToast(e?.message || 'Échec création.', 'err');
+                return false;
               } finally {
                 setSetterSubmitting(false);
               }
