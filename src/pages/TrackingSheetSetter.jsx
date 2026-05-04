@@ -260,7 +260,7 @@ export default function TrackingSheetSetter() {
       const extractList = (resp) => {
         if (!resp || resp.__err) return [];
         if (Array.isArray(resp)) return resp;
-        return resp.leads || resp.data || [];
+        return resp.leads || resp.sales || resp.data || [];
       };
 
       const mineList = extractList(mineRes).map((l) => ({
