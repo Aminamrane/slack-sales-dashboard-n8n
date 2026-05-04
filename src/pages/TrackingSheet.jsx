@@ -4814,19 +4814,36 @@ export default function TrackingSheet() {
                         );
                       })()}
 
-                      {/* Bandeau "En traitement par <setter>" — TOUJOURS visible sur la card
-                          pliée, peu importe l'onglet (R1, R2, voicemail, callback, etc.).
+                      {/* Bandeau setter — wording contextuel selon l'onglet :
+                          - Onglet R1 (lead.r1_placed_by_setter_id) → "Traité par X"
+                            (le setter a placé le R1, son boulot est terminé sur ce lead).
+                          - Onglet R2 (lead.r2_placed_by_setter_id) → "Traité par X"
+                            (idem côté R2).
+                          - Onglets Répondeurs / Callback / autres (lead.setter_called_by) →
+                            "En traitement par X ×N" (le setter est en cours d'appel).
                           Signal fort pour éviter qu'un sales appelle un lead qu'un setter
-                          est en train de retravailler. Lecture seule, aucun handler.
-                          Champs sources (payload WS `setter_called` + lead refetch) :
-                            `setter_called_by_name` (fallback `setter_called_by`, puis 'Setter')
-                            + `setter_call_count` + `setter_called_at`. */}
-                      {(lead.setter_called_by_name || lead.setter_called_by) && (() => {
-                        const setterName = lead.setter_called_by_name || lead.setter_called_by || 'Setter';
-                        const cnt = Number(lead.setter_call_count || 0);
-                        const tooltipParts = [`En traitement par ${setterName}`];
+                          est en train de retravailler ou a déjà traité. Lecture seule.
+                          Fallback nom = 'Setter' tant que le backend n'expose pas
+                          `r1_placed_by_setter_name` / `r2_placed_by_setter_name`. */}
+                      {(() => {
+                        let label = null;
+                        let setterName = null;
+                        let cnt = 0;
+                        if (activeCat.key === 'r1' && lead.r1_placed_by_setter_id) {
+                          label = 'Traité par';
+                          setterName = lead.r1_placed_by_setter_name || 'Setter';
+                        } else if (activeCat.key === 'r2' && lead.r2_placed_by_setter_id) {
+                          label = 'Traité par';
+                          setterName = lead.r2_placed_by_setter_name || 'Setter';
+                        } else if (lead.setter_called_by_name || lead.setter_called_by) {
+                          label = 'En traitement par';
+                          setterName = lead.setter_called_by_name || lead.setter_called_by || 'Setter';
+                          cnt = Number(lead.setter_call_count || 0);
+                        }
+                        if (!label) return null;
+                        const tooltipParts = [`${label} ${setterName}`];
                         if (cnt > 0) tooltipParts.push(`Tentatives setter : ${cnt}`);
-                        if (lead.setter_called_at) {
+                        if (label === 'En traitement par' && lead.setter_called_at) {
                           try {
                             const sd = new Date(lead.setter_called_at);
                             const sdd = String(sd.getDate()).padStart(2, '0');
@@ -4850,7 +4867,7 @@ export default function TrackingSheet() {
                               <path d="M3 11l18-5v12L3 14v-3z" />
                               <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
                             </svg>
-                            En traitement par {setterName}{cnt > 1 ? ` ×${cnt}` : ''}
+                            {label} {setterName}{cnt > 1 ? ` ×${cnt}` : ''}
                           </span>
                         );
                       })()}
