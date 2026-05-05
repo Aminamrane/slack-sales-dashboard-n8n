@@ -123,15 +123,24 @@ function TimeSelect({ value, onChange, C, darkMode }) {
 }
 
 // ── CATEGORIES (SETTER VERSION) ──────────────────────────────────────────────
-// Setter view exposes only 2 buckets : "Nouveau lead" (mine = cold calls
-// créés par le setter) + "Répondeurs" (voicemail = team leads ratés).
-// Sales-only tabs (new/r1/r2/r3/callback/not_relevant/signed) sont retirés
-// — leurs blocs panel-détail deviennent inatteignables. Sécurité défense en
-// profondeur : les blocs sales-only restent gardés par `{!isSetter && ...}`
-// dans le panel détail.
+// Setter view (P3) expose 5 buckets :
+//   - mine        : cold calls créés par le setter  (édition R1/R2/disqualif)
+//   - voicemail   : répondeurs équipe à reprendre   (édition R1/R2/disqualif)
+//   - r1_placed   : leads où le setter a placé R1   (LECTURE SEULE — sous-conteneurs planifié/effectué/annulé)
+//   - r2_placed   : leads où le setter a placé R2   (LECTURE SEULE — idem)
+//   - signed      : leads touchés par le setter et signés (LECTURE SEULE)
+//
+// Sales-only tabs (new/r1/r2/r3/callback/not_relevant) sont retirés — leurs
+// blocs panel-détail deviennent inatteignables (gardes `{!isSetter && ...}`
+// existantes). Le bucket "signed" du setter ré-utilise la même `key` que
+// CATEGORIES sales mais le détail panel reste read-only car aucun bloc sales
+// d'édition n'est branché côté setter.
 const CATEGORIES = [
   { key: "mine",         label: "Nouveau lead",    color: "#6366f1", dotColor: "#a8c8f0", softBg: "#f0f1fb", softBgDark: "rgba(99,102,241,0.18)",  softText: "#7578c4", description: "Cold calls créés par toi" },
   { key: "voicemail",    label: "Répondeurs",      color: "#64748b", softBg: "#f0f1f4", softBgDark: "rgba(100,116,139,0.18)", softText: "#7a8594", description: "Répondeurs équipe à reprendre" },
+  { key: "r1_placed",    label: "R1 placés",       color: "#3b82f6", dotColor: "#a8c8f0", softBg: "#edf4fc", softBgDark: "rgba(59,130,246,0.18)",  softText: "#6a9fd8", description: "R1 que tu as placés (suivi sales)" },
+  { key: "r2_placed",    label: "R2 placés",       color: "#fb923c", softBg: "#fdf3eb", softBgDark: "rgba(251,146,60,0.18)",  softText: "#c48a5a", description: "R2 que tu as placés (suivi sales)" },
+  { key: "signed",       label: "Signés",          color: "#34d399", softBg: "#edfbf3", softBgDark: "rgba(52,211,153,0.18)",  softText: "#5ab896", description: "Leads que tu as touchés et qui ont signé" },
 ];
 
 // ── TODAY (for dynamic notifications in demo) ────────────────────────────────
@@ -243,17 +252,27 @@ export default function TrackingSheetSetter() {
   const isAdminView = !!viewingSheetId;
   const initialView = urlParams.get('view');
 
-  // ── REFRESH DATA (setter version) ──────────────────────────────────────────
-  // Stratégie 1 : on construit un array unique `leads` à partir de
-  // `/setter/my-leads` (bucket "mine") + `/setter/team-leads` (bucket
-  // "voicemail"), chaque lead annoté avec `status` aligné sur `_setter_bucket`
-  // pour que le filtrage CATEGORIES (`leads.filter(l => l.status === cat.key)`)
-  // fonctionne sans toucher au reste du flux.
+  // ── REFRESH DATA (setter version, P3 — 5 buckets) ─────────────────────────
+  // On fetch en parallèle les 5 endpoints setter + la liste des sales équipe,
+  // chaque lead est annoté avec `_setter_bucket` (et `status` aligné sur ce
+  // bucket pour que le filtrage CATEGORIES `leads.filter(l => l.status === cat.key)`
+  // fonctionne sans modifier la mécanique commune).
+  //
+  // Dédoublonnage : un lead peut apparaître dans plusieurs endpoints simultanément
+  // (ex. setter a placé R1 puis R2 → présent dans /r1-placed ET /r2-placed ;
+  // si signé → présent aussi dans /signed). Pour la UX, on garde uniquement le
+  // bucket le plus avancé selon la priorité : signed > r2_placed > r1_placed >
+  // voicemail > mine. Implémentation : on insère par ordre croissant de priorité
+  // dans une Map keyed by lead.id ; chaque insert écrase la précédente, ce qui
+  // garantit que le bucket le plus prioritaire l'emporte au final.
   const refreshData = useCallback(async () => {
     try {
-      const [mineRes, teamRes, salesRes] = await Promise.all([
+      const [mineRes, teamRes, r1PlacedRes, r2PlacedRes, signedRes, salesRes] = await Promise.all([
         apiClient.get('/api/v1/tracking/setter/my-leads').catch((e) => ({ __err: e })),
         apiClient.get('/api/v1/tracking/setter/team-leads').catch((e) => ({ __err: e })),
+        apiClient.get('/api/v1/tracking/setter/r1-placed').catch((e) => ({ __err: e })),
+        apiClient.get('/api/v1/tracking/setter/r2-placed').catch((e) => ({ __err: e })),
+        apiClient.get('/api/v1/tracking/setter/signed').catch((e) => ({ __err: e })),
         apiClient.get('/api/v1/tracking/setter/my-team-sales').catch((e) => ({ __err: e })),
       ]);
 
@@ -263,25 +282,33 @@ export default function TrackingSheetSetter() {
         return resp.leads || resp.sales || resp.data || [];
       };
 
-      const mineList = extractList(mineRes).map((l) => ({
+      const annotate = (bucket) => (l) => ({
         ...l,
-        _setter_bucket: 'mine',
-        status: 'mine',
+        _setter_bucket: bucket,
+        status: bucket,
         full_name: l.full_name || l.client || '',
         r1: l.r1_date || l.r1 || null,
         r2: l.r2_date || l.r2 || null,
         r3: l.r3_date || l.r3 || null,
-      }));
-      const teamList = extractList(teamRes).map((l) => ({
-        ...l,
-        _setter_bucket: 'voicemail',
-        status: 'voicemail',
-        full_name: l.full_name || l.client || '',
-        r1: l.r1_date || l.r1 || null,
-        r2: l.r2_date || l.r2 || null,
-        r3: l.r3_date || l.r3 || null,
-      }));
-      setLeads([...mineList, ...teamList]);
+      });
+
+      // Ordre d'insertion = ordre de priorité croissant. La Map garantit
+      // qu'un même lead.id sera écrasé par le bucket le plus avancé.
+      const buckets = [
+        ['mine',      extractList(mineRes)],
+        ['voicemail', extractList(teamRes)],
+        ['r1_placed', extractList(r1PlacedRes)],
+        ['r2_placed', extractList(r2PlacedRes)],
+        ['signed',    extractList(signedRes)],
+      ];
+      const dedup = new Map();
+      for (const [bucket, list] of buckets) {
+        for (const lead of list) {
+          if (lead?.id == null) continue;
+          dedup.set(String(lead.id), annotate(bucket)(lead));
+        }
+      }
+      setLeads(Array.from(dedup.values()));
 
       const sList = extractList(salesRes);
       setTeamSales(sList);
@@ -2363,20 +2390,27 @@ export default function TrackingSheetSetter() {
                 )}
               </div>
             )}
-            {/* Setter KPI bar : 2 chiffres seulement (Mes leads / Répondeurs
-                équipe). Affiché à la place des KPIs sales habituels. */}
+            {/* Setter KPI bar : 5 chiffres (un par bucket). Padding latéral
+                réduit (24px vs 36px sales) pour tenir 5 KPIs sans scroll
+                horizontal sur écrans 13" courants. */}
             {!isAdminView && isSetter && (() => {
-              const mineCount = leads.filter(l => l._setter_bucket === 'mine').length;
-              const teamCount = leads.filter(l => l._setter_bucket === 'voicemail').length;
+              const mineCount      = leads.filter(l => l._setter_bucket === 'mine').length;
+              const voicemailCount = leads.filter(l => l._setter_bucket === 'voicemail').length;
+              const r1PlacedCount  = leads.filter(l => l._setter_bucket === 'r1_placed').length;
+              const r2PlacedCount  = leads.filter(l => l._setter_bucket === 'r2_placed').length;
+              const signedCount    = leads.filter(l => l._setter_bucket === 'signed').length;
               const items = [
-                { label: 'Mes leads', value: mineCount },
-                { label: 'Répondeurs équipe', value: teamCount },
+                { label: 'Nouveau lead', value: mineCount,      color: '#6366f1' },
+                { label: 'Répondeurs',   value: voicemailCount, color: '#64748b' },
+                { label: 'R1 placés',    value: r1PlacedCount,  color: '#3b82f6' },
+                { label: 'R2 placés',    value: r2PlacedCount,  color: '#fb923c' },
+                { label: 'Signés',       value: signedCount,    color: '#34d399' },
               ];
               return (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
                   {items.map((kpi, i, arr) => (
-                    <div key={kpi.label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, borderRight: i < arr.length - 1 ? `1px solid ${C.border}` : 'none', padding: '0 36px', whiteSpace: 'nowrap' }}>
-                      <span style={{ fontSize: 20, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>{kpi.value}</span>
+                    <div key={kpi.label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, borderRight: i < arr.length - 1 ? `1px solid ${C.border}` : 'none', padding: '0 24px', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: 20, fontWeight: 700, color: kpi.color, letterSpacing: '-0.02em' }}>{kpi.value}</span>
                       <span style={{ fontSize: 11.5, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{kpi.label}</span>
                     </div>
                   ))}
@@ -4484,10 +4518,18 @@ export default function TrackingSheetSetter() {
             )}
           </div>
 
-          {/* Lead cards — with grouped containers for R1/R2 tabs */}
+          {/* Lead cards — with grouped containers for R1/R2 tabs.
+              Setter (P3) : `r1_placed` et `r2_placed` ré-utilisent la même
+              mécanique groupée que les onglets sales `r1`/`r2`, en filtrant
+              sur `r1_result` / `r2_result` pour produire les sous-conteneurs
+              Planifiés / En attente / Effectués / Annulés. Ces onglets sont
+              en lecture seule côté setter (pas d'actions destructives).
+              Les onglets `r1`/`r2`/`r3`/`callback` restent listés ici par
+              robustesse (héritage de la duplication TrackingSheet) mais ne
+              s'activent jamais : ils ne sont pas dans CATEGORIES setter. */}
           {(() => {
-            const isR1Tab = activeCat.key === 'r1';
-            const isR2Tab = activeCat.key === 'r2';
+            const isR1Tab = activeCat.key === 'r1' || activeCat.key === 'r1_placed';
+            const isR2Tab = activeCat.key === 'r2' || activeCat.key === 'r2_placed';
             const isR3Tab = activeCat.key === 'r3';
             const isCallTab = activeCat.key === 'callback' || activeCat.key === 'voicemail';
             const isGroupedTab = isR1Tab || isR2Tab || isR3Tab || isCallTab;
