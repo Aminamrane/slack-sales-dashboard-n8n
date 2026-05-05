@@ -42,6 +42,7 @@ export default function PlaceR1R2Modal({
   const [time, setTime] = useState("");
   const [targetSales, setTargetSales] = useState("");
   const [notes, setNotes] = useState("");
+  const [email, setEmail] = useState("");
   const [error, setError] = useState(null);
   const dateRef = useRef(null);
 
@@ -56,6 +57,7 @@ export default function PlaceR1R2Modal({
     setTime("10:00");
     setTargetSales("");
     setNotes("");
+    setEmail((lead?.email || "").trim());
     setError(null);
     setTimeout(() => dateRef.current?.focus(), 80);
   }, [open, lead?.id, kind, mode]);
@@ -70,6 +72,13 @@ export default function PlaceR1R2Modal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, submitting, onClose]);
 
+  // Validation email basique (suffisamment permissive pour les saisies réelles)
+  const isValidEmail = (v) => {
+    const t = (v || "").trim();
+    if (!t) return false;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t);
+  };
+
   const handleSubmit = (e) => {
     e?.preventDefault?.();
     setError(null);
@@ -82,8 +91,22 @@ export default function PlaceR1R2Modal({
       setError("Choisis le sales propriétaire.");
       return;
     }
-    if (!lead?.email?.trim()) {
-      setError("Email obligatoire pour placer un R1/R2. Renseigne l'email du prospect avant de réserver le créneau.");
+
+    // Email — obligatoire pour R2 (transfert vers le closer en Google Meet),
+    // optionnel pour R1 (rendez-vous téléphonique côté setter).
+    const emailTrimmed = (email || "").trim();
+    if (kind === "r2") {
+      if (!emailTrimmed) {
+        setError("Email obligatoire pour placer un R2 (transfert vers le closer en Google Meet).");
+        return;
+      }
+      if (!isValidEmail(emailTrimmed)) {
+        setError("Email invalide. Vérifie la saisie.");
+        return;
+      }
+    } else if (emailTrimmed && !isValidEmail(emailTrimmed)) {
+      // R1 : si le setter en saisit un, on valide quand même le format
+      setError("Email invalide. Laisse vide ou corrige la saisie.");
       return;
     }
 
@@ -100,6 +123,11 @@ export default function PlaceR1R2Modal({
     };
     if (mode === "mine") {
       payload.target_sales_email = targetSales;
+    }
+    // L'email saisi est remonté au parent ssi il diffère de celui actuel du
+    // lead (le parent décide alors de patcher le lead avant place-r1/r2).
+    if (emailTrimmed && emailTrimmed.toLowerCase() !== (lead?.email || "").trim().toLowerCase()) {
+      payload.lead_email = emailTrimmed;
     }
 
     onConfirm?.(payload);
@@ -213,6 +241,36 @@ export default function PlaceR1R2Modal({
                 </select>
               </Field>
             )}
+
+            <Field
+              label={kind === "r2" ? "Email du prospect" : "Email du prospect (facultatif)"}
+              darkMode={darkMode}
+              hint={
+                kind === "r2"
+                  ? "Obligatoire — utilisé pour l'invitation Google Meet."
+                  : "R1 par téléphone : email non requis. Renseigne-le si tu veux qu'il soit enregistré sur le lead."
+              }
+            >
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => {
+                  // Empêche le submit du form quand l'utilisateur tape Enter
+                  // dans le champ email — sinon onChange n'a pas le temps de
+                  // propager et le state local reste vide. Blur déclenche les
+                  // dernières mises à jour ; la soumission passe par le bouton
+                  // "Confirmer".
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.currentTarget.blur();
+                  }
+                }}
+                placeholder="prospect@exemple.com"
+                autoComplete="email"
+                style={inputStyle(C)}
+              />
+            </Field>
 
             <Field label="Note pour le sales (facultatif)" darkMode={darkMode}>
               <textarea

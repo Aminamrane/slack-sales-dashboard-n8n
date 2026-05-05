@@ -1585,11 +1585,12 @@ export default function TrackingSheetSetter() {
     setTimeout(() => { workflowSubmittingRef.current = false; }, 2000);
     const currentStatus = CATEGORIES[activeTab].key;
     const newStatus = patchData.status;
-    // Check email required for R1/R2 date changes
-    if (patchData.r1_date || patchData.r2_date) {
+    // Email obligatoire UNIQUEMENT pour R2 (transfert vers closer en Google
+    // Meet). R1 setter se fait au téléphone — pas d'email requis.
+    if (patchData.r2_date) {
       const lead = leads.find(l => l.id === leadId);
       if (lead && !lead.email) {
-        setCalendarError({ leadId, message: "Remplissez l'email du prospect avant de fixer un rendez-vous" });
+        setCalendarError({ leadId, message: "Remplissez l'email du prospect avant de fixer un R2 (Google Meet)" });
         setTimeout(() => setCalendarError(null), 5000);
         return;
       }
@@ -8088,7 +8089,7 @@ export default function TrackingSheetSetter() {
             teamSales={teamSales}
             darkMode={darkMode}
             submitting={setterSubmitting}
-            onConfirm={async ({ when, target_sales_email, notes }) => {
+            onConfirm={async ({ when, target_sales_email, notes, lead_email }) => {
               if (!setterModal?.lead?.id) return;
               const leadId = setterModal.lead.id;
               const isR2 = setterModal.kind === 'placeR2';
@@ -8100,6 +8101,27 @@ export default function TrackingSheetSetter() {
                 : { r1_date: when, target_sales_email, notes };
               setSetterSubmitting(true);
               try {
+                // Si le setter a saisi/corrigé un email dans la modale, on
+                // persiste le changement sur le lead AVANT de placer le RDV.
+                // - R2 : indispensable (l'event Google Meet a besoin de
+                //   l'email du prospect comme attendee côté backend).
+                // - R1 : non bloquant mais utile (le sales le retrouvera
+                //   sur sa fiche lead après le transfert).
+                if (lead_email) {
+                  try {
+                    await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, { email: lead_email });
+                    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, email: lead_email } : l));
+                  } catch (patchErr) {
+                    console.error('[Setter] patch lead email failed', patchErr);
+                    if (isR2) {
+                      // R2 : impossible de continuer sans email persisté.
+                      showSetterToast(patchErr?.message || "Impossible d'enregistrer l'email du prospect.", 'err');
+                      setSetterSubmitting(false);
+                      return;
+                    }
+                    // R1 : on continue, le placement n'a pas besoin de l'email.
+                  }
+                }
                 await apiClient.post(path, body);
                 showSetterToast(isR2 ? 'R2 placé.' : 'R1 placé.');
                 setSetterModal(null);
