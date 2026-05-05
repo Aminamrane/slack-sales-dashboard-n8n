@@ -74,6 +74,7 @@ export default function Campaigns() {
         const token = apiClient.getToken();
         const user = apiClient.getUser();
         if (!token || !user) { navigate("/login"); return; }
+        if (user.role !== 'admin' && user.role !== 'marketing') { navigate("/"); return; }
         setSession({ user: { email: user.email, user_metadata: { name: user.name, avatar_url: user.avatar_url || null } } });
         await fetchCampaigns();
       } catch {
