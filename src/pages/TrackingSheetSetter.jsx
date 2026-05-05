@@ -5905,8 +5905,13 @@ export default function TrackingSheetSetter() {
               )}
 
               {/* ═══ NEW / CALLBACK / VOICEMAIL TAB WORKFLOW ═══ */}
-              {/* Garde Option B : caché côté setter (gardé sales seuls) */}
-              {!isSetter && (activeCat.key === 'new' || activeCat.key === 'callback' || activeCat.key === 'voicemail') && (() => {
+              {/* Visible côté sales (`new`, `callback`, `voicemail`) ET setter
+                  (`mine` = analogue de `new`, `voicemail` = répondeurs équipe).
+                  Le setter peut bumper call_attempts + setter contact_result /
+                  appointment_result / r1_date / r2_date — tous champs présents
+                  dans la whitelist setter étendue côté backend. Aucune sous-
+                  action ne touche les sacred zones (contrats, NDA). */}
+              {(activeCat.key === 'new' || activeCat.key === 'mine' || activeCat.key === 'callback' || activeCat.key === 'voicemail') && (() => {
                 const wf = activeWorkflow?.leadId === lead.id && !activeWorkflow?.callFlow ? activeWorkflow : null;
                 const today = new Date().toISOString().split('T')[0];
                 // Preserve original first contact date if already set (callback/voicemail leads have been contacted before)
