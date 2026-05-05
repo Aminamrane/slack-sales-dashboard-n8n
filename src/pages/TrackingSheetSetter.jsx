@@ -155,75 +155,16 @@ const EXTRA_STATUS_MAP = {
 };
 
 // ── DATE/TIME HELPERS ─────────────────────────────────────────────────────────
-// Backend stores TIMESTAMPTZ (UTC) and returns ISO with offset
-// (e.g. "2026-05-05T13:00:00+00:00" = 15h Paris CEST). The UI displays /
-// edits times in Europe/Paris, so we MUST convert UTC → Paris explicitly,
-// otherwise the user sees 13h instead of 15h.
-//
-// Why Intl rather than `new Date(val)` + `getHours()` ? Because relying on
-// the browser's local TZ silently breaks for any user not on Europe/Paris
-// (admin viewing from abroad, future remote hires, screenshots from CI).
-// We pin to Europe/Paris — the operational TZ of the team — so the picker
-// is deterministic regardless of where the browser is.
-const PARIS_DT_PARTS = new Intl.DateTimeFormat('en-GB', {
-  timeZone: 'Europe/Paris',
-  year: 'numeric', month: '2-digit', day: '2-digit',
-  hour: '2-digit', minute: '2-digit', hour12: false,
-});
+// Backend now returns ISO timestamps (e.g. "2026-03-11T14:00:00+00:00")
+// datetime-local inputs need "YYYY-MM-DDTHH:MM" format (no timezone suffix)
 const toDatetimeLocal = (val) => {
   if (!val) return '';
-  if (typeof val === 'string' && val.length === 10) return val + 'T09:00'; // date-only → default 9am
-  // Already in datetime-local shape from a local picker change ("YYYY-MM-DDTHH:MM…")
-  // — keep the slice so we don't double-convert mid-edit.
-  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(val) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(val)) {
-    return val.slice(0, 16);
-  }
-  const d = val instanceof Date ? val : new Date(val);
-  if (Number.isNaN(d.getTime())) return '';
-  const parts = PARIS_DT_PARTS.formatToParts(d).reduce((acc, p) => {
-    if (p.type !== 'literal') acc[p.type] = p.value;
-    return acc;
-  }, {});
-  // 24h='24' edge case (Intl returns '24' for midnight in some locales)
-  const hour = parts.hour === '24' ? '00' : parts.hour;
-  return `${parts.year}-${parts.month}-${parts.day}T${hour}:${parts.minute}`;
+  if (val.length === 10) return val + 'T09:00'; // date-only → default 9am
+  return val.slice(0, 16); // trim seconds + timezone
 };
 const toDateOnly = (val) => {
   if (!val) return '';
   return val.slice(0, 10);
-};
-
-// "YYYY-MM-DDTHH:MM" interprété en Europe/Paris → ISO 8601 UTC ("…Z").
-// Pendant : `toDatetimeLocal` lit l'UTC stocké en backend en heure Paris,
-// donc l'inverse est nécessaire au moment d'écrire (sinon le backend
-// stockerait 15h naïf comme 15h UTC, qui se relit ensuite en 17h Paris).
-// Si la valeur a déjà un suffixe TZ (ISO complet), on la retourne telle quelle.
-const parisLocalToISO = (val) => {
-  if (!val) return val;
-  if (typeof val !== 'string') return val;
-  // Date-only → backend la stockera comme date pure, on n'ajoute rien.
-  if (val.length === 10) return val;
-  // Déjà tagué TZ (ISO complet) → ne pas double-convertir.
-  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(val)) return val;
-  const m = val.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-  if (!m) return val;
-  const [, yyyy, mm, dd, hh, mi] = m;
-  // Calcule l'offset Paris (DST-aware) pour ce moment précis :
-  // 1) On suppose d'abord UTC et on regarde l'heure que ça fait à Paris.
-  // 2) L'écart entre l'heure "voulue" (saisie locale Paris) et celle qu'on
-  //    obtient en UTC = offset Paris à appliquer.
-  const utcGuess = new Date(Date.UTC(+yyyy, +mm - 1, +dd, +hh, +mi));
-  const parisParts = PARIS_DT_PARTS.formatToParts(utcGuess).reduce((acc, p) => {
-    if (p.type !== 'literal') acc[p.type] = p.value;
-    return acc;
-  }, {});
-  const parisAsUtc = Date.UTC(
-    +parisParts.year, +parisParts.month - 1, +parisParts.day,
-    +(parisParts.hour === '24' ? '00' : parisParts.hour), +parisParts.minute,
-  );
-  const offsetMs = parisAsUtc - utcGuess.getTime(); // ex. +7200000 (CEST), +3600000 (CET)
-  const realUtc = new Date(utcGuess.getTime() - offsetMs);
-  return realUtc.toISOString();
 };
 const formatDateTimeFR = (val) => {
   if (!val) return '';
@@ -1524,7 +1465,7 @@ export default function TrackingSheetSetter() {
   const dateChangeTimers = useRef({}); // debounce per lead+field
   const handleDateChange = async (leadId, field, value) => {
     const backendField = field === 'r1' ? 'r1_date' : field === 'r2' ? 'r2_date' : field === 'r3' ? 'r3_date' : field;
-    // Optimistic update immediately (UI keeps the local picker shape)
+    // Optimistic update immediately
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, [field]: value } : l));
     // Debounce the PATCH — cancel previous timer for same lead+field
     const key = `${leadId}-${field}`;
@@ -1532,10 +1473,7 @@ export default function TrackingSheetSetter() {
     dateChangeTimers.current[key] = setTimeout(async () => {
       delete dateChangeTimers.current[key];
       try {
-        // Le picker produit "YYYY-MM-DDTHH:MM" (Europe/Paris) — convertir en
-        // ISO Z UTC avant l'envoi pour que TIMESTAMPTZ stocke le bon instant.
-        const payloadValue = value ? parisLocalToISO(value) : null;
-        await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, { [backendField]: payloadValue });
+        await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, { [backendField]: value || null });
       } catch (err) {
         console.error("Erreur mise à jour date:", err);
       }
@@ -1645,19 +1583,6 @@ export default function TrackingSheetSetter() {
     if (workflowSubmittingRef.current) return;
     workflowSubmittingRef.current = true;
     setTimeout(() => { workflowSubmittingRef.current = false; }, 2000);
-    // Normalise les datetimes saisies localement (Europe/Paris) en ISO Z UTC
-    // avant envoi backend. Les call-sites passent r1_date / r2_date au format
-    // "YYYY-MM-DDTHH:MM" via wf.newDate (input date + TimeSelect heure locale).
-    // Si une valeur arrive déjà avec un suffixe TZ (ISO Z complet), parisLocalToISO
-    // la retourne telle quelle.
-    if (patchData && typeof patchData === 'object') {
-      const TZ_FIELDS = ['r1_date', 'r2_date', 'r3_date', 'rdv_onboarding_date', 'rdv_lancement_date'];
-      const next = { ...patchData };
-      for (const f of TZ_FIELDS) {
-        if (next[f] != null && next[f] !== '') next[f] = parisLocalToISO(next[f]);
-      }
-      patchData = next;
-    }
     const currentStatus = CATEGORIES[activeTab].key;
     const newStatus = patchData.status;
     // Email obligatoire UNIQUEMENT pour R2 (transfert vers closer en Google
@@ -6711,7 +6636,7 @@ export default function TrackingSheetSetter() {
                         <span style={{ fontSize: 9, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Onboarding</span>
                         <DateTimePicker value={lead.rdv_onboarding_date ? toDatetimeLocal(lead.rdv_onboarding_date) : ''} onChange={async (val) => {
                             setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_onboarding_date: val } : l));
-                            try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { rdv_onboarding_date: val ? parisLocalToISO(val) : null }); }
+                            try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { rdv_onboarding_date: val || null }); }
                             catch { setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_onboarding_date: lead.rdv_onboarding_date } : l)); }
                           }} C={C} darkMode={darkMode} />
                       </div>
@@ -6727,7 +6652,7 @@ export default function TrackingSheetSetter() {
                         <span style={{ fontSize: 9, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Lancement</span>
                         <DateTimePicker value={lead.rdv_lancement_date ? toDatetimeLocal(lead.rdv_lancement_date) : ''} onChange={async (val) => {
                             setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_lancement_date: val } : l));
-                            try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { rdv_lancement_date: val ? parisLocalToISO(val) : null }); }
+                            try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { rdv_lancement_date: val || null }); }
                             catch { setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_lancement_date: lead.rdv_lancement_date } : l)); }
                           }} C={C} darkMode={darkMode} />
                       </div>

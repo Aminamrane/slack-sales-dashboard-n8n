@@ -110,15 +110,19 @@ export default function PlaceR1R2Modal({
       return;
     }
 
-    // Build local ISO with timezone — backend stores TIMESTAMPTZ
-    const local = new Date(`${date}T${time}:00`);
-    if (Number.isNaN(local.getTime())) {
+    // Construit un datetime "naïf" "YYYY-MM-DDTHH:MM" — paradigme aligné sur
+    // TrackingSheet sales : on n'applique aucune conversion timezone, l'heure
+    // saisie part telle quelle vers le backend (cf. handleWorkflowSubmit côté
+    // setter et sales). Round-trip cohérent : 18h saisi → "18:00" stocké en
+    // TIMESTAMPTZ comme 18:00 UTC → relu via slice naïf = "18:00" affiché.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) {
       setError("Date / heure invalide.");
       return;
     }
+    const when = `${date}T${time}`;
 
     const payload = {
-      when: local.toISOString(),
+      when,
       notes: notes.trim() || undefined,
     };
     if (mode === "mine") {
