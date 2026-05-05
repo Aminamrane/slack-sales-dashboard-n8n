@@ -6173,8 +6173,12 @@ export default function TrackingSheetSetter() {
               })()}
 
               {/* ═══ R1 TAB WORKFLOW ═══ */}
-              {/* Garde Option B : caché côté setter (sales-only). */}
-              {!isSetter && activeCat.key === 'r1' && (() => {
+              {/* Visible côté sales (`r1`) ET setter (`r1_placed`) : qualifier
+                  R1 (Lapin / Reporter / R1 effectué / Annulé), R2 placé
+                  (transfert vers le closer via création R2), reschedule.
+                  Le sous-bloc "Envoyer le contrat" interne reste sous-gaté
+                  `!isSetter` (sacred zone /api/v1/contracts/* + NDA). */}
+              {(activeCat.key === 'r1' || activeCat.key === 'r1_placed') && (() => {
                 const wfR2 = activeWorkflow?.leadId === lead.id && activeWorkflow?.r1Result === 'r2_set_standalone' ? activeWorkflow : null;
                 const wf = activeWorkflow?.leadId === lead.id && !wfR2 ? activeWorkflow : null;
                 const wfPill = (label, color, icon, delay, onClick, isImg) => (
@@ -6267,7 +6271,10 @@ export default function TrackingSheetSetter() {
                         )}
 
                         {/* ── Shortcut: Envoyer le contrat directly from R1 ── */}
-                        {r1ShortcutContract === lead.id ? (() => {
+                        {/* Garde Option B : caché côté setter — touche
+                            /api/v1/contracts/send + openNdaPopup (sacred zone).
+                            Le setter ne peut pas envoyer de contrat depuis R1. */}
+                        {!isSetter && (r1ShortcutContract === lead.id ? (() => {
                           const hasRange = !!lead.employee_range;
                           const ndaDone = !!(lead.has_client_data);
                           const isSending = sendingContract === lead.id;
@@ -6312,7 +6319,7 @@ export default function TrackingSheetSetter() {
                             onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.06)'; e.currentTarget.style.transform = 'scale(1.02)'; }}
                             onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(16,185,129,0.06)' : 'rgba(16,185,129,0.03)'; e.currentTarget.style.transform = 'scale(1)'; }}
                           >Envoyer le contrat</button>
-                        )}
+                        ))}
                       </>
                     ) : !wf.r1Result ? (
                       /* ── Step 1: R1 qualification pills ── */
