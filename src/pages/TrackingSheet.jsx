@@ -4474,6 +4474,17 @@ export default function TrackingSheet() {
             const callMedium  = isCallTab ? filteredLeads.filter(l => l.setter_called_by == null && (l.call_attempts || 0) >= 3 && (l.call_attempts || 0) <= 5) : [];
             const callHigh    = isCallTab ? filteredLeads.filter(l => l.setter_called_by == null && (l.call_attempts || 0) >= 6) : [];
 
+            // Label dynamique du container "Traité par le setter" (R1).
+            // 1 setter unique → "Traité par {prénom}" (premier token du nom complet).
+            // 2+ setters distincts → "Traité par les setters" (fallback collectif).
+            // Aucun nom dispo (data corrompue) → "Traité par le setter" (fallback générique).
+            const setterPlacedLabel = (() => {
+              const names = [...new Set(r1SetterPlaced.map(l => l.r1_placed_by_setter_name).filter(Boolean))];
+              if (names.length === 0) return 'Traité par le setter';
+              if (names.length === 1) return `Traité par ${names[0].split(' ')[0]}`;
+              return 'Traité par les setters';
+            })();
+
             // Unified groups array for the active tab
             const groups = isR1Tab ? [
               { key: 'scheduled', leads: r1Scheduled, label: 'Planifiés', color: '#3b82f6' },
@@ -4482,7 +4493,8 @@ export default function TrackingSheet() {
               { key: 'cancelled', leads: r1Cancelled, label: 'Annulés',     color: '#ef4444' },
               // Container "Traité par le setter" — collapsed par défaut, mirror Annulés.
               // Listing exclusif des leads dont r1_placed_by_setter_id est non null.
-              { key: 'setter_placed', leads: r1SetterPlaced, label: 'Traité par le setter', color: '#8b5cf6' },
+              // Label dynamique selon le ou les setters présents (cf. setterPlacedLabel).
+              { key: 'setter_placed', leads: r1SetterPlaced, label: setterPlacedLabel, color: '#8b5cf6' },
             ] : isR2Tab ? [
               { key: 'scheduled', leads: r2Scheduled, label: 'Planifiés', color: '#fb923c' },
               { key: 'pending',   leads: r2Pending,   label: 'En attente', color: '#f59e0b' },
