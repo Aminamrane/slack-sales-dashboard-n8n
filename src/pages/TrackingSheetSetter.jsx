@@ -6,7 +6,6 @@ import { supabase } from "../lib/supabaseClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import LeadsManagement from "./LeadsManagement.jsx";
 // ── Setter modales (Option B duplication intégrale TrackingSheet) ──────────
-import PlaceR1R2Modal from "../components/setter/PlaceR1R2Modal.jsx";
 import DisqualifyModal from "../components/setter/DisqualifyModal.jsx";
 import CreateColdLeadModal from "../components/setter/CreateColdLeadModal.jsx";
 import "../index.css";
@@ -5853,7 +5852,7 @@ export default function TrackingSheetSetter() {
                   )}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                     <button
-                      onClick={() => setSetterModal({ kind: 'placeR1', lead, mode: lead._setter_bucket === 'mine' ? 'mine' : 'team' })}
+                      onClick={() => setActiveWorkflow({ leadId: lead.id, setterPlaceFlow: 'r1', setterMode: lead._setter_bucket === 'mine' ? 'mine' : 'team', newDate: '', targetSalesEmail: '', notes: '', emailDraft: (lead.email || '') })}
                       style={{
                         padding: '9px 14px', borderRadius: 50, border: 'none',
                         background: darkMode ? 'rgba(59,130,246,0.22)' : 'rgba(59,130,246,0.12)',
@@ -5869,7 +5868,7 @@ export default function TrackingSheetSetter() {
                       Placer R1
                     </button>
                     <button
-                      onClick={() => setSetterModal({ kind: 'placeR2', lead, mode: lead._setter_bucket === 'mine' ? 'mine' : 'team' })}
+                      onClick={() => setActiveWorkflow({ leadId: lead.id, setterPlaceFlow: 'r2', setterMode: lead._setter_bucket === 'mine' ? 'mine' : 'team', newDate: '', targetSalesEmail: '', notes: '', emailDraft: (lead.email || '') })}
                       style={{
                         padding: '9px 14px', borderRadius: 50, border: 'none',
                         background: darkMode ? 'rgba(251,146,60,0.22)' : 'rgba(251,146,60,0.12)',
@@ -5904,6 +5903,205 @@ export default function TrackingSheetSetter() {
                 </div>
               )}
 
+              {/* ═══ SETTER PLACE R1 / R2 INLINE WORKFLOW ═══ */}
+              {/* Mirror UX TS sales : zéro modale popup. Le setter ouvre le
+                  date picker inline directement dans le panel détail via les
+                  boutons "Placer R1" / "Placer R2" ci-dessus.
+                  - mode='team' (lead bucket='voicemail') : sales déjà assigné,
+                    target_sales_email ignoré côté backend.
+                  - mode='mine' (lead bucket='mine', cold lead créé par setter) :
+                    target_sales_email OBLIGATOIRE (dropdown teamSales).
+                  - kind='r2' : email du prospect OBLIGATOIRE (event Google Meet
+                    côté backend), patché en amont si modifié.
+                  Les semantics target_sales_email + notes nécessitent les
+                  endpoints dédiés `/setter/leads/{id}/place-r1` et `/place-r2`
+                  — le PATCH général ne les gère pas. */}
+              {isSetter && activeWorkflow?.leadId === lead.id && activeWorkflow?.setterPlaceFlow && (() => {
+                const isR2 = activeWorkflow.setterPlaceFlow === 'r2';
+                const isMine = activeWorkflow.setterMode === 'mine';
+                const accent = isR2 ? '#fb923c' : '#3b82f6';
+                const accentBgD = isR2 ? 'rgba(251,146,60,0.08)' : 'rgba(59,130,246,0.08)';
+                const accentBgL = isR2 ? 'rgba(251,146,60,0.04)' : 'rgba(59,130,246,0.04)';
+                const accentBdrD = isR2 ? 'rgba(251,146,60,0.2)' : 'rgba(59,130,246,0.2)';
+                const accentBdrL = isR2 ? 'rgba(251,146,60,0.12)' : 'rgba(59,130,246,0.12)';
+                const isValidEmail = (v) => {
+                  const t = (v || '').trim();
+                  if (!t) return false;
+                  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t);
+                };
+                const handleSetterPlaceSubmit = async () => {
+                  const wf = activeWorkflow;
+                  if (!wf?.leadId) return;
+                  // Validation locale
+                  if (!wf.newDate || wf.newDate.length < 16) {
+                    showSetterToast('Date et heure requises.', 'err');
+                    return;
+                  }
+                  if (isMine && !wf.targetSalesEmail) {
+                    showSetterToast('Choisis le sales propriétaire.', 'err');
+                    return;
+                  }
+                  const emailTrimmed = (wf.emailDraft || '').trim();
+                  if (isR2) {
+                    if (!emailTrimmed) {
+                      showSetterToast("Email obligatoire pour placer un R2 (Google Meet).", 'err');
+                      return;
+                    }
+                    if (!isValidEmail(emailTrimmed)) {
+                      showSetterToast('Email invalide.', 'err');
+                      return;
+                    }
+                  } else if (emailTrimmed && !isValidEmail(emailTrimmed)) {
+                    showSetterToast('Email invalide. Laisse vide ou corrige la saisie.', 'err');
+                    return;
+                  }
+                  const leadId = wf.leadId;
+                  const path = isR2
+                    ? `/api/v1/tracking/setter/leads/${leadId}/place-r2`
+                    : `/api/v1/tracking/setter/leads/${leadId}/place-r1`;
+                  const body = isR2
+                    ? { r2_date: wf.newDate, target_sales_email: wf.targetSalesEmail || undefined, notes: (wf.notes || '').trim() || undefined }
+                    : { r1_date: wf.newDate, target_sales_email: wf.targetSalesEmail || undefined, notes: (wf.notes || '').trim() || undefined };
+                  setSetterSubmitting(true);
+                  try {
+                    // Si l'email a changé, on persiste AVANT le placement (mirror flow modale).
+                    // - R2 : indispensable (event Google Meet a besoin de l'email comme attendee).
+                    // - R1 : non bloquant mais utile (le sales le retrouvera sur la fiche).
+                    const currentEmail = (lead?.email || '').trim().toLowerCase();
+                    if (emailTrimmed && emailTrimmed.toLowerCase() !== currentEmail) {
+                      try {
+                        await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, { email: emailTrimmed });
+                        setLeads(prev => prev.map(l => l.id === leadId ? { ...l, email: emailTrimmed } : l));
+                      } catch (patchErr) {
+                        console.error('[Setter] patch lead email failed', patchErr);
+                        if (isR2) {
+                          showSetterToast(patchErr?.message || "Impossible d'enregistrer l'email du prospect.", 'err');
+                          setSetterSubmitting(false);
+                          return;
+                        }
+                        // R1 : on continue, le placement n'a pas besoin de l'email.
+                      }
+                    }
+                    await apiClient.post(path, body);
+                    showSetterToast(isR2 ? 'R2 placé.' : 'R1 placé.');
+                    setActiveWorkflow(null);
+                    refreshData().catch(() => {});
+                  } catch (e) {
+                    console.error('[Setter] place RDV failed', e);
+                    showSetterToast(e?.message || 'Échec du placement.', 'err');
+                  } finally {
+                    setSetterSubmitting(false);
+                  }
+                };
+                return (
+                  <div style={{
+                    marginBottom: 16,
+                    display: 'flex', flexDirection: 'column', gap: 10,
+                    padding: '16px 18px', borderRadius: 16,
+                    background: darkMode ? accentBgD : accentBgL,
+                    border: `1px solid ${darkMode ? accentBdrD : accentBdrL}`,
+                    animation: 'wfDateCardIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 15 }}>{isR2 ? '⚡' : '📅'}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: accent }}>
+                        {isR2 ? 'Placer un R2' : 'Placer un R1'}
+                      </span>
+                    </div>
+
+                    {/* ── Date + heure ── */}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Date</div>
+                        <input type="date" value={activeWorkflow.newDate ? activeWorkflow.newDate.slice(0, 10) : ''}
+                          onChange={(e) => { const time = activeWorkflow.newDate?.slice(10) || 'T10:00'; setActiveWorkflow(prev => ({ ...prev, newDate: e.target.value + time })); }}
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
+                        <TimeSelect value={activeWorkflow.newDate?.slice(11, 16) || '10:00'} onChange={(t) => { const date = activeWorkflow.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
+                      </div>
+                    </div>
+
+                    {/* ── Sales propriétaire (mode='mine' uniquement) ── */}
+                    {isMine && (
+                      <div>
+                        <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Sales propriétaire</div>
+                        <select
+                          value={activeWorkflow.targetSalesEmail || ''}
+                          onChange={(e) => setActiveWorkflow(prev => ({ ...prev, targetSalesEmail: e.target.value }))}
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }}
+                        >
+                          <option value="">— Choisir —</option>
+                          {teamSales.map((s) => (
+                            <option key={s.email} value={s.email}>{s.full_name || s.name || s.email}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* ── Email du prospect (R2 obligatoire, R1 facultatif) ── */}
+                    {isR2 && (
+                      <div>
+                        <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                          Email du prospect <span style={{ color: '#ef4444' }}>*</span>
+                        </div>
+                        <input
+                          type="email"
+                          required
+                          value={activeWorkflow.emailDraft || ''}
+                          onChange={(e) => setActiveWorkflow(prev => ({ ...prev, emailDraft: e.target.value }))}
+                          placeholder="prospect@exemple.com"
+                          autoComplete="email"
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                        />
+                        <div style={{ fontSize: 10.5, color: C.muted, marginTop: 4 }}>Utilisé pour l'invitation Google Meet.</div>
+                      </div>
+                    )}
+
+                    {/* ── Notes (toujours visible, optionnelle) ── */}
+                    <div>
+                      <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Note pour le sales (facultatif)</div>
+                      <textarea
+                        value={activeWorkflow.notes || ''}
+                        onChange={(e) => setActiveWorkflow(prev => ({ ...prev, notes: e.target.value }))}
+                        rows={2}
+                        placeholder="Contexte du RDV, points à transmettre…"
+                        style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none', resize: 'vertical', minHeight: 56, boxSizing: 'border-box' }}
+                      />
+                    </div>
+
+                    {/* ── Confirmer ── */}
+                    {activeWorkflow.newDate && activeWorkflow.newDate.length >= 16 && (
+                      <button
+                        onClick={handleSetterPlaceSubmit}
+                        disabled={setterSubmitting}
+                        style={{
+                          padding: '10px 20px', borderRadius: 50, border: 'none',
+                          background: accent, color: '#fff', fontSize: 12.5, fontWeight: 700,
+                          cursor: setterSubmitting ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                          opacity: setterSubmitting ? 0.6 : 1,
+                          animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both',
+                          transition: 'transform 0.15s, box-shadow 0.15s',
+                        }}
+                        onMouseEnter={(e) => { if (!setterSubmitting) { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = `0 4px 14px ${accent}59`; } }}
+                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                      >
+                        {setterSubmitting ? 'Envoi…' : (isR2 ? 'Confirmer → R2' : 'Confirmer → R1')}
+                      </button>
+                    )}
+
+                    {/* ── Annuler ── */}
+                    <button
+                      onClick={() => !setterSubmitting && setActiveWorkflow(null)}
+                      disabled={setterSubmitting}
+                      style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: setterSubmitting ? 'not-allowed' : 'pointer', fontFamily: 'inherit', alignSelf: 'center', opacity: 0.7 }}
+                    >Annuler</button>
+                  </div>
+                );
+              })()}
+
               {/* ═══ NEW / CALLBACK / VOICEMAIL TAB WORKFLOW ═══ */}
               {/* Visible côté sales (`new`, `callback`, `voicemail`) ET setter
                   (`mine` = analogue de `new`, `voicemail` = répondeurs équipe).
@@ -5912,7 +6110,7 @@ export default function TrackingSheetSetter() {
                   dans la whitelist setter étendue côté backend. Aucune sous-
                   action ne touche les sacred zones (contrats, NDA). */}
               {(activeCat.key === 'new' || activeCat.key === 'mine' || activeCat.key === 'callback' || activeCat.key === 'voicemail') && (() => {
-                const wf = activeWorkflow?.leadId === lead.id && !activeWorkflow?.callFlow ? activeWorkflow : null;
+                const wf = activeWorkflow?.leadId === lead.id && !activeWorkflow?.callFlow && !activeWorkflow?.setterPlaceFlow ? activeWorkflow : null;
                 const today = new Date().toISOString().split('T')[0];
                 // Preserve original first contact date if already set (callback/voicemail leads have been contacted before)
                 const firstContactDate = lead.first_contact_date ? lead.first_contact_date.slice(0, 10) : today;
@@ -8085,67 +8283,16 @@ export default function TrackingSheetSetter() {
       {/* ═══════════════════════════════════════════════════════════════════
           SETTER MODALES (Option B) — montées en permanence côté setter,
           ouvertes via setSetterModal({ kind, lead?, mode? }).
-          - placeR1 / placeR2 : PlaceR1R2Modal
+          - placeR1 / placeR2 : INLINE dans le panel détail (cf. bloc
+            "SETTER PLACE R1 / R2 INLINE WORKFLOW" plus haut), via
+            setActiveWorkflow({ setterPlaceFlow, setterMode, ... }).
+            Plus de modale popup pour le placement — mirror UX TS sales.
           - disqualify : DisqualifyModal
           - createCold : CreateColdLeadModal (déclenché via "+ Nouveau lead")
           - markCalled : pas de modale, action directe via apiClient
           ═══════════════════════════════════════════════════════════════════ */}
       {isSetter && (
         <>
-          <PlaceR1R2Modal
-            open={setterModal?.kind === 'placeR1' || setterModal?.kind === 'placeR2'}
-            onClose={() => !setterSubmitting && setSetterModal(null)}
-            kind={setterModal?.kind === 'placeR2' ? 'r2' : 'r1'}
-            mode={setterModal?.mode || 'team'}
-            lead={setterModal?.lead || null}
-            teamSales={teamSales}
-            darkMode={darkMode}
-            submitting={setterSubmitting}
-            onConfirm={async ({ when, target_sales_email, notes, lead_email }) => {
-              if (!setterModal?.lead?.id) return;
-              const leadId = setterModal.lead.id;
-              const isR2 = setterModal.kind === 'placeR2';
-              const path = isR2
-                ? `/api/v1/tracking/setter/leads/${leadId}/place-r2`
-                : `/api/v1/tracking/setter/leads/${leadId}/place-r1`;
-              const body = isR2
-                ? { r2_date: when, target_sales_email, notes }
-                : { r1_date: when, target_sales_email, notes };
-              setSetterSubmitting(true);
-              try {
-                // Si le setter a saisi/corrigé un email dans la modale, on
-                // persiste le changement sur le lead AVANT de placer le RDV.
-                // - R2 : indispensable (l'event Google Meet a besoin de
-                //   l'email du prospect comme attendee côté backend).
-                // - R1 : non bloquant mais utile (le sales le retrouvera
-                //   sur sa fiche lead après le transfert).
-                if (lead_email) {
-                  try {
-                    await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, { email: lead_email });
-                    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, email: lead_email } : l));
-                  } catch (patchErr) {
-                    console.error('[Setter] patch lead email failed', patchErr);
-                    if (isR2) {
-                      // R2 : impossible de continuer sans email persisté.
-                      showSetterToast(patchErr?.message || "Impossible d'enregistrer l'email du prospect.", 'err');
-                      setSetterSubmitting(false);
-                      return;
-                    }
-                    // R1 : on continue, le placement n'a pas besoin de l'email.
-                  }
-                }
-                await apiClient.post(path, body);
-                showSetterToast(isR2 ? 'R2 placé.' : 'R1 placé.');
-                setSetterModal(null);
-                refreshData().catch(() => {});
-              } catch (e) {
-                console.error('[Setter] place RDV failed', e);
-                showSetterToast(e?.message || 'Échec du placement.', 'err');
-              } finally {
-                setSetterSubmitting(false);
-              }
-            }}
-          />
           <DisqualifyModal
             open={setterModal?.kind === 'disqualify'}
             onClose={() => !setterSubmitting && setSetterModal(null)}
