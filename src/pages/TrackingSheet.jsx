@@ -770,6 +770,9 @@ export default function TrackingSheet() {
 
   // ── SIDEBAR NAV + FORM STATE ────────────────────────────────────────────
   const [cancelledExpanded, setCancelledExpanded] = useState(false);
+  // R1 tab — "Traité par le setter" container : collapsed par défaut, mirror du
+  // container "Annulé". Toggle œil/chevron pour show/hide.
+  const [setterPlacedExpanded, setSetterPlacedExpanded] = useState(false);
   const [sidebarView, setSidebarView] = useState(initialView || 'leads');
 
   // ── TRACKING SHEETS MANAGEMENT (admin, HoS only) ──────────────────────────
@@ -998,6 +1001,7 @@ export default function TrackingSheet() {
           if (s === 'r1_waiting') { const dp = l.r1 ? l.r1.slice(0,10) < new Date().toISOString().slice(0,10) : false; return l.r1_result === 'no_show' || ((!l.r1_result || l.r1_result === 'rescheduled') && dp); }
           if (s === 'r1_done') return l.r1_result === 'done';
           if (s === 'r1_cancelled') return l.r1_result === 'cancelled';
+          if (s === 'r1_setter_placed') return l.r1_placed_by_setter_id != null;
           if (s === 'r1_not_done') return !l.r1_result || l.r1_result !== 'done';
           if (s === 'r2_scheduled') { const dp = l.r2 ? l.r2.slice(0,10) < new Date().toISOString().slice(0,10) : false; return (!l.r2_result || l.r2_result === 'reporte') && !dp; }
           if (s === 'r2_pending') { const dp = l.r2 ? l.r2.slice(0,10) < new Date().toISOString().slice(0,10) : false; return ['comptable', 'associe', 'reflexion', 'relire_contrat', 'pas_decision_jour', 'tresorerie'].includes(l.r2_result) || ((!l.r2_result || l.r2_result === 'reporte') && dp); }
@@ -3869,7 +3873,7 @@ export default function TrackingSheet() {
           const statusOptions = catKey === 'new'
             ? prioOptions
             : catKey === 'r1'
-              ? [{ value: 'r1_scheduled', label: 'Planifiés', color: '#3b82f6' }, { value: 'r1_waiting', label: 'En attente', color: '#f59e0b' }, { value: 'r1_done', label: 'Effectués', color: '#10b981' }, { value: 'r1_cancelled', label: 'Annulés', color: '#ef4444' }, ...prioOptions]
+              ? [{ value: 'r1_scheduled', label: 'Planifiés', color: '#3b82f6' }, { value: 'r1_waiting', label: 'En attente', color: '#f59e0b' }, { value: 'r1_done', label: 'Effectués', color: '#10b981' }, { value: 'r1_cancelled', label: 'Annulés', color: '#ef4444' }, { value: 'r1_setter_placed', label: 'Traité par le setter', color: '#8b5cf6' }, ...prioOptions]
               : catKey === 'r2'
                 ? [{ value: 'r2_scheduled', label: 'Planifiés', color: '#fb923c' }, { value: 'r2_pending', label: 'En attente', color: '#f59e0b' }, { value: 'r2_done', label: 'Effectués', color: '#10b981' }, { value: 'r2_cancelled', label: 'Annulés', color: '#ef4444' }, ...prioOptions]
                 : catKey === 'r3'
@@ -4211,7 +4215,7 @@ export default function TrackingSheet() {
                 const statusOptions = catKey === 'new'
                   ? prioOpts
                   : catKey === 'r1'
-                    ? [{ value: 'r1_scheduled', label: 'Planifiés', color: '#3b82f6' }, { value: 'r1_waiting', label: 'En attente', color: '#f59e0b' }, { value: 'r1_done', label: 'Effectués', color: '#10b981' }, { value: 'r1_cancelled', label: 'Annulés', color: '#ef4444' }, ...prioOpts]
+                    ? [{ value: 'r1_scheduled', label: 'Planifiés', color: '#3b82f6' }, { value: 'r1_waiting', label: 'En attente', color: '#f59e0b' }, { value: 'r1_done', label: 'Effectués', color: '#10b981' }, { value: 'r1_cancelled', label: 'Annulés', color: '#ef4444' }, { value: 'r1_setter_placed', label: 'Traité par le setter', color: '#8b5cf6' }, ...prioOpts]
                     : catKey === 'r2'
                       ? [{ value: 'r2_scheduled', label: 'Planifiés', color: '#fb923c' }, { value: 'r2_pending', label: 'En attente', color: '#f59e0b' }, { value: 'r2_done', label: 'Effectués', color: '#10b981' }, { value: 'r2_cancelled', label: 'Annulés', color: '#ef4444' }, ...prioOpts]
                       : catKey === 'r3'
@@ -4433,13 +4437,19 @@ export default function TrackingSheet() {
             const isCallTab = activeCat.key === 'callback' || activeCat.key === 'voicemail';
             const isGroupedTab = isR1Tab || isR2Tab || isR3Tab || isCallTab;
 
-            // R1 groups — leads with past date + no result go to pending
+            // R1 groups — leads with past date + no result go to pending.
+            // Conteneur "Traité par le setter" (option A — exclusif) : un lead avec
+            // `r1_placed_by_setter_id` non null est isolé dans son propre container et
+            // n'apparaît PAS dans Planifiés/En attente/Effectués/Annulés. Sémantique :
+            // le setter a déjà fait le boulot, le sales le voit dans son slot dédié.
             const todayDate = new Date().toISOString().slice(0, 10);
             const isDatePast = (d) => { if (!d) return false; const ds = typeof d === 'string' ? d.slice(0, 10) : ''; return ds && ds < todayDate; };
-            const r1Scheduled  = isR1Tab ? filteredLeads.filter(l => (!l.r1_result || l.r1_result === 'rescheduled') && !isDatePast(l.r1)) : [];
-            const r1Pending    = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'no_show' || ((!l.r1_result || l.r1_result === 'rescheduled') && isDatePast(l.r1))) : [];
-            const r1Cancelled  = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'cancelled') : [];
-            const r1Completed  = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'done') : [];
+            const isSetterPlaced = (l) => l.r1_placed_by_setter_id != null;
+            const r1SetterPlaced = isR1Tab ? filteredLeads.filter(l => isSetterPlaced(l)) : [];
+            const r1Scheduled  = isR1Tab ? filteredLeads.filter(l => !isSetterPlaced(l) && (!l.r1_result || l.r1_result === 'rescheduled') && !isDatePast(l.r1)) : [];
+            const r1Pending    = isR1Tab ? filteredLeads.filter(l => !isSetterPlaced(l) && (l.r1_result === 'no_show' || ((!l.r1_result || l.r1_result === 'rescheduled') && isDatePast(l.r1)))) : [];
+            const r1Cancelled  = isR1Tab ? filteredLeads.filter(l => !isSetterPlaced(l) && l.r1_result === 'cancelled') : [];
+            const r1Completed  = isR1Tab ? filteredLeads.filter(l => !isSetterPlaced(l) && l.r1_result === 'done') : [];
 
             // R2 groups
             const R2_PENDING_STATES = ['comptable', 'associe', 'reflexion', 'relire_contrat', 'pas_decision_jour', 'tresorerie'];
@@ -4470,6 +4480,9 @@ export default function TrackingSheet() {
               { key: 'pending',   leads: r1Pending,   label: 'En attente', color: '#f59e0b' },
               { key: 'completed', leads: r1Completed, label: 'Effectués',  color: '#10b981' },
               { key: 'cancelled', leads: r1Cancelled, label: 'Annulés',     color: '#ef4444' },
+              // Container "Traité par le setter" — collapsed par défaut, mirror Annulés.
+              // Listing exclusif des leads dont r1_placed_by_setter_id est non null.
+              { key: 'setter_placed', leads: r1SetterPlaced, label: 'Traité par le setter', color: '#8b5cf6' },
             ] : isR2Tab ? [
               { key: 'scheduled', leads: r2Scheduled, label: 'Planifiés', color: '#fb923c' },
               { key: 'pending',   leads: r2Pending,   label: 'En attente', color: '#f59e0b' },
@@ -4947,7 +4960,17 @@ export default function TrackingSheet() {
                           runningIdx += grp.leads.length;
                           if (grp.leads.length === 0) return null;
                           const isCancelled = grp.key === 'cancelled';
-                          const isCollapsed = isCancelled && !cancelledExpanded;
+                          const isSetterPlacedGrp = grp.key === 'setter_placed';
+                          // Conteneurs collapsibles (mirror du pattern "Annulé") :
+                          // cancelled + setter_placed → toggle œil/chevron au click.
+                          const isCollapsible = isCancelled || isSetterPlacedGrp;
+                          const isExpanded = isCancelled ? cancelledExpanded : isSetterPlacedGrp ? setterPlacedExpanded : true;
+                          const toggleCollapse = isCancelled
+                            ? () => setCancelledExpanded(prev => !prev)
+                            : isSetterPlacedGrp
+                              ? () => setSetterPlacedExpanded(prev => !prev)
+                              : undefined;
+                          const isCollapsed = isCollapsible && !isExpanded;
                           return (
                             <div key={grp.key} style={{
                               border: `1.5px solid ${darkMode ? 'rgba(255,255,255,0.06)' : '#dfe1e6'}`,
@@ -4955,9 +4978,9 @@ export default function TrackingSheet() {
                               background: darkMode ? 'rgba(255,255,255,0.04)' : '#fafafb',
                               padding: isCollapsed ? '14px 10px' : '14px 10px 10px',
                               marginBottom: 8,
-                              cursor: isCancelled ? 'pointer' : undefined,
+                              cursor: isCollapsible ? 'pointer' : undefined,
                             }}
-                              onClick={isCancelled ? () => setCancelledExpanded(prev => !prev) : undefined}
+                              onClick={toggleCollapse}
                             >
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: isCollapsed ? 0 : 10, padding: '0 6px' }}>
                                 <span style={{
@@ -4986,9 +5009,9 @@ export default function TrackingSheet() {
                                     onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.color = '#ef4444'; }}
                                   >Tout → Non-pertinent</button>
                                 )}
-                                {isCancelled ? (
+                                {isCollapsible ? (
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round"
-                                    style={{ transition: 'transform 0.25s ease', transform: cancelledExpanded ? 'rotate(180deg)' : 'rotate(0deg)', opacity: 0.5 }}>
+                                    style={{ transition: 'transform 0.25s ease', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', opacity: 0.5 }}>
                                     <path d="m6 9 6 6 6-6" />
                                   </svg>
                                 ) : (
@@ -5001,7 +5024,7 @@ export default function TrackingSheet() {
                                 )}
                               </div>
                               {!isCollapsed && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }} onClick={isCancelled ? (e) => e.stopPropagation() : undefined}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }} onClick={isCollapsible ? (e) => e.stopPropagation() : undefined}>
                                   {[...grp.leads].sort((a, b) => {
                                     // Conteneur "Traité par le setter" : tri par
                                     // setter_called_at desc (plus récent en haut).
