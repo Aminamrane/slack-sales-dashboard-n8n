@@ -10,7 +10,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 // 2026-05-11 v3 → v4 : ajout slide raccourci recherche Ctrl/Cmd+F.
 // 2026-05-11 v4 → v5 : bump pour re-déclencher le tuto chez Gaelle (le
 // dev a consommé v4 en testant, contenu inchangé).
-const STORAGE_KEY_PREFIX = 'owner_setter_onboarding_dismissed_v5_';
+// 2026-05-11 v5 → v6 : 2e re-déclenchement pour Gaelle (dev a consommé
+// v5 en re-testant, contenu inchangé).
+const STORAGE_KEY_PREFIX = 'owner_setter_onboarding_dismissed_v6_';
 
 const SLIDES = [
   {
