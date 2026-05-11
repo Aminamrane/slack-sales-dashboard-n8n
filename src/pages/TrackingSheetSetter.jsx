@@ -4738,7 +4738,7 @@ export default function TrackingSheetSetter() {
                           <span style={{ fontSize: 10, fontWeight: 700, color: '#10b981', fontFamily: 'inherit', animation: 'copiedToastIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both' }}>Copié</span>
                         ) : lead.phone}
                       </span>
-                      {lead.headcount && (
+                      {lead.headcount && currentUser?.role !== 'setter' && (
                         <>
                           <span style={{ width: '1px', height: '14px', background: C.border, flexShrink: 0 }} />
                           <span style={{ fontSize: '11px', color: C.muted, flexShrink: 0 }}>
@@ -5242,26 +5242,34 @@ export default function TrackingSheetSetter() {
               </div>
 
               {/* ─── STATS ROW ─── */}
-              <div style={{
-                display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1,
-                borderRadius: 10, overflow: 'hidden', marginBottom: 14,
-                background: C.border,
-                animation: 'contentReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.08s both',
-              }}>
-                {[
-                  { label: 'Salariés', value: lead.headcount || '—' },
-                  { label: 'CA', value: lead.revenue || '—' },
+              {(() => {
+                const isSetter = currentUser?.role === 'setter';
+                const statsRow = [
+                  ...(isSetter ? [] : [
+                    { label: 'Salariés', value: lead.headcount || '—' },
+                    { label: 'CA', value: lead.revenue || '—' },
+                  ]),
                   { label: 'Assigné', value: formatDate(lead.assigned_at) || '—' },
-                ].map(stat => (
-                  <div key={stat.label} style={{
-                    padding: '10px 6px', textAlign: 'center',
-                    background: darkMode ? '#16171e' : '#fafbfd',
+                ];
+                return (
+                  <div style={{
+                    display: 'grid', gridTemplateColumns: `repeat(${statsRow.length}, 1fr)`, gap: 1,
+                    borderRadius: 10, overflow: 'hidden', marginBottom: 14,
+                    background: C.border,
+                    animation: 'contentReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.08s both',
                   }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>{stat.value}</div>
-                    <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 2 }}>{stat.label}</div>
+                    {statsRow.map(stat => (
+                      <div key={stat.label} style={{
+                        padding: '10px 6px', textAlign: 'center',
+                        background: darkMode ? '#16171e' : '#fafbfd',
+                      }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>{stat.value}</div>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 2 }}>{stat.label}</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                );
+              })()}
 
               {/* ─── INFO DETAILS ─── */}
               <div style={{
