@@ -955,6 +955,7 @@ export default function TrackingSheetSetter() {
   const [filterTags, setFilterTags] = useState([]); // multi-select: r1_result or r2_result values (e.g. ['no_show', 'done'])
   const [filterOrigins, setFilterOrigins] = useState([]); // multi-select: origin values (e.g. ['BTP', 'cc'])
   const [filterSalesOwners, setFilterSalesOwners] = useState([]); // multi-select setter only: emails des sales propriétaires (scope = teamSales)
+  const [filterMyColdCallsOnly, setFilterMyColdCallsOnly] = useState(false); // toggle setter only (Nouveau lead): n'affiche que ses propres cold calls
   const [filterStatuses, setFilterStatuses] = useState([]); // multi-select: ['r1_done', 'r1_not_done', 'r2_done', 'r2_not_done']
   const [filterCallTime, setFilterCallTime] = useState([]); // multi-select: ['matin', 'apres_midi', 'soir'] — first_call_at time-of-day filter
   const [sortOrder, setSortOrder] = useState('newest'); // 'newest' | 'oldest'
@@ -1021,6 +1022,11 @@ export default function TrackingSheetSetter() {
     if (filterSalesOwners.length > 0) {
       result = result.filter(l => l.assigned_to && filterSalesOwners.includes(l.assigned_to));
     }
+    // Filter "Mes cold calls uniquement" (setter only, bucket Nouveau lead)
+    if (filterMyColdCallsOnly) {
+      const myEmailLower = (currentUser?.email || '').toLowerCase();
+      result = result.filter(l => (l.created_by_setter || '').toLowerCase() === myEmailLower);
+    }
     // Filter by tag (qualification result) — tab-contextual field
     if (filterTags.length > 0) {
       if (catKey === 'r1') {
@@ -1076,7 +1082,7 @@ export default function TrackingSheetSetter() {
       result = [...result].sort((a, b) => (b.assigned_at || '').localeCompare(a.assigned_at || ''));
     }
     return result;
-  }, [leads, activeTab, exitingCards, searchQuery, filterTags, filterStatuses, filterOrigins, filterSalesOwners, filterCallTime, sortOrder]);
+  }, [leads, activeTab, exitingCards, searchQuery, filterTags, filterStatuses, filterOrigins, filterSalesOwners, filterMyColdCallsOnly, filterCallTime, sortOrder]);
 
   // Dismiss a notification (optimistic + backend persist)
   const dismissNotif = (key) => {
@@ -1383,6 +1389,7 @@ export default function TrackingSheetSetter() {
     setFilterStatuses([]);
     setFilterOrigins([]);
     setFilterSalesOwners([]);
+    setFilterMyColdCallsOnly(false);
     setFilterCallTime([]);
     setOpenFilter('');
     // Clear dropping state after animation completes
@@ -4091,6 +4098,19 @@ export default function TrackingSheetSetter() {
                   );
                 })()}
 
+                {/* Mes cold calls uniquement — setter only, Nouveau lead.
+                    Isole les leads créés par le setter (Scénario 2) parmi
+                    les 3 sources du bucket (cold-call / overflow / uncalled
+                    voicemail). Toggle binaire, click = on/off. */}
+                {isSetter && catKey === 'mine' && (
+                  <>
+                    {renderFilterRow('my_cold_calls', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>, 'Mes cold calls', true)}
+                    {openFilterSections.has('my_cold_calls') && renderOptionsBox([
+                      <div key="my_cold_calls_toggle">{renderRadio(filterMyColdCallsOnly, 'Uniquement mes cold calls', C.accent, () => setFilterMyColdCallsOnly(v => !v))}</div>
+                    ])}
+                  </>
+                )}
+
                 {/* Sales propriétaire — setter only, onglets Nouveau lead
                     + Répondeurs (les 2 contiennent désormais des leads
                     multi-sales : cold-call setter + overflow 24h +
@@ -4156,9 +4176,9 @@ export default function TrackingSheetSetter() {
               <div style={{ flex: 1 }} />
 
               {/* Clear all — bottom */}
-              {(filterTags.length > 0 || filterStatuses.length > 0 || filterOrigins.length > 0 || filterSalesOwners.length > 0 || filterCallTime.length > 0 || sortOrder !== 'newest') && (
+              {(filterTags.length > 0 || filterStatuses.length > 0 || filterOrigins.length > 0 || filterSalesOwners.length > 0 || filterMyColdCallsOnly || filterCallTime.length > 0 || sortOrder !== 'newest') && (
                 <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}` }}>
-                  <button onClick={() => { setFilterTags([]); setFilterStatuses([]); setFilterOrigins([]); setFilterSalesOwners([]); setFilterCallTime([]); setSortOrder('newest'); }} style={{
+                  <button onClick={() => { setFilterTags([]); setFilterStatuses([]); setFilterOrigins([]); setFilterSalesOwners([]); setFilterMyColdCallsOnly(false); setFilterCallTime([]); setSortOrder('newest'); }} style={{
                     width: '100%', padding: '8px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
                     border: `1px solid ${C.accent}40`, background: `${C.accent}08`, color: C.accent,
                     cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',

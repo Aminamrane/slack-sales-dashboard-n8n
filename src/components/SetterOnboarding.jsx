@@ -7,7 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 // 2026-05-11 v1 → v2 : retrait mention "samedi/dimanche exclus" (interne).
 // 2026-05-11 v2 → v3 : slide 2 inclut maintenant les répondeurs non
 // encore appelés ; slide 3 reformulé pour expliciter "déjà appelés".
-const STORAGE_KEY_PREFIX = 'owner_setter_onboarding_dismissed_v3_';
+// 2026-05-11 v3 → v4 : ajout slide raccourci recherche Ctrl/Cmd+F.
+const STORAGE_KEY_PREFIX = 'owner_setter_onboarding_dismissed_v4_';
 
 const SLIDES = [
   {
@@ -32,8 +33,13 @@ const SLIDES = [
   },
   {
     emoji: '🔍',
-    title: 'Astuce filtre',
-    body: "Dans l'onglet Répondeurs, tu peux filtrer par sales propriétaire (par exemple les répondeurs de Yohan uniquement) via le panneau Filtres à gauche.",
+    title: 'Astuce filtres',
+    body: "Dans Nouveau lead + Répondeurs, tu peux filtrer par sales propriétaire (par exemple les leads de Yohan uniquement). Dans Nouveau lead, tu peux aussi afficher uniquement tes propres cold calls.",
+  },
+  {
+    emoji: '⌘',
+    title: 'Raccourci recherche',
+    body: "Appuie sur Ctrl+F (ou Cmd+F sur Mac) pour chercher un lead par nom, email ou téléphone. La recherche fonctionne dans tous les onglets.",
   },
 ];
 
