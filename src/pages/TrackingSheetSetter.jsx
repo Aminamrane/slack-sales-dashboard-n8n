@@ -144,20 +144,20 @@ const CATEGORIES = [
 ];
 
 // ── SALES OWNER COLOR PALETTE (setter view) ─────────────────────────────────
-// Palette de 8 couleurs distinctes assignées de manière déterministe par sales
-// (hash de l'email). Chaque sales aura toujours la même couleur, donc le setter
-// reconnaît visuellement le propriétaire d'un lead d'un coup d'œil sur la card.
-// Couleurs choisies pour être visuellement distinctes ET accessibles (contraste
-// suffisant sur fond clair + fond sombre).
+// Palette de 7 couleurs assignées de manière déterministe par sales (hash
+// FNV-1a de l'email). Chaque sales aura toujours la même couleur.
+// IMPORTANT : les couleurs sont ordonnées pour que des buckets adjacents
+// soient chromatiquement opposés (le hash modulo tombe naturellement sur des
+// buckets proches pour des emails similaires — on évite ainsi que 2 sales
+// proches sémantiquement aient des couleurs trop voisines).
 const SETTER_SALES_PALETTE = [
-  '#3b82f6', // blue
-  '#fb923c', // orange
-  '#8b5cf6', // purple
-  '#10b981', // emerald
-  '#ec4899', // pink
-  '#14b8a6', // teal
-  '#f59e0b', // amber
-  '#06b6d4', // cyan
+  '#3b82f6', // blue   (210°)
+  '#ef4444', // red    (0°)    — opposé bleu
+  '#10b981', // green  (158°)  — entre les deux
+  '#8b5cf6', // purple (258°)
+  '#f59e0b', // amber  (38°)   — chaud, distant du purple
+  '#ec4899', // pink   (330°)
+  '#14b8a6', // teal   (172°)
 ];
 
 const getSalesOwnerColor = (email) => {
