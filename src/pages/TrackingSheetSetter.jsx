@@ -143,6 +143,36 @@ const CATEGORIES = [
   { key: "signed",       label: "Signés",          color: "#34d399", softBg: "#edfbf3", softBgDark: "rgba(52,211,153,0.18)",  softText: "#5ab896", description: "Leads que tu as touchés et qui ont signé" },
 ];
 
+// ── SALES OWNER COLOR PALETTE (setter view) ─────────────────────────────────
+// Palette de 8 couleurs distinctes assignées de manière déterministe par sales
+// (hash de l'email). Chaque sales aura toujours la même couleur, donc le setter
+// reconnaît visuellement le propriétaire d'un lead d'un coup d'œil sur la card.
+// Couleurs choisies pour être visuellement distinctes ET accessibles (contraste
+// suffisant sur fond clair + fond sombre).
+const SETTER_SALES_PALETTE = [
+  '#3b82f6', // blue
+  '#fb923c', // orange
+  '#8b5cf6', // purple
+  '#10b981', // emerald
+  '#ec4899', // pink
+  '#14b8a6', // teal
+  '#f59e0b', // amber
+  '#06b6d4', // cyan
+];
+
+const getSalesOwnerColor = (email) => {
+  if (!email) return '#94a3b8'; // gray fallback
+  // FNV-1a 32-bit hash : meilleure distribution que la multiplication par 31
+  // pour des chaînes courtes similaires (emails partagent souvent un domaine).
+  const s = email.toLowerCase();
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return SETTER_SALES_PALETTE[(h >>> 0) % SETTER_SALES_PALETTE.length];
+};
+
 // ── TODAY (for dynamic notifications in demo) ────────────────────────────────
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -4754,20 +4784,26 @@ export default function TrackingSheetSetter() {
                       </span>
 
                       {/* Origin badge (sales/admin) — Sales owner first name (setter) */}
-                      {isSetter ? (
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center',
-                          padding: '2px 8px', borderRadius: '50px',
-                          fontSize: '10px', fontWeight: 600,
-                          background: darkMode ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
-                          color: C.muted,
-                          flexShrink: 0,
-                        }}
-                          title={lead.assigned_to_name || ''}
-                        >
-                          {lead.assigned_to_name?.split(' ')[0] || '—'}
-                        </span>
-                      ) : (
+                      {isSetter ? (() => {
+                        const ownerColor = getSalesOwnerColor(lead.assigned_to);
+                        const firstName = lead.assigned_to_name?.split(' ')[0] || '—';
+                        return (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center',
+                            padding: '4px 11px', borderRadius: '50px',
+                            fontSize: '11.5px', fontWeight: 700,
+                            background: darkMode ? `${ownerColor}26` : `${ownerColor}1a`,
+                            color: ownerColor,
+                            border: `1px solid ${ownerColor}40`,
+                            flexShrink: 0,
+                            letterSpacing: '-0.005em',
+                          }}
+                            title={lead.assigned_to_name || ''}
+                          >
+                            {firstName}
+                          </span>
+                        );
+                      })() : (
                         <span style={{
                           display: 'inline-flex', alignItems: 'center',
                           padding: '2px 8px', borderRadius: '50px',
