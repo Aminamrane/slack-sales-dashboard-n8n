@@ -8,6 +8,7 @@ import LeadsManagement from "./LeadsManagement.jsx";
 // ── Setter modales (Option B duplication intégrale TrackingSheet) ──────────
 import DisqualifyModal from "../components/setter/DisqualifyModal.jsx";
 import CreateColdLeadModal from "../components/setter/CreateColdLeadModal.jsx";
+import SetterOnboarding from "../components/SetterOnboarding.jsx";
 import "../index.css";
 
 // ── SIDEBAR ICONS ────────────────────────────────────────────────────────────
@@ -8437,6 +8438,10 @@ export default function TrackingSheetSetter() {
             </div>,
             document.body,
           )}
+          {/* Onboarding tutorial — first-visit setter only.
+              Clé localStorage scopée par user.id → chaque nouveau setter
+              voit le tuto même sur un browser déjà utilisé par un autre. */}
+          <SetterOnboarding userId={currentUser?.id} darkMode={darkMode} />
         </>
       )}
     </div>
