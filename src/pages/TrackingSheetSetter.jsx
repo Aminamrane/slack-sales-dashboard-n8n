@@ -4091,11 +4091,15 @@ export default function TrackingSheetSetter() {
                   );
                 })()}
 
-                {/* Sales propriétaire — setter only, onglet répondeurs.
-                    Options = teamSales (scope setter_assignments, fetché via
-                    /api/v1/tracking/setter/my-team-sales). Filtre sur
+                {/* Sales propriétaire — setter only, onglets Nouveau lead
+                    + Répondeurs (les 2 contiennent désormais des leads
+                    multi-sales : cold-call setter + overflow 24h +
+                    répondeurs uncalled dans Nouveau lead ; répondeurs
+                    appelés par le setter dans Répondeurs).
+                    Options = teamSales (scope setter_assignments, fetché
+                    via /api/v1/tracking/setter/my-team-sales). Filtre sur
                     `lead.assigned_to` (email du sales). */}
-                {isSetter && catKey === 'voicemail' && teamSales.length > 0 && (
+                {isSetter && (catKey === 'voicemail' || catKey === 'mine') && teamSales.length > 0 && (
                   <>
                     {renderFilterRow('sales_owner', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, 'Sales propriétaire', true)}
                     {openFilterSections.has('sales_owner') && renderOptionsBox(

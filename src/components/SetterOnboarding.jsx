@@ -5,7 +5,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 // Versionner la clé permet de re-déclencher le tuto pour tous les setters
 // après une refonte majeure du tutoriel (incrémenter _v2, _v3, etc.).
 // 2026-05-11 v1 → v2 : retrait mention "samedi/dimanche exclus" (interne).
-const STORAGE_KEY_PREFIX = 'owner_setter_onboarding_dismissed_v2_';
+// 2026-05-11 v2 → v3 : slide 2 inclut maintenant les répondeurs non
+// encore appelés ; slide 3 reformulé pour expliciter "déjà appelés".
+const STORAGE_KEY_PREFIX = 'owner_setter_onboarding_dismissed_v3_';
 
 const SLIDES = [
   {
@@ -16,12 +18,12 @@ const SLIDES = [
   {
     emoji: '🎯',
     title: 'Onglet « Nouveau lead »',
-    body: "Tes cold calls + les leads de ton équipe non traités après 24h ouvrées. C'est ton point de départ chaque jour.",
+    body: "Tes cold calls + les leads de ton équipe non traités après 24h ouvrées + les répondeurs équipe que tu n'as pas encore appelés. C'est ton point de départ chaque jour.",
   },
   {
     emoji: '📞',
     title: 'Onglet « Répondeurs »',
-    body: "Les leads de ton équipe qui n'ont pas décroché. Sur chaque lead, 4 actions : Marquer appelé, Placer R1, Placer R2, Disqualifier.",
+    body: "Les leads que tu as déjà appelés au moins une fois sans qu'ils décrochent. Tu peux les rappeler. Tes 4 actions : Marquer appelé, Placer R1, Placer R2, Disqualifier.",
   },
   {
     emoji: '📅',
