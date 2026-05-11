@@ -4859,13 +4859,33 @@ export default function TrackingSheet() {
                       {(() => {
                         let label = null;
                         let setterName = null;
+                        let originStep = null; // 'R1' | 'R2' — pour préciser tooltip quand fallback
                         let cnt = 0;
                         if (activeCat.key === 'r1' && lead.r1_placed_by_setter_id) {
                           label = 'Traité par';
                           setterName = lead.r1_placed_by_setter_name || 'Setter';
+                          originStep = 'R1';
                         } else if (activeCat.key === 'r2' && lead.r2_placed_by_setter_id) {
                           label = 'Traité par';
                           setterName = lead.r2_placed_by_setter_name || 'Setter';
+                          originStep = 'R2';
+                        } else if (activeCat.key === 'r2' && lead.r1_placed_by_setter_id) {
+                          // Fallback R2 tab : le R2 a été placé par le sales mais le R1
+                          // originel venait d'un setter. Trace préservée pour le suivi.
+                          label = 'Traité par';
+                          setterName = lead.r1_placed_by_setter_name || 'Setter';
+                          originStep = 'R1';
+                        } else if (activeCat.key === 'signed' && (lead.r2_placed_by_setter_id || lead.r1_placed_by_setter_id)) {
+                          // Tab Signés : préserve la trace setter de bout en bout. R2
+                          // setter prime sur R1 (étape la plus avancée).
+                          label = 'Traité par';
+                          if (lead.r2_placed_by_setter_id) {
+                            setterName = lead.r2_placed_by_setter_name || 'Setter';
+                            originStep = 'R2';
+                          } else {
+                            setterName = lead.r1_placed_by_setter_name || 'Setter';
+                            originStep = 'R1';
+                          }
                         } else if (lead.setter_called_by_name || lead.setter_called_by) {
                           label = 'En traitement par';
                           setterName = lead.setter_called_by_name || lead.setter_called_by || 'Setter';
@@ -4873,6 +4893,7 @@ export default function TrackingSheet() {
                         }
                         if (!label) return null;
                         const tooltipParts = [`${label} ${setterName}`];
+                        if (originStep) tooltipParts.push(`${originStep} placé par ce setter`);
                         if (cnt > 0) tooltipParts.push(`Tentatives setter : ${cnt}`);
                         if (label === 'En traitement par' && lead.setter_called_at) {
                           try {
