@@ -264,8 +264,14 @@ export default function TrackingSheetSetter() {
   // ── SETTER MODE (Option B) ─────────────────────────────────────────────────
   // Sécurité : si l'utilisateur n'est PAS un setter, on bloque la route à
   // l'auth check ci-dessous. Ce flag drive aussi toutes les gardes UI.
+  // 2026-05-11 : élargi pour couvrir les setters hybrides (role primaire
+  // 'sales' avec un setter_assignment actif → tracking_sheet_setter
+  // permission granted dynamiquement par le backend via
+  // `has_active_setter_assignment`). Cas Sébastien ITEMA. Admin reste
+  // exclu pour conserver sa vue sales-like sur la route.
   const userMeta = apiClient.getUser();
-  const isSetter = (userMeta?.role || '') === 'setter';
+  const isSetter = (userMeta?.role || '') === 'setter'
+    || (apiClient.hasAccess('tracking_sheet_setter') && (userMeta?.role || '') !== 'admin');
   const [teamSales, setTeamSales] = useState([]);
   // Setter modales state — ouvertes via setter actions dans panel détail
   const [setterModal, setSetterModal] = useState(null); // { kind, lead?, mode }
@@ -5939,27 +5945,86 @@ export default function TrackingSheetSetter() {
                   <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>
                     Actions setter
                   </div>
-                  {(lead._setter_bucket === 'voicemail' || lead._setter_bucket === 'mine') && (
-                    <button
-                      onClick={() => setSetterModal({ kind: 'markCalled', lead })}
-                      style={{
-                        padding: '9px 14px', borderRadius: 50, border: 'none',
-                        background: darkMode ? 'rgba(16,185,129,0.18)' : 'rgba(16,185,129,0.12)',
-                        color: '#10b981', fontSize: 12.5, fontWeight: 600,
-                        cursor: 'pointer', fontFamily: 'inherit',
-                        transition: 'background 0.15s, transform 0.15s',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(16,185,129,0.28)' : 'rgba(16,185,129,0.18)'; e.currentTarget.style.transform = 'scale(1.02)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(16,185,129,0.18)' : 'rgba(16,185,129,0.12)'; e.currentTarget.style.transform = 'scale(1)'; }}
-                    >
-                      <span style={{ fontSize: 14, lineHeight: 1 }}>📞</span>
-                      Marquer appelé
-                      {lead.setter_call_count > 0 && (
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 50, background: 'rgba(16,185,129,0.25)' }}>{lead.setter_call_count}</span>
-                      )}
-                    </button>
-                  )}
+                  {(lead._setter_bucket === 'voicemail' || lead._setter_bucket === 'mine') && (() => {
+                    // Marquer appelé : branching inline. Clic → propose 3
+                    // outcomes (Répondeur / Placer R1 / Placer R2). Le bouton
+                    // se transforme en 3 pills tant que le workflow est actif.
+                    // Pattern miroir du R1 sales workflow (cf. l.6113+).
+                    const outcomeWf = activeWorkflow?.leadId === lead.id && activeWorkflow?.setterOutcomeFlow ? activeWorkflow : null;
+                    if (!outcomeWf) {
+                      return (
+                        <button
+                          onClick={() => setActiveWorkflow({ leadId: lead.id, setterOutcomeFlow: true })}
+                          style={{
+                            padding: '9px 14px', borderRadius: 50, border: 'none',
+                            background: darkMode ? 'rgba(16,185,129,0.18)' : 'rgba(16,185,129,0.12)',
+                            color: '#10b981', fontSize: 12.5, fontWeight: 600,
+                            cursor: 'pointer', fontFamily: 'inherit',
+                            transition: 'background 0.15s, transform 0.15s',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(16,185,129,0.28)' : 'rgba(16,185,129,0.18)'; e.currentTarget.style.transform = 'scale(1.02)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(16,185,129,0.18)' : 'rgba(16,185,129,0.12)'; e.currentTarget.style.transform = 'scale(1)'; }}
+                        >
+                          <span style={{ fontSize: 14, lineHeight: 1 }}>📞</span>
+                          Marquer appelé
+                          {lead.setter_call_count > 0 && (
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 50, background: 'rgba(16,185,129,0.25)' }}>{lead.setter_call_count}</span>
+                          )}
+                        </button>
+                      );
+                    }
+                    // Branching state : 3 outcome pills + Annuler
+                    const setterMode = lead._setter_bucket === 'mine' ? 'mine' : 'team';
+                    const pillStyle = (color) => ({
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                      padding: '9px 14px', borderRadius: 50, border: 'none',
+                      background: darkMode ? `${color}30` : `${color}15`,
+                      color, fontSize: 12.5, fontWeight: 600,
+                      cursor: 'pointer', fontFamily: 'inherit',
+                      transition: 'background 0.15s, transform 0.15s',
+                    });
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2, animation: 'wfSplitIn 0.3s ease both' }}>
+                          Qu'est-ce qui s'est passé ?
+                        </div>
+                        <button
+                          onClick={() => { setActiveWorkflow(null); setSetterModal({ kind: 'markCalled', lead }); }}
+                          style={{ ...pillStyle('#64748b'), animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) 30ms both' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(100,116,139,0.4)' : 'rgba(100,116,139,0.2)'; e.currentTarget.style.transform = 'scale(1.02)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(100,116,139,0.3)' : 'rgba(100,116,139,0.15)'; e.currentTarget.style.transform = 'scale(1)'; }}
+                        >
+                          <span style={{ fontSize: 14, lineHeight: 1 }}>📞</span>
+                          Répondeur
+                        </button>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                          <button
+                            onClick={() => setActiveWorkflow({ leadId: lead.id, setterPlaceFlow: 'r1', setterMode, newDate: '', targetSalesEmail: '', notes: '', emailDraft: (lead.email || '') })}
+                            style={{ ...pillStyle('#3b82f6'), animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) 70ms both' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(59,130,246,0.4)' : 'rgba(59,130,246,0.2)'; e.currentTarget.style.transform = 'scale(1.02)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(59,130,246,0.3)' : 'rgba(59,130,246,0.15)'; e.currentTarget.style.transform = 'scale(1)'; }}
+                          >
+                            <span style={{ fontSize: 14, lineHeight: 1 }}>📅</span>
+                            Placer R1
+                          </button>
+                          <button
+                            onClick={() => setActiveWorkflow({ leadId: lead.id, setterPlaceFlow: 'r2', setterMode, newDate: '', targetSalesEmail: '', notes: '', emailDraft: (lead.email || '') })}
+                            style={{ ...pillStyle('#fb923c'), animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) 110ms both' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(251,146,60,0.4)' : 'rgba(251,146,60,0.2)'; e.currentTarget.style.transform = 'scale(1.02)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(251,146,60,0.3)' : 'rgba(251,146,60,0.15)'; e.currentTarget.style.transform = 'scale(1)'; }}
+                          >
+                            <span style={{ fontSize: 14, lineHeight: 1 }}>⚡</span>
+                            Placer R2
+                          </button>
+                        </div>
+                        <button
+                          onClick={() => setActiveWorkflow(null)}
+                          style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', marginTop: 2, opacity: 0.7, animation: 'wfSplitIn 0.3s ease 150ms both' }}
+                        >Annuler</button>
+                      </div>
+                    );
+                  })()}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                     <button
                       onClick={() => setActiveWorkflow({ leadId: lead.id, setterPlaceFlow: 'r1', setterMode: lead._setter_bucket === 'mine' ? 'mine' : 'team', newDate: '', targetSalesEmail: '', notes: '', emailDraft: (lead.email || '') })}
