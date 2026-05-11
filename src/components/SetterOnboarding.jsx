@@ -8,7 +8,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 // 2026-05-11 v2 → v3 : slide 2 inclut maintenant les répondeurs non
 // encore appelés ; slide 3 reformulé pour expliciter "déjà appelés".
 // 2026-05-11 v3 → v4 : ajout slide raccourci recherche Ctrl/Cmd+F.
-const STORAGE_KEY_PREFIX = 'owner_setter_onboarding_dismissed_v4_';
+// 2026-05-11 v4 → v5 : bump pour re-déclencher le tuto chez Gaelle (le
+// dev a consommé v4 en testant, contenu inchangé).
+const STORAGE_KEY_PREFIX = 'owner_setter_onboarding_dismissed_v5_';
 
 const SLIDES = [
   {
