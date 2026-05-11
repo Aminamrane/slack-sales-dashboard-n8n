@@ -2398,8 +2398,10 @@ export default function TrackingSheetSetter() {
             )}
             {/* Setter KPI bar : 5 chiffres (un par bucket). Padding latéral
                 réduit (24px vs 36px sales) pour tenir 5 KPIs sans scroll
-                horizontal sur écrans 13" courants. */}
-            {!isAdminView && isSetter && (() => {
+                horizontal sur écrans 13" courants.
+                TEMP désactivé 2026-05-11 (dev) — sera repensé plus tard.
+                Retirer le `false &&` ci-dessous pour réactiver. */}
+            {false && !isAdminView && isSetter && (() => {
               const mineCount      = leads.filter(l => l._setter_bucket === 'mine').length;
               const voicemailCount = leads.filter(l => l._setter_bucket === 'voicemail').length;
               const r1PlacedCount  = leads.filter(l => l._setter_bucket === 'r1_placed').length;
