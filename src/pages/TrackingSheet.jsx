@@ -4488,13 +4488,15 @@ export default function TrackingSheet() {
             // Unified groups array for the active tab
             const groups = isR1Tab ? [
               { key: 'scheduled', leads: r1Scheduled, label: 'Planifiés', color: '#3b82f6' },
-              { key: 'pending',   leads: r1Pending,   label: 'En attente', color: '#f59e0b' },
-              { key: 'completed', leads: r1Completed, label: 'Effectués',  color: '#10b981' },
-              { key: 'cancelled', leads: r1Cancelled, label: 'Annulés',     color: '#ef4444' },
-              // Container "Traité par le setter" — collapsed par défaut, mirror Annulés.
+              // Container "Traité par le setter" — positionné juste après Planifiés
+              // pour que le sales voie immédiatement les R1 placés par les setters
+              // (qui demandent généralement plus d'attention que les Annulés).
               // Listing exclusif des leads dont r1_placed_by_setter_id est non null.
               // Label dynamique selon le ou les setters présents (cf. setterPlacedLabel).
               { key: 'setter_placed', leads: r1SetterPlaced, label: setterPlacedLabel, color: '#8b5cf6' },
+              { key: 'pending',   leads: r1Pending,   label: 'En attente', color: '#f59e0b' },
+              { key: 'completed', leads: r1Completed, label: 'Effectués',  color: '#10b981' },
+              { key: 'cancelled', leads: r1Cancelled, label: 'Annulés',     color: '#ef4444' },
             ] : isR2Tab ? [
               { key: 'scheduled', leads: r2Scheduled, label: 'Planifiés', color: '#fb923c' },
               { key: 'pending',   leads: r2Pending,   label: 'En attente', color: '#f59e0b' },
