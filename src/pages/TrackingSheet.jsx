@@ -4438,18 +4438,22 @@ export default function TrackingSheet() {
             const isGroupedTab = isR1Tab || isR2Tab || isR3Tab || isCallTab;
 
             // R1 groups — leads with past date + no result go to pending.
-            // Conteneur "Traité par le setter" (option A — exclusif) : un lead avec
-            // `r1_placed_by_setter_id` non null est isolé dans son propre container et
-            // n'apparaît PAS dans Planifiés/En attente/Effectués/Annulés. Sémantique :
-            // le setter a déjà fait le boulot, le sales le voit dans son slot dédié.
+            // Conteneur "Traité par le setter" (option B — exclusif tant que non
+            // qualifié par sales) : un lead avec `r1_placed_by_setter_id` non null
+            // est dans son propre container TANT QUE r1_result est null/rescheduled.
+            // Dès que le sales qualifie (`r1_result = done/no_show/cancelled`), le
+            // lead migre naturellement dans Planifiés/Pending/Effectués/Annulés.
+            // Le badge "Traité par {prénom}" reste sur la card via
+            // `r1_placed_by_setter_name` peu importe le bucket → trace préservée.
             const todayDate = new Date().toISOString().slice(0, 10);
             const isDatePast = (d) => { if (!d) return false; const ds = typeof d === 'string' ? d.slice(0, 10) : ''; return ds && ds < todayDate; };
             const isSetterPlaced = (l) => l.r1_placed_by_setter_id != null;
-            const r1SetterPlaced = isR1Tab ? filteredLeads.filter(l => isSetterPlaced(l)) : [];
-            const r1Scheduled  = isR1Tab ? filteredLeads.filter(l => !isSetterPlaced(l) && (!l.r1_result || l.r1_result === 'rescheduled') && !isDatePast(l.r1)) : [];
-            const r1Pending    = isR1Tab ? filteredLeads.filter(l => !isSetterPlaced(l) && (l.r1_result === 'no_show' || ((!l.r1_result || l.r1_result === 'rescheduled') && isDatePast(l.r1)))) : [];
-            const r1Cancelled  = isR1Tab ? filteredLeads.filter(l => !isSetterPlaced(l) && l.r1_result === 'cancelled') : [];
-            const r1Completed  = isR1Tab ? filteredLeads.filter(l => !isSetterPlaced(l) && l.r1_result === 'done') : [];
+            const isSetterPlacedUnqualified = (l) => isSetterPlaced(l) && (!l.r1_result || l.r1_result === 'rescheduled');
+            const r1SetterPlaced = isR1Tab ? filteredLeads.filter(isSetterPlacedUnqualified) : [];
+            const r1Scheduled  = isR1Tab ? filteredLeads.filter(l => !isSetterPlacedUnqualified(l) && (!l.r1_result || l.r1_result === 'rescheduled') && !isDatePast(l.r1)) : [];
+            const r1Pending    = isR1Tab ? filteredLeads.filter(l => !isSetterPlacedUnqualified(l) && (l.r1_result === 'no_show' || ((!l.r1_result || l.r1_result === 'rescheduled') && isDatePast(l.r1)))) : [];
+            const r1Cancelled  = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'cancelled') : [];
+            const r1Completed  = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'done') : [];
 
             // R2 groups
             const R2_PENDING_STATES = ['comptable', 'associe', 'reflexion', 'relire_contrat', 'pas_decision_jour', 'tresorerie'];
