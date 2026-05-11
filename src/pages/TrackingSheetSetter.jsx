@@ -953,6 +953,7 @@ export default function TrackingSheetSetter() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTags, setFilterTags] = useState([]); // multi-select: r1_result or r2_result values (e.g. ['no_show', 'done'])
   const [filterOrigins, setFilterOrigins] = useState([]); // multi-select: origin values (e.g. ['BTP', 'cc'])
+  const [filterSalesOwners, setFilterSalesOwners] = useState([]); // multi-select setter only: emails des sales propriétaires (scope = teamSales)
   const [filterStatuses, setFilterStatuses] = useState([]); // multi-select: ['r1_done', 'r1_not_done', 'r2_done', 'r2_not_done']
   const [filterCallTime, setFilterCallTime] = useState([]); // multi-select: ['matin', 'apres_midi', 'soir'] — first_call_at time-of-day filter
   const [sortOrder, setSortOrder] = useState('newest'); // 'newest' | 'oldest'
@@ -1015,6 +1016,10 @@ export default function TrackingSheetSetter() {
     if (filterOrigins.length > 0) {
       result = result.filter(l => filterOrigins.includes(l.origin));
     }
+    // Filter by sales owner (setter only — restreint à teamSales)
+    if (filterSalesOwners.length > 0) {
+      result = result.filter(l => l.assigned_to && filterSalesOwners.includes(l.assigned_to));
+    }
     // Filter by tag (qualification result) — tab-contextual field
     if (filterTags.length > 0) {
       if (catKey === 'r1') {
@@ -1070,7 +1075,7 @@ export default function TrackingSheetSetter() {
       result = [...result].sort((a, b) => (b.assigned_at || '').localeCompare(a.assigned_at || ''));
     }
     return result;
-  }, [leads, activeTab, exitingCards, searchQuery, filterTags, filterStatuses, filterOrigins, filterCallTime, sortOrder]);
+  }, [leads, activeTab, exitingCards, searchQuery, filterTags, filterStatuses, filterOrigins, filterSalesOwners, filterCallTime, sortOrder]);
 
   // Dismiss a notification (optimistic + backend persist)
   const dismissNotif = (key) => {
@@ -1376,6 +1381,7 @@ export default function TrackingSheetSetter() {
     setFilterTags([]);
     setFilterStatuses([]);
     setFilterOrigins([]);
+    setFilterSalesOwners([]);
     setFilterCallTime([]);
     setOpenFilter('');
     // Clear dropping state after animation completes
@@ -4081,6 +4087,21 @@ export default function TrackingSheetSetter() {
                     ))
                   );
                 })()}
+
+                {/* Sales propriétaire — setter only, onglet répondeurs.
+                    Options = teamSales (scope setter_assignments, fetché via
+                    /api/v1/tracking/setter/my-team-sales). Filtre sur
+                    `lead.assigned_to` (email du sales). */}
+                {isSetter && catKey === 'voicemail' && teamSales.length > 0 && (
+                  <>
+                    {renderFilterRow('sales_owner', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, 'Sales propriétaire', true)}
+                    {openFilterSections.has('sales_owner') && renderOptionsBox(
+                      teamSales.map(s => (
+                        <div key={s.email}>{renderRadio(filterSalesOwners.includes(s.email), s.full_name || s.name || s.email, C.accent, () => setFilterSalesOwners(prev => prev.includes(s.email) ? prev.filter(v => v !== s.email) : [...prev, s.email]))}</div>
+                      ))
+                    )}
+                  </>
+                )}
               </div>
 
               {/* ═══ GROUP: TRI & DATES ═══ */}
@@ -4128,9 +4149,9 @@ export default function TrackingSheetSetter() {
               <div style={{ flex: 1 }} />
 
               {/* Clear all — bottom */}
-              {(filterTags.length > 0 || filterStatuses.length > 0 || filterOrigins.length > 0 || filterCallTime.length > 0 || sortOrder !== 'newest') && (
+              {(filterTags.length > 0 || filterStatuses.length > 0 || filterOrigins.length > 0 || filterSalesOwners.length > 0 || filterCallTime.length > 0 || sortOrder !== 'newest') && (
                 <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}` }}>
-                  <button onClick={() => { setFilterTags([]); setFilterStatuses([]); setFilterOrigins([]); setFilterCallTime([]); setSortOrder('newest'); }} style={{
+                  <button onClick={() => { setFilterTags([]); setFilterStatuses([]); setFilterOrigins([]); setFilterSalesOwners([]); setFilterCallTime([]); setSortOrder('newest'); }} style={{
                     width: '100%', padding: '8px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
                     border: `1px solid ${C.accent}40`, background: `${C.accent}08`, color: C.accent,
                     cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
@@ -4705,16 +4726,31 @@ export default function TrackingSheetSetter() {
                         {lead.full_name}
                       </span>
 
-                      {/* Origin badge */}
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center',
-                        padding: '2px 8px', borderRadius: '50px',
-                        fontSize: '10px', fontWeight: 600,
-                        background: origin.bg, color: origin.text,
-                        flexShrink: 0,
-                      }}>
-                        {lead.origin}
-                      </span>
+                      {/* Origin badge (sales/admin) — Sales owner first name (setter) */}
+                      {isSetter ? (
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center',
+                          padding: '2px 8px', borderRadius: '50px',
+                          fontSize: '10px', fontWeight: 600,
+                          background: darkMode ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+                          color: C.muted,
+                          flexShrink: 0,
+                        }}
+                          title={lead.assigned_to_name || ''}
+                        >
+                          {lead.assigned_to_name?.split(' ')[0] || '—'}
+                        </span>
+                      ) : (
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center',
+                          padding: '2px 8px', borderRadius: '50px',
+                          fontSize: '10px', fontWeight: 600,
+                          background: origin.bg, color: origin.text,
+                          flexShrink: 0,
+                        }}>
+                          {lead.origin}
+                        </span>
+                      )}
 
                       {/* Compact info pills */}
                       <span style={{ width: '1px', height: '14px', background: C.border, flexShrink: 0 }} />
@@ -6111,13 +6147,12 @@ export default function TrackingSheetSetter() {
               })()}
 
               {/* ═══ NEW / CALLBACK / VOICEMAIL TAB WORKFLOW ═══ */}
-              {/* Visible côté sales (`new`, `callback`, `voicemail`) ET setter
-                  (`mine` = analogue de `new`, `voicemail` = répondeurs équipe).
-                  Le setter peut bumper call_attempts + setter contact_result /
-                  appointment_result / r1_date / r2_date — tous champs présents
-                  dans la whitelist setter étendue côté backend. Aucune sous-
-                  action ne touche les sacred zones (contrats, NDA). */}
-              {(activeCat.key === 'new' || activeCat.key === 'mine' || activeCat.key === 'callback' || activeCat.key === 'voicemail') && (() => {
+              {/* Sales-only désormais. Côté setter, les actions équivalentes
+                  vivent dans le bloc SETTER ACTIONS plus haut (Marquer appelé,
+                  Placer R1, Placer R2, Disqualifier). Le bouton "Re-contacter"
+                  et le workflow callback/voicemail sales ne s'appliquent pas
+                  au flow setter. */}
+              {!isSetter && (activeCat.key === 'new' || activeCat.key === 'callback' || activeCat.key === 'voicemail') && (() => {
                 const wf = activeWorkflow?.leadId === lead.id && !activeWorkflow?.callFlow && !activeWorkflow?.setterPlaceFlow ? activeWorkflow : null;
                 const today = new Date().toISOString().split('T')[0];
                 // Preserve original first contact date if already set (callback/voicemail leads have been contacted before)
