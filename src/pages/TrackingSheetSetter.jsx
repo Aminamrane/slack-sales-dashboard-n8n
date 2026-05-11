@@ -4898,8 +4898,11 @@ export default function TrackingSheetSetter() {
                       {/* Call timestamps (voicemail/callback). Two pills side-by-side:
                           "1er" = first_call_at (existing, now shows date + time) in indigo,
                           "Dernier" = last_call_at (new field) in teal. The sales rep
-                          needs to know when they last tried — not just the first attempt. */}
-                      {(activeCat.key === 'voicemail' || activeCat.key === 'callback') && lead.first_call_at && (() => {
+                          needs to know when they last tried — not just the first attempt.
+                          Côté setter : pas affiché sur la card (lead plié), mais conservé
+                          dans le panel détail (cf. l.~5257). Le setter priorise l'info
+                          "à qui appartient le lead" sur les rappels historiques. */}
+                      {!isSetter && (activeCat.key === 'voicemail' || activeCat.key === 'callback') && lead.first_call_at && (() => {
                         const d = new Date(lead.first_call_at);
                         const dd = String(d.getDate()).padStart(2, '0');
                         const mo = String(d.getMonth() + 1).padStart(2, '0');
@@ -4917,7 +4920,7 @@ export default function TrackingSheetSetter() {
                           </span>
                         );
                       })()}
-                      {(activeCat.key === 'voicemail' || activeCat.key === 'callback') && lead.last_call_at && lead.last_call_at !== lead.first_call_at && (() => {
+                      {!isSetter && (activeCat.key === 'voicemail' || activeCat.key === 'callback') && lead.last_call_at && lead.last_call_at !== lead.first_call_at && (() => {
                         // Hide "Dernier" when it equals "1er" — avoids the redundant
                         // case after a single call (or on backfilled historical rows
                         // where backend set last = first). Absence carries meaning:
