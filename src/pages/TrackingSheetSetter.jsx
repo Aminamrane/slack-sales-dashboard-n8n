@@ -6025,40 +6025,6 @@ export default function TrackingSheetSetter() {
                       </div>
                     );
                   })()}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                    <button
-                      onClick={() => setActiveWorkflow({ leadId: lead.id, setterPlaceFlow: 'r1', setterMode: lead._setter_bucket === 'mine' ? 'mine' : 'team', newDate: '', targetSalesEmail: '', notes: '', emailDraft: (lead.email || '') })}
-                      style={{
-                        padding: '9px 14px', borderRadius: 50, border: 'none',
-                        background: darkMode ? 'rgba(59,130,246,0.22)' : 'rgba(59,130,246,0.12)',
-                        color: '#3b82f6', fontSize: 12.5, fontWeight: 600,
-                        cursor: 'pointer', fontFamily: 'inherit',
-                        transition: 'background 0.15s, transform 0.15s',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(59,130,246,0.32)' : 'rgba(59,130,246,0.20)'; e.currentTarget.style.transform = 'scale(1.02)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(59,130,246,0.22)' : 'rgba(59,130,246,0.12)'; e.currentTarget.style.transform = 'scale(1)'; }}
-                    >
-                      <span style={{ fontSize: 14, lineHeight: 1 }}>📅</span>
-                      Placer R1
-                    </button>
-                    <button
-                      onClick={() => setActiveWorkflow({ leadId: lead.id, setterPlaceFlow: 'r2', setterMode: lead._setter_bucket === 'mine' ? 'mine' : 'team', newDate: '', targetSalesEmail: '', notes: '', emailDraft: (lead.email || '') })}
-                      style={{
-                        padding: '9px 14px', borderRadius: 50, border: 'none',
-                        background: darkMode ? 'rgba(251,146,60,0.22)' : 'rgba(251,146,60,0.12)',
-                        color: '#fb923c', fontSize: 12.5, fontWeight: 600,
-                        cursor: 'pointer', fontFamily: 'inherit',
-                        transition: 'background 0.15s, transform 0.15s',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(251,146,60,0.32)' : 'rgba(251,146,60,0.20)'; e.currentTarget.style.transform = 'scale(1.02)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(251,146,60,0.22)' : 'rgba(251,146,60,0.12)'; e.currentTarget.style.transform = 'scale(1)'; }}
-                    >
-                      <span style={{ fontSize: 14, lineHeight: 1 }}>⚡</span>
-                      Placer R2
-                    </button>
-                  </div>
                   <button
                     onClick={() => setSetterModal({ kind: 'disqualify', lead, mode: lead._setter_bucket === 'mine' ? 'mine' : 'team' })}
                     style={{
