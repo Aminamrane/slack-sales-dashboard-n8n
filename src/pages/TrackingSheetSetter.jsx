@@ -5883,7 +5883,7 @@ export default function TrackingSheetSetter() {
                   <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>
                     Actions setter
                   </div>
-                  {lead._setter_bucket === 'voicemail' && (
+                  {(lead._setter_bucket === 'voicemail' || lead._setter_bucket === 'mine') && (
                     <button
                       onClick={() => setSetterModal({ kind: 'markCalled', lead })}
                       style={{
