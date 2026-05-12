@@ -404,8 +404,9 @@ export default function Profile() {
           )}
         </div>
 
-        {/* ─── Section 3: Partage leads avec setter (rôles sales uniquement) ─── */}
-        {['sales', 'head_of_sales', 'head_of_sales_manager'].includes(session?.role) && (
+        {/* ─── Section 3: Partage leads avec setter (rôles closers + admin) ─── */}
+        {/* admin inclus pour permettre les tests en interne (cf. dev qui a un setter test rattaché). */}
+        {['sales', 'head_of_sales', 'head_of_sales_manager', 'admin'].includes(session?.role) && (
           <div
             style={{
               background: C.bg,
