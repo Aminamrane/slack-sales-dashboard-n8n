@@ -138,6 +138,7 @@ function TimeSelect({ value, onChange, C, darkMode }) {
 const CATEGORIES = [
   { key: "mine",         label: "Nouveau lead",    color: "#6366f1", dotColor: "#a8c8f0", softBg: "#f0f1fb", softBgDark: "rgba(99,102,241,0.18)",  softText: "#7578c4", description: "Cold calls créés par toi" },
   { key: "voicemail",    label: "Répondeurs",      color: "#64748b", softBg: "#f0f1f4", softBgDark: "rgba(100,116,139,0.18)", softText: "#7a8594", description: "Répondeurs équipe à reprendre" },
+  { key: "callback",     label: "À rappeler",      color: "#94a3b8", softBg: "#f4f5f7", softBgDark: "rgba(148,163,184,0.18)", softText: "#8993a4", description: "Prospects qui souhaitent être rappelés plus tard" },
   { key: "r1_placed",    label: "R1 placés",       color: "#3b82f6", dotColor: "#a8c8f0", softBg: "#edf4fc", softBgDark: "rgba(59,130,246,0.18)",  softText: "#6a9fd8", description: "R1 que tu as placés (suivi sales)" },
   { key: "r2_placed",    label: "R2 placés",       color: "#fb923c", softBg: "#fdf3eb", softBgDark: "rgba(251,146,60,0.18)",  softText: "#c48a5a", description: "R2 que tu as placés (suivi sales)" },
   { key: "signed",       label: "Signés",          color: "#34d399", softBg: "#edfbf3", softBgDark: "rgba(52,211,153,0.18)",  softText: "#5ab896", description: "Leads que tu as touchés et qui ont signé" },
@@ -303,9 +304,10 @@ export default function TrackingSheetSetter() {
   // garantit que le bucket le plus prioritaire l'emporte au final.
   const refreshData = useCallback(async () => {
     try {
-      const [mineRes, teamRes, r1PlacedRes, r2PlacedRes, signedRes, salesRes] = await Promise.all([
+      const [mineRes, teamRes, callbackRes, r1PlacedRes, r2PlacedRes, signedRes, salesRes] = await Promise.all([
         apiClient.get('/api/v1/tracking/setter/my-leads').catch((e) => ({ __err: e })),
         apiClient.get('/api/v1/tracking/setter/team-leads').catch((e) => ({ __err: e })),
+        apiClient.get('/api/v1/tracking/setter/callback-leads').catch((e) => ({ __err: e })),
         apiClient.get('/api/v1/tracking/setter/r1-placed').catch((e) => ({ __err: e })),
         apiClient.get('/api/v1/tracking/setter/r2-placed').catch((e) => ({ __err: e })),
         apiClient.get('/api/v1/tracking/setter/signed').catch((e) => ({ __err: e })),
@@ -333,6 +335,7 @@ export default function TrackingSheetSetter() {
       const buckets = [
         ['mine',      extractList(mineRes)],
         ['voicemail', extractList(teamRes)],
+        ['callback',  extractList(callbackRes)],
         ['r1_placed', extractList(r1PlacedRes)],
         ['r2_placed', extractList(r2PlacedRes)],
         ['signed',    extractList(signedRes)],
@@ -5940,12 +5943,12 @@ export default function TrackingSheetSetter() {
                   par des actions setter : Marquer appelé (voicemail seul) +
                   Placer R1 / Placer R2 / Disqualifier. Bouton "+ Nouveau lead"
                   vit en haut des folder tabs (cf. plus haut). */}
-              {isSetter && (lead._setter_bucket === 'mine' || lead._setter_bucket === 'voicemail') && (
+              {isSetter && (lead._setter_bucket === 'mine' || lead._setter_bucket === 'voicemail' || lead._setter_bucket === 'callback') && (
                 <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>
                     Actions setter
                   </div>
-                  {(lead._setter_bucket === 'voicemail' || lead._setter_bucket === 'mine') && (() => {
+                  {(lead._setter_bucket === 'voicemail' || lead._setter_bucket === 'mine' || lead._setter_bucket === 'callback') && (() => {
                     // Marquer appelé : branching inline. Clic → propose 3
                     // outcomes (Répondeur / Placer R1 / Placer R2). Le bouton
                     // se transforme en 3 pills tant que le workflow est actif.
@@ -6019,8 +6022,17 @@ export default function TrackingSheetSetter() {
                           </button>
                         </div>
                         <button
+                          onClick={() => { setActiveWorkflow(null); setSetterModal({ kind: 'markCallback', lead }); }}
+                          style={{ ...pillStyle('#94a3b8'), animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) 150ms both' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(148,163,184,0.4)' : 'rgba(148,163,184,0.2)'; e.currentTarget.style.transform = 'scale(1.02)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(148,163,184,0.3)' : 'rgba(148,163,184,0.15)'; e.currentTarget.style.transform = 'scale(1)'; }}
+                        >
+                          <span style={{ fontSize: 14, lineHeight: 1 }}>↩</span>
+                          À rappeler
+                        </button>
+                        <button
                           onClick={() => setActiveWorkflow(null)}
-                          style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', marginTop: 2, opacity: 0.7, animation: 'wfSplitIn 0.3s ease 150ms both' }}
+                          style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', marginTop: 2, opacity: 0.7, animation: 'wfSplitIn 0.3s ease 180ms both' }}
                         >Annuler</button>
                       </div>
                     );
@@ -8486,29 +8498,32 @@ export default function TrackingSheetSetter() {
               }
             }}
           />
-          {/* "Marquer appelé" — pas de modale, action directe + optimistic UI */}
-          {setterModal?.kind === 'markCalled' && (() => {
+          {/* "Marquer appelé" + "À rappeler" — pas de modale, action directe + optimistic UI.
+              kind='markCalled' → POST /setter/leads/:id/mark-called (outcome=voicemail)
+              kind='markCallback' → POST /setter/leads/:id/mark-callback (outcome=callback) */}
+          {(setterModal?.kind === 'markCalled' || setterModal?.kind === 'markCallback') && (() => {
             const lead = setterModal.lead;
+            const isCallback = setterModal.kind === 'markCallback';
             if (!lead?.id) { setSetterModal(null); return null; }
-            // Fire & forget : on déclenche puis on ferme. Optimistic update.
             (async () => {
               const optimistic = {
                 ...lead,
                 setter_call_count: Number(lead.setter_call_count || 0) + 1,
                 setter_called_at: new Date().toISOString(),
+                status: isCallback ? 'callback' : 'voicemail',
               };
               setLeads((prev) => prev.map((l) => (String(l.id) === String(lead.id) ? optimistic : l)));
               setSetterModal(null);
+              const endpoint = isCallback
+                ? `/api/v1/tracking/setter/leads/${lead.id}/mark-callback`
+                : `/api/v1/tracking/setter/leads/${lead.id}/mark-called`;
               try {
-                await apiClient.post(
-                  `/api/v1/tracking/setter/leads/${lead.id}/mark-called`,
-                  {},
-                );
-                showSetterToast('Appel enregistré.');
+                await apiClient.post(endpoint, {});
+                showSetterToast(isCallback ? 'À rappeler enregistré.' : 'Appel enregistré.');
                 refreshData().catch(() => {});
               } catch (e) {
-                console.error('[Setter] mark-called failed', e);
-                showSetterToast(e?.message || 'Échec mark-called.', 'err');
+                console.error('[Setter] mark action failed', e);
+                showSetterToast(e?.message || (isCallback ? 'Échec à rappeler.' : 'Échec mark-called.'), 'err');
                 refreshData().catch(() => {});
               }
             })();

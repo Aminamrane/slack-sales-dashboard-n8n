@@ -12,7 +12,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 // dev a consommé v4 en testant, contenu inchangé).
 // 2026-05-11 v5 → v6 : 2e re-déclenchement pour Gaelle (dev a consommé
 // v5 en re-testant, contenu inchangé).
-const STORAGE_KEY_PREFIX = 'owner_setter_onboarding_dismissed_v6_';
+// 2026-05-12 v6 → v7 : ajout mention onglet "À rappeler" suite à la
+// feature callback setter (branchement Marquer appelé étendu en 4
+// outcomes + bucket dédié).
+const STORAGE_KEY_PREFIX = 'owner_setter_onboarding_dismissed_v7_';
 
 const SLIDES = [
   {
@@ -28,7 +31,12 @@ const SLIDES = [
   {
     emoji: '📞',
     title: 'Onglet « Répondeurs »',
-    body: "Les leads que tu as déjà appelés au moins une fois sans qu'ils décrochent. Tu peux les rappeler. Tes 4 actions : Marquer appelé, Placer R1, Placer R2, Disqualifier.",
+    body: "Les leads que tu as déjà appelés au moins une fois sans qu'ils décrochent. Tu peux les rappeler. Sur chaque lead, clique 'Marquer appelé' → tu choisis le résultat : Répondeur / Placer R1 / Placer R2 / À rappeler.",
+  },
+  {
+    emoji: '↩️',
+    title: 'Onglet « À rappeler »',
+    body: "Les leads où le prospect a répondu mais n'a pas voulu placer de RDV tout de suite. Tu les retrouves ici pour les rappeler plus tard. Depuis ce bucket, tu peux les basculer en Répondeurs, Placer R1/R2, ou les laisser pour un nouveau rappel.",
   },
   {
     emoji: '📅',
