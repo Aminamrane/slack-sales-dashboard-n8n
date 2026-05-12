@@ -38,6 +38,12 @@ export default function Profile() {
   const [wdSuccess, setWdSuccess] = useState("");
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
+  // Share new leads with setter (per-sales toggle) state
+  const [shareNewLeads, setShareNewLeads] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareError, setShareError] = useState("");
+  const [shareSuccess, setShareSuccess] = useState("");
+
   useEffect(() => {
     localStorage.setItem("darkMode", darkMode);
   }, [darkMode]);
@@ -63,9 +69,37 @@ export default function Profile() {
       } catch {
         // Backend not ready yet — keep defaults
       }
+
+      // Load share_new_leads_with_setter toggle
+      try {
+        const r = await apiClient.get('/api/v1/users/me/share-new-leads');
+        setShareNewLeads(!!r?.share_new_leads_with_setter);
+      } catch {
+        // Backend not ready yet — keep false
+      }
     };
     init();
   }, [navigate]);
+
+  const toggleShareNewLeads = async () => {
+    const newVal = !shareNewLeads;
+    setShareLoading(true);
+    setShareError("");
+    setShareSuccess("");
+    // Optimistic update for snappy UX
+    setShareNewLeads(newVal);
+    try {
+      await apiClient.put('/api/v1/users/me/share-new-leads', { share_new_leads_with_setter: newVal });
+      setShareSuccess(newVal ? "Partage activé." : "Partage désactivé.");
+      setTimeout(() => setShareSuccess(""), 2500);
+    } catch (e) {
+      // Rollback optimistic update
+      setShareNewLeads(!newVal);
+      setShareError(e?.message || "Erreur lors de la mise à jour.");
+    } finally {
+      setShareLoading(false);
+    }
+  };
 
   const C = {
     bg: darkMode ? "#1e1f28" : "#ffffff",
@@ -369,6 +403,82 @@ export default function Profile() {
             </button>
           )}
         </div>
+
+        {/* ─── Section 3: Partage leads avec setter (rôles sales uniquement) ─── */}
+        {['sales', 'head_of_sales', 'head_of_sales_manager'].includes(session?.role) && (
+          <div
+            style={{
+              background: C.bg,
+              borderRadius: "24px",
+              padding: "36px 32px",
+              boxShadow: C.shadow,
+            }}
+          >
+            <h2 style={{ fontSize: "20px", fontWeight: 700, margin: "0 0 6px", color: C.text }}>
+              Partage avec setter
+            </h2>
+            <p style={{ fontSize: "13px", color: C.muted, margin: "0 0 24px", lineHeight: 1.5 }}>
+              Si activé, votre setter rattaché voit vos nouveaux leads dès qu'ils vous sont assignés (sans attendre 24h). Désactivé par défaut.
+            </p>
+
+            {shareError && (
+              <div style={{
+                padding: "10px 14px", borderRadius: "10px",
+                background: darkMode ? "rgba(239,68,68,0.12)" : "#fef2f2",
+                color: "#ef4444", fontSize: "13px", marginBottom: "16px",
+                border: `1px solid ${darkMode ? "rgba(239,68,68,0.25)" : "#fecaca"}`,
+              }}>{shareError}</div>
+            )}
+            {shareSuccess && (
+              <div style={{
+                padding: "10px 14px", borderRadius: "10px",
+                background: darkMode ? "rgba(34,197,94,0.12)" : "#f0fdf4",
+                color: "#22c55e", fontSize: "13px", marginBottom: "16px",
+                border: `1px solid ${darkMode ? "rgba(34,197,94,0.25)" : "#bbf7d0"}`,
+              }}>{shareSuccess}</div>
+            )}
+
+            <div
+              onClick={() => { if (!shareLoading) toggleShareNewLeads(); }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "14px 18px",
+                borderRadius: "14px",
+                border: `1px solid ${C.border}`,
+                background: darkMode ? "#252636" : "#f4f6fb",
+                cursor: shareLoading ? "not-allowed" : "pointer",
+                opacity: shareLoading ? 0.7 : 1,
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={(e) => { if (!shareLoading) e.currentTarget.style.borderColor = C.accent; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; }}
+            >
+              <span style={{ fontSize: "14px", fontWeight: 600, color: C.text, fontFamily: "Inter, sans-serif" }}>
+                Partager mes nouveaux leads avec mon setter
+              </span>
+              {/* Toggle switch */}
+              <div style={{
+                width: "44px", height: "24px", borderRadius: "999px",
+                background: shareNewLeads ? C.accent : (darkMode ? "#3a3b48" : "#d1d5db"),
+                position: "relative",
+                transition: "background 0.2s",
+                flexShrink: 0,
+              }}>
+                <div style={{
+                  position: "absolute",
+                  top: "2px",
+                  left: shareNewLeads ? "22px" : "2px",
+                  width: "20px", height: "20px", borderRadius: "50%",
+                  background: "#fff",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                  transition: "left 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                }} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ─── Confirmation Modal ─── */}
