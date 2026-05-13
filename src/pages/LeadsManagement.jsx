@@ -452,7 +452,7 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
               <div>
                 <h1 style={{ fontSize: 22, fontWeight: 700, color: C.text, margin: 0, letterSpacing: '-0.02em' }}>Gestion des Leads</h1>
-                <p style={{ fontSize: 13, color: C.muted, margin: '4px 0 0' }}>{leads.filter(l => (l.origin || '').toLowerCase() !== 'cc').length} leads</p>
+                <p style={{ fontSize: 13, color: C.muted, margin: '4px 0 0' }}>{leads.filter(l => !['cc', 'setter'].includes((l.origin || '').toLowerCase())).length} leads</p>
               </div>
               <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} style={{
                 padding: '8px 32px 8px 14px', borderRadius: 10, border: `1px solid ${C.border}`,
@@ -492,7 +492,7 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
                   icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>,
                   options: (() => {
                     const origins = new Set();
-                    leads.forEach(l => { const o = (l.origin || '').trim(); if (o && o.toLowerCase() !== 'cc') origins.add(o); });
+                    leads.forEach(l => { const o = (l.origin || '').trim(); if (o && !['cc', 'setter'].includes(o.toLowerCase())) origins.add(o); });
                     return [...origins].sort();
                   })(),
                 },
@@ -613,7 +613,7 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
                       </thead>
                       <tbody>
                         {(() => {
-                          let filtered = leads.filter(l => (l.origin || '').toLowerCase() !== 'cc');
+                          let filtered = leads.filter(l => !['cc', 'setter'].includes((l.origin || '').toLowerCase()));
                           // Apply filters
                           if (filterOrigine.length > 0) filtered = filtered.filter(l => filterOrigine.includes((l.origin || '').trim()));
                           if (filterStatut.length > 0) filtered = filtered.filter(l => {
