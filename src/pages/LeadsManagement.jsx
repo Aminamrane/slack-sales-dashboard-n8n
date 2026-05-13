@@ -137,6 +137,7 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
     'd.dubois@ownertechnology.com': '#10b981',
     'g.derouet@ownertechnology.com': '#10b981',
     'a.voratovic@ownertechnology.com': '#3b82f6',
+    'm.streicher@ownertechnology.com': '#10b981',
   };
   // Hide specific users from the assign dropdown
   const HIDDEN_USERS = ['k.dif@ownertechnology.com'];
