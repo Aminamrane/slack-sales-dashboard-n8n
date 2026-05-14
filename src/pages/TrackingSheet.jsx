@@ -40,6 +40,10 @@ import mynoteIcon from "../assets/mynote.svg";
 import iconFuse from "../assets/Fuse.svg";
 import iconMessage from "../assets/message.svg";
 import smsRecuIcon from "../assets/smsrecu.svg";
+import iconSiren from "../assets/siren2.svg";
+
+// ── SIREN HELPERS (consumed from contracts/schemas.js, do not modify there) ──
+import { normalizeSiren, isValidSiren, formatSiren } from "../contracts/schemas.js";
 
 // ── CATEGORIES ────────────────────────────────────────────────────────────────
 // ── CUSTOM DATETIME PICKER (date input + hour/minute selects, 5min step) ────
@@ -945,6 +949,8 @@ export default function TrackingSheet() {
   // ── INLINE EDIT STATE ──────────────────────────────────────────────────
   const [editingField, setEditingField] = useState(null); // { leadId, field, value } or null
   const editInputRef = useRef(null);
+  // SIREN inline edit: backend 422 error message displayed below the input
+  const [sirenEditError, setSirenEditError] = useState('');
 
   // ── NDA POPUP STATE ────────────────────────────────────────────────────
   const [ndaPopup, setNdaPopup] = useState(null); // { leadId } or null — which lead's NDA popup is open
@@ -1724,7 +1730,35 @@ export default function TrackingSheet() {
     }
     setEditingField(null);
   };
-  const cancelFieldEdit = () => setEditingField(null);
+  const cancelFieldEdit = () => { setEditingField(null); setSirenEditError(''); };
+
+  // ── SIREN INLINE EDIT (dedicated path: digit-only, ""-clear, 422-aware) ──
+  // Generic saveFieldEdit sends `null` to clear, but the backend SIREN field
+  // expects "" for clear. We also surface backend 422 messages discreetly.
+  const saveSirenEdit = async () => {
+    if (!editingField || editingField.field !== 'siren') return;
+    const { leadId, value } = editingField;
+    const normalized = normalizeSiren(value); // strip non-digits, may be ""
+    // Only accept empty (clear) or exactly 9 digits — UI prevents > 9 input
+    if (normalized.length !== 0 && normalized.length !== 9) {
+      setSirenEditError('SIREN = 9 chiffres');
+      return;
+    }
+    const lead = leads.find(l => l.id === leadId);
+    if (!lead) { setEditingField(null); setSirenEditError(''); return; }
+    // No change → just close
+    if (normalized === (lead.siren || '')) { setEditingField(null); setSirenEditError(''); return; }
+    try {
+      await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, { siren: normalized });
+      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, siren: normalized || null } : l));
+      setEditingField(null);
+      setSirenEditError('');
+    } catch (err) {
+      // 422 → invalid format; surface inline without closing the editor
+      const msg = err?.data?.detail || err?.message || 'SIREN invalide';
+      setSirenEditError(typeof msg === 'string' ? msg : 'SIREN invalide');
+    }
+  };
 
   // ── NDA POPUP HANDLERS ──────────────────────────────────────────────────
   const NDA_LEGAL_FORMS = ["SARL", "SAS", "SASU", "SA", "EURL", "SCI", "SNC", "EI"];
@@ -1741,7 +1775,7 @@ export default function TrackingSheet() {
     setNdaData({
       legalName: lead.company_name || '',
       legalForm: 'SARL',
-      siren: '',
+      siren: lead.siren || '',
       rcsCity: '',
       email: lead.email || '',
       phone: lead.phone || '',
@@ -1759,13 +1793,19 @@ export default function TrackingSheet() {
   const handleNdaPrefill = async () => {
     if (!ndaData || !ndaPopup) return;
     const lead = leads.find(l => l.id === ndaPopup.leadId);
+    // Routing: if a valid SIREN is present, use Pappers (vérité absolue).
+    // Otherwise fall back to the existing name-based AI prefill.
+    const sirenDigits = normalizeSiren(ndaData.siren);
+    const useSirenMode = sirenDigits.length === 9 && isValidSiren(sirenDigits);
     const query = `${ndaData.legalName || lead?.company_name || ''} - ${lead?.full_name || ''}`.trim();
-    if (!query || query === '-') { setNdaError('Renseignez le nom de la société'); return; }
+    if (!useSirenMode && (!query || query === '-')) { setNdaError('Renseignez le nom de la société'); return; }
     setNdaLoading(true);
     setNdaError('');
     setNdaSuccess(false);
     try {
-      const data = await apiClient.post('/api/v1/contracts/ai-prefill', { query });
+      const data = useSirenMode
+        ? await apiClient.post('/api/v1/contracts/ai-prefill-by-siren', { siren: sirenDigits })
+        : await apiClient.post('/api/v1/contracts/ai-prefill', { query });
       const updates = {};
       if (data.legal_name) updates.legalName = data.legal_name;
       if (data.legal_form) {
@@ -1796,7 +1836,12 @@ export default function TrackingSheet() {
       setNdaSuccess(true);
       setTimeout(() => setNdaSuccess(false), 4000);
     } catch (err) {
-      setNdaError(err?.data?.detail || err?.message || 'Erreur lors de la recherche IA');
+      // Pappers SIREN mode: 404 = unknown SIREN → clear user-facing message
+      if (useSirenMode && err?.status === 404) {
+        setNdaError("Aucune entreprise trouvée pour ce SIREN. Vérifiez le numéro ou utilisez la recherche par nom (laissez le SIREN vide).");
+      } else {
+        setNdaError(err?.data?.detail || err?.message || 'Erreur lors de la recherche IA');
+      }
     } finally {
       setNdaLoading(false);
     }
@@ -5241,6 +5286,71 @@ export default function TrackingSheet() {
                 )}
               </div>
 
+              {/* ─── SIREN (detail card only — NOT shown in sidebar list) ─── */}
+              <div style={{ display: 'flex', flexDirection: 'column', marginTop: -6, marginBottom: 12 }}>
+                {editingField?.leadId === lead.id && editingField?.field === 'siren' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                      <img src={iconSiren} alt="" style={{ width: 23, height: 13, opacity: 0.85, flexShrink: 0 }} />
+                      <input
+                        ref={editInputRef}
+                        value={editingField.value}
+                        onChange={(e) => {
+                          // Only digits, max 9 chars
+                          const onlyDigits = e.target.value.replace(/\D+/g, '').slice(0, 9);
+                          setEditingField(prev => ({ ...prev, value: onlyDigits }));
+                          if (sirenEditError) setSirenEditError('');
+                        }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') saveSirenEdit(); if (e.key === 'Escape') cancelFieldEdit(); }}
+                        placeholder="123456789"
+                        inputMode="numeric"
+                        maxLength={9}
+                        style={{
+                          flex: 1, fontSize: 13, fontWeight: 600, color: C.text,
+                          border: `1px solid ${C.accent}`, borderRadius: 6,
+                          padding: '3px 8px', background: C.bg, fontFamily: 'inherit',
+                          outline: 'none', letterSpacing: '0.02em',
+                        }}
+                      />
+                      <button onClick={saveSirenEdit} style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: C.accent, color: '#fff', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✓</button>
+                      <button onClick={cancelFieldEdit} style={{ width: 24, height: 24, borderRadius: 5, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                    </div>
+                    {/* Discreet hint while typing 1-8 chars; only show if no backend error */}
+                    {!sirenEditError && editingField.value.length > 0 && editingField.value.length < 9 && (
+                      <div style={{ fontSize: 10, color: C.muted, fontStyle: 'italic', marginLeft: 27 }}>
+                        SIREN = 9 chiffres
+                      </div>
+                    )}
+                    {sirenEditError && (
+                      <div style={{ fontSize: 10, color: '#ef4444', fontWeight: 600, marginLeft: 27 }}>
+                        {sirenEditError}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <img src={iconSiren} alt="" style={{ width: 23, height: 13, opacity: 0.85, flexShrink: 0 }} />
+                    <span style={{
+                      fontSize: 12, fontWeight: 600,
+                      color: '#949293',
+                      fontStyle: lead.siren ? 'normal' : 'italic',
+                      letterSpacing: lead.siren ? '0.02em' : 'normal',
+                    }}>
+                      {lead.siren ? formatSiren(lead.siren) : '+ Siren'}
+                    </span>
+                    <button
+                      onClick={() => { setSirenEditError(''); startFieldEdit(lead.id, 'siren', lead.siren || ''); }}
+                      title={lead.siren ? 'Modifier le SIREN' : 'Ajouter le SIREN'}
+                      style={{ width: 22, height: 22, borderRadius: 5, border: 'none', background: 'transparent', color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.4, transition: 'opacity 0.15s' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.opacity = 1; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.opacity = 0.4; }}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* ─── STATS ROW ─── */}
               <div style={{
                 display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1,
@@ -7041,7 +7151,7 @@ export default function TrackingSheet() {
                 <div>
                   <div style={labelStyle}>Représentant</div>
                   {ndaData.representatives.map((rep, i) => (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 6, marginBottom: i < ndaData.representatives.length - 1 ? 6 : 0 }}>
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 28px', gap: 6, marginBottom: 6, alignItems: 'center' }}>
                       <input value={rep.fullName} onChange={(e) => {
                         const reps = [...ndaData.representatives];
                         reps[i] = { ...reps[i], fullName: e.target.value };
@@ -7056,8 +7166,44 @@ export default function TrackingSheet() {
                       }} style={inputStyle} placeholder="Fonction"
                         onFocus={(e) => e.target.style.borderColor = C.accent} onBlur={(e) => e.target.style.borderColor = C.border}
                       />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const reps = ndaData.representatives.filter((_, idx) => idx !== i);
+                          setNdaData(prev => ({ ...prev, representatives: reps }));
+                        }}
+                        title="Supprimer ce représentant"
+                        style={{
+                          width: 28, height: 28, borderRadius: 6,
+                          border: `1px solid ${C.border}`, background: 'transparent',
+                          color: C.muted, fontSize: 16, lineHeight: 1, cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all 0.15s',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.08)'; e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#ef4444'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.muted; e.currentTarget.style.borderColor = C.border; }}
+                      >×</button>
                     </div>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const reps = [...ndaData.representatives, { fullName: '', role: 'Gérant' }];
+                      setNdaData(prev => ({ ...prev, representatives: reps }));
+                    }}
+                    style={{
+                      marginTop: ndaData.representatives.length > 0 ? 4 : 0,
+                      padding: '6px 10px', borderRadius: 6,
+                      border: `1px dashed ${C.border}`, background: 'transparent',
+                      color: C.muted, fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'; e.currentTarget.style.color = C.text; e.currentTarget.style.borderColor = C.accent; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.muted; e.currentTarget.style.borderColor = C.border; }}
+                  >
+                    + Ajouter un représentant
+                  </button>
                 </div>
 
                 {/* Row: Email + Phone (from lead, editable here) */}
