@@ -5978,7 +5978,14 @@ export default function TrackingSheetSetter() {
                       );
                     }
                     // Branching state : 3 outcome pills + Annuler
-                    const setterMode = lead._setter_bucket === 'mine' ? 'mine' : 'team';
+                    // setterMode='mine' si lead créé par le setter courant
+                    // (Scénario 2), même si bascule en callback/voicemail/etc.
+                    // Sans cette extension, target_sales_email n'est pas
+                    // demandé → backend rejette avec 400 (cf. bug "Creche
+                    // Les P'tits Malins" 14277, 2026-05-22).
+                    const myEmailLowerForMode = (currentUser?.email || '').toLowerCase();
+                    const isSelfCreatedLead = (lead.created_by_setter || '').toLowerCase() === myEmailLowerForMode;
+                    const setterMode = (lead._setter_bucket === 'mine' || isSelfCreatedLead) ? 'mine' : 'team';
                     const pillStyle = (color) => ({
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
                       padding: '9px 14px', borderRadius: 50, border: 'none',
