@@ -777,6 +777,10 @@ export default function TrackingSheet() {
   // R1 tab — "Traité par le setter" container : collapsed par défaut, mirror du
   // container "Annulé". Toggle œil/chevron pour show/hide.
   const [setterPlacedExpanded, setSetterPlacedExpanded] = useState(false);
+  // R2 tab — "R2 Webinaire" container : expanded par défaut pour visibilité
+  // immédiate (leads issus des bookings webinaire avec R2 déjà placé par le
+  // prospect). Mêmes mécaniques collapsible que cancelled/setter_placed.
+  const [r2WebinaireExpanded, setR2WebinaireExpanded] = useState(true);
   const [sidebarView, setSidebarView] = useState(initialView || 'leads');
 
   // ── TRACKING SHEETS MANAGEMENT (admin, HoS only) ──────────────────────────
@@ -4502,7 +4506,13 @@ export default function TrackingSheet() {
 
             // R2 groups
             const R2_PENDING_STATES = ['comptable', 'associe', 'reflexion', 'relire_contrat', 'pas_decision_jour', 'tresorerie'];
-            const r2Scheduled  = isR2Tab ? filteredLeads.filter(l => (!l.r2_result || l.r2_result === 'reporte') && !isDatePast(l.r2)) : [];
+            const r2ScheduledAll = isR2Tab ? filteredLeads.filter(l => (!l.r2_result || l.r2_result === 'reporte') && !isDatePast(l.r2)) : [];
+            // Sous-groupe webinaire : R2 planifiés dont origin commence par 'Webinaire'.
+            // Affichés dans leur propre container en HAUT de l'onglet pour visibilité
+            // immédiate (RDV placé par le prospect, sales doit savoir tout de suite).
+            const isWebinaireLead = (l) => (l.origin || '').toLowerCase().startsWith('webinaire');
+            const r2Webinaire  = isR2Tab ? r2ScheduledAll.filter(isWebinaireLead) : [];
+            const r2Scheduled  = isR2Tab ? r2ScheduledAll.filter(l => !isWebinaireLead(l)) : [];
             const r2Pending    = isR2Tab ? filteredLeads.filter(l => R2_PENDING_STATES.includes(l.r2_result) || ((!l.r2_result || l.r2_result === 'reporte') && isDatePast(l.r2))) : [];
             const r2Cancelled  = isR2Tab ? filteredLeads.filter(l => l.r2_result === 'pas_interesse' || l.r2_result === 'annule') : [];
             const r2Completed  = isR2Tab ? filteredLeads.filter(l => l.r2_result === 'done') : [];
@@ -4547,6 +4557,14 @@ export default function TrackingSheet() {
               { key: 'completed', leads: r1Completed, label: 'Effectués',  color: '#10b981' },
               { key: 'cancelled', leads: r1Cancelled, label: 'Annulés',     color: '#ef4444' },
             ] : isR2Tab ? [
+              // Container "R2 Webinaire" en TÊTE : leads issus des bookings
+              // webinaire (origin commence par 'Webinaire'), RDV déjà placé
+              // par le prospect lui-même. Couleur violet pour distinction.
+              // Affiché uniquement si non vide. Collapsible (default expanded).
+              ...(r2Webinaire.length > 0 ? [{
+                key: 'webinaire', leads: r2Webinaire, label: 'R2 Webinaire',
+                color: '#8b5cf6',
+              }] : []),
               { key: 'scheduled', leads: r2Scheduled, label: 'Planifiés', color: '#fb923c' },
               { key: 'pending',   leads: r2Pending,   label: 'En attente', color: '#f59e0b' },
               { key: 'completed', leads: r2Completed, label: 'Effectués',  color: '#10b981' },
@@ -5045,15 +5063,24 @@ export default function TrackingSheet() {
                           if (grp.leads.length === 0) return null;
                           const isCancelled = grp.key === 'cancelled';
                           const isSetterPlacedGrp = grp.key === 'setter_placed';
+                          const isWebinaireGrp = grp.key === 'webinaire';
                           // Conteneurs collapsibles (mirror du pattern "Annulé") :
-                          // cancelled + setter_placed → toggle œil/chevron au click.
-                          const isCollapsible = isCancelled || isSetterPlacedGrp;
-                          const isExpanded = isCancelled ? cancelledExpanded : isSetterPlacedGrp ? setterPlacedExpanded : true;
+                          // cancelled + setter_placed + webinaire → toggle œil/chevron au click.
+                          const isCollapsible = isCancelled || isSetterPlacedGrp || isWebinaireGrp;
+                          const isExpanded = isCancelled
+                            ? cancelledExpanded
+                            : isSetterPlacedGrp
+                              ? setterPlacedExpanded
+                              : isWebinaireGrp
+                                ? r2WebinaireExpanded
+                                : true;
                           const toggleCollapse = isCancelled
                             ? () => setCancelledExpanded(prev => !prev)
                             : isSetterPlacedGrp
                               ? () => setSetterPlacedExpanded(prev => !prev)
-                              : undefined;
+                              : isWebinaireGrp
+                                ? () => setR2WebinaireExpanded(prev => !prev)
+                                : undefined;
                           const isCollapsed = isCollapsible && !isExpanded;
                           return (
                             <div key={grp.key} style={{
