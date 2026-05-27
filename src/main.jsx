@@ -22,6 +22,9 @@ import Campaigns        from "./pages/Campaigns.jsx";
 import PerfClosing      from "./pages/PerfClosing.jsx";
 import TrackingSheetAdmin from "./pages/TrackingSheetAdmin.jsx";
 import TrackingSheetSetter from "./pages/TrackingSheetSetter.jsx";
+import TrackingSheetFinance from "./pages/TrackingSheetFinance/index.jsx";
+import CeoDashboard       from "./pages/CeoDashboard.jsx";
+import CeoSheetView       from "./pages/CeoSheetView.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import MouseDot from "./components/MouseDot.jsx";
@@ -48,6 +51,7 @@ function App() {
         <Route path="/campaigns" element={<Campaigns />} />
         <Route path="/perf-closing" element={<PerfClosing />} />
         <Route path="/tracking-sheets" element={<TrackingSheetAdmin />} />
+        <Route path="/tracking-finance" element={<TrackingSheetFinance />} />
         <Route path="/change-password" element={<Navigate to="/profile" replace />} />
 
         {/* Protected routes */}
@@ -64,6 +68,22 @@ function App() {
           element={
             <ProtectedRoute>
               <ContractNew />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ceo"
+          element={
+            <ProtectedRoute>
+              <CeoDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ceo/sheet/:email"
+          element={
+            <ProtectedRoute>
+              <CeoSheetView />
             </ProtectedRoute>
           }
         />

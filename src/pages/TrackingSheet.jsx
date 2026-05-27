@@ -225,6 +225,9 @@ export default function TrackingSheet() {
   const viewingSheetId = urlParams.get('sheet_id');
   const isAdminView = !!viewingSheetId;
   const initialView = urlParams.get('view');
+  // Embed mode: masque uniquement SharedNavbar interne. Utilisé par
+  // CeoSheetView qui rend déjà sa propre sidebar CEO autour du TS.
+  const embedMode = urlParams.get('embed') === 'true';
 
   // ── REFRESH DATA (reusable — called on mount + polling) ────────────────────
   const refreshData = useCallback(async () => {
@@ -275,7 +278,7 @@ export default function TrackingSheet() {
         setSession({ user: { email: user.email, user_metadata: { name: user.name, avatar_url: user.avatar_url || null } } });
 
         // Access check — skip if admin view OR user has tracking_sheet permission
-        const hasPermission = user.role === 'admin' || apiClient.hasAccess('tracking_sheet');
+        const hasPermission = user.role === 'admin' || user.role === 'ceo' || apiClient.hasAccess('tracking_sheet');
         if (!isAdminView && !hasPermission) {
           navigate("/");
           return;
@@ -2175,7 +2178,7 @@ export default function TrackingSheet() {
         }
       `}</style>
 
-      <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} notification={navNotif} />
+      {!embedMode && <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} notification={navNotif} />}
 
       {/* ── FLYING CARD CLONE (Genie effect transition) ───────────────────── */}
       {flyingCard && (
@@ -2253,7 +2256,8 @@ export default function TrackingSheet() {
         {/* ── FLEX ROW: sidebar + board + detail panel ──────────────────────── */}
         <div style={{ display: 'flex', alignItems: 'stretch', minHeight: '100vh' }}>
 
-          {/* ── LEFT SIDEBAR (full height) ──────────────────────────────────── */}
+          {/* ── LEFT SIDEBAR (full height) — hidden in CEO embed mode ──────── */}
+          {!embedMode && (
           <div style={{
             width: 220,
             minWidth: 220,
@@ -2379,15 +2383,16 @@ export default function TrackingSheet() {
             {/* Spacer */}
             <div style={{ flex: 1 }} />
           </div>
+          )}
 
         {/* ── RIGHT COLUMN (single top card + content row) ─────────────────── */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: '8px 8px 8px 0', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: embedMode ? '8px 8px 8px 8px' : '8px 8px 8px 0', gap: 12 }}>
 
           {/* ── KPI HEADER CARD (3 left + gap for navbar + 3 right) ────────── */}
           <div style={{ height: 76, background: darkMode ? C.bg : '#f6f7f9', borderRadius: 8, flexShrink: 0, border: `1px solid ${isAdminView ? '#8b5cf640' : C.border}`, marginLeft: 8, display: 'flex', alignItems: 'center', padding: '0 24px' }}>
             {isAdminView && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 'auto' }}>
-                <button onClick={() => { window.location.href = '/tracking-sheet'; }} style={{
+                <button onClick={() => { window.location.href = embedMode ? '/ceo' : '/tracking-sheet'; }} style={{
                   display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8,
                   border: `1px solid ${C.border}`, background: 'transparent', color: C.muted,
                   fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',

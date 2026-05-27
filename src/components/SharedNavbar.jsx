@@ -854,7 +854,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
 
                 {(apiClient.getUser()?.role === 'admin' || apiClient.getUser()?.role === 'ceo') && (
                   <button
-                    onClick={() => navigate("/perf-closing")}
+                    onClick={() => navigate("/ceo")}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px',
                       borderRadius: '8px', border: 'none', background: 'transparent',

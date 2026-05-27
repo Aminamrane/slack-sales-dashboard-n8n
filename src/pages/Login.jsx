@@ -30,7 +30,7 @@ export default function Login() {
         throw new Error("Login OK mais token/user non stockés (apiClient incohérent).");
       }
 
-      navigate('/');
+      navigate(user.role === 'ceo' ? '/ceo' : '/');
     } catch (err) {
       setError(err.message || 'Email ou mot de passe incorrect');
     } finally {
