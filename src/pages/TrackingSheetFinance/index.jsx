@@ -217,15 +217,26 @@ function PageEmblem({ kind, size = 18 }) {
 export default function TrackingSheetFinance() {
   const navigate = useNavigate();
 
+  // ── Embed mode (CEO Dispatch wrapper) ────────────────────────────────
+  // Quand `?embed=true` est présent dans la query, on masque la sidebar
+  // interne TSF + désactive son toggle (la CeoSidebar de CeoDispatchView
+  // prend le relais). Le CEO est aussi autorisé à passer le gate dans ce
+  // mode uniquement, sans élargir ALLOWED_ROLES global.
+  const embedMode = useMemo(
+    () => new URLSearchParams(window.location.search).get('embed') === 'true',
+    []
+  );
+
   // ── Auth gating (mirrors Campaigns.jsx) ─────────────────────────────
   const [authChecked, setAuthChecked] = useState(false);
   useEffect(() => {
     const token = apiClient.getToken();
     const user = apiClient.getUser();
     if (!token || !user) { navigate('/login'); return; }
-    if (!ALLOWED_ROLES.includes(user.role)) { navigate('/'); return; }
+    const allowed = ALLOWED_ROLES.includes(user.role) || (embedMode && user.role === 'ceo');
+    if (!allowed) { navigate('/'); return; }
     setAuthChecked(true);
-  }, [navigate]);
+  }, [navigate, embedMode]);
 
   // ── State ────────────────────────────────────────────────────────────
   const [period, setPeriod] = useState(currentPeriod());
@@ -428,13 +439,17 @@ export default function TrackingSheetFinance() {
     }}>
       <style>{STYLE_BLOCK}</style>
 
-      {/* ═══ LEFT SIDEBAR (Notion-style) ═══════════════════════════════ */}
-      <Sidebar
-        width={sideWidth}
-        collapsed={sideCollapsed}
-        onToggle={() => setSideCollapsed((v) => !v)}
-        sections={SIDEBAR_SECTIONS}
-      />
+      {/* ═══ LEFT SIDEBAR (Notion-style) ═══════════════════════════════
+          En mode embed (CEO Dispatch), la sidebar interne est masquée :
+          la CeoSidebar de CeoDispatchView prend le relais à gauche. */}
+      {!embedMode && (
+        <Sidebar
+          width={sideWidth}
+          collapsed={sideCollapsed}
+          onToggle={() => setSideCollapsed((v) => !v)}
+          sections={SIDEBAR_SECTIONS}
+        />
+      )}
 
       {/* ═══ MAIN AREA ═════════════════════════════════════════════════
           When the DetailPanel slide-in is open, we reserve space on the right
@@ -456,7 +471,7 @@ export default function TrackingSheetFinance() {
           period={period}
           lastModif={lastModif}
           onShowSidebar={() => setSideCollapsed(false)}
-          showSidebarToggle={sideCollapsed}
+          showSidebarToggle={!embedMode && sideCollapsed}
         />
 
         {/* Main content area — flex column pour que le tableau prenne tout

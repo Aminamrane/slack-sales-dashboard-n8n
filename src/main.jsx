@@ -25,6 +25,7 @@ import TrackingSheetSetter from "./pages/TrackingSheetSetter.jsx";
 import TrackingSheetFinance from "./pages/TrackingSheetFinance/index.jsx";
 import CeoDashboard       from "./pages/CeoDashboard.jsx";
 import CeoSheetView       from "./pages/CeoSheetView.jsx";
+import CeoDispatchView    from "./pages/CeoDispatchView.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import MouseDot from "./components/MouseDot.jsx";
@@ -84,6 +85,14 @@ function App() {
           element={
             <ProtectedRoute>
               <CeoSheetView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ceo/dispatch"
+          element={
+            <ProtectedRoute>
+              <CeoDispatchView />
             </ProtectedRoute>
           }
         />
