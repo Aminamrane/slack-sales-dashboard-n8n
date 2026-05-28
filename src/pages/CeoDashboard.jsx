@@ -52,7 +52,6 @@ const SIDEBAR_TABS = [
   { key: 'leaderboard', label: 'Leaderboard', icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 7 7 7 7"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5C17 4 17 7 17 7"/><path d="M4 22h16"/><path d="M10 22V2h4v20"/><path d="M6 22V10h4"/><path d="M14 22V10h4"/></svg>
   )},
-  { section: 'ÉQUIPE' },
   { key: 'sales_team', label: 'Équipe Sales', icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
   )},
@@ -1666,7 +1665,7 @@ export default function CeoDashboard() {
 
           {/* ═══ SALES TEAM TAB (CEO → Tracking Sheets individuels) ═══════════ */}
           {activeTab === 'sales_team' && (
-            <div style={{ animation: 'ceoFadeIn 0.35s ease both', marginTop: -68 }}>
+            <div style={{ animation: 'ceoFadeIn 0.35s ease both', paddingTop: 96 }}>
               <h1 style={{ fontSize: 24, fontWeight: 700, color: C.text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>Équipe Sales</h1>
               <p style={{ fontSize: 14, color: C.muted, margin: '0 0 28px' }}>
                 Accédez aux Tracking Sheets individuels — mode ghost (lecture transparente, pas de notification).
