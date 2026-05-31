@@ -125,30 +125,30 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
   const [assigningLeads, setAssigningLeads] = useState(new Set());
   const [assignDropdown, setAssignDropdown] = useState(null); // lead id with open assign dropdown
   const assignDropdownRef = useRef({ right: 0, top: 0, bottom: 0, openUp: false });
-  const ROLE_COLORS = { head_of_sales_manager: '#3b82f6', head_of_sales: '#10b981', sales: '#10b981', admin: '#94a3b8' };
+  const ROLE_COLORS = { head_of_sales_manager: '#3b82f6', head_of_sales: '#ef4444', sales: '#10b981', admin: '#94a3b8' };
   const ROLE_ORDER = { head_of_sales_manager: 0, head_of_sales: 1, sales: 2, admin: 3 };
   const ROLE_OVERRIDES = { 'y.zairi@ownertechnology.com': 'head_of_sales_manager' };
-  // Couleurs par equipe (cf table teams.color en DB) : Yohan=bleu, Leo=vert, David=orange
+  // Couleurs par equipe (frontend) : Yohan=bleu, Leo=rouge, David=vert
   const TEAM_BLUE = '#3b82f6';
+  const TEAM_RED = '#ef4444';
   const TEAM_GREEN = '#10b981';
-  const TEAM_ORANGE = '#f59e0b';
   const COLOR_OVERRIDES = {
     'y.debowski@ownertechnology.com': TEAM_BLUE,
     'y.zairi@ownertechnology.com': TEAM_BLUE,
     'a.voratovic@ownertechnology.com': TEAM_BLUE,
-    'l.mafrici@ownertechnology.com': TEAM_GREEN,
-    'm.mestiri@ownertechnology.com': TEAM_GREEN,
-    'g.meynier@ownertechnology.com': TEAM_GREEN,
-    'd.dubois@ownertechnology.com': TEAM_ORANGE,
-    'g.derouet@ownertechnology.com': TEAM_ORANGE,
-    'j.limbourg@ownertechnology.com': TEAM_ORANGE,
-    'm.streicher@ownertechnology.com': TEAM_ORANGE,
+    'l.mafrici@ownertechnology.com': TEAM_RED,
+    'm.mestiri@ownertechnology.com': TEAM_RED,
+    'g.meynier@ownertechnology.com': TEAM_RED,
+    'd.dubois@ownertechnology.com': TEAM_GREEN,
+    'g.derouet@ownertechnology.com': TEAM_GREEN,
+    'j.limbourg@ownertechnology.com': TEAM_GREEN,
+    'm.streicher@ownertechnology.com': TEAM_GREEN,
   };
   const HIDDEN_USERS = ['k.dif@ownertechnology.com'];
   const getUserRole = (u) => ROLE_OVERRIDES[u.email] || u.role;
-  const NAME_COLOR_OVERRIDES = { 'léo mafrici': TEAM_GREEN, 'leo mafrici': TEAM_GREEN };
+  const NAME_COLOR_OVERRIDES = { 'léo mafrici': TEAM_RED, 'leo mafrici': TEAM_RED };
   const getUserColor = (u) => COLOR_OVERRIDES[u.email] || NAME_COLOR_OVERRIDES[(u.full_name || '').toLowerCase()] || ROLE_COLORS[getUserRole(u)] || C.secondary;
-  const COLOR_ORDER = { [TEAM_BLUE]: 0, [TEAM_GREEN]: 1, [TEAM_ORANGE]: 2, '#94a3b8': 3 };
+  const COLOR_ORDER = { [TEAM_BLUE]: 0, [TEAM_RED]: 1, [TEAM_GREEN]: 2, '#94a3b8': 3 };
   const sortedAssignableUsers = useMemo(() =>
     [...(assignableUsers.length > 0 ? assignableUsers : [])].filter(u => !HIDDEN_USERS.includes(u.email)).sort((a, b) => {
       const colorDiff = (COLOR_ORDER[getUserColor(a)] ?? 9) - (COLOR_ORDER[getUserColor(b)] ?? 9);
