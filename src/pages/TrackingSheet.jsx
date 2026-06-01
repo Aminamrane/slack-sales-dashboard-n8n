@@ -780,6 +780,8 @@ export default function TrackingSheet() {
   // R1 tab — "Traité par le setter" container : collapsed par défaut, mirror du
   // container "Annulé". Toggle œil/chevron pour show/hide.
   const [setterPlacedExpanded, setSetterPlacedExpanded] = useState(false);
+  // R2 tab — "R2 Landing" container (Broad LP / BTP LP) : expanded par defaut.
+  const [r2LandingExpanded, setR2LandingExpanded] = useState(true);
   // R2 tab — "R2 Webinaire" container : expanded par défaut pour visibilité
   // immédiate (leads issus des bookings webinaire avec R2 déjà placé par le
   // prospect). Mêmes mécaniques collapsible que cancelled/setter_placed.
@@ -4516,8 +4518,11 @@ export default function TrackingSheet() {
             // Affichés dans leur propre container en HAUT de l'onglet pour visibilité
             // immédiate (RDV placé par le prospect, sales doit savoir tout de suite).
             const isWebinaireLead = (l) => (l.origin || '').toLowerCase().startsWith('webinaire');
+            // Landing pages dynamiques (Broad LP, BTP LP, etc.) : origin finit par " LP".
+            const isLandingLead = (l) => (l.origin || '').toLowerCase().trimEnd().endsWith(' lp');
             const r2Webinaire  = isR2Tab ? r2ScheduledAll.filter(isWebinaireLead) : [];
-            const r2Scheduled  = isR2Tab ? r2ScheduledAll.filter(l => !isWebinaireLead(l)) : [];
+            const r2Landing    = isR2Tab ? r2ScheduledAll.filter(isLandingLead) : [];
+            const r2Scheduled  = isR2Tab ? r2ScheduledAll.filter(l => !isWebinaireLead(l) && !isLandingLead(l)) : [];
             const r2Pending    = isR2Tab ? filteredLeads.filter(l => R2_PENDING_STATES.includes(l.r2_result) || ((!l.r2_result || l.r2_result === 'reporte') && isDatePast(l.r2))) : [];
             const r2Cancelled  = isR2Tab ? filteredLeads.filter(l => l.r2_result === 'pas_interesse' || l.r2_result === 'annule') : [];
             const r2Completed  = isR2Tab ? filteredLeads.filter(l => l.r2_result === 'done') : [];
@@ -4569,6 +4574,12 @@ export default function TrackingSheet() {
               ...(r2Webinaire.length > 0 ? [{
                 key: 'webinaire', leads: r2Webinaire, label: 'R2 Webinaire',
                 color: '#8b5cf6',
+              }] : []),
+              // Container "R2 Landing" : leads Broad LP / BTP LP, RDV pris directement
+              // depuis landing page (/live, /btp). Couleur cyan pour distinction.
+              ...(r2Landing.length > 0 ? [{
+                key: 'landing', leads: r2Landing, label: 'R2 Landing',
+                color: '#06b6d4',
               }] : []),
               { key: 'scheduled', leads: r2Scheduled, label: 'Planifiés', color: '#fb923c' },
               { key: 'pending',   leads: r2Pending,   label: 'En attente', color: '#f59e0b' },
@@ -5069,23 +5080,28 @@ export default function TrackingSheet() {
                           const isCancelled = grp.key === 'cancelled';
                           const isSetterPlacedGrp = grp.key === 'setter_placed';
                           const isWebinaireGrp = grp.key === 'webinaire';
+                          const isLandingGrp = grp.key === 'landing';
                           // Conteneurs collapsibles (mirror du pattern "Annulé") :
-                          // cancelled + setter_placed + webinaire → toggle œil/chevron au click.
-                          const isCollapsible = isCancelled || isSetterPlacedGrp || isWebinaireGrp;
+                          // cancelled + setter_placed + webinaire + landing → toggle œil/chevron au click.
+                          const isCollapsible = isCancelled || isSetterPlacedGrp || isWebinaireGrp || isLandingGrp;
                           const isExpanded = isCancelled
                             ? cancelledExpanded
                             : isSetterPlacedGrp
                               ? setterPlacedExpanded
                               : isWebinaireGrp
                                 ? r2WebinaireExpanded
-                                : true;
+                                : isLandingGrp
+                                  ? r2LandingExpanded
+                                  : true;
                           const toggleCollapse = isCancelled
                             ? () => setCancelledExpanded(prev => !prev)
                             : isSetterPlacedGrp
                               ? () => setSetterPlacedExpanded(prev => !prev)
                               : isWebinaireGrp
                                 ? () => setR2WebinaireExpanded(prev => !prev)
-                                : undefined;
+                                : isLandingGrp
+                                  ? () => setR2LandingExpanded(prev => !prev)
+                                  : undefined;
                           const isCollapsed = isCollapsible && !isExpanded;
                           return (
                             <div key={grp.key} style={{
