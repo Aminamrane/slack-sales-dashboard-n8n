@@ -1306,6 +1306,25 @@ export default function Leaderboard() {
 
   }, [darkMode]);
 
+  // ── MONTHLY OBJECTIVES (fetched from API, silent fallback) ─────────────────
+  // Replaces the hard-coded MONTHLY_OBJECTIVES map. On fetch error (offline,
+  // 500, auth), falls back silently to {} which yields the default 45 below.
+  const [monthlyObjectives, setMonthlyObjectives] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await apiClient.get('/api/v1/monthly-objectives');
+        if (cancelled || !data?.objectives) return;
+        const map = Object.fromEntries(data.objectives.map(o => [o.period, o.target]));
+        setMonthlyObjectives(map);
+      } catch {
+        // Silent: keep {} → fallback 45 everywhere. Page must not break.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // ── SALE DECLARATION MODAL ─────────────────────────────────────────────────
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [saleForm, setSaleForm] = useState({
@@ -2365,10 +2384,10 @@ export default function Leaderboard() {
 
   };
 
-  // Monthly sales objectives
-  const MONTHLY_OBJECTIVES = { '2026-03': 50, '2026-04': 50, '2026-05': 60, '2026-06': 130 };
+  // Monthly sales objectives — sourced from API (see useEffect above).
+  // Fallback 45 if month not configured (preserves prior behavior).
   const viewingMonth = range && range !== 'all' ? range : new Date().toISOString().slice(0, 7);
-  const monthlyObjective = MONTHLY_OBJECTIVES[viewingMonth] || 45;
+  const monthlyObjective = monthlyObjectives[viewingMonth] ?? 45;
 
   // Progress percentage for objective
   const progressPct = Math.min((totals.ventes / monthlyObjective) * 100, 100);

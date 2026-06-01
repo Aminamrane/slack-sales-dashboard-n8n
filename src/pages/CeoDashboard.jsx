@@ -508,6 +508,13 @@ export default function CeoDashboard() {
   const [salesTeamUsers, setSalesTeamUsers] = useState([]);
   const [salesTeamLoading, setSalesTeamLoading] = useState(false);
 
+  // ── MONTHLY OBJECTIVES — CEO/admin editable modal ───────────────────
+  // map { 'YYYY-MM': target } sourced from /api/v1/monthly-objectives.
+  const [monthlyObjectives, setMonthlyObjectives] = useState({});
+  const [objectivesModalOpen, setObjectivesModalOpen] = useState(false);
+  const [savingPeriod, setSavingPeriod] = useState(null); // period currently being PUT
+  const [objectiveError, setObjectiveError] = useState(null); // { period, message }
+
   const C = useMemo(() => getColors(darkMode), [darkMode]);
 
   // ── AUTH CHECK ──────────────────────────────────────────────────────
@@ -547,6 +554,71 @@ export default function CeoDashboard() {
       setDataLoading(false);
     })();
   }, [user]);
+
+  // ── MONTHLY OBJECTIVES — load on mount, refetch when modal opens ───
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await apiClient.get('/api/v1/monthly-objectives');
+        if (cancelled || !data?.objectives) return;
+        const map = Object.fromEntries(data.objectives.map(o => [o.period, o.target]));
+        setMonthlyObjectives(map);
+      } catch {
+        // Silent: empty map → card shows "Objectif : —".
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
+
+  // Authorization gate: only CEO and admin can edit objectives.
+  const canEditObjectives = user?.role === 'ceo' || user?.role === 'admin';
+  // Current month key (YYYY-MM, locale-independent).
+  const currentMonthKey = useMemo(() => new Date().toISOString().slice(0, 7), []);
+  // Rolling 6 months (current + 5 next) for the editable modal.
+  const rollingMonths = useMemo(() => {
+    const MONTH_LABELS_FR = [
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+    ];
+    const now = new Date();
+    const list = [];
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      const period = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      list.push({ period, label: `${MONTH_LABELS_FR[d.getMonth()]} ${d.getFullYear()}` });
+    }
+    return list;
+  }, []);
+
+  // PUT a single objective. Optimistic UI with rollback on failure.
+  const saveObjective = useCallback(async (period, rawValue) => {
+    if (!canEditObjectives) return;
+    const target = parseInt(rawValue, 10);
+    if (!Number.isFinite(target) || target < 0) {
+      setObjectiveError({ period, message: 'Valeur invalide' });
+      return;
+    }
+    const previous = monthlyObjectives[period];
+    setMonthlyObjectives(prev => ({ ...prev, [period]: target }));
+    setSavingPeriod(period);
+    setObjectiveError(null);
+    try {
+      await apiClient.put(`/api/v1/monthly-objectives/${period}`, { target });
+    } catch (e) {
+      // Rollback
+      setMonthlyObjectives(prev => {
+        const next = { ...prev };
+        if (previous === undefined) delete next[period];
+        else next[period] = previous;
+        return next;
+      });
+      setObjectiveError({ period, message: e?.message || 'Erreur sauvegarde' });
+    } finally {
+      setSavingPeriod(null);
+    }
+  }, [canEditObjectives, monthlyObjectives]);
 
   // ── DERIVED KPIs ──────────────────────────────────────────────────
   const kpiRow1 = useMemo(() => {
@@ -621,6 +693,12 @@ export default function CeoDashboard() {
         @keyframes ceoRowIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
         @keyframes ceoPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         @keyframes ceoTooltipPortalIn { from { opacity: 0; transform: translateX(-50%) translateY(-2px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+        @keyframes ceoSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        /* Objectifs mensuels modal — input number Notion-style (pas de
+           spinners natifs, plus discret et cohérent avec le pattern de la page). */
+        .ceo-objective-input { -moz-appearance: textfield; appearance: textfield; }
+        .ceo-objective-input::-webkit-inner-spin-button,
+        .ceo-objective-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         /* KPI tooltip — portal-rendered, voir KpiTooltipPortal. Le DOM tooltip
            n'est plus enfant de la carte (échappe stacking contexts), seul le
            ring focus + cursor restent côté carte. */
@@ -1218,13 +1296,32 @@ export default function CeoDashboard() {
                 animation: 'ceoCardPop 0.4s ease 480ms both',
                 width: 280, flexShrink: 0, position: 'relative',
               }}>
-                <img src={ceo6} alt="" style={{
-                  position: 'absolute', top: -12, right: -10, width: 58, height: 55,
-                  objectFit: 'contain', pointerEvents: 'none', zIndex: 10,
-                }} />
+                <img
+                  src={ceo6}
+                  alt={canEditObjectives ? 'Éditer les objectifs mensuels' : ''}
+                  onClick={canEditObjectives ? () => setObjectivesModalOpen(true) : undefined}
+                  style={{
+                    position: 'absolute', top: -12, right: -10, width: 58, height: 55,
+                    objectFit: 'contain',
+                    pointerEvents: canEditObjectives ? 'auto' : 'none',
+                    cursor: canEditObjectives ? 'pointer' : 'default',
+                    zIndex: 10,
+                    transition: 'transform 0.2s cubic-bezier(0.34,1.56,0.64,1)',
+                    transformOrigin: 'center',
+                  }}
+                  onMouseEnter={canEditObjectives ? (e) => e.currentTarget.style.transform = 'scale(1.08)' : undefined}
+                  onMouseLeave={canEditObjectives ? (e) => e.currentTarget.style.transform = 'scale(1)' : undefined}
+                />
                 <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.border}` }}>
                   <div style={{ fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>Classement</div>
                   <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Top commerciaux du mois</div>
+                  {canEditObjectives && (
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>
+                      Objectif : <span style={{ color: C.text, fontWeight: 600 }}>
+                        {monthlyObjectives[currentMonthKey] ?? '—'}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div style={{ padding: '6px 0' }}>
                   {(leaderboardData?.all_sellers || []).slice(0, 4).map((seller, i) => {
@@ -1744,6 +1841,153 @@ export default function CeoDashboard() {
           )}
         </div>
       </div>
+      {/* ── MONTHLY OBJECTIVES MODAL (CEO/admin only, portal) ───────── */}
+      {objectivesModalOpen && canEditObjectives && createPortal(
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setObjectivesModalOpen(false); }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 3000,
+            background: darkMode ? 'rgba(0,0,0,0.55)' : 'rgba(15,18,30,0.35)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            animation: 'ceoFadeIn 0.18s cubic-bezier(0.16,1,0.3,1) both',
+            padding: 20,
+          }}
+        >
+          <div style={{
+            width: '100%', maxWidth: 480,
+            background: C.bg, border: `1px solid ${C.border}`, borderRadius: 18,
+            boxShadow: darkMode ? '0 24px 64px rgba(0,0,0,0.5)' : '0 24px 64px rgba(0,0,0,0.18)',
+            overflow: 'hidden',
+            animation: 'ceoCardPop 0.28s cubic-bezier(0.16,1,0.3,1) both',
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: '18px 22px', borderBottom: `1px solid ${C.border}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+            }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>Objectifs mensuels</div>
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Ventes cibles par mois</div>
+              </div>
+              <button
+                onClick={() => setObjectivesModalOpen(false)}
+                style={{
+                  width: 32, height: 32, borderRadius: 10, border: `1px solid ${C.border}`,
+                  background: 'transparent', color: C.muted, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.15s', padding: 0,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = C.subtle; e.currentTarget.style.color = C.text; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.muted; }}
+                aria-label="Fermer"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            {/* Rows */}
+            <div style={{ padding: '10px 14px 16px' }}>
+              {rollingMonths.map(({ period, label }) => (
+                <ObjectiveRow
+                  key={period}
+                  period={period}
+                  label={label}
+                  currentValue={monthlyObjectives[period]}
+                  saving={savingPeriod === period}
+                  errorMessage={objectiveError?.period === period ? objectiveError.message : null}
+                  onSave={(val) => saveObjective(period, val)}
+                  C={C}
+                  darkMode={darkMode}
+                  isCurrent={period === currentMonthKey}
+                />
+              ))}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
+// ── Single editable row inside the objectives modal ─────────────────────────
+function ObjectiveRow({ label, currentValue, saving, errorMessage, onSave, C, darkMode, isCurrent }) {
+  const [draft, setDraft] = useState(currentValue !== undefined ? String(currentValue) : '');
+  // Sync local draft when external value changes (e.g. successful save or refetch).
+  useEffect(() => {
+    setDraft(currentValue !== undefined ? String(currentValue) : '');
+  }, [currentValue]);
+
+  const dirty = draft !== (currentValue !== undefined ? String(currentValue) : '');
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && dirty && !saving) onSave(draft);
+  };
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      padding: '12px 14px',
+      borderRadius: 12,
+      background: isCurrent ? (darkMode ? 'rgba(124,138,219,0.08)' : 'rgba(91,106,191,0.06)') : 'transparent',
+      transition: 'background 0.15s',
+    }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 650, color: C.text, letterSpacing: '-0.01em' }}>
+          {label}{isCurrent && <span style={{ marginLeft: 8, fontSize: 10, color: C.accent, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px' }}>actuel</span>}
+        </div>
+        {errorMessage && (
+          <div style={{ fontSize: 11, color: '#ef4444', marginTop: 2 }}>{errorMessage}</div>
+        )}
+      </div>
+      <input
+        type="number"
+        inputMode="numeric"
+        min="0"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="45"
+        disabled={saving}
+        className="ceo-objective-input"
+        style={{
+          width: 84, padding: '8px 12px',
+          border: `1px solid ${errorMessage ? '#ef4444' : C.border}`,
+          borderRadius: 10, background: C.subtle, color: C.text,
+          fontSize: 14, fontWeight: 600, fontVariantNumeric: 'tabular-nums',
+          letterSpacing: '-0.01em',
+          textAlign: 'right', outline: 'none', fontFamily: 'inherit',
+          transition: 'border-color 0.15s, background 0.15s, opacity 0.15s',
+          opacity: saving ? 0.6 : 1,
+        }}
+        onFocus={(e) => { if (!errorMessage) e.target.style.borderColor = C.accent; }}
+        onBlur={(e) => { if (!errorMessage) e.target.style.borderColor = C.border; }}
+      />
+      <button
+        onClick={() => onSave(draft)}
+        disabled={!dirty || saving}
+        style={{
+          width: 32, height: 32, borderRadius: 9,
+          border: `1px solid ${dirty && !saving ? C.accent : C.border}`,
+          background: dirty && !saving ? C.accent : 'transparent',
+          color: dirty && !saving ? '#fff' : C.muted,
+          cursor: dirty && !saving ? 'pointer' : 'default',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          transition: 'all 0.15s', padding: 0,
+          opacity: dirty && !saving ? 1 : 0.5,
+        }}
+        aria-label="Sauvegarder"
+      >
+        {saving ? (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation: 'ceoSpin 0.8s linear infinite' }}>
+            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+          </svg>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        )}
+      </button>
     </div>
   );
 }
