@@ -3095,8 +3095,9 @@ export default function TrackingSheet() {
                   </div>
                   {vacError && <div style={{ marginTop: 10, fontSize: 12, color: '#ef4444', fontWeight: 500 }}>{vacError}</div>}
                   <div style={{ marginTop: 10, fontSize: 11, color: C.muted, lineHeight: 1.4 }}>
-                    Pendant cette période, tu n'apparaîtras pas comme disponible dans la gestion des leads.
-                    Tu pourras toujours traiter les leads déjà attribués avant ton départ.
+                    💡 Pense à traiter tes leads en cours avant ton départ : ils restent attribués à
+                    ton compte pendant ton absence, donc autant les finaliser pour ne pas impacter
+                    tes statistiques du mois.
                   </div>
                 </div>
               </div>
