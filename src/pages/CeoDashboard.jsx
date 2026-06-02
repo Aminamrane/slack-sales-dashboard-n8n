@@ -760,9 +760,11 @@ export default function CeoDashboard() {
         sections={SIDEBAR_SECTIONS}
         activeTab={activeTab}
         setActiveTab={(tabId) => {
-          // "dispatch" est un wrapper de route (CeoDispatchView) → on
-          // navigate vers /ceo/dispatch au lieu d'un rendu inline.
+          // "dispatch" et "leaderboard" sont des wrappers de route
+          // (CeoDispatchView / CeoLeaderboardView) → on navigate au lieu
+          // d'un rendu inline.
           if (tabId === 'dispatch') { navigate('/ceo/dispatch'); return; }
+          if (tabId === 'leaderboard') { navigate('/ceo/leaderboard'); return; }
           setActiveTab(tabId);
         }}
         C={C}

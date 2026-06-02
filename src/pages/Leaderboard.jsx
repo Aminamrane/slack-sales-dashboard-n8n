@@ -1272,6 +1272,15 @@ export default function Leaderboard() {
 
   const navigate = useNavigate();
 
+  // ── EMBED MODE (CEO Dashboard wrapper) ────────────────────────────────────
+  // Quand `?embed=true` est présent (via CeoLeaderboardView), on masque la
+  // SharedNavbar interne (la CeoSidebar de CeoLeaderboardView prend le relais
+  // à gauche) et on retire le paddingTop dédié à la navbar.
+  const embedMode = useMemo(
+    () => new URLSearchParams(window.location.search).get('embed') === 'true',
+    []
+  );
+
   // ── DARK MODE ───────────────────────────────────────────────────────────────
 
   const [darkMode, setDarkMode] = useState(() => {
@@ -2412,10 +2421,10 @@ export default function Leaderboard() {
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
       background: CARD.surface,
       minHeight: "100vh",
-      paddingTop: '64px',
+      paddingTop: embedMode ? 0 : '64px',
       color: CARD.text,
     }}>
-      <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />
+      {!embedMode && <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />}
 
       {/* ═══════════════════════════════════════════════════════════════════
           OUTER WRAPPER — soft card-behind-card
