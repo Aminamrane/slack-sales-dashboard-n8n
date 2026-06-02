@@ -3027,82 +3027,130 @@ export default function TrackingSheet() {
         })()}
 
         {/* ════ MODAL: Mes absences (declaration vacances) ═══════════════ */}
-        {showVacationModal && (
+        {showVacationModal && createPortal(
           <div
             onClick={() => setShowVacationModal(false)}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'tabFadeIn 0.15s ease-out both' }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(15,15,20,0.55)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, animation: 'tabFadeIn 0.18s ease-out both' }}
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              style={{ background: C.bg, borderRadius: 16, border: `1px solid ${C.border}`, boxShadow: C.shadow, width: 480, maxWidth: '90vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+              style={{ background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`, boxShadow: '0 24px 60px rgba(0,0,0,0.25)', width: 540, maxWidth: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'solarFadeIn 0.25s cubic-bezier(0.16,1,0.3,1) both' }}
             >
-              <div style={{ padding: '20px 24px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 22 }}>🌴</span>
-                  <h3 style={{ fontSize: 17, fontWeight: 700, color: C.text, margin: 0 }}>Mes absences</h3>
+              {/* Header avec gradient amber subtil */}
+              <div style={{ padding: '22px 28px 18px', background: darkMode ? 'linear-gradient(135deg, rgba(245,158,11,0.14), rgba(251,146,60,0.06))' : 'linear-gradient(135deg, rgba(245,158,11,0.10), rgba(251,146,60,0.04))', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: 'linear-gradient(135deg, #fbbf24, #f97316)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, boxShadow: '0 4px 12px rgba(245,158,11,0.3)' }}>🌴</div>
+                  <div>
+                    <h3 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0, letterSpacing: '-0.01em' }}>Mes absences</h3>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                      {myUnavailability.length === 0 ? 'Aucune absence à venir' : `${myUnavailability.length} période${myUnavailability.length > 1 ? 's' : ''} déclarée${myUnavailability.length > 1 ? 's' : ''}`}
+                    </div>
+                  </div>
                 </div>
                 <button onClick={() => setShowVacationModal(false)}
-                  style={{ width: 30, height: 30, border: 'none', background: 'transparent', color: C.muted, cursor: 'pointer', fontSize: 18, borderRadius: 8 }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'}
+                  style={{ width: 34, height: 34, border: 'none', background: 'transparent', color: C.muted, cursor: 'pointer', fontSize: 20, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}
                   onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  aria-label="Fermer"
                 >&times;</button>
               </div>
 
-              <div style={{ padding: '18px 24px', overflowY: 'auto', flex: 1 }}>
+              <div style={{ padding: '20px 28px 24px', overflowY: 'auto', flex: 1 }}>
                 {/* Liste des periodes existantes */}
                 {myUnavailability.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13 }}>Aucune absence déclarée</div>
+                  <div style={{ textAlign: 'center', padding: '20px 0 24px', color: C.muted }}>
+                    <div style={{ fontSize: 36, marginBottom: 6, opacity: 0.4 }}>📅</div>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>Aucune absence à venir</div>
+                    <div style={{ fontSize: 11.5, marginTop: 4, opacity: 0.7 }}>Déclare ci-dessous tes prochains congés</div>
+                  </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
                     {myUnavailability.map(v => {
-                      const fmt = (iso) => { const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`; };
+                      const fmt = (iso) => {
+                        const d = new Date(iso + 'T12:00:00');
+                        return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+                      };
+                      const daysCount = (() => {
+                        const s = new Date(v.start_date); const e = new Date(v.end_date);
+                        return Math.round((e - s) / 86400000) + 1;
+                      })();
                       return (
-                        <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10 }}>
-                          <span style={{ fontSize: 16 }}>🌴</span>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>
-                              {v.start_date === v.end_date ? `Le ${fmt(v.start_date)}` : `Du ${fmt(v.start_date)} au ${fmt(v.end_date)}`}
+                        <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: darkMode ? 'rgba(245,158,11,0.10)' : 'rgba(245,158,11,0.07)', border: `1px solid ${darkMode ? 'rgba(245,158,11,0.28)' : 'rgba(245,158,11,0.22)'}`, borderRadius: 12, transition: 'transform 0.15s' }}
+                          onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-1px)'}
+                          onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                        >
+                          <div style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg, rgba(251,191,36,0.25), rgba(249,115,22,0.15))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0 }}>🌴</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13.5, fontWeight: 600, color: C.text, lineHeight: 1.3 }}>
+                              {v.start_date === v.end_date ? fmt(v.start_date) : `${fmt(v.start_date)} → ${fmt(v.end_date)}`}
+                            </div>
+                            <div style={{ fontSize: 11, color: C.muted, marginTop: 2, fontWeight: 500 }}>
+                              {daysCount} jour{daysCount > 1 ? 's' : ''}
                             </div>
                           </div>
                           <button onClick={() => handleDeleteVacation(v.id)}
-                            style={{ padding: '6px 10px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: '#ef4444', cursor: 'pointer', fontSize: 11, fontWeight: 600, fontFamily: 'inherit' }}
-                          >Supprimer</button>
+                            style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${darkMode ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.18)'}`, background: 'transparent', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s' }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.08)'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                            title="Supprimer cette période"
+                            aria-label="Supprimer"
+                          >🗑</button>
                         </div>
                       );
                     })}
                   </div>
                 )}
 
+                {/* Separator + label */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                  <div style={{ flex: 1, height: 1, background: C.border }} />
+                  <span style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Nouvelle absence</span>
+                  <div style={{ flex: 1, height: 1, background: C.border }} />
+                </div>
+
                 {/* Formulaire d'ajout */}
-                <div style={{ padding: 14, background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', borderRadius: 10, border: `1px solid ${C.border}` }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>Déclarer une nouvelle absence</div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: C.muted, marginBottom: 4 }}>Du</label>
+                <div style={{ padding: 16, background: darkMode ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.018)', borderRadius: 14, border: `1px solid ${C.border}` }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Du</label>
                       <input type="date" value={newVacStart} min={TODAY} onChange={(e) => setNewVacStart(e.target.value)}
-                        style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, fontFamily: 'inherit' }}
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', transition: 'border-color 0.15s', boxSizing: 'border-box' }}
+                        onFocus={(e) => e.currentTarget.style.borderColor = '#f59e0b'}
+                        onBlur={(e) => e.currentTarget.style.borderColor = C.border}
                       />
                     </div>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: C.muted, marginBottom: 4 }}>Au</label>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Au</label>
                       <input type="date" value={newVacEnd} min={newVacStart || TODAY} onChange={(e) => setNewVacEnd(e.target.value)}
-                        style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, fontFamily: 'inherit' }}
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', transition: 'border-color 0.15s', boxSizing: 'border-box' }}
+                        onFocus={(e) => e.currentTarget.style.borderColor = '#f59e0b'}
+                        onBlur={(e) => e.currentTarget.style.borderColor = C.border}
                       />
                     </div>
-                    <button onClick={handleAddVacation}
-                      style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#f59e0b', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}
-                    >Ajouter</button>
                   </div>
-                  {vacError && <div style={{ marginTop: 10, fontSize: 12, color: '#ef4444', fontWeight: 500 }}>{vacError}</div>}
-                  <div style={{ marginTop: 10, fontSize: 11, color: C.muted, lineHeight: 1.4 }}>
-                    💡 Pense à traiter tes leads en cours avant ton départ : ils restent attribués à
-                    ton compte pendant ton absence, donc autant les finaliser pour ne pas impacter
-                    tes statistiques du mois.
+                  <button onClick={handleAddVacation}
+                    style={{ width: '100%', padding: '11px 16px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #fbbf24, #f97316)', color: '#fff', cursor: 'pointer', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap', boxShadow: '0 4px 12px rgba(245,158,11,0.32)', letterSpacing: '0.01em', transition: 'transform 0.15s, box-shadow 0.15s' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(245,158,11,0.4)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(245,158,11,0.32)'; }}
+                  >Ajouter cette période</button>
+                  {vacError && (
+                    <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, fontSize: 12, color: '#ef4444', fontWeight: 500 }}>
+                      {vacError}
+                    </div>
+                  )}
+                </div>
+
+                {/* Tip box */}
+                <div style={{ marginTop: 16, padding: '12px 14px', background: darkMode ? 'rgba(59,130,246,0.08)' : 'rgba(59,130,246,0.06)', border: `1px solid ${darkMode ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.15)'}`, borderRadius: 10, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <span style={{ fontSize: 14, lineHeight: 1.4 }}>💡</span>
+                  <div style={{ fontSize: 11.5, color: C.text, lineHeight: 1.5, opacity: 0.85 }}>
+                    Pense à traiter tes leads en cours <strong>avant ton départ</strong> : ils restent attribués à ton compte pendant ton absence, donc autant les finaliser pour ne pas impacter tes statistiques du mois.
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
         {/* ════ VIEW: NOTIFICATIONS ═══════════════════════════════════════ */}
