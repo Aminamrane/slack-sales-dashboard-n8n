@@ -741,18 +741,28 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
                                           {sortedAssignableUsers.map(u => {
                                             const color = getUserColor(u);
                                             const isActive = lead.assigned_to === u.email;
+                                            // Vacances : item visible mais non sélectionnable (visuel grisé + icone)
+                                            const isOnVacation = !!u.unavailable_until;
                                             return (
-                                              <button key={u.email} onClick={() => { setAssignDropdown(null); handleAssignLead(lead.id, u.email, { stopPropagation: () => {} }); }}
+                                              <button key={u.email}
+                                                onClick={isOnVacation ? undefined : () => { setAssignDropdown(null); handleAssignLead(lead.id, u.email, { stopPropagation: () => {} }); }}
+                                                disabled={isOnVacation}
+                                                title={isOnVacation ? `En vacances jusqu'au ${u.unavailable_until}` : undefined}
                                                 style={{
-                                                  display: 'flex', alignItems: 'center', width: '100%', padding: '8px 12px',
-                                                  border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
+                                                  display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '8px 12px',
+                                                  border: 'none', borderRadius: 8, cursor: isOnVacation ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
                                                   background: isActive ? `${color}10` : 'transparent',
                                                   fontSize: 13, fontWeight: isActive ? 600 : 500, color: color,
+                                                  opacity: isOnVacation ? 0.45 : 1,
                                                   transition: 'background 0.15s', whiteSpace: 'nowrap',
                                                 }}
-                                                onMouseEnter={(e) => e.currentTarget.style.background = `${color}15`}
-                                                onMouseLeave={(e) => e.currentTarget.style.background = isActive ? `${color}10` : 'transparent'}
-                                              >{u.full_name}</button>
+                                                onMouseEnter={(e) => { if (!isOnVacation) e.currentTarget.style.background = `${color}15`; }}
+                                                onMouseLeave={(e) => { if (!isOnVacation) e.currentTarget.style.background = isActive ? `${color}10` : 'transparent'; }}
+                                              >
+                                                {isOnVacation && <span style={{ fontSize: 13 }}>🌴</span>}
+                                                <span>{u.full_name}</span>
+                                                {isOnVacation && <span style={{ fontSize: 10, fontWeight: 500, marginLeft: 'auto', opacity: 0.75 }}>en vacances</span>}
+                                              </button>
                                             );
                                           })}
                                         </div>

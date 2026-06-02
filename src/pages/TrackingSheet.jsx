@@ -926,6 +926,41 @@ export default function TrackingSheet() {
     window.location.href = `/tracking-sheet?sheet_id=${encodeURIComponent(email)}${ghostParam}`;
   }; // 'leads' | 'add_lead' | 'calendar' | 'notifications' | 'kpis' | 'campaigns'
   const [calendarWeekOffset, setCalendarWeekOffset] = useState(0);
+  // Vacances/absences : declarees par le sales lui-meme, visibles dans le calendrier
+  const [myUnavailability, setMyUnavailability] = useState([]);
+  const [showVacationModal, setShowVacationModal] = useState(false);
+  const [newVacStart, setNewVacStart] = useState('');
+  const [newVacEnd, setNewVacEnd] = useState('');
+  const [vacError, setVacError] = useState('');
+  const fetchMyUnavailability = async () => {
+    try {
+      const data = await apiClient.get('/api/v1/users/me/unavailability');
+      setMyUnavailability(Array.isArray(data) ? data : []);
+    } catch (e) { console.warn('Failed to fetch unavailability:', e); }
+  };
+  useEffect(() => { fetchMyUnavailability(); }, []);
+  const handleAddVacation = async () => {
+    setVacError('');
+    if (!newVacStart || !newVacEnd) { setVacError('Sélectionne une date de début et de fin'); return; }
+    if (newVacEnd < newVacStart) { setVacError('La fin doit être après le début'); return; }
+    try {
+      await apiClient.post('/api/v1/users/me/unavailability', { start_date: newVacStart, end_date: newVacEnd });
+      setNewVacStart(''); setNewVacEnd('');
+      await fetchMyUnavailability();
+    } catch (e) {
+      setVacError(e?.message?.includes('409') ? 'Cette période chevauche une absence déjà déclarée' : 'Erreur lors de la création');
+    }
+  };
+  const handleDeleteVacation = async (id) => {
+    try {
+      await apiClient.delete(`/api/v1/users/me/unavailability/${id}`);
+      await fetchMyUnavailability();
+    } catch (e) { console.warn('Failed to delete unavailability:', e); }
+  };
+  const isDayInVacation = (date) => {
+    const iso = date.toISOString().split('T')[0];
+    return myUnavailability.some(v => iso >= v.start_date && iso <= v.end_date);
+  };
   const [formData, setFormData] = useState({ full_name: '', phone: '', email: '', sector: '', company_type: '' });
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formSuccess, setFormSuccess] = useState(false);
@@ -2854,29 +2889,44 @@ export default function TrackingSheet() {
                     <span style={{ fontSize: 13, fontWeight: 600, color: C.muted, marginLeft: 8 }}>
                       {monthNames[weekDays[0].getMonth()]} {weekDays[0].getFullYear()}
                     </span>
+                    <div style={{ width: 1, height: 22, background: C.border, margin: '0 4px' }} />
+                    <button onClick={() => setShowVacationModal(true)}
+                      style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: myUnavailability.length > 0 ? 'rgba(245,158,11,0.12)' : 'transparent', color: C.text, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}
+                      title="Déclarer mes absences (vacances, congés)"
+                    >
+                      <span>🌴</span>
+                      <span>Mes absences</span>
+                      {myUnavailability.length > 0 && <span style={{ background: '#f59e0b', color: '#fff', borderRadius: 8, padding: '0 6px', fontSize: 10, fontWeight: 700 }}>{myUnavailability.length}</span>}
+                    </button>
                   </div>
                 </div>
 
                 {/* Day headers */}
                 <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(7, 1fr)', borderBottom: `1px solid ${C.border}` }}>
                   <div />
-                  {weekDays.map((d, i) => (
-                    <div key={i} style={{
-                      textAlign: 'center', padding: '8px 0 10px',
-                      borderLeft: `1px solid ${C.border}`,
-                    }}>
-                      <div style={{ fontSize: 11, fontWeight: 500, color: C.muted, textTransform: 'uppercase' }}>{dayLabels[i]}</div>
-                      <div style={{
-                        fontSize: 20, fontWeight: 700, lineHeight: 1.3,
-                        color: isToday(d) ? '#fff' : C.text,
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        width: 34, height: 34, borderRadius: '50%',
-                        background: isToday(d) ? C.accent : 'transparent',
+                  {weekDays.map((d, i) => {
+                    const onVacation = isDayInVacation(d);
+                    return (
+                      <div key={i} style={{
+                        textAlign: 'center', padding: '8px 0 10px',
+                        borderLeft: `1px solid ${C.border}`,
+                        background: onVacation ? 'rgba(245,158,11,0.10)' : 'transparent',
+                        position: 'relative',
                       }}>
-                        {d.getDate()}
+                        <div style={{ fontSize: 11, fontWeight: 500, color: C.muted, textTransform: 'uppercase' }}>{dayLabels[i]}</div>
+                        <div style={{
+                          fontSize: 20, fontWeight: 700, lineHeight: 1.3,
+                          color: isToday(d) ? '#fff' : C.text,
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          width: 34, height: 34, borderRadius: '50%',
+                          background: isToday(d) ? C.accent : 'transparent',
+                        }}>
+                          {d.getDate()}
+                        </div>
+                        {onVacation && <div style={{ fontSize: 10, fontWeight: 600, color: '#b45309', marginTop: 2 }}>🌴 vacances</div>}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -2975,6 +3025,84 @@ export default function TrackingSheet() {
             </div>
           );
         })()}
+
+        {/* ════ MODAL: Mes absences (declaration vacances) ═══════════════ */}
+        {showVacationModal && (
+          <div
+            onClick={() => setShowVacationModal(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'tabFadeIn 0.15s ease-out both' }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{ background: C.bg, borderRadius: 16, border: `1px solid ${C.border}`, boxShadow: C.shadow, width: 480, maxWidth: '90vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+            >
+              <div style={{ padding: '20px 24px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 22 }}>🌴</span>
+                  <h3 style={{ fontSize: 17, fontWeight: 700, color: C.text, margin: 0 }}>Mes absences</h3>
+                </div>
+                <button onClick={() => setShowVacationModal(false)}
+                  style={{ width: 30, height: 30, border: 'none', background: 'transparent', color: C.muted, cursor: 'pointer', fontSize: 18, borderRadius: 8 }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >&times;</button>
+              </div>
+
+              <div style={{ padding: '18px 24px', overflowY: 'auto', flex: 1 }}>
+                {/* Liste des periodes existantes */}
+                {myUnavailability.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13 }}>Aucune absence déclarée</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
+                    {myUnavailability.map(v => {
+                      const fmt = (iso) => { const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`; };
+                      return (
+                        <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10 }}>
+                          <span style={{ fontSize: 16 }}>🌴</span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>
+                              {v.start_date === v.end_date ? `Le ${fmt(v.start_date)}` : `Du ${fmt(v.start_date)} au ${fmt(v.end_date)}`}
+                            </div>
+                          </div>
+                          <button onClick={() => handleDeleteVacation(v.id)}
+                            style={{ padding: '6px 10px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: '#ef4444', cursor: 'pointer', fontSize: 11, fontWeight: 600, fontFamily: 'inherit' }}
+                          >Supprimer</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Formulaire d'ajout */}
+                <div style={{ padding: 14, background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', borderRadius: 10, border: `1px solid ${C.border}` }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>Déclarer une nouvelle absence</div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: C.muted, marginBottom: 4 }}>Du</label>
+                      <input type="date" value={newVacStart} min={TODAY} onChange={(e) => setNewVacStart(e.target.value)}
+                        style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, fontFamily: 'inherit' }}
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: C.muted, marginBottom: 4 }}>Au</label>
+                      <input type="date" value={newVacEnd} min={newVacStart || TODAY} onChange={(e) => setNewVacEnd(e.target.value)}
+                        style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, fontFamily: 'inherit' }}
+                      />
+                    </div>
+                    <button onClick={handleAddVacation}
+                      style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#f59e0b', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                    >Ajouter</button>
+                  </div>
+                  {vacError && <div style={{ marginTop: 10, fontSize: 12, color: '#ef4444', fontWeight: 500 }}>{vacError}</div>}
+                  <div style={{ marginTop: 10, fontSize: 11, color: C.muted, lineHeight: 1.4 }}>
+                    Pendant cette période, tu n'apparaîtras pas comme disponible dans la gestion des leads.
+                    Tu pourras toujours traiter les leads déjà attribués avant ton départ.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ════ VIEW: NOTIFICATIONS ═══════════════════════════════════════ */}
         {sidebarView === 'notifications' && (() => {
