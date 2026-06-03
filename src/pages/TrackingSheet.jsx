@@ -5,6 +5,7 @@ import apiClient from "../services/apiClient";
 import { supabase } from "../lib/supabaseClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import LeadsManagement from "./LeadsManagement.jsx";
+import PerfSalesTable from "../components/PerfSalesTable.jsx";
 import "../index.css";
 
 // ── SIDEBAR ICONS ────────────────────────────────────────────────────────────
@@ -2567,8 +2568,16 @@ export default function TrackingSheet() {
         {/* ADD LEAD view removed — now a modal (see end of component) */}
 
 
-        {/* ════ VIEW: KPIs (mockup) ═══════════════════════════════════════════ */}
-        {sidebarView === 'kpis' && (
+        {/* ════ VIEW: KPIs ════════════════════════════════════════════════ */}
+        {/* Pour admin / head_of_sales / head_of_sales_manager : affiche le tableau */}
+        {/* Perf Sales (composant isole, aucune logique metier touchee). */}
+        {/* Pour les autres roles : conserve le mockup d'origine. */}
+        {sidebarView === 'kpis' && ['admin', 'head_of_sales', 'head_of_sales_manager'].includes(currentUser?.role) && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'tabFadeIn 0.3s ease-out both' }}>
+            <PerfSalesTable darkMode={darkMode} C={C} />
+          </div>
+        )}
+        {sidebarView === 'kpis' && !['admin', 'head_of_sales', 'head_of_sales_manager'].includes(currentUser?.role) && (
           <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
             <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
               KPIs & Statistiques
