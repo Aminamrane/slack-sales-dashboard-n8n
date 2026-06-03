@@ -157,6 +157,25 @@ const toDateOnly = (val) => {
   if (!val) return '';
   return val.slice(0, 10);
 };
+// Format Notion-like pour le timestamp de derniere modification d'une note.
+// "aujourd'hui a 14h56" / "hier a 14h56" / "lundi a 14h56" / "le 3 juin a 14h56".
+const formatNoteDate = (iso) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+  const now = new Date();
+  const months = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+  const days = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+  const sameDay = (a, b) => a.toDateString() === b.toDateString();
+  const yest = new Date(now); yest.setDate(now.getDate() - 1);
+  const time = `${d.getHours()}h${String(d.getMinutes()).padStart(2, '0')}`;
+  if (sameDay(d, now)) return `aujourd'hui à ${time}`;
+  if (sameDay(d, yest)) return `hier à ${time}`;
+  const diffDays = (now - d) / 86400000;
+  if (diffDays > 0 && diffDays < 7) return `${days[d.getDay()]} à ${time}`;
+  const sameY = d.getFullYear() === now.getFullYear();
+  return `le ${d.getDate()} ${months[d.getMonth()]}${sameY ? '' : ' ' + d.getFullYear()} à ${time}`;
+};
 const formatDateTimeFR = (val) => {
   if (!val) return '';
   const d = val.slice(0, 10).split('-');
@@ -5938,7 +5957,12 @@ export default function TrackingSheet() {
                   border: `1px solid ${darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'}`,
                 }}>
                   <span style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Note</span>
-                  <p style={{ fontSize: 13, color: C.secondary, margin: '4px 0 0', lineHeight: 1.5, fontStyle: 'italic' }}>{lead.notes}</p>
+                  <p style={{ fontSize: 13, color: C.secondary, margin: '4px 0 0', lineHeight: 1.5, fontStyle: 'italic', whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>{lead.notes}</p>
+                  {lead.notes_updated_at && formatNoteDate(lead.notes_updated_at) && (
+                    <div style={{ fontSize: 10, color: C.muted, marginTop: 6, textAlign: 'right', fontStyle: 'normal' }}>
+                      Modifié {formatNoteDate(lead.notes_updated_at)}
+                    </div>
+                  )}
                 </div>
               )}
               {editingNotes.hasOwnProperty(lead.id) && (
