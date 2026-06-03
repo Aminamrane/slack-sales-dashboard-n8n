@@ -112,7 +112,10 @@ export default function CeoPerfSalesView() {
       style={{
         display: "flex",
         minHeight: "100vh",
-        background: darkMode ? "#13141b" : "#f6f7f9",
+        // Aligné sur le body override de MonitoringPerf
+        // (#ffffff light / #13141b dark) pour éviter la bande sous la
+        // SharedNavbar dans la zone paddingTop:64 du wrapper droit.
+        background: darkMode ? "#13141b" : "#ffffff",
         fontFamily: "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
         WebkitFontSmoothing: "antialiased",
         MozOsxFontSmoothing: "grayscale",
