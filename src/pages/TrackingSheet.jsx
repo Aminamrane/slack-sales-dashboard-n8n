@@ -2891,12 +2891,19 @@ export default function TrackingSheet() {
                     </span>
                     <div style={{ width: 1, height: 22, background: C.border, margin: '0 4px' }} />
                     <button onClick={() => setShowVacationModal(true)}
-                      style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: myUnavailability.length > 0 ? 'rgba(245,158,11,0.12)' : 'transparent', color: C.text, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}
-                      title="Déclarer mes absences (vacances, congés)"
+                      style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: myUnavailability.length > 0 ? 'rgba(99,102,241,0.10)' : 'transparent', color: C.text, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}
+                      title="Déclarer mes absences"
                     >
-                      <span>🌴</span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                        <rect x="3" y="4" width="18" height="18" rx="2" />
+                        <line x1="16" y1="2" x2="16" y2="6" />
+                        <line x1="8" y1="2" x2="8" y2="6" />
+                        <line x1="3" y1="10" x2="21" y2="10" />
+                        <line x1="10" y1="14" x2="14" y2="18" />
+                        <line x1="14" y1="14" x2="10" y2="18" />
+                      </svg>
                       <span>Mes absences</span>
-                      {myUnavailability.length > 0 && <span style={{ background: '#f59e0b', color: '#fff', borderRadius: 8, padding: '0 6px', fontSize: 10, fontWeight: 700 }}>{myUnavailability.length}</span>}
+                      {myUnavailability.length > 0 && <span style={{ background: '#6366f1', color: '#fff', borderRadius: 8, padding: '0 6px', fontSize: 10, fontWeight: 700 }}>{myUnavailability.length}</span>}
                     </button>
                   </div>
                 </div>
@@ -2910,7 +2917,7 @@ export default function TrackingSheet() {
                       <div key={i} style={{
                         textAlign: 'center', padding: '8px 0 10px',
                         borderLeft: `1px solid ${C.border}`,
-                        background: onVacation ? 'rgba(245,158,11,0.10)' : 'transparent',
+                        background: onVacation ? (darkMode ? 'rgba(99,102,241,0.10)' : 'rgba(99,102,241,0.06)') : 'transparent',
                         position: 'relative',
                       }}>
                         <div style={{ fontSize: 11, fontWeight: 500, color: C.muted, textTransform: 'uppercase' }}>{dayLabels[i]}</div>
@@ -2923,7 +2930,7 @@ export default function TrackingSheet() {
                         }}>
                           {d.getDate()}
                         </div>
-                        {onVacation && <div style={{ fontSize: 10, fontWeight: 600, color: '#b45309', marginTop: 2 }}>🌴 vacances</div>}
+                        {onVacation && <div style={{ fontSize: 10, fontWeight: 600, color: '#6366f1', marginTop: 2, letterSpacing: '0.04em' }}>absent</div>}
                       </div>
                     );
                   })}
@@ -3036,10 +3043,19 @@ export default function TrackingSheet() {
               onClick={(e) => e.stopPropagation()}
               style={{ background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`, boxShadow: '0 24px 60px rgba(0,0,0,0.25)', width: 540, maxWidth: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'solarFadeIn 0.25s cubic-bezier(0.16,1,0.3,1) both' }}
             >
-              {/* Header avec gradient amber subtil */}
-              <div style={{ padding: '22px 28px 18px', background: darkMode ? 'linear-gradient(135deg, rgba(245,158,11,0.14), rgba(251,146,60,0.06))' : 'linear-gradient(135deg, rgba(245,158,11,0.10), rgba(251,146,60,0.04))', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              {/* Header avec accent indigo subtil — aligne avec la charte du site */}
+              <div style={{ padding: '22px 28px 18px', background: darkMode ? 'linear-gradient(135deg, rgba(99,102,241,0.12), rgba(99,102,241,0.04))' : 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(99,102,241,0.02))', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: 'linear-gradient(135deg, #fbbf24, #f97316)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, boxShadow: '0 4px 12px rgba(245,158,11,0.3)' }}>🌴</div>
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: 'linear-gradient(135deg, #6366f1, #4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 4px 12px rgba(99,102,241,0.28)' }}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2" />
+                      <line x1="16" y1="2" x2="16" y2="6" />
+                      <line x1="8" y1="2" x2="8" y2="6" />
+                      <line x1="3" y1="10" x2="21" y2="10" />
+                      <line x1="10" y1="14" x2="14" y2="18" />
+                      <line x1="14" y1="14" x2="10" y2="18" />
+                    </svg>
+                  </div>
                   <div>
                     <h3 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0, letterSpacing: '-0.01em' }}>Mes absences</h3>
                     <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
@@ -3059,9 +3075,18 @@ export default function TrackingSheet() {
                 {/* Liste des periodes existantes */}
                 {myUnavailability.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '20px 0 24px', color: C.muted }}>
-                    <div style={{ fontSize: 36, marginBottom: 6, opacity: 0.4 }}>📅</div>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 56, height: 56, borderRadius: 14, background: darkMode ? 'rgba(99,102,241,0.10)' : 'rgba(99,102,241,0.06)', color: '#6366f1', marginBottom: 8 }}>
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2" />
+                        <line x1="16" y1="2" x2="16" y2="6" />
+                        <line x1="8" y1="2" x2="8" y2="6" />
+                        <line x1="3" y1="10" x2="21" y2="10" />
+                        <line x1="10" y1="14" x2="14" y2="18" />
+                        <line x1="14" y1="14" x2="10" y2="18" />
+                      </svg>
+                    </div>
                     <div style={{ fontSize: 13, fontWeight: 500 }}>Aucune absence à venir</div>
-                    <div style={{ fontSize: 11.5, marginTop: 4, opacity: 0.7 }}>Déclare ci-dessous tes prochains congés</div>
+                    <div style={{ fontSize: 11.5, marginTop: 4, opacity: 0.7 }}>Déclare ci-dessous tes prochaines absences</div>
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
@@ -3075,11 +3100,20 @@ export default function TrackingSheet() {
                         return Math.round((e - s) / 86400000) + 1;
                       })();
                       return (
-                        <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: darkMode ? 'rgba(245,158,11,0.10)' : 'rgba(245,158,11,0.07)', border: `1px solid ${darkMode ? 'rgba(245,158,11,0.28)' : 'rgba(245,158,11,0.22)'}`, borderRadius: 12, transition: 'transform 0.15s' }}
+                        <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: darkMode ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)', border: `1px solid ${darkMode ? 'rgba(99,102,241,0.22)' : 'rgba(99,102,241,0.18)'}`, borderRadius: 12, transition: 'transform 0.15s' }}
                           onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-1px)'}
                           onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
                         >
-                          <div style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg, rgba(251,191,36,0.25), rgba(249,115,22,0.15))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0 }}>🌴</div>
+                          <div style={{ width: 38, height: 38, borderRadius: 10, background: darkMode ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.12)', color: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="4" width="18" height="18" rx="2" />
+                              <line x1="16" y1="2" x2="16" y2="6" />
+                              <line x1="8" y1="2" x2="8" y2="6" />
+                              <line x1="3" y1="10" x2="21" y2="10" />
+                              <line x1="10" y1="14" x2="14" y2="18" />
+                              <line x1="14" y1="14" x2="10" y2="18" />
+                            </svg>
+                          </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 13.5, fontWeight: 600, color: C.text, lineHeight: 1.3 }}>
                               {v.start_date === v.end_date ? fmt(v.start_date) : `${fmt(v.start_date)} → ${fmt(v.end_date)}`}
@@ -3089,12 +3123,19 @@ export default function TrackingSheet() {
                             </div>
                           </div>
                           <button onClick={() => handleDeleteVacation(v.id)}
-                            style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${darkMode ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.18)'}`, background: 'transparent', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s' }}
+                            style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${darkMode ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.18)'}`, background: 'transparent', color: '#ef4444', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s' }}
                             onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.08)'}
                             onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                             title="Supprimer cette période"
                             aria-label="Supprimer"
-                          >🗑</button>
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />
+                              <path d="M10 11v6M14 11v6" />
+                              <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                            </svg>
+                          </button>
                         </div>
                       );
                     })}
@@ -3115,7 +3156,7 @@ export default function TrackingSheet() {
                       <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Du</label>
                       <input type="date" value={newVacStart} min={TODAY} onChange={(e) => setNewVacStart(e.target.value)}
                         style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', transition: 'border-color 0.15s', boxSizing: 'border-box' }}
-                        onFocus={(e) => e.currentTarget.style.borderColor = '#f59e0b'}
+                        onFocus={(e) => e.currentTarget.style.borderColor = '#6366f1'}
                         onBlur={(e) => e.currentTarget.style.borderColor = C.border}
                       />
                     </div>
@@ -3123,15 +3164,15 @@ export default function TrackingSheet() {
                       <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Au</label>
                       <input type="date" value={newVacEnd} min={newVacStart || TODAY} onChange={(e) => setNewVacEnd(e.target.value)}
                         style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', transition: 'border-color 0.15s', boxSizing: 'border-box' }}
-                        onFocus={(e) => e.currentTarget.style.borderColor = '#f59e0b'}
+                        onFocus={(e) => e.currentTarget.style.borderColor = '#6366f1'}
                         onBlur={(e) => e.currentTarget.style.borderColor = C.border}
                       />
                     </div>
                   </div>
                   <button onClick={handleAddVacation}
-                    style={{ width: '100%', padding: '11px 16px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #fbbf24, #f97316)', color: '#fff', cursor: 'pointer', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap', boxShadow: '0 4px 12px rgba(245,158,11,0.32)', letterSpacing: '0.01em', transition: 'transform 0.15s, box-shadow 0.15s' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(245,158,11,0.4)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(245,158,11,0.32)'; }}
+                    style={{ width: '100%', padding: '11px 16px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #6366f1, #4f46e5)', color: '#fff', cursor: 'pointer', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap', boxShadow: '0 4px 12px rgba(99,102,241,0.28)', letterSpacing: '0.01em', transition: 'transform 0.15s, box-shadow 0.15s' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(99,102,241,0.38)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(99,102,241,0.28)'; }}
                   >Ajouter cette période</button>
                   {vacError && (
                     <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, fontSize: 12, color: '#ef4444', fontWeight: 500 }}>

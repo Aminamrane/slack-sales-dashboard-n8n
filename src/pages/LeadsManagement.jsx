@@ -747,7 +747,7 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
                                               <button key={u.email}
                                                 onClick={isOnVacation ? undefined : () => { setAssignDropdown(null); handleAssignLead(lead.id, u.email, { stopPropagation: () => {} }); }}
                                                 disabled={isOnVacation}
-                                                title={isOnVacation ? `En vacances jusqu'au ${u.unavailable_until}` : undefined}
+                                                title={isOnVacation ? `Absent jusqu'au ${u.unavailable_until}` : undefined}
                                                 style={{
                                                   display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '8px 12px',
                                                   border: 'none', borderRadius: 8, cursor: isOnVacation ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
@@ -759,9 +759,18 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
                                                 onMouseEnter={(e) => { if (!isOnVacation) e.currentTarget.style.background = `${color}15`; }}
                                                 onMouseLeave={(e) => { if (!isOnVacation) e.currentTarget.style.background = isActive ? `${color}10` : 'transparent'; }}
                                               >
-                                                {isOnVacation && <span style={{ fontSize: 13 }}>🌴</span>}
+                                                {isOnVacation && (
+                                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                                    <rect x="3" y="4" width="18" height="18" rx="2" />
+                                                    <line x1="16" y1="2" x2="16" y2="6" />
+                                                    <line x1="8" y1="2" x2="8" y2="6" />
+                                                    <line x1="3" y1="10" x2="21" y2="10" />
+                                                    <line x1="10" y1="14" x2="14" y2="18" />
+                                                    <line x1="14" y1="14" x2="10" y2="18" />
+                                                  </svg>
+                                                )}
                                                 <span>{u.full_name}</span>
-                                                {isOnVacation && <span style={{ fontSize: 10, fontWeight: 500, marginLeft: 'auto', opacity: 0.75 }}>en vacances</span>}
+                                                {isOnVacation && <span style={{ fontSize: 10, fontWeight: 500, marginLeft: 'auto', opacity: 0.75 }}>absent</span>}
                                               </button>
                                             );
                                           })}
