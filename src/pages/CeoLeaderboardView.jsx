@@ -16,8 +16,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
+import { navigateBackToDashboard } from "../utils/dashboardNavigation";
 import Leaderboard from "./Leaderboard.jsx";
-import { CeoSidebar, SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
+import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
+import Sidebar from "../components/shared/Sidebar";
+import { getVisibleSections } from "../utils/sidebarPermissions";
+import SharedNavbar from "../components/SharedNavbar.jsx";
+
+// Rôles autorisés à embedder ce Leaderboard dans le wrapper sidebar.
+// admin / ceo en ont toujours eu accès ; on ajoute acquisition_director
+// pour qu'il puisse cliquer "Leaderboard" depuis son AcqDir Dashboard
+// et atterrir ici avec SA sidebar restreinte (le filter s'occupe du reste).
+const ALLOWED_ROLES = new Set(["admin", "ceo", "acquisition_director", "head_of_acquisition"]);
 
 export default function CeoLeaderboardView() {
   const navigate = useNavigate();
@@ -50,14 +60,20 @@ export default function CeoLeaderboardView() {
 
   // ── AUTH GATE ───────────────────────────────────────────────────────
   const [authChecked, setAuthChecked] = useState(false);
+  const [userRole, setUserRole] = useState(null);
   useEffect(() => {
     const u = apiClient.getUser();
-    if (!u || (u.role !== "ceo" && u.role !== "admin")) {
+    if (!u || !ALLOWED_ROLES.has(u.role)) {
       navigate("/");
       return;
     }
+    setUserRole(u.role);
     setAuthChecked(true);
   }, [navigate]);
+
+  // Sidebar filtrée selon le rôle (Acquisition Director ne voit que
+  // RÉCENTES + ACQUISITION). Admin / CEO voient tout.
+  const visibleSections = useMemo(() => getVisibleSections(SIDEBAR_SECTIONS, userRole), [userRole]);
 
   // ── INJECT LEADERBOARD EMBED FLAG via history.replaceState ──────────
   // Leaderboard lit `embed` depuis window.location.search au mount. On
@@ -84,8 +100,11 @@ export default function CeoLeaderboardView() {
   const handleSidebarTabClick = (tabId) => {
     if (tabId === "leaderboard") return;
     if (tabId === "dispatch") { navigate("/ceo/dispatch"); return; }
-    try { localStorage.setItem("ceoActiveTab", tabId); } catch { /* noop */ }
-    navigate("/ceo");
+    if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }
+    if (tabId === "lead_quality") { navigate("/ceo/lead-quality"); return; }
+    if (tabId === "sales_team") { navigate("/ceo/sales-team"); return; }
+    if (tabId === "webinar") { navigate("/ceo/webinar"); return; }
+    navigateBackToDashboard(navigate, userRole, tabId);
   };
 
   if (!authChecked || !paramsInjected) {
@@ -141,11 +160,11 @@ export default function CeoLeaderboardView() {
         height: "100vh",
         display: "flex",
       }}>
-        <CeoSidebar
+        <Sidebar
           width={sideCollapsed ? 56 : 260}
           collapsed={sideCollapsed}
           onToggle={() => setSideCollapsed((v) => !v)}
-          sections={SIDEBAR_SECTIONS}
+          sections={visibleSections}
           activeTab="leaderboard"
           setActiveTab={handleSidebarTabClick}
           C={C}
@@ -154,8 +173,11 @@ export default function CeoLeaderboardView() {
       </div>
 
       {/* Embedded Leaderboard — `?embed=true` est déjà dans la query via
-          replaceState (lecture sync au mount). */}
-      <div style={{ flex: 1, minWidth: 0 }}>
+          replaceState (lecture sync au mount). On rend ici une SharedNavbar
+          (dynamic-island) pour que le CEO / Acquisition Director gardent
+          l'accès aux notifications et raccourcis comme sur /ceo. */}
+      <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
         <Leaderboard />
       </div>
     </div>

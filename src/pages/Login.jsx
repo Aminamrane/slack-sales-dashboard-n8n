@@ -30,7 +30,13 @@ export default function Login() {
         throw new Error("Login OK mais token/user non stockés (apiClient incohérent).");
       }
 
-      navigate(user.role === 'ceo' ? '/ceo' : '/');
+      // Dashboard par défaut selon le rôle.
+      const dashboardByRole = {
+        ceo: '/ceo',
+        acquisition_director: '/acquisition-director',
+        head_of_acquisition: '/acquisition-director',
+      };
+      navigate(dashboardByRole[user.role] || '/');
     } catch (err) {
       setError(err.message || 'Email ou mot de passe incorrect');
     } finally {

@@ -57,6 +57,12 @@ const EXCLUDED_KEYS = new Set(["mohamed bouaksa", "sara benabid", "sarah amroune
 
 export default function MonitoringPerf() {
   const navigate = useNavigate();
+  // Mode embed (CEO/Acquisition Director wrapper) : masque la SharedNavbar
+  // interne pour laisser le wrapper rendre la sienne.
+  const embedMode = useMemo(
+    () => new URLSearchParams(window.location.search).get('embed') === 'true',
+    []
+  );
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
   useEffect(() => { localStorage.setItem("darkMode", darkMode); document.body.classList.toggle("dark-mode", darkMode); document.documentElement.classList.toggle("dark-mode", darkMode); }, [darkMode]);
 
@@ -67,7 +73,13 @@ export default function MonitoringPerf() {
   const [loading, setLoading] = useState(true);
   useEffect(() => { const check = async () => { try { const token = apiClient.getToken(); const user = apiClient.getUser(); if (!token || !user) { navigate("/login"); return; } setSession({ user: { email: user.email, user_metadata: { name: user.name, avatar_url: user.avatar_url || null } } }); if (user.role === 'admin' || apiClient.hasAccess('monitoring_perf')) setHasAccess(true); else navigate("/"); } catch { navigate("/login"); } finally { setLoading(false); } }; check(); }, [navigate]);
 
-  const [viewMode, setViewMode] = useState("perf_sales");
+  // Init viewMode depuis ?view=lead-quality si présent (utilisé par
+  // CeoLeadQualityView wrapper pour atterrir direct sur la bonne vue).
+  const initialViewMode = useMemo(() => {
+    const v = new URLSearchParams(window.location.search).get('view');
+    return v === 'lead-quality' || v === 'lead_quality' ? 'lead_quality' : 'perf_sales';
+  }, []);
+  const [viewMode, setViewMode] = useState(initialViewMode);
   const [perfData, setPerfData] = useState(null);
   const [dataLoading, setDataLoading] = useState(true);
   const [leadQualityData, setLeadQualityData] = useState(null);
@@ -160,13 +172,15 @@ export default function MonitoringPerf() {
 
   return (
     <>
-      <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />
+      {!embedMode && <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />}
       <style>{`@keyframes pageReveal{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@keyframes sidebarReveal{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:none}}@keyframes rowIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}html,body{background:${darkMode?'#13141b':'#ffffff'}}.mp-scroll::-webkit-scrollbar{width:3px;height:3px}.mp-scroll::-webkit-scrollbar-track{background:transparent}.mp-scroll::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:4px}`}</style>
 
       <div style={{animation:'pageReveal 0.5s cubic-bezier(0.4,0,0.2,1) both',fontFamily:"'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"}}>
         <div style={{display:'flex',alignItems:'stretch',minHeight:'100vh'}}>
 
-          {/* SIDEBAR */}
+          {/* SIDEBAR \u2014 masqu\u00e9e en mode embed (sidebar du wrapper Ceo*View
+              prend le relais et g\u00e8re la navigation perf_sales / lead_quality). */}
+          {!embedMode && (
           <div style={{width:220,minWidth:220,borderRight:'1px solid '+C.border,display:'flex',flexDirection:'column',background:darkMode?C.subtle:'#eceef2',animation:'sidebarReveal 0.4s ease both'}}>
             <div style={{padding:'18px 16px 14px',borderBottom:'1px solid '+C.border,marginBottom:12}}>
               <div style={{display:'flex',alignItems:'center',gap:8,padding:'6px 8px',borderRadius:10,border:'1px solid '+C.border,background:darkMode?'rgba(255,255,255,0.04)':'#fff'}}>
@@ -185,6 +199,7 @@ export default function MonitoringPerf() {
             })}
             <div style={{flex:1}} />
           </div>
+          )}
 
           {/* RIGHT */}
           <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column',padding:'8px 8px 8px 0',gap:12}}>

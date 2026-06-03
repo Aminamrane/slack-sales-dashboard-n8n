@@ -27,6 +27,12 @@ import CeoDashboard       from "./pages/CeoDashboard.jsx";
 import CeoSheetView       from "./pages/CeoSheetView.jsx";
 import CeoDispatchView    from "./pages/CeoDispatchView.jsx";
 import CeoLeaderboardView from "./pages/CeoLeaderboardView.jsx";
+import CeoPerfSalesView   from "./pages/CeoPerfSalesView.jsx";
+import CeoLeadQualityView from "./pages/CeoLeadQualityView.jsx";
+import CeoSalesTeamView   from "./pages/CeoSalesTeamView.jsx";
+import CeoWebinarView     from "./pages/CeoWebinarView.jsx";
+import AcquisitionDirectorDashboard from "./pages/AcquisitionDirectorDashboard.jsx";
+import Marketing          from "./pages/Marketing/index.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import MouseDot from "./components/MouseDot.jsx";
@@ -54,6 +60,7 @@ function App() {
         <Route path="/perf-closing" element={<PerfClosing />} />
         <Route path="/tracking-sheets" element={<TrackingSheetAdmin />} />
         <Route path="/tracking-finance" element={<TrackingSheetFinance />} />
+        <Route path="/marketing" element={<Marketing />} />
         <Route path="/change-password" element={<Navigate to="/profile" replace />} />
 
         {/* Protected routes */}
@@ -102,6 +109,46 @@ function App() {
           element={
             <ProtectedRoute>
               <CeoLeaderboardView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ceo/perf-sales"
+          element={
+            <ProtectedRoute>
+              <CeoPerfSalesView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ceo/lead-quality"
+          element={
+            <ProtectedRoute>
+              <CeoLeadQualityView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ceo/sales-team"
+          element={
+            <ProtectedRoute>
+              <CeoSalesTeamView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ceo/webinar"
+          element={
+            <ProtectedRoute>
+              <CeoWebinarView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/acquisition-director"
+          element={
+            <ProtectedRoute>
+              <AcquisitionDirectorDashboard />
             </ProtectedRoute>
           }
         />

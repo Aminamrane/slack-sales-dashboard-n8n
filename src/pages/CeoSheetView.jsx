@@ -16,8 +16,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import apiClient from "../services/apiClient";
+import { navigateBackToDashboard } from "../utils/dashboardNavigation";
 import TrackingSheet from "./TrackingSheet.jsx";
-import { CeoSidebar, SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
+import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
+import Sidebar from "../components/shared/Sidebar";
+import { getVisibleSections } from "../utils/sidebarPermissions";
+import SharedNavbar from "../components/SharedNavbar.jsx";
+
+const ALLOWED_ROLES = new Set(["admin", "ceo", "acquisition_director", "head_of_acquisition"]);
 
 export default function CeoSheetView() {
   const navigate = useNavigate();
@@ -56,12 +62,14 @@ export default function CeoSheetView() {
 
   // ── AUTH GATE ───────────────────────────────────────────────────────
   const [authChecked, setAuthChecked] = useState(false);
+  const [userRole, setUserRole] = useState(null);
   useEffect(() => {
     const u = apiClient.getUser();
-    if (!u || (u.role !== "ceo" && u.role !== "admin")) {
+    if (!u || !ALLOWED_ROLES.has(u.role)) {
       navigate("/");
       return;
     }
+    setUserRole(u.role);
     setAuthChecked(true);
   }, [navigate]);
 
@@ -91,6 +99,7 @@ export default function CeoSheetView() {
   }, [authChecked, email]);
 
   const C = useMemo(() => getColors(darkMode), [darkMode]);
+  const visibleSections = useMemo(() => getVisibleSections(SIDEBAR_SECTIONS, userRole), [userRole]);
 
   // ── SIDEBAR NAVIGATION HANDLER ──────────────────────────────────────
   // Clicking any sidebar item from this view returns to /ceo with the chosen
@@ -98,8 +107,14 @@ export default function CeoSheetView() {
   // which CeoDashboard reads at mount. Simple, no API change, no router-level
   // state. Cleared after consumption by CeoDashboard.
   const handleSidebarTabClick = (tabId) => {
-    try { localStorage.setItem("ceoActiveTab", tabId); } catch { /* noop */ }
-    navigate("/ceo");
+    if (tabId === "dispatch") { navigate("/ceo/dispatch"); return; }
+    if (tabId === "leaderboard") { navigate("/ceo/leaderboard"); return; }
+    if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }
+    if (tabId === "lead_quality") { navigate("/ceo/lead-quality"); return; }
+    if (tabId === "sales_team") { navigate("/ceo/sales-team"); return; }
+    if (tabId === "webinar") { navigate("/ceo/webinar"); return; }
+    // Fallback : retour à la home dashboard du user (role-aware).
+    navigateBackToDashboard(navigate, userRole, tabId);
   };
 
   if (!authChecked || !paramsInjected) {
@@ -142,19 +157,21 @@ export default function CeoSheetView() {
         .ceo-side-scroll::-webkit-scrollbar-track { background: transparent; }
       `}</style>
 
-      <CeoSidebar
+      <Sidebar
         width={sideCollapsed ? 56 : 260}
         collapsed={sideCollapsed}
         onToggle={() => setSideCollapsed((v) => !v)}
-        sections={SIDEBAR_SECTIONS}
+        sections={visibleSections}
         activeTab="sales_team"
         setActiveTab={handleSidebarTabClick}
         C={C}
         darkMode={darkMode}
       />
 
-      {/* Embedded TrackingSheet — params are already in window.location.search via replaceState. */}
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+      {/* Embedded TrackingSheet — params are already in window.location.search via replaceState.
+          On rend la SharedNavbar (dynamic-island) au-dessus pour cohérence avec /ceo. */}
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", position: 'relative' }}>
+        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
         <TrackingSheet key={email} />
       </div>
     </div>

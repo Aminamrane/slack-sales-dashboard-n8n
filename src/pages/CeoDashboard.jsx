@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
-import companyLogo from "../assets/my_image.png";
+import Sidebar from "../components/shared/Sidebar";
 import ceo1 from "../assets/ceo1.svg";
 import ceo2 from "../assets/ceo2.svg";
 import ceo3 from "../assets/ceo3.svg";
@@ -49,11 +49,17 @@ const SIDEBAR_TABS = [
   { key: 'perf_sales', label: 'Perf Sales', icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
   )},
+  { key: 'lead_quality', label: 'Qualité Leads', icon: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
+  )},
   { key: 'leaderboard', label: 'Leaderboard', icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 7 7 7 7"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5C17 4 17 7 17 7"/><path d="M4 22h16"/><path d="M10 22V2h4v20"/><path d="M6 22V10h4"/><path d="M14 22V10h4"/></svg>
   )},
   { key: 'sales_team', label: 'Équipe Sales', icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+  )},
+  { key: 'webinar', label: 'Webinaire', icon: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
   )},
   { section: 'MARKETING' },
   { key: 'campaigns', label: 'Campagnes', icon: (
@@ -753,7 +759,7 @@ export default function CeoDashboard() {
       `}</style>
 
       {/* ═══ LEFT SIDEBAR (Notion-style — mirror TSF) ═══════════════════ */}
-      <CeoSidebar
+      <Sidebar
         width={sideCollapsed ? 56 : 260}
         collapsed={sideCollapsed}
         onToggle={() => setSideCollapsed((v) => !v)}
@@ -762,9 +768,14 @@ export default function CeoDashboard() {
         setActiveTab={(tabId) => {
           // "dispatch" et "leaderboard" sont des wrappers de route
           // (CeoDispatchView / CeoLeaderboardView) → on navigate au lieu
-          // d'un rendu inline.
+          // d'un rendu inline. "webinar" route vers CeoWebinarView qui
+          // embed la page Marketing dans le shell Ceo (pas d'onglet
+          // interne ici car la page est lourde et autonome).
           if (tabId === 'dispatch') { navigate('/ceo/dispatch'); return; }
           if (tabId === 'leaderboard') { navigate('/ceo/leaderboard'); return; }
+          if (tabId === 'perf_sales') { navigate('/ceo/perf-sales'); return; }
+          if (tabId === 'lead_quality') { navigate('/ceo/lead-quality'); return; }
+          if (tabId === 'webinar') { navigate('/ceo/webinar'); return; }
           setActiveTab(tabId);
         }}
         C={C}
@@ -1994,306 +2005,3 @@ function ObjectiveRow({ label, currentValue, saving, errorMessage, onSave, C, da
   );
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// SIDEBAR (Notion-style — pattern miroir TrackingSheetFinance/index.jsx l.583).
-// Dupliqué localement (Option B) plutôt qu'extrait en shared : TSF utilise
-// palette fixe Notion + classes CSS scopées + assets locaux ; un refactor
-// aurait été risqué (sacred-ish zone "modifiable avec prudence"). Si un 3e
-// usage apparaît, extraire en `src/components/shared/Sidebar/`.
-// Différence avec TSF : palette dynamique via `C = getColors(darkMode)` pour
-// suivre le dark mode du CEO Dashboard (TSF est blanc fixe).
-// ════════════════════════════════════════════════════════════════════════════
-export function CeoSidebar({ width, collapsed, onToggle, sections, activeTab, setActiveTab, C, darkMode }) {
-  return (
-    <motion.aside
-      className="ceo-side"
-      animate={{ width }}
-      initial={false}
-      transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-      style={{
-        flexShrink: 0,
-        background: C.bg,
-        borderRight: `1px solid ${C.border}`,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        position: 'relative',
-      }}
-    >
-      <div style={{ flexShrink: 0 }}>
-        <CeoWorkspaceHeader collapsed={collapsed} C={C} />
-        <CeoIconRow collapsed={collapsed} C={C} />
-      </div>
-
-      <nav style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 0' }} className="ceo-side-scroll">
-        {sections.map((sec) => (
-          <CeoSidebarSection
-            key={sec.key}
-            section={sec}
-            collapsed={collapsed}
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            C={C}
-            darkMode={darkMode}
-          />
-        ))}
-      </nav>
-
-      <div style={{ flexShrink: 0 }}>
-        <CeoSidebarFooter collapsed={collapsed} onToggle={onToggle} C={C} />
-      </div>
-    </motion.aside>
-  );
-}
-
-function CeoWorkspaceHeader({ collapsed, C }) {
-  return (
-    <div style={{
-      padding: collapsed ? '10px 8px' : '10px 8px 6px',
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      gap: 6,
-    }}>
-      <button
-        className="ceo-icon-btn"
-        style={{
-          flex: 1,
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '4px 6px',
-          borderRadius: 4,
-          border: 'none', background: 'transparent', cursor: 'pointer',
-          fontFamily: 'inherit', textAlign: 'left',
-          minWidth: 0,
-        }}
-      >
-        <span style={{
-          width: 22, height: 22, flexShrink: 0,
-          borderRadius: 4,
-          background: '#fff',
-          border: `1px solid ${C.border}`,
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          overflow: 'hidden',
-        }}>
-          <img src={companyLogo} alt="Owner" style={{ width: 18, height: 18, objectFit: 'contain' }} />
-        </span>
-        {!collapsed && (
-          <>
-            <span style={{
-              fontSize: 14, fontWeight: 600, color: C.text,
-              letterSpacing: '-0.01em',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              Owner Technology
-            </span>
-            <ChevronDown size={14} style={{ color: C.muted, flexShrink: 0, marginLeft: 'auto' }} />
-          </>
-        )}
-      </button>
-    </div>
-  );
-}
-
-function CeoIconRow({ collapsed, C }) {
-  const items = [
-    { key: 'home',   icon: <Home size={16} />,          label: 'Accueil' },
-    { key: 'inbox',  icon: <MessageSquare size={16} />, label: 'Discussions' },
-    { key: 'mail',   icon: <Mail size={16} />,          label: 'Boîte de réception' },
-    { key: 'search', icon: <Search size={16} />,        label: 'Recherche' },
-  ];
-  return (
-    <div style={{
-      display: collapsed ? 'flex' : 'grid',
-      flexDirection: collapsed ? 'column' : undefined,
-      gridTemplateColumns: collapsed ? undefined : 'repeat(4, 1fr)',
-      gap: 2,
-      padding: collapsed ? '4px 8px 8px' : '0 8px 6px',
-    }}>
-      {items.map((it) => (
-        <button
-          key={it.key}
-          className="ceo-icon-btn"
-          title={it.label}
-          style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            gap: 8,
-            padding: '6px 0',
-            borderRadius: 4,
-            border: 'none', background: 'transparent', cursor: 'pointer',
-            color: C.muted, fontFamily: 'inherit',
-          }}
-        >
-          {it.icon}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function CeoSidebarSection({ section, collapsed, activeTab, setActiveTab, C, darkMode }) {
-  const [open, setOpen] = useState(true);
-  return (
-    <div style={{ padding: collapsed ? '4px 6px' : '4px 8px' }}>
-      {!collapsed && (
-        <button
-          onClick={() => setOpen((o) => !o)}
-          style={{
-            width: '100%',
-            display: 'flex', alignItems: 'center', gap: 4,
-            padding: '4px 6px',
-            border: 'none', background: 'transparent', cursor: 'pointer',
-            fontFamily: 'inherit',
-            color: C.muted,
-            fontSize: 12, fontWeight: 600,
-            letterSpacing: '0.01em',
-            borderRadius: 4,
-            textTransform: 'uppercase',
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.05)' : '#f5f5f4'}
-          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-        >
-          <ChevronDown
-            size={12}
-            style={{
-              transform: open ? 'rotate(0deg)' : 'rotate(-90deg)',
-              transition: 'transform 0.15s ease',
-              color: C.muted,
-            }}
-          />
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {section.label}
-          </span>
-        </button>
-      )}
-
-      <AnimatePresence initial={false}>
-        {(open || collapsed) && (
-          <motion.div
-            key="items"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
-            style={{ overflow: 'hidden' }}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginTop: 2 }}>
-              {section.items.map((item) => (
-                <CeoSidebarItem
-                  key={item.id}
-                  item={item}
-                  collapsed={collapsed}
-                  active={activeTab === item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  C={C}
-                  darkMode={darkMode}
-                />
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-function CeoSidebarItem({ item, collapsed, active, onClick, C, darkMode }) {
-  return (
-    <button
-      className="ceo-side-item"
-      title={collapsed ? item.label : undefined}
-      onClick={onClick}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: collapsed ? '6px 0' : '4px 6px',
-        justifyContent: collapsed ? 'center' : 'flex-start',
-        border: 'none',
-        background: active ? (darkMode ? 'rgba(255,255,255,0.08)' : '#eeeeec') : 'transparent',
-        cursor: 'pointer',
-        borderRadius: 4,
-        fontFamily: 'inherit',
-        color: C.text,
-        fontSize: 14,
-        textAlign: 'left',
-        width: '100%',
-        minWidth: 0,
-      }}
-    >
-      <span style={{
-        width: 20, height: 20, flexShrink: 0, borderRadius: 4,
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        color: active ? C.text : C.muted,
-      }}>
-        {item.icon}
-      </span>
-      {!collapsed && (
-        <span style={{
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          fontWeight: active ? 500 : 400,
-          color: C.text,
-          flex: 1,
-        }}>
-          {item.label}
-        </span>
-      )}
-    </button>
-  );
-}
-
-function CeoSidebarFooter({ collapsed, onToggle, C }) {
-  return (
-    <div style={{
-      borderTop: `1px solid ${C.border}`,
-      padding: collapsed ? '6px 6px' : '6px 8px',
-      display: 'flex',
-      flexDirection: collapsed ? 'column' : 'row',
-      alignItems: 'center',
-      gap: 6,
-    }}>
-      {!collapsed && (
-        <button
-          className="ceo-side-item"
-          style={{
-            flex: 1,
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '6px 8px',
-            border: 'none', background: 'transparent', cursor: 'pointer',
-            borderRadius: 4,
-            fontFamily: 'inherit',
-            color: C.text,
-            fontSize: 13,
-            textAlign: 'left',
-            minWidth: 0,
-          }}
-        >
-          <Sparkles size={14} style={{ color: C.muted }} />
-          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            Nouvelle discussion
-          </span>
-          <span style={{
-            fontSize: 11, color: C.muted,
-            background: C.bg,
-            border: `1px solid ${C.border}`,
-            borderRadius: 3,
-            padding: '0 4px',
-            fontFamily: 'inherit',
-          }}>
-            ⌘O
-          </span>
-        </button>
-      )}
-
-      <button
-        onClick={onToggle}
-        title={collapsed ? 'Étendre la barre latérale' : 'Réduire la barre latérale'}
-        className="ceo-icon-btn"
-        style={{
-          width: 28, height: 28,
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          border: 'none', background: 'transparent', cursor: 'pointer',
-          borderRadius: 4,
-          color: C.muted,
-        }}
-      >
-        <PanelLeft size={15} />
-      </button>
-    </div>
-  );
-}
