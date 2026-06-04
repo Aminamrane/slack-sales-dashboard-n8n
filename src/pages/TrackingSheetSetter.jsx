@@ -659,6 +659,13 @@ export default function TrackingSheetSetter() {
   const [animatingBadges, setAnimatingBadges] = useState(new Set());
   const [editingNotes, setEditingNotes] = useState({});
   const [tabKey, setTabKey] = useState(0); // forces re-animation on tab switch
+  // Set des lead.id deja animes pour le tabKey courant : evite le rejeu
+  // cardStaggerIn a chaque polling 30s (style inline reconstitué → browser
+  // relance l'animation et fait disparaitre/reapparaitre les cartes).
+  const animatedLeadsRef = useRef({ tabKey: 0, ids: new Set() });
+  if (animatedLeadsRef.current.tabKey !== tabKey) {
+    animatedLeadsRef.current = { tabKey, ids: new Set() };
+  }
   const prevCountsRef = useRef(null);
   const [sendingContract, setSendingContract] = useState(null); // lead.id or null
   const [navNotif, setNavNotif] = useState(null); // 'sending' | 'sent' | null
@@ -4742,6 +4749,11 @@ export default function TrackingSheetSetter() {
               const remoteFocuser = Object.values(remoteLeadFocus).find(f => f.lead_id === String(lead.id));
               const isRemoteFocused = !!remoteFocuser;
               const focusColor = remoteFocuser?.color || '#6366f1';
+              // Premier affichage de cette carte sous le tabKey courant ? Si oui,
+              // on joue cardStaggerIn une seule fois ; les polling suivants reusent
+              // l'instance et evitent de retrigger l'animation CSS.
+              const hasAnimated = animatedLeadsRef.current.ids.has(lead.id);
+              if (!hasAnimated) animatedLeadsRef.current.ids.add(lead.id);
               return (
                   <div
                     key={lead.id}
@@ -4768,7 +4780,9 @@ export default function TrackingSheetSetter() {
                         ? 'signedGlow 0.8s ease both'
                         : isExiting
                           ? 'cardSlideOut 0.35s cubic-bezier(0.22,1,0.36,1) both'
-                          : `cardStaggerIn 0.5s cubic-bezier(0.34,1.56,0.64,1) ${index * 40}ms both`,
+                          : hasAnimated
+                            ? 'none'
+                            : `cardStaggerIn 0.5s cubic-bezier(0.34,1.56,0.64,1) ${index * 40}ms both`,
                       cursor: 'pointer',
                       overflow: isExiting ? 'hidden' : 'visible',
                     }}
