@@ -142,6 +142,8 @@ const CATEGORIES = [
   { key: "callback",     label: "À rappeler",      color: "#94a3b8", softBg: "#f4f5f7", softBgDark: "rgba(148,163,184,0.18)", softText: "#8993a4", description: "Prospects qui souhaitent être rappelés plus tard" },
   { key: "r1_placed",    label: "R1 placés",       color: "#3b82f6", dotColor: "#a8c8f0", softBg: "#edf4fc", softBgDark: "rgba(59,130,246,0.18)",  softText: "#6a9fd8", description: "R1 que tu as placés (suivi sales)" },
   { key: "r2_placed",    label: "R2 placés",       color: "#fb923c", softBg: "#fdf3eb", softBgDark: "rgba(251,146,60,0.18)",  softText: "#c48a5a", description: "R2 que tu as placés (suivi sales)" },
+  { key: "r1_late",      label: "R1 en retard",    color: "#dc2626", softBg: "#fef2f2", softBgDark: "rgba(220,38,38,0.18)",   softText: "#b91c1c", description: "R1 placés il y a +3 jours ouvrés sans résultat saisi" },
+  { key: "lapins",       label: "Lapins",          color: "#a855f7", softBg: "#faf5ff", softBgDark: "rgba(168,85,247,0.18)",  softText: "#9333ea", description: "Prospects no-show sur R1 ou R2" },
   { key: "signed",       label: "Signés",          color: "#34d399", softBg: "#edfbf3", softBgDark: "rgba(52,211,153,0.18)",  softText: "#5ab896", description: "Leads que tu as touchés et qui ont signé" },
 ];
 
@@ -1039,7 +1041,27 @@ export default function TrackingSheetSetter() {
   const tabCounts = useMemo(() => {
     const counts = {};
     CATEGORIES.forEach(cat => { counts[cat.key] = 0; });
-    leads.forEach(l => { if (counts[l.status] !== undefined) counts[l.status]++; });
+    // Pivot pour r1_late : today - 3 jours ouvrés (mirror logique filteredLeads)
+    const pivotR1LateIso = (() => {
+      const d = new Date(); let n = 3;
+      while (n > 0) { d.setDate(d.getDate() - 1); if (d.getDay() !== 0 && d.getDay() !== 6) n--; }
+      return d.toISOString().slice(0, 10);
+    })();
+    const nowDateIso = new Date().toISOString().slice(0, 10);
+    const nowIsoFull = new Date().toISOString();
+    const horizonIso = new Date(Date.now() + 30 * 86400000).toISOString();
+    leads.forEach(l => {
+      if (counts[l.status] !== undefined && l.status !== 'r1_late' && l.status !== 'lapins' && l.status !== 'to_do') counts[l.status]++;
+      // to_do (P3) : R1/R2/callback futurs sous 30 j
+      const r1Future = l.r1 && l.r1.slice(0,10) >= nowDateIso && l.r1 <= horizonIso && l.r1_result !== 'done' && l.r1_result !== 'cancelled';
+      const r2Future = l.r2 && l.r2.slice(0,10) >= nowDateIso && l.r2 <= horizonIso && l.r2_result !== 'done' && l.r2_result !== 'pas_interesse' && l.r2_result !== 'annule';
+      const cbFuture = l.callback_at && l.callback_at >= nowIsoFull && l.callback_at <= horizonIso;
+      if (r1Future || r2Future || cbFuture) counts.to_do++;
+      // r1_late (P6) : R1 placé il y a +3 j ouvrés sans résultat
+      if (l.r1 && l.r1.slice(0,10) < pivotR1LateIso && (!l.r1_result || l.r1_result === 'rescheduled')) counts.r1_late++;
+      // lapins (P5) : no-show R1 ou R2
+      if (l.r1_result === 'no_show' || l.r2_result === 'no_show') counts.lapins++;
+    });
     return counts;
   }, [leads]);
 
@@ -1058,6 +1080,30 @@ export default function TrackingSheetSetter() {
         const r2Future = l.r2 && l.r2.slice(0,10) >= nowDateIso && l.r2 <= horizonIso && l.r2_result !== 'done' && l.r2_result !== 'pas_interesse' && l.r2_result !== 'annule';
         const cbFuture = l.callback_at && l.callback_at >= new Date().toISOString() && l.callback_at <= horizonIso;
         return r1Future || r2Future || cbFuture;
+      });
+    } else if (catKey === 'r1_late') {
+      // P6 — Bucket "R1 en retard" : leads avec un R1 placé il y a +3 jours
+      // ouvrés et r1_result toujours NULL (ou 'rescheduled'). Vue transverse :
+      // on regarde tous les leads remontés par les endpoints setter (r1_placed
+      // surtout), peu importe leur _setter_bucket actuel.
+      const pivotIso = (() => {
+        const d = new Date(); let n = 3;
+        while (n > 0) { d.setDate(d.getDate() - 1); if (d.getDay() !== 0 && d.getDay() !== 6) n--; }
+        return d.toISOString().slice(0, 10);
+      })();
+      result = leads.filter(l => {
+        if (exitingCards.has(l.id)) return false;
+        if (!l.r1) return false;
+        if (l.r1.slice(0, 10) >= pivotIso) return false;
+        return !l.r1_result || l.r1_result === 'rescheduled';
+      });
+    } else if (catKey === 'lapins') {
+      // P5 — Bucket "Lapins" : leads no-show sur R1 ou R2 (vue transverse,
+      // tous _setter_bucket confondus pour capturer aussi les leads passés
+      // au sales après no-show).
+      result = leads.filter(l => {
+        if (exitingCards.has(l.id)) return false;
+        return l.r1_result === 'no_show' || l.r2_result === 'no_show';
       });
     } else {
       result = leads.filter(l => l.status === catKey && !exitingCards.has(l.id));
@@ -6232,7 +6278,7 @@ export default function TrackingSheetSetter() {
                         </button>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                           <button
-                            onClick={() => setActiveWorkflow({ leadId: lead.id, setterPlaceFlow: 'r1', setterMode, newDate: '', targetSalesEmail: '', notes: '', emailDraft: (lead.email || '') })}
+                            onClick={() => setActiveWorkflow({ leadId: lead.id, setterPlaceFlow: 'r1', setterMode, newDate: '', targetSalesEmail: '', notes: '', emailDraft: (lead.email || ''), targetCalendar: 'sales' })}
                             style={{ ...pillStyle('#3b82f6'), animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) 70ms both' }}
                             onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(59,130,246,0.4)' : 'rgba(59,130,246,0.2)'; e.currentTarget.style.transform = 'scale(1.02)'; }}
                             onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(59,130,246,0.3)' : 'rgba(59,130,246,0.15)'; e.currentTarget.style.transform = 'scale(1)'; }}
@@ -6343,7 +6389,7 @@ export default function TrackingSheetSetter() {
                     : `/api/v1/tracking/setter/leads/${leadId}/place-r1`;
                   const body = isR2
                     ? { r2_date: wf.newDate, target_sales_email: wf.targetSalesEmail || undefined, notes: (wf.notes || '').trim() || undefined }
-                    : { r1_date: wf.newDate, target_sales_email: wf.targetSalesEmail || undefined, notes: (wf.notes || '').trim() || undefined };
+                    : { r1_date: wf.newDate, target_sales_email: wf.targetSalesEmail || undefined, notes: (wf.notes || '').trim() || undefined, target_calendar: wf.targetCalendar || undefined };
                   setSetterSubmitting(true);
                   try {
                     // Si l'email a changé, on persiste AVANT le placement (mirror flow modale).
@@ -6420,6 +6466,39 @@ export default function TrackingSheetSetter() {
                             <option key={s.email} value={s.email}>{s.full_name || s.name || s.email}</option>
                           ))}
                         </select>
+                      </div>
+                    )}
+
+                    {/* ── Choix agenda Google (R1 uniquement) ── */}
+                    {/* P4 (2026-06-04) : le setter choisit où l'event Google Calendar
+                        est créé. Si le sales a activé `force_setter_r1_to_calendar`
+                        côté Profil, le backend override ce choix vers 'sales'. */}
+                    {!isR2 && (
+                      <div>
+                        <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Agenda Google</div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          {[
+                            { v: 'sales', label: 'Pour le sales' },
+                            { v: 'setter', label: 'Pour moi' },
+                          ].map(opt => {
+                            const selected = (activeWorkflow.targetCalendar || 'sales') === opt.v;
+                            return (
+                              <button
+                                key={opt.v}
+                                type="button"
+                                onClick={() => setActiveWorkflow(prev => ({ ...prev, targetCalendar: opt.v }))}
+                                style={{
+                                  flex: 1, padding: '8px 10px', borderRadius: 10, cursor: 'pointer',
+                                  border: `1px solid ${selected ? accent : C.border}`,
+                                  background: selected ? (darkMode ? accentBgD : accentBgL) : C.bg,
+                                  color: selected ? accent : C.text,
+                                  fontSize: 12, fontWeight: selected ? 700 : 500, fontFamily: 'inherit',
+                                  transition: 'all 0.15s',
+                                }}
+                              >{opt.label}</button>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
 

@@ -44,6 +44,12 @@ export default function Profile() {
   const [shareError, setShareError] = useState("");
   const [shareSuccess, setShareSuccess] = useState("");
 
+  // P4 : Force setter R1 → mon agenda (per-sales toggle)
+  const [forceR1, setForceR1] = useState(false);
+  const [forceR1Loading, setForceR1Loading] = useState(false);
+  const [forceR1Error, setForceR1Error] = useState("");
+  const [forceR1Success, setForceR1Success] = useState("");
+
   useEffect(() => {
     localStorage.setItem("darkMode", darkMode);
   }, [darkMode]);
@@ -77,9 +83,35 @@ export default function Profile() {
       } catch {
         // Backend not ready yet — keep false
       }
+
+      // P4 : Load force_setter_r1_to_calendar toggle
+      try {
+        const r = await apiClient.get('/api/v1/users/me/force-setter-r1');
+        setForceR1(!!r?.force_setter_r1_to_calendar);
+      } catch {
+        // Backend not ready yet — keep false
+      }
     };
     init();
   }, [navigate]);
+
+  const toggleForceR1 = async () => {
+    const newVal = !forceR1;
+    setForceR1Loading(true);
+    setForceR1Error("");
+    setForceR1Success("");
+    setForceR1(newVal);
+    try {
+      await apiClient.put('/api/v1/users/me/force-setter-r1', { force_setter_r1_to_calendar: newVal });
+      setForceR1Success(newVal ? "Activé." : "Désactivé.");
+      setTimeout(() => setForceR1Success(""), 2500);
+    } catch (e) {
+      setForceR1(!newVal);
+      setForceR1Error(e?.message || "Erreur lors de la mise à jour.");
+    } finally {
+      setForceR1Loading(false);
+    }
+  };
 
   const toggleShareNewLeads = async () => {
     const newVal = !shareNewLeads;
@@ -474,6 +506,49 @@ export default function Profile() {
                   width: "20px", height: "20px", borderRadius: "50%",
                   background: "#fff",
                   boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                  transition: "left 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                }} />
+              </div>
+            </div>
+
+            {/* P4 : toggle force R1 setter -> mon agenda */}
+            <p style={{ fontSize: "12px", color: C.muted, margin: "20px 0 8px", lineHeight: 1.5 }}>
+              Si activé, tous les R1 placés par votre setter créent automatiquement un événement
+              dans votre agenda Google (override le choix du setter). Désactivé par défaut.
+            </p>
+            {forceR1Error && (
+              <div style={{ padding: "8px 12px", borderRadius: 10, background: darkMode ? "rgba(239,68,68,0.12)" : "#fef2f2", color: "#ef4444", fontSize: 12, marginBottom: 12, border: `1px solid ${darkMode ? "rgba(239,68,68,0.25)" : "#fecaca"}` }}>{forceR1Error}</div>
+            )}
+            {forceR1Success && (
+              <div style={{ padding: "8px 12px", borderRadius: 10, background: darkMode ? "rgba(34,197,94,0.12)" : "#f0fdf4", color: "#22c55e", fontSize: 12, marginBottom: 12, border: `1px solid ${darkMode ? "rgba(34,197,94,0.25)" : "#bbf7d0"}` }}>{forceR1Success}</div>
+            )}
+            <div
+              onClick={() => { if (!forceR1Loading) toggleForceR1(); }}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "14px 18px", borderRadius: "14px",
+                border: `1px solid ${C.border}`,
+                background: darkMode ? "#252636" : "#f4f6fb",
+                cursor: forceR1Loading ? "not-allowed" : "pointer",
+                opacity: forceR1Loading ? 0.7 : 1,
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={(e) => { if (!forceR1Loading) e.currentTarget.style.borderColor = C.accent; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; }}
+            >
+              <span style={{ fontSize: 14, fontWeight: 600, color: C.text, fontFamily: "Inter, sans-serif" }}>
+                Forcer les R1 setter dans mon agenda
+              </span>
+              <div style={{
+                width: 44, height: 24, borderRadius: 999,
+                background: forceR1 ? C.accent : (darkMode ? "#3a3b48" : "#d1d5db"),
+                position: "relative", transition: "background 0.2s", flexShrink: 0,
+              }}>
+                <div style={{
+                  position: "absolute", top: 2,
+                  left: forceR1 ? 22 : 2,
+                  width: 20, height: 20, borderRadius: "50%",
+                  background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
                   transition: "left 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
                 }} />
               </div>
