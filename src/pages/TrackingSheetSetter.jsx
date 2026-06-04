@@ -2644,29 +2644,8 @@ export default function TrackingSheetSetter() {
                   </button>
                 );
               })}
-              {/* Setter : bouton "+ Nouveau lead" aligné à droite des tabs */}
-              {isSetter && (
-                <>
-                  <div style={{ flex: 1 }} />
-                  <button
-                    onClick={() => setSetterModal({ kind: 'createCold' })}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 6,
-                      padding: '7px 14px', borderRadius: 8,
-                      border: `1px solid ${C.accent}`,
-                      background: C.accent, color: '#fff',
-                      fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
-                      fontFamily: 'inherit', transition: 'all 0.15s',
-                      letterSpacing: '-0.01em',
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 18px ${C.accent}40`; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
-                  >
-                    <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>
-                    Nouveau lead
-                  </button>
-                </>
-              )}
+              {/* "+ Nouveau lead" déplacé sous les filtres pour les setters
+                  (2026-06-04). Voir bloc dans le filter sidebar plus bas. */}
             </div>
           )}
 
@@ -4281,6 +4260,32 @@ export default function TrackingSheetSetter() {
 
                 {renderFilterRow('notes', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>, 'Notes', false)}
               </div>
+
+              {/* Setter : bouton "+ Nouveau lead" sous les filtres (2026-06-04)
+                  Déplacé depuis le coin haut-droit des tabs pour pointer plus
+                  naturellement le cold-call setter (le "Nouveau lead" se crée
+                  depuis la zone qui filtre/explore les leads). */}
+              {isSetter && (
+                <div style={{ padding: '8px 14px 0 14px' }}>
+                  <button
+                    onClick={() => setSetterModal({ kind: 'createCold' })}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      padding: '9px 14px', borderRadius: 8,
+                      border: `1px solid ${C.accent}`,
+                      background: C.accent, color: '#fff',
+                      fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+                      fontFamily: 'inherit', transition: 'all 0.15s',
+                      letterSpacing: '-0.01em',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 18px ${C.accent}40`; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+                  >
+                    <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>
+                    Nouveau lead
+                  </button>
+                </div>
+              )}
 
               <div style={{ flex: 1 }} />
 
