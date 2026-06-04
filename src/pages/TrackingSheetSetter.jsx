@@ -5170,7 +5170,7 @@ export default function TrackingSheetSetter() {
 
                     {/* Date de rappel (bucket 'callback' uniquement) — champ structure
                         callback_at, ecrase la date saisie precedemment dans les notes. */}
-                    {catKey === 'callback' && (
+                    {activeCat.key === 'callback' && (
                       <div onClick={(e) => e.stopPropagation()} style={{
                         padding: '6px 12px 8px',
                         borderTop: `1px solid ${darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'}`,
@@ -5297,7 +5297,7 @@ export default function TrackingSheetSetter() {
                       </>
                     );
                   })()
-                ) : catKey === 'mine' ? (
+                ) : activeCat.key === 'mine' ? (
                   /* Bucket Nouveau lead : split visuel "Leads chauds" (<7j ouvrés) et
                      "À reprendre" (>=7j ouvrés). Tri DESC sur created_at (fallback assigned_at).
                      La sémantique de filteredLeads (filtres, search, etc.) est inchangée. */
@@ -5356,7 +5356,7 @@ export default function TrackingSheetSetter() {
                       </>
                     );
                   })()
-                ) : catKey === 'to_do' ? (
+                ) : activeCat.key === 'to_do' ? (
                   /* Vue "À faire" : agrège R1, R2 et rappels à venir sur les 30 prochains
                      jours, groupes par jour. Click sur un item ouvre le lead detail (panel
                      droite, sémantique habituelle). Aucune action complexe ici - les modifs
