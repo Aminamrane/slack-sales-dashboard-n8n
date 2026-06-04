@@ -4132,12 +4132,12 @@ export default function TrackingSheetSetter() {
           );
 
           return (
+            <div style={{ width: 220, flexShrink: 0, marginTop: 10, marginLeft: 4, display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{
-                width: 220, flexShrink: 0, alignSelf: 'flex-start',
+                width: '100%', alignSelf: 'flex-start',
                 background: darkMode ? C.bg : '#fafafb',
                 border: `1px solid ${C.border}`,
                 borderRadius: 10,
-                marginTop: 10, marginLeft: 4,
                 overflowY: 'auto', display: 'flex', flexDirection: 'column',
                 scrollbarWidth: 'thin', scrollbarColor: `${darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'} transparent`,
                 boxShadow: darkMode ? 'none' : '0 1px 3px rgba(0,0,0,0.04)',
@@ -4261,32 +4261,6 @@ export default function TrackingSheetSetter() {
                 {renderFilterRow('notes', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>, 'Notes', false)}
               </div>
 
-              {/* Setter : bouton "+ Nouveau lead" sous les filtres (2026-06-04)
-                  Déplacé depuis le coin haut-droit des tabs pour pointer plus
-                  naturellement le cold-call setter (le "Nouveau lead" se crée
-                  depuis la zone qui filtre/explore les leads). */}
-              {isSetter && (
-                <div style={{ padding: '8px 14px 0 14px' }}>
-                  <button
-                    onClick={() => setSetterModal({ kind: 'createCold' })}
-                    style={{
-                      width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                      padding: '9px 14px', borderRadius: 8,
-                      border: `1px solid ${C.accent}`,
-                      background: C.accent, color: '#fff',
-                      fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
-                      fontFamily: 'inherit', transition: 'all 0.15s',
-                      letterSpacing: '-0.01em',
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 18px ${C.accent}40`; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
-                  >
-                    <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>
-                    Nouveau lead
-                  </button>
-                </div>
-              )}
-
               <div style={{ flex: 1 }} />
 
               {/* Clear all — bottom */}
@@ -4303,6 +4277,29 @@ export default function TrackingSheetSetter() {
                 </div>
               )}
               </div>
+
+              {/* Setter : bouton "+ Nouveau lead" sous la carte Filtres
+                  (2026-06-04 — externe au wrapper, séparé par un gap). */}
+              {isSetter && (
+                <button
+                  onClick={() => setSetterModal({ kind: 'createCold' })}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    padding: '11px 14px', borderRadius: 10,
+                    border: `1px solid ${C.accent}`,
+                    background: C.accent, color: '#fff',
+                    fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    fontFamily: 'inherit', transition: 'all 0.15s',
+                    letterSpacing: '-0.01em',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 18px ${C.accent}40`; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+                >
+                  <span style={{ fontSize: 15, lineHeight: 1 }}>+</span>
+                  Nouveau lead
+                </button>
+              )}
+            </div>
           );
         })()}
 
