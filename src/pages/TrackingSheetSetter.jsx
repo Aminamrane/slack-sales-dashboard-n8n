@@ -5195,6 +5195,65 @@ export default function TrackingSheetSetter() {
                       </>
                     );
                   })()
+                ) : catKey === 'mine' ? (
+                  /* Bucket Nouveau lead : split visuel "Leads chauds" (<7j ouvrés) et
+                     "À reprendre" (>=7j ouvrés). Tri DESC sur created_at (fallback assigned_at).
+                     La sémantique de filteredLeads (filtres, search, etc.) est inchangée. */
+                  (() => {
+                    const pivotIso = (() => {
+                      const d = new Date(); let n = 7;
+                      while (n > 0) { d.setDate(d.getDate() - 1); if (d.getDay() !== 0 && d.getDay() !== 6) n--; }
+                      return d.toISOString();
+                    })();
+                    const sortedMine = [...filteredLeads].sort((a, b) => {
+                      const po = { high: 0, medium: 1, low: 2 };
+                      const p = (po[a.lead_priority] ?? 1) - (po[b.lead_priority] ?? 1);
+                      if (p !== 0) return p;
+                      return (b.created_at || b.assigned_at || '').localeCompare(a.created_at || a.assigned_at || '');
+                    });
+                    const isHot = (l) => (l.created_at || l.assigned_at || '') >= pivotIso;
+                    const hot = sortedMine.filter(isHot);
+                    const cold = sortedMine.filter(l => !isHot(l));
+                    const SubContainer = ({ label, count, color, children, hint }) => (
+                      <div style={{
+                        border: `1.5px solid ${darkMode ? 'rgba(255,255,255,0.06)' : '#dfe1e6'}`,
+                        borderRadius: 14,
+                        background: darkMode ? 'rgba(255,255,255,0.04)' : '#fafafb',
+                        padding: '14px 10px 10px',
+                        marginBottom: 8,
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, padding: '0 6px' }}>
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center',
+                            padding: '4px 14px', borderRadius: 50,
+                            border: `1.5px solid ${color}35`,
+                            background: `${color}10`,
+                            fontSize: 12.5, fontWeight: 600, color: color,
+                          }}>{label}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>{count}</span>
+                          {hint && (<>
+                            <div style={{ flex: 1 }} />
+                            <span style={{ fontSize: 11, color: C.muted, fontStyle: 'italic' }}>{hint}</span>
+                          </>)}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{children}</div>
+                      </div>
+                    );
+                    return (
+                      <>
+                        {hot.length > 0 && (
+                          <SubContainer label="Leads chauds" count={hot.length} color="#ef4444">
+                            {hot.map((lead, i) => renderLeadCard(lead, i))}
+                          </SubContainer>
+                        )}
+                        {cold.length > 0 && (
+                          <SubContainer label="À reprendre" count={cold.length} color="#64748b" hint="arrivés il y a plus de 7 jours ouvrés">
+                            {cold.map((lead, i) => renderLeadCard(lead, hot.length + i))}
+                          </SubContainer>
+                        )}
+                      </>
+                    );
+                  })()
                 ) : (
                   [...filteredLeads].sort((a, b) => {
                     const prioOrder = { high: 0, medium: 1, low: 2 };
