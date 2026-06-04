@@ -5105,6 +5105,45 @@ export default function TrackingSheetSetter() {
                       </div>
                     )}
 
+                    {/* Date de rappel (bucket 'callback' uniquement) — champ structure
+                        callback_at, ecrase la date saisie precedemment dans les notes. */}
+                    {catKey === 'callback' && (
+                      <div onClick={(e) => e.stopPropagation()} style={{
+                        padding: '6px 12px 8px',
+                        borderTop: `1px solid ${darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'}`,
+                        background: darkMode ? 'rgba(148,163,184,0.04)' : 'rgba(148,163,184,0.03)',
+                        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                      }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Rappeler le</span>
+                        <input
+                          type="datetime-local"
+                          value={toDatetimeLocal(lead.callback_at)}
+                          onChange={(e) => handleDateChange(lead.id, 'callback_at', e.target.value)}
+                          style={{
+                            padding: '4px 8px',
+                            borderRadius: 6,
+                            border: `1px solid ${C.border}`,
+                            background: darkMode ? C.bg : '#fff',
+                            color: C.text,
+                            fontSize: 12,
+                            fontFamily: 'inherit',
+                            outline: 'none',
+                          }}
+                        />
+                        {lead.callback_at && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleDateChange(lead.id, 'callback_at', null); }}
+                            title="Effacer la date de rappel"
+                            style={{
+                              padding: '4px 8px', borderRadius: 6,
+                              border: 'none', background: 'transparent',
+                              color: C.muted, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
+                            }}
+                          >Effacer</button>
+                        )}
+                      </div>
+                    )}
 
                   </div>
                 );
