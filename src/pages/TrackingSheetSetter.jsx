@@ -137,6 +137,7 @@ function TimeSelect({ value, onChange, C, darkMode }) {
 // d'édition n'est branché côté setter.
 const CATEGORIES = [
   { key: "mine",         label: "Nouveau lead",    color: "#6366f1", dotColor: "#a8c8f0", softBg: "#f0f1fb", softBgDark: "rgba(99,102,241,0.18)",  softText: "#7578c4", description: "Cold calls créés par toi" },
+  { key: "to_do",        label: "À faire",         color: "#06b6d4", softBg: "#ecfeff", softBgDark: "rgba(6,182,212,0.18)",   softText: "#0e7490", description: "R1 / R2 / rappels à venir des sales que tu suis" },
   { key: "voicemail",    label: "Répondeurs",      color: "#64748b", softBg: "#f0f1f4", softBgDark: "rgba(100,116,139,0.18)", softText: "#7a8594", description: "Répondeurs équipe à reprendre" },
   { key: "callback",     label: "À rappeler",      color: "#94a3b8", softBg: "#f4f5f7", softBgDark: "rgba(148,163,184,0.18)", softText: "#8993a4", description: "Prospects qui souhaitent être rappelés plus tard" },
   { key: "r1_placed",    label: "R1 placés",       color: "#3b82f6", dotColor: "#a8c8f0", softBg: "#edf4fc", softBgDark: "rgba(59,130,246,0.18)",  softText: "#6a9fd8", description: "R1 que tu as placés (suivi sales)" },
@@ -1044,7 +1045,23 @@ export default function TrackingSheetSetter() {
 
   const filteredLeads = useMemo(() => {
     const catKey = CATEGORIES[activeTab].key;
-    let result = leads.filter(l => l.status === catKey && !exitingCards.has(l.id));
+    let result;
+    if (catKey === 'to_do') {
+      // Bucket "À faire" : leads avec au moins un R1 / R2 / rappel a venir dans
+      // les 30 prochains jours (et non encore "done"). Pas de filtre par status :
+      // on agrege tous les leads peu importe leur status, tant qu'il y a une action future.
+      const nowDateIso = new Date().toISOString().slice(0, 10);
+      const horizonIso = new Date(Date.now() + 30 * 86400000).toISOString();
+      result = leads.filter(l => {
+        if (exitingCards.has(l.id)) return false;
+        const r1Future = l.r1 && l.r1.slice(0,10) >= nowDateIso && l.r1 <= horizonIso && l.r1_result !== 'done' && l.r1_result !== 'cancelled';
+        const r2Future = l.r2 && l.r2.slice(0,10) >= nowDateIso && l.r2 <= horizonIso && l.r2_result !== 'done' && l.r2_result !== 'pas_interesse' && l.r2_result !== 'annule';
+        const cbFuture = l.callback_at && l.callback_at >= new Date().toISOString() && l.callback_at <= horizonIso;
+        return r1Future || r2Future || cbFuture;
+      });
+    } else {
+      result = leads.filter(l => l.status === catKey && !exitingCards.has(l.id));
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       result = result.filter(l =>
@@ -5290,6 +5307,113 @@ export default function TrackingSheetSetter() {
                             {cold.map((lead, i) => renderLeadCard(lead, hot.length + i))}
                           </SubContainer>
                         )}
+                      </>
+                    );
+                  })()
+                ) : catKey === 'to_do' ? (
+                  /* Vue "À faire" : agrège R1, R2 et rappels à venir sur les 30 prochains
+                     jours, groupes par jour. Click sur un item ouvre le lead detail (panel
+                     droite, sémantique habituelle). Aucune action complexe ici - les modifs
+                     se font dans le panel existant. */
+                  (() => {
+                    const nowIsoFull = new Date().toISOString();
+                    const nowDay = nowIsoFull.slice(0, 10);
+                    const items = [];
+                    filteredLeads.forEach(l => {
+                      if (l.r1 && l.r1.slice(0,10) >= nowDay && l.r1_result !== 'done' && l.r1_result !== 'cancelled') {
+                        items.push({ lead: l, type: 'r1', date: l.r1, color: '#3b82f6', label: 'R1' });
+                      }
+                      if (l.r2 && l.r2.slice(0,10) >= nowDay && l.r2_result !== 'done' && l.r2_result !== 'pas_interesse' && l.r2_result !== 'annule') {
+                        items.push({ lead: l, type: 'r2', date: l.r2, color: '#fb923c', label: 'R2' });
+                      }
+                      if (l.callback_at && l.callback_at >= nowIsoFull) {
+                        items.push({ lead: l, type: 'callback', date: l.callback_at, color: '#94a3b8', label: 'Rappel' });
+                      }
+                    });
+                    items.sort((a, b) => a.date.localeCompare(b.date));
+                    const byDay = {};
+                    items.forEach(it => {
+                      const d = it.date.slice(0, 10);
+                      if (!byDay[d]) byDay[d] = [];
+                      byDay[d].push(it);
+                    });
+                    const days = Object.keys(byDay).sort();
+                    if (days.length === 0) {
+                      return (
+                        <div style={{ textAlign: 'center', padding: '60px 20px', color: C.muted, fontSize: 14 }}>
+                          Rien à faire dans les 30 prochains jours
+                        </div>
+                      );
+                    }
+                    const fmtDay = (iso) => {
+                      const d = new Date(iso + 'T12:00:00');
+                      const today = new Date(); today.setHours(0,0,0,0);
+                      const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+                      const dDay = new Date(d); dDay.setHours(0,0,0,0);
+                      if (dDay.getTime() === today.getTime()) return "Aujourd'hui";
+                      if (dDay.getTime() === tomorrow.getTime()) return "Demain";
+                      const label = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+                      return label.charAt(0).toUpperCase() + label.slice(1);
+                    };
+                    const fmtTime = (iso) => (iso && iso.length > 10) ? iso.slice(11, 16).replace(':', 'h') : '';
+                    return (
+                      <>
+                        {days.map(day => (
+                          <div key={day} style={{
+                            border: `1.5px solid ${darkMode ? 'rgba(255,255,255,0.06)' : '#dfe1e6'}`,
+                            borderRadius: 14,
+                            background: darkMode ? 'rgba(255,255,255,0.04)' : '#fafafb',
+                            padding: '14px 10px 10px',
+                            marginBottom: 8,
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, padding: '0 6px' }}>
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center',
+                                padding: '4px 14px', borderRadius: 50,
+                                border: '1.5px solid rgba(6,182,212,0.25)',
+                                background: 'rgba(6,182,212,0.08)',
+                                fontSize: 12.5, fontWeight: 600, color: '#06b6d4',
+                              }}>{fmtDay(day)}</span>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>{byDay[day].length}</span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {byDay[day].map((item) => (
+                                <div key={`${item.lead.id}-${item.type}`}
+                                  onClick={() => {
+                                    setSelectedLead(item.lead.id);
+                                    if (wsRef.current && wsRef.current.readyState === 1) {
+                                      wsRef.current.send(JSON.stringify({ type: 'lead_focus', lead_id: String(item.lead.id) }));
+                                    }
+                                  }}
+                                  style={{
+                                    padding: '10px 12px',
+                                    borderRadius: 10,
+                                    border: `1px solid ${selectedLead === item.lead.id ? (C.accent + '50') : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)')}`,
+                                    background: selectedLead === item.lead.id ? (darkMode ? `${C.accent}12` : `${C.accent}08`) : (darkMode ? 'rgba(255,255,255,0.03)' : '#fff'),
+                                    display: 'flex', alignItems: 'center', gap: 10,
+                                    cursor: 'pointer', transition: 'all 0.15s',
+                                  }}
+                                  onMouseEnter={e => { if (selectedLead !== item.lead.id) e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.025)'; }}
+                                  onMouseLeave={e => { if (selectedLead !== item.lead.id) e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.03)' : '#fff'; }}
+                                >
+                                  <span style={{
+                                    fontSize: 10, fontWeight: 700,
+                                    padding: '3px 8px', borderRadius: 4,
+                                    background: `${item.color}15`, color: item.color,
+                                    flexShrink: 0, letterSpacing: '0.04em',
+                                  }}>{item.label}</span>
+                                  <span style={{ fontSize: 13, color: C.text, fontWeight: 600, fontVariantNumeric: 'tabular-nums', flexShrink: 0, minWidth: 42 }}>{fmtTime(item.date)}</span>
+                                  <span style={{ fontSize: 13, fontWeight: 500, color: C.text, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {item.lead.full_name || '(sans nom)'}
+                                  </span>
+                                  <span style={{ fontSize: 11, color: C.muted, fontStyle: 'italic', flexShrink: 0, maxWidth: 140, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {item.lead.assigned_to ? item.lead.assigned_to.split('@')[0] : '—'}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
                       </>
                     );
                   })()
