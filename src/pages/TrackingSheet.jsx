@@ -952,29 +952,62 @@ export default function TrackingSheet() {
   const [newVacStart, setNewVacStart] = useState('');
   const [newVacEnd, setNewVacEnd] = useState('');
   const [vacError, setVacError] = useState('');
+  // Cross-user : HoS/HoSM/admin peuvent gerer les absences des membres de leur equipe
+  const [manageableUsers, setManageableUsers] = useState([]); // [{id, full_name, email, role, is_self}]
+  const [targetManageUserId, setTargetManageUserId] = useState(null); // null = self
+  const [targetUnavailability, setTargetUnavailability] = useState([]); // absences du target
   const fetchMyUnavailability = async () => {
     try {
       const data = await apiClient.get('/api/v1/users/me/unavailability');
-      setMyUnavailability(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setMyUnavailability(list);
+      // Si modal sur self, sync aussi targetUnavailability
+      if (!targetManageUserId) setTargetUnavailability(list);
     } catch (e) { console.warn('Failed to fetch unavailability:', e); }
   };
-  useEffect(() => { fetchMyUnavailability(); }, []);
+  const fetchTargetUnavailability = async (uid) => {
+    if (!uid) {
+      // self
+      setTargetUnavailability(myUnavailability);
+      return;
+    }
+    try {
+      const data = await apiClient.get(`/api/v1/users/${uid}/unavailability`);
+      setTargetUnavailability(Array.isArray(data) ? data : []);
+    } catch (e) { console.warn('Failed to fetch target unavailability:', e); setTargetUnavailability([]); }
+  };
+  const fetchManageableUsers = async () => {
+    try {
+      const data = await apiClient.get('/api/v1/users/manageable');
+      setManageableUsers(Array.isArray(data) ? data : []);
+    } catch (e) { console.warn('Failed to fetch manageable:', e); }
+  };
+  useEffect(() => { fetchMyUnavailability(); fetchManageableUsers(); }, []);
+  useEffect(() => { if (showVacationModal) fetchTargetUnavailability(targetManageUserId); }, [showVacationModal, targetManageUserId]);
   const handleAddVacation = async () => {
     setVacError('');
     if (!newVacStart || !newVacEnd) { setVacError('Sélectionne une date de début et de fin'); return; }
     if (newVacEnd < newVacStart) { setVacError('La fin doit être après le début'); return; }
+    const targetUrl = targetManageUserId
+      ? `/api/v1/users/${targetManageUserId}/unavailability`
+      : '/api/v1/users/me/unavailability';
     try {
-      await apiClient.post('/api/v1/users/me/unavailability', { start_date: newVacStart, end_date: newVacEnd });
+      await apiClient.post(targetUrl, { start_date: newVacStart, end_date: newVacEnd });
       setNewVacStart(''); setNewVacEnd('');
-      await fetchMyUnavailability();
+      await fetchTargetUnavailability(targetManageUserId);
+      if (!targetManageUserId) await fetchMyUnavailability();
     } catch (e) {
       setVacError(e?.message?.includes('409') ? 'Cette période chevauche une absence déjà déclarée' : 'Erreur lors de la création');
     }
   };
   const handleDeleteVacation = async (id) => {
+    const targetUrl = targetManageUserId
+      ? `/api/v1/users/${targetManageUserId}/unavailability/${id}`
+      : `/api/v1/users/me/unavailability/${id}`;
     try {
-      await apiClient.delete(`/api/v1/users/me/unavailability/${id}`);
-      await fetchMyUnavailability();
+      await apiClient.delete(targetUrl);
+      await fetchTargetUnavailability(targetManageUserId);
+      if (!targetManageUserId) await fetchMyUnavailability();
     } catch (e) { console.warn('Failed to delete unavailability:', e); }
   };
   const isDayInVacation = (date) => {
@@ -3085,9 +3118,13 @@ export default function TrackingSheet() {
                     </svg>
                   </div>
                   <div>
-                    <h3 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0, letterSpacing: '-0.01em' }}>Mes absences</h3>
+                    <h3 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0, letterSpacing: '-0.01em' }}>
+                      {targetManageUserId
+                        ? `Absences de ${manageableUsers.find(u => u.id === targetManageUserId)?.full_name || '...'}`
+                        : 'Mes absences'}
+                    </h3>
                     <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
-                      {myUnavailability.length === 0 ? 'Aucune absence à venir' : `${myUnavailability.length} période${myUnavailability.length > 1 ? 's' : ''} déclarée${myUnavailability.length > 1 ? 's' : ''}`}
+                      {targetUnavailability.length === 0 ? 'Aucune absence à venir' : `${targetUnavailability.length} période${targetUnavailability.length > 1 ? 's' : ''} déclarée${targetUnavailability.length > 1 ? 's' : ''}`}
                     </div>
                   </div>
                 </div>
@@ -3100,8 +3137,24 @@ export default function TrackingSheet() {
               </div>
 
               <div style={{ padding: '20px 28px 24px', overflowY: 'auto', flex: 1 }}>
+                {/* Dropdown "Pour qui ?" : visible uniquement si current peut gerer au moins 1 autre user */}
+                {manageableUsers.filter(u => !u.is_self).length > 0 && (
+                  <div style={{ marginBottom: 18 }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pour qui ?</label>
+                    <select
+                      value={targetManageUserId || ''}
+                      onChange={(e) => { setTargetManageUserId(e.target.value || null); setVacError(''); setNewVacStart(''); setNewVacEnd(''); }}
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', cursor: 'pointer', boxSizing: 'border-box' }}
+                    >
+                      <option value="">Moi-même</option>
+                      {manageableUsers.filter(u => !u.is_self).map(u => (
+                        <option key={u.id} value={u.id}>{u.full_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 {/* Liste des periodes existantes */}
-                {myUnavailability.length === 0 ? (
+                {targetUnavailability.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '20px 0 24px', color: C.muted }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 56, height: 56, borderRadius: 14, background: darkMode ? 'rgba(99,102,241,0.10)' : 'rgba(99,102,241,0.06)', color: '#6366f1', marginBottom: 8 }}>
                       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -3114,11 +3167,13 @@ export default function TrackingSheet() {
                       </svg>
                     </div>
                     <div style={{ fontSize: 13, fontWeight: 500 }}>Aucune absence à venir</div>
-                    <div style={{ fontSize: 11.5, marginTop: 4, opacity: 0.7 }}>Déclare ci-dessous tes prochaines absences</div>
+                    <div style={{ fontSize: 11.5, marginTop: 4, opacity: 0.7 }}>
+                      {targetManageUserId ? 'Déclare ci-dessous une absence' : 'Déclare ci-dessous tes prochaines absences'}
+                    </div>
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
-                    {myUnavailability.map(v => {
+                    {targetUnavailability.map(v => {
                       const fmt = (iso) => {
                         const d = new Date(iso + 'T12:00:00');
                         return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
