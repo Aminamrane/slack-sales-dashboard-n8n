@@ -5183,44 +5183,61 @@ export default function TrackingSheetSetter() {
                     )}
 
                     {/* Date de rappel (bucket 'callback' uniquement) — champ structure
-                        callback_at, ecrase la date saisie precedemment dans les notes. */}
-                    {activeCat.key === 'callback' && (
-                      <div onClick={(e) => e.stopPropagation()} style={{
-                        padding: '6px 12px 8px',
-                        borderTop: `1px solid ${darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'}`,
-                        background: darkMode ? 'rgba(148,163,184,0.04)' : 'rgba(148,163,184,0.03)',
-                        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-                      }}>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Rappeler le</span>
-                        <input
-                          type="datetime-local"
-                          value={toDatetimeLocal(lead.callback_at)}
-                          onChange={(e) => handleDateChange(lead.id, 'callback_at', e.target.value)}
-                          style={{
-                            padding: '4px 8px',
-                            borderRadius: 6,
-                            border: `1px solid ${C.border}`,
-                            background: darkMode ? C.bg : '#fff',
-                            color: C.text,
-                            fontSize: 12,
-                            fontFamily: 'inherit',
-                            outline: 'none',
-                          }}
-                        />
-                        {lead.callback_at && (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); handleDateChange(lead.id, 'callback_at', null); }}
-                            title="Effacer la date de rappel"
+                        callback_at, ecrase la date saisie precedemment dans les notes.
+                        2026-06-04 : remplacement input datetime-local (qui affichait
+                        un format AM/PM en US selon browser locale) par 2 inputs séparés
+                        date + heure custom. Cohérent avec le pattern R1/R2 et le
+                        workflow inline "À rappeler" du panel détail. */}
+                    {activeCat.key === 'callback' && (() => {
+                      const cur = toDatetimeLocal(lead.callback_at);
+                      const datePart = cur ? cur.slice(0, 10) : '';
+                      const timePart = cur ? cur.slice(11, 16) : '10:00';
+                      const setComposite = (newDate, newTime) => {
+                        if (!newDate) { handleDateChange(lead.id, 'callback_at', null); return; }
+                        handleDateChange(lead.id, 'callback_at', `${newDate}T${newTime}`);
+                      };
+                      return (
+                        <div onClick={(e) => e.stopPropagation()} style={{
+                          padding: '6px 12px 8px',
+                          borderTop: `1px solid ${darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'}`,
+                          background: darkMode ? 'rgba(148,163,184,0.04)' : 'rgba(148,163,184,0.03)',
+                          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                        }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Rappeler le</span>
+                          <input
+                            type="date"
+                            value={datePart}
+                            onChange={(e) => setComposite(e.target.value, timePart)}
                             style={{
                               padding: '4px 8px', borderRadius: 6,
-                              border: 'none', background: 'transparent',
-                              color: C.muted, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
+                              border: `1px solid ${C.border}`,
+                              background: darkMode ? C.bg : '#fff', color: C.text,
+                              fontSize: 12, fontFamily: 'inherit', outline: 'none',
                             }}
-                          >Effacer</button>
-                        )}
-                      </div>
-                    )}
+                          />
+                          <div style={{ minWidth: 78 }}>
+                            <TimeSelect
+                              value={timePart}
+                              onChange={(t) => setComposite(datePart || new Date().toISOString().slice(0, 10), t)}
+                              C={C}
+                              darkMode={darkMode}
+                            />
+                          </div>
+                          {lead.callback_at && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleDateChange(lead.id, 'callback_at', null); }}
+                              title="Effacer la date de rappel"
+                              style={{
+                                padding: '4px 8px', borderRadius: 6,
+                                border: 'none', background: 'transparent',
+                                color: C.muted, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
+                              }}
+                            >Effacer</button>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                   </div>
                 );
@@ -6311,7 +6328,16 @@ export default function TrackingSheetSetter() {
                           </button>
                         </div>
                         <button
-                          onClick={() => { setActiveWorkflow(null); setSetterModal({ kind: 'markCallback', lead }); }}
+                          onClick={() => {
+                            // Workflow inline date+heure pour le callback
+                            // (2026-06-04). Default = demain 10h00 (cible
+                            // courante pour les rappels de prospects). Le
+                            // setter ajuste avant de confirmer.
+                            const d = new Date();
+                            d.setDate(d.getDate() + 1);
+                            const defaultDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T10:00`;
+                            setActiveWorkflow({ leadId: lead.id, setterCallbackFlow: true, newDate: defaultDate });
+                          }}
                           style={{ ...pillStyle('#94a3b8'), animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) 150ms both' }}
                           onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(148,163,184,0.4)' : 'rgba(148,163,184,0.2)'; e.currentTarget.style.transform = 'scale(1.02)'; }}
                           onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(148,163,184,0.3)' : 'rgba(148,163,184,0.15)'; e.currentTarget.style.transform = 'scale(1)'; }}
@@ -6564,6 +6590,101 @@ export default function TrackingSheetSetter() {
                         onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
                       >
                         {setterSubmitting ? 'Envoi…' : (isR2 ? 'Confirmer → R2' : 'Confirmer → R1')}
+                      </button>
+                    )}
+
+                    {/* ── Annuler ── */}
+                    <button
+                      onClick={() => !setterSubmitting && setActiveWorkflow(null)}
+                      disabled={setterSubmitting}
+                      style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: setterSubmitting ? 'not-allowed' : 'pointer', fontFamily: 'inherit', alignSelf: 'center', opacity: 0.7 }}
+                    >Annuler</button>
+                  </div>
+                );
+              })()}
+
+              {/* ═══ SETTER "À RAPPELER" INLINE WORKFLOW ═══ */}
+              {/* 2026-06-04 : Mirror R1/R2 — quand le setter clique "À rappeler",
+                  on lui demande la date+heure inline (au lieu d'un mark direct
+                  qui demanderait au setter d'aller éditer la date après dans
+                  le bucket). Format date/heure FR via input type="date" + TimeSelect
+                  pour éviter le AM/PM US des inputs datetime-local sur certains
+                  browsers. Au confirm : POST /setter/leads/{id}/mark-callback
+                  avec callback_at → le lead transite vers le bucket "À rappeler"
+                  ET apparaît dans la vue "À faire" à la bonne date. */}
+              {isSetter && activeWorkflow?.leadId === lead.id && activeWorkflow?.setterCallbackFlow && (() => {
+                const accent = '#94a3b8';
+                const handleCallbackSubmit = async () => {
+                  const wf = activeWorkflow;
+                  if (!wf?.newDate || wf.newDate.length < 16) {
+                    showSetterToast('Date et heure requises.', 'err');
+                    return;
+                  }
+                  setSetterSubmitting(true);
+                  try {
+                    // Le backend attend un ISO. L'input HTML date génère
+                    // "YYYY-MM-DDTHH:MM" en time-local (sans timezone) — on
+                    // l'envoie tel quel, le backend interprète en TZ Europe/Paris
+                    // (cohérent avec r1_date / r2_date).
+                    await apiClient.post(`/api/v1/tracking/setter/leads/${lead.id}/mark-callback`, {
+                      callback_at: wf.newDate,
+                    });
+                    showSetterToast('À rappeler enregistré.');
+                    setActiveWorkflow(null);
+                    refreshData().catch(() => {});
+                  } catch (e) {
+                    console.error('[Setter] mark-callback failed', e);
+                    showSetterToast(e?.message || 'Échec à rappeler.', 'err');
+                  } finally {
+                    setSetterSubmitting(false);
+                  }
+                };
+                return (
+                  <div style={{
+                    marginBottom: 16,
+                    display: 'flex', flexDirection: 'column', gap: 10,
+                    padding: '16px 18px', borderRadius: 16,
+                    background: darkMode ? 'rgba(148,163,184,0.08)' : 'rgba(148,163,184,0.04)',
+                    border: `1px solid ${darkMode ? 'rgba(148,163,184,0.2)' : 'rgba(148,163,184,0.12)'}`,
+                    animation: 'wfDateCardIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 15 }}>↩</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: accent }}>Rappeler le prospect le…</span>
+                    </div>
+
+                    {/* ── Date + heure (format FR via inputs custom) ── */}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Date</div>
+                        <input type="date" value={activeWorkflow.newDate ? activeWorkflow.newDate.slice(0, 10) : ''}
+                          onChange={(e) => { const time = activeWorkflow.newDate?.slice(10) || 'T10:00'; setActiveWorkflow(prev => ({ ...prev, newDate: e.target.value + time })); }}
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
+                        <TimeSelect value={activeWorkflow.newDate?.slice(11, 16) || '10:00'} onChange={(t) => { const date = activeWorkflow.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
+                      </div>
+                    </div>
+
+                    {/* ── Confirmer ── */}
+                    {activeWorkflow.newDate && activeWorkflow.newDate.length >= 16 && (
+                      <button
+                        onClick={handleCallbackSubmit}
+                        disabled={setterSubmitting}
+                        style={{
+                          padding: '10px 20px', borderRadius: 50, border: 'none',
+                          background: accent, color: '#fff', fontSize: 12.5, fontWeight: 700,
+                          cursor: setterSubmitting ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                          opacity: setterSubmitting ? 0.6 : 1,
+                          animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both',
+                          transition: 'transform 0.15s, box-shadow 0.15s',
+                        }}
+                        onMouseEnter={(e) => { if (!setterSubmitting) { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = `0 4px 14px ${accent}59`; } }}
+                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                      >
+                        {setterSubmitting ? 'Envoi…' : 'Confirmer → À rappeler'}
                       </button>
                     )}
 
