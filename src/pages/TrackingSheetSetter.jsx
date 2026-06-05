@@ -350,7 +350,15 @@ export default function TrackingSheetSetter() {
           dedup.set(String(lead.id), annotate(bucket)(lead));
         }
       }
-      setLeads(Array.from(dedup.values()));
+      // Masque les leads disqualifiés par le setter (setter_disqualified_at non-null).
+      // Le backend ne renvoie un disqualifié que via my-leads (bucket 'mine') ; les
+      // endpoints signed / r1-placed / r2-placed / team-leads filtrent déjà côté
+      // serveur. Garde de sécurité : on ne masque jamais un lead signé (donnée de vente).
+      setLeads(
+        Array.from(dedup.values()).filter(
+          (l) => !l.setter_disqualified_at || l.status === 'signed',
+        ),
+      );
 
       const sList = extractList(salesRes);
       setTeamSales(sList);
@@ -4199,15 +4207,16 @@ export default function TrackingSheetSetter() {
                   </>
                 )}
 
-                {/* Sales propriétaire — setter only, onglets Nouveau lead
-                    + Répondeurs (les 2 contiennent désormais des leads
-                    multi-sales : cold-call setter + overflow 24h +
-                    répondeurs uncalled dans Nouveau lead ; répondeurs
-                    appelés par le setter dans Répondeurs).
+                {/* Sales propriétaire — setter only, TOUS les onglets.
+                    Permet à la setteuse de ne traiter que les leads d'un
+                    sales précis (sales en congés, sales qui ne veut pas
+                    qu'on touche ses leads pour le moment, etc.). Le filtre
+                    (filteredLeads, sur `lead.assigned_to`) s'applique déjà à
+                    tous les buckets ; on expose donc le sélecteur partout,
+                    plus seulement Nouveau lead / Répondeurs.
                     Options = teamSales (scope setter_assignments, fetché
-                    via /api/v1/tracking/setter/my-team-sales). Filtre sur
-                    `lead.assigned_to` (email du sales). */}
-                {isSetter && (catKey === 'voicemail' || catKey === 'mine') && teamSales.length > 0 && (
+                    via /api/v1/tracking/setter/my-team-sales). */}
+                {isSetter && teamSales.length > 0 && (
                   <>
                     {renderFilterRow('sales_owner', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, 'Sales propriétaire', true)}
                     {openFilterSections.has('sales_owner') && renderOptionsBox(
