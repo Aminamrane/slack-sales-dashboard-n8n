@@ -5200,12 +5200,14 @@ export default function TrackingSheetSetter() {
                         date + heure custom. Cohérent avec le pattern R1/R2 et le
                         workflow inline "À rappeler" du panel détail. */}
                     {activeCat.key === 'callback' && (() => {
+                      const hasDate = !!lead.callback_at;
                       const cur = toDatetimeLocal(lead.callback_at);
                       const datePart = cur ? cur.slice(0, 10) : '';
-                      const timePart = cur ? cur.slice(11, 16) : '10:00';
+                      const timePart = cur ? cur.slice(11, 16) : '';  // pas de défaut 10:00 tant qu'aucune vraie date
                       const setComposite = (newDate, newTime) => {
                         if (!newDate) { handleDateChange(lead.id, 'callback_at', null); return; }
-                        handleDateChange(lead.id, 'callback_at', `${newDate}T${newTime}`);
+                        // Heure 10:00 par défaut UNIQUEMENT au moment où le setter saisit une date
+                        handleDateChange(lead.id, 'callback_at', `${newDate}T${newTime || '10:00'}`);
                       };
                       return (
                         <div onClick={(e) => e.stopPropagation()} style={{
@@ -5221,30 +5223,38 @@ export default function TrackingSheetSetter() {
                             onChange={(e) => setComposite(e.target.value, timePart)}
                             style={{
                               padding: '4px 8px', borderRadius: 6,
-                              border: `1px solid ${C.border}`,
-                              background: darkMode ? C.bg : '#fff', color: C.text,
+                              border: hasDate ? `1px solid ${C.border}` : `1px dashed ${C.muted}`,
+                              background: hasDate ? (darkMode ? C.bg : '#fff') : 'transparent',
+                              color: hasDate ? C.text : C.muted,
                               fontSize: 12, fontFamily: 'inherit', outline: 'none',
+                              opacity: hasDate ? 1 : 0.7,
                             }}
                           />
-                          <div style={{ minWidth: 78 }}>
-                            <TimeSelect
-                              value={timePart}
-                              onChange={(t) => setComposite(datePart || new Date().toISOString().slice(0, 10), t)}
-                              C={C}
-                              darkMode={darkMode}
-                            />
-                          </div>
-                          {lead.callback_at && (
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); handleDateChange(lead.id, 'callback_at', null); }}
-                              title="Effacer la date de rappel"
-                              style={{
-                                padding: '4px 8px', borderRadius: 6,
-                                border: 'none', background: 'transparent',
-                                color: C.muted, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
-                              }}
-                            >Effacer</button>
+                          {hasDate ? (
+                            <>
+                              <div style={{ minWidth: 78 }}>
+                                <TimeSelect
+                                  value={timePart}
+                                  onChange={(t) => setComposite(datePart, t)}
+                                  C={C}
+                                  darkMode={darkMode}
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); handleDateChange(lead.id, 'callback_at', null); }}
+                                title="Effacer la date de rappel"
+                                style={{
+                                  padding: '4px 8px', borderRadius: 6,
+                                  border: 'none', background: 'transparent',
+                                  color: C.muted, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
+                                }}
+                              >Effacer</button>
+                            </>
+                          ) : (
+                            <span style={{ fontSize: 11, fontStyle: 'italic', color: C.muted, display: 'inline-flex', alignItems: 'center', gap: 4, opacity: 0.85 }}>
+                              à définir · voir commentaire
+                            </span>
                           )}
                         </div>
                       );
