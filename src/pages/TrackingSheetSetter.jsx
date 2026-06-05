@@ -307,13 +307,14 @@ export default function TrackingSheetSetter() {
   // garantit que le bucket le plus prioritaire l'emporte au final.
   const refreshData = useCallback(async () => {
     try {
-      const [mineRes, teamRes, callbackRes, r1PlacedRes, r2PlacedRes, signedRes, salesRes] = await Promise.all([
+      const [mineRes, teamRes, callbackRes, r1PlacedRes, r2PlacedRes, signedRes, scopeRdvRes, salesRes] = await Promise.all([
         apiClient.get('/api/v1/tracking/setter/my-leads').catch((e) => ({ __err: e })),
         apiClient.get('/api/v1/tracking/setter/team-leads').catch((e) => ({ __err: e })),
         apiClient.get('/api/v1/tracking/setter/callback-leads').catch((e) => ({ __err: e })),
         apiClient.get('/api/v1/tracking/setter/r1-placed').catch((e) => ({ __err: e })),
         apiClient.get('/api/v1/tracking/setter/r2-placed').catch((e) => ({ __err: e })),
         apiClient.get('/api/v1/tracking/setter/signed').catch((e) => ({ __err: e })),
+        apiClient.get('/api/v1/tracking/setter/scope-rdv').catch((e) => ({ __err: e })),
         apiClient.get('/api/v1/tracking/setter/my-team-sales').catch((e) => ({ __err: e })),
       ]);
 
@@ -339,6 +340,10 @@ export default function TrackingSheetSetter() {
         ['mine',      extractList(mineRes)],
         ['voicemail', extractList(teamRes)],
         ['callback',  extractList(callbackRes)],
+        // RDV à venir des sales pour CONFIRMATION de présence (lecture seule).
+        // Priorité basse : si le setter a placé le RDV lui-même, r1_placed/r2_placed
+        // ci-dessous écrasent ce bucket → sa version actionnable l'emporte.
+        ['confirm',   extractList(scopeRdvRes)],
         ['r1_placed', extractList(r1PlacedRes)],
         ['r2_placed', extractList(r2PlacedRes)],
         ['signed',    extractList(signedRes)],
@@ -5504,6 +5509,11 @@ export default function TrackingSheetSetter() {
                                   <span style={{ fontSize: 13, fontWeight: 500, color: C.text, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {item.lead.full_name || '(sans nom)'}
                                   </span>
+                                  {item.lead._setter_bucket === 'confirm' && (
+                                    <span title="RDV d'un sale — à appeler pour confirmer la présence" style={{ fontSize: 9, fontWeight: 700, padding: '3px 7px', borderRadius: 4, background: 'rgba(245,158,11,0.14)', color: '#d97706', flexShrink: 0, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                                      à confirmer
+                                    </span>
+                                  )}
                                   <span style={{ fontSize: 11, color: C.muted, fontStyle: 'italic', flexShrink: 0, maxWidth: 140, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {item.lead.assigned_to ? item.lead.assigned_to.split('@')[0] : '—'}
                                   </span>
