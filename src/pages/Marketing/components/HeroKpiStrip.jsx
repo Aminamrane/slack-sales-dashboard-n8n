@@ -221,7 +221,7 @@ function KpiTile({ label, value, hint, tone, C, delay = 0, compact = false }) {
   );
 }
 
-export default function HeroKpiStrip({ webinar, summary, realtimeLeads, rankingPanel, C, loading }) {
+export default function HeroKpiStrip({ webinar, summary, realtimeLeads, rankingPanel, donutPanel, C, loading }) {
   if (!summary) {
     return (
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) 2fr', gap: 16 }}>
@@ -296,32 +296,57 @@ export default function HeroKpiStrip({ webinar, summary, realtimeLeads, rankingP
     },
   ];
 
-  // Layout 3 colonnes si rankingPanel fourni : [Hero | Ranking | Tiles].
-  // Fallback 2 colonnes [Hero | Tiles] sinon (rétro-compat).
-  return (
+  // Trois modes de layout :
+  // 1. `donutPanel` + `rankingPanel` (cas /marketing actuel) → hero 3 cols
+  //    [HeroCard | Ranking | Donut] + tiles dans une row 2 (4 cols).
+  // 2. `rankingPanel` seul → 3 cols [HeroCard | Ranking | Tiles compacts]
+  //    (legacy avant ajout du donut, conservé pour rétro-compat).
+  // 3. Sans aucun panel additionnel → 2 cols [HeroCard | Tiles 3 cols]
+  //    (encore plus legacy, conservé au cas où).
+  const tilesGrid = (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: rankingPanel
-        ? 'minmax(280px, 1fr) minmax(280px, 1.2fr) minmax(360px, 1.6fr)'
-        : 'minmax(320px, 1.2fr) 2.4fr',
-      gap: 16,
-      alignItems: 'stretch',
+      gridTemplateColumns: donutPanel
+        ? 'repeat(4, 1fr)'                          // mode 1 — row pleine sous le hero
+        : rankingPanel ? 'repeat(2, 1fr)'           // mode 2 — col 3 partagée
+        : 'repeat(3, 1fr)',                         // mode 3 — col 2 large
+      gap: 10,
+      opacity: loading ? 0.7 : 1,
+      transition: 'opacity 0.25s ease',
+      alignContent: 'start',
     }}>
-      <HeroCard webinar={webinar} summary={summary} realtimeLeads={realtimeLeads} C={C} />
-      {rankingPanel}
+      {tiles.map((t, i) => (
+        <KpiTile
+          key={t.label}
+          {...t}
+          C={C}
+          delay={i * 0.04}
+          compact={!!rankingPanel && !donutPanel}
+        />
+      ))}
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{
         display: 'grid',
-        // 2 colonnes plus compactes quand on partage la largeur avec le ranking.
-        gridTemplateColumns: rankingPanel ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
-        gap: 10,
-        opacity: loading ? 0.7 : 1,
-        transition: 'opacity 0.25s ease',
-        alignContent: 'start',
+        gridTemplateColumns: donutPanel
+          ? 'minmax(300px, 1fr) minmax(280px, 1.1fr) minmax(320px, 1.2fr)'
+          : rankingPanel
+            ? 'minmax(280px, 1fr) minmax(280px, 1.2fr) minmax(360px, 1.6fr)'
+            : 'minmax(320px, 1.2fr) 2.4fr',
+        gap: 16,
+        alignItems: 'stretch',
       }}>
-        {tiles.map((t, i) => (
-          <KpiTile key={t.label} {...t} C={C} delay={i * 0.04} compact={!!rankingPanel} />
-        ))}
+        <HeroCard webinar={webinar} summary={summary} realtimeLeads={realtimeLeads} C={C} />
+        {rankingPanel}
+        {donutPanel || tilesGrid}
       </div>
+
+      {/* Quand le donut occupe la 3e colonne du hero, on rend les tiles
+          en row dédiée juste en dessous (4 cols × 2 rows pour 8 tiles). */}
+      {donutPanel && tilesGrid}
     </div>
   );
 }

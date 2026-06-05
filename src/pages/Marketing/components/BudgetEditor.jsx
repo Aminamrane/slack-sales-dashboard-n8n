@@ -21,9 +21,12 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export default function BudgetEditor({ webinarId, C, onChange, readOnly = false }) {
+export default function BudgetEditor({ webinarId, C, onChange, readOnly = false, dateFrom, dateTo }) {
   const [budgets, setBudgets] = useState([]);
-  const [date, setDate] = useState(todayIso());
+  // Date initiale du formulaire = dateFrom de la cohorte si fournie
+  // (ouverture de campagne), sinon today. Ré-init quand la cohorte change.
+  const [date, setDate] = useState(() => dateFrom || todayIso());
+  useEffect(() => { setDate(dateFrom || todayIso()); }, [dateFrom]);
   const [amount, setAmount] = useState('');
   const [source, setSource] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -32,7 +35,15 @@ export default function BudgetEditor({ webinarId, C, onChange, readOnly = false 
 
   const load = useCallback(async () => {
     try {
-      const json = await apiClient.get(`/api/v1/marketing/webinars/${webinarId}/budgets`);
+      // Passe from/to pour scoper la liste à la fenêtre de la cohorte.
+      // La landing `/api/admin/budgets` filtre par from/to (pas par
+      // webinar), donc c'est le seul moyen de séparer les budgets 26 mai
+      // vs 22 juin côté affichage.
+      const params = [];
+      if (dateFrom) params.push(`from=${encodeURIComponent(dateFrom)}`);
+      if (dateTo) params.push(`to=${encodeURIComponent(dateTo)}`);
+      const qs = params.length ? `?${params.join('&')}` : '';
+      const json = await apiClient.get(`/api/v1/marketing/webinars/${webinarId}/budgets${qs}`);
       setBudgets((json?.budgets || []).slice().sort((a, b) => b.date.localeCompare(a.date)));
       setErr(null);
     } catch (e) {
@@ -40,7 +51,7 @@ export default function BudgetEditor({ webinarId, C, onChange, readOnly = false 
     } finally {
       setLoading(false);
     }
-  }, [webinarId]);
+  }, [webinarId, dateFrom, dateTo]);
 
   useEffect(() => { void load(); }, [load]);
 
