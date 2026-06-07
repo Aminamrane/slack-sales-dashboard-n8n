@@ -26,13 +26,16 @@ const SOURCE_ORDER = [
   { key: 'unattributed', label: 'Non attribué', toneKey: 'muted' },
 ];
 
-// Modes de vue du donut. Le backend fournit 2 dicts dans realtime-leads :
+// Modes de vue du donut. Le backend fournit 3 dicts dans realtime-leads :
 // - `rdv_by_source` (qui prend un RDV)
 // - `live_attendees_by_source` (qui était présent au live, hardcoded par
 //   webinaire à partir d'un calcul SQL redirect_clicks × leads.source)
+// - `sales_by_source` (qui a signé — status='signed' agrégé par source via
+//   le même matcher v2 email/tel/nom)
 const VIEW_MODES = [
-  { key: 'rdv',  label: 'RDV pris',         dataKey: 'rdv_by_source',          unitLabel: 'rendez-vous', centerLabel: 'RDV PRIS' },
-  { key: 'live', label: 'Présents au live', dataKey: 'live_attendees_by_source', unitLabel: 'présents au live', centerLabel: 'PRÉSENTS' },
+  { key: 'rdv',   label: 'RDV pris',         dataKey: 'rdv_by_source',          unitLabel: 'rendez-vous',     centerLabel: 'RDV PRIS' },
+  { key: 'live',  label: 'Présents au live', dataKey: 'live_attendees_by_source', unitLabel: 'présents au live', centerLabel: 'PRÉSENTS' },
+  { key: 'sales', label: 'Ventes',           dataKey: 'sales_by_source',        unitLabel: 'ventes',          centerLabel: 'VENTES' },
 ];
 
 export default function RdvBySourceDonut({ data, C }) {
@@ -107,9 +110,9 @@ export default function RdvBySourceDonut({ data, C }) {
           textAlign: 'center',
           padding: '12px 0',
         }}>
-          {viewMode === 'live'
-            ? 'Aucun présent au live enregistré.'
-            : 'Aucun RDV pris pour ce webinaire.'}
+          {viewMode === 'live' && 'Aucun présent au live enregistré.'}
+          {viewMode === 'sales' && 'Aucune vente enregistrée.'}
+          {viewMode === 'rdv' && 'Aucun RDV pris pour ce webinaire.'}
         </div>
       </motion.div>
     );
@@ -218,6 +221,7 @@ function Header({ C, total, activeView, viewMode, setViewMode }) {
   const titleByMode = {
     rdv: 'RDV par source',
     live: 'Présents au live · source',
+    sales: 'Ventes par source',
   };
   return (
     <div style={{
