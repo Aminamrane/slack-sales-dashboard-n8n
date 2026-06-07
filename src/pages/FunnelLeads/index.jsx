@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-// eslint-disable-next-line no-unused-vars -- motion utilisé via JSX (faux positif)
-import { motion } from 'framer-motion';
+// eslint-disable-next-line no-unused-vars -- motion + AnimatePresence utilisés via JSX (faux positif)
+import { motion, AnimatePresence } from 'framer-motion';
 import apiClient from '../../services/apiClient';
 import SharedNavbar from '../../components/SharedNavbar.jsx';
 // Réutilise le design system de la page Marketing (cohérence + DRY).
@@ -91,6 +91,82 @@ export default function FunnelLeads() {
 
   const isCurrentMonth = month === months[months.length - 1];
 
+  // ── Sélecteur de mois (dropdown custom, scale-first) ──────────────────────
+  // Ancré en haut à droite, groupé par année (au-delà d'une année), clavier
+  // complet (flèches / Home / End / Enter / Échap). Aucune dépendance externe.
+  const monthSelectRef = useRef(null);
+  const [monthOpen, setMonthOpen] = useState(false);
+  const currentMonth = months[months.length - 1];
+
+  // Options affichées : du mois le + récent au + ancien. En-têtes d'année
+  // uniquement si plusieurs années sont présentes (évite un « 2026 » solitaire).
+  const monthOptions = useMemo(() => {
+    const ordered = [...months].reverse();
+    const multiYear = new Set(ordered.map((m) => m.slice(0, 4))).size > 1;
+    const out = [];
+    let lastYear = null;
+    ordered.forEach((m) => {
+      const year = m.slice(0, 4);
+      if (multiYear && year !== lastYear) { out.push({ type: 'year', year }); lastYear = year; }
+      out.push({ type: 'month', m });
+    });
+    return out;
+  }, [months]);
+
+  // Liste plate des mois sélectionnables (navigation clavier).
+  const selectableMonths = useMemo(
+    () => monthOptions.filter((o) => o.type === 'month').map((o) => o.m),
+    [monthOptions],
+  );
+  const [activeIdx, setActiveIdx] = useState(0);
+
+  // À l'ouverture, place le surlignage clavier sur le mois sélectionné.
+  useEffect(() => {
+    if (!monthOpen) return;
+    const i = selectableMonths.indexOf(month);
+    setActiveIdx(i < 0 ? 0 : i);
+  }, [monthOpen, month, selectableMonths]);
+
+  // Click-outside + clavier (flèches / Home / End / Enter / Échap).
+  useEffect(() => {
+    if (!monthOpen) return;
+    const onDown = (e) => {
+      if (monthSelectRef.current && !monthSelectRef.current.contains(e.target)) {
+        setMonthOpen(false);
+      }
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        setMonthOpen(false);
+        monthSelectRef.current?.querySelector('[data-month-trigger]')?.focus();
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setActiveIdx((i) => Math.min(i + 1, selectableMonths.length - 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActiveIdx((i) => Math.max(i - 1, 0));
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        setActiveIdx(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        setActiveIdx(selectableMonths.length - 1);
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        const picked = selectableMonths[activeIdx];
+        if (picked) { setMonth(picked); setMonthOpen(false); }
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [monthOpen, selectableMonths, activeIdx]);
+
   if (!authReady) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.backdrop, color: C.muted, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
@@ -149,25 +225,138 @@ export default function FunnelLeads() {
               Entonnoir mensuel des leads (reçus → signés). Recalcul live — les mois récents continuent de mûrir.
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {months.map((m) => {
-              const active = m === month;
-              return (
-                <button
-                  key={m}
-                  onClick={() => setMonth(m)}
+          <div ref={monthSelectRef} style={{ position: 'relative' }}>
+            {/* Scrollbar fine, thématisée (webkit). Une seule injection. */}
+            <style>{`
+              .funnel-month-scroll::-webkit-scrollbar { width: 8px; }
+              .funnel-month-scroll::-webkit-scrollbar-track { background: transparent; }
+              .funnel-month-scroll::-webkit-scrollbar-thumb {
+                background: ${C.border}; border-radius: 8px;
+                border: 2px solid transparent; background-clip: padding-box;
+              }
+              .funnel-month-scroll::-webkit-scrollbar-thumb:hover {
+                background: ${C.muted}; background-clip: padding-box;
+              }
+            `}</style>
+
+            {/* Déclencheur */}
+            <button
+              type="button"
+              data-month-trigger
+              onClick={() => setMonthOpen((o) => !o)}
+              aria-haspopup="listbox"
+              aria-expanded={monthOpen}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 12px 8px 14px', borderRadius: 11, cursor: 'pointer',
+                fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                border: `1px solid ${monthOpen ? C.accent : C.border}`,
+                background: C.surface, color: C.text,
+                boxShadow: monthOpen ? C.shadowFloat : C.shadow,
+                transition: 'border-color 0.15s, box-shadow 0.15s',
+              }}
+            >
+              <span>{monthLabel(month)}</span>
+              {month === currentMonth && (
+                <span style={{
+                  fontSize: 10, fontWeight: 700, letterSpacing: '0.02em',
+                  padding: '2px 7px', borderRadius: 999, lineHeight: 1.4,
+                  background: C.accent, color: '#fff',
+                }}>
+                  en cours
+                </span>
+              )}
+              <motion.svg
+                width="14" height="14" viewBox="0 0 24 24" fill="none"
+                animate={{ rotate: monthOpen ? 180 : 0 }}
+                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                style={{ color: C.muted, flexShrink: 0 }}
+              >
+                <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+              </motion.svg>
+            </button>
+
+            {/* Panneau */}
+            <AnimatePresence>
+              {monthOpen && (
+                <motion.ul
+                  role="listbox"
+                  aria-label="Sélection du mois"
+                  tabIndex={-1}
+                  className="funnel-month-scroll"
+                  initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                  transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                   style={{
-                    padding: '7px 14px', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600,
-                    fontFamily: 'inherit', transition: 'all 0.15s',
-                    border: `1px solid ${active ? C.accent : C.border}`,
-                    background: active ? C.accent : C.surface,
-                    color: active ? '#fff' : C.muted,
+                    position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 50,
+                    transformOrigin: 'top right',
+                    minWidth: 220, maxHeight: 300, overflowY: 'auto', overflowX: 'hidden',
+                    margin: 0, padding: 6, listStyle: 'none',
+                    background: C.surface, border: `1px solid ${C.border}`,
+                    borderRadius: 14, boxShadow: C.shadowFloat,
                   }}
                 >
-                  {monthLabel(m)}{m === months[months.length - 1] ? ' (en cours)' : ''}
-                </button>
-              );
-            })}
+                  {monthOptions.map((opt) => {
+                    if (opt.type === 'year') {
+                      return (
+                        <li
+                          key={`year-${opt.year}`}
+                          aria-hidden="true"
+                          style={{
+                            position: 'sticky', top: -6, zIndex: 1,
+                            padding: '8px 12px 4px', margin: '2px 0',
+                            fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
+                            textTransform: 'uppercase', color: C.faded,
+                            background: C.surface,
+                          }}
+                        >
+                          {opt.year}
+                        </li>
+                      );
+                    }
+                    const m = opt.m;
+                    const selected = m === month;
+                    const idx = selectableMonths.indexOf(m);
+                    const active = idx === activeIdx;
+                    const current = m === currentMonth;
+                    return (
+                      <li key={m} role="none">
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={selected}
+                          onClick={() => { setMonth(m); setMonthOpen(false); }}
+                          onMouseEnter={() => setActiveIdx(idx)}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                            width: '100%', textAlign: 'left',
+                            padding: '9px 12px', borderRadius: 9, border: 'none', cursor: 'pointer',
+                            fontSize: 13, fontWeight: selected ? 700 : 500, fontFamily: 'inherit',
+                            background: selected ? C.accent : active ? C.subtle : 'transparent',
+                            color: selected ? '#fff' : C.text,
+                            transition: 'background 0.12s, color 0.12s',
+                          }}
+                        >
+                          <span>{monthLabel(m)}</span>
+                          {current && (
+                            <span style={{
+                              fontSize: 10, fontWeight: 700, letterSpacing: '0.02em',
+                              padding: '2px 7px', borderRadius: 999, lineHeight: 1.4,
+                              background: selected ? 'rgba(255,255,255,0.22)' : C.subtle,
+                              color: selected ? '#fff' : C.muted,
+                              border: selected ? 'none' : `1px solid ${C.hairline}`,
+                            }}>
+                              en cours
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </motion.ul>
+              )}
+            </AnimatePresence>
           </div>
         </header>
 
