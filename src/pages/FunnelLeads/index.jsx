@@ -221,9 +221,6 @@ export default function FunnelLeads() {
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
           <div>
             <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em', margin: 0, color: C.text }}>Funnel Leads</h1>
-            <p style={{ fontSize: 13, color: C.muted, margin: '4px 0 0' }}>
-              Entonnoir mensuel des leads (reçus → signés). Recalcul live — les mois récents continuent de mûrir.
-            </p>
           </div>
           <div ref={monthSelectRef} style={{ position: 'relative' }}>
             {/* Scrollbar fine, thématisée (webkit). Une seule injection. */}
