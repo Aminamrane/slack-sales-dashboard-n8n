@@ -108,8 +108,8 @@ export default function MonitoringPerf() {
   // Fetch tracking-based R1/R2 KPIs (correct placed/done counts)
   useEffect(() => { if (hasAccess && range && range !== 'all' && range.match(/^\d{4}-\d{2}$/)) { apiClient.get('/api/v1/tracking/perf-sales-kpis?month=' + range).then(d => setTrackingKpis(d)).catch(() => setTrackingKpis(null)); } else { setTrackingKpis(null); } }, [hasAccess, range]);
 
-  // Analytics RDV (délai R1→R2 + heatmap no-show par créneau) — cumul depuis avril, indépendant du mois sélectionné.
-  useEffect(() => { if (hasAccess) { apiClient.get('/api/v1/tracking/rdv-analytics').then(d => setRdvAnalytics(d)).catch(() => setRdvAnalytics(null)); } }, [hasAccess]);
+  // Analytics RDV (délai R1→R2 + heatmap no-show par créneau) — suit le mois sélectionné (range), comme le tableau.
+  useEffect(() => { if (hasAccess) { const q = (range && range !== 'all' && range.match(/^\d{4}-\d{2}$/)) ? '?month=' + range : ''; apiClient.get('/api/v1/tracking/rdv-analytics' + q).then(d => setRdvAnalytics(d)).catch(() => setRdvAnalytics(null)); } }, [hasAccess, range]);
 
   useEffect(() => { if (hasAccess && viewMode === 'lead_quality') { setLeadQualityLoading(true); let url = '/api/v1/monitoring/lead-quality?period=' + (leadQualityRange || 'current_month'); if (selectedOrigins.length > 0) url += '&' + selectedOrigins.map(o => 'origins=' + encodeURIComponent(o)).join('&'); apiClient.get(url).then(d => setLeadQualityData(d)).catch(err => { if (err.message && err.message.includes('401')) navigate("/login"); }).finally(() => setTimeout(() => setLeadQualityLoading(false), 150)); } }, [hasAccess, viewMode, leadQualityRange, selectedOrigins]);
 
@@ -294,7 +294,7 @@ export default function MonitoringPerf() {
                     <div style={{padding:'8px 20px 28px',display:'flex',flexDirection:'column',gap:20,borderTop:'1px solid '+C.border,marginTop:8}}>
                       <div>
                         <h2 style={{fontSize:18,fontWeight:700,color:C.text,margin:'8px 0 2px'}}>D&eacute;lai moyen R1 &rarr; R2 (effectu&eacute;s)</h2>
-                        <div style={{fontSize:12,color:C.muted,marginBottom:12}}>Temps &eacute;coul&eacute; entre un R1 et un R2 r&eacute;alis&eacute;s, par mois du R1 &mdash; depuis avril 2026.</div>
+                        <div style={{fontSize:12,color:C.muted,marginBottom:12}}>Temps &eacute;coul&eacute; entre un R1 et un R2 r&eacute;alis&eacute;s (par mois du R1) &mdash; suit le mois s&eacute;lectionn&eacute;.</div>
                         <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
                           {rdvAnalytics.delay_by_month.length===0 && <div style={{fontSize:13,color:C.muted}}>Pas encore de R1+R2 effectu&eacute;s.</div>}
                           {rdvAnalytics.delay_by_month.map(m=>(
@@ -307,7 +307,7 @@ export default function MonitoringPerf() {
                         </div>
                       </div>
                       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(440px, 1fr))',gap:16}}>
-                        <RdvHeatmap cells={rdvAnalytics.heatmap_r1} C={C} title="Pr&eacute;sence R1 &mdash; jour &times; heure" subtitle="Taux de pr&eacute;sence par cr&eacute;neau planifi&eacute;. No-show = lapin + en attente &gt;1 sem. (depuis avril)" />
+                        <RdvHeatmap cells={rdvAnalytics.heatmap_r1} C={C} title="Pr&eacute;sence R1 &mdash; jour &times; heure" subtitle="Taux de pr&eacute;sence par cr&eacute;neau planifi&eacute;. No-show = lapin + en attente &gt;1 sem." />
                         <RdvHeatmap cells={rdvAnalytics.heatmap_r2} C={C} title="Pr&eacute;sence R2 &mdash; jour &times; heure" subtitle="No-show R2 = annul&eacute;/report&eacute; + en attente &gt;1 sem." />
                       </div>
                     </div>
