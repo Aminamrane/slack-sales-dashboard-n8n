@@ -114,6 +114,7 @@ export default function CeoSheetView() {
     if (tabId === "sales_team") { navigate("/ceo/sales-team"); return; }
     if (tabId === "webinar") { navigate("/ceo/webinar"); return; }
     // Fallback : retour à la home dashboard du user (role-aware).
+    if (tabId === "funnel_leads") { navigate("/ceo/funnel-leads"); return; }
     navigateBackToDashboard(navigate, userRole, tabId);
   };
 
