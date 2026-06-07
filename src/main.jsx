@@ -31,8 +31,10 @@ import CeoPerfSalesView   from "./pages/CeoPerfSalesView.jsx";
 import CeoLeadQualityView from "./pages/CeoLeadQualityView.jsx";
 import CeoSalesTeamView   from "./pages/CeoSalesTeamView.jsx";
 import CeoWebinarView     from "./pages/CeoWebinarView.jsx";
+import CeoFunnelLeadsView from "./pages/CeoFunnelLeadsView.jsx";
 import AcquisitionDirectorDashboard from "./pages/AcquisitionDirectorDashboard.jsx";
 import Marketing          from "./pages/Marketing/index.jsx";
+import FunnelLeads        from "./pages/FunnelLeads/index.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import MouseDot from "./components/MouseDot.jsx";
@@ -77,6 +79,14 @@ function App() {
           element={
             <ProtectedRoute>
               <ContractNew />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/funnel-leads"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'acquisition_director']}>
+              <FunnelLeads />
             </ProtectedRoute>
           }
         />
@@ -141,6 +151,14 @@ function App() {
           element={
             <ProtectedRoute>
               <CeoWebinarView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ceo/funnel-leads"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'acquisition_director']}>
+              <CeoFunnelLeadsView />
             </ProtectedRoute>
           }
         />
