@@ -9,8 +9,11 @@ import thirdPlace from "../assets/3st-place.png";
 import iconGlobal from "../assets/global.png";
 import iconFinance from "../assets/finance.png";
 import "../index.css";
+import RdvHeatmap from "../components/RdvHeatmap.jsx";
 
 const COLORS = { primary: "#6366f1", secondary: "#fb923c", tertiary: "#10b981" };
+const MONTHS_FR = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
+const monthLabelFR = (ym) => { const p = String(ym || '').split('-'); return (MONTHS_FR[(+p[1] || 1) - 1] || '') + ' ' + (p[0] || ''); };
 
 const stripDiacritics = (str) => str ? str.normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
 const normalizeSalesKey = (name) => {
@@ -94,6 +97,7 @@ export default function MonitoringPerf() {
   const [detailModal, setDetailModal] = useState(null);
   const [originsOpen, setOriginsOpen] = useState(false);
   const [trackingKpis, setTrackingKpis] = useState(null); // from /tracking/perf-sales-kpis
+  const [rdvAnalytics, setRdvAnalytics] = useState(null); // from /tracking/rdv-analytics (délai R1→R2 + heatmap no-show)
 
   const openDetail = async (personName) => { if (canal !== "ads" && canal !== "cc") return; setDetailModal({ personName, type: canal, data: null, loading: true }); try { const ep = canal === "ads" ? '/api/v1/monitoring/performance/detail/ads' : '/api/v1/monitoring/performance/detail/cc'; const res = await apiClient.get(ep + '?person_name=' + encodeURIComponent(personName) + '&period=' + range); setDetailModal(prev => prev ? { ...prev, data: res, loading: false } : null); } catch { setDetailModal(prev => prev ? { ...prev, data: null, loading: false } : null); } };
 
@@ -103,6 +107,9 @@ export default function MonitoringPerf() {
 
   // Fetch tracking-based R1/R2 KPIs (correct placed/done counts)
   useEffect(() => { if (hasAccess && range && range !== 'all' && range.match(/^\d{4}-\d{2}$/)) { apiClient.get('/api/v1/tracking/perf-sales-kpis?month=' + range).then(d => setTrackingKpis(d)).catch(() => setTrackingKpis(null)); } else { setTrackingKpis(null); } }, [hasAccess, range]);
+
+  // Analytics RDV (délai R1→R2 + heatmap no-show par créneau) — cumul depuis avril, indépendant du mois sélectionné.
+  useEffect(() => { if (hasAccess) { apiClient.get('/api/v1/tracking/rdv-analytics').then(d => setRdvAnalytics(d)).catch(() => setRdvAnalytics(null)); } }, [hasAccess]);
 
   useEffect(() => { if (hasAccess && viewMode === 'lead_quality') { setLeadQualityLoading(true); let url = '/api/v1/monitoring/lead-quality?period=' + (leadQualityRange || 'current_month'); if (selectedOrigins.length > 0) url += '&' + selectedOrigins.map(o => 'origins=' + encodeURIComponent(o)).join('&'); apiClient.get(url).then(d => setLeadQualityData(d)).catch(err => { if (err.message && err.message.includes('401')) navigate("/login"); }).finally(() => setTimeout(() => setLeadQualityLoading(false), 150)); } }, [hasAccess, viewMode, leadQualityRange, selectedOrigins]);
 
@@ -282,6 +289,29 @@ export default function MonitoringPerf() {
                   </tbody></table></div>)}
 
                   {!dataLoading && !performanceData.length && !adsDetailView && <div style={{textAlign:'center',padding:60,color:C.muted}}>Aucune donn&eacute;e disponible</div>}
+
+                  {rdvAnalytics && (
+                    <div style={{padding:'8px 20px 28px',display:'flex',flexDirection:'column',gap:20,borderTop:'1px solid '+C.border,marginTop:8}}>
+                      <div>
+                        <h2 style={{fontSize:18,fontWeight:700,color:C.text,margin:'8px 0 2px'}}>D&eacute;lai moyen R1 &rarr; R2 (effectu&eacute;s)</h2>
+                        <div style={{fontSize:12,color:C.muted,marginBottom:12}}>Temps &eacute;coul&eacute; entre un R1 et un R2 r&eacute;alis&eacute;s, par mois du R1 &mdash; depuis avril 2026.</div>
+                        <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
+                          {rdvAnalytics.delay_by_month.length===0 && <div style={{fontSize:13,color:C.muted}}>Pas encore de R1+R2 effectu&eacute;s.</div>}
+                          {rdvAnalytics.delay_by_month.map(m=>(
+                            <div key={m.month} style={{flex:'1 1 150px',minWidth:150,background:C.bg,border:'1px solid '+C.border,borderRadius:10,padding:'12px 16px',boxShadow:C.shadow}}>
+                              <div style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:'uppercase',letterSpacing:'0.04em'}}>{monthLabelFR(m.month)}</div>
+                              <div style={{fontSize:22,fontWeight:700,color:C.text,marginTop:2}}>{m.avg_days.toLocaleString('fr-FR',{maximumFractionDigits:1})}<span style={{fontSize:13,fontWeight:600,color:C.muted}}> j moy.</span></div>
+                              <div style={{fontSize:11.5,color:C.muted,marginTop:2}}>m&eacute;diane {m.median_days.toLocaleString('fr-FR',{maximumFractionDigits:1})} j &middot; {m.n} RDV</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(440px, 1fr))',gap:16}}>
+                        <RdvHeatmap cells={rdvAnalytics.heatmap_r1} C={C} title="Pr&eacute;sence R1 &mdash; jour &times; heure" subtitle="Taux de pr&eacute;sence par cr&eacute;neau planifi&eacute;. No-show = lapin + en attente &gt;1 sem. (depuis avril)" />
+                        <RdvHeatmap cells={rdvAnalytics.heatmap_r2} C={C} title="Pr&eacute;sence R2 &mdash; jour &times; heure" subtitle="No-show R2 = annul&eacute;/report&eacute; + en attente &gt;1 sem." />
+                      </div>
+                    </div>
+                  )}
                 </div>)}
 
                 {viewMode==='lead_quality' && (<div style={{padding:'20px 20px 28px'}}>
