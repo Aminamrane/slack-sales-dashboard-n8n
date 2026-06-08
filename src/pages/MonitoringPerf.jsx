@@ -102,6 +102,7 @@ export default function MonitoringPerf() {
   const [rdvAnalytics, setRdvAnalytics] = useState(null); // from /tracking/rdv-analytics (délai R1→R2 + heatmap no-show)
   const [salesBreakdown, setSalesBreakdown] = useState(null); // from /tracking/sales-breakdown (vue Ventes)
   const [perfView, setPerfView] = useState('default'); // 'default' (tableau perf) | 'ventes' (ventilation salariés/paiement)
+  const [autreModal, setAutreModal] = useState(null); // { name, items: [{societe, headcount}] } — détail des ventes "Autre"
 
   const openDetail = async (personName) => { if (canal !== "ads" && canal !== "cc") return; setDetailModal({ personName, type: canal, data: null, loading: true }); try { const ep = canal === "ads" ? '/api/v1/monitoring/performance/detail/ads' : '/api/v1/monitoring/performance/detail/cc'; const res = await apiClient.get(ep + '?person_name=' + encodeURIComponent(personName) + '&period=' + range); setDetailModal(prev => prev ? { ...prev, data: res, loading: false } : null); } catch { setDetailModal(prev => prev ? { ...prev, data: null, loading: false } : null); } };
 
@@ -174,12 +175,13 @@ export default function MonitoringPerf() {
     salesBreakdown.by_rapporteur.forEach(r => {
       const key = getCanonicalKey(r.rapporteur);
       if (EXCLUDED_KEYS.has(key)) return;
-      if (!byKey[key]) byKey[key] = { key, name: displaySalesName(r.rapporteur), ventes: 0, hc: { ...empty }, mensuel: 0, annuel: 0 };
+      if (!byKey[key]) byKey[key] = { key, name: displaySalesName(r.rapporteur), ventes: 0, hc: { ...empty }, mensuel: 0, annuel: 0, autreDetail: [] };
       const a = byKey[key];
       a.ventes += r.ventes || 0;
       VENTES_BRACKETS.forEach(b => { a.hc[b] += (r.headcount?.[b] || 0); });
       a.mensuel += r.mensuel || 0;
       a.annuel += r.annuel || 0;
+      if (r.autre_detail && r.autre_detail.length) a.autreDetail.push(...r.autre_detail);
     });
     const rows = Object.values(byKey).sort((x, y) => y.ventes - x.ventes);
     const totals = rows.reduce((acc, r) => {
@@ -298,7 +300,7 @@ export default function MonitoringPerf() {
                                   <td style={tdS}>{i+1}</td>
                                   <td style={{...tdS,textAlign:'left',paddingLeft:12,fontWeight:600}}>{r.name}</td>
                                   <td style={{...tdS,fontWeight:800,fontSize:14}}>{r.ventes}</td>
-                                  {VENTES_BRACKETS.map(b=><td key={b} style={{...tdS,color:r.hc[b]?C.text:C.muted}}>{r.hc[b]||'—'}</td>)}
+                                  {VENTES_BRACKETS.map(b=>{ const clk=b==='autre'&&r.hc[b]>0; return <td key={b} onClick={clk?()=>setAutreModal({name:r.name,items:r.autreDetail||[]}):undefined} style={{...tdS,color:r.hc[b]?C.text:C.muted,...(clk?{cursor:'pointer',textDecoration:'underline dotted',textUnderlineOffset:'3px'}:{})}}>{r.hc[b]||'—'}</td>; })}
                                   <td style={{...tdS,color:COLORS.primary,fontWeight:600}}>{r.annuel||'—'}</td>
                                   <td style={{...tdS,color:COLORS.secondary,fontWeight:600}}>{r.mensuel||'—'}</td>
                                 </tr>
@@ -313,6 +315,21 @@ export default function MonitoringPerf() {
                               </tr>
                             </tbody>
                           </table>
+                        </div>
+                      )}
+                      {autreModal && (
+                        <div onClick={()=>setAutreModal(null)} style={{position:'fixed',inset:0,background:'rgba(15,18,30,0.45)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+                          <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:14,padding:'18px 20px',minWidth:340,maxWidth:520,maxHeight:'72vh',overflowY:'auto',boxShadow:'0 10px 40px rgba(0,0,0,0.25)',border:'1px solid '+C.border}}>
+                            <div style={{fontSize:15,fontWeight:700,color:C.text}}>D&eacute;tail &laquo;&nbsp;Autre&nbsp;&raquo; &mdash; {autreModal.name}</div>
+                            <div style={{fontSize:12,color:C.muted,margin:'2px 0 14px'}}>Salari&eacute;s non classables (valeur brute du CRM) &middot; {autreModal.items.length} vente{autreModal.items.length>1?'s':''}</div>
+                            <table style={{width:'100%',fontSize:13,borderCollapse:'collapse'}}>
+                              <thead><tr><th style={{textAlign:'left',color:C.muted,fontWeight:600,padding:'4px 8px',borderBottom:'1px solid '+C.border}}>Soci&eacute;t&eacute;</th><th style={{textAlign:'left',color:C.muted,fontWeight:600,padding:'4px 8px',borderBottom:'1px solid '+C.border}}>Salari&eacute;s (brut)</th></tr></thead>
+                              <tbody>
+                                {autreModal.items.map((it,i)=>(<tr key={i}><td style={{padding:'7px 8px',color:C.text,borderBottom:'1px solid '+C.subtle}}>{it.societe}</td><td style={{padding:'7px 8px',color:C.text,borderBottom:'1px solid '+C.subtle,fontStyle:'italic'}}>{it.headcount}</td></tr>))}
+                              </tbody>
+                            </table>
+                            <button onClick={()=>setAutreModal(null)} style={{marginTop:16,padding:'7px 16px',borderRadius:8,border:'1px solid '+C.border,background:C.surface,color:C.text,cursor:'pointer',fontSize:13,fontWeight:600,fontFamily:'inherit'}}>Fermer</button>
+                          </div>
                         </div>
                       )}
                     </div>
