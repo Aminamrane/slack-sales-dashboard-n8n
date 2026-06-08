@@ -175,14 +175,16 @@ export default function MonitoringPerf() {
   // exclusions/affichage que le tableau Perf Sales), somme tranches & paiement.
   const ventesData = useMemo(() => {
     const empty = { '1-2': 0, '3-5': 0, '6-10': 0, '11-19': 0, '20+': 0, 'autre': 0 };
-    if (!salesBreakdown?.by_rapporteur) return { rows: [], totals: { ventes: 0, hc: { ...empty }, mensuel: 0, annuel: 0 } };
+    if (!salesBreakdown?.by_rapporteur) return { rows: [], totals: { ventes: 0, cc: 0, ads: 0, hc: { ...empty }, mensuel: 0, annuel: 0 } };
     const byKey = {};
     salesBreakdown.by_rapporteur.forEach(r => {
       const key = getCanonicalKey(r.rapporteur);
       if (EXCLUDED_KEYS.has(key)) return;
-      if (!byKey[key]) byKey[key] = { key, name: displaySalesName(r.rapporteur), ventes: 0, hc: { ...empty }, mensuel: 0, annuel: 0, autreDetail: [] };
+      if (!byKey[key]) byKey[key] = { key, name: displaySalesName(r.rapporteur), ventes: 0, cc: 0, ads: 0, hc: { ...empty }, mensuel: 0, annuel: 0, autreDetail: [] };
       const a = byKey[key];
       a.ventes += r.ventes || 0;
+      a.cc += r.cc || 0;
+      a.ads += r.ads || 0;
       VENTES_BRACKETS.forEach(b => { a.hc[b] += (r.headcount?.[b] || 0); });
       a.mensuel += r.mensuel || 0;
       a.annuel += r.annuel || 0;
@@ -190,10 +192,10 @@ export default function MonitoringPerf() {
     });
     const rows = Object.values(byKey).sort((x, y) => y.ventes - x.ventes);
     const totals = rows.reduce((acc, r) => {
-      acc.ventes += r.ventes; acc.mensuel += r.mensuel; acc.annuel += r.annuel;
+      acc.ventes += r.ventes; acc.cc += r.cc; acc.ads += r.ads; acc.mensuel += r.mensuel; acc.annuel += r.annuel;
       VENTES_BRACKETS.forEach(b => { acc.hc[b] += r.hc[b]; });
       return acc;
-    }, { ventes: 0, hc: { ...empty }, mensuel: 0, annuel: 0 });
+    }, { ventes: 0, cc: 0, ads: 0, hc: { ...empty }, mensuel: 0, annuel: 0 });
     return { rows, totals };
   }, [salesBreakdown]);
 
@@ -298,14 +300,16 @@ export default function MonitoringPerf() {
                         <div style={{textAlign:'center',padding:48,color:C.muted}}>Aucune vente sur ce mois.</div>
                       ) : (
                         <div style={{overflowX:'auto'}}>
-                          <table className="leaderboard" style={{width:'100%',minWidth:780}}>
-                            <thead><tr>{['#','Commercial','Ventes',...VENTES_BRACKETS.map(b=>VENTES_BRACKET_LABEL[b]),'Annuel','Mensuel'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead>
+                          <table className="leaderboard" style={{width:'100%',minWidth:900}}>
+                            <thead><tr>{['#','Commercial','Ventes','Cold call','ADS',...VENTES_BRACKETS.map(b=>VENTES_BRACKET_LABEL[b]),'Annuel','Mensuel'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead>
                             <tbody>
                               {ventesData.rows.map((r,i)=>(
                                 <tr key={r.key}>
                                   <td style={tdS}>{i+1}</td>
                                   <td style={{...tdS,textAlign:'left',paddingLeft:12,fontWeight:600}}>{r.name}</td>
                                   <td style={{...tdS,fontWeight:800,fontSize:14}}>{r.ventes}</td>
+                                  <td style={{...tdS,color:r.cc?C.accent:C.muted,fontWeight:700}}>{r.cc||'—'}</td>
+                                  <td style={{...tdS,color:r.ads?C.text:C.muted,fontWeight:600}}>{r.ads||'—'}</td>
                                   {VENTES_BRACKETS.map(b=>{ const clk=b==='autre'&&r.hc[b]>0; return <td key={b} onClick={clk?()=>setAutreModal({name:r.name,items:r.autreDetail||[]}):undefined} style={{...tdS,color:r.hc[b]?C.text:C.muted,...(clk?{cursor:'pointer',textDecoration:'underline dotted',textUnderlineOffset:'3px'}:{})}}>{r.hc[b]||'—'}</td>; })}
                                   <td style={{...tdS,color:COLORS.primary,fontWeight:600}}>{r.annuel||'—'}</td>
                                   <td style={{...tdS,color:COLORS.secondary,fontWeight:600}}>{r.mensuel||'—'}</td>
@@ -315,6 +319,8 @@ export default function MonitoringPerf() {
                                 <td style={tdS}></td>
                                 <td style={{...tdS,textAlign:'left',paddingLeft:12}}>Total</td>
                                 <td style={tdS}>{ventesData.totals.ventes}</td>
+                                <td style={{...tdS,color:C.accent}}>{ventesData.totals.cc}</td>
+                                <td style={tdS}>{ventesData.totals.ads}</td>
                                 {VENTES_BRACKETS.map(b=><td key={b} style={tdS}>{ventesData.totals.hc[b]}</td>)}
                                 <td style={tdS}>{ventesData.totals.annuel}</td>
                                 <td style={tdS}>{ventesData.totals.mensuel}</td>
