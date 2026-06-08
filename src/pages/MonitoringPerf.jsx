@@ -103,6 +103,8 @@ export default function MonitoringPerf() {
   const [salesBreakdown, setSalesBreakdown] = useState(null); // from /tracking/sales-breakdown (vue Ventes)
   const [perfView, setPerfView] = useState('default'); // 'default' (tableau perf) | 'ventes' (ventilation salariés/paiement)
   const [autreModal, setAutreModal] = useState(null); // { name, items: [{societe, headcount}] } — détail des ventes "Autre"
+  const [settersPerf, setSettersPerf] = useState(null); // from /tracking/setters-perf (vue Setters)
+  const [setterModal, setSetterModal] = useState(null); // détail d'un setter (par sales)
 
   const openDetail = async (personName) => { if (canal !== "ads" && canal !== "cc") return; setDetailModal({ personName, type: canal, data: null, loading: true }); try { const ep = canal === "ads" ? '/api/v1/monitoring/performance/detail/ads' : '/api/v1/monitoring/performance/detail/cc'; const res = await apiClient.get(ep + '?person_name=' + encodeURIComponent(personName) + '&period=' + range); setDetailModal(prev => prev ? { ...prev, data: res, loading: false } : null); } catch { setDetailModal(prev => prev ? { ...prev, data: null, loading: false } : null); } };
 
@@ -118,6 +120,9 @@ export default function MonitoringPerf() {
 
   // Vue Ventes (ventilation salariés + paiement par commercial) — lazy, suit le mois sélectionné.
   useEffect(() => { if (hasAccess && perfView === 'ventes' && range && range !== 'all' && range.match(/^\d{4}-\d{2}$/)) { setSalesBreakdown(null); apiClient.get('/api/v1/tracking/sales-breakdown?month=' + range).then(d => setSalesBreakdown(d)).catch(() => setSalesBreakdown(null)); } }, [hasAccess, perfView, range]);
+
+  // Vue Setters (appels/répondu/répondeur/R1-R2 placés par setter) — lazy, mois sélectionné (mai+).
+  useEffect(() => { if (hasAccess && perfView === 'setters' && range && range !== 'all' && range.match(/^\d{4}-\d{2}$/)) { setSettersPerf(null); apiClient.get('/api/v1/tracking/setters-perf?month=' + range).then(d => setSettersPerf(d)).catch(() => setSettersPerf(null)); } }, [hasAccess, perfView, range]);
 
   useEffect(() => { if (hasAccess && viewMode === 'lead_quality') { setLeadQualityLoading(true); let url = '/api/v1/monitoring/lead-quality?period=' + (leadQualityRange || 'current_month'); if (selectedOrigins.length > 0) url += '&' + selectedOrigins.map(o => 'origins=' + encodeURIComponent(o)).join('&'); apiClient.get(url).then(d => setLeadQualityData(d)).catch(err => { if (err.message && err.message.includes('401')) navigate("/login"); }).finally(() => setTimeout(() => setLeadQualityLoading(false), 150)); } }, [hasAccess, viewMode, leadQualityRange, selectedOrigins]);
 
@@ -257,6 +262,7 @@ export default function MonitoringPerf() {
                 {canal==='ads' && (<><div style={{width:1,height:28,background:C.border}} /><button onClick={()=>setAdsDetailView(v=>!v)} style={pillS(adsDetailView)}>{adsDetailView?'Funnel':'D\u00e9tail'}</button></>)}
                 <div style={{flex:1}} />
                 <button onClick={()=>setPerfView(v=>v==='ventes'?'default':'ventes')} style={pillS(perfView==='ventes')}>Ventes</button>
+                <button onClick={()=>setPerfView(v=>v==='setters'?'default':'setters')} style={pillS(perfView==='setters')}>Setters</button>
               </>) : (<>
                 <select value={leadQualityRange} onChange={e=>setLeadQualityRange(e.target.value)} style={selS}>
                   {monthOpts(2026,1).map(m=><option key={m.value} value={m.value}>{m.label}</option>)}
@@ -329,6 +335,53 @@ export default function MonitoringPerf() {
                               </tbody>
                             </table>
                             <button onClick={()=>setAutreModal(null)} style={{marginTop:16,padding:'7px 16px',borderRadius:8,border:'1px solid '+C.border,background:C.surface,color:C.text,cursor:'pointer',fontSize:13,fontWeight:600,fontFamily:'inherit'}}>Fermer</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : perfView === 'setters' ? (
+                    <div style={{padding:'4px 0 8px'}}>
+                      {range==='all' ? (
+                        <div style={{textAlign:'center',padding:48,color:C.muted}}>Sélectionne un mois précis pour la vue Setters.</div>
+                      ) : range < '2026-05' ? (
+                        <div style={{textAlign:'center',padding:48,color:C.muted}}>Données setter disponibles à partir de mai 2026.</div>
+                      ) : !settersPerf ? (
+                        <div style={{textAlign:'center',padding:48,color:C.muted}}>Chargement…</div>
+                      ) : (settersPerf.by_setter||[]).length===0 ? (
+                        <div style={{textAlign:'center',padding:48,color:C.muted}}>Aucun setter sur ce mois.</div>
+                      ) : (
+                        <div style={{overflowX:'auto'}}>
+                          <table className="leaderboard" style={{width:'100%',minWidth:720}}>
+                            <thead><tr>{['#','Setter','Appels','Répondu','Répondeur','R1 placés','R2 placés'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead>
+                            <tbody>
+                              {settersPerf.by_setter.map((s,i)=>(
+                                <tr key={s.setter} onClick={()=>setSetterModal(s)} style={{cursor:'pointer'}}>
+                                  <td style={tdS}>{i+1}</td>
+                                  <td style={{...tdS,textAlign:'left',paddingLeft:12,fontWeight:600,color:C.accent,textDecoration:'underline dotted',textUnderlineOffset:'3px'}}>{s.setter}</td>
+                                  <td style={{...tdS,fontWeight:800,fontSize:14}}>{s.appels}</td>
+                                  <td style={{...tdS,color:COLORS.tertiary,fontWeight:700}}>{s.repondu}</td>
+                                  <td style={{...tdS,color:C.muted}}>{s.repondeur}</td>
+                                  <td style={tdS}>{s.r1_places||'—'}</td>
+                                  <td style={tdS}>{s.r2_places||'—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          <div style={{fontSize:11.5,color:C.muted,marginTop:10,fontStyle:'italic'}}>Clique un setter pour le détail par commercial.</div>
+                        </div>
+                      )}
+                      {setterModal && (
+                        <div onClick={()=>setSetterModal(null)} style={{position:'fixed',inset:0,background:'rgba(15,18,30,0.45)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+                          <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:14,padding:'18px 20px',minWidth:420,maxWidth:640,maxHeight:'75vh',overflowY:'auto',boxShadow:'0 10px 40px rgba(0,0,0,0.25)',border:'1px solid '+C.border}}>
+                            <div style={{fontSize:15,fontWeight:700,color:C.text}}>Détail — {setterModal.setter}</div>
+                            <div style={{fontSize:12,color:C.muted,margin:'2px 0 14px'}}>Par commercial · {setterModal.appels} appels · {setterModal.repondu} répondu · {setterModal.r1_places} R1 · {setterModal.r2_places} R2</div>
+                            <table style={{width:'100%',fontSize:13,borderCollapse:'collapse'}}>
+                              <thead><tr>{['Commercial','Appels','Répondu','R1 placés','R2 placés'].map((h,i)=><th key={h} style={{textAlign:i===0?'left':'center',color:C.muted,fontWeight:600,padding:'4px 8px',borderBottom:'1px solid '+C.border}}>{h}</th>)}</tr></thead>
+                              <tbody>
+                                {setterModal.detail.map((d,i)=>(<tr key={i}><td style={{padding:'7px 8px',color:C.text,borderBottom:'1px solid '+C.subtle}}>{displaySalesName(d.sales)}</td><td style={{padding:'7px 8px',textAlign:'center',color:C.text,borderBottom:'1px solid '+C.subtle}}>{d.appels}</td><td style={{padding:'7px 8px',textAlign:'center',color:COLORS.tertiary,fontWeight:600,borderBottom:'1px solid '+C.subtle}}>{d.repondu}</td><td style={{padding:'7px 8px',textAlign:'center',color:C.text,borderBottom:'1px solid '+C.subtle}}>{d.r1_places||'—'}</td><td style={{padding:'7px 8px',textAlign:'center',color:C.text,borderBottom:'1px solid '+C.subtle}}>{d.r2_places||'—'}</td></tr>))}
+                              </tbody>
+                            </table>
+                            <button onClick={()=>setSetterModal(null)} style={{marginTop:16,padding:'7px 16px',borderRadius:8,border:'1px solid '+C.border,background:C.surface,color:C.text,cursor:'pointer',fontSize:13,fontWeight:600,fontFamily:'inherit'}}>Fermer</button>
                           </div>
                         </div>
                       )}
