@@ -98,7 +98,6 @@ export default function RdvHeatmap({ cells = [], C, title, subtitle }) {
           </div>
 
           <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, fontSize: 10.5, color: C.muted, fontWeight: 500, flexWrap: 'wrap' }}>
-            <span style={{ marginRight: 'auto', fontStyle: 'italic' }}>Cases pâles = &lt;3 RDV (peu fiable)</span>
             <span>No-show</span>
             <div style={{ display: 'flex', gap: 4 }}>
               {['#ef4444', '#fb923c', '#fbbf24', '#10b981'].map((bg, i) => (
