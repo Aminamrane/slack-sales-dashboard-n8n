@@ -351,10 +351,10 @@ export default function MonitoringPerf() {
                         <div style={{textAlign:'center',padding:48,color:C.muted}}>Aucun setter sur ce mois.</div>
                       ) : (
                         <div style={{overflowX:'auto'}}>
-                          <table className="leaderboard" style={{width:'100%',minWidth:720}}>
-                            <thead><tr>{['#','Setter','Appels','Répondu','Répondeur','R1 placés','R2 placés'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead>
+                          <table className="leaderboard" style={{width:'100%',minWidth:800}}>
+                            <thead><tr>{['#','Setter','Appels','Répondu','Répondeur','R1 placés','R2 placés','Signés'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead>
                             <tbody>
-                              {settersPerf.by_setter.map((s,i)=>(
+                              {[...settersPerf.by_setter].sort((a,b)=>(b.signes-a.signes)||(b.appels-a.appels)).map((s,i)=>(
                                 <tr key={s.setter} onClick={()=>setSetterModal(s)} style={{cursor:'pointer'}}>
                                   <td style={tdS}>{i+1}</td>
                                   <td style={{...tdS,textAlign:'left',paddingLeft:12,fontWeight:600,color:C.accent,textDecoration:'underline dotted',textUnderlineOffset:'3px'}}>{s.setter}</td>
@@ -363,6 +363,7 @@ export default function MonitoringPerf() {
                                   <td style={{...tdS,color:C.muted}}>{s.repondeur}</td>
                                   <td style={tdS}>{s.r1_places||'—'}</td>
                                   <td style={tdS}>{s.r2_places||'—'}</td>
+                                  <td style={{...tdS,color:COLORS.secondary,fontWeight:800,fontSize:14}}>{s.signes||'—'}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -374,7 +375,7 @@ export default function MonitoringPerf() {
                         <div onClick={()=>setSetterModal(null)} style={{position:'fixed',inset:0,background:'rgba(15,18,30,0.45)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
                           <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:14,padding:'18px 20px',minWidth:420,maxWidth:640,maxHeight:'75vh',overflowY:'auto',boxShadow:'0 10px 40px rgba(0,0,0,0.25)',border:'1px solid '+C.border}}>
                             <div style={{fontSize:15,fontWeight:700,color:C.text}}>Détail — {setterModal.setter}</div>
-                            <div style={{fontSize:12,color:C.muted,margin:'2px 0 14px'}}>Par commercial · {setterModal.appels} appels · {setterModal.repondu} répondu · {setterModal.r1_places} R1 · {setterModal.r2_places} R2</div>
+                            <div style={{fontSize:12,color:C.muted,margin:'2px 0 14px'}}>Par commercial · {setterModal.appels} appels · {setterModal.repondu} répondu · {setterModal.r1_places} R1 · {setterModal.r2_places} R2 · {setterModal.signes} signés</div>
                             <table style={{width:'100%',fontSize:13,borderCollapse:'collapse'}}>
                               <thead><tr>{['Commercial','Appels','Répondu','Répondeur','R1 placés','R2 placés'].map((h,i)=><th key={h} style={{textAlign:i===0?'left':'center',color:C.muted,fontWeight:600,padding:'4px 8px',borderBottom:'1px solid '+C.border}}>{h}</th>)}</tr></thead>
                               <tbody>
