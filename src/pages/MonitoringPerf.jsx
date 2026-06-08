@@ -42,7 +42,7 @@ const NAME_VARIANTS_TO_CANONICAL = {
   "sarah": "sarah amroune", "sarah amroune": "sarah amroune", "amroune": "sarah amroune",
   "sara": "sara benabid", "sara benabid": "sara benabid", "benabid": "sara benabid",
   "mohamed": "mohamed bouaksa", "mohamed bouaksa": "mohamed bouaksa", "bouaksa": "mohamed bouaksa",
-  "youcef": "youcef amrane", "youcef amran": "youcef amrane", "youcef amrane": "youcef amrane", "amran": "youcef amrane", "amrane": "youcef amrane"
+  "youcef": "youcef amrane", "youcef amran": "youcef amrane", "youcef amrane": "youcef amrane", "amran": "youcef amrane", "amrane": "youcef amrane", "yamraneownertechnologycom": "youcef amrane"
 };
 
 const CANONICAL_DISPLAY_NAMES = {
@@ -56,7 +56,7 @@ const CANONICAL_DISPLAY_NAMES = {
 
 const getCanonicalKey = (rawName) => { const n = normalizeSalesKey(rawName); return NAME_VARIANTS_TO_CANONICAL[n] || n; };
 const displaySalesName = (rawName) => { const k = getCanonicalKey(rawName); return CANONICAL_DISPLAY_NAMES[k] || (rawName ? rawName.trim() : "Unknown"); };
-const EXCLUDED_KEYS = new Set(["mohamed bouaksa", "sara benabid", "sarah amroune"]);
+const EXCLUDED_KEYS = new Set(["mohamed bouaksa", "sara benabid", "sarah amroune", "youcef amrane"]);
 
 export default function MonitoringPerf() {
   const navigate = useNavigate();
