@@ -307,8 +307,8 @@ export default function MonitoringPerf() {
                         </div>
                       </div>
                       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(440px, 1fr))',gap:16}}>
-                        <RdvHeatmap cells={rdvAnalytics.heatmap_r1} C={C} title="Pr&eacute;sence R1 &mdash; jour &times; heure" subtitle="Taux de pr&eacute;sence par cr&eacute;neau planifi&eacute;. No-show = lapin + en attente &gt;1 sem." />
-                        <RdvHeatmap cells={rdvAnalytics.heatmap_r2} C={C} title="Pr&eacute;sence R2 &mdash; jour &times; heure" subtitle="No-show R2 = annul&eacute;/report&eacute; + en attente &gt;1 sem." />
+                        <RdvHeatmap cells={rdvAnalytics.heatmap_r1} C={C} title="Pr&eacute;sence R1 &mdash; jour/heure" />
+                        <RdvHeatmap cells={rdvAnalytics.heatmap_r2} C={C} title="Pr&eacute;sence R2 &mdash; jour/heure" />
                       </div>
                     </div>
                   )}
