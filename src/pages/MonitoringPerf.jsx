@@ -57,6 +57,8 @@ const CANONICAL_DISPLAY_NAMES = {
 const getCanonicalKey = (rawName) => { const n = normalizeSalesKey(rawName); return NAME_VARIANTS_TO_CANONICAL[n] || n; };
 const displaySalesName = (rawName) => { const k = getCanonicalKey(rawName); return CANONICAL_DISPLAY_NAMES[k] || (rawName ? rawName.trim() : "Unknown"); };
 const EXCLUDED_KEYS = new Set(["mohamed bouaksa", "sara benabid", "sarah amroune", "youcef amrane"]);
+const VENTES_BRACKETS = ['1-2', '3-5', '6-10', '11-19', '20+', 'autre'];
+const VENTES_BRACKET_LABEL = { '1-2': '1-2', '3-5': '3-5', '6-10': '6-10', '11-19': '11-19', '20+': '20+', 'autre': 'Autre' };
 
 export default function MonitoringPerf() {
   const navigate = useNavigate();
@@ -98,6 +100,8 @@ export default function MonitoringPerf() {
   const [originsOpen, setOriginsOpen] = useState(false);
   const [trackingKpis, setTrackingKpis] = useState(null); // from /tracking/perf-sales-kpis
   const [rdvAnalytics, setRdvAnalytics] = useState(null); // from /tracking/rdv-analytics (délai R1→R2 + heatmap no-show)
+  const [salesBreakdown, setSalesBreakdown] = useState(null); // from /tracking/sales-breakdown (vue Ventes)
+  const [perfView, setPerfView] = useState('default'); // 'default' (tableau perf) | 'ventes' (ventilation salariés/paiement)
 
   const openDetail = async (personName) => { if (canal !== "ads" && canal !== "cc") return; setDetailModal({ personName, type: canal, data: null, loading: true }); try { const ep = canal === "ads" ? '/api/v1/monitoring/performance/detail/ads' : '/api/v1/monitoring/performance/detail/cc'; const res = await apiClient.get(ep + '?person_name=' + encodeURIComponent(personName) + '&period=' + range); setDetailModal(prev => prev ? { ...prev, data: res, loading: false } : null); } catch { setDetailModal(prev => prev ? { ...prev, data: null, loading: false } : null); } };
 
@@ -110,6 +114,9 @@ export default function MonitoringPerf() {
 
   // Analytics RDV (délai R1→R2 + heatmap no-show par créneau) — suit le mois sélectionné (range), comme le tableau.
   useEffect(() => { if (hasAccess) { const q = (range && range !== 'all' && range.match(/^\d{4}-\d{2}$/)) ? '?month=' + range : ''; apiClient.get('/api/v1/tracking/rdv-analytics' + q).then(d => setRdvAnalytics(d)).catch(() => setRdvAnalytics(null)); } }, [hasAccess, range]);
+
+  // Vue Ventes (ventilation salariés + paiement par commercial) — lazy, suit le mois sélectionné.
+  useEffect(() => { if (hasAccess && perfView === 'ventes' && range && range !== 'all' && range.match(/^\d{4}-\d{2}$/)) { setSalesBreakdown(null); apiClient.get('/api/v1/tracking/sales-breakdown?month=' + range).then(d => setSalesBreakdown(d)).catch(() => setSalesBreakdown(null)); } }, [hasAccess, perfView, range]);
 
   useEffect(() => { if (hasAccess && viewMode === 'lead_quality') { setLeadQualityLoading(true); let url = '/api/v1/monitoring/lead-quality?period=' + (leadQualityRange || 'current_month'); if (selectedOrigins.length > 0) url += '&' + selectedOrigins.map(o => 'origins=' + encodeURIComponent(o)).join('&'); apiClient.get(url).then(d => setLeadQualityData(d)).catch(err => { if (err.message && err.message.includes('401')) navigate("/login"); }).finally(() => setTimeout(() => setLeadQualityLoading(false), 150)); } }, [hasAccess, viewMode, leadQualityRange, selectedOrigins]);
 
@@ -157,6 +164,31 @@ export default function MonitoringPerf() {
     const t = performanceData.reduce((a,s) => ({ calls:a.calls+s.calls_total, answered:a.answered+s.calls_answered, r1_placed:a.r1_placed+s.r1_placed, r1_done:a.r1_done+s.r1_done, r2_placed:a.r2_placed+s.r2_placed, r2_done:a.r2_done+s.r2_done, signatures:a.signatures+s.signatures, revenue:a.revenue+s.revenue, cashCollected:a.cashCollected+s.cashCollected, leads_assigned:a.leads_assigned+s.leads_assigned, unique_attempted:a.unique_attempted+s.unique_attempted, unique_answered:a.unique_answered+s.unique_answered }), { calls:0, answered:0, r1_placed:0, r1_done:0, r2_placed:0, r2_done:0, signatures:0, revenue:0, cashCollected:0, leads_assigned:0, unique_attempted:0, unique_answered:0 });
     return { ...t, lead_qualifie:t.leads_assigned>0?(t.unique_answered/t.leads_assigned)*100:0, closing_r1:t.unique_answered>0?(t.r1_done/t.unique_answered)*100:0, closing_r2:t.r1_done>0?(t.r2_done/t.r1_done)*100:0, closing_audit:t.r2_done>0?(t.signatures/t.r2_done)*100:0, conv_global:t.leads_assigned>0?(t.signatures/t.leads_assigned)*100:0, conv_calls_to_answered:t.calls>0?(t.answered/t.calls)*100:0, conv_answered_to_r1p:t.answered>0?(t.r1_placed/t.answered)*100:0, conv_r1p_to_r1r:t.r1_placed>0?(t.r1_done/t.r1_placed)*100:0, conv_r2p_to_r2r:t.r2_placed>0?(t.r2_done/t.r2_placed)*100:0, conv_sales:t.r2_done>0?(t.signatures/t.r2_done)*100:0 };
   }, [performanceData]);
+
+  // Vue Ventes : fusionne les rapporteurs bruts par clé canonique (mêmes
+  // exclusions/affichage que le tableau Perf Sales), somme tranches & paiement.
+  const ventesData = useMemo(() => {
+    const empty = { '1-2': 0, '3-5': 0, '6-10': 0, '11-19': 0, '20+': 0, 'autre': 0 };
+    if (!salesBreakdown?.by_rapporteur) return { rows: [], totals: { ventes: 0, hc: { ...empty }, mensuel: 0, annuel: 0 } };
+    const byKey = {};
+    salesBreakdown.by_rapporteur.forEach(r => {
+      const key = getCanonicalKey(r.rapporteur);
+      if (EXCLUDED_KEYS.has(key)) return;
+      if (!byKey[key]) byKey[key] = { key, name: displaySalesName(r.rapporteur), ventes: 0, hc: { ...empty }, mensuel: 0, annuel: 0 };
+      const a = byKey[key];
+      a.ventes += r.ventes || 0;
+      VENTES_BRACKETS.forEach(b => { a.hc[b] += (r.headcount?.[b] || 0); });
+      a.mensuel += r.mensuel || 0;
+      a.annuel += r.annuel || 0;
+    });
+    const rows = Object.values(byKey).sort((x, y) => y.ventes - x.ventes);
+    const totals = rows.reduce((acc, r) => {
+      acc.ventes += r.ventes; acc.mensuel += r.mensuel; acc.annuel += r.annuel;
+      VENTES_BRACKETS.forEach(b => { acc.hc[b] += r.hc[b]; });
+      return acc;
+    }, { ventes: 0, hc: { ...empty }, mensuel: 0, annuel: 0 });
+    return { rows, totals };
+  }, [salesBreakdown]);
 
   const gcColor = (tx) => tx>=5?COLORS.tertiary:tx>=2?COLORS.secondary:C.text;
   const dcColor = (tx) => tx>=80?COLORS.tertiary:tx>=50?COLORS.secondary:'#ff453a';
@@ -221,6 +253,8 @@ export default function MonitoringPerf() {
                 <div style={{width:1,height:28,background:C.border}} />
                 {['global','ads','cc'].map(c=>(<button key={c} onClick={()=>{setCanal(c);if(c!=='ads')setAdsDetailView(false);}} style={pillS(canal===c)}>{c==='global'?'Global':c.toUpperCase()}</button>))}
                 {canal==='ads' && (<><div style={{width:1,height:28,background:C.border}} /><button onClick={()=>setAdsDetailView(v=>!v)} style={pillS(adsDetailView)}>{adsDetailView?'Funnel':'D\u00e9tail'}</button></>)}
+                <div style={{flex:1}} />
+                <button onClick={()=>setPerfView(v=>v==='ventes'?'default':'ventes')} style={pillS(perfView==='ventes')}>Ventes</button>
               </>) : (<>
                 <select value={leadQualityRange} onChange={e=>setLeadQualityRange(e.target.value)} style={selS}>
                   {monthOpts(2026,1).map(m=><option key={m.value} value={m.value}>{m.label}</option>)}
@@ -245,6 +279,44 @@ export default function MonitoringPerf() {
 
                 {viewMode==='perf_sales' && (<div style={{padding:'20px 20px 28px'}}>
                   <h2 style={{fontSize:20,fontWeight:700,color:C.text,margin:'0 0 4px'}}>Monitoring Perf. Sales</h2>
+
+                  {perfView === 'ventes' ? (
+                    <div style={{padding:'4px 0 8px'}}>
+                      {range==='all' ? (
+                        <div style={{textAlign:'center',padding:48,color:C.muted}}>S&eacute;lectionne un mois pr&eacute;cis pour la vue Ventes.</div>
+                      ) : !salesBreakdown ? (
+                        <div style={{textAlign:'center',padding:48,color:C.muted}}>Chargement&hellip;</div>
+                      ) : ventesData.rows.length===0 ? (
+                        <div style={{textAlign:'center',padding:48,color:C.muted}}>Aucune vente sur ce mois.</div>
+                      ) : (
+                        <div style={{overflowX:'auto'}}>
+                          <table className="leaderboard" style={{width:'100%',minWidth:780}}>
+                            <thead><tr>{['#','Commercial','Ventes',...VENTES_BRACKETS.map(b=>VENTES_BRACKET_LABEL[b]),'Annuel','Mensuel'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead>
+                            <tbody>
+                              {ventesData.rows.map((r,i)=>(
+                                <tr key={r.key}>
+                                  <td style={tdS}>{i+1}</td>
+                                  <td style={{...tdS,textAlign:'left',paddingLeft:12,fontWeight:600}}>{r.name}</td>
+                                  <td style={{...tdS,fontWeight:800,fontSize:14}}>{r.ventes}</td>
+                                  {VENTES_BRACKETS.map(b=><td key={b} style={{...tdS,color:r.hc[b]?C.text:C.muted}}>{r.hc[b]||'—'}</td>)}
+                                  <td style={{...tdS,color:COLORS.primary,fontWeight:600}}>{r.annuel||'—'}</td>
+                                  <td style={{...tdS,color:COLORS.secondary,fontWeight:600}}>{r.mensuel||'—'}</td>
+                                </tr>
+                              ))}
+                              <tr style={{borderTop:'2px solid '+C.border,fontWeight:700,background:darkMode?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.02)'}}>
+                                <td style={tdS}></td>
+                                <td style={{...tdS,textAlign:'left',paddingLeft:12}}>Total</td>
+                                <td style={tdS}>{ventesData.totals.ventes}</td>
+                                {VENTES_BRACKETS.map(b=><td key={b} style={tdS}>{ventesData.totals.hc[b]}</td>)}
+                                <td style={tdS}>{ventesData.totals.annuel}</td>
+                                <td style={tdS}>{ventesData.totals.mensuel}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  ) : (<>
 
                   <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:16}}>
                     {[{l:'Appels',v:totals.calls.toLocaleString('fr-FR')},{l:'D\u00e9croch\u00e9s',v:totals.answered.toLocaleString('fr-FR')},{l:'R1 plac\u00e9',v:totals.r1_placed.toLocaleString('fr-FR')},{l:'R1 effectu\u00e9',v:totals.r1_done.toLocaleString('fr-FR')},{l:'Leads',v:totals.leads_assigned.toLocaleString('fr-FR')},{l:'Ventes',v:totals.signatures.toLocaleString('fr-FR'),a:COLORS.tertiary},{l:'Revenue',v:totals.revenue>0?Math.round(totals.revenue).toLocaleString('fr-FR')+'\u20ac':'0\u20ac',a:COLORS.secondary},{l:'Cash',v:totals.cashCollected>0?Math.round(totals.cashCollected).toLocaleString('fr-FR')+'\u20ac':'0\u20ac',a:COLORS.tertiary}].map(k=>(<div key={k.l} style={{flex:1,minWidth:100,padding:'10px 14px',borderRadius:10,background:darkMode?C.subtle:'#fff',border:'1px solid '+C.border,textAlign:'center'}}><div style={{fontSize:10,fontWeight:500,color:C.muted,textTransform:'uppercase',marginBottom:4,letterSpacing:'0.04em'}}>{k.l}</div><div style={{fontSize:18,fontWeight:700,color:k.a||C.text}}>{k.v}</div></div>))}
@@ -312,6 +384,7 @@ export default function MonitoringPerf() {
                       </div>
                     </div>
                   )}
+                  </>)}
                 </div>)}
 
                 {viewMode==='lead_quality' && (<div style={{padding:'20px 20px 28px'}}>
