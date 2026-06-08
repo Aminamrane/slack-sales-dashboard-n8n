@@ -322,7 +322,6 @@ export default function Marketing() {
   const leadsByDay = stats?.timeseries?.leadsByDay || [];
   const budgetByDay = stats?.timeseries?.budgetByDay || [];
   const emailEngagement = stats?.emailEngagement || [];
-  const rangeWindow = stats?.range || null;
 
   // Partial errors flag
   const partialErrors = overview?._partial ? (overview?._errors || []) : [];
@@ -424,11 +423,6 @@ export default function Marketing() {
               fontWeight: 500,
             }}>
               KPIs landing, séquence emailing et pipeline prospects
-              {rangeWindow && (
-                <span style={{ marginLeft: 8, color: C.faded }}>
-                  · {rangeWindow.from} → {rangeWindow.to}
-                </span>
-              )}
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
