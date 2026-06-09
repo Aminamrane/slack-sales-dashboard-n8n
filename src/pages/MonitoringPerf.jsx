@@ -187,7 +187,7 @@ export default function MonitoringPerf() {
     return performanceData.map(s => {
       const cr = callsLookup[s.salesKey] || callsLookup[normalizeSalesKey(s.salesName)];
       const appels = cr ? cr.appels : 0, repondu = cr ? cr.repondu : 0, repondeur = cr ? cr.repondeur : 0;
-      return { ...s, calls_total: appels, calls_answered: repondu, repondeur, crm_appels: cr ? cr.crm : false,
+      return { ...s, calls_total: appels, calls_answered: repondu, repondeur, unique_answered: repondu, crm_appels: cr ? cr.crm : false,
         r1p_self: cr ? cr.r1p_self : 0, r1p_s: cr ? cr.r1p_s : 0, r2p_self: cr ? cr.r2p_self : 0, r2p_s: cr ? cr.r2p_s : 0,
         conv_calls_to_answered: appels > 0 ? (repondu / appels) * 100 : 0,
         conv_answered_to_r1p: repondu > 0 ? (s.r1_placed / repondu) * 100 : 0 };
