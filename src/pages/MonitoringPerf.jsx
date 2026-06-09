@@ -86,6 +86,7 @@ export default function MonitoringPerf() {
   }, []);
   const [viewMode, setViewMode] = useState(initialViewMode);
   const [perfData, setPerfData] = useState(null);
+  const [callsCrm, setCallsCrm] = useState(null); // /tracking/sales-calls-crm (appels/répondu/répondeur hybride, mai+)
   const [dataLoading, setDataLoading] = useState(true);
   const [leadQualityData, setLeadQualityData] = useState(null);
   const [leadQualityLoading, setLeadQualityLoading] = useState(false);
@@ -111,6 +112,8 @@ export default function MonitoringPerf() {
   useEffect(() => { if (!adsDetailView || canal !== "ads") return; let c = false; (async () => { setHeadcountLoading(true); try { const res = await apiClient.get('/api/v1/monitoring/performance/detail/ads/headcount?period=' + range); if (!c) setHeadcountData(res); } catch { if (!c) setHeadcountData(null); } finally { if (!c) setHeadcountLoading(false); } })(); return () => { c = true; }; }, [adsDetailView, range, canal]);
 
   useEffect(() => { if (hasAccess) { setDataLoading(true); const period = range === "all" ? "all" : range.match(/^\d{4}-\d{2}$/) ? range : "current_month"; apiClient.get('/api/v1/monitoring/performance/v2?period=' + period).then(d => setPerfData(d)).catch(err => { if (err.message && err.message.includes('401')) navigate("/login"); }).finally(() => setTimeout(() => setDataLoading(false), 150)); } }, [hasAccess, range]);
+  // Appels/répondu/répondeur hybride CRM — mai+ uniquement (avril et avant = OnOff via v2).
+  useEffect(() => { if (hasAccess && range && range.match(/^\d{4}-\d{2}$/) && range >= '2026-05') { setCallsCrm(null); apiClient.get('/api/v1/tracking/sales-calls-crm?month=' + range).then(d => setCallsCrm(d)).catch(() => setCallsCrm(null)); } else { setCallsCrm(null); } }, [hasAccess, range]);
 
   // Fetch tracking-based R1/R2 KPIs (correct placed/done counts)
   useEffect(() => { if (hasAccess && range && range !== 'all' && range.match(/^\d{4}-\d{2}$/)) { apiClient.get('/api/v1/tracking/perf-sales-kpis?month=' + range).then(d => setTrackingKpis(d)).catch(() => setTrackingKpis(null)); } else { setTrackingKpis(null); } }, [hasAccess, range]);
@@ -165,11 +168,36 @@ export default function MonitoringPerf() {
     return deduped;
   }, [perfData, canal, trackingLookup]);
 
+  // Régime CRM des appels = mai 2026 et après (avant = OnOff).
+  const isCrmMonth = !!(range && /^\d{4}-\d{2}$/.test(range) && range >= '2026-05');
+  // Lookup CRM par clé canonique, pour le canal actif (total/ads/cc).
+  const callsLookup = useMemo(() => {
+    if (!callsCrm?.by_sales) return null;
+    const m = {};
+    callsCrm.by_sales.forEach(s => {
+      const v = canal === 'ads' ? s.ads : canal === 'cc' ? s.cc : s.total;
+      const entry = { appels: v.appels || 0, repondu: v.repondu || 0, repondeur: v.repondeur || 0, crm: !!s.crm_appels };
+      [getCanonicalKey(s.canonical), getCanonicalKey(s.sales), normalizeSalesKey(s.sales)].forEach(k => { if (k) m[k] = entry; });
+    });
+    return m;
+  }, [callsCrm, canal]);
+  // Overlay mai+ : Appels=volume CRM, Décrochés->Répondu (vérité CRM), +Répondeur.
+  const perfRows = useMemo(() => {
+    if (!isCrmMonth || !callsLookup) return performanceData;
+    return performanceData.map(s => {
+      const cr = callsLookup[s.salesKey] || callsLookup[normalizeSalesKey(s.salesName)];
+      const appels = cr ? cr.appels : 0, repondu = cr ? cr.repondu : 0, repondeur = cr ? cr.repondeur : 0;
+      return { ...s, calls_total: appels, calls_answered: repondu, repondeur, crm_appels: cr ? cr.crm : false,
+        conv_calls_to_answered: appels > 0 ? (repondu / appels) * 100 : 0,
+        conv_answered_to_r1p: repondu > 0 ? (s.r1_placed / repondu) * 100 : 0 };
+    });
+  }, [performanceData, isCrmMonth, callsLookup]);
+
   const totals = useMemo(() => {
-    if (!performanceData.length) return { calls:0, answered:0, signatures:0, revenue:0, cashCollected:0, r1_placed:0, r1_done:0, r2_placed:0, r2_done:0, leads_assigned:0, unique_attempted:0, unique_answered:0, conv_global:0, lead_qualifie:0, closing_r1:0, closing_r2:0, closing_audit:0, conv_calls_to_answered:0, conv_answered_to_r1p:0, conv_r1p_to_r1r:0, conv_r2p_to_r2r:0, conv_sales:0 };
-    const t = performanceData.reduce((a,s) => ({ calls:a.calls+s.calls_total, answered:a.answered+s.calls_answered, r1_placed:a.r1_placed+s.r1_placed, r1_done:a.r1_done+s.r1_done, r2_placed:a.r2_placed+s.r2_placed, r2_done:a.r2_done+s.r2_done, signatures:a.signatures+s.signatures, revenue:a.revenue+s.revenue, cashCollected:a.cashCollected+s.cashCollected, leads_assigned:a.leads_assigned+s.leads_assigned, unique_attempted:a.unique_attempted+s.unique_attempted, unique_answered:a.unique_answered+s.unique_answered }), { calls:0, answered:0, r1_placed:0, r1_done:0, r2_placed:0, r2_done:0, signatures:0, revenue:0, cashCollected:0, leads_assigned:0, unique_attempted:0, unique_answered:0 });
+    if (!perfRows.length) return { calls:0, answered:0, repondeur:0, signatures:0, revenue:0, cashCollected:0, r1_placed:0, r1_done:0, r2_placed:0, r2_done:0, leads_assigned:0, unique_attempted:0, unique_answered:0, conv_global:0, lead_qualifie:0, closing_r1:0, closing_r2:0, closing_audit:0, conv_calls_to_answered:0, conv_answered_to_r1p:0, conv_r1p_to_r1r:0, conv_r2p_to_r2r:0, conv_sales:0 };
+    const t = perfRows.reduce((a,s) => ({ calls:a.calls+s.calls_total, answered:a.answered+s.calls_answered, repondeur:a.repondeur+(s.repondeur||0), r1_placed:a.r1_placed+s.r1_placed, r1_done:a.r1_done+s.r1_done, r2_placed:a.r2_placed+s.r2_placed, r2_done:a.r2_done+s.r2_done, signatures:a.signatures+s.signatures, revenue:a.revenue+s.revenue, cashCollected:a.cashCollected+s.cashCollected, leads_assigned:a.leads_assigned+s.leads_assigned, unique_attempted:a.unique_attempted+s.unique_attempted, unique_answered:a.unique_answered+s.unique_answered }), { calls:0, answered:0, repondeur:0, r1_placed:0, r1_done:0, r2_placed:0, r2_done:0, signatures:0, revenue:0, cashCollected:0, leads_assigned:0, unique_attempted:0, unique_answered:0 });
     return { ...t, lead_qualifie:t.leads_assigned>0?(t.unique_answered/t.leads_assigned)*100:0, closing_r1:t.unique_answered>0?(t.r1_done/t.unique_answered)*100:0, closing_r2:t.r1_done>0?(t.r2_done/t.r1_done)*100:0, closing_audit:t.r2_done>0?(t.signatures/t.r2_done)*100:0, conv_global:t.leads_assigned>0?(t.signatures/t.leads_assigned)*100:0, conv_calls_to_answered:t.calls>0?(t.answered/t.calls)*100:0, conv_answered_to_r1p:t.answered>0?(t.r1_placed/t.answered)*100:0, conv_r1p_to_r1r:t.r1_placed>0?(t.r1_done/t.r1_placed)*100:0, conv_r2p_to_r2r:t.r2_placed>0?(t.r2_done/t.r2_placed)*100:0, conv_sales:t.r2_done>0?(t.signatures/t.r2_done)*100:0 };
-  }, [performanceData]);
+  }, [perfRows]);
 
   // Vue Ventes : fusionne les rapporteurs bruts par clé canonique (mêmes
   // exclusions/affichage que le tableau Perf Sales), somme tranches & paiement.
@@ -396,7 +424,7 @@ export default function MonitoringPerf() {
                   ) : (<>
 
                   <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:16}}>
-                    {[{l:'Appels',v:totals.calls.toLocaleString('fr-FR')},{l:'D\u00e9croch\u00e9s',v:totals.answered.toLocaleString('fr-FR')},{l:'R1 plac\u00e9',v:totals.r1_placed.toLocaleString('fr-FR')},{l:'R1 effectu\u00e9',v:totals.r1_done.toLocaleString('fr-FR')},{l:'Leads',v:totals.leads_assigned.toLocaleString('fr-FR')},{l:'Ventes',v:totals.signatures.toLocaleString('fr-FR'),a:COLORS.tertiary},{l:'Revenue',v:totals.revenue>0?Math.round(totals.revenue).toLocaleString('fr-FR')+'\u20ac':'0\u20ac',a:COLORS.secondary},{l:'Cash',v:totals.cashCollected>0?Math.round(totals.cashCollected).toLocaleString('fr-FR')+'\u20ac':'0\u20ac',a:COLORS.tertiary}].map(k=>(<div key={k.l} style={{flex:1,minWidth:100,padding:'10px 14px',borderRadius:10,background:darkMode?C.subtle:'#fff',border:'1px solid '+C.border,textAlign:'center'}}><div style={{fontSize:10,fontWeight:500,color:C.muted,textTransform:'uppercase',marginBottom:4,letterSpacing:'0.04em'}}>{k.l}</div><div style={{fontSize:18,fontWeight:700,color:k.a||C.text}}>{k.v}</div></div>))}
+                    {[{l:'Appels',v:totals.calls.toLocaleString('fr-FR')},...(isCrmMonth?[{l:'R\u00e9pondu',v:totals.answered.toLocaleString('fr-FR'),a:COLORS.tertiary},{l:'R\u00e9pondeur',v:totals.repondeur.toLocaleString('fr-FR')}]:[{l:'D\u00e9croch\u00e9s',v:totals.answered.toLocaleString('fr-FR')}]),{l:'R1 plac\u00e9',v:totals.r1_placed.toLocaleString('fr-FR')},{l:'R1 effectu\u00e9',v:totals.r1_done.toLocaleString('fr-FR')},{l:'Leads',v:totals.leads_assigned.toLocaleString('fr-FR')},{l:'Ventes',v:totals.signatures.toLocaleString('fr-FR'),a:COLORS.tertiary},{l:'Revenue',v:totals.revenue>0?Math.round(totals.revenue).toLocaleString('fr-FR')+'\u20ac':'0\u20ac',a:COLORS.secondary},{l:'Cash',v:totals.cashCollected>0?Math.round(totals.cashCollected).toLocaleString('fr-FR')+'\u20ac':'0\u20ac',a:COLORS.tertiary}].map(k=>(<div key={k.l} style={{flex:1,minWidth:100,padding:'10px 14px',borderRadius:10,background:darkMode?C.subtle:'#fff',border:'1px solid '+C.border,textAlign:'center'}}><div style={{fontSize:10,fontWeight:500,color:C.muted,textTransform:'uppercase',marginBottom:4,letterSpacing:'0.04em'}}>{k.l}</div><div style={{fontSize:18,fontWeight:700,color:k.a||C.text}}>{k.v}</div></div>))}
                   </div>
 
                   <div style={{display:'flex',justifyContent:'center',gap:0,marginBottom:20,borderRadius:10,border:'1px solid '+C.border,overflow:'hidden',background:darkMode?C.subtle:'#fff'}}>
@@ -416,14 +444,15 @@ export default function MonitoringPerf() {
                     {headcountData.totals && <tr style={{borderTop:'2px solid '+C.border,fontWeight:700,background:darkMode?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.02)'}}><td style={tdS}></td><td style={{...tdS,textAlign:'left',paddingLeft:12}}>Total</td><td style={tdS}>{(headcountData.totals.leads_assigned||0).toLocaleString('fr-FR')}</td>{['1-2','3-4','5-6','7-10','11-19','20+'].map(b=><td key={b} style={tdS}>{(headcountData.totals.headcount_breakdown||{})[b]||0}</td>)}<td style={{...tdS,color:C.muted}}>{headcountData.totals.unknown||0}</td></tr>}
                   </tbody></table>)}
 
-                  {!dataLoading && performanceData.length>0 && !(canal==='ads'&&adsDetailView) && (<div style={{overflowX:'auto'}}><table className="leaderboard" style={{width:'100%',minWidth:1100}}><thead><tr>{['#','Sales','Leads','Conv.%','Appels','D\u00e9cr.','Tx D\u00e9cr.','R1/D\u00e9cr','R1p','R1E','Tx R1','R2p','R2E','Tx R2','Ventes','Conv.V.','Revenue','Cash'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>
-                    {performanceData.map((s,i)=>(<tr key={canal+'-'+i+'-'+s.salesKey} style={{animation:'rowIn 0.3s cubic-bezier(0.16,1,0.3,1) '+(i*40)+'ms both'}}>
+                  {!dataLoading && perfRows.length>0 && !(canal==='ads'&&adsDetailView) && (<div style={{overflowX:'auto'}}><table className="leaderboard" style={{width:'100%',minWidth:1100}}><thead><tr>{['#','Sales','Leads','Conv.%','Appels',...(isCrmMonth?['R\u00e9p.','R\u00e9pondeur','Tx R\u00e9p.','R1/R\u00e9p']:['D\u00e9cr.','Tx D\u00e9cr.','R1/D\u00e9cr']),'R1p','R1E','Tx R1','R2p','R2E','Tx R2','Ventes','Conv.V.','Revenue','Cash'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>
+                    {perfRows.map((s,i)=>(<tr key={canal+'-'+i+'-'+s.salesKey} style={{animation:'rowIn 0.3s cubic-bezier(0.16,1,0.3,1) '+(i*40)+'ms both'}}>
                       <td style={tdS}>{medal(i)}</td>
                       <td style={{...tdS,textAlign:'left',paddingLeft:8}}><div style={{display:'flex',alignItems:'center',gap:8}}><div style={{width:28,height:28,borderRadius:'50%',background:i===0?COLORS.tertiary:i===1?COLORS.secondary:COLORS.primary,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'#fff',fontWeight:600,flexShrink:0}}>{s.salesName.charAt(0).toUpperCase()}</div><span style={{fontWeight:i<3?700:500,fontSize:12,whiteSpace:'nowrap',...(canal!=='global'?{cursor:'pointer',textDecoration:'underline',textDecorationColor:'rgba(128,128,128,0.3)',textUnderlineOffset:3}:{})}} onClick={()=>canal!=='global'&&openDetail(s.salesName)}>{s.salesName}</span></div></td>
                       <td style={{...tdS,fontWeight:700}}>{canal==='ads'?(s.leads_ads||0):canal==='cc'?(s.leads_cc||0):(s.leads_assigned||0)}</td>
                       <td style={{...tdS,fontWeight:700,color:gcColor(s.conv_global)}}>{s.conv_global.toFixed(2)}%</td>
                       <td style={tdS}>{s.calls_total.toLocaleString('fr-FR')}</td>
-                      <td style={tdS}>{s.calls_answered.toLocaleString('fr-FR')}</td>
+                      <td style={isCrmMonth?{...tdS,color:COLORS.tertiary,fontWeight:600}:tdS}>{s.calls_answered.toLocaleString('fr-FR')}</td>
+                      {isCrmMonth && <td style={{...tdS,color:C.muted}}>{s.repondeur!=null?s.repondeur.toLocaleString('fr-FR'):'—'}</td>}
                       <td style={{...tdS,fontWeight:600,color:dcColor(s.conv_calls_to_answered)}}>{s.conv_calls_to_answered.toFixed(1)}%</td>
                       <td style={{...tdS,fontWeight:600,color:r1pColor(s.conv_answered_to_r1p)}}>{s.conv_answered_to_r1p.toFixed(1)}%</td>
                       <td style={tdS}>{s.r1_placed}</td><td style={tdS}>{s.r1_done}</td>
@@ -437,7 +466,7 @@ export default function MonitoringPerf() {
                     </tr>))}
                   </tbody></table></div>)}
 
-                  {!dataLoading && !performanceData.length && !adsDetailView && <div style={{textAlign:'center',padding:60,color:C.muted}}>Aucune donn&eacute;e disponible</div>}
+                  {!dataLoading && !perfRows.length && !adsDetailView && <div style={{textAlign:'center',padding:60,color:C.muted}}>Aucune donn&eacute;e disponible</div>}
 
                   {rdvAnalytics && (
                     <div style={{padding:'8px 20px 28px',display:'flex',flexDirection:'column',gap:20,borderTop:'1px solid '+C.border,marginTop:8}}>
