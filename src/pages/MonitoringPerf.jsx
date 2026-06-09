@@ -176,7 +176,7 @@ export default function MonitoringPerf() {
     const m = {};
     callsCrm.by_sales.forEach(s => {
       const v = canal === 'ads' ? s.ads : canal === 'cc' ? s.cc : s.total;
-      const entry = { appels: v.appels || 0, repondu: v.repondu || 0, repondeur: v.repondeur || 0, crm: !!s.crm_appels };
+      const entry = { appels: v.appels || 0, repondu: v.repondu || 0, repondeur: v.repondeur || 0, r1p_s: v.r1p_s || 0, r2p_s: v.r2p_s || 0, crm: !!s.crm_appels };
       [getCanonicalKey(s.canonical), getCanonicalKey(s.sales), normalizeSalesKey(s.sales)].forEach(k => { if (k) m[k] = entry; });
     });
     return m;
@@ -188,6 +188,7 @@ export default function MonitoringPerf() {
       const cr = callsLookup[s.salesKey] || callsLookup[normalizeSalesKey(s.salesName)];
       const appels = cr ? cr.appels : 0, repondu = cr ? cr.repondu : 0, repondeur = cr ? cr.repondeur : 0;
       return { ...s, calls_total: appels, calls_answered: repondu, repondeur, crm_appels: cr ? cr.crm : false,
+        r1p_s: cr ? cr.r1p_s : 0, r2p_s: cr ? cr.r2p_s : 0,
         conv_calls_to_answered: appels > 0 ? (repondu / appels) * 100 : 0,
         conv_answered_to_r1p: repondu > 0 ? (s.r1_placed / repondu) * 100 : 0 };
     });
@@ -444,7 +445,7 @@ export default function MonitoringPerf() {
                     {headcountData.totals && <tr style={{borderTop:'2px solid '+C.border,fontWeight:700,background:darkMode?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.02)'}}><td style={tdS}></td><td style={{...tdS,textAlign:'left',paddingLeft:12}}>Total</td><td style={tdS}>{(headcountData.totals.leads_assigned||0).toLocaleString('fr-FR')}</td>{['1-2','3-4','5-6','7-10','11-19','20+'].map(b=><td key={b} style={tdS}>{(headcountData.totals.headcount_breakdown||{})[b]||0}</td>)}<td style={{...tdS,color:C.muted}}>{headcountData.totals.unknown||0}</td></tr>}
                   </tbody></table>)}
 
-                  {!dataLoading && perfRows.length>0 && !(canal==='ads'&&adsDetailView) && (<div style={{overflowX:'auto'}}><table className="leaderboard" style={{width:'100%',minWidth:1100}}><thead><tr>{['#','Sales','Leads','Conv.%','Appels',...(isCrmMonth?['R\u00e9p.','R\u00e9pondeur','Tx R\u00e9p.','R1/R\u00e9p']:['D\u00e9cr.','Tx D\u00e9cr.','R1/D\u00e9cr']),'R1p','R1E','Tx R1','R2p','R2E','Tx R2','Ventes','Conv.V.','Revenue','Cash'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>
+                  {!dataLoading && perfRows.length>0 && !(canal==='ads'&&adsDetailView) && (<div style={{overflowX:'auto'}}><table className="leaderboard" style={{width:'100%',minWidth:1100}}><thead><tr>{['#','Sales','Leads','Conv.%','Appels',...(isCrmMonth?['R\u00e9p.','R\u00e9pondeur','Tx R\u00e9p.','R1/R\u00e9p']:['D\u00e9cr.','Tx D\u00e9cr.','R1/D\u00e9cr']),'R1p',...(isCrmMonth?['R1(S)']:[]),'R1E','Tx R1','R2p',...(isCrmMonth?['R2(S)']:[]),'R2E','Tx R2','Ventes','Conv.V.','Revenue','Cash'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>
                     {perfRows.map((s,i)=>(<tr key={canal+'-'+i+'-'+s.salesKey} style={{animation:'rowIn 0.3s cubic-bezier(0.16,1,0.3,1) '+(i*40)+'ms both'}}>
                       <td style={tdS}>{medal(i)}</td>
                       <td style={{...tdS,textAlign:'left',paddingLeft:8}}><div style={{display:'flex',alignItems:'center',gap:8}}><div style={{width:28,height:28,borderRadius:'50%',background:i===0?COLORS.tertiary:i===1?COLORS.secondary:COLORS.primary,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'#fff',fontWeight:600,flexShrink:0}}>{s.salesName.charAt(0).toUpperCase()}</div><span style={{fontWeight:i<3?700:500,fontSize:12,whiteSpace:'nowrap',...(canal!=='global'?{cursor:'pointer',textDecoration:'underline',textDecorationColor:'rgba(128,128,128,0.3)',textUnderlineOffset:3}:{})}} onClick={()=>canal!=='global'&&openDetail(s.salesName)}>{s.salesName}</span></div></td>
@@ -455,9 +456,9 @@ export default function MonitoringPerf() {
                       {isCrmMonth && <td style={{...tdS,color:C.muted}}>{s.repondeur!=null?s.repondeur.toLocaleString('fr-FR'):'—'}</td>}
                       <td style={{...tdS,fontWeight:600,color:dcColor(s.conv_calls_to_answered)}}>{s.conv_calls_to_answered.toFixed(1)}%</td>
                       <td style={{...tdS,fontWeight:600,color:r1pColor(s.conv_answered_to_r1p)}}>{s.conv_answered_to_r1p.toFixed(1)}%</td>
-                      <td style={tdS}>{s.r1_placed}</td><td style={tdS}>{s.r1_done}</td>
+                      <td style={tdS}>{s.r1_placed}</td>{isCrmMonth && <td style={{...tdS,color:COLORS.primary,fontWeight:600}}>{s.r1p_s||'—'}</td>}<td style={tdS}>{s.r1_done}</td>
                       <td style={{...tdS,fontWeight:600,color:rxColor(s.conv_r1p_to_r1r)}}>{s.conv_r1p_to_r1r.toFixed(0)}%</td>
-                      <td style={tdS}>{s.r2_placed}</td><td style={tdS}>{s.r2_done}</td>
+                      <td style={tdS}>{s.r2_placed}</td>{isCrmMonth && <td style={{...tdS,color:COLORS.primary,fontWeight:600}}>{s.r2p_s||'—'}</td>}<td style={tdS}>{s.r2_done}</td>
                       <td style={{...tdS,fontWeight:600,color:rxColor(s.conv_r2p_to_r2r)}}>{s.conv_r2p_to_r2r.toFixed(0)}%</td>
                       <td style={{...tdS,fontWeight:800,fontSize:13,color:COLORS.tertiary}}>{s.signatures}</td>
                       <td style={{...tdS,fontWeight:600,color:cvColor(s.conv_sales)}}>{s.conv_sales.toFixed(1)}%</td>
