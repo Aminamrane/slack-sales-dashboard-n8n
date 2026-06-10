@@ -176,7 +176,7 @@ export default function MonitoringPerf() {
     const m = {};
     callsCrm.by_sales.forEach(s => {
       const v = canal === 'ads' ? s.ads : canal === 'cc' ? s.cc : s.total;
-      const entry = { appels: v.appels || 0, repondu: v.repondu || 0, repondeur: v.repondeur || 0, r1p_self: v.r1p_self || 0, r1p_s: v.r1p_s || 0, r2p_self: v.r2p_self || 0, r2p_s: v.r2p_s || 0, crm: !!s.crm_appels };
+      const entry = { appels: v.appels || 0, repondu: v.repondu || 0, repondeur: v.repondeur || 0, qualif: v.qualif || 0, r1p_self: v.r1p_self || 0, r1p_s: v.r1p_s || 0, r2p_self: v.r2p_self || 0, r2p_s: v.r2p_s || 0, crm: !!s.crm_appels };
       [getCanonicalKey(s.canonical), getCanonicalKey(s.sales), normalizeSalesKey(s.sales)].forEach(k => { if (k) m[k] = entry; });
     });
     return m;
@@ -187,7 +187,7 @@ export default function MonitoringPerf() {
     return performanceData.map(s => {
       const cr = callsLookup[s.salesKey] || callsLookup[normalizeSalesKey(s.salesName)];
       const appels = cr ? cr.appels : 0, repondu = cr ? cr.repondu : 0, repondeur = cr ? cr.repondeur : 0;
-      return { ...s, calls_total: appels, calls_answered: repondu, repondeur, unique_answered: repondu, crm_appels: cr ? cr.crm : false,
+      return { ...s, calls_total: appels, calls_answered: repondu, repondeur, unique_answered: repondu, qualif: cr ? cr.qualif : 0, crm_appels: cr ? cr.crm : false,
         r1p_self: cr ? cr.r1p_self : 0, r1p_s: cr ? cr.r1p_s : 0, r2p_self: cr ? cr.r2p_self : 0, r2p_s: cr ? cr.r2p_s : 0,
         conv_calls_to_answered: appels > 0 ? (repondu / appels) * 100 : 0,
         conv_answered_to_r1p: repondu > 0 ? (s.r1_placed / repondu) * 100 : 0 };
@@ -195,10 +195,10 @@ export default function MonitoringPerf() {
   }, [performanceData, isCrmMonth, callsLookup]);
 
   const totals = useMemo(() => {
-    if (!perfRows.length) return { calls:0, answered:0, repondeur:0, signatures:0, revenue:0, cashCollected:0, r1_placed:0, r1_done:0, r2_placed:0, r2_done:0, leads_assigned:0, unique_attempted:0, unique_answered:0, conv_global:0, lead_qualifie:0, closing_r1:0, closing_r2:0, closing_audit:0, conv_calls_to_answered:0, conv_answered_to_r1p:0, conv_r1p_to_r1r:0, conv_r2p_to_r2r:0, conv_sales:0 };
-    const t = perfRows.reduce((a,s) => ({ calls:a.calls+s.calls_total, answered:a.answered+s.calls_answered, repondeur:a.repondeur+(s.repondeur||0), r1_placed:a.r1_placed+s.r1_placed, r1_done:a.r1_done+s.r1_done, r2_placed:a.r2_placed+s.r2_placed, r2_done:a.r2_done+s.r2_done, signatures:a.signatures+s.signatures, revenue:a.revenue+s.revenue, cashCollected:a.cashCollected+s.cashCollected, leads_assigned:a.leads_assigned+s.leads_assigned, unique_attempted:a.unique_attempted+s.unique_attempted, unique_answered:a.unique_answered+s.unique_answered }), { calls:0, answered:0, repondeur:0, r1_placed:0, r1_done:0, r2_placed:0, r2_done:0, signatures:0, revenue:0, cashCollected:0, leads_assigned:0, unique_attempted:0, unique_answered:0 });
-    return { ...t, lead_qualifie:t.leads_assigned>0?(t.unique_answered/t.leads_assigned)*100:0, closing_r1:t.unique_answered>0?(t.r1_done/t.unique_answered)*100:0, closing_r2:t.r1_done>0?(t.r2_done/t.r1_done)*100:0, closing_audit:t.r2_done>0?(t.signatures/t.r2_done)*100:0, conv_global:t.leads_assigned>0?(t.signatures/t.leads_assigned)*100:0, conv_calls_to_answered:t.calls>0?(t.answered/t.calls)*100:0, conv_answered_to_r1p:t.answered>0?(t.r1_placed/t.answered)*100:0, conv_r1p_to_r1r:t.r1_placed>0?(t.r1_done/t.r1_placed)*100:0, conv_r2p_to_r2r:t.r2_placed>0?(t.r2_done/t.r2_placed)*100:0, conv_sales:t.r2_done>0?(t.signatures/t.r2_done)*100:0 };
-  }, [perfRows]);
+    if (!perfRows.length) return { calls:0, answered:0, repondeur:0, qualif:0, signatures:0, revenue:0, cashCollected:0, r1_placed:0, r1_done:0, r2_placed:0, r2_done:0, leads_assigned:0, unique_attempted:0, unique_answered:0, conv_global:0, lead_qualifie:0, closing_r1:0, closing_r2:0, closing_audit:0, conv_calls_to_answered:0, conv_answered_to_r1p:0, conv_r1p_to_r1r:0, conv_r2p_to_r2r:0, conv_sales:0 };
+    const t = perfRows.reduce((a,s) => ({ calls:a.calls+s.calls_total, answered:a.answered+s.calls_answered, repondeur:a.repondeur+(s.repondeur||0), qualif:a.qualif+(s.qualif||0), r1_placed:a.r1_placed+s.r1_placed, r1_done:a.r1_done+s.r1_done, r2_placed:a.r2_placed+s.r2_placed, r2_done:a.r2_done+s.r2_done, signatures:a.signatures+s.signatures, revenue:a.revenue+s.revenue, cashCollected:a.cashCollected+s.cashCollected, leads_assigned:a.leads_assigned+s.leads_assigned, unique_attempted:a.unique_attempted+s.unique_attempted, unique_answered:a.unique_answered+s.unique_answered }), { calls:0, answered:0, repondeur:0, qualif:0, r1_placed:0, r1_done:0, r2_placed:0, r2_done:0, signatures:0, revenue:0, cashCollected:0, leads_assigned:0, unique_attempted:0, unique_answered:0 });
+    return { ...t, lead_qualifie:isCrmMonth?(t.answered>0?(t.qualif/t.answered)*100:0):(t.leads_assigned>0?(t.unique_answered/t.leads_assigned)*100:0), closing_r1:t.unique_answered>0?(t.r1_done/t.unique_answered)*100:0, closing_r2:t.r1_done>0?(t.r2_done/t.r1_done)*100:0, closing_audit:t.r2_done>0?(t.signatures/t.r2_done)*100:0, conv_global:t.leads_assigned>0?(t.signatures/t.leads_assigned)*100:0, conv_calls_to_answered:t.calls>0?(t.answered/t.calls)*100:0, conv_answered_to_r1p:t.answered>0?(t.r1_placed/t.answered)*100:0, conv_r1p_to_r1r:t.r1_placed>0?(t.r1_done/t.r1_placed)*100:0, conv_r2p_to_r2r:t.r2_placed>0?(t.r2_done/t.r2_placed)*100:0, conv_sales:t.r2_done>0?(t.signatures/t.r2_done)*100:0 };
+  }, [perfRows, isCrmMonth]);
 
   // Vue Ventes : fusionne les rapporteurs bruts par clé canonique (mêmes
   // exclusions/affichage que le tableau Perf Sales), somme tranches & paiement.
