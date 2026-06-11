@@ -35,6 +35,7 @@ import CeoFunnelLeadsView from "./pages/CeoFunnelLeadsView.jsx";
 import AcquisitionDirectorDashboard from "./pages/AcquisitionDirectorDashboard.jsx";
 import Marketing          from "./pages/Marketing/index.jsx";
 import FunnelLeads        from "./pages/FunnelLeads/index.jsx";
+import Dialer             from "./pages/Dialer/index.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import MouseDot from "./components/MouseDot.jsx";
@@ -167,6 +168,14 @@ function App() {
           element={
             <ProtectedRoute>
               <AcquisitionDirectorDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dialer"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'finance_director', 'finance_team']}>
+              <Dialer />
             </ProtectedRoute>
           }
         />
