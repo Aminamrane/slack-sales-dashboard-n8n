@@ -28,7 +28,7 @@ const MODES = [
     tag: "Fallback",
     icon: "🛡️",
     tone: "#10b981",
-    desc: "Tout le monde signe en une fois — contrat Owner + convention Opti'Lex groupés dans une seule signature. Le système actuel, éprouvé en production.",
+    desc: "Tout le monde signe en une fois : contrat Owner et convention Opti'Lex groupés dans une seule signature. Le système actuel, éprouvé en production.",
   },
   {
     key: "per_sales",
@@ -165,7 +165,7 @@ export default function ContractSplitMonitoring() {
       flash("Mode mis à jour");
     } catch {
       setState(prev);
-      flash("Échec — réessaie", true);
+      flash("Échec, réessaie", true);
     } finally {
       setSavingMode(false);
     }
@@ -181,7 +181,7 @@ export default function ContractSplitMonitoring() {
       setState(d);
     } catch {
       setState((s) => ({ ...s, sales: s.sales.map((x) => (x.id === sale.id ? { ...x, split_enabled: !next } : x)) }));
-      flash("Échec — réessaie", true);
+      flash("Échec, réessaie", true);
     } finally {
       setSavingId(null);
     }
@@ -235,12 +235,12 @@ export default function ContractSplitMonitoring() {
               Interne · Admin
             </div>
             <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.4 }}>
-              Split contrats — Owner / Opti'Lex
+              Split contrats Owner / Opti'Lex
             </h1>
             <p style={{ margin: "8px 0 0", color: C.secondary, fontSize: 14.5, lineHeight: 1.5, maxWidth: 640 }}>
-              Choisis qui envoie le contrat en <strong>deux signatures séparées</strong> (Owner + convention Opti'Lex)
-              plutôt qu'en une seule. Réversible à tout instant : repasse sur « Système actuel » et tout le monde
-              revient au fonctionnement éprouvé.
+              Choisis qui envoie le contrat en <strong>deux signatures séparées</strong> (Owner + convention
+              Opti'Lex) plutôt qu'en une seule. Réversible à tout moment : « Système actuel » remet tout le
+              monde sur le fonctionnement habituel.
             </p>
           </div>
           <ModeBadge mode={mode} />
@@ -252,18 +252,8 @@ export default function ContractSplitMonitoring() {
           </div>
         )}
 
-        {/* Warning */}
-        <div style={{ marginTop: 18, display: "flex", gap: 10, alignItems: "flex-start", padding: "12px 14px", borderRadius: 12, background: darkMode ? "#2e2614" : "#fffbeb", border: `1px solid ${darkMode ? "#4d3f1a" : "#fde68a"}` }}>
-          <span style={{ fontSize: 16, lineHeight: 1.2 }}>⚠️</span>
-          <span style={{ fontSize: 13.5, lineHeight: 1.5, color: darkMode ? "#e6cf8f" : "#92700e" }}>
-            Avant d'activer le split en production, fais un <strong>envoi de test réel</strong> sur un sale test et
-            vérifie que la convention arrive bien sur le compte Yousign Opti'Lex. L'envoi Opti'Lex part
-            <strong> dans la foulée</strong> de l'envoi Owner.
-          </span>
-        </div>
-
         {/* Mode selector */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginTop: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginTop: 26 }}>
           {MODES.map((m) => {
             const selected = mode === m.key;
             return (
@@ -428,7 +418,7 @@ export default function ContractSplitMonitoring() {
         </div>
 
         <div style={{ marginTop: 22, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
-          Owner reste strictement inchangé dans tous les cas — l'envoi Opti'Lex est additionnel et ne peut
+          Owner reste strictement inchangé dans tous les cas. L'envoi Opti'Lex est additionnel et ne peut
           jamais bloquer l'envoi du contrat Owner.
         </div>
       </motion.div>
