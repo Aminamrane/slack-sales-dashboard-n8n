@@ -55,6 +55,25 @@ const ROLE_LABEL = {
   admin: "Admin",
 };
 
+const SIG = {
+  done: { label: "Signé", color: "#10b981" },
+  ongoing: { label: "Envoyé", color: "#6366f1" },
+  expired: { label: "Expiré", color: "#f59e0b" },
+  canceled: { label: "Annulé", color: "#ef4444" },
+  failed: { label: "Échec", color: "#ef4444" },
+  draft: { label: "Brouillon", color: "#9ca3af" },
+};
+const sigInfo = (s) => SIG[s] || { label: s || "—", color: "#9ca3af" };
+
+const fmtDate = (iso) => {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "—";
+  }
+};
+
 export default function ContractSplitMonitoring() {
   const navigate = useNavigate();
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
@@ -86,6 +105,7 @@ export default function ContractSplitMonitoring() {
   const [savingId, setSavingId] = useState(null);
   const [toast, setToast] = useState(null);
   const [error, setError] = useState(null);
+  const [activity, setActivity] = useState([]);
 
   // Accès : admin uniquement
   useEffect(() => {
@@ -112,6 +132,21 @@ export default function ContractSplitMonitoring() {
       }
     })();
     return () => { cancelled = true; };
+  }, [hasAccess]);
+
+  // Suivi des retours de signature — poll léger pour voir les statuts évoluer.
+  useEffect(() => {
+    if (!hasAccess) return;
+    let cancelled = false;
+    const fetchActivity = async () => {
+      try {
+        const d = await apiClient.get("/api/v1/admin/contract-split/activity?limit=50");
+        if (!cancelled) setActivity(d?.contracts || []);
+      } catch { /* silencieux : le suivi ne doit jamais casser la page */ }
+    };
+    fetchActivity();
+    const id = setInterval(fetchActivity, 18000);
+    return () => { cancelled = true; clearInterval(id); };
   }, [hasAccess]);
 
   const flash = (msg, isErr = false) => {
@@ -355,6 +390,43 @@ export default function ContractSplitMonitoring() {
           </AnimatePresence>
         </div>
 
+        {/* Suivi des retours de signature */}
+        <div style={{ marginTop: 34 }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 12 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 750, margin: 0 }}>Suivi des signatures (split)</h2>
+            <span style={{ fontSize: 12, color: C.muted }}>
+              {activity.length} contrat{activity.length > 1 ? "s" : ""} · maj auto
+            </span>
+          </div>
+          <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: C.shadow, overflow: "hidden" }}>
+            {activity.length === 0 ? (
+              <div style={{ padding: 26, textAlign: "center", color: C.muted, fontSize: 13.5, lineHeight: 1.55 }}>
+                Aucun contrat envoyé en split pour l'instant. Dès qu'un envoi split part, il apparaît ici
+                avec le statut de signature Owner et Opti'Lex, mis à jour automatiquement.
+              </div>
+            ) : (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "1.7fr 1fr 1fr 0.85fr", gap: 10, padding: "10px 16px", fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: C.muted, borderBottom: `1px solid ${C.border}` }}>
+                  <span>Client</span><span>Owner</span><span>Opti'Lex</span><span style={{ textAlign: "right" }}>Envoyé</span>
+                </div>
+                {activity.map((a, i) => (
+                  <div key={a.id} style={{ display: "grid", gridTemplateColumns: "1.7fr 1fr 1fr 0.85fr", gap: 10, alignItems: "center", padding: "12px 16px", borderTop: i === 0 ? "none" : `1px solid ${C.border}` }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {a.client_company || a.client_name || "—"}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>{a.commercial_name}</div>
+                    </div>
+                    <SigCell status={a.owner_status} at={a.owner_signed_at} />
+                    <SigCell status={a.optilex_status} at={a.optilex_signed_at} />
+                    <div style={{ fontSize: 12, color: C.secondary, textAlign: "right" }}>{fmtDate(a.created_at)}</div>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        </div>
+
         <div style={{ marginTop: 22, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
           Owner reste strictement inchangé dans tous les cas — l'envoi Opti'Lex est additionnel et ne peut
           jamais bloquer l'envoi du contrat Owner.
@@ -416,6 +488,22 @@ function EffectivePill({ enabled, C }) {
     }}>
       {enabled ? "Split" : "Actuel"}
     </span>
+  );
+}
+
+function SigCell({ status, at }) {
+  const info = sigInfo(status);
+  return (
+    <div>
+      <span style={{
+        display: "inline-block", fontSize: 11.5, fontWeight: 700,
+        padding: "3px 9px", borderRadius: 20,
+        color: info.color, background: `${info.color}1a`, border: `1px solid ${info.color}33`,
+      }}>
+        {status === "done" ? "✓ " : ""}{info.label}
+      </span>
+      {at && <div style={{ fontSize: 10.5, color: "#9ca3af", marginTop: 3 }}>{fmtDate(at)}</div>}
+    </div>
   );
 }
 
