@@ -134,7 +134,7 @@ export default function Dialer() {
           }}>
             {[
               { key: 'console', label: 'Console opérateur', icon: PhoneCall },
-              { key: 'supervision', label: 'Supervision DAF', icon: LayoutDashboard },
+              { key: 'supervision', label: 'Supervision', icon: LayoutDashboard },
             ].map((t) => {
               const active = tab === t.key;
               return (
