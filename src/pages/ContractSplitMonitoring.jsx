@@ -237,11 +237,6 @@ export default function ContractSplitMonitoring() {
             <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, letterSpacing: -0.4 }}>
               Split contrats Owner / Opti'Lex
             </h1>
-            <p style={{ margin: "8px 0 0", color: C.secondary, fontSize: 14.5, lineHeight: 1.5, maxWidth: 640 }}>
-              Choisis qui envoie le contrat en <strong>deux signatures séparées</strong> (Owner + convention
-              Opti'Lex) plutôt qu'en une seule. Réversible à tout moment : « Système actuel » remet tout le
-              monde sur le fonctionnement habituel.
-            </p>
           </div>
           <ModeBadge mode={mode} />
         </div>
@@ -372,8 +367,8 @@ export default function ContractSplitMonitoring() {
                 </div>
                 <div style={{ fontSize: 13.5, color: C.secondary, maxWidth: 460, margin: "0 auto", lineHeight: 1.55 }}>
                   {mode === "all"
-                    ? "Chaque contrat part en deux signatures séparées (Owner + Opti'Lex). Pour choisir au cas par cas, passe en mode « Par sale »."
-                    : "Chaque contrat part comme aujourd'hui : une seule signature groupée. Pour activer le split sur certains sales, passe en mode « Par sale »."}
+                    ? "Chaque contrat part en deux signatures séparées."
+                    : "Chaque contrat part comme aujourd'hui."}
                 </div>
               </motion.div>
             )}
@@ -391,8 +386,7 @@ export default function ContractSplitMonitoring() {
           <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: C.shadow, overflow: "hidden" }}>
             {activity.length === 0 ? (
               <div style={{ padding: 26, textAlign: "center", color: C.muted, fontSize: 13.5, lineHeight: 1.55 }}>
-                Aucun contrat envoyé en split pour l'instant. Dès qu'un envoi split part, il apparaît ici
-                avec le statut de signature Owner et Opti'Lex, mis à jour automatiquement.
+                Aucun contrat envoyé en split pour l'instant.
               </div>
             ) : (
               <>
