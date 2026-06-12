@@ -42,6 +42,9 @@ import iconFuse from "../assets/Fuse.svg";
 import iconMessage from "../assets/message.svg";
 import smsRecuIcon from "../assets/smsrecu.svg";
 import iconSiren from "../assets/siren2.svg";
+import { useLeadCreative, CreativeButton, CreativePopup } from "../components/CreativePopup.jsx";
+import iconCreaActive from "../assets/metaads.png";
+import iconCreaEmpty from "../assets/metagris.png";
 
 // ── SIREN HELPERS (consumed from contracts/schemas.js, do not modify there) ──
 import { normalizeSiren, isValidSiren, formatSiren } from "../contracts/schemas.js";
@@ -603,6 +606,8 @@ export default function TrackingSheet() {
   useEffect(() => { leadsRef.current = leads; }, [leads]);
   const [activeTab, setActiveTab] = useState(0);
   const [selectedLead, setSelectedLead] = useState(null);
+  const [creaPopup, setCreaPopup] = useState(null);
+  const leadCreative = useLeadCreative(selectedLead);
   const [copiedField, setCopiedField] = useState(null); // 'phone-{id}' or 'email-{id}'
   const [exitingCards, setExitingCards] = useState(new Set());
   const [animatingBadges, setAnimatingBadges] = useState(new Set());
@@ -2752,6 +2757,15 @@ export default function TrackingSheet() {
           </div>
           );
         })()}
+
+        {creaPopup && (
+          <CreativePopup
+            creative={creaPopup.creative}
+            triggerRect={creaPopup.rect}
+            darkMode={darkMode}
+            onClose={() => setCreaPopup(null)}
+          />
+        )}
 
         {/* ════ CAMPAIGN FULLSCREEN DETAIL (Apple open animation) ══════════ */}
         {(openCampaign || campaignClosing) && (() => {
@@ -5542,6 +5556,20 @@ export default function TrackingSheet() {
                     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                   </svg>
                 </button>
+              </div>
+
+              {/* Bouton créa — flotte sous la croix, sans pousser le contenu du lead */}
+              <div style={{ position: 'relative', height: 0, zIndex: 5 }}>
+                <CreativeButton
+                  data={leadCreative.data}
+                  loading={leadCreative.loading}
+                  iconActive={iconCreaActive}
+                  iconEmpty={iconCreaEmpty}
+                  darkMode={darkMode}
+                  size={54}
+                  style={{ position: 'absolute', top: 2, right: -14 }}
+                  onOpen={(creative, rect) => setCreaPopup({ creative, rect })}
+                />
               </div>
 
               {/* ─── PROFILE HEADER ─── */}
