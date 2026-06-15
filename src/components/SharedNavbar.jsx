@@ -23,6 +23,7 @@ const ROLE_LABELS = {
   marketing: "Marketing",
   hr: "HR",
   finance_director: "Finance Director",
+  customer_success_manager: "Customer Success Manager",
 };
 
 // ── KEYFRAMES (injected once) ───────────────────────────────────────────────
@@ -913,6 +914,22 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
                     Power Dialer
+                  </button>
+                )}
+
+                {(apiClient.getUser()?.role === 'admin' || apiClient.getUser()?.role === 'ceo' || apiClient.getUser()?.role === 'marketing' || apiClient.getUser()?.role === 'acquisition_director') && (
+                  <button
+                    onClick={() => navigate("/meta-ads")}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px',
+                      borderRadius: '8px', border: 'none', background: 'transparent',
+                      color: darkMode ? '#f5f5f7' : '#1d1d1f', fontSize: '14px', fontWeight: 500,
+                      cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? '#2a2b2e' : '#f5f5f7'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    Meta Ads
                   </button>
                 )}
 
