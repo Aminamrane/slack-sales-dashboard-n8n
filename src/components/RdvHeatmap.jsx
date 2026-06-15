@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useLayoutEffect } from 'react';
 
 const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
@@ -30,6 +30,21 @@ export default function RdvHeatmap({ cells = [], C, title, subtitle }) {
   }, [cells]);
 
   const [hover, setHover] = useState(null);
+  const gridRef = useRef(null);
+  const tipRef = useRef(null);
+  const [tipLeft, setTipLeft] = useState(null);
+
+  // Clamp horizontal du tooltip pour qu'il ne soit jamais coupé à gauche/droite
+  // (mesure réelle, avant paint => pas de flash).
+  useLayoutEffect(() => {
+    if (!hover || !tipRef.current || !gridRef.current) return;
+    const cw = gridRef.current.offsetWidth;
+    const half = tipRef.current.offsetWidth / 2;
+    let left = hover.x;
+    if (left - half < 2) left = half + 2;
+    else if (left + half > cw - 2) left = cw - half - 2;
+    setTipLeft(left);
+  }, [hover]);
 
   const colorFor = (cell) => {
     if (!cell) return { bg: C.subtle, empty: true };
@@ -63,7 +78,7 @@ export default function RdvHeatmap({ cells = [], C, title, subtitle }) {
         <p style={{ margin: 0, color: C.muted, fontSize: 13 }}>Aucun RDV sur la période.</p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <div style={{ minWidth: 520, position: 'relative' }}>
+          <div ref={gridRef} style={{ minWidth: 520, position: 'relative' }}>
             <div style={{ display: 'grid', gridTemplateColumns: `38px repeat(${hours.length}, 1fr)`, gap: 5, alignItems: 'center' }}>
               <div />
               {hours.map((h) => (
@@ -91,7 +106,7 @@ export default function RdvHeatmap({ cells = [], C, title, subtitle }) {
             </div>
 
             {hover && hover.cell && (hover.cell.showed + hover.cell.noshow) > 0 && (
-              <div style={{ position: 'absolute', left: hover.x, top: hover.y - 10, transform: 'translate(-50%, -100%)', background: C.bg, color: C.text, padding: '6px 10px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, boxShadow: C.shadow, border: '1px solid ' + C.border, pointerEvents: 'none', whiteSpace: 'nowrap', zIndex: 5 }}>
+              <div ref={tipRef} style={{ position: 'absolute', left: tipLeft != null ? tipLeft : hover.x, top: hover.y < 40 ? hover.y + 36 : hover.y - 10, transform: hover.y < 40 ? 'translate(-50%, 0)' : 'translate(-50%, -100%)', background: C.bg, color: C.text, padding: '6px 10px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, boxShadow: C.shadow, border: '1px solid ' + C.border, pointerEvents: 'none', whiteSpace: 'nowrap', zIndex: 5 }}>
                 {DAY_LABELS[hover.dayIdx]} {hover.hour}h · {hover.cell.showed} présents / {hover.cell.noshow} no-show ({Math.round((hover.cell.showed / (hover.cell.showed + hover.cell.noshow)) * 100)}%)
               </div>
             )}

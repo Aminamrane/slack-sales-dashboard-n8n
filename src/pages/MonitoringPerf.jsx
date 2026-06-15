@@ -106,6 +106,7 @@ export default function MonitoringPerf() {
   const [autreModal, setAutreModal] = useState(null); // { name, items: [{societe, headcount}] } — détail des ventes "Autre"
   const [settersPerf, setSettersPerf] = useState(null); // from /tracking/setters-perf (vue Setters)
   const [setterModal, setSetterModal] = useState(null); // détail d'un setter (par sales)
+  const [heatmapSales, setHeatmapSales] = useState('global'); // taux de présence : global | nom d'un sales
 
   const openDetail = async (personName) => { if (canal !== "ads" && canal !== "cc") return; setDetailModal({ personName, type: canal, data: null, loading: true }); try { const ep = canal === "ads" ? '/api/v1/monitoring/performance/detail/ads' : '/api/v1/monitoring/performance/detail/cc'; const res = await apiClient.get(ep + '?person_name=' + encodeURIComponent(personName) + '&period=' + range); setDetailModal(prev => prev ? { ...prev, data: res, loading: false } : null); } catch { setDetailModal(prev => prev ? { ...prev, data: null, loading: false } : null); } };
 
@@ -176,7 +177,7 @@ export default function MonitoringPerf() {
     const m = {};
     callsCrm.by_sales.forEach(s => {
       const v = canal === 'ads' ? s.ads : canal === 'cc' ? s.cc : s.total;
-      const entry = { appels: v.appels || 0, repondu: v.repondu || 0, repondeur: v.repondeur || 0, qualif: v.qualif || 0, r1p_self: v.r1p_self || 0, r1p_s: v.r1p_s || 0, r2p_self: v.r2p_self || 0, r2p_s: v.r2p_s || 0, crm: !!s.crm_appels };
+      const entry = { appels: v.appels || 0, repondu: v.repondu || 0, repondu_lead: v.repondu_lead || 0, repondeur: v.repondeur || 0, qualif: v.qualif || 0, r1p_self: v.r1p_self || 0, r1p_s: v.r1p_s || 0, r2p_self: v.r2p_self || 0, r2p_s: v.r2p_s || 0, crm: !!s.crm_appels };
       [getCanonicalKey(s.canonical), getCanonicalKey(s.sales), normalizeSalesKey(s.sales)].forEach(k => { if (k) m[k] = entry; });
     });
     return m;
@@ -190,7 +191,7 @@ export default function MonitoringPerf() {
       return { ...s, calls_total: appels, calls_answered: repondu, repondeur, unique_answered: repondu, qualif: cr ? cr.qualif : 0, crm_appels: cr ? cr.crm : false,
         r1p_self: cr ? cr.r1p_self : 0, r1p_s: cr ? cr.r1p_s : 0, r2p_self: cr ? cr.r2p_self : 0, r2p_s: cr ? cr.r2p_s : 0,
         conv_calls_to_answered: appels > 0 ? (repondu / appels) * 100 : 0,
-        conv_answered_to_r1p: repondu > 0 ? (s.r1_placed / repondu) * 100 : 0 };
+        conv_answered_to_r1p: (cr && cr.repondu_lead > 0) ? (((cr.r1p_self||0) + (cr.r1p_s||0)) / cr.repondu_lead) * 100 : 0 };
     });
   }, [performanceData, isCrmMonth, callsLookup]);
 
@@ -430,12 +431,12 @@ export default function MonitoringPerf() {
 
                   <div style={{display:'flex',justifyContent:'center',gap:0,marginBottom:20,borderRadius:10,border:'1px solid '+C.border,overflow:'hidden',background:darkMode?C.subtle:'#fff'}}>
                     {[
-                      ...(canal!=='cc' ? [{l:'Lead Qualifi\u00e9',v:totals.lead_qualifie.toFixed(1)+'%'}] : []),
-                      {l:'Closing R1',v:totals.closing_r1.toFixed(1)+'%'},
-                      {l:'Closing R2',v:totals.closing_r2.toFixed(1)+'%'},
-                      {l:'Closing Audit',v:totals.closing_audit.toFixed(1)+'%'},
-                      {l:'Conv. Globale',v:totals.conv_global.toFixed(2)+'%'},
-                    ].map((k,i,arr)=>(<div key={k.l} style={{flex:1,textAlign:'center',padding:'10px 16px',borderRight:i<arr.length-1?'1px solid '+C.border:'none'}}><div style={{fontSize:12,fontWeight:500,color:C.muted,marginBottom:2}}>{k.l}</div><div style={{fontSize:15,fontWeight:700,color:C.text}}>{k.v}</div></div>))}
+                      ...(canal!=='cc' ? [{l:'Lead Qualifi\u00e9',v:totals.lead_qualifie.toFixed(1)+'%',f:isCrmMonth?'Leads qualifi\u00e9s (ont atteint un R1 ou R2) \u00f7 R\u00e9pondu':'D\u00e9croch\u00e9s uniques \u00f7 Leads affect\u00e9s'}] : []),
+                      {l:'Closing R1',v:totals.closing_r1.toFixed(1)+'%',f:isCrmMonth?'R1 effectu\u00e9s \u00f7 R\u00e9pondu':'R1 effectu\u00e9s \u00f7 D\u00e9croch\u00e9s uniques'},
+                      {l:'Closing R2',v:totals.closing_r2.toFixed(1)+'%',f:'R2 effectu\u00e9s \u00f7 R1 effectu\u00e9s'},
+                      {l:'Closing Audit',v:totals.closing_audit.toFixed(1)+'%',f:'Ventes \u00f7 R2 effectu\u00e9s'},
+                      {l:'Conv. Globale',v:totals.conv_global.toFixed(2)+'%',f:'Ventes \u00f7 Leads affect\u00e9s'},
+                    ].map((k,i,arr)=>(<div key={k.l} title={k.f} style={{flex:1,textAlign:'center',padding:'10px 16px',borderRight:i<arr.length-1?'1px solid '+C.border:'none',cursor:'help'}}><div style={{fontSize:12,fontWeight:500,color:C.muted,marginBottom:2}}>{k.l}</div><div style={{fontSize:15,fontWeight:700,color:C.text}}>{k.v}</div></div>))}
                   </div>
 
                   {dataLoading && <div style={{textAlign:'center',padding:60,color:C.muted}}>Chargement...</div>}
@@ -473,7 +474,7 @@ export default function MonitoringPerf() {
                     <div style={{padding:'8px 20px 28px',display:'flex',flexDirection:'column',gap:20,borderTop:'1px solid '+C.border,marginTop:8}}>
                       <div>
                         <h2 style={{fontSize:18,fontWeight:700,color:C.text,margin:'8px 0 2px'}}>D&eacute;lai moyen R1 &rarr; R2 (effectu&eacute;s)</h2>
-                        <div style={{fontSize:12,color:C.muted,marginBottom:12}}>Temps &eacute;coul&eacute; entre un R1 et un R2 r&eacute;alis&eacute;s (par mois du R1) &mdash; suit le mois s&eacute;lectionn&eacute;.</div>
+                        <div style={{fontSize:12,color:C.muted,marginBottom:12}}>Temps &eacute;coul&eacute; entre un R1 et un R2 r&eacute;alis&eacute;s (par mois du R1).</div>
                         <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
                           {rdvAnalytics.delay_by_month.length===0 && <div style={{fontSize:13,color:C.muted}}>Pas encore de R1+R2 effectu&eacute;s.</div>}
                           {rdvAnalytics.delay_by_month.map(m=>(
@@ -485,10 +486,88 @@ export default function MonitoringPerf() {
                           ))}
                         </div>
                       </div>
-                      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(440px, 1fr))',gap:16}}>
-                        <RdvHeatmap cells={rdvAnalytics.heatmap_r1} C={C} title="Pr&eacute;sence R1 &mdash; jour/heure" />
-                        <RdvHeatmap cells={rdvAnalytics.heatmap_r2} C={C} title="Pr&eacute;sence R2 &mdash; jour/heure" />
-                      </div>
+                      {rdvAnalytics.treatment_delay && (()=>{
+                        if (range && /^\d{4}-\d{2}$/.test(range) && range < '2026-04') return (
+                          <div>
+                            <h2 style={{fontSize:18,fontWeight:700,color:C.text,margin:'8px 0 2px'}}>D&eacute;lai affectation &rarr; 1er traitement</h2>
+                            <div style={{fontSize:13,color:darkMode?'#e6cf8f':'#92700e',marginTop:8,padding:'14px 16px',background:darkMode?'#2e2614':'#fffbeb',border:'1px solid '+(darkMode?'#4d3f1a':'#fde68a'),borderRadius:10,lineHeight:1.5}}>Donn&eacute;es fiables &agrave; partir d'avril 2026. En mars, le champ d'horodatage d'affectation a &eacute;t&eacute; rempli r&eacute;troactivement, donc le d&eacute;lai n'est pas repr&eacute;sentatif.</div>
+                          </div>
+                        );
+                        const td=rdvAnalytics.treatment_delay, g=td.global||{}, sales=td.by_sales||[];
+                        const fmtMin=(m)=> m==null?'—': m<60?`${m} min`:`${Math.floor(m/60)}h${String(Math.round(m%60)).padStart(2,'0')}`;
+                        const pct=(a,b)=> b?Math.round(100*a/b):0;
+                        const sdColor=(p)=> p==null?C.muted: p>=70?'#10b981': p>=50?'#fbbf24':'#ef4444';
+                        return (
+                        <div>
+                          <h2 style={{fontSize:18,fontWeight:700,color:C.text,margin:'8px 0 2px'}}>D&eacute;lai affectation &rarr; 1er traitement</h2>
+                          <div style={{fontSize:12,color:C.muted,marginBottom:12}}>D&eacute;lai entre l'affectation d'un lead re&ccedil;u (hors cold call / setter) et sa 1&egrave;re action (appel, non-pertinent, R1&hellip;), par le sales ou son setter.</div>
+                          <div style={{display:'flex',gap:12,flexWrap:'wrap',marginBottom:16}}>
+                            <div style={{flex:'1 1 150px',minWidth:150,background:C.bg,border:'1px solid '+C.border,borderRadius:10,padding:'12px 16px',boxShadow:C.shadow}}>
+                              <div style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:'uppercase',letterSpacing:'0.04em'}}>Trait&eacute; le jour m&ecirc;me</div>
+                              <div style={{fontSize:22,fontWeight:700,color:C.text,marginTop:2}}>{g.same_day_pct!=null?g.same_day_pct.toLocaleString('fr-FR',{maximumFractionDigits:0}):'—'}<span style={{fontSize:13,fontWeight:600,color:C.muted}}>%</span></div>
+                              <div style={{fontSize:11.5,color:C.muted,marginTop:2}}>{g.n_treated} / {g.n_assigned} leads trait&eacute;s</div>
+                            </div>
+                            <div style={{flex:'1 1 150px',minWidth:150,background:C.bg,border:'1px solid '+C.border,borderRadius:10,padding:'12px 16px',boxShadow:C.shadow}}>
+                              <div style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:'uppercase',letterSpacing:'0.04em'}}>M&eacute;diane (leads appel&eacute;s)</div>
+                              <div style={{fontSize:22,fontWeight:700,color:C.text,marginTop:2}}>{fmtMin(g.median_minutes)}</div>
+                              <div style={{fontSize:11.5,color:C.muted,marginTop:2}}>moy. {fmtMin(g.mean_minutes)}</div>
+                            </div>
+                            <div style={{flex:'2 1 280px',minWidth:240,background:C.bg,border:'1px solid '+C.border,borderRadius:10,padding:'12px 16px',boxShadow:C.shadow}}>
+                              <div style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:'uppercase',letterSpacing:'0.04em',marginBottom:8}}>R&eacute;partition du d&eacute;lai</div>
+                              <div style={{display:'flex',height:10,borderRadius:5,overflow:'hidden',background:C.subtle}}>
+                                <div style={{width:pct(g.d0,g.n_treated)+'%',background:'#10b981'}} />
+                                <div style={{width:pct(g.d1,g.n_treated)+'%',background:'#fbbf24'}} />
+                                <div style={{width:pct(g.d2,g.n_treated)+'%',background:'#fb923c'}} />
+                                <div style={{width:pct(g.d3plus,g.n_treated)+'%',background:'#ef4444'}} />
+                              </div>
+                              <div style={{display:'flex',gap:12,flexWrap:'wrap',marginTop:8,fontSize:11,color:C.muted}}>
+                                <span style={{color:'#10b981',fontWeight:600}}>&bull; M&ecirc;me jour <b style={{color:C.text}}>{g.d0}</b></span>
+                                <span style={{color:'#fbbf24',fontWeight:600}}>&bull; J+1 <b style={{color:C.text}}>{g.d1}</b></span>
+                                <span style={{color:'#fb923c',fontWeight:600}}>&bull; J+2 <b style={{color:C.text}}>{g.d2}</b></span>
+                                <span style={{color:'#ef4444',fontWeight:600}}>&bull; J+3 et + <b style={{color:C.text}}>{g.d3plus}</b></span>
+                              </div>
+                            </div>
+                          </div>
+                          {sales.length>0 && (
+                            <div style={{overflowX:'auto'}}>
+                              <table style={{width:'100%',borderCollapse:'collapse'}}>
+                                <thead><tr>{['Sales','Leads','Jour même','Médiane','J+1','J+2','J+3+'].map((h,i)=><th key={h} style={{textAlign:i===0?'left':'center',color:C.muted,fontWeight:600,padding:'6px 10px',borderBottom:'1px solid '+C.border,fontSize:11.5,whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead>
+                                <tbody>
+                                  {sales.map(s=>(
+                                    <tr key={s.sales} style={{borderBottom:'1px solid '+C.subtle}}>
+                                      <td style={{textAlign:'left',padding:'7px 10px',fontWeight:600,color:C.text,whiteSpace:'nowrap'}}>{s.sales}</td>
+                                      <td style={{textAlign:'center',padding:'7px 10px',color:C.muted}}>{s.n}</td>
+                                      <td style={{textAlign:'center',padding:'7px 10px',fontWeight:700,color:sdColor(s.same_day_pct)}}>{s.same_day_pct!=null?s.same_day_pct+'%':'—'}</td>
+                                      <td style={{textAlign:'center',padding:'7px 10px',color:C.text}}>{fmtMin(s.median_minutes)}</td>
+                                      <td style={{textAlign:'center',padding:'7px 10px',color:C.muted}}>{s.d1}</td>
+                                      <td style={{textAlign:'center',padding:'7px 10px',color:C.muted}}>{s.d2}</td>
+                                      <td style={{textAlign:'center',padding:'7px 10px',color:s.d3plus>0?'#ef4444':C.muted,fontWeight:s.d3plus>0?700:400}}>{s.d3plus}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                        );
+                      })()}
+                      {(()=>{
+                        const hbs=rdvAnalytics.heatmap_by_sales||[];
+                        const sel=heatmapSales==='global'?null:hbs.find(s=>s.sales===heatmapSales);
+                        return (<>
+                          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,flexWrap:'wrap'}}>
+                            <span style={{fontSize:12,color:C.muted,fontWeight:600}}>Taux de pr&eacute;sence&nbsp;:</span>
+                            <select value={heatmapSales} onChange={e=>setHeatmapSales(e.target.value)} style={{padding:'6px 30px 6px 12px',borderRadius:8,border:'1px solid '+C.border,background:darkMode?'#16171e':'#fff',color:C.text,fontSize:13,fontWeight:600,cursor:'pointer',appearance:'none',WebkitAppearance:'none',fontFamily:'inherit',outline:'none',backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='${encodeURIComponent(C.muted)}' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,backgroundRepeat:'no-repeat',backgroundPosition:'right 10px center'}}>
+                              <option value="global">Global</option>
+                              {hbs.map(s=><option key={s.sales} value={s.sales}>{s.sales}</option>)}
+                            </select>
+                          </div>
+                          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(440px, 1fr))',gap:16}}>
+                            <RdvHeatmap cells={sel?sel.r1:rdvAnalytics.heatmap_r1} C={C} title="Pr&eacute;sence R1 &mdash; jour/heure" />
+                            <RdvHeatmap cells={sel?sel.r2:rdvAnalytics.heatmap_r2} C={C} title="Pr&eacute;sence R2 &mdash; jour/heure" />
+                          </div>
+                        </>);
+                      })()}
                     </div>
                   )}
                   </>)}
