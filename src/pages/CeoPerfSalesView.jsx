@@ -84,6 +84,7 @@ export default function CeoPerfSalesView() {
   // localStorage pour pré-sélectionner l'onglet.
   const handleSidebarTabClick = (tabId) => {
     if (tabId === "perf_sales") return;
+    if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }
     if (tabId === "dispatch") { navigate("/ceo/dispatch"); return; }
     if (tabId === "leaderboard") { navigate("/ceo/leaderboard"); return; }
     if (tabId === "lead_quality") { navigate("/ceo/lead-quality"); return; }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
+import { StopButton, stopBadge, ReassignPanel } from "../components/AutoAssignControls.jsx";
 import "../index.css";
 
 const COLORS = { primary: "#6366f1", secondary: "#fb923c", tertiary: "#10b981" };
@@ -124,6 +125,8 @@ export default function LeadAssignmentMonitor() {
   // Badge d'eligibilite du jour : absence (dates du.. au..) ou simple jour de repos. null si actif.
   const fmtJM = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
   const dayBadge = (p) => {
+    const sb = stopBadge(p, darkMode);
+    if (sb) return sb;
     if (p.active_today !== false) return null;
     if (p.absent_until) {
       const txt = p.absent_from && p.absent_from !== p.absent_until
@@ -227,12 +230,13 @@ export default function LeadAssignmentMonitor() {
                           <div>
                             <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                               <span style={{ fontWeight: 650, fontSize: 13, color: C.text, letterSpacing: "-0.01em", whiteSpace: "nowrap" }}>{p.full_name}</span>
-                              {badge && <span style={{ fontSize: 9.5, fontWeight: 700, color: badge.color, background: badge.color + "1e", padding: "2px 7px", borderRadius: 6, whiteSpace: "nowrap" }}>{badge.txt}</span>}
+                              {badge && <span title={badge.reason || undefined} style={{ fontSize: 9.5, fontWeight: 700, color: badge.color, background: badge.color + "1e", padding: "2px 7px", borderRadius: 6, whiteSpace: "nowrap" }}>{badge.txt}</span>}
                             </div>
                             <div style={{ fontSize: 10.5, color: C.muted }}>
                               {p.elig.includes(4) ? "Cat 1-5 (bonus)" : "Cat 1-3"}
                               {p.credit_total > 0 && <span title="Leads d'écart accumulés pendant une absence, neutralisés pour éviter le rattrapage au retour." style={{ color: COLORS.secondary, fontWeight: 600 }}> · ≈{p.credit_total} non rattrapés</span>}
                             </div>
+                            {p.user_id && <div style={{ marginTop: 7 }}><StopButton p={p} C={C} darkMode={darkMode} onChanged={applyData} /></div>}
                           </div>
                         </div>
                       </td>
@@ -302,6 +306,9 @@ export default function LeadAssignmentMonitor() {
             </div>
           </div>
         </div>
+
+        {/* Réassignation manuelle (admin) */}
+        <ReassignPanel pool={pool} C={C} darkMode={darkMode} card={card} onChanged={applyData} />
 
         {/* Rappel des catégories */}
         <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, margin: "26px 0 10px" }}>Les catégories</div>

@@ -28,6 +28,7 @@ import CeoSheetView       from "./pages/CeoSheetView.jsx";
 import CeoDispatchView    from "./pages/CeoDispatchView.jsx";
 import CeoLeaderboardView from "./pages/CeoLeaderboardView.jsx";
 import CeoPerfSalesView   from "./pages/CeoPerfSalesView.jsx";
+import CeoAutoAssignView  from "./pages/CeoAutoAssignView.jsx";
 import CeoLeadQualityView from "./pages/CeoLeadQualityView.jsx";
 import CeoSalesTeamView   from "./pages/CeoSalesTeamView.jsx";
 import CeoWebinarView     from "./pages/CeoWebinarView.jsx";
@@ -40,6 +41,7 @@ import ContractSplitMonitoring from "./pages/ContractSplitMonitoring.jsx";
 import MetaAds            from "./pages/MetaAds/index.jsx";
 import LeadAssignmentEquity from "./pages/LeadAssignmentEquity.jsx";
 import LeadAssignmentMonitor from "./pages/LeadAssignmentMonitor.jsx";
+import LeadAssignmentLive from "./pages/LeadAssignmentLive.jsx";
 import TeamAbsences from "./pages/TeamAbsences.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
@@ -63,6 +65,7 @@ function App() {
         <Route path="/monitoring-perf" element={<MonitoringPerf />} />
         <Route path="/affectation-auto" element={<LeadAssignmentEquity />} />
         <Route path="/affectation-auto-monitor" element={<LeadAssignmentMonitor />} />
+        <Route path="/affectation-en-direct" element={<LeadAssignmentLive />} />
         <Route path="/equipe" element={<TeamAbsences />} />
         <Route path="/eod-report" element={<EODReport />} />
         <Route path="/eod-dashboard" element={<EODDashboard />} />
@@ -136,6 +139,14 @@ function App() {
           element={
             <ProtectedRoute>
               <CeoPerfSalesView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ceo/auto-affectation"
+          element={
+            <ProtectedRoute>
+              <CeoAutoAssignView />
             </ProtectedRoute>
           }
         />

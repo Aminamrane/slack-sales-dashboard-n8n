@@ -39,6 +39,7 @@ import completedIcon from "../assets/completed.png";
 import meetIcon from "../assets/meet.png";
 import mynoteIcon from "../assets/mynote.svg";
 import iconFuse from "../assets/Fuse.svg";
+import LeadAssignmentLive from "./LeadAssignmentLive.jsx";
 import iconMessage from "../assets/message.svg";
 import smsRecuIcon from "../assets/smsrecu.svg";
 import iconSiren from "../assets/siren2.svg";
@@ -2413,6 +2414,9 @@ export default function TrackingSheet() {
               { key: 'email', label: 'Relance', iconSrc: iconEmail, accent: C.accent },
               { key: 'campaigns', label: 'Campagnes', iconSrc: iconCampaigns, accent: '#f59e0b' },
               { key: 'kpis', label: 'KPIs & Stats', iconSrc: iconKpis, accent: '#6366f1' },
+              ...(['head_of_sales_manager', 'admin'].includes(currentUser?.role) ? [{ key: 'autoassign', label: 'Auto-affectation', accent: '#2563eb', iconNode: (active) => (
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></svg>
+              ) }] : []),
               ...(canManageLeads ? [{ key: 'leads_management', label: 'Gestion des leads', iconSrc: iconFuse, accent: '#6366f1', keepColor: true, iconSize: 19 }] : []),
               ...(canManageSheets ? [{ key: 'sheets', label: 'Tracking Sheets', iconSrc: iconSheets, accent: '#8b5cf6' }] : []),
             ].map(item => {
@@ -2435,7 +2439,11 @@ export default function TrackingSheet() {
                   onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'; }}
                   onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                 >
-                  {item.iconSrc && item.keepColor ? (
+                  {item.iconNode ? (
+                    <div style={{ width: 28, height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {item.iconNode(isActive)}
+                    </div>
+                  ) : item.iconSrc && item.keepColor ? (
                     <div style={{ width: 28, height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <img src={item.iconSrc} alt="" style={{ width: item.iconSize || 25, height: item.iconSize || 25, opacity: isActive ? 1 : 0.5, transition: 'all 0.15s', filter: isActive ? (darkMode ? 'none' : 'brightness(0) invert(1)') : 'none' }} />
                     </div>
@@ -2651,6 +2659,13 @@ export default function TrackingSheet() {
         {sidebarView === 'kpis' && ['admin', 'head_of_sales', 'head_of_sales_manager'].includes(currentUser?.role) && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'tabFadeIn 0.3s ease-out both' }}>
             <PerfSalesTable darkMode={darkMode} C={C} />
+          </div>
+        )}
+
+        {/* ════ VIEW: AUTO-AFFECTATION (embed, lecture seule — manager/admin) ═══ */}
+        {sidebarView === 'autoassign' && ['head_of_sales_manager', 'admin'].includes(currentUser?.role) && (
+          <div style={{ flex: 1, overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
+            <LeadAssignmentLive embed />
           </div>
         )}
         {sidebarView === 'kpis' && !['admin', 'head_of_sales', 'head_of_sales_manager'].includes(currentUser?.role) && (

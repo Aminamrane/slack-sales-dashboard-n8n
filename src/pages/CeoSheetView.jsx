@@ -110,6 +110,7 @@ export default function CeoSheetView() {
     if (tabId === "dispatch") { navigate("/ceo/dispatch"); return; }
     if (tabId === "leaderboard") { navigate("/ceo/leaderboard"); return; }
     if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }
+    if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }
     if (tabId === "lead_quality") { navigate("/ceo/lead-quality"); return; }
     if (tabId === "sales_team") { navigate("/ceo/sales-team"); return; }
     if (tabId === "webinar") { navigate("/ceo/webinar"); return; }

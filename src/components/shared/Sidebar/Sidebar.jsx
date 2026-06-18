@@ -22,31 +22,69 @@
 // `.ceo-icon-btn` sont conservées telles quelles (déjà injectées dans le
 // `<style>` de chaque page hôte).
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, Home, MessageSquare, Mail, Search, Sparkles, PanelLeft } from "lucide-react";
 import companyLogo from "../../../assets/my_image.png";
 
+// État de survol PERSISTANT entre les navigations. Sur les dashboards CEO/Acquisition, chaque
+// onglet est une ROUTE distincte : cliquer un onglet remonte toute la page (donc la Sidebar).
+// Sans persistance, la barre se replierait juste après un clic alors que la souris est encore
+// dessus (onMouseEnter ne re-déclenche pas sur un élément monté sous le curseur) -> incohérent.
+// On garde l'état au niveau module : au remontage, la barre reste ouverte si on la survolait.
+let railHovered = false;
+
+// Timings (motion design). Un menu de nav = utilitaire : le mouvement doit s'effacer, ne laisser
+// que la vitesse. Pas de ressort (traîne de stabilisation = sensation de lenteur), pas de rebond.
+// Ease-out court et net. Ouverture vive, fermeture encore plus rapide (les sorties sont + rapides
+// que les entrées). easeOutExpo : gros déplacement immédiat puis pose douce.
+const OPEN_T = { duration: 0.06, ease: [0.16, 1, 0.3, 1] };
+const CLOSE_T = { duration: 0.08, ease: [0.16, 1, 0.3, 1] };
+
 export default function Sidebar({ width, collapsed, onToggle, sections, activeTab, setActiveTab, C, darkMode }) {
+  // Survol = dépliage automatique (réactif) : si la barre est repliée, la survoler
+  // l'ouvre (largeur étendue + labels) ; en sortir la referme. Le bouton de pin
+  // (onToggle/collapsed) reste prioritaire : barre épinglée ouverte = toujours ouverte.
+  const [hovered, setHovered] = useState(() => railHovered);
+  const setHover = (v) => { railHovered = v; setHovered(v); };
+  const effCollapsed = collapsed && !hovered;
+  const effWidth = (collapsed && hovered) ? 260 : width;
+  // Le LAYOUT (labels + centrage icônes) suit un état RETARDÉ : à la fermeture, les labels restent
+  // rendus pendant que le panneau rétrécit (l'overflow:hidden les rogne -> le panneau "avale" le
+  // texte, cohérent), puis on bascule en mode replié à la fin de l'animation. À l'ouverture, direct.
+  const [renderCollapsed, setRenderCollapsed] = useState(() => collapsed && !railHovered);
+  useEffect(() => { if (!effCollapsed) setRenderCollapsed(false); }, [effCollapsed]);
   return (
-    <motion.aside
-      className="ceo-side"
-      animate={{ width }}
-      initial={false}
-      transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-      style={{
-        flexShrink: 0,
-        background: C.bg,
-        borderRight: `1px solid ${C.border}`,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        position: 'relative',
-      }}
-    >
+    <>
+      {/* Spacer : réserve la largeur repliée dans le flux -> les éléments de la page ne bougent JAMAIS. */}
+      <div style={{ width, flexShrink: 0, alignSelf: 'stretch' }} aria-hidden />
+      {createPortal(
+      <motion.aside
+        className="ceo-side"
+        animate={{ width: effWidth }}
+        initial={false}
+        transition={effCollapsed ? CLOSE_T : OPEN_T}
+        onAnimationComplete={() => { if (effCollapsed) setRenderCollapsed(true); }}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          // overlay : la barre étendue passe PAR-DESSUS le contenu (pas de reflow de la page)
+          position: 'fixed', left: 0, top: 0, height: '100vh', zIndex: 40,
+          // police explicite (le portal vers body lui ferait perdre celle de .ceo-page) :
+          // identique au menu de gauche de la TrackingSheet Sales.
+          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+          background: C.bg,
+          borderRight: `1px solid ${C.border}`,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          boxShadow: renderCollapsed ? 'none' : (darkMode ? '4px 0 24px rgba(0,0,0,0.5)' : '4px 0 24px rgba(16,24,40,0.10)'),
+        }}
+      >
       <div style={{ flexShrink: 0 }}>
-        <WorkspaceHeader collapsed={collapsed} C={C} />
-        <IconRow collapsed={collapsed} C={C} />
+        <WorkspaceHeader collapsed={renderCollapsed} C={C} />
+        <IconRow collapsed={renderCollapsed} C={C} />
       </div>
 
       <nav style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 0' }} className="ceo-side-scroll">
@@ -54,7 +92,7 @@ export default function Sidebar({ width, collapsed, onToggle, sections, activeTa
           <SidebarSection
             key={sec.key}
             section={sec}
-            collapsed={collapsed}
+            collapsed={renderCollapsed}
             activeTab={activeTab}
             setActiveTab={setActiveTab}
             C={C}
@@ -64,9 +102,11 @@ export default function Sidebar({ width, collapsed, onToggle, sections, activeTa
       </nav>
 
       <div style={{ flexShrink: 0 }}>
-        <SidebarFooter collapsed={collapsed} onToggle={onToggle} C={C} />
+        <SidebarFooter collapsed={renderCollapsed} onToggle={onToggle} C={C} />
       </div>
-    </motion.aside>
+      </motion.aside>,
+      document.body)}
+    </>
   );
 }
 
@@ -82,6 +122,7 @@ function WorkspaceHeader({ collapsed, C }) {
         style={{
           flex: 1,
           display: 'flex', alignItems: 'center', gap: 8,
+          justifyContent: collapsed ? 'center' : 'flex-start',
           padding: '4px 6px',
           borderRadius: 4,
           border: 'none', background: 'transparent', cursor: 'pointer',
