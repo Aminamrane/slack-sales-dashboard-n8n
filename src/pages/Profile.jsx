@@ -594,7 +594,7 @@ export default function Profile() {
               Confirmer vos jours de travail ?
             </h3>
             <p style={{ fontSize: "14px", color: C.secondary, margin: "0 0 24px", lineHeight: 1.5, fontFamily: "inherit" }}>
-              Une fois confirmé, vous ne pourrez pas les modifier pendant 2 semaines. Contactez le support en cas de besoin.
+              Vos jours de travail déterminent les jours où vous recevez des leads. Vous pouvez les modifier à tout moment.
             </p>
             <div style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
               <button

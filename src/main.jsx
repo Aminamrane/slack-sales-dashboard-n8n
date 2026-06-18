@@ -37,6 +37,10 @@ import Marketing          from "./pages/Marketing/index.jsx";
 import FunnelLeads        from "./pages/FunnelLeads/index.jsx";
 import Dialer             from "./pages/Dialer/index.jsx";
 import ContractSplitMonitoring from "./pages/ContractSplitMonitoring.jsx";
+import MetaAds            from "./pages/MetaAds/index.jsx";
+import LeadAssignmentEquity from "./pages/LeadAssignmentEquity.jsx";
+import LeadAssignmentMonitor from "./pages/LeadAssignmentMonitor.jsx";
+import TeamAbsences from "./pages/TeamAbsences.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import MouseDot from "./components/MouseDot.jsx";
@@ -57,6 +61,9 @@ function App() {
         <Route path="/tracking-sheet" element={<TrackingSheet />} />
         <Route path="/tracking-setter" element={<TrackingSheetSetter />} />
         <Route path="/monitoring-perf" element={<MonitoringPerf />} />
+        <Route path="/affectation-auto" element={<LeadAssignmentEquity />} />
+        <Route path="/affectation-auto-monitor" element={<LeadAssignmentMonitor />} />
+        <Route path="/equipe" element={<TeamAbsences />} />
         <Route path="/eod-report" element={<EODReport />} />
         <Route path="/eod-dashboard" element={<EODDashboard />} />
         <Route path="/profile" element={<Profile />} />
@@ -185,6 +192,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['admin']}>
               <ContractSplitMonitoring />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/meta-ads"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <MetaAds />
             </ProtectedRoute>
           }
         />

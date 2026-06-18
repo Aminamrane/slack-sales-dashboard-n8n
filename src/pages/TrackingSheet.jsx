@@ -134,6 +134,7 @@ const CATEGORIES = [
   { key: "callback",     label: "À rappeler",      color: "#94a3b8", softBg: "#f4f5f7", softBgDark: "rgba(148,163,184,0.18)", softText: "#8993a4", description: "Prospect souhaite être rappelé" },
   { key: "voicemail",    label: "Répondeurs",      color: "#64748b", softBg: "#f0f1f4", softBgDark: "rgba(100,116,139,0.18)", softText: "#7a8594", description: "Pas de réponse" },
   { key: "not_relevant", label: "Non-pertinents",  color: "#f87171", softBg: "#fceeed", softBgDark: "rgba(248,113,113,0.18)", softText: "#c47272", description: "Non qualifiés ou pas intéressés" },
+  { key: "to_recontact", label: "À relancer",      color: "#14b8a6", softBg: "#e6faf6", softBgDark: "rgba(20,184,166,0.18)",  softText: "#0f9b8e", description: "Pas pour nous maintenant, à recontacter plus tard" },
   { key: "signed",       label: "Signés",          color: "#34d399", softBg: "#edfbf3", softBgDark: "rgba(52,211,153,0.18)",  softText: "#5ab896", description: "Clients signés" },
 ];
 
@@ -812,6 +813,8 @@ export default function TrackingSheet() {
   // prospect). Mêmes mécaniques collapsible que cancelled/setter_placed.
   const [r2WebinaireExpanded, setR2WebinaireExpanded] = useState(true);
   const [sidebarView, setSidebarView] = useState(initialView || 'leads');
+  const [sidebarHover, setSidebarHover] = useState(false);
+  const sidebarCollapsed = !sidebarHover; // repliee par defaut, s'ouvre au survol (overlay)
 
   // ── TRACKING SHEETS MANAGEMENT (admin, HoS only) ──────────────────────────
   const [allSheets, setAllSheets] = useState([]); // [{ email, full_name, lead_count, status, team_id, avatar_url }]
@@ -956,6 +959,9 @@ export default function TrackingSheet() {
   const [showVacationModal, setShowVacationModal] = useState(false);
   const [newVacStart, setNewVacStart] = useState('');
   const [newVacEnd, setNewVacEnd] = useState('');
+  const [newVacType, setNewVacType] = useState('conge');
+  const [newVacDesc, setNewVacDesc] = useState('');
+  const ABSENCE_TYPE_META = { conge: { label: 'Congé', color: '#f59e0b' }, maladie: { label: 'Maladie', color: '#ef4444' }, absence: { label: 'Absence', color: '#ec4899' }, autre: { label: 'Autre', color: '#6366f1' } };
   const [vacError, setVacError] = useState('');
   // Cross-user : HoS/HoSM/admin peuvent gerer les absences des membres de leur equipe
   const [manageableUsers, setManageableUsers] = useState([]); // [{id, full_name, email, role, is_self}]
@@ -997,8 +1003,8 @@ export default function TrackingSheet() {
       ? `/api/v1/users/${targetManageUserId}/unavailability`
       : '/api/v1/users/me/unavailability';
     try {
-      await apiClient.post(targetUrl, { start_date: newVacStart, end_date: newVacEnd });
-      setNewVacStart(''); setNewVacEnd('');
+      await apiClient.post(targetUrl, { start_date: newVacStart, end_date: newVacEnd, absence_type: newVacType, description: newVacDesc.trim() || null });
+      setNewVacStart(''); setNewVacEnd(''); setNewVacType('conge'); setNewVacDesc('');
       await fetchTargetUnavailability(targetManageUserId);
       if (!targetManageUserId) await fetchMyUnavailability();
     } catch (e) {
@@ -2034,7 +2040,7 @@ export default function TrackingSheet() {
       <style>{`
         @keyframes pageReveal {
           from { opacity: 0; transform: translateY(20px); }
-          to   { opacity: 1; transform: translateY(0); }
+          to   { opacity: 1; transform: none; }
         }
         @keyframes tabFadeIn {
           from { opacity: 0; transform: translateY(10px); }
@@ -2273,7 +2279,7 @@ export default function TrackingSheet() {
         }
       `}</style>
 
-      {!embedMode && <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} notification={navNotif} />}
+      {!embedMode && <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} notification={navNotif} centerShift={78} />}
 
       {/* ── FLYING CARD CLONE (Genie effect transition) ───────────────────── */}
       {flyingCard && (
@@ -2352,24 +2358,33 @@ export default function TrackingSheet() {
         <div style={{ display: 'flex', alignItems: 'stretch', minHeight: '100vh' }}>
 
           {/* ── LEFT SIDEBAR (full height) — hidden in CEO embed mode ──────── */}
-          {!embedMode && (
-          <div style={{
-            width: 220,
-            minWidth: 220,
+          {!embedMode && <div style={{ width: 64, minWidth: 64, flexShrink: 0 }} />}
+          {!embedMode && createPortal((
+          <div
+            onMouseEnter={() => setSidebarHover(true)}
+            onMouseLeave={() => setSidebarHover(false)}
+            style={{
+            position: 'fixed', top: 0, left: 0, height: '100vh', zIndex: 60,
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+            width: sidebarCollapsed ? 64 : 220,
             borderRight: `1px solid ${C.border}`,
             display: 'flex',
             flexDirection: 'column',
             background: darkMode ? C.subtle : '#eceef2',
             animation: 'sidebarReveal 0.4s ease both',
+            transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)',
+            overflow: 'hidden',
+            boxShadow: sidebarCollapsed ? 'none' : (darkMode ? '6px 0 28px rgba(0,0,0,0.45)' : '6px 0 28px rgba(0,0,0,0.12)'),
           }}>
             {/* Sidebar header — company logo like Quno */}
-            <div style={{ padding: '18px 16px 14px', borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
+            <div style={{ padding: sidebarCollapsed ? '14px 8px' : '18px 16px 14px', borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 8,
-                padding: '6px 8px',
+                padding: sidebarCollapsed ? '6px' : '6px 8px',
                 borderRadius: 10,
                 border: `1px solid ${C.border}`,
                 background: darkMode ? 'rgba(255,255,255,0.04)' : '#fff',
+                justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
               }}>
                 <div style={{
                   width: 32, height: 32, borderRadius: 8,
@@ -2379,7 +2394,7 @@ export default function TrackingSheet() {
                 }}>
                   <img src={companyLogo} alt="" style={{ width: 20, height: 20, objectFit: 'contain', filter: darkMode ? 'none' : 'brightness(0) invert(1)' }} />
                 </div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>Owner</div>
+                {!sidebarCollapsed && <div style={{ fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>Owner</div>}
               </div>
             </div>
 
@@ -2408,6 +2423,7 @@ export default function TrackingSheet() {
                   onClick={() => { setSidebarView(item.key); if (item.key !== 'leads') setSelectedLead(null); }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6,
+                    justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
                     padding: item.iconSize ? '2px 12px' : '9px 12px', margin: '1px 12px', cursor: 'pointer',
                     borderRadius: 10,
                     background: isActive ? (darkMode ? '#fff' : '#1e2330') : 'transparent',
@@ -2445,13 +2461,16 @@ export default function TrackingSheet() {
                       {item.icon}
                     </span>
                   )}
+                  {!sidebarCollapsed && (
                   <span style={{
                     fontSize: 13, fontWeight: isActive ? 600 : 500,
                     color: isActive ? (darkMode ? '#1e2330' : '#fff') : C.muted, transition: 'color 0.15s',
+                    whiteSpace: 'nowrap',
                   }}>
                     {item.label}
                   </span>
-                  {item.key === 'leads' && (
+                  )}
+                  {!sidebarCollapsed && item.key === 'leads' && (
                     <span style={{
                       marginLeft: 'auto', fontSize: 10, fontWeight: 600,
                       padding: '2px 6px', borderRadius: 4,
@@ -2461,7 +2480,7 @@ export default function TrackingSheet() {
                       {leads.length}
                     </span>
                   )}
-                  {item.badgeCount > 0 && (
+                  {!sidebarCollapsed && item.badgeCount > 0 && (
                     <span style={{
                       marginLeft: 'auto', fontSize: 10, fontWeight: 700,
                       padding: '2px 7px', borderRadius: 50,
@@ -2478,7 +2497,7 @@ export default function TrackingSheet() {
             {/* Spacer */}
             <div style={{ flex: 1 }} />
           </div>
-          )}
+          ), document.body)}
 
         {/* ── RIGHT COLUMN (single top card + content row) ─────────────────── */}
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: embedMode ? '8px 8px 8px 8px' : '8px 8px 8px 0', gap: 12 }}>
@@ -2956,7 +2975,7 @@ export default function TrackingSheet() {
                       style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontFamily: 'inherit' }}
                     >&lsaquo;</button>
                     <button onClick={() => setCalendarWeekOffset(0)}
-                      style={{ padding: '6px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: calWeekOffset === 0 ? C.accent : 'transparent', color: calWeekOffset === 0 ? '#fff' : C.text, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
+                      style={{ padding: '6px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: calWeekOffset === 0 ? (darkMode ? '#fff' : '#1e2330') : 'transparent', color: calWeekOffset === 0 ? (darkMode ? '#1e2330' : '#fff') : C.text, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
                     >Aujourd'hui</button>
                     <button onClick={() => setCalendarWeekOffset(prev => (prev || 0) + 1)}
                       style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontFamily: 'inherit' }}
@@ -2966,7 +2985,7 @@ export default function TrackingSheet() {
                     </span>
                     <div style={{ width: 1, height: 22, background: C.border, margin: '0 4px' }} />
                     <button onClick={() => setShowVacationModal(true)}
-                      style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: myUnavailability.length > 0 ? 'rgba(99,102,241,0.10)' : 'transparent', color: C.text, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}
+                      style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: myUnavailability.length > 0 ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)') : 'transparent', color: C.text, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}
                       title="Déclarer mes absences"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -2978,7 +2997,7 @@ export default function TrackingSheet() {
                         <line x1="14" y1="14" x2="10" y2="18" />
                       </svg>
                       <span>Mes absences</span>
-                      {myUnavailability.length > 0 && <span style={{ background: '#6366f1', color: '#fff', borderRadius: 8, padding: '0 6px', fontSize: 10, fontWeight: 700 }}>{myUnavailability.length}</span>}
+                      {myUnavailability.length > 0 && <span style={{ background: darkMode ? '#eef0f6' : '#1e2330', color: darkMode ? '#1e2330' : '#fff', borderRadius: 8, padding: '0 6px', fontSize: 10, fontWeight: 700 }}>{myUnavailability.length}</span>}
                     </button>
                   </div>
                 </div>
@@ -2992,20 +3011,20 @@ export default function TrackingSheet() {
                       <div key={i} style={{
                         textAlign: 'center', padding: '8px 0 10px',
                         borderLeft: `1px solid ${C.border}`,
-                        background: onVacation ? (darkMode ? 'rgba(99,102,241,0.10)' : 'rgba(99,102,241,0.06)') : 'transparent',
+                        background: onVacation ? (darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)') : 'transparent',
                         position: 'relative',
                       }}>
                         <div style={{ fontSize: 11, fontWeight: 500, color: C.muted, textTransform: 'uppercase' }}>{dayLabels[i]}</div>
                         <div style={{
                           fontSize: 20, fontWeight: 700, lineHeight: 1.3,
-                          color: isToday(d) ? '#fff' : C.text,
+                          color: isToday(d) ? (darkMode ? '#1e2330' : '#fff') : C.text,
                           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                           width: 34, height: 34, borderRadius: '50%',
-                          background: isToday(d) ? C.accent : 'transparent',
+                          background: isToday(d) ? (darkMode ? '#fff' : '#1e2330') : 'transparent',
                         }}>
                           {d.getDate()}
                         </div>
-                        {onVacation && <div style={{ fontSize: 10, fontWeight: 600, color: '#6366f1', marginTop: 2, letterSpacing: '0.04em' }}>absent</div>}
+                        {onVacation && <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, marginTop: 2, letterSpacing: '0.04em' }}>absent</div>}
                       </div>
                     );
                   })}
@@ -3118,10 +3137,10 @@ export default function TrackingSheet() {
               onClick={(e) => e.stopPropagation()}
               style={{ background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`, boxShadow: '0 24px 60px rgba(0,0,0,0.25)', width: 540, maxWidth: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'solarFadeIn 0.25s cubic-bezier(0.16,1,0.3,1) both' }}
             >
-              {/* Header avec accent indigo subtil — aligne avec la charte du site */}
-              <div style={{ padding: '22px 28px 18px', background: darkMode ? 'linear-gradient(135deg, rgba(99,102,241,0.12), rgba(99,102,241,0.04))' : 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(99,102,241,0.02))', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              {/* Header neutre (navy de la charte, plus de violet) */}
+              <div style={{ padding: '22px 28px 18px', background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.015)', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: 'linear-gradient(135deg, #6366f1, #4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 4px 12px rgba(99,102,241,0.28)' }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: darkMode ? '#eef0f6' : '#1e2330', display: 'flex', alignItems: 'center', justifyContent: 'center', color: darkMode ? '#1e2330' : '#fff', boxShadow: darkMode ? 'none' : '0 4px 12px rgba(0,0,0,0.18)' }}>
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="3" y="4" width="18" height="18" rx="2" />
                       <line x1="16" y1="2" x2="16" y2="6" />
@@ -3157,7 +3176,7 @@ export default function TrackingSheet() {
                     <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pour qui ?</label>
                     <select
                       value={targetManageUserId || ''}
-                      onChange={(e) => { setTargetManageUserId(e.target.value || null); setVacError(''); setNewVacStart(''); setNewVacEnd(''); }}
+                      onChange={(e) => { setTargetManageUserId(e.target.value || null); setVacError(''); setNewVacStart(''); setNewVacEnd(''); setNewVacType('conge'); setNewVacDesc(''); }}
                       style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', cursor: 'pointer', boxSizing: 'border-box' }}
                     >
                       <option value="">Moi-même</option>
@@ -3170,7 +3189,7 @@ export default function TrackingSheet() {
                 {/* Liste des periodes existantes */}
                 {targetUnavailability.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '20px 0 24px', color: C.muted }}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 56, height: 56, borderRadius: 14, background: darkMode ? 'rgba(99,102,241,0.10)' : 'rgba(99,102,241,0.06)', color: '#6366f1', marginBottom: 8 }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 56, height: 56, borderRadius: 14, background: darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', color: C.muted, marginBottom: 8 }}>
                       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="3" y="4" width="18" height="18" rx="2" />
                         <line x1="16" y1="2" x2="16" y2="6" />
@@ -3197,11 +3216,11 @@ export default function TrackingSheet() {
                         return Math.round((e - s) / 86400000) + 1;
                       })();
                       return (
-                        <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: darkMode ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)', border: `1px solid ${darkMode ? 'rgba(99,102,241,0.22)' : 'rgba(99,102,241,0.18)'}`, borderRadius: 12, transition: 'transform 0.15s' }}
+                        <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: C.subtle, border: `1px solid ${C.border}`, borderRadius: 12, transition: 'transform 0.15s' }}
                           onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-1px)'}
                           onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
                         >
-                          <div style={{ width: 38, height: 38, borderRadius: 10, background: darkMode ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.12)', color: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <div style={{ width: 38, height: 38, borderRadius: 10, background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', color: C.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <rect x="3" y="4" width="18" height="18" rx="2" />
                               <line x1="16" y1="2" x2="16" y2="6" />
@@ -3212,11 +3231,12 @@ export default function TrackingSheet() {
                             </svg>
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13.5, fontWeight: 600, color: C.text, lineHeight: 1.3 }}>
+                            <div style={{ fontSize: 13.5, fontWeight: 600, color: C.text, lineHeight: 1.3, display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
                               {v.start_date === v.end_date ? fmt(v.start_date) : `${fmt(v.start_date)} → ${fmt(v.end_date)}`}
+                              {(() => { const m = ABSENCE_TYPE_META[v.absence_type] || ABSENCE_TYPE_META.conge; return <span style={{ fontSize: 10, fontWeight: 700, color: m.color, background: m.color + '1e', borderRadius: 5, padding: '1px 7px' }}>{m.label}</span>; })()}
                             </div>
                             <div style={{ fontSize: 11, color: C.muted, marginTop: 2, fontWeight: 500 }}>
-                              {daysCount} jour{daysCount > 1 ? 's' : ''}
+                              {daysCount} jour{daysCount > 1 ? 's' : ''}{v.description ? ` · ${v.description}` : ''}
                             </div>
                           </div>
                           <button onClick={() => handleDeleteVacation(v.id)}
@@ -3266,11 +3286,29 @@ export default function TrackingSheet() {
                       />
                     </div>
                   </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Type</label>
+                    <select value={newVacType} onChange={(e) => setNewVacType(e.target.value)}
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', cursor: 'pointer' }}>
+                      {Object.entries(ABSENCE_TYPE_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Description <span style={{ textTransform: 'none', fontWeight: 500, opacity: 0.7 }}>(optionnel)</span></label>
+                    <input value={newVacDesc} onChange={(e) => setNewVacDesc(e.target.value)} placeholder="Ex : rdv médical, formation…"
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                      onFocus={(e) => e.currentTarget.style.borderColor = '#6366f1'}
+                      onBlur={(e) => e.currentTarget.style.borderColor = C.border}
+                    />
+                  </div>
                   <button onClick={handleAddVacation}
-                    style={{ width: '100%', padding: '11px 16px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #6366f1, #4f46e5)', color: '#fff', cursor: 'pointer', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap', boxShadow: '0 4px 12px rgba(99,102,241,0.28)', letterSpacing: '0.01em', transition: 'transform 0.15s, box-shadow 0.15s' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(99,102,241,0.38)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(99,102,241,0.28)'; }}
-                  >Ajouter cette période</button>
+                    style={{ width: '100%', padding: '11px 16px', borderRadius: 10, border: 'none', background: darkMode ? '#fff' : '#1e2330', color: darkMode ? '#1e2330' : '#fff', cursor: 'pointer', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap', boxShadow: darkMode ? 'none' : '0 4px 12px rgba(0,0,0,0.18)', letterSpacing: '0.01em', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'transform 0.15s, box-shadow 0.15s' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = darkMode ? 'none' : '0 6px 16px rgba(0,0,0,0.26)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = darkMode ? 'none' : '0 4px 12px rgba(0,0,0,0.18)'; }}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+                    Ajouter cette période
+                  </button>
                   {vacError && (
                     <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, fontSize: 12, color: '#ef4444', fontWeight: 500 }}>
                       {vacError}
@@ -6372,10 +6410,32 @@ export default function TrackingSheet() {
                           {wfPill('Répondeur', '#64748b', '📞', 70, () => isReContact ? bumpCallAttempts() : handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, contact_result: 'voicemail', status: 'voicemail' }))}
                           {wfPill('Non pertinent', '#ef4444', '✕', 110, () => handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, contact_result: 'not_relevant', status: 'not_relevant' }))}
                           {wfPill('Non traitable', '#f59e0b', '⚠', 150, () => handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, contact_result: 'not_processable', status: 'not_relevant' }))}
+                          {wfPill('À relancer', '#14b8a6', '↻', 190, () => setActiveWorkflow(prev => ({ ...prev, contactResult: 'to_recontact', newDate: '' })))}
                         </div>
                         <button onClick={() => setActiveWorkflow(null)}
                           style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', marginTop: 2, opacity: 0.7, animation: 'wfSplitIn 0.3s ease 200ms both' }}
                         >Annuler</button>
+                      </div>
+                    ) : wf.contactResult === 'to_recontact' ? (
+                      /* ── Sous-étape: date approx. de relance (À relancer ≠ Non pertinent) ── */
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '16px 18px', borderRadius: 16, background: darkMode ? 'rgba(20,184,166,0.08)' : 'rgba(20,184,166,0.05)', border: `1px solid ${darkMode ? 'rgba(20,184,166,0.22)' : 'rgba(20,184,166,0.15)'}`, animation: 'wfDateCardIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 15 }}>↻</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#0f9b8e' }}>Quand le recontacter ?</span>
+                        </div>
+                        <div style={{ fontSize: 10.5, color: C.muted }}>Date approximative, modifiable plus tard.</div>
+                        <input type="date" value={wf.newDate ? wf.newDate.slice(0, 10) : ''}
+                          onChange={(e) => setActiveWorkflow(prev => ({ ...prev, newDate: e.target.value }))}
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
+                        />
+                        {wf.newDate && wf.newDate.length >= 10 && (
+                          <button onClick={() => handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, status: 'to_recontact', recontact_date: wf.newDate.slice(0, 10) })}
+                            style={{ padding: '10px 20px', borderRadius: 50, border: 'none', background: '#14b8a6', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both' }}
+                          >Confirmer → À relancer</button>
+                        )}
+                        <button onClick={() => setActiveWorkflow(prev => ({ ...prev, contactResult: '', newDate: '' }))}
+                          style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', opacity: 0.7 }}
+                        >← Retour</button>
                       </div>
                     ) : wf.contactResult === 'reached' && !wf.appointmentResult ? (
                       /* ── Step 2: Follow-up pills ── */
@@ -6702,6 +6762,18 @@ export default function TrackingSheet() {
               })()}
 
 
+              {/* Dates pipeline (À relancer = recontact futur ; Non pertinent = écarté) */}
+              {activeCat.key === 'to_recontact' && lead.recontact_date && (
+                <div style={{ fontSize: 11.5, fontWeight: 600, color: '#0f9b8e', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>↻</span> Relancer vers le {new Date(lead.recontact_date + 'T00:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                </div>
+              )}
+              {activeCat.key === 'not_relevant' && lead.not_relevant_at && (
+                <div style={{ fontSize: 11.5, fontWeight: 500, color: C.muted, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ color: '#f87171' }}>✕</span> Non pertinent depuis le {new Date(lead.not_relevant_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                </div>
+              )}
+
               {/* ═══ OTHER TABS: Déplacer vers (not for signed) ═══ */}
               {!['new', 'r1', 'r2', 'r3', 'signed', 'callback', 'voicemail'].includes(activeCat.key) && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
@@ -6715,6 +6787,7 @@ export default function TrackingSheet() {
                       if (cat.key === activeCat.key || cat.key === 'signed') return false;
                       // Répondeurs & Non-pertinents can only go back to Nouveaux leads
                       if (activeCat.key === 'not_relevant') return cat.key === 'new';
+                      if (activeCat.key === 'to_recontact') return cat.key === 'new';
                       if (activeCat.key === 'voicemail' || activeCat.key === 'callback') return cat.key === 'new' || cat.key === 'not_relevant';
                       return true;
                     }).map(cat => (
