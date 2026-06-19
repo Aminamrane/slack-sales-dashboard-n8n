@@ -8,6 +8,7 @@ import SharedNavbar from '../../components/SharedNavbar.jsx';
 // L'import de theme injecte aussi les keyframes mkt* globales.
 import { buildTheme, fmtInt } from '../Marketing/theme';
 import Card from '../Marketing/components/Card';
+import FunnelAnalysis from './FunnelAnalysis';
 
 const ALLOWED_ROLES = ['admin', 'ceo', 'acquisition_director'];
 
@@ -453,6 +454,9 @@ export default function FunnelLeads() {
             )}
           </div>
         </div>
+
+        {/* ── ANALYSE IA (sous l'entonnoir, repliable) ── */}
+        <FunnelAnalysis C={C} month={month} />
       </motion.div>
     </div>
   );
