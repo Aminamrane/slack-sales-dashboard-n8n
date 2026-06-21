@@ -6,6 +6,8 @@ import { supabase } from "../lib/supabaseClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import LeadsManagement from "./LeadsManagement.jsx";
 import PerfSalesTable from "../components/PerfSalesTable.jsx";
+import ReproLinkRow from "../components/booking/ReproLinkRow.jsx";
+import BookingSettings from "../components/booking/BookingSettings.jsx";
 import "../index.css";
 
 // ── SIDEBAR ICONS ────────────────────────────────────────────────────────────
@@ -4094,6 +4096,8 @@ export default function TrackingSheet() {
                             fontSize: 14, fontWeight: 600, cursor: relanceSaving ? 'wait' : 'pointer',
                             fontFamily: 'inherit', transition: 'all 0.2s', alignSelf: 'flex-start',
                           }}>{relanceSaving ? 'Enregistrement...' : relanceSaved ? 'Enregistré ✓' : 'Enregistrer les relances'}</button>
+
+                          <BookingSettings C={C} darkMode={darkMode} />
                         </div>
                       );
                     })()}
@@ -6018,6 +6022,7 @@ export default function TrackingSheet() {
                     </div>
                   </a>
                 )}
+                <ReproLinkRow lead={lead} C={C} darkMode={darkMode} />
               </div>
 
               {/* ─── CALENDAR ERROR ─── */}
