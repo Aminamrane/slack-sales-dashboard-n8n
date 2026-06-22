@@ -43,7 +43,6 @@ import LeadAssignmentEquity from "./pages/LeadAssignmentEquity.jsx";
 import LeadAssignmentMonitor from "./pages/LeadAssignmentMonitor.jsx";
 import LeadAssignmentLive from "./pages/LeadAssignmentLive.jsx";
 import TeamAbsences from "./pages/TeamAbsences.jsx";
-import RdvBooking from "./pages/RdvBooking.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import MouseDot from "./components/MouseDot.jsx";
@@ -59,7 +58,6 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/rdv/:token" element={<RdvBooking />} />
         <Route path="/admin/leads" element={<AdminLeads />} />
         <Route path="/leads-management" element={<LeadsManagement />} />
         <Route path="/tracking-sheet" element={<TrackingSheet />} />

@@ -43,7 +43,7 @@ export default function BookingSettings({ C, darkMode }) {
       setStartH(s.booking_start_hour ?? 9);
       setEndH(s.booking_end_hour ?? 19);
       setDays(new Set(String(s.booking_days || '1,2,3,4,5').split(',').map(Number).filter(Boolean)));
-      if (g && g.path) setUrl(window.location.origin + g.path);
+      if (g && g.url) setUrl(g.url); // URL audit (jamais interne) — autorité serveur
       setLoaded(true);
     }).catch(() => setLoaded(true));
     return () => { cancelled = true; };

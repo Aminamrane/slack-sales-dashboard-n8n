@@ -57,8 +57,8 @@ export default function ReproLinkRow({ lead, C, darkMode }) {
     setLoading(true); setErr(false);
     try {
       const data = await apiClient.get(`/api/v1/rdv-booking/manage/lead/${lead.id}/link`);
-      if (!data || !data.path) throw new Error('no link');
-      await navigator.clipboard.writeText(window.location.origin + data.path);
+      if (!data || !data.url) throw new Error('no link');
+      await navigator.clipboard.writeText(data.url); // URL audit (jamais interne)
       setStatus({ opened_at: data.opened_at, booked_at: data.booked_at });
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
