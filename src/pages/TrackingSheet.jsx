@@ -811,6 +811,8 @@ export default function TrackingSheet() {
   const [setterPlacedExpanded, setSetterPlacedExpanded] = useState(false);
   // R2 tab — "R2 Landing" container (Broad LP / BTP LP) : expanded par defaut.
   const [r2LandingExpanded, setR2LandingExpanded] = useState(true);
+  // R1 tab — "R1 Landing" container (Broad LP) : etat plie/deplie distinct de R2.
+  const [r1LandingExpanded, setR1LandingExpanded] = useState(true);
   // R2 tab — "R2 Webinaire" container : expanded par défaut pour visibilité
   // immédiate (leads issus des bookings webinaire avec R2 déjà placé par le
   // prospect). Mêmes mécaniques collapsible que cancelled/setter_placed.
@@ -4877,8 +4879,12 @@ export default function TrackingSheet() {
             const isDatePast = (d) => { if (!d) return false; const ds = typeof d === 'string' ? d.slice(0, 10) : ''; return ds && ds < todayDate; };
             const isSetterPlaced = (l) => l.r1_placed_by_setter_id != null;
             const isSetterPlacedUnqualified = (l) => isSetterPlaced(l) && (!l.r1_result || l.r1_result === 'rescheduled');
+            // Landing pages dynamiques (Broad LP, BTP LP, etc.) : origin finit par " LP".
+            // RDV R1 pris directement depuis la LP (/live) → propre conteneur "R1 Landing".
+            const isLandingLead = (l) => (l.origin || '').toLowerCase().trimEnd().endsWith(' lp');
             const r1SetterPlaced = isR1Tab ? filteredLeads.filter(isSetterPlacedUnqualified) : [];
-            const r1Scheduled  = isR1Tab ? filteredLeads.filter(l => !isSetterPlacedUnqualified(l) && (!l.r1_result || l.r1_result === 'rescheduled') && !isDatePast(l.r1)) : [];
+            const r1Landing    = isR1Tab ? filteredLeads.filter(l => !isSetterPlacedUnqualified(l) && (!l.r1_result || l.r1_result === 'rescheduled') && !isDatePast(l.r1) && isLandingLead(l)) : [];
+            const r1Scheduled  = isR1Tab ? filteredLeads.filter(l => !isSetterPlacedUnqualified(l) && (!l.r1_result || l.r1_result === 'rescheduled') && !isDatePast(l.r1) && !isLandingLead(l)) : [];
             const r1Pending    = isR1Tab ? filteredLeads.filter(l => !isSetterPlacedUnqualified(l) && (l.r1_result === 'no_show' || ((!l.r1_result || l.r1_result === 'rescheduled') && isDatePast(l.r1)))) : [];
             const r1Cancelled  = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'cancelled') : [];
             const r1Completed  = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'done') : [];
@@ -4890,8 +4896,6 @@ export default function TrackingSheet() {
             // Affichés dans leur propre container en HAUT de l'onglet pour visibilité
             // immédiate (RDV placé par le prospect, sales doit savoir tout de suite).
             const isWebinaireLead = (l) => (l.origin || '').toLowerCase().startsWith('webinaire');
-            // Landing pages dynamiques (Broad LP, BTP LP, etc.) : origin finit par " LP".
-            const isLandingLead = (l) => (l.origin || '').toLowerCase().trimEnd().endsWith(' lp');
             const r2Webinaire  = isR2Tab ? r2ScheduledAll.filter(isWebinaireLead) : [];
             const r2Landing    = isR2Tab ? r2ScheduledAll.filter(isLandingLead) : [];
             const r2Scheduled  = isR2Tab ? r2ScheduledAll.filter(l => !isWebinaireLead(l) && !isLandingLead(l)) : [];
@@ -4928,6 +4932,13 @@ export default function TrackingSheet() {
 
             // Unified groups array for the active tab
             const groups = isR1Tab ? [
+              // Container "R1 Landing" en TÊTE : leads Broad LP, RDV R1 pris directement
+              // depuis la landing page (/live). Couleur cyan (cohérent avec "R2 Landing").
+              // Affiché uniquement si non vide.
+              ...(r1Landing.length > 0 ? [{
+                key: 'landing', leads: r1Landing, label: 'R1 Landing',
+                color: '#06b6d4',
+              }] : []),
               { key: 'scheduled', leads: r1Scheduled, label: 'Planifiés', color: '#3b82f6' },
               // Container "Traité par le setter" — positionné juste après Planifiés
               // pour que le sales voie immédiatement les R1 placés par les setters
@@ -5463,7 +5474,7 @@ export default function TrackingSheet() {
                               : isWebinaireGrp
                                 ? r2WebinaireExpanded
                                 : isLandingGrp
-                                  ? r2LandingExpanded
+                                  ? (isR1Tab ? r1LandingExpanded : r2LandingExpanded)
                                   : true;
                           const toggleCollapse = isCancelled
                             ? () => setCancelledExpanded(prev => !prev)
@@ -5472,7 +5483,7 @@ export default function TrackingSheet() {
                               : isWebinaireGrp
                                 ? () => setR2WebinaireExpanded(prev => !prev)
                                 : isLandingGrp
-                                  ? () => setR2LandingExpanded(prev => !prev)
+                                  ? () => (isR1Tab ? setR1LandingExpanded : setR2LandingExpanded)(prev => !prev)
                                   : undefined;
                           const isCollapsed = isCollapsible && !isExpanded;
                           return (
