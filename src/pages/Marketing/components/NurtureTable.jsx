@@ -3,20 +3,37 @@ import Card from './Card';
 import { fmtInt } from '../theme';
 import { useCampaignPolling } from '../hooks';
 
-// Hard-coded metadata per nurture kind. Matches the landing's labels —
-// kept here so the dashboard remains accurate even if the backend
-// reorders the rows. If new kinds are added backend-side, the row
-// will simply render with the raw kind as fallback.
-const LABELS = {
-  email_post_missed_no_rdv:        { day: 'Mar 26/05 16h17', subject: 'Vous avez raté quelque chose…' },
-  email_post_missed_no_rdv_d2:     { day: 'Mer 27/05 10h00', subject: 'La majorité des dirigeants pensent être déjà optimisés' },
-  email_post_missed_no_rdv_d3:     { day: 'Jeu 28/05 10h00', subject: 'Combien vous coûte votre entreprise ?' },
-  email_post_missed_no_rdv_d4:     { day: 'Ven 29/05 10h00', subject: 'Dernière relance (lien /rdv)' },
-  email_post_attended_no_rdv:      { day: 'Mar 26/05 17h00', subject: 'Merci d\'avoir participé au webinaire.' },
-  email_post_attended_no_rdv_d2:   { day: 'Mer 27/05 10h00', subject: '+12 500 € : ce chiffre revient souvent' },
-  email_post_attended_no_rdv_d3:   { day: 'Jeu 28/05 10h00', subject: 'Dirigeants d\'entreprises : comment mieux vous rémunérer ?' },
-  email_post_attended_no_rdv_d4:   { day: 'Ven 29/05 10h00', subject: 'Dernière relance (lien /rdv)' },
+// Hard-coded metadata per nurture kind, indexed by cohort (webinarId). Matches
+// the landing's labels — kept here so the dashboard remains accurate even if the
+// backend reorders the rows. If new kinds are added backend-side, the row will
+// simply render with the raw kind as fallback. When a new cohort gets a sequence
+// deployed landing-side, add its label set here keyed by webinarId.
+const LABELS_BY_COHORT = {
+  'webinar-2026-05-26': {
+    email_post_missed_no_rdv:        { day: 'Mar 26/05 16h17', subject: 'Vous avez raté quelque chose…' },
+    email_post_missed_no_rdv_d2:     { day: 'Mer 27/05 10h00', subject: 'La majorité des dirigeants pensent être déjà optimisés' },
+    email_post_missed_no_rdv_d3:     { day: 'Jeu 28/05 10h00', subject: 'Combien vous coûte votre entreprise ?' },
+    email_post_missed_no_rdv_d4:     { day: 'Ven 29/05 10h00', subject: 'Dernière relance (lien /rdv)' },
+    email_post_attended_no_rdv:      { day: 'Mar 26/05 17h00', subject: 'Merci d\'avoir participé au webinaire.' },
+    email_post_attended_no_rdv_d2:   { day: 'Mer 27/05 10h00', subject: '+12 500 € : ce chiffre revient souvent' },
+    email_post_attended_no_rdv_d3:   { day: 'Jeu 28/05 10h00', subject: 'Dirigeants d\'entreprises : comment mieux vous rémunérer ?' },
+    email_post_attended_no_rdv_d4:   { day: 'Ven 29/05 10h00', subject: 'Dernière relance (lien /rdv)' },
+  },
+  'webinar-2026-06-22': {
+    email_post_missed_no_rdv:        { day: '23/06',       subject: 'Vous avez raté quelque chose…' },
+    email_post_missed_no_rdv_d2:     { day: '24/06 · 10h', subject: 'La plupart des dirigeants se croient déjà optimisés' },
+    email_post_missed_no_rdv_d3:     { day: '25/06 · 10h', subject: 'Combien votre entreprise vous coûte vraiment ?' },
+    email_post_missed_no_rdv_d4:     { day: '26/06 · 10h', subject: 'Dernière relance' },
+    email_post_attended_no_rdv:      { day: '23/06',       subject: 'Merci d\'avoir participé au webinaire' },
+    email_post_attended_no_rdv_d2:   { day: '24/06 · 10h', subject: '+12 500€ : ce chiffre revient souvent' },
+    email_post_attended_no_rdv_d3:   { day: '25/06 · 10h', subject: 'Vous développez votre activité… mais en profitez-vous ?' },
+    email_post_attended_no_rdv_d4:   { day: '26/06 · 10h', subject: 'Dernière relance' },
+  },
 };
+
+// Fallback = cohorte historique 26 mai (préserve le comportement existant si un
+// webinarId inconnu était passé : on ne casse jamais l'affichage).
+const FALLBACK_LABELS = LABELS_BY_COHORT['webinar-2026-05-26'];
 
 const segment = (kind) => (kind.includes('attended') ? 'attended' : 'missed');
 
@@ -30,6 +47,7 @@ const segment = (kind) => (kind.includes('attended') ? 'attended' : 'missed');
 export default function NurtureTable({ webinarId, C }) {
   const endpoint = `/api/v1/marketing/webinars/${webinarId}/campaigns/post-nurture`;
   const { data, loading, error } = useCampaignPolling(endpoint, 30000);
+  const labels = LABELS_BY_COHORT[webinarId] || FALLBACK_LABELS;
 
   if (loading && !data) {
     return (
@@ -116,7 +134,7 @@ export default function NurtureTable({ webinarId, C }) {
           </thead>
           <tbody>
             {rows.map((r) => {
-              const meta = LABELS[r.kind] || { day: '—', subject: r.kind };
+              const meta = labels[r.kind] || { day: '—', subject: r.kind };
               const seg = segment(r.kind);
               const openRate = r.sent > 0 ? Math.round((r.opened / r.sent) * 100) : null;
               return (

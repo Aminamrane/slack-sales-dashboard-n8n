@@ -35,11 +35,20 @@ const ROLES_WITH_BUDGET_EDIT = ['admin', 'marketing'];
 // expose maintenant les autres cohortes (multi-webinaire 2026-06-04).
 const DEFAULT_WEBINAR_ID = 'webinar-2026-05-26';
 
-// Cohorte qui possède les 4 séquences emails post-webinaire (post-missed,
-// postponement, NurtureTable, broad) côté landing. Pour toute autre cohorte,
-// ces 4 cards sont masquées (la landing les retourne quand même mais ce
-// serait de la data 26 mai sous un header 22 juin = trompeur).
+// Cohorte qui possède les campagnes one-shot SPÉCIFIQUES 26 mai (post-missed,
+// postponement, broad) côté landing. Ces endpoints ne sont PAS paramétrés par
+// webinaire : sur une autre cohorte ils retourneraient quand même la data
+// 26 mai sous un header différent = trompeur. On les garde donc 26-mai-only.
 const COHORT_WITH_CAMPAIGNS = 'webinar-2026-05-26';
+
+// Cohortes qui possèdent une séquence post-webinaire (NurtureTable). Contrairement
+// aux one-shots ci-dessus, l'endpoint post-nurture est cohorte-aware côté landing :
+// chaque cohorte de ce set renvoie ses propres chiffres. On y ajoute une cohorte
+// dès que sa séquence est déployée côté landing.
+const COHORTS_WITH_NURTURE = new Set([
+  'webinar-2026-05-26',
+  'webinar-2026-06-22',
+]);
 
 function readWebinarFromUrl() {
   try {
@@ -189,17 +198,28 @@ export default function Marketing() {
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [overviewError, setOverviewError] = useState(null);
 
+  // Ref pointant toujours sur le `webinarId` courant. Sert de garde
+  // anti-stale : si on change vite de webinaire, une réponse en vol pour
+  // l'ancien webinaire ne doit pas écraser la data du nouveau.
+  const webinarIdRef = useRef(webinarId);
+  useEffect(() => { webinarIdRef.current = webinarId; }, [webinarId]);
+
   const loadOverview = useCallback(async () => {
+    const requestedWebinarId = webinarId;
     setOverviewLoading(true);
     try {
       const qs = queryString();
       const json = await apiClient.get(`/api/v1/marketing/webinars/${webinarId}/overview?${qs}`);
+      // Ignore une réponse obsolète : l'utilisateur a déjà switché de
+      // webinaire entre le départ du fetch et son retour.
+      if (webinarIdRef.current !== requestedWebinarId) return;
       setOverview(json);
       setOverviewError(null);
     } catch (e) {
+      if (webinarIdRef.current !== requestedWebinarId) return;
       setOverviewError(e?.message || 'Erreur de chargement');
     } finally {
-      setOverviewLoading(false);
+      if (webinarIdRef.current === requestedWebinarId) setOverviewLoading(false);
     }
   }, [queryString, webinarId]);
 
@@ -251,8 +271,12 @@ export default function Marketing() {
   // backend, donc plusieurs onglets ouverts ne flood pas Supabase.
   const [realtimeLeads, setRealtimeLeads] = useState(null);
   const fetchRealtimeLeads = useCallback(async () => {
+    const requestedWebinarId = webinarId;
     try {
       const json = await apiClient.get(`/api/v1/marketing/webinars/${webinarId}/realtime-leads`);
+      // Garde anti-stale alignée sur loadOverview : ne pas repeupler le
+      // hero avec la data realtime d'un webinaire qu'on a déjà quitté.
+      if (webinarIdRef.current !== requestedWebinarId) return;
       setRealtimeLeads(json);
     } catch {
       // Silencieux — les tiles tomberont sur leur fallback "—"
@@ -303,6 +327,41 @@ export default function Marketing() {
     })();
     return () => { cancelled = true; };
   }, [authReady]);
+
+  // ── Reset data on webinar switch (skeleton replay) ───────────────
+  // Quand l'utilisateur change de cohorte via le sélecteur, `overview` et
+  // `realtimeLeads` contiennent encore la data du webinaire précédent →
+  // `initialLoading` resterait `false` et on verrait brièvement les
+  // chiffres de l'ancien webinaire sous le nouveau titre. On remet donc
+  // les deux à `null` AU SEUL changement de `webinarId` : `initialLoading`
+  // redevient `true` le temps que la nouvelle data arrive (skeleton), puis
+  // le crossfade existant prend le relais.
+  //
+  // ⚠️ Cet effet dépend UNIQUEMENT de `webinarId` : il ne se déclenche
+  // jamais sur le poll 60s (qui ne touche pas `webinarId`) ni sur un
+  // changement de filtre date/source (idem) → aucun clignotement de
+  // skeleton sur le refresh périodique. On skip le tout premier run (mount)
+  // via une ref : `overview`/`realtimeLeads` sont déjà `null` à ce stade,
+  // un reset y serait inutile et le fetch initial gère déjà le skeleton.
+  const didMountWebinarReset = useRef(false);
+  useEffect(() => {
+    if (!didMountWebinarReset.current) {
+      didMountWebinarReset.current = true;
+      return;
+    }
+    setOverview(null);
+    setRealtimeLeads(null);
+  }, [webinarId]);
+
+  // ── Initial-load flag (skeletons) ────────────────────────────────
+  // `initialLoading` n'est vrai QUE tant qu'aucun overview n'a jamais été
+  // chargé ET qu'un fetch est en cours. Dès que `overview` est peuplé une
+  // 1re fois, `!overview` devient false définitivement → les refetch du
+  // poll 60s gardent `initialLoading` à false : ils n'affichent JAMAIS de
+  // skeleton plein écran, le contenu réel reste visible pendant le refresh
+  // (seul l'indicateur d'opacité existant sur les tiles du hero bouge).
+  // C'est la garde centrale qui distingue "1er chargement" de "refetch".
+  const initialLoading = !overview && overviewLoading;
 
   // ── Derived data ─────────────────────────────────────────────────
   const stats = overview?.stats || null;
@@ -507,9 +566,12 @@ export default function Marketing() {
         </section>
 
         {/* ── SOURCE BREAKDOWN ── */}
-        {summary && (
+        {/* Affiché si summary OU pendant le 1er chargement (skeleton 3 cards).
+            Hors loading sans summary (ex. erreur dure), SourceBreakdown
+            renvoie null comme avant → la section reste vide sans crasher. */}
+        {(summary || initialLoading) && (
           <section style={{ marginBottom: 24 }}>
-            <SourceBreakdown summary={summary} C={C} />
+            <SourceBreakdown summary={summary} C={C} loading={initialLoading} />
           </section>
         )}
 
@@ -521,12 +583,13 @@ export default function Marketing() {
             budgetByDay={budgetByDay}
             C={C}
             darkMode={darkMode}
+            loading={initialLoading}
           />
         </section>
 
         {/* ── BUDGET PAR JOUR (graph dédié, lecture rapide) ── */}
         <section style={{ marginBottom: 24 }}>
-          <BudgetByDayChart budgetByDay={budgetByDay} C={C} darkMode={darkMode} />
+          <BudgetByDayChart budgetByDay={budgetByDay} C={C} darkMode={darkMode} loading={initialLoading} />
         </section>
 
         {/* ── SATISFACTION GAUGE + HEATMAP (side by side) ── */}
@@ -536,13 +599,13 @@ export default function Marketing() {
           gap: 16,
           marginBottom: 24,
         }}>
-          <SatisfactionGauge score={summary?.globalOpenRatePct} C={C} />
-          <Heatmap leads={leads} C={C} />
+          <SatisfactionGauge score={summary?.globalOpenRatePct} C={C} loading={initialLoading} />
+          <Heatmap leads={leads} C={C} loading={initialLoading} />
         </section>
 
         {/* ── EMAIL ENGAGEMENT TABLE ── */}
         <section style={{ marginBottom: 24 }}>
-          <EmailEngagement rows={emailEngagement} C={C} />
+          <EmailEngagement rows={emailEngagement} C={C} loading={initialLoading} />
         </section>
 
         {/* ── CAMPAGNES CIBLÉES (4 cards, polling actif) ──
@@ -613,7 +676,6 @@ export default function Marketing() {
               progressColor={C.heroEmerald}
               C={C}
             />
-            <NurtureTable webinarId={webinarId} C={C} />
             <CampaignCard
               webinarId={webinarId}
               kind="broad"
@@ -636,6 +698,57 @@ export default function Marketing() {
         </section>
         )}
 
+        {/* ── SÉQUENCES POST-WEBINAIRE ──
+            L'endpoint post-nurture est cohorte-aware côté landing : chaque
+            cohorte de COHORTS_WITH_NURTURE renvoie ses propres chiffres.
+            Section distincte des "Campagnes ciblées" (qui restent 26-mai-only
+            car leurs endpoints one-shot ne sont pas paramétrés par webinaire). */}
+        {COHORTS_WITH_NURTURE.has(webinarId) && (
+        <section style={{ marginBottom: 28 }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 14,
+          }}>
+            <h2 style={{
+              margin: 0,
+              fontSize: 18,
+              fontWeight: 700,
+              color: C.text,
+              letterSpacing: '-0.02em',
+            }}>
+              Séquences post-webinaire
+            </h2>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              background: C.subtle,
+              border: `1px solid ${C.hairline}`,
+              borderRadius: 50,
+              fontSize: 10,
+              fontWeight: 700,
+              color: C.muted,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+            }}>
+              <span style={{
+                display: 'inline-block',
+                width: 6,
+                height: 6,
+                background: C.emerald.strong,
+                borderRadius: '50%',
+                animation: 'mktPulse 1.8s ease-in-out infinite',
+              }} />
+              Polling actif
+            </div>
+          </div>
+          <NurtureTable webinarId={webinarId} C={C} />
+        </section>
+        )}
+
         {/* ── CLASSEMENT SALES WEBINAIRE ── */}
         <section style={{ marginBottom: 24 }}>
           <SalesWebinarRanking data={realtimeLeads} C={C} />
@@ -647,6 +760,7 @@ export default function Marketing() {
             leads={filteredLeads}
             scoresByLeadId={scoresByLeadId}
             C={C}
+            loading={initialLoading}
             sourceFilter={
               <SourceFilter value={source} onChange={handleSourceChange} C={C} />
             }
