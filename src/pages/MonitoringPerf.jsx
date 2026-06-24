@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
+import { motion } from "framer-motion";
 import apiClient from "../services/apiClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import companyLogo from "../assets/my_image.png";
@@ -60,6 +62,40 @@ const EXCLUDED_KEYS = new Set(["mohamed bouaksa", "sara benabid", "sarah amroune
 const VENTES_BRACKETS = ['1-2', '3-5', '6-10', '11-19', '20+', 'autre'];
 const VENTES_BRACKET_LABEL = { '1-2': '1-2', '3-5': '3-5', '6-10': '6-10', '11-19': '11-19', '20+': '20+', 'autre': 'Autre' };
 
+function CalcTip({ text, rect, darkMode }) {
+  const [typed, setTyped] = useState('');
+  const contentRef = useRef(null);
+  const [contentH, setContentH] = useState(0);
+  useEffect(() => {
+    let i = 0; setTyped('');
+    const id = setInterval(() => { i++; if (i <= text.length) setTyped(text.slice(0, i)); else clearInterval(id); }, 22);
+    return () => clearInterval(id);
+  }, [text]);
+  useEffect(() => { if (contentRef.current) setContentH(contentRef.current.scrollHeight); }, [typed]);
+  const GLASS_BG = darkMode ? 'rgba(30,31,40,0.82)' : 'rgba(255,255,255,0.82)';
+  const GLASS_BORDER = darkMode ? 'rgba(53,54,71,0.6)' : 'rgba(223,226,235,0.8)';
+  const W = (typeof window !== 'undefined') ? window.innerWidth : 1200;
+  const left = Math.min(Math.max(rect.left + rect.width / 2, 175), W - 175);
+  return createPortal(
+    <div style={{ position:'fixed', left, top: rect.bottom + 10, transform:'translateX(-50%)', zIndex:99999, pointerEvents:'none' }}>
+      <motion.div initial={{ opacity:0, scale:0.85, y:-6 }} animate={{ opacity:1, scale:1, y:0 }} transition={{ type:'spring', stiffness:420, damping:28 }} style={{ transformOrigin:'top center' }}>
+        <div style={{ position:'relative', background:GLASS_BG, backdropFilter:'blur(14px)', WebkitBackdropFilter:'blur(14px)', border:`1px solid ${GLASS_BORDER}`, borderRadius:11, padding:'0 14px', boxShadow: darkMode ? '0 8px 30px rgba(0,0,0,0.4), 0 0 0 1px rgba(124,138,219,0.10)' : '0 8px 28px rgba(0,0,0,0.08), 0 0 0 1px rgba(91,106,191,0.05)', minWidth:180, maxWidth:300, overflow:'hidden' }}>
+          <motion.div animate={{ height: contentH || 'auto' }} transition={{ duration:0.25, ease:[0.22,0.68,0.35,1.05] }} style={{ overflow:'hidden' }}>
+            <div ref={contentRef} style={{ padding:'8px 0' }}>
+              <span style={{ fontSize:'12px', fontWeight:500, fontFamily:"'Inter', system-ui, sans-serif", color: darkMode ? '#c8cbda' : '#3a3f54', lineHeight:1.45, letterSpacing:'-0.01em', whiteSpace:'pre-wrap', textAlign:'center', display:'block' }}>
+                {typed}
+                <motion.span animate={{ opacity:[1,0] }} transition={{ duration:0.5, repeat:Infinity, repeatType:'reverse' }} style={{ color: darkMode ? '#7c8adb' : '#5b6abf', fontWeight:300 }}>|</motion.span>
+              </span>
+            </div>
+          </motion.div>
+          <div style={{ position:'absolute', top:-5, left:'50%', marginLeft:-5, width:10, height:10, background:GLASS_BG, backdropFilter:'blur(14px)', WebkitBackdropFilter:'blur(14px)', border:`1px solid ${GLASS_BORDER}`, borderBottom:'none', borderRight:'none', transform:'rotate(45deg)', borderRadius:'2px 0 0 0' }} />
+        </div>
+      </motion.div>
+    </div>,
+    document.body
+  );
+}
+
 export default function MonitoringPerf() {
   const navigate = useNavigate();
   // Mode embed (CEO/Acquisition Director wrapper) : masque la SharedNavbar
@@ -99,6 +135,12 @@ export default function MonitoringPerf() {
   const [headcountLoading, setHeadcountLoading] = useState(false);
   const [detailModal, setDetailModal] = useState(null);
   const [originsOpen, setOriginsOpen] = useState(false);
+  const [hiddenCols, setHiddenCols] = useState(()=>{ try { return new Set(JSON.parse(localStorage.getItem('perfHiddenCols')||'[]')); } catch { return new Set(); } });
+  const [colMenuOpen, setColMenuOpen] = useState(false);
+  const [tip, setTip] = useState(null); // tooltip calcul custom
+  useEffect(()=>{ try { localStorage.setItem('perfHiddenCols', JSON.stringify([...hiddenCols])); } catch { /* noop */ } }, [hiddenCols]);
+  const [avatarMap, setAvatarMap] = useState({});
+  useEffect(()=>{ if(!hasAccess) return; let cancelled=false; apiClient.get('/api/v1/users/assignable').then(d=>{ if(cancelled) return; const m={}; (d?.users||[]).forEach(u=>{ const url=u.avatar_url?(/^https?:\/\//i.test(u.avatar_url)?u.avatar_url:apiClient.baseUrl+u.avatar_url):null; m[getCanonicalKey(u.full_name)]={av:url,role:u.role}; }); setAvatarMap(m); }).catch(()=>{}); return ()=>{cancelled=true;}; }, [hasAccess]);
   const [trackingKpis, setTrackingKpis] = useState(null); // from /tracking/perf-sales-kpis
   const [rdvAnalytics, setRdvAnalytics] = useState(null); // from /tracking/rdv-analytics (délai R1→R2 + heatmap no-show)
   const [salesBreakdown, setSalesBreakdown] = useState(null); // from /tracking/sales-breakdown (vue Ventes)
@@ -237,13 +279,50 @@ export default function MonitoringPerf() {
   const cColor = (r) => r>=10?COLORS.tertiary:r>=5?COLORS.secondary:C.text;
   const lColor = (r) => r<=30?COLORS.tertiary:r<=50?COLORS.secondary:'#ff453a';
 
-  const medal = (i) => i===0?<img src={firstPlace} alt="" style={{width:20,height:20}}/>:i===1?<img src={secondPlace} alt="" style={{width:20,height:20}}/>:i===2?<img src={thirdPlace} alt="" style={{width:20,height:20}}/>:<span style={{fontSize:11,color:C.muted}}>{i+1}</span>;
+  const medal = (i) => i===0?<img src={firstPlace} alt="" style={{width:25,height:25}}/>:i===1?<img src={secondPlace} alt="" style={{width:25,height:25}}/>:i===2?<img src={thirdPlace} alt="" style={{width:25,height:25}}/>:<span style={{fontSize:16,fontWeight:800,color:C.secondary,fontVariantNumeric:"tabular-nums"}}>{i+1}</span>;
 
   const monthOpts = (sy,sm) => { const o=[]; const td=new Date(); const c=new Date(sy,sm-1); const ym=td.getFullYear()*100+td.getMonth(); while(true){ const y=c.getFullYear()*100+c.getMonth(); if(y>ym) break; const v=c.getFullYear()+'-'+String(c.getMonth()+1).padStart(2,'0'); const l=new Intl.DateTimeFormat('fr-FR',{month:'long',year:'numeric'}).format(c); o.unshift({value:v,label:l.charAt(0).toUpperCase()+l.slice(1)}); c.setMonth(c.getMonth()+1); } return o; };
   const selS = { fontSize:12, fontWeight:500, padding:'6px 10px', borderRadius:8, border:'1px solid '+C.border, background:darkMode?C.subtle:'#fff', color:C.text, cursor:'pointer', outline:'none' };
   const pillS = (a) => ({ fontSize:11.5, fontWeight:a?600:500, padding:'5px 14px', borderRadius:8, border:'1px solid '+(a?C.accent:C.border), background:a?(darkMode?C.accent+'25':C.accent+'12'):'transparent', color:a?C.accent:C.muted, cursor:'pointer', transition:'all 0.15s', whiteSpace:'nowrap' });
   const thS = { whiteSpace:'nowrap', textAlign:'center' };
-  const tdS = { textAlign:'center' };
+  const tdS = { textAlign:'center', fontVariantNumeric:'tabular-nums' };
+  const pctPill = (txt,color)=><span style={{display:'inline-block',padding:'3px 11px',borderRadius:8,fontSize:12.5,fontWeight:600,color,background:color+'22',fontVariantNumeric:'tabular-nums'}}>{txt}</span>;
+  const KPI_ICONS = {
+    phone:['M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z'],
+    check:['M22 11.08V12a10 10 0 1 1-5.93-9.14','M22 4 12 14.01l-3-3'],
+    voicemail:['M5.5 8a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z','M18.5 8a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z','M5.5 15h13'],
+    calendar:['M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z','M16 2v4','M8 2v4','M3 10h18'],
+    calcheck:['M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z','M16 2v4','M8 2v4','M3 10h18','M9 15l2 2 4-4'],
+    users:['M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2','M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'],
+    trophy:['M6 9H4.5a2.5 2.5 0 0 1 0-5H6','M18 9h1.5a2.5 2.5 0 0 0 0-5H18','M4 22h16','M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22','M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22','M18 2H6v7a6 6 0 0 0 12 0V2z'],
+    trending:['M23 6l-9.5 9.5-5-5L1 18','M17 6h6v6'],
+    card:['M21 4H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z','M1 10h22'],
+  };
+  const kpiIcon = (n) => { const a=KPI_ICONS[n]; return a ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">{a.map((d,i)=><path key={i} d={d} />)}</svg> : null; };
+
+  const perfColumns = [
+    { key:'rank', label:'#', tip:'Classement par ventes', always:true, cell:(s,i,k)=><td key={k} style={tdS}>{medal(i)}</td> },
+    { key:'sales', label:'Sales', tip:'Commercial', always:true, cell:(s,i,k)=>{const meta=avatarMap[s.salesKey]||{};const av=meta.av;const rl={sales:'Sales',head_of_sales:'Head of Sales',head_of_sales_manager:'Manager',admin:'Admin'}[meta.role]||'';return <td key={k} style={{...tdS,textAlign:'left',paddingLeft:8}}><div style={{display:'flex',alignItems:'center',gap:11}}>{av?<img src={av} alt="" style={{width:36,height:36,borderRadius:'50%',objectFit:'cover',flexShrink:0,border:'1px solid '+C.border}} />:<div style={{width:36,height:36,borderRadius:'50%',background:i===0?COLORS.tertiary:i===1?COLORS.secondary:COLORS.primary,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,color:'#fff',fontWeight:600,flexShrink:0}}>{s.salesName.charAt(0).toUpperCase()}</div>}<div style={{minWidth:0}}><div style={{fontWeight:650,fontSize:13.5,color:C.text,whiteSpace:'nowrap',letterSpacing:'-0.01em',...(canal!=='global'?{cursor:'pointer'}:{})}} onClick={()=>canal!=='global'&&openDetail(s.salesName)}>{s.salesName}</div>{rl&&<div style={{fontSize:11,color:C.muted,marginTop:1}}>{rl}</div>}</div></div></td>;} },
+    { key:'leads', label:'Leads', tip:'Leads reçus (créés) dans le mois', cell:(s,i,k)=><td key={k} style={{...tdS,fontWeight:700}}>{canal==='ads'?(s.leads_ads||0):canal==='cc'?(s.leads_cc||0):(s.leads_assigned||0)}</td> },
+    { key:'conv', label:'Conv.%', tip:'Conversion globale : Ventes ÷ Leads', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(s.conv_global.toFixed(2)+'%',gcColor(s.conv_global))}</td> },
+    { key:'appels', label:'Appels', tip:'Volume des appels', cell:(s,i,k)=><td key={k} style={tdS}>{s.calls_total.toLocaleString('fr-FR')}</td> },
+    { key:'rep', label:isCrmMonth?'Rép.':'Décr.', tip:isCrmMonth?'Leads répondu (atteints), vérité CRM':'Décrochés (OnOff)', cell:(s,i,k)=><td key={k} style={isCrmMonth?{...tdS,color:COLORS.tertiary,fontWeight:600}:tdS}>{s.calls_answered.toLocaleString('fr-FR')}</td> },
+    { key:'repondeur', label:'Répondeur', tip:'Tombés sur répondeur / messagerie', crmOnly:true, cell:(s,i,k)=><td key={k} style={{...tdS,color:C.muted}}>{s.repondeur!=null?s.repondeur.toLocaleString('fr-FR'):'—'}</td> },
+    { key:'txrep', label:isCrmMonth?'Tx Rép.':'Tx Décr.', tip:isCrmMonth?'Répondu ÷ Appels':'Décrochés ÷ Appels', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(s.conv_calls_to_answered.toFixed(1)+'%',dcColor(s.conv_calls_to_answered))}</td> },
+    { key:'r1rep', label:isCrmMonth?'R1/Rép':'R1/Décr', tip:isCrmMonth?'R1 placés (sales + setter) ÷ Répondu global (leads atteints)':'R1 placés ÷ Décrochés', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(s.conv_answered_to_r1p.toFixed(1)+'%',r1pColor(s.conv_answered_to_r1p))}</td> },
+    { key:'r1p', label:'R1p', tip:'R1 placés par le sales lui-même', cell:(s,i,k)=><td key={k} style={tdS}>{isCrmMonth?s.r1p_self:s.r1_placed}</td> },
+    { key:'r1s', label:'R1(S)', tip:'R1 placés par le setter', crmOnly:true, cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.primary,fontWeight:600}}>{s.r1p_s||'—'}</td> },
+    { key:'r1e', label:'R1E', tip:'R1 effectués (réalisés)', cell:(s,i,k)=><td key={k} style={tdS}>{s.r1_done}</td> },
+    { key:'txr1', label:'Tx R1', tip:'R1 effectués ÷ R1 placés', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(s.conv_r1p_to_r1r.toFixed(0)+'%',rxColor(s.conv_r1p_to_r1r))}</td> },
+    { key:'r2p', label:'R2p', tip:'R2 placés par le sales', cell:(s,i,k)=><td key={k} style={tdS}>{isCrmMonth?s.r2p_self:s.r2_placed}</td> },
+    { key:'r2s', label:'R2(S)', tip:'R2 placés par le setter', crmOnly:true, cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.primary,fontWeight:600}}>{s.r2p_s||'—'}</td> },
+    { key:'r2e', label:'R2E', tip:'R2 effectués', cell:(s,i,k)=><td key={k} style={tdS}>{s.r2_done}</td> },
+    { key:'txr2', label:'Tx R2', tip:'R2 effectués ÷ R2 placés', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(s.conv_r2p_to_r2r.toFixed(0)+'%',rxColor(s.conv_r2p_to_r2r))}</td> },
+    { key:'ventes', label:'Ventes', tip:'Nombre de ventes', cell:(s,i,k)=><td key={k} style={{...tdS,fontWeight:800,fontSize:15,color:COLORS.tertiary}}>{s.signatures}</td> },
+    { key:'convv', label:'Conv.V.', tip:'Conversion ventes : Ventes ÷ R2 effectués', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(s.conv_sales.toFixed(1)+'%',cvColor(s.conv_sales))}</td> },
+    { key:'revenue', label:'Revenue', tip:'Revenu généré', cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.secondary}}>{s.revenue>0?Math.round(s.revenue).toLocaleString('fr-FR')+'€':'—'}</td> },
+    { key:'cash', label:'Cash', tip:'Cash encaissé', cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.tertiary}}>{s.cashCollected>0?Math.round(s.cashCollected).toLocaleString('fr-FR')+'€':'—'}</td> },
+  ];
 
   if (loading) return <div style={{minHeight:'100vh',background:C.surface}} />;
   if (!hasAccess) return null;
@@ -251,6 +330,7 @@ export default function MonitoringPerf() {
   return (
     <>
       {!embedMode && <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />}
+      {tip && <CalcTip text={tip.t} rect={tip.r} darkMode={darkMode} />}
       <style>{`@keyframes pageReveal{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@keyframes sidebarReveal{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:none}}@keyframes rowIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}html,body{background:${darkMode?'#13141b':'#ffffff'}}.mp-scroll::-webkit-scrollbar{width:3px;height:3px}.mp-scroll::-webkit-scrollbar-track{background:transparent}.mp-scroll::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:4px}`}</style>
 
       <div style={{animation:'pageReveal 0.5s cubic-bezier(0.4,0,0.2,1) both',fontFamily:"'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"}}>
@@ -425,8 +505,8 @@ export default function MonitoringPerf() {
                     </div>
                   ) : (<>
 
-                  <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:16}}>
-                    {[{l:'Appels',v:totals.calls.toLocaleString('fr-FR')},...(isCrmMonth?[{l:'R\u00e9pondu',v:totals.answered.toLocaleString('fr-FR'),a:COLORS.tertiary},{l:'R\u00e9pondeur',v:totals.repondeur.toLocaleString('fr-FR')}]:[{l:'D\u00e9croch\u00e9s',v:totals.answered.toLocaleString('fr-FR')}]),{l:'R1 plac\u00e9',v:totals.r1_placed.toLocaleString('fr-FR')},{l:'R1 effectu\u00e9',v:totals.r1_done.toLocaleString('fr-FR')},{l:'Leads',v:totals.leads_assigned.toLocaleString('fr-FR')},{l:'Ventes',v:totals.signatures.toLocaleString('fr-FR'),a:COLORS.tertiary},{l:'Revenue',v:totals.revenue>0?Math.round(totals.revenue).toLocaleString('fr-FR')+'\u20ac':'0\u20ac',a:COLORS.secondary},{l:'Cash',v:totals.cashCollected>0?Math.round(totals.cashCollected).toLocaleString('fr-FR')+'\u20ac':'0\u20ac',a:COLORS.tertiary}].map(k=>(<div key={k.l} style={{flex:1,minWidth:100,padding:'10px 14px',borderRadius:10,background:darkMode?C.subtle:'#fff',border:'1px solid '+C.border,textAlign:'center'}}><div style={{fontSize:10,fontWeight:500,color:C.muted,textTransform:'uppercase',marginBottom:4,letterSpacing:'0.04em'}}>{k.l}</div><div style={{fontSize:18,fontWeight:700,color:k.a||C.text}}>{k.v}</div></div>))}
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(5, minmax(0, 1fr))',gap:10,marginBottom:16}}>
+                    {[{l:'Appels',v:totals.calls.toLocaleString('fr-FR'),ic:'phone'},...(isCrmMonth?[{l:'Répondu',v:totals.answered.toLocaleString('fr-FR'),a:COLORS.tertiary,ic:'check'},{l:'Répondeur',v:totals.repondeur.toLocaleString('fr-FR'),ic:'voicemail'}]:[{l:'Décrochés',v:totals.answered.toLocaleString('fr-FR'),ic:'check'}]),{l:'R1 placé',v:totals.r1_placed.toLocaleString('fr-FR'),ic:'calendar'},{l:'R1 effectué',v:totals.r1_done.toLocaleString('fr-FR'),ic:'calcheck'},{l:'Leads',v:totals.leads_assigned.toLocaleString('fr-FR'),ic:'users'},{l:'Ventes',v:totals.signatures.toLocaleString('fr-FR'),a:COLORS.tertiary,ic:'trophy'},{l:'Revenue',v:totals.revenue>0?Math.round(totals.revenue).toLocaleString('fr-FR')+'€':'0€',a:COLORS.secondary,ic:'trending'},{l:'Cash',v:totals.cashCollected>0?Math.round(totals.cashCollected).toLocaleString('fr-FR')+'€':'0€',a:COLORS.tertiary,ic:'card'}].map(k=>(<div key={k.l} style={{padding:'14px 16px',borderRadius:14,background:C.bg,border:'1px solid '+C.border,boxShadow:darkMode?'none':'0 1px 2px rgba(0,0,0,0.03)'}}><div style={{display:'flex',alignItems:'center',gap:6,marginBottom:9,color:C.muted}}>{kpiIcon(k.ic)}<span style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.07em'}}>{k.l}</span></div><div style={{fontSize:22,fontWeight:700,color:k.a||C.text,letterSpacing:'-0.02em',fontVariantNumeric:'tabular-nums'}}>{k.v}</div></div>))}
                   </div>
 
                   <div style={{display:'flex',justifyContent:'center',gap:0,marginBottom:20,borderRadius:10,border:'1px solid '+C.border,overflow:'hidden',background:darkMode?C.subtle:'#fff'}}>
@@ -436,7 +516,7 @@ export default function MonitoringPerf() {
                       {l:'Closing R2',v:totals.closing_r2.toFixed(1)+'%',f:'R2 effectu\u00e9s \u00f7 R1 effectu\u00e9s'},
                       {l:'Closing Audit',v:totals.closing_audit.toFixed(1)+'%',f:'Ventes \u00f7 R2 effectu\u00e9s'},
                       {l:'Conv. Globale',v:totals.conv_global.toFixed(2)+'%',f:'Ventes \u00f7 Leads affect\u00e9s'},
-                    ].map((k,i,arr)=>(<div key={k.l} title={k.f} style={{flex:1,textAlign:'center',padding:'10px 16px',borderRight:i<arr.length-1?'1px solid '+C.border:'none',cursor:'help'}}><div style={{fontSize:12,fontWeight:500,color:C.muted,marginBottom:2}}>{k.l}</div><div style={{fontSize:15,fontWeight:700,color:C.text}}>{k.v}</div></div>))}
+                    ].map((k,i,arr)=>(<div key={k.l} onMouseEnter={e=>setTip({t:k.f,r:e.currentTarget.getBoundingClientRect()})} onMouseLeave={()=>setTip(null)} style={{flex:1,textAlign:'center',padding:'10px 16px',borderRight:i<arr.length-1?'1px solid '+C.border:'none',cursor:'help'}}><div style={{fontSize:12,fontWeight:500,color:C.muted,marginBottom:2}}>{k.l}</div><div style={{fontSize:17,fontWeight:700,color:C.text,fontVariantNumeric:'tabular-nums',letterSpacing:'-0.01em'}}>{k.v}</div></div>))}
                   </div>
 
                   {dataLoading && <div style={{textAlign:'center',padding:60,color:C.muted}}>Chargement...</div>}
@@ -446,27 +526,34 @@ export default function MonitoringPerf() {
                     {headcountData.totals && <tr style={{borderTop:'2px solid '+C.border,fontWeight:700,background:darkMode?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.02)'}}><td style={tdS}></td><td style={{...tdS,textAlign:'left',paddingLeft:12}}>Total</td><td style={tdS}>{(headcountData.totals.leads_assigned||0).toLocaleString('fr-FR')}</td>{['1-2','3-4','5-6','7-10','11-19','20+'].map(b=><td key={b} style={tdS}>{(headcountData.totals.headcount_breakdown||{})[b]||0}</td>)}<td style={{...tdS,color:C.muted}}>{headcountData.totals.unknown||0}</td></tr>}
                   </tbody></table>)}
 
-                  {!dataLoading && perfRows.length>0 && !(canal==='ads'&&adsDetailView) && (<div style={{overflowX:'auto'}}><table className="leaderboard" style={{width:'100%',minWidth:1100}}><thead><tr>{['#','Sales','Leads','Conv.%','Appels',...(isCrmMonth?['R\u00e9p.','R\u00e9pondeur','Tx R\u00e9p.','R1/R\u00e9p']:['D\u00e9cr.','Tx D\u00e9cr.','R1/D\u00e9cr']),'R1p',...(isCrmMonth?['R1(S)']:[]),'R1E','Tx R1','R2p',...(isCrmMonth?['R2(S)']:[]),'R2E','Tx R2','Ventes','Conv.V.','Revenue','Cash'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>
-                    {perfRows.map((s,i)=>(<tr key={canal+'-'+i+'-'+s.salesKey} style={{animation:'rowIn 0.3s cubic-bezier(0.16,1,0.3,1) '+(i*40)+'ms both'}}>
-                      <td style={tdS}>{medal(i)}</td>
-                      <td style={{...tdS,textAlign:'left',paddingLeft:8}}><div style={{display:'flex',alignItems:'center',gap:8}}><div style={{width:28,height:28,borderRadius:'50%',background:i===0?COLORS.tertiary:i===1?COLORS.secondary:COLORS.primary,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'#fff',fontWeight:600,flexShrink:0}}>{s.salesName.charAt(0).toUpperCase()}</div><span style={{fontWeight:i<3?700:500,fontSize:12,whiteSpace:'nowrap',...(canal!=='global'?{cursor:'pointer',textDecoration:'underline',textDecorationColor:'rgba(128,128,128,0.3)',textUnderlineOffset:3}:{})}} onClick={()=>canal!=='global'&&openDetail(s.salesName)}>{s.salesName}</span></div></td>
-                      <td style={{...tdS,fontWeight:700}}>{canal==='ads'?(s.leads_ads||0):canal==='cc'?(s.leads_cc||0):(s.leads_assigned||0)}</td>
-                      <td style={{...tdS,fontWeight:700,color:gcColor(s.conv_global)}}>{s.conv_global.toFixed(2)}%</td>
-                      <td style={tdS}>{s.calls_total.toLocaleString('fr-FR')}</td>
-                      <td style={isCrmMonth?{...tdS,color:COLORS.tertiary,fontWeight:600}:tdS}>{s.calls_answered.toLocaleString('fr-FR')}</td>
-                      {isCrmMonth && <td style={{...tdS,color:C.muted}}>{s.repondeur!=null?s.repondeur.toLocaleString('fr-FR'):'—'}</td>}
-                      <td style={{...tdS,fontWeight:600,color:dcColor(s.conv_calls_to_answered)}}>{s.conv_calls_to_answered.toFixed(1)}%</td>
-                      <td style={{...tdS,fontWeight:600,color:r1pColor(s.conv_answered_to_r1p)}}>{s.conv_answered_to_r1p.toFixed(1)}%</td>
-                      <td style={tdS}>{isCrmMonth?s.r1p_self:s.r1_placed}</td>{isCrmMonth && <td style={{...tdS,color:COLORS.primary,fontWeight:600}}>{s.r1p_s||'—'}</td>}<td style={tdS}>{s.r1_done}</td>
-                      <td style={{...tdS,fontWeight:600,color:rxColor(s.conv_r1p_to_r1r)}}>{s.conv_r1p_to_r1r.toFixed(0)}%</td>
-                      <td style={tdS}>{isCrmMonth?s.r2p_self:s.r2_placed}</td>{isCrmMonth && <td style={{...tdS,color:COLORS.primary,fontWeight:600}}>{s.r2p_s||'—'}</td>}<td style={tdS}>{s.r2_done}</td>
-                      <td style={{...tdS,fontWeight:600,color:rxColor(s.conv_r2p_to_r2r)}}>{s.conv_r2p_to_r2r.toFixed(0)}%</td>
-                      <td style={{...tdS,fontWeight:800,fontSize:13,color:COLORS.tertiary}}>{s.signatures}</td>
-                      <td style={{...tdS,fontWeight:600,color:cvColor(s.conv_sales)}}>{s.conv_sales.toFixed(1)}%</td>
-                      <td style={{...tdS,color:COLORS.secondary}}>{s.revenue>0?Math.round(s.revenue).toLocaleString('fr-FR')+'\u20ac':'\u2014'}</td>
-                      <td style={{...tdS,color:COLORS.tertiary}}>{s.cashCollected>0?Math.round(s.cashCollected).toLocaleString('fr-FR')+'\u20ac':'\u2014'}</td>
-                    </tr>))}
-                  </tbody></table></div>)}
+                  {!dataLoading && perfRows.length>0 && !(canal==='ads'&&adsDetailView) && (()=>{
+                    const visCols = perfColumns.filter(c=>(!c.crmOnly||isCrmMonth)).filter(c=>c.always||!hiddenCols.has(c.key));
+                    const toggleable = perfColumns.filter(c=>!c.always && (!c.crmOnly||isCrmMonth));
+                    return (<>
+                    <div style={{display:'flex',justifyContent:'flex-end',marginBottom:10,position:'relative'}}>
+                      <button onClick={()=>setColMenuOpen(o=>!o)} style={{display:'flex',alignItems:'center',gap:6,padding:'7px 14px',borderRadius:9,border:'1px solid '+C.border,background:darkMode?'#16171e':'#fff',color:C.text,fontSize:12.5,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+                        Colonnes{hiddenCols.size>0?` (${toggleable.filter(c=>!hiddenCols.has(c.key)).length}/${toggleable.length})`:''}
+                      </button>
+                      {colMenuOpen && (<>
+                        <div onClick={()=>setColMenuOpen(false)} style={{position:'fixed',inset:0,zIndex:40}} />
+                        <div style={{position:'absolute',top:'calc(100% + 6px)',right:0,zIndex:41,background:C.bg,border:'1px solid '+C.border,borderRadius:10,boxShadow:C.shadow,padding:8,minWidth:200,maxHeight:340,overflowY:'auto'}}>
+                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'2px 6px 8px',borderBottom:'1px solid '+C.border,marginBottom:4}}>
+                            <span style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:'uppercase',letterSpacing:'0.04em'}}>Colonnes</span>
+                            <button onClick={()=>setHiddenCols(new Set())} style={{border:'none',background:'transparent',color:COLORS.primary,fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Tout afficher</button>
+                          </div>
+                          {toggleable.map(c=>{const on=!hiddenCols.has(c.key);return (<div key={c.key} onClick={()=>setHiddenCols(prev=>{const n=new Set(prev);n.has(c.key)?n.delete(c.key):n.add(c.key);return n;})} style={{display:'flex',alignItems:'center',gap:9,padding:'7px 8px',borderRadius:7,cursor:'pointer',fontSize:13,fontWeight:500,color:on?C.text:C.muted,userSelect:'none'}} onMouseEnter={e=>e.currentTarget.style.background=darkMode?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                            <span style={{width:16,height:16,borderRadius:5,border:'1.5px solid '+(on?COLORS.primary:C.border),background:on?COLORS.primary:'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all 0.15s'}}>{on&&<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}</span>
+                            {c.label}
+                          </div>);})}
+                        </div>
+                      </>)}
+                    </div>
+                    <div style={{overflowX:'auto'}}><table className="perfv2" style={{width:'100%',minWidth:Math.max(700,visCols.length*82)}}><thead><tr>{visCols.map(c=><th key={c.key} style={{...thS,cursor:'help'}} onMouseEnter={e=>setTip({t:c.tip,r:e.currentTarget.getBoundingClientRect()})} onMouseLeave={()=>setTip(null)}>{c.label}</th>)}</tr></thead><tbody>
+                    {perfRows.map((s,i)=>(<tr key={canal+'-'+i+'-'+s.salesKey} style={{animation:'rowIn 0.3s cubic-bezier(0.16,1,0.3,1) '+(i*40)+'ms both'}}>{visCols.map(c=>c.cell(s,i,c.key))}</tr>))}
+                    </tbody></table></div>
+                    </>);
+                  })()}
 
                   {!dataLoading && !perfRows.length && !adsDetailView && <div style={{textAlign:'center',padding:60,color:C.muted}}>Aucune donn&eacute;e disponible</div>}
 
