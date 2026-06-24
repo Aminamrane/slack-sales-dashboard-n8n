@@ -43,6 +43,7 @@ import LeadAssignmentEquity from "./pages/LeadAssignmentEquity.jsx";
 import LeadAssignmentMonitor from "./pages/LeadAssignmentMonitor.jsx";
 import LeadAssignmentLive from "./pages/LeadAssignmentLive.jsx";
 import TeamAbsences from "./pages/TeamAbsences.jsx";
+import Variables from "./pages/Variables.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import MouseDot from "./components/MouseDot.jsx";
@@ -211,6 +212,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['admin']}>
               <MetaAds />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/variables"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'ceo']}>
+              <Variables />
             </ProtectedRoute>
           }
         />
