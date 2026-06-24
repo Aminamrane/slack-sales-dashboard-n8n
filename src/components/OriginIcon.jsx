@@ -2,6 +2,7 @@
 // Couleurs sobres, coherentes avec la charte. Sert au flux des affectations.
 export function originMeta(origin) {
   const o = (origin || "").toLowerCase();
+  if (o.includes("crèche") || o.includes("creche") || o.includes("crech")) return { key: "microcreche", label: "Micro-crèche", color: "#c08497" };
   if (o.includes("resto") || o.includes("restau")) return { key: "resto", label: "Resto", color: "#c47a6a" };
   if (o.includes("btp")) return { key: "btp", label: "BTP", color: "#bf945f" };
   if (o.includes("webinaire") || o.includes("webinar")) return { key: "webinar", label: "Webinaire", color: "#5b7fc4" };
@@ -27,6 +28,8 @@ export default function OriginIcon({ origin, size = 17, color }) {
       return <svg {...common}><rect x="4" y="2" width="16" height="20" rx="2" /><line x1="8" y1="6" x2="16" y2="6" /><line x1="8" y1="14" x2="8" y2="14" /><line x1="12" y1="14" x2="12" y2="14" /><line x1="16" y1="14" x2="16" y2="18" /><line x1="8" y1="18" x2="12" y2="18" /></svg>;
     case "general": // immeuble
       return <svg {...common}><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" /><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" /><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" /><path d="M10 6h4" /><path d="M10 10h4" /><path d="M10 14h4" /></svg>;
+    case "microcreche": // bebe (creche / micro-creche)
+      return <svg {...common}><path d="M9 12h.01" /><path d="M15 12h.01" /><path d="M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5" /><path d="M19 6.3a9 9 0 0 1 1.8 3.9 2 2 0 0 1 0 3.6 9 9 0 0 1-17.6 0 2 2 0 0 1 0-3.6A9 9 0 0 1 12 3c2 0 3.5 1.1 3.5 2.5S15.1 8 14 8c-.8 0-1.5-.4-1.5-1" /></svg>;
     default: // generique
       return <svg {...common}><rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></svg>;
   }

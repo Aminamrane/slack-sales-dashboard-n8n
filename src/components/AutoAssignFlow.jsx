@@ -8,20 +8,23 @@ import { CHARTE_CAT } from "../styles/charte";
 const fullUrl = (u) => (u ? (/^https?:\/\//i.test(u) ? u : apiClient.baseUrl + u) : null);
 const easeOutBack = (t) => { const c1 = 1.9, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
 
-const CW = 900, CH = 300;
+const CW = 900, CH = 338;
 const NODE = {
   n1: { x: 10, y: 106, w: 182, h: 84 },
   n2: { x: 292, y: 66, w: 234, h: 168 },
-  n3: { x: 642, y: 22, w: 248, h: 112 },
-  n4: { x: 642, y: 166, w: 248, h: 112 },
+  n3: { x: 642, y: 16, w: 248, h: 148 },
+  n4: { x: 642, y: 176, w: 248, h: 148 },
 };
 const OUT1 = { x: 192, y: 148 }, IN2 = { x: 292, y: 148 };
 const R1 = { x: 526, y: 126 }, R2 = { x: 526, y: 196 };
-const IN3 = { x: 642, y: 78 }, IN4 = { x: 642, y: 222 };
+const IN3 = { x: 642, y: 74 }, IN4 = { x: 642, y: 234 };
 
 export default function AutoAssignFlow({ pool, C, counts, darkMode }) {
   const all = pool || [];
   const bonus = all.filter((p) => p.elig?.includes(4));
+  const micro = all.filter((p) => p.microcreche);   // exclusif origine Micro-creche (Yohan/Leo)
+  const MC = "#c08497";
+  const microNames = micro.map((p) => (p.full_name || "").split(" ")[0]).filter(Boolean).join(" + ");
 
   const [off, setOff] = useState({});
   const offRef = useRef({});
@@ -108,6 +111,15 @@ export default function AutoAssignFlow({ pool, C, counts, darkMode }) {
       {chips(cats)}
     </div>
   );
+  // Mention micro-creche A L'INTERIEUR d'un pool : exclusivite Yohan/Leo, mais EN EQUILIBRE (remplace, pas en plus).
+  const mcFooter = (note) => micro.length ? (
+    <div style={{ marginTop: 9, paddingTop: 8, borderTop: "1px dashed " + C.border, display: "flex", alignItems: "flex-start", gap: 7 }}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MC} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}><path d="M9 12h.01" /><path d="M15 12h.01" /><path d="M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5" /><path d="M19 6.3a9 9 0 0 1 1.8 3.9 2 2 0 0 1 0 3.6 9 9 0 0 1-17.6 0 2 2 0 0 1 0-3.6A9 9 0 0 1 12 3c2 0 3.5 1.1 3.5 2.5S15.1 8 14 8c-.8 0-1.5-.4-1.5-1" /></svg>
+      <div style={{ fontSize: 9.8, color: C.muted, lineHeight: 1.45 }}>
+        <span style={{ fontWeight: 700, color: MC }}>Micro-crèche</span> · exclusive à {microNames || "Léo + Yohan"}, sans changer l'<span style={{ fontWeight: 600, color: C.text2 }}>équilibre {note}</span>.
+      </div>
+    </div>
+  ) : null;
   const nodeBox = (key, n, children) => (
     <div onMouseDown={onDown(key)} style={{ position: "absolute", left: n.x, top: n.y, width: n.w, minHeight: n.h, transform: `translate(${o(key).dx}px, ${o(key).dy}px)`, background: C.bg, border: "1px solid " + (grab === key ? C.accent : C.border), borderRadius: 12, boxShadow: grab === key ? C.shadowLg : C.shadow, padding: "11px 13px", boxSizing: "border-box", cursor: grab === key ? "grabbing" : "grab", userSelect: "none", zIndex: grab === key ? 6 : 2 }}>{children}</div>
   );
@@ -169,12 +181,14 @@ export default function AutoAssignFlow({ pool, C, counts, darkMode }) {
             {head(<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.text2} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>, "Tous les commerciaux", all.length + " actifs · équité")}
             {avatarStack(all, 9)}
             <div style={{ fontSize: 10.5, color: C.muted, marginTop: 8 }}>Chacun reçoit sa juste part des cat. 1 à 3.</div>
+            {mcFooter("du pool")}
           </>)}
 
           {nodeBox("n4", NODE.n4, <>
             {head(<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.warn} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>, "Pool bonus · top sellers", bonus.length + " éligibles · équité")}
             {bonus.length ? avatarStack(bonus, 9) : <div style={{ fontSize: 11, color: C.muted, marginTop: 9 }}>Aucun pour l'instant.</div>}
             <div style={{ fontSize: 10.5, color: C.muted, marginTop: 8 }}>Cat. 4-5 réparties équitablement, entre eux seulement.</div>
+            {mcFooter("du pool bonus")}
           </>)}
         </div>
       </div>

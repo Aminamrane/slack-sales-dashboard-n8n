@@ -267,6 +267,7 @@ export default function LeadAssignmentLive({ embed = false }) {
                             <div style={{ minWidth: 0 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
                                 <span style={{ fontWeight: 650, fontSize: 13.5, color: C.text, letterSpacing: "-0.01em", whiteSpace: "nowrap" }}>{p.full_name}</span>
+                                {p.microcreche && <span title="Reçoit en exclusivité les leads Micro-crèche" style={{ display: "inline-flex", alignItems: "center" }}><OriginIcon origin="micro-crèche" size={15} /></span>}
                                 {badge && <span title={badge.reason || undefined} style={{ fontSize: 9.5, fontWeight: 700, color: badge.color, background: badge.color + "1c", padding: "2px 7px", borderRadius: 6, whiteSpace: "nowrap" }}>{badge.txt}</span>}
                               </div>
                               <div style={{ fontSize: 10.5, color: C.muted, marginTop: 1 }}>
