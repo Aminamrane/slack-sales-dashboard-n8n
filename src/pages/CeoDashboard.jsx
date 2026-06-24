@@ -39,11 +39,8 @@ const SIDEBAR_TABS = [
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
   )},
   { section: 'HUMAN' },
-  { key: 'eod', label: 'EOD Report', icon: (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-  )},
-  { key: 'eod_dashboard', label: 'Dashboard EOD', icon: (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+  { key: 'variables', label: 'Variables Sales', icon: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>
   )},
   { section: 'ACQUISITION' },
   { key: 'perf_sales', label: 'Perf Sales', icon: (
@@ -784,6 +781,7 @@ export default function CeoDashboard() {
           if (tabId === 'webinar') { navigate('/ceo/webinar'); return; }
           if (tabId === 'funnel_leads') { navigate('/ceo/funnel-leads'); return; }
           if (tabId === 'autoassign') { navigate('/ceo/auto-affectation'); return; }
+          if (tabId === 'variables') { navigate('/ceo/variables'); return; }
           setActiveTab(tabId);
         }}
         C={C}

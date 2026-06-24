@@ -26,7 +26,7 @@ const shiftMonth = (m, delta) => {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 };
 
-export default function Variables() {
+export default function Variables({ embed = false }) {
   const navigate = useNavigate();
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
   useEffect(() => {
@@ -36,9 +36,10 @@ export default function Variables() {
   const C = makeCharte(darkMode);
 
   useEffect(() => {
+    if (embed) return;  // en embed (shell CEO), l'acces est garanti par le parent
     const u = apiClient.getUser();
     if (!u || (u.role !== "admin" && u.role !== "ceo")) navigate("/login");
-  }, [navigate]);
+  }, [navigate, embed]);
 
   const nowMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
   const [month, setMonth] = useState(nowMonth());
@@ -69,20 +70,19 @@ export default function Variables() {
   }, [people]);
 
   return (
-    <div style={{ minHeight: "100vh", background: C.surface, fontFamily: FONT, color: C.text }}>
+    <div style={{ minHeight: embed ? "auto" : "100vh", background: embed ? "transparent" : C.surface, fontFamily: FONT, color: C.text }}>
       <style>{`
         @keyframes vFadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
         @keyframes vRowIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
       `}</style>
-      <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
+      {!embed && <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />}
 
-      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "26px 24px 80px", animation: "vFadeUp 0.4s ease both" }}>
+      <div style={{ maxWidth: embed ? "100%" : 1180, margin: "0 auto", padding: embed ? "6px 6px 48px" : "26px 24px 80px", animation: "vFadeUp 0.4s ease both" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 16, marginBottom: 8 }}>
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, color: C.accentText, letterSpacing: 0.3 }}>Paie · confidentiel</div>
             <h1 style={{ margin: "4px 0 2px", fontSize: 26, fontWeight: 700, letterSpacing: -0.4 }}>Calcul des variables</h1>
-            <div style={{ fontSize: 13.5, color: C.text2 }}>Calcule depuis les contrats reellement signes dans le CRM. Chaque euro est traçable.</div>
           </div>
           <MonthPicker C={C} month={month} setMonth={setMonth} />
         </div>
@@ -90,7 +90,7 @@ export default function Variables() {
         {/* Bandeau de confiance + toggle regles */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", margin: "14px 0 18px", padding: "10px 14px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10 }}>
           <div style={{ fontSize: 12.5, color: C.text2 }}>
-            Aucune saisie manuelle : la source, ce sont les ventes signees du CRM. Clique une ligne pour voir le calcul <b style={{ color: C.text }}>deal par deal</b>.
+            Aucune saisie manuelle : la source, ce sont les <b style={{ color: C.text }}>ventes signées du CRM</b>.
           </div>
           <button onClick={() => setShowRules((v) => !v)}
             style={{ flexShrink: 0, padding: "7px 13px", borderRadius: 8, border: `1px solid ${C.border}`, background: showRules ? C.accentSoft : "transparent", color: showRules ? C.accentText : C.text2, fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>

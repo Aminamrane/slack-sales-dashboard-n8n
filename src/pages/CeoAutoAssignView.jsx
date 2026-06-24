@@ -65,6 +65,7 @@ export default function CeoAutoAssignView() {
   // Les autres onglets-route renvoient vers leur route dédiée (sinon page blanche).
   const handleSidebarTabClick = (tabId) => {
     if (tabId === "autoassign") return;
+    if (tabId === "variables") { navigate("/ceo/variables"); return; }
     if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }
     if (tabId === "dispatch") { navigate("/ceo/dispatch"); return; }
     if (tabId === "leaderboard") { navigate("/ceo/leaderboard"); return; }

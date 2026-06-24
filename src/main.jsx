@@ -29,6 +29,7 @@ import CeoDispatchView    from "./pages/CeoDispatchView.jsx";
 import CeoLeaderboardView from "./pages/CeoLeaderboardView.jsx";
 import CeoPerfSalesView   from "./pages/CeoPerfSalesView.jsx";
 import CeoAutoAssignView  from "./pages/CeoAutoAssignView.jsx";
+import CeoVariablesView   from "./pages/CeoVariablesView.jsx";
 import CeoLeadQualityView from "./pages/CeoLeadQualityView.jsx";
 import CeoSalesTeamView   from "./pages/CeoSalesTeamView.jsx";
 import CeoWebinarView     from "./pages/CeoWebinarView.jsx";
@@ -148,6 +149,14 @@ function App() {
           element={
             <ProtectedRoute>
               <CeoAutoAssignView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ceo/variables"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'ceo']}>
+              <CeoVariablesView />
             </ProtectedRoute>
           }
         />
