@@ -23,6 +23,7 @@ import BudgetByDayChart from './components/BudgetByDayChart';
 import SalesWebinarRanking from './components/SalesWebinarRanking';
 import SalesWebinarRankingCompact from './components/SalesWebinarRankingCompact';
 import RdvBySourceDonut from './components/RdvBySourceDonut';
+import LiveQualitySection from './components/LiveQualitySection';
 import Card from './components/Card';
 
 const ALLOWED_ROLES = ['admin', 'ceo', 'marketing', 'acquisition_director', 'head_of_acquisition'];
@@ -564,6 +565,18 @@ export default function Marketing() {
             loading={overviewLoading && !summary}
           />
         </section>
+
+        {/* ── QUALITÉ DU LIVE (rapport Zoom) ──
+            Cartes KPI cliquables détaillant la qualité de présence au live.
+            La section entière (wrapper + marge) n'est rendue que si la
+            cohorte expose `live_quality.available` → aucune marge fantôme
+            ni carte vide pour les cohortes sans rapport Zoom. Placée juste
+            après le bloc Hero (qui porte la tuile "Présents au live"). */}
+        {realtimeLeads?.live_quality?.available && (
+          <section style={{ marginBottom: 24 }}>
+            <LiveQualitySection realtimeLeads={realtimeLeads} C={C} />
+          </section>
+        )}
 
         {/* ── SOURCE BREAKDOWN ── */}
         {/* Affiché si summary OU pendant le 1er chargement (skeleton 3 cards).
