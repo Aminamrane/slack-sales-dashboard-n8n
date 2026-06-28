@@ -1,46 +1,33 @@
 // src/pages/AcquisitionDirectorDashboard.jsx
 //
-// Route /acquisition-director — coquille du Dashboard Directeur Acquisition.
+// Route /acquisition-director — dashboard du Directeur Acquisition.
 //
-// Architecture (miroir CeoLeaderboardView / CeoDispatchView) :
-// - URL : /acquisition-director
-// - Réutilise EXACTEMENT la CeoSidebar (exports nommés de CeoDashboard.jsx) :
-//   même palette, mêmes sections (RÉCENTES / HUMAN / ACQUISITION / MARKETING
-//   / FINANCE), mêmes animations.
-// - Workspace de droite = coquille placeholder. Le dev précisera les KPIs
-//   métier à implémenter dans une 2e passe (sections à venir).
-// - Aucun mock de KPI ici : la coquille assume sa nature transitoire.
+// Le dashboard AFFICHE le Leaderboard de la section Acquisition (la même vue
+// que /ceo/leaderboard), embarqué dans la coquille : sidebar adaptée au rôle
+// + SharedNavbar. On garde l'onglet "Dashboard" actif -> leur dashboard EST
+// le leaderboard. Calque de CeoLeaderboardView, avec activeTab="dashboard".
 //
-// Gate : admin | ceo | head_of_acquisition | marketing. À l'audit du
-// codebase, `head_of_acquisition` n'apparaît nulle part côté front
-// (rôles connus = admin, ceo, head_of_sales, head_of_sales_manager,
-// sales, commercial, tech, finance, finance_director, finance_team,
-// marketing). Le rôle est gardé dans la liste pour qu'il fonctionne
-// dès que le backend l'aura matérialisé — aucune entrée nouvelle n'est
-// créée côté front (role_permissions intouché par design).
+// - Sidebar filtrée : Acquisition Director ne voit que {recent, acquisition}
+//   (sidebarPermissions). Admin / CEO voient tout.
+// - Leaderboard lit ?embed=true (injecté ici via replaceState) pour masquer
+//   sa SharedNavbar interne et son paddingTop dédié.
 //
-// Navigation sidebar : cliquer un item rejoint l'écosystème CEO :
-//   - "Dispatch"     → /ceo/dispatch
-//   - "Leaderboard"  → /ceo/leaderboard
-//   - tous les autres → /ceo avec `ceoActiveTab` posé en localStorage,
-//     que CeoDashboard consomme à son mount (pattern identique aux
-//     autres wrappers Ceo*).
-// Cliquer "Dashboard" dans la sidebar = no-op (on est déjà dessus —
-// activeTab est highlighté à 'dashboard').
+// Gate : admin | ceo | head_of_acquisition | acquisition_director | marketing.
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
+import Leaderboard from "./Leaderboard.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
+import SharedNavbar from "../components/SharedNavbar.jsx";
 
 const ALLOWED_ROLES = ["admin", "ceo", "head_of_acquisition", "acquisition_director", "marketing"];
 
 export default function AcquisitionDirectorDashboard() {
   const navigate = useNavigate();
 
-  // ── DARK MODE (read-only sync; pas de toggle interne ici) ───────────
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
   useEffect(() => {
     const onStorage = (e) => {
@@ -57,7 +44,6 @@ export default function AcquisitionDirectorDashboard() {
     };
   }, []);
 
-  // ── SIDEBAR COLLAPSE (mirror CeoDashboard pattern, key partagée) ────
   const [sideCollapsed, setSideCollapsed] = useState(() => {
     const stored = localStorage.getItem("ceoSideCollapsed");
     return stored === null ? false : stored === "true";
@@ -66,7 +52,6 @@ export default function AcquisitionDirectorDashboard() {
     localStorage.setItem("ceoSideCollapsed", String(sideCollapsed));
   }, [sideCollapsed]);
 
-  // ── AUTH GATE ───────────────────────────────────────────────────────
   const [authChecked, setAuthChecked] = useState(false);
   const [userRole, setUserRole] = useState(null);
   useEffect(() => {
@@ -79,17 +64,25 @@ export default function AcquisitionDirectorDashboard() {
     setAuthChecked(true);
   }, [navigate]);
 
-  const C = useMemo(() => getColors(darkMode), [darkMode]);
+  // Le dashboard Acquisition Director = le Leaderboard. On injecte ?embed=true
+  // AVANT le mount du Leaderboard (il lit ce flag au mount pour masquer sa navbar
+  // interne), comme CeoLeaderboardView. On préserve le path /acquisition-director.
+  const [paramsInjected, setParamsInjected] = useState(false);
+  useEffect(() => {
+    if (!authChecked) return;
+    const incoming = new URLSearchParams(window.location.search);
+    if (incoming.get("embed") !== "true") {
+      incoming.set("embed", "true");
+      window.history.replaceState(null, "", `${window.location.pathname}?${incoming.toString()}`);
+    }
+    setParamsInjected(true);
+  }, [authChecked]);
 
+  const C = useMemo(() => getColors(darkMode), [darkMode]);
   const visibleSections = useMemo(() => getVisibleSections(SIDEBAR_SECTIONS, userRole), [userRole]);
 
-  // ── SIDEBAR NAVIGATION HANDLER ──────────────────────────────────────
-  // Cliquer un item de la sidebar = rejoindre l'écosystème CEO :
-  // - dispatch / leaderboard ont leur route dédiée (cohérent avec
-  //   CeoLeaderboardView et CeoDispatchView entre eux).
-  // - tous les autres tabs → on pose `ceoActiveTab` en localStorage et
-  //   on navigate vers /ceo, où CeoDashboard lira le flag à son mount.
-  // Cliquer "Dashboard" depuis cette vue est un no-op (déjà highlighté).
+  // Cliquer "Dashboard" = no-op (on est déjà dessus, il affiche le leaderboard).
+  // Les autres onglets-route rejoignent leur route dédiée (sinon page blanche).
   const handleSidebarTabClick = (tabId) => {
     if (tabId === "dashboard") return;
     if (tabId === "dispatch") { navigate("/ceo/dispatch"); return; }
@@ -97,6 +90,7 @@ export default function AcquisitionDirectorDashboard() {
     if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }
     if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }
     if (tabId === "variables") { navigate("/ceo/variables"); return; }
+    if (tabId === "conges") { navigate("/ceo/conges"); return; }
     if (tabId === "lead_quality") { navigate("/ceo/lead-quality"); return; }
     if (tabId === "sales_team") { navigate("/ceo/sales-team"); return; }
     if (tabId === "webinar") { navigate("/ceo/webinar"); return; }
@@ -105,7 +99,7 @@ export default function AcquisitionDirectorDashboard() {
     navigate("/ceo");
   };
 
-  if (!authChecked) {
+  if (!authChecked || !paramsInjected) {
     return (
       <div style={{
         minHeight: "100vh",
@@ -125,15 +119,15 @@ export default function AcquisitionDirectorDashboard() {
       style={{
         display: "flex",
         minHeight: "100vh",
-        background: darkMode ? "#13141b" : "#f6f7f9",
+        // Aligné sur CARD.surface du Leaderboard (#edf0f8 light / #13141b dark)
+        // pour éviter une coupure de couleur avec la zone droite embarquée.
+        background: darkMode ? "#13141b" : "#edf0f8",
         fontFamily: "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
         WebkitFontSmoothing: "antialiased",
         MozOsxFontSmoothing: "grayscale",
         textRendering: "optimizeLegibility",
       }}
     >
-      {/* CSS scopé identique à CeoLeaderboardView pour que la sidebar ait
-          le même comportement hover / scrollbar / transitions. */}
       <style>{`
         .ceo-side { transition: width 0.22s cubic-bezier(0.4,0,0.2,1); }
         .ceo-side-item { transition: background 0.12s ease; }
@@ -144,17 +138,8 @@ export default function AcquisitionDirectorDashboard() {
         .ceo-side-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
         .ceo-side-scroll:hover::-webkit-scrollbar-thumb { background: ${darkMode ? "rgba(255,255,255,0.18)" : "rgba(55,53,47,0.16)"}; background-clip: padding-box; }
         .ceo-side-scroll::-webkit-scrollbar-track { background: transparent; }
-
-        /* Keyframes locales pour ne pas dépendre de la chaîne d'import
-           CeoDashboard (qui injecte ces keyframes en in-flight CSS dans
-           son propre render). Noms identiques pour cohérence visuelle. */
-        @keyframes acqFadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-        @keyframes acqCardPop { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: none; } }
       `}</style>
 
-      {/* Sidebar sticky comme CeoLeaderboardView : le wrapper est en flex
-          column pour que la motion.aside enfant prenne toute la hauteur du
-          viewport sans étirer la page entière. */}
       <div style={{
         position: "sticky",
         top: 0,
@@ -174,93 +159,11 @@ export default function AcquisitionDirectorDashboard() {
         />
       </div>
 
-      {/* Workspace droit — coquille placeholder. Le dev viendra brancher
-          ici les sections métier acquisition (KPIs, tables, charts) dans
-          une 2e passe. Pas de mock entre-temps : un placeholder neutre
-          fait moins de bruit qu'un mock qui pourrait être confondu avec
-          de la donnée réelle. */}
-      <main
-        style={{
-          flex: 1,
-          minWidth: 0,
-          padding: "48px 56px 64px",
-          animation: "acqFadeIn 0.4s ease both",
-          overflowY: "auto",
-        }}
-      >
-        <header style={{ marginBottom: 40 }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 32,
-              fontWeight: 700,
-              letterSpacing: "-0.02em",
-              color: C.text,
-              lineHeight: 1.15,
-            }}
-          >
-            Acquisition Director Dashboard
-          </h1>
-          <p
-            style={{
-              margin: "8px 0 0",
-              fontSize: 15,
-              fontWeight: 400,
-              color: C.muted,
-              letterSpacing: "-0.005em",
-            }}
-          >
-            Vue Acquisition · Owner Technology
-          </p>
-        </header>
-
-        <section
-          style={{
-            background: C.bg,
-            border: `1px solid ${C.border}`,
-            borderRadius: 12,
-            padding: "56px 32px",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 10,
-            textAlign: "center",
-            boxShadow: C.shadow,
-            animation: "acqCardPop 0.45s ease 80ms both",
-          }}
-        >
-          <div
-            style={{
-              width: 40, height: 40, borderRadius: 10,
-              background: C.subtle,
-              border: `1px solid ${C.border}`,
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              color: C.accent,
-              marginBottom: 6,
-            }}
-            aria-hidden="true"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="7" height="7" rx="1.5"/>
-              <rect x="14" y="3" width="7" height="7" rx="1.5"/>
-              <rect x="3" y="14" width="7" height="7" rx="1.5"/>
-              <rect x="14" y="14" width="7" height="7" rx="1.5"/>
-            </svg>
-          </div>
-          <h2
-            style={{
-              margin: 0,
-              fontSize: 16,
-              fontWeight: 600,
-              color: C.text,
-              letterSpacing: "-0.01em",
-            }}
-          >
-            Sections à venir
-          </h2>
-        </section>
-      </main>
+      {/* Dashboard Acquisition Director = Leaderboard embarqué (?embed=true injecté). */}
+      <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
+        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
+        <Leaderboard />
+      </div>
     </div>
   );
 }

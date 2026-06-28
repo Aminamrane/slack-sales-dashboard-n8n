@@ -22,7 +22,7 @@ import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo", "acquisition_director", "head_of_acquisition"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "acquisition_director", "head_of_acquisition"]);
 
 const getInitials = (name) => {
   if (!name) return "?";
@@ -102,6 +102,7 @@ export default function CeoSalesTeamView() {
     if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }
     if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }
     if (tabId === "variables") { navigate("/ceo/variables"); return; }
+    if (tabId === "conges") { navigate("/ceo/conges"); return; }
     if (tabId === "lead_quality") { navigate("/ceo/lead-quality"); return; }
     if (tabId === "webinar") { navigate("/ceo/webinar"); return; }
     if (tabId === "funnel_leads") { navigate("/ceo/funnel-leads"); return; }

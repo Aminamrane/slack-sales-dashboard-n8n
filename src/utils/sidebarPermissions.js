@@ -12,6 +12,7 @@
 const ROLE_SECTIONS = {
   acquisition_director: new Set(["recent", "acquisition"]),
   head_of_acquisition: new Set(["recent", "acquisition"]),
+  hr: new Set(["recent", "human", "acquisition"]),  // RH : coin Humain (Congés + Variables) + tout l'Acquisition
 };
 
 /**

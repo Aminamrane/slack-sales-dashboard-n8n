@@ -1,32 +1,34 @@
-// src/pages/CeoDispatchView.jsx
+// src/pages/HrDashboard.jsx
 //
-// Route /ceo/dispatch — vue CEO de la page TrackingSheetFinance (dispatch).
+// Route /rh-dashboard — dashboard du rôle RH (Ressources Humaines).
 //
-// Architecture (miroir de CeoSheetView pour TS embed) :
-// - URL : /ceo/dispatch
-// - On injecte `?embed=true` dans window.location.search via replaceState
-//   (TSF lit ce flag pour masquer sa sidebar interne + élargir son auth
-//   gate au rôle ceo).
-// - On rend la CeoSidebar (importée nommée de CeoDashboard) + TSF tel quel.
+// Le dashboard RH AFFICHE le Leaderboard de la section Acquisition (la même
+// vue que /ceo/leaderboard), embarqué dans la coquille RH : sidebar adaptée
+// au rôle + SharedNavbar. On garde l'onglet "Dashboard" actif -> leur
+// dashboard EST le leaderboard. Calque de CeoLeaderboardView, avec
+// activeTab="dashboard" et le gate RH.
 //
-// Gate : seul role=ceo (et admin pour debug) peut accéder.
+// - Le rôle `hr` ne voit que {recent, human, acquisition} (sidebarPermissions)
+//   -> coin RH (Congés + Variables Sales) + tout l'Acquisition.
+// - Leaderboard lit ?embed=true (injecté ici via replaceState) pour masquer
+//   sa SharedNavbar interne et son paddingTop dédié.
+//
+// Gate : admin | ceo | hr.
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
-import { navigateBackToDashboard } from "../utils/dashboardNavigation";
-import TrackingSheetFinance from "./TrackingSheetFinance/index.jsx";
+import Leaderboard from "./Leaderboard.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "acquisition_director", "head_of_acquisition"]);
+const ALLOWED_ROLES = ["admin", "ceo", "hr"];
 
-export default function CeoDispatchView() {
+export default function HrDashboard() {
   const navigate = useNavigate();
 
-  // ── DARK MODE (read-only sync with localStorage; TSF owns its own) ──
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
   useEffect(() => {
     const onStorage = (e) => {
@@ -43,7 +45,6 @@ export default function CeoDispatchView() {
     };
   }, []);
 
-  // ── SIDEBAR COLLAPSE (mirror CeoDashboard pattern) ──────────────────
   const [sideCollapsed, setSideCollapsed] = useState(() => {
     const stored = localStorage.getItem("ceoSideCollapsed");
     return stored === null ? false : stored === "true";
@@ -52,31 +53,28 @@ export default function CeoDispatchView() {
     localStorage.setItem("ceoSideCollapsed", String(sideCollapsed));
   }, [sideCollapsed]);
 
-  // ── AUTH GATE ───────────────────────────────────────────────────────
   const [authChecked, setAuthChecked] = useState(false);
   const [userRole, setUserRole] = useState(null);
   useEffect(() => {
     const u = apiClient.getUser();
-    if (!u || !ALLOWED_ROLES.has(u.role)) {
-      navigate("/");
+    if (!u || !ALLOWED_ROLES.includes(u.role)) {
+      navigate("/login");
       return;
     }
     setUserRole(u.role);
     setAuthChecked(true);
   }, [navigate]);
 
-  // ── INJECT TSF EMBED FLAG via history.replaceState ──────────────────
-  // TSF lit `embed` depuis window.location.search au mount. On préserve
-  // le path /ceo/dispatch (pour le routing + Back) mais on injecte
-  // ?embed=true. Doit s'exécuter AVANT le mount de TSF.
+  // Le dashboard RH = le Leaderboard. On injecte ?embed=true AVANT le mount du
+  // Leaderboard (il lit ce flag au mount pour masquer sa navbar interne), comme
+  // CeoLeaderboardView. On préserve le path /rh-dashboard pour le routing.
   const [paramsInjected, setParamsInjected] = useState(false);
   useEffect(() => {
     if (!authChecked) return;
     const incoming = new URLSearchParams(window.location.search);
     if (incoming.get("embed") !== "true") {
       incoming.set("embed", "true");
-      const newUrl = `${window.location.pathname}?${incoming.toString()}`;
-      window.history.replaceState(null, "", newUrl);
+      window.history.replaceState(null, "", `${window.location.pathname}?${incoming.toString()}`);
     }
     setParamsInjected(true);
   }, [authChecked]);
@@ -84,22 +82,22 @@ export default function CeoDispatchView() {
   const C = useMemo(() => getColors(darkMode), [darkMode]);
   const visibleSections = useMemo(() => getVisibleSections(SIDEBAR_SECTIONS, userRole), [userRole]);
 
-  // ── SIDEBAR NAVIGATION HANDLER ──────────────────────────────────────
-  // Clicking any sidebar item returns to /ceo with the chosen tab
-  // pre-selected via localStorage `ceoActiveTab`. Cliquer "Dispatch"
-  // depuis cette vue est un no-op (déjà dessus).
+  // Cliquer "Dashboard" = no-op (on est déjà dessus, il affiche le leaderboard).
+  // Les autres onglets-route rejoignent leur route dédiée (sinon page blanche).
   const handleSidebarTabClick = (tabId) => {
-    if (tabId === "dispatch") return;
+    if (tabId === "dashboard") return;
+    if (tabId === "conges") { navigate("/ceo/conges"); return; }
+    if (tabId === "variables") { navigate("/ceo/variables"); return; }
+    if (tabId === "dispatch") { navigate("/ceo/dispatch"); return; }
     if (tabId === "leaderboard") { navigate("/ceo/leaderboard"); return; }
     if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }
     if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }
-    if (tabId === "variables") { navigate("/ceo/variables"); return; }
-    if (tabId === "conges") { navigate("/ceo/conges"); return; }
     if (tabId === "lead_quality") { navigate("/ceo/lead-quality"); return; }
     if (tabId === "sales_team") { navigate("/ceo/sales-team"); return; }
     if (tabId === "webinar") { navigate("/ceo/webinar"); return; }
     if (tabId === "funnel_leads") { navigate("/ceo/funnel-leads"); return; }
-    navigateBackToDashboard(navigate, userRole, tabId);
+    try { localStorage.setItem("ceoActiveTab", tabId); } catch { /* noop */ }
+    navigate("/ceo");
   };
 
   if (!authChecked || !paramsInjected) {
@@ -121,9 +119,10 @@ export default function CeoDispatchView() {
       className="ceo-page"
       style={{
         display: "flex",
-        height: "100vh",
-        overflow: "hidden",
-        background: C.surface,
+        minHeight: "100vh",
+        // Aligné sur CARD.surface du Leaderboard (#edf0f8 light / #13141b dark)
+        // pour éviter une coupure de couleur avec la zone droite embarquée.
+        background: darkMode ? "#13141b" : "#edf0f8",
         fontFamily: "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
         WebkitFontSmoothing: "antialiased",
         MozOsxFontSmoothing: "grayscale",
@@ -142,23 +141,29 @@ export default function CeoDispatchView() {
         .ceo-side-scroll::-webkit-scrollbar-track { background: transparent; }
       `}</style>
 
-      <Sidebar
-        width={sideCollapsed ? 56 : 260}
-        collapsed={sideCollapsed}
-        onToggle={() => setSideCollapsed((v) => !v)}
-        sections={visibleSections}
-        activeTab="dispatch"
-        setActiveTab={handleSidebarTabClick}
-        C={C}
-        darkMode={darkMode}
-      />
+      <div style={{
+        position: "sticky",
+        top: 0,
+        alignSelf: "flex-start",
+        height: "100vh",
+        display: "flex",
+      }}>
+        <Sidebar
+          width={sideCollapsed ? 56 : 260}
+          collapsed={sideCollapsed}
+          onToggle={() => setSideCollapsed((v) => !v)}
+          sections={visibleSections}
+          activeTab="dashboard"
+          setActiveTab={handleSidebarTabClick}
+          C={C}
+          darkMode={darkMode}
+        />
+      </div>
 
-      {/* Embedded TrackingSheetFinance — `?embed=true` est déjà dans la query
-          via replaceState (lecture sync au mount). On rend la SharedNavbar
-          (dynamic-island) au-dessus pour cohérence avec /ceo. */}
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", position: 'relative' }}>
+      {/* Dashboard RH = Leaderboard embarqué (?embed=true déjà injecté). */}
+      <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
         <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
-        <TrackingSheetFinance />
+        <Leaderboard />
       </div>
     </div>
   );

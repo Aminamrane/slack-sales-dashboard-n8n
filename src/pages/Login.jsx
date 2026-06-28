@@ -35,6 +35,7 @@ export default function Login() {
         ceo: '/ceo',
         acquisition_director: '/acquisition-director',
         head_of_acquisition: '/acquisition-director',
+        hr: '/rh-dashboard',
       };
       navigate(dashboardByRole[user.role] || '/');
     } catch (err) {

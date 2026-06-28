@@ -12,6 +12,7 @@
 const ROLE_DASHBOARDS = {
   acquisition_director: "/acquisition-director",
   head_of_acquisition: "/acquisition-director",
+  hr: "/rh-dashboard",
 };
 
 export function getDashboardRoute(role) {

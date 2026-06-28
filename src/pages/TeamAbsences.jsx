@@ -20,13 +20,23 @@ const ROLE_LABELS = {
   customer_success_manager: "CSM",
 };
 
-export default function TeamAbsences() {
+export default function TeamAbsences({ embed = false }) {
   const navigate = useNavigate();
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
   useEffect(() => {
+    if (embed) return; // en embed, la coquille (CeoCongesView) pilote la classe dark-mode du body
     document.body.classList.toggle("dark-mode", darkMode);
     document.documentElement.classList.toggle("dark-mode", darkMode);
-  }, [darkMode]);
+  }, [darkMode, embed]);
+  // En embed, on SUIT le thème piloté par la coquille (lecture de la classe body).
+  useEffect(() => {
+    if (!embed) return;
+    const id = setInterval(() => {
+      const isDark = document.body.classList.contains("dark-mode");
+      setDarkMode((p) => (p !== isDark ? isDark : p));
+    }, 500);
+    return () => clearInterval(id);
+  }, [embed]);
 
   const C = {
     bg: darkMode ? "#1e1f28" : "#ffffff",
@@ -45,9 +55,11 @@ export default function TeamAbsences() {
     const user = apiClient.getUser();
     if (!token || !user) { navigate("/login"); return; }
     setSession({ user: { email: user.email, user_metadata: { name: user.name, avatar_url: user.avatar_url || null } } });
-    // Temporaire : admin SEULEMENT (front pas fini, pas encore ouvert au RH). Rouvrir 'hr' plus tard.
-    if (user.role === "admin") setOk(true); else navigate("/");
-  }, [navigate]);
+    // En embed, la coquille (CeoCongesView) a déjà filtré le rôle -> on rend le contenu.
+    // En standalone (/equipe) : coin RH réservé admin + hr.
+    if (embed) { setOk(true); return; }
+    if (user.role === "admin" || user.role === "hr") setOk(true); else navigate("/");
+  }, [navigate, embed]);
 
   const [tab, setTab] = useState("absences");
   const [calMonth] = useState(() => new Date());
@@ -71,7 +83,7 @@ export default function TeamAbsences() {
       .catch(() => setAbsences([]));
   }, [ok]);
 
-  if (!ok) return <div style={{ minHeight: "100vh", background: C.surface }} />;
+  if (!ok) return <div style={{ minHeight: embed ? 240 : "100vh", background: embed ? "transparent" : C.surface }} />;
   const card = { background: C.bg, border: "1px solid " + C.border, borderRadius: 14, boxShadow: darkMode ? "none" : "0 1px 2px rgba(0,0,0,0.03)" };
   const fmtJM = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
   const rangeLabel = (a) => (a.start_date === a.end_date ? "le " + fmtJM(a.start_date) : "du " + fmtJM(a.start_date) + " au " + fmtJM(a.end_date));
@@ -98,9 +110,44 @@ export default function TeamAbsences() {
     setBusyId(null);
   };
 
+  // Distingue passé / à venir (date du jour locale en YYYY-MM-DD, comparaison de chaines).
+  const _now = new Date();
+  const todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
+  const isPastAbs = (a) => a.end_date < todayStr && !a.active_now;
+  const upcomingAbs = (absences || []).filter((a) => !isPastAbs(a));
+  const pastAbs = (absences || []).filter((a) => isPastAbs(a));
+
+  // Une ligne d'absence. `past` = grisée + lecture seule (validable/refusable n'a plus de sens).
+  const absenceRow = (a, i, arr, past) => (
+    <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: i < arr.length - 1 ? "1px dashed " + C.border : "none", animation: "rowIn 0.3s ease both", opacity: past ? 0.6 : 1 }}>
+      {a.avatar_url
+        ? <img src={a.avatar_url} alt="" style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+        : <div style={{ width: 34, height: 34, borderRadius: "50%", background: COLORS.primary, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 600, fontSize: 13, flexShrink: 0 }}>{(a.full_name || "?").charAt(0)}</div>}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 600, color: C.text, display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+          {a.full_name}
+          {(() => { const m = ABSENCE_TYPE_META[a.absence_type] || ABSENCE_TYPE_META.conge; return <span style={{ fontSize: 9.5, fontWeight: 700, color: m.color, background: m.color + "1e", borderRadius: 5, padding: "1px 6px" }}>{m.label}</span>; })()}
+          {!past && a.active_now && <span style={{ fontSize: 9.5, fontWeight: 700, color: COLORS.secondary, background: COLORS.secondary + "1e", borderRadius: 5, padding: "1px 6px" }}>EN COURS</span>}
+        </div>
+        <div style={{ fontSize: 11.5, color: C.muted, marginTop: 1 }}>{rangeLabel(a)} · {a.days} j</div>
+        {a.description && a.description.trim() && (
+          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 4, fontStyle: "italic", paddingLeft: 9, borderLeft: "2px solid " + C.border, lineHeight: 1.45 }}>{a.description.trim()}</div>
+        )}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+        {a.validated_at
+          ? <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 600, color: COLORS.tertiary }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>Validé</span>
+          : past
+            ? <span style={{ fontSize: 11.5, fontWeight: 600, color: C.muted }}>Passé</span>
+            : <button onClick={() => validateAbs(a)} disabled={busyId === a.id} style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 8, border: "none", background: COLORS.tertiary, color: "#fff", fontSize: 12, fontWeight: 600, cursor: busyId === a.id ? "wait" : "pointer", fontFamily: "inherit", opacity: busyId === a.id ? 0.6 : 1 }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>Valider</button>}
+        {!past && <button onClick={() => refuseAbs(a)} disabled={busyId === a.id} title="Annule l'absence : la personne reçoit de nouveau des leads à ces dates" style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 8, border: "1px solid " + C.border, background: "transparent", color: "#ef4444", fontSize: 12, fontWeight: 600, cursor: busyId === a.id ? "wait" : "pointer", fontFamily: "inherit", opacity: busyId === a.id ? 0.6 : 1 }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>Refuser</button>}
+      </div>
+    </div>
+  );
+
   return (
-    <div style={{ minHeight: "100vh", background: C.surface, fontFamily: FONT }}>
-      <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />
+    <div style={{ minHeight: embed ? "auto" : "100vh", background: embed ? "transparent" : C.surface, fontFamily: FONT }}>
+      {!embed && <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />}
       <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@keyframes rowIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}`}</style>
 
       <div style={{ maxWidth: 1320, margin: "0 auto", padding: "26px 24px 60px", animation: "fadeUp 0.4s ease both" }}>
@@ -117,7 +164,7 @@ export default function TeamAbsences() {
             </div>
           </div>
           <div style={{ display: "flex", gap: 4, padding: 4, borderRadius: 12, background: C.subtle, border: "1px solid " + C.border }}>
-            {[["equipe", "Équipe"], ["salaire", "Salaire & Prime"], ["absences", "Absences"]].map(([k, label]) => (
+            {[["equipe", "Équipe"], ["absences", "Absences"]].map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)} style={{ padding: "8px 16px", borderRadius: 9, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 600, background: tab === k ? (darkMode ? "#fff" : "#1e2330") : "transparent", color: tab === k ? (darkMode ? "#1e2330" : "#fff") : C.muted, transition: "all 0.15s" }}>{label}</button>
             ))}
           </div>
@@ -127,44 +174,34 @@ export default function TeamAbsences() {
         {tab === "absences" && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 16, alignItems: "start" }}>
 
-            {/* Colonne gauche : absences à venir (RÉEL) */}
-            <div style={{ ...card, padding: "16px 18px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={COLORS.secondary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
-                <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Absences à venir</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.secondary, background: COLORS.secondary + "18", borderRadius: 20, padding: "2px 9px" }}>{absences ? absences.length : "…"}</span>
+            {/* Colonne gauche : à venir / en cours + passés (RÉEL) */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ ...card, padding: "16px 18px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={COLORS.secondary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Absences à venir</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.secondary, background: COLORS.secondary + "18", borderRadius: 20, padding: "2px 9px" }}>{absences ? upcomingAbs.length : "…"}</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  {absences === null && <div style={{ textAlign: "center", color: C.muted, fontSize: 13, padding: "40px 10px" }}>Chargement…</div>}
+                  {absences && upcomingAbs.length === 0 && <div style={{ textAlign: "center", color: C.muted, fontSize: 13, padding: "40px 10px" }}>Aucune absence à venir 🎉</div>}
+                  {upcomingAbs.map((a, i) => absenceRow(a, i, upcomingAbs, false))}
+                </div>
               </div>
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                {absences === null && <div style={{ textAlign: "center", color: C.muted, fontSize: 13, padding: "40px 10px" }}>Chargement…</div>}
-                {absences && absences.length === 0 && <div style={{ textAlign: "center", color: C.muted, fontSize: 13, padding: "40px 10px" }}>Aucune absence à venir 🎉</div>}
-                {(absences || []).map((a, i) => (
-                  <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: i < absences.length - 1 ? "1px dashed " + C.border : "none", animation: "rowIn 0.3s ease both" }}>
-                    {a.avatar_url
-                      ? <img src={a.avatar_url} alt="" style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
-                      : <div style={{ width: 34, height: 34, borderRadius: "50%", background: COLORS.primary, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 600, fontSize: 13, flexShrink: 0 }}>{(a.full_name || "?").charAt(0)}</div>}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 600, color: C.text, display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-                        {a.full_name}
-                        {(() => { const m = ABSENCE_TYPE_META[a.absence_type] || ABSENCE_TYPE_META.conge; return <span style={{ fontSize: 9.5, fontWeight: 700, color: m.color, background: m.color + "1e", borderRadius: 5, padding: "1px 6px" }}>{m.label}</span>; })()}
-                        {a.active_now && <span style={{ fontSize: 9.5, fontWeight: 700, color: COLORS.secondary, background: COLORS.secondary + "1e", borderRadius: 5, padding: "1px 6px" }}>EN COURS</span>}
-                      </div>
-                      <div style={{ fontSize: 11.5, color: C.muted, marginTop: 1 }}>{rangeLabel(a)} · {a.days} j{a.description ? ` · ${a.description}` : ""}</div>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                      {a.validated_at
-                        ? <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 600, color: COLORS.tertiary }}>
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>Validé
-                          </span>
-                        : <button onClick={() => validateAbs(a)} disabled={busyId === a.id} style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 8, border: "none", background: COLORS.tertiary, color: "#fff", fontSize: 12, fontWeight: 600, cursor: busyId === a.id ? "wait" : "pointer", fontFamily: "inherit", opacity: busyId === a.id ? 0.6 : 1 }}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>Valider
-                          </button>}
-                      <button onClick={() => refuseAbs(a)} disabled={busyId === a.id} title="Annule l'absence : la personne reçoit de nouveau des leads à ces dates" style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 8, border: "1px solid " + C.border, background: "transparent", color: "#ef4444", fontSize: 12, fontWeight: 600, cursor: busyId === a.id ? "wait" : "pointer", fontFamily: "inherit", opacity: busyId === a.id ? 0.6 : 1 }}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>Refuser
-                      </button>
-                    </div>
+
+              {absences && pastAbs.length > 0 && (
+                <div style={{ ...card, padding: "16px 18px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15 14" /></svg>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: C.muted }}>Congés passés</span>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: C.muted }}>· ce mois</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: C.muted, background: C.muted + "1e", borderRadius: 20, padding: "2px 9px" }}>{pastAbs.length}</span>
                   </div>
-                ))}
-              </div>
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    {pastAbs.map((a, i) => absenceRow(a, i, pastAbs, true))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Colonne droite : calendrier réel + jours posés */}
@@ -248,13 +285,6 @@ export default function TeamAbsences() {
           </div>
         )}
 
-        {/* ── ONGLET SALAIRE & PRIME (placeholder) ── */}
-        {tab === "salaire" && (
-          <div style={{ ...card, padding: "60px 20px", textAlign: "center" }}>
-            <div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>Salaire & Prime</div>
-            <div style={{ fontSize: 13, color: C.muted, marginTop: 8, maxWidth: 460, marginLeft: "auto", marginRight: "auto" }}>Chantier séparé (proche des calculs de commission, zone sensible). Placeholder pour l'instant.</div>
-          </div>
-        )}
       </div>
     </div>
   );

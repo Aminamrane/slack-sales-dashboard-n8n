@@ -20,7 +20,7 @@ import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo", "acquisition_director"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "acquisition_director"]);
 
 export default function CeoFunnelLeadsView() {
   const navigate = useNavigate();
@@ -89,6 +89,7 @@ export default function CeoFunnelLeadsView() {
     if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }
     if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }
     if (tabId === "variables") { navigate("/ceo/variables"); return; }
+    if (tabId === "conges") { navigate("/ceo/conges"); return; }
     if (tabId === "lead_quality") { navigate("/ceo/lead-quality"); return; }
     if (tabId === "sales_team") { navigate("/ceo/sales-team"); return; }
     navigateBackToDashboard(navigate, userRole, tabId);

@@ -16,7 +16,7 @@ import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo", "hr"]);
 
 export default function CeoVariablesView() {
   const navigate = useNavigate();
@@ -64,6 +64,7 @@ export default function CeoVariablesView() {
   // Les autres onglets-route renvoient vers leur route dédiée (sinon page blanche).
   const handleSidebarTabClick = (tabId) => {
     if (tabId === "variables") return;
+    if (tabId === "conges") { navigate("/ceo/conges"); return; }
     if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }
     if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }
     if (tabId === "dispatch") { navigate("/ceo/dispatch"); return; }
