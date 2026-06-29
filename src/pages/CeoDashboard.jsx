@@ -119,6 +119,119 @@ const KPI_ICONS = {
 };
 const formatEuro = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n || 0);
 
+// ── CEO SHEET — états Suivi Clients → 6 buckets dashboard ──────────────────
+// Source : GET /api/v1/ceo-sheet/current → snapshot.etats { <libellé brut>: count }.
+// Les libellés bruts viennent du Google Sheet (orthographe/casse non garantie).
+// On normalise (trim + lowercase) avant comparaison. Tout état NON présent dans
+// cette table tombe dans le bucket "Autres" (fallback) → aucun client perdu, et
+// la somme des 6 buckets == etats_total par construction.
+const normEtat = (s) => (s || '').toString().trim().toLowerCase();
+
+// Ordre = ordre d'affichage des cartes. `key` sert d'id stable, `match` liste
+// les libellés bruts attendus (déjà normalisés). `autres` est le catch-all.
+const CEO_SHEET_BUCKETS = [
+  {
+    key: 'actifs', label: 'Actifs', emoji: '🟢',
+    match: ['en cours', 'vip paul'],
+  },
+  {
+    key: 'retard', label: 'En retard de paiement', emoji: '🟠',
+    match: [
+      'en retard de paiement optilex',
+      'en retard de paiement owner',
+      'en retard de paiement globale',
+      'anomalie de paiement',
+      'on boarding fait à rappeler si pas payer',
+    ],
+  },
+  {
+    key: 'onboarding', label: 'Onboarding à venir', emoji: '🟡',
+    match: ['call onboarding à venir'],
+  },
+  {
+    key: 'resilies', label: 'Résiliés / Perdus', emoji: '🔴',
+    match: [
+      'résiliation',
+      'self résiliation',
+      'retractation',
+      'résiliation programmé',
+      'liquidation',
+    ],
+  },
+  {
+    key: 'autres', label: 'Autres', emoji: '⚪',
+    // Catch-all : "pause", "restitution optilex", "en attente recupération tax
+    // sur les salaires", "(vide)" + TOUT libellé non mappé ci-dessus.
+    match: [],
+    isFallback: true,
+  },
+];
+
+// € arrondi à l'entier, séparateur de milliers garanti (format FR).
+// Déterministe : on n'utilise pas Intl currency (le séparateur de milliers ICU
+// est parfois absent selon le runtime -> "201946 €"). On groupe les milliers à
+// la main, puis on suffixe le symbole euro. Espaces insecables ecrits en \u00A0
+// pour une source propre (pas d'"irregular whitespace").
+const fmtEuro0 = (n) => {
+  const v = Math.round(Number(n) || 0);
+  const grouped = String(Math.abs(v)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0');
+  return `${v < 0 ? '-' : ''}${grouped}\u00A0€`;
+};
+// Pourcentage FR. Le `pct` du snapshot est TOUJOURS un ratio 0-1 (confirmé :
+// 0.7182 = 71,8 %). Conversion déterministe *100, 1 décimale max.
+const fmtPct = (v) => {
+  if (v === null || v === undefined || Number.isNaN(Number(v))) return '—';
+  const pct = Number(v) * 100;
+  return `${pct.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 1 })}\u00A0%`;
+};
+
+// Construit les 6 buckets (Total + 5 catégories) depuis snapshot.etats.
+// Retourne { buckets: { key: { count, breakdown:[{label,value}] } }, total, covered }
+// où `covered` = somme des 5 catégories (doit == total).
+function computeEtatBuckets(etats, etatsTotal) {
+  const src = etats || {};
+  // Index libellé normalisé → bucket key (hors fallback).
+  const lookup = {};
+  CEO_SHEET_BUCKETS.forEach((b) => {
+    if (b.isFallback) return;
+    b.match.forEach((m) => { lookup[m] = b.key; });
+  });
+  const buckets = {};
+  CEO_SHEET_BUCKETS.forEach((b) => { buckets[b.key] = { count: 0, breakdown: [] }; });
+  Object.entries(src).forEach(([rawLabel, rawCount]) => {
+    const count = Number(rawCount) || 0;
+    if (count === 0 && !rawLabel) return;
+    const key = lookup[normEtat(rawLabel)] || 'autres';
+    buckets[key].count += count;
+    const displayLabel = (rawLabel && rawLabel.trim()) ? rawLabel.trim() : '(vide)';
+    buckets[key].breakdown.push({ label: displayLabel, value: count });
+  });
+  // Tri des breakdowns par count décroissant (lisibilité tooltip).
+  Object.values(buckets).forEach((b) => b.breakdown.sort((a, z) => z.value - a.value));
+  const covered = CEO_SHEET_BUCKETS
+    .filter((b) => !b.isFallback || b.key === 'autres')
+    .reduce((s, b) => s + buckets[b.key].count, 0);
+  return {
+    buckets,
+    total: Number(etatsTotal) || covered,
+    covered,
+  };
+}
+
+// Sélectionne le mois "cash" à afficher : le mois courant (YYYY-MM) s'il existe
+// dans le tableau et porte des valeurs, sinon le mois le plus récent non vide.
+function pickCashMonth(months, currentKey) {
+  if (!Array.isArray(months) || months.length === 0) return null;
+  const hasValue = (m) => (m?.montant_attendu?.total || 0) > 0
+    || (m?.montant_recupere?.total || 0) > 0
+    || (m?.retard?.total || 0) > 0;
+  const current = months.find((m) => m?.month === currentKey);
+  if (current && hasValue(current)) return current;
+  // Le plus récent non vide (months supposé chronologique ; on reparcourt en fin).
+  const sorted = [...months].sort((a, z) => (z?.month || '').localeCompare(a?.month || ''));
+  return sorted.find(hasValue) || sorted[0] || current || null;
+}
+
 const MOCK_TEAM = [
   { name: 'Youcef Amrane', role: 'CEO', location: 'Paris, France', tz: 'Europe/Paris', flag: '🇫🇷', lat: 48.8566, lng: 2.3522 },
   { name: 'Léo Mafrici', role: 'Head of Sales', location: 'Lisbonne, Portugal', tz: 'Europe/Lisbon', flag: '🇵🇹', lat: 38.7223, lng: -9.1393 },
@@ -337,11 +450,285 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// CASH CARD ICONS — un badge SVG par carte du bandeau Cash. L'icône hérite la
+// couleur d'accent de sa carte via `currentColor` (badge `color: <accent>`),
+// donc lisible en dark mode comme en light (l'accent reste vif sur fond sombre).
+// ══════════════════════════════════════════════════════════════════════════
+const CASH_CARD_ICONS = {
+  // 1 — Taux de récupération (vert)
+  recovery: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.5 12a8 8 0 1 1-2.6-5.9" />
+      <path d="M20.8 4.8l-.2 3.3-3.3-.2" />
+      <path d="M14 9.7a3.2 3.2 0 1 0 0 4.6" />
+      <path d="M8.7 11.3h4.3M8.7 12.9h3.7" />
+    </svg>
+  ),
+  // 2 — Récupéré / Attendu (ardoise)
+  collected: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 8a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v0" />
+      <rect x="3" y="8" width="18" height="12" rx="2.5" />
+      <path d="M21 12.6h-3.4a1.7 1.7 0 0 0 0 3.4H21" />
+      <circle cx="17.4" cy="14.3" r="0.95" fill="currentColor" stroke="none" />
+    </svg>
+  ),
+  // 3 — Cash en retard (orange)
+  late: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="10.5" cy="13.5" r="6.7" />
+      <path d="M13 11a3 3 0 1 0 0 5" />
+      <path d="M8 12.7h3.4M8 14.2h3" />
+      <circle cx="18.2" cy="6.8" r="3.6" />
+      <path d="M18.2 5.2V6.8l1.2 0.9" />
+    </svg>
+  ),
+  // 4 — Créances antérieures (rouge)
+  receivables: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 10.5V8l-5-5H7a2 2 0 0 0-2 2v6" />
+      <path d="M14 3v5h5" />
+      <path d="M8.5 7.5h2.5" />
+      <path d="M16.5 21a4.2 4.2 0 1 0-3.7-6.2" />
+      <path d="M12.3 12.4v2.6h2.6" />
+    </svg>
+  ),
+};
+
+// Badge icône carré arrondi (≈34px), fond = accent à ~10%, icône 22px en accent.
+// Positionné en haut-droite de la carte (.ceo-card est position: relative).
+// NB : .ceo-card a un fond clair FIXE (gradient ::after, indépendant du dark
+// mode), donc l'accent reste lisible en light comme en dark — pas de variante
+// de fond nécessaire ici.
+function CashCardIcon({ icon, accent }) {
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        position: 'absolute', top: 16, right: 16,
+        width: 34, height: 34, borderRadius: 11,
+        background: `${accent}1a`, // accent à ~10% d'opacité (hex alpha 0x1a)
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: accent, flexShrink: 0, pointerEvents: 'none',
+      }}
+    >
+      <span style={{ width: 22, height: 22, display: 'flex' }}>
+        {React.cloneElement(icon, { width: 22, height: 22 })}
+      </span>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// CEO CASH BANNER — bandeau "cash du mois courant" au-dessus des cartes états.
+// Vue fiscaliste-CEO : le cash d'abord, le risque (retard / créances) en avant.
+// 4 blocs : taux de récup • récupéré/attendu • cash en retard • créances
+// antérieures. Chaque montant € porte son split Owner / Optilex.
+// `month` = un élément de snapshot.months (ou null → état "—" propre, no crash).
+// ══════════════════════════════════════════════════════════════════════════
+// `months` = snapshot.months complet, `defaultMonthKey` = mois à afficher au
+// montage (mois courant si présent+non vide, sinon plus récent non vide). Le
+// sélecteur de mois ne pilote QUE ce bandeau ; les cartes d'états (instantané
+// "maintenant") ne sont jamais affectées.
+function CeoCashBanner({ months, defaultMonthKey, dataLoading, darkMode, C }) {
+  const list = Array.isArray(months) ? months : [];
+  // Mois sélectionné (state local au bandeau). Resync si le défaut change
+  // (ex : snapshot arrive après le 1er render avec months=[]).
+  const [selectedKey, setSelectedKey] = useState(defaultMonthKey);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef(null);
+  useEffect(() => { setSelectedKey(defaultMonthKey); }, [defaultMonthKey]);
+  useEffect(() => {
+    if (!pickerOpen) return undefined;
+    const onClick = (e) => { if (pickerRef.current && !pickerRef.current.contains(e.target)) setPickerOpen(false); };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [pickerOpen]);
+
+  const month = list.find((m) => m?.month === selectedKey) || null;
+  const empty = !month;
+
+  const recPct = month?.montant_recupere?.pct;
+  const recTotal = month?.montant_recupere?.total ?? 0;
+  const attTotal = month?.montant_attendu?.total ?? 0;
+  const recOwner = month?.montant_recupere?.owner ?? 0;
+  const recOptilex = month?.montant_recupere?.optilex ?? 0;
+  const retardTotal = month?.retard?.total ?? 0;
+  const retardOwner = month?.retard?.owner ?? 0;
+  const retardOptilex = month?.retard?.optilex ?? 0;
+  const prec = month?.retard_prec?.total ?? 0;
+  const recupCreancesPct = month?.recup_creances?.pct;
+  const recupCreancesTotal = month?.recup_creances?.total ?? 0;
+
+  // Décomposition exacte du retard.total (formule sheet par client) :
+  //   retard.total = monthGap + oldDebt
+  //   monthGap = montant_attendu.total − montant_recupere.total  (impayé du mois)
+  //   oldDebt  = retard_prec.total      − recup_creances.total   (reste antérieur)
+  const monthGap = attTotal - recTotal;
+  const oldDebt = prec - recupCreancesTotal;
+
+  // Mini-ligne split Owner / Optilex sous un montant principal.
+  const Split = ({ owner, optilex }) => (
+    <div style={{ display: 'flex', gap: 14, marginTop: 8, fontSize: 11, fontWeight: 600 }}>
+      <span style={{ color: C.muted }}>
+        Owner <span style={{ color: '#1e2330', fontVariantNumeric: 'tabular-nums' }}>{empty ? '—' : fmtEuro0(owner)}</span>
+      </span>
+      <span style={{ color: C.muted }}>
+        Optilex <span style={{ color: '#1e2330', fontVariantNumeric: 'tabular-nums' }}>{empty ? '—' : fmtEuro0(optilex)}</span>
+      </span>
+    </div>
+  );
+
+  const monthLabel = month?.label || (empty ? 'Aucune donnée' : (month?.month ?? '—'));
+
+  return (
+    <div style={{ marginBottom: 28 }}>
+      {/* En-tête : titre + mois PROÉMINENT + sélecteur de mois (pilote ce bandeau) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, paddingLeft: 2 }}>
+        <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: 0, letterSpacing: '-0.01em' }}>
+          Cash
+        </h2>
+        <div ref={pickerRef} style={{ position: 'relative' }}>
+          <button
+            type="button"
+            disabled={list.length === 0}
+            onClick={() => setPickerOpen((o) => !o)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '7px 12px 7px 14px', borderRadius: 12,
+              border: `1px solid ${C.border}`,
+              background: pickerOpen ? (darkMode ? '#2a2b36' : '#f4f6fb') : C.bg,
+              cursor: list.length === 0 ? 'default' : 'pointer',
+              color: C.text, fontFamily: 'inherit',
+              fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em',
+              boxShadow: darkMode ? '0 1px 2px rgba(0,0,0,0.25)' : '0 1px 2px rgba(0,0,0,0.04)',
+              transition: 'background 0.15s, box-shadow 0.15s',
+            }}
+          >
+            <span style={{ textTransform: 'capitalize' }}>{monthLabel}</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+              style={{ transform: pickerOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s cubic-bezier(0.34,1.56,0.64,1)' }}>
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {pickerOpen && list.length > 0 && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 3000,
+              minWidth: 180, maxHeight: 300, overflowY: 'auto',
+              background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14, padding: 6,
+              boxShadow: darkMode ? '0 12px 32px rgba(0,0,0,0.45)' : '0 12px 32px rgba(15,23,42,0.12)',
+              animation: 'ceoFadeIn 0.18s cubic-bezier(0.16,1,0.3,1) both',
+            }}
+            className="ceo-scroll"
+            >
+              {list.map((m) => {
+                const active = m.month === selectedKey;
+                return (
+                  <button
+                    key={m.month}
+                    type="button"
+                    onClick={() => { setSelectedKey(m.month); setPickerOpen(false); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                      width: '100%', padding: '9px 12px', borderRadius: 10, border: 'none',
+                      background: active ? (darkMode ? 'rgba(124,138,219,0.18)' : 'rgba(91,106,191,0.10)') : 'transparent',
+                      color: active ? C.accent : C.text,
+                      fontFamily: 'inherit', fontSize: 13.5, fontWeight: active ? 700 : 500,
+                      cursor: 'pointer', textAlign: 'left', textTransform: 'capitalize',
+                      transition: 'background 0.12s',
+                    }}
+                    onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.05)' : '#f5f5f4'; }}
+                    onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <span>{m.label || m.month}</span>
+                    {active && (
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+        {/* 1 — Taux de récupération (la mesure clé du cash rentré) */}
+        <div className="ceo-card" style={{ padding: '20px 22px 18px', animation: 'ceoCardPop 0.4s ease 0ms both' }}>
+          <CashCardIcon icon={CASH_CARD_ICONS.recovery} accent="#10b981" />
+          <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 8 }}>Taux de récupération</div>
+          <div style={{ fontSize: 30, fontWeight: 800, color: '#10b981', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+            {dataLoading ? <span style={{ animation: 'ceoPulse 1.2s ease infinite' }}>—</span> : (empty ? '—' : fmtPct(recPct))}
+          </div>
+          {/* Barre de progression du taux (pct = ratio 0-1 → *100) */}
+          <div style={{ marginTop: 14, height: 6, borderRadius: 3, background: darkMode ? 'rgba(255,255,255,0.06)' : '#eef0f4', overflow: 'hidden' }}>
+            <div style={{
+              height: '100%', borderRadius: 3, background: '#10b981',
+              width: empty ? '0%' : `${Math.min(100, Math.max(0, (Number(recPct) || 0) * 100))}%`,
+              transition: 'width 0.8s ease',
+            }} />
+          </div>
+        </div>
+
+        {/* 2 — Récupéré / Attendu en € + split */}
+        <div className="ceo-card" style={{ padding: '20px 22px 18px', animation: 'ceoCardPop 0.4s ease 80ms both' }}>
+          <CashCardIcon icon={CASH_CARD_ICONS.collected} accent="#475569" />
+          <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 8 }}>Récupéré / Attendu</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: '#212121', letterSpacing: '-0.02em', lineHeight: 1.15 }}>
+            {dataLoading ? <span style={{ animation: 'ceoPulse 1.2s ease infinite' }}>—</span> : (empty ? '—' : fmtEuro0(recTotal))}
+            <span style={{ fontSize: 14, fontWeight: 600, color: C.muted }}> / {empty ? '—' : fmtEuro0(attTotal)}</span>
+          </div>
+          <Split owner={recOwner} optilex={recOptilex} />
+        </div>
+
+        {/* 3 — Cash en retard : GLOBAL = total dû à ce jour (mois précédents inclus). */}
+        <div className="ceo-card" style={{ padding: '20px 22px 18px', animation: 'ceoCardPop 0.4s ease 160ms both' }}>
+          <CashCardIcon icon={CASH_CARD_ICONS.late} accent="#f59e0b" />
+          <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 2 }}>Cash en retard</div>
+          <div style={{ fontSize: 10.5, color: C.muted, fontWeight: 500, marginBottom: 8, opacity: 0.85 }}>Total dû à ce jour (global)</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: '#f97316', letterSpacing: '-0.02em', lineHeight: 1.15 }}>
+            {dataLoading ? <span style={{ animation: 'ceoPulse 1.2s ease infinite' }}>—</span> : (empty ? '—' : fmtEuro0(retardTotal))}
+          </div>
+          {/* Décomposition : impayé du mois + reste antérieur (== total au rounding) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8, fontSize: 11, fontWeight: 600 }}>
+            <span style={{ color: C.muted }}>
+              Mois courant <span style={{ color: '#1e2330', fontVariantNumeric: 'tabular-nums' }}>{empty ? '—' : fmtEuro0(monthGap)}</span>
+            </span>
+            <span style={{ color: C.muted }}>
+              Antérieur <span style={{ color: '#1e2330', fontVariantNumeric: 'tabular-nums' }}>{empty ? '—' : fmtEuro0(oldDebt)}</span>
+            </span>
+          </div>
+          <Split owner={retardOwner} optilex={retardOptilex} />
+        </div>
+
+        {/* 4 — Créances antérieures + taux de récup créances */}
+        <div className="ceo-card" style={{ padding: '20px 22px 18px', animation: 'ceoCardPop 0.4s ease 240ms both' }}>
+          <CashCardIcon icon={CASH_CARD_ICONS.receivables} accent="#ef4444" />
+          <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 8 }}>Créances antérieures</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: '#ef4444', letterSpacing: '-0.02em', lineHeight: 1.15 }}>
+            {dataLoading ? <span style={{ animation: 'ceoPulse 1.2s ease infinite' }}>—</span> : (empty ? '—' : fmtEuro0(prec))}
+          </div>
+          <div style={{ marginTop: 8, fontSize: 11, fontWeight: 600, color: C.muted }}>
+            Récup. créances{' '}
+            <span style={{ color: '#10b981' }}>{empty ? '—' : fmtPct(recupCreancesPct)}</span>
+            {' · '}
+            <span style={{ color: '#1e2330', fontVariantNumeric: 'tabular-nums' }}>{empty ? '—' : fmtEuro0(recupCreancesTotal)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // COMPONENT
 // ══════════════════════════════════════════════════════════════════════════
 export default function CeoDashboard() {
   const navigate = useNavigate();
-  // Vue CEO/admin "tout" -> reset du scope de navigation des sous-vues /ceo/*.
+  // Vue CEO/admin "tout" -> on réinitialise le scope de navigation (les sous-vues
+  // /ceo/* repassent en vue complète, contrairement au contexte RH).
   setNavScope(null);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
   const [genieExtended, setGenieExtended] = useState(true);
@@ -514,11 +901,14 @@ export default function CeoDashboard() {
   const [user, setUser] = useState(null);
   // Real data states
   const [leaderboardData, setLeaderboardData] = useState(null); // { totals, all_sellers }
-  const [perfClosingData, setPerfClosingData] = useState(null); // { counters, delays }
+  // perf-closing/dashboard : conservé (fetch toujours actif). N'alimente plus
+  // les cartes états (migrées vers ceoSheet), mais l'endpoint reste branché —
+  // données disponibles ici pour un futur usage (délais, autres KPI).
+  const [perfClosingData, setPerfClosingData] = useState(null); // eslint-disable-line no-unused-vars
+  const [ceoSheet, setCeoSheet] = useState(null); // snapshot Suivi Clients (GET /ceo-sheet/current)
   const [perfClients, setPerfClients] = useState([]); // perf-closing clients list
   const [dataLoading, setDataLoading] = useState(true);
   const [avatarMap, setAvatarMap] = useState({});
-  const [woTab, setWoTab] = useState('active'); // Work Orders tab: active | draft | all
   // Sales team tab (CEO → opens individual sales' TrackingSheet in ghost mode).
   const [salesTeamUsers, setSalesTeamUsers] = useState([]);
   const [salesTeamLoading, setSalesTeamLoading] = useState(false);
@@ -548,9 +938,10 @@ export default function CeoDashboard() {
     (async () => {
       setDataLoading(true);
       try {
-        const [lb, pc] = await Promise.all([
+        const [lb, pc, cs] = await Promise.all([
           apiClient.getLeaderboardStats('current_month').catch(() => null),
           apiClient.get('/api/v1/perf-closing/dashboard').catch(() => null),
+          apiClient.get('/api/v1/ceo-sheet/current').catch(() => null),
         ]);
         if (lb) {
           setLeaderboardData(lb);
@@ -565,6 +956,9 @@ export default function CeoDashboard() {
           setAvatarMap(map);
         }
         if (pc) setPerfClosingData(pc);
+        // snapshot peut être { snapshot: {...} } ou { snapshot: null } → on
+        // stocke le snapshot (null géré gracieusement par les useMemo dérivés).
+        if (cs) setCeoSheet(cs.snapshot ?? null);
       } catch (e) { console.warn('CEO dashboard data fetch failed:', e); }
       setDataLoading(false);
     })();
@@ -650,24 +1044,57 @@ export default function CeoDashboard() {
     ];
   }, [leaderboardData]);
 
+  // États clients — source = snapshot Suivi Clients (ceoSheet), plus PerfClosing.
+  // 6 cartes : Total + Actifs + En retard + Onboarding + Résiliés + Autres.
+  // Cf. CEO_SHEET_BUCKETS pour le mapping libellés bruts → buckets.
   const kpiRow2 = useMemo(() => {
-    const c = perfClosingData?.counters || {};
-    const resilies = (c.resilie || 0) + (c.self_resiliation || 0) + (c.retractation || 0);
-    const autres = (c.pause || 0) + (c.sans_suite || 0) + (c.liquidation || 0);
+    const { buckets, total } = computeEtatBuckets(
+      ceoSheet?.etats,
+      ceoSheet?.etats_total,
+    );
+    const subList = (b) => b.breakdown
+      .map((r) => r.label)
+      .slice(0, 3)
+      .join(', ') || '—';
     return [
-      { label: 'Total Clients', value: String(c.total || 0), color: '#5b6abf', iconSrc: ceo1, sub: 'Tous états confondus' },
-      { label: 'En Cours', value: String(c.en_cours || 0), color: '#10b981', iconSrc: ceo2, sub: 'Clients actifs' },
       {
-        label: 'Résiliés', value: String(resilies), color: '#ef4444', iconSrc: ceo3, sub: 'Résiliation + Self + Rétractation',
-        breakdown: [
-          { label: 'Résiliation', value: c.resilie || 0 },
-          { label: 'Self', value: c.self_resiliation || 0 },
-          { label: 'Rétractation', value: c.retractation || 0 },
-        ],
+        label: 'Total Clients', value: String(total), color: '#5b6abf', iconSrc: ceo1,
+        sub: 'Tous états confondus',
       },
-      { label: 'Autres', value: String(autres), color: '#f59e0b', iconSrc: ceo4, sub: 'Pause, sans suite, etc.' },
+      {
+        label: '🟢 Actifs', value: String(buckets.actifs.count), color: '#10b981', iconSrc: ceo2,
+        sub: 'En cours, vip paul',
+      },
+      {
+        label: '🟠 En retard de paiement', value: String(buckets.retard.count), color: '#f97316', iconSrc: ceo6,
+        sub: buckets.retard.breakdown.length ? subList(buckets.retard) : 'Optilex, Owner, globale…',
+        breakdown: buckets.retard.breakdown,
+      },
+      {
+        label: '🟡 Onboarding à venir', value: String(buckets.onboarding.count), color: '#eab308', iconSrc: ceo4,
+        sub: 'Call onboarding à venir',
+      },
+      {
+        label: '🔴 Résiliés / Perdus', value: String(buckets.resilies.count), color: '#ef4444', iconSrc: ceo3,
+        sub: buckets.resilies.breakdown.length ? subList(buckets.resilies) : 'Résiliation, liquidation…',
+        breakdown: buckets.resilies.breakdown,
+      },
+      {
+        label: '⚪ Autres', value: String(buckets.autres.count), color: '#94a3b8', iconSrc: ceo5,
+        sub: buckets.autres.breakdown.length ? subList(buckets.autres) : 'Pause, restitution…',
+        breakdown: buckets.autres.breakdown,
+      },
     ];
-  }, [perfClosingData]);
+  }, [ceoSheet]);
+
+  // ── CASH : mois par défaut du bandeau (snapshot.months) ───────────────
+  // Clé du mois affiché au montage : mois courant si présent + non vide,
+  // sinon le mois le plus récent non vide. Le sélecteur du bandeau peut
+  // ensuite changer le mois localement (cf. CeoCashBanner).
+  const defaultCashMonthKey = useMemo(
+    () => pickCashMonth(ceoSheet?.months, currentMonthKey)?.month,
+    [ceoSheet, currentMonthKey],
+  );
 
   useEffect(() => {
     localStorage.setItem('darkMode', darkMode);
@@ -1127,8 +1554,18 @@ export default function CeoDashboard() {
                 </div>
               </div>
 
-              {/* KPI Cards — Clients (PerfClosing) */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }}>
+              {/* ── BANDEAU CASH — Suivi Clients snapshot (sélecteur de mois) ── */}
+              {/* Le cash d'abord, le risque en avant (vue fiscaliste-CEO). */}
+              <CeoCashBanner
+                months={ceoSheet?.months}
+                defaultMonthKey={defaultCashMonthKey}
+                dataLoading={dataLoading}
+                darkMode={darkMode}
+                C={C}
+              />
+
+              {/* KPI Cards — États Clients (Suivi Clients snapshot) */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 28 }}>
                 {kpiRow2.map((kpi, i) => (
                   <CeoKpiCard
                     key={kpi.label}
@@ -1402,191 +1839,6 @@ export default function CeoDashboard() {
               </div>
               </div>
 
-              {/* ── MISSIONS TABLE (Work Orders — pixel-perfect) ── */}
-              <div className="ceo-card" style={{
-                animation: 'ceoCardPop 0.4s ease 350ms both',
-              }}>
-                {/* Top bar: title + tabs + filter row */}
-                <div style={{ padding: '18px 22px 0' }}>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>Missions en cours</div>
-                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2, marginBottom: 16 }}>Suivi des projets internes par pôle</div>
-                  {/* Tab bar */}
-                  <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${C.border}`, marginBottom: 0 }}>
-                    {[{ label: 'Active SO', count: 8 }, { label: 'Draft', count: 2 }, { label: 'All Filters', count: null }].map((tab, i) => (
-                      <button key={tab.label} style={{
-                        padding: '10px 18px', fontSize: 13, fontWeight: i === 0 ? 600 : 500,
-                        color: i === 0 ? '#ef4444' : C.muted,
-                        borderBottom: i === 0 ? '2px solid #ef4444' : '2px solid transparent',
-                        background: 'transparent', border: 'none', borderBottomStyle: 'solid',
-                        cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-                        display: 'flex', alignItems: 'center', gap: 6,
-                      }}>
-                        {tab.label}
-                        {tab.count !== null && (
-                          <span style={{
-                            padding: '1px 7px', borderRadius: 50, fontSize: 10, fontWeight: 700,
-                            background: i === 0 ? 'rgba(239,68,68,0.08)' : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'),
-                            color: i === 0 ? '#ef4444' : C.muted,
-                          }}>{tab.count}</span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Filter row (dropdowns) */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 10, padding: '12px 22px',
-                  borderBottom: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#fafbfc',
-                  flexWrap: 'wrap',
-                }}>
-                  {['Pôle', 'Assigné à', 'Priorité', 'Date début', 'Deadline'].map(f => (
-                    <button key={f} style={{
-                      display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px',
-                      borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg,
-                      fontSize: 12, fontWeight: 500, color: C.secondary, cursor: 'pointer', fontFamily: 'inherit',
-                    }}>
-                      {f}
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round"><path d="m6 9 6 6 6-6"/></svg>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Table */}
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
-                    <thead>
-                      <tr>
-                        {/* Checkbox col */}
-                        <th style={{ padding: '11px 0 11px 18px', width: 36, background: darkMode ? C.subtle : '#f8f9fb', borderBottom: `1px solid ${C.border}` }}>
-                          <input type="checkbox" disabled style={{ width: 14, height: 14, accentColor: C.accent, cursor: 'default' }} />
-                        </th>
-                        {[
-                          { label: 'ID', w: 80 }, { label: 'Status' , w: 50 }, { label: 'Mission', w: null },
-                          { label: 'Pôle', w: 140 }, { label: 'Assigned To', w: 180 },
-                          { label: 'Priority', w: 90 }, { label: 'Deadline', w: 120 }, { label: '', w: 50 },
-                        ].map(col => (
-                          <th key={col.label} style={{
-                            padding: '11px 14px', fontSize: 10, fontWeight: 700, color: C.muted,
-                            textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'left',
-                            background: darkMode ? C.subtle : '#f8f9fb', borderBottom: `1px solid ${C.border}`,
-                            width: col.w || 'auto', whiteSpace: 'nowrap',
-                          }}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, cursor: 'pointer' }}>
-                              {col.label}
-                              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" style={{ opacity: 0.4 }}><path d="m7 10 5-5 5 5"/><path d="m7 14 5 5 5-5"/></svg>
-                            </span>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[
-                        { id: 'MO-1025', client: 'Refonte Dashboard CEO', sub: 'Frontend React, intégration API, design...', service: 'Tech', assignee: 'Youcef Amrane', assignee2: 'Amine Amrane', priority: 'high', status: '#ef4444', date: 'Apr 15, 2026', value: '—' },
-                        { id: 'MO-1024', client: 'Campagne Ads Q2', sub: 'Créa visuels, ciblage audiences, A/B test', service: 'Marketing', assignee: 'Sarah Khelifi', assignee2: null, priority: 'medium', status: '#3b82f6', date: 'Apr 18, 2026', value: '—' },
-                        { id: 'MO-1023', client: 'Migration API v2', sub: 'Endpoints auth, leads, tracking, contracts', service: 'Tech', assignee: 'Amine Amrane', assignee2: 'Youcef Amrane', priority: 'high', status: '#f59e0b', date: 'Mar 17, 2026', value: '—' },
-                        { id: 'MO-1022', client: 'Recrutement Commercial', sub: null, service: 'RH', assignee: 'Lina Mansouri', assignee2: null, priority: 'low', status: '#10b981', date: 'Mar 15, 2026', value: '—' },
-                        { id: 'MO-1021', client: 'Formation Closing R2', sub: null, service: 'Commercial', assignee: 'Léo Mafrici', assignee2: 'Yanis Zairi', priority: 'medium', status: '#3b82f6', date: 'Mar 19, 2026', value: '—' },
-                        { id: 'MO-1020', client: 'Bilan Trimestriel Q1', sub: null, service: 'Finance', assignee: 'Julie Renaud', assignee2: null, priority: 'low', status: '#94a3b8', date: 'Mar 18, 2026', value: '—' },
-                        { id: 'MO-1019', client: 'Process Onboarding Client', sub: null, service: 'Commercial', assignee: 'Yanis Zairi', assignee2: null, priority: 'medium', status: '#3b82f6', date: 'Mar 18, 2026', value: '—' },
-                        { id: 'MO-1018', client: 'Optimisation Pipeline Leads', sub: null, service: 'Tech', assignee: 'Amine Amrane', assignee2: null, priority: 'high', status: '#ef4444', date: 'Mar 20, 2026', value: '—' },
-                        { id: 'MO-1017', client: 'Stratégie Contenu LinkedIn', sub: null, service: 'Marketing', assignee: 'Sarah Khelifi', assignee2: null, priority: 'low', status: '#10b981', date: 'Mar 19, 2026', value: '—' },
-                      ].map((row, i) => {
-                        const PRIO = { high: { label: 'High', dot: '#ef4444' }, medium: { label: 'Med', dot: '#f59e0b' }, low: { label: 'Low', dot: '#10b981' } };
-                        const pr = PRIO[row.priority] || PRIO.medium;
-                        return (
-                          <tr key={row.id + i} style={{
-                            cursor: 'pointer', transition: 'background 0.12s',
-                            animation: `ceoRowIn 0.25s ease ${i * 30}ms both`,
-                            background: i % 2 === 0 ? 'transparent' : (darkMode ? 'rgba(255,255,255,0.012)' : 'rgba(0,0,0,0.008)'),
-                          }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.025)' : '#fafafb'}
-                            onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : (darkMode ? 'rgba(255,255,255,0.012)' : 'rgba(0,0,0,0.008)')}
-                          >
-                            {/* Checkbox */}
-                            <td style={{ padding: '11px 0 11px 18px', borderBottom: `1px solid ${C.border}`, width: 36 }}>
-                              <input type="checkbox" disabled style={{ width: 14, height: 14, accentColor: C.accent, cursor: 'default' }} />
-                            </td>
-                            {/* ID */}
-                            <td style={{ padding: '11px 14px', borderBottom: `1px solid ${C.border}`, fontSize: 13, fontWeight: 600, color: '#3b82f6', whiteSpace: 'nowrap' }}>{row.id}</td>
-                            {/* Status dot */}
-                            <td style={{ padding: '11px 8px', borderBottom: `1px solid ${C.border}`, textAlign: 'center' }}>
-                              <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: row.status }} />
-                            </td>
-                            {/* Client + sub */}
-                            <td style={{ padding: '11px 14px', borderBottom: `1px solid ${C.border}` }}>
-                              <div style={{ fontSize: 13, fontWeight: 600, color: C.text, lineHeight: 1.3 }}>{row.client}</div>
-                              {row.sub && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>{row.sub}</div>}
-                            </td>
-                            {/* Service Tasks */}
-                            <td style={{ padding: '11px 14px', borderBottom: `1px solid ${C.border}`, fontSize: 12.5, color: C.secondary, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>{row.service}</td>
-                            {/* Assigned */}
-                            <td style={{ padding: '11px 14px', borderBottom: `1px solid ${C.border}` }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <div style={{ display: 'flex' }}>
-                                  <div style={{
-                                    width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
-                                    background: darkMode ? '#3a3b46' : '#e5e7eb',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    color: darkMode ? '#ccc' : '#6b7280', fontSize: 9, fontWeight: 700,
-                                    border: `1.5px solid ${C.bg}`, zIndex: 2,
-                                  }}>{getInitials(row.assignee)}</div>
-                                  {row.assignee2 && (
-                                    <div style={{
-                                      width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
-                                      background: darkMode ? '#4a4b56' : '#d1d5db',
-                                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                      color: darkMode ? '#bbb' : '#6b7280', fontSize: 9, fontWeight: 700,
-                                      border: `1.5px solid ${C.bg}`, marginLeft: -8, zIndex: 1,
-                                    }}>{getInitials(row.assignee2)}</div>
-                                  )}
-                                </div>
-                                <span style={{ fontSize: 12, color: C.text, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                  {row.assignee.split(' ')[0]}{row.assignee2 ? `, ${row.assignee2.split(' ')[0]}` : ''}
-                                </span>
-                              </div>
-                            </td>
-                            {/* Priority */}
-                            <td style={{ padding: '11px 14px', borderBottom: `1px solid ${C.border}` }}>
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 500, color: C.secondary }}>
-                                <span style={{ width: 7, height: 7, borderRadius: '50%', background: pr.dot }} />
-                              </span>
-                            </td>
-                            {/* Date */}
-                            <td style={{ padding: '11px 14px', borderBottom: `1px solid ${C.border}`, fontSize: 12, color: C.muted, fontWeight: 500, whiteSpace: 'nowrap' }}>{row.date}</td>
-                            {/* Value */}
-                            <td style={{ padding: '11px 14px', borderBottom: `1px solid ${C.border}`, fontSize: 12.5, fontWeight: 600, color: C.text, whiteSpace: 'nowrap' }}>{row.value}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Footer */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '10px 22px', background: darkMode ? C.subtle : '#f8f9fb',
-                  borderTop: `1px solid ${C.border}`,
-                }}>
-                  <div style={{ fontSize: 12, color: C.muted, fontWeight: 500 }}>Showing 9 of 9 results</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 12, color: C.muted }}>Items Per Page :</span>
-                    <select style={{ padding: '3px 6px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 12, fontFamily: 'inherit' }}>
-                      <option>10</option><option>25</option><option>50</option>
-                    </select>
-                    <div style={{ display: 'flex', gap: 2 }}>
-                      <button style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${C.border}`, background: C.bg, color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="m15 18-6-6 6-6"/></svg>
-                      </button>
-                      <button style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: C.text, color: C.bg, cursor: 'pointer', fontSize: 11, fontWeight: 600, fontFamily: 'inherit' }}>1</button>
-                      <button style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${C.border}`, background: C.bg, color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="m9 18 6-6-6-6"/></svg>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
           )}
 
