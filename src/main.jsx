@@ -31,6 +31,7 @@ import CeoPerfSalesView   from "./pages/CeoPerfSalesView.jsx";
 import CeoAutoAssignView  from "./pages/CeoAutoAssignView.jsx";
 import CeoVariablesView   from "./pages/CeoVariablesView.jsx";
 import CeoCongesView      from "./pages/CeoCongesView.jsx";
+import CeoCampaignsView   from "./pages/CeoCampaignsView.jsx";
 import HrDashboard        from "./pages/HrDashboard.jsx";
 import CeoLeadQualityView from "./pages/CeoLeadQualityView.jsx";
 import CeoSalesTeamView   from "./pages/CeoSalesTeamView.jsx";
@@ -167,6 +168,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['admin', 'ceo', 'hr']}>
               <CeoCongesView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ceo/campaigns"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'marketing']}>
+              <CeoCampaignsView />
             </ProtectedRoute>
           }
         />

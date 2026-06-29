@@ -1,29 +1,30 @@
-// src/pages/CeoPerfSalesView.jsx
+// src/pages/CeoCampaignsView.jsx
 //
-// Route /ceo/perf-sales — embed MonitoringPerf dans le shell CEO /
-// Acquisition Director (sidebar shared + SharedNavbar conservés).
+// Route /ceo/campaigns — embed <Campaigns embed /> dans le shell CEO
+// (sidebar shared + SharedNavbar conservés). Calque de CeoCongesView.
 //
-// Pattern strictement aligné sur CeoLeaderboardView : auth gate, sticky
-// sidebar 100vh, injection `?embed=true` via history.replaceState pour
-// masquer la SharedNavbar interne de MonitoringPerf, filter sidebar
-// selon le rôle (Acquisition Director ne voit que RÉCENTES + ACQUISITION).
+// Objectif : que "Campagnes" reste DANS le dashboard (la sidebar ne disparaît
+// jamais), comme les autres pages. Avant, le tab "Campagnes" n'était câblé
+// nulle part -> contenu vide. La page standalone /campaigns reste disponible
+// et inchangée.
+//
+// Campagnes = section MARKETING -> accès admin / ceo / marketing.
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import { navigateBackToDashboard } from "../utils/dashboardNavigation";
-import MonitoringPerf from "./MonitoringPerf.jsx";
+import Campaigns from "./Campaigns.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "acquisition_director", "head_of_acquisition"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo", "marketing"]);
 
-export default function CeoPerfSalesView() {
+export default function CeoCampaignsView() {
   const navigate = useNavigate();
 
-  // ── DARK MODE (read-only sync — MonitoringPerf gère son propre toggle) ──
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
   useEffect(() => {
     const onStorage = (e) => {
@@ -40,7 +41,6 @@ export default function CeoPerfSalesView() {
     };
   }, []);
 
-  // ── SIDEBAR COLLAPSE (mirror CeoDashboard pattern, key partagée) ────
   const [sideCollapsed, setSideCollapsed] = useState(() => {
     const stored = localStorage.getItem("ceoSideCollapsed");
     return stored === null ? false : stored === "true";
@@ -49,7 +49,6 @@ export default function CeoPerfSalesView() {
     localStorage.setItem("ceoSideCollapsed", String(sideCollapsed));
   }, [sideCollapsed]);
 
-  // ── AUTH GATE ───────────────────────────────────────────────────────
   const [authChecked, setAuthChecked] = useState(false);
   const [userRole, setUserRole] = useState(null);
   useEffect(() => {
@@ -62,42 +61,27 @@ export default function CeoPerfSalesView() {
     setAuthChecked(true);
   }, [navigate]);
 
-  // ── INJECT MONITORING PERF EMBED FLAG via history.replaceState ──────
-  const [paramsInjected, setParamsInjected] = useState(false);
-  useEffect(() => {
-    if (!authChecked) return;
-    const incoming = new URLSearchParams(window.location.search);
-    if (incoming.get("embed") !== "true") {
-      incoming.set("embed", "true");
-      const newUrl = `${window.location.pathname}?${incoming.toString()}`;
-      window.history.replaceState(null, "", newUrl);
-    }
-    setParamsInjected(true);
-  }, [authChecked]);
-
   const C = useMemo(() => getColors(darkMode), [darkMode]);
   const visibleSections = useMemo(() => getVisibleSections(SIDEBAR_SECTIONS, userRole), [userRole]);
 
-  // ── SIDEBAR NAVIGATION HANDLER ──────────────────────────────────────
-  // Cliquer "Perf Sales" depuis cette vue est un no-op (déjà dessus).
-  // Les autres tabs renvoient vers leurs routes dédiées ou /ceo avec
-  // localStorage pour pré-sélectionner l'onglet.
+  // Cliquer "Campagnes" depuis cette vue = no-op (déjà dessus).
+  // Les autres onglets-route renvoient vers leur route dédiée (sinon page blanche).
   const handleSidebarTabClick = (tabId) => {
-    if (tabId === "perf_sales") return;
-    if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }
-    if (tabId === "variables") { navigate("/ceo/variables"); return; }
+    if (tabId === "campaigns") return;
     if (tabId === "conges") { navigate("/ceo/conges"); return; }
+    if (tabId === "variables") { navigate("/ceo/variables"); return; }
+    if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }
+    if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }
     if (tabId === "dispatch") { navigate("/ceo/dispatch"); return; }
     if (tabId === "leaderboard") { navigate("/ceo/leaderboard"); return; }
     if (tabId === "lead_quality") { navigate("/ceo/lead-quality"); return; }
     if (tabId === "sales_team") { navigate("/ceo/sales-team"); return; }
     if (tabId === "webinar") { navigate("/ceo/webinar"); return; }
-    if (tabId === "campaigns") { navigate("/ceo/campaigns"); return; }
     if (tabId === "funnel_leads") { navigate("/ceo/funnel-leads"); return; }
     navigateBackToDashboard(navigate, userRole, tabId);
   };
 
-  if (!authChecked || !paramsInjected) {
+  if (!authChecked) {
     return (
       <div style={{
         minHeight: "100vh",
@@ -117,10 +101,7 @@ export default function CeoPerfSalesView() {
       style={{
         display: "flex",
         minHeight: "100vh",
-        // Aligné sur le body override de MonitoringPerf
-        // (#ffffff light / #13141b dark) pour éviter la bande sous la
-        // SharedNavbar dans la zone paddingTop:64 du wrapper droit.
-        background: darkMode ? "#13141b" : "#ffffff",
+        background: darkMode ? "#13141b" : "#edf0f8",
         fontFamily: "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
         WebkitFontSmoothing: "antialiased",
         MozOsxFontSmoothing: "grayscale",
@@ -151,20 +132,16 @@ export default function CeoPerfSalesView() {
           collapsed={sideCollapsed}
           onToggle={() => setSideCollapsed((v) => !v)}
           sections={visibleSections}
-          activeTab="perf_sales"
+          activeTab="campaigns"
           setActiveTab={handleSidebarTabClick}
           C={C}
           darkMode={darkMode}
         />
       </div>
 
-      {/* Embedded MonitoringPerf — `?embed=true` masque sa SharedNavbar
-          interne ; on rend ici la dynamic-island pour cohérence avec /ceo.
-          `paddingTop` pour que le contenu de MonitoringPerf passe sous la
-          navbar flottante (centre haut). */}
-      <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingTop: 64 }}>
+      <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 64 }}>
         <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
-        <MonitoringPerf />
+        <Campaigns embed />
       </div>
     </div>
   );

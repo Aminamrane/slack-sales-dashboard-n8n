@@ -786,6 +786,7 @@ export default function CeoDashboard() {
           if (tabId === 'autoassign') { navigate('/ceo/auto-affectation'); return; }
           if (tabId === 'variables') { navigate('/ceo/variables'); return; }
           if (tabId === 'conges') { navigate('/ceo/conges'); return; }
+          if (tabId === 'campaigns') { navigate('/ceo/campaigns'); return; }
           setActiveTab(tabId);
         }}
         C={C}

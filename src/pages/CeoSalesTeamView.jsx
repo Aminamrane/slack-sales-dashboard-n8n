@@ -105,6 +105,7 @@ export default function CeoSalesTeamView() {
     if (tabId === "conges") { navigate("/ceo/conges"); return; }
     if (tabId === "lead_quality") { navigate("/ceo/lead-quality"); return; }
     if (tabId === "webinar") { navigate("/ceo/webinar"); return; }
+    if (tabId === "campaigns") { navigate("/ceo/campaigns"); return; }
     if (tabId === "funnel_leads") { navigate("/ceo/funnel-leads"); return; }
     navigateBackToDashboard(navigate, userRole, tabId);
   };

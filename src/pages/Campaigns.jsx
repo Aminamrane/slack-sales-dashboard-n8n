@@ -54,16 +54,26 @@ const fmtRelative = (iso) => {
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
 };
 
-export default function Campaigns() {
+export default function Campaigns({ embed = false }) {
   const navigate = useNavigate();
 
   // ── DARK MODE ──────────────────────────────────────────────────────────
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
   useEffect(() => {
+    if (embed) return; // en embed, la coquille (CeoCampaignsView) pilote le thème
     localStorage.setItem("darkMode", darkMode);
     document.body.classList.toggle("dark-mode", darkMode);
     document.documentElement.classList.toggle("dark-mode", darkMode);
-  }, [darkMode]);
+  }, [darkMode, embed]);
+  // En embed, on SUIT le thème de la coquille (lecture de la classe body).
+  useEffect(() => {
+    if (!embed) return;
+    const id = setInterval(() => {
+      const isDark = document.body.classList.contains("dark-mode");
+      setDarkMode((p) => (p !== isDark ? isDark : p));
+    }, 500);
+    return () => clearInterval(id);
+  }, [embed]);
 
   const C = {
     bg:        darkMode ? '#1e1f28' : '#ffffff',
@@ -113,7 +123,8 @@ export default function Campaigns() {
         const token = apiClient.getToken();
         const user = apiClient.getUser();
         if (!token || !user) { navigate("/login"); return; }
-        if (user.role !== 'admin' && user.role !== 'marketing') { navigate("/"); return; }
+        // En embed, la coquille (CeoCampaignsView) a déjà filtré le rôle -> pas de redirect.
+        if (!embed && user.role !== 'admin' && user.role !== 'marketing') { navigate("/"); return; }
         setSession({ user: { email: user.email, user_metadata: { name: user.name, avatar_url: user.avatar_url || null } } });
         await Promise.all([fetchCampaigns(), fetchActiveAds()]);
       } catch {
@@ -124,7 +135,7 @@ export default function Campaigns() {
     };
     check();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigate]);
+  }, [navigate, embed]);
 
   // ── FETCH ───────────────────────────────────────────────────────────────
   const fetchCampaigns = async () => {
@@ -341,7 +352,7 @@ export default function Campaigns() {
 
   // ── RENDER ──────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: 0, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", background: C.surface, minHeight: '100vh' }}>
+    <div style={{ padding: 0, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", background: embed ? 'transparent' : C.surface, minHeight: embed ? 'auto' : '100vh' }}>
       <style>{`
         @keyframes pageReveal { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes cardIn { from { opacity: 0; transform: translateY(12px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -351,9 +362,9 @@ export default function Campaigns() {
         @keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
       `}</style>
 
-      <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />
+      {!embed && <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />}
 
-      <div style={{ animation: 'pageReveal 0.5s cubic-bezier(0.4,0,0.2,1) both', paddingTop: 80 }}>
+      <div style={{ animation: 'pageReveal 0.5s cubic-bezier(0.4,0,0.2,1) both', paddingTop: embed ? 0 : 80 }}>
         {/* Outer wrapper */}
         <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 24px 40px' }}>
           <div style={{ background: darkMode ? 'rgba(0,0,0,0.10)' : 'rgba(190,197,215,0.20)', borderRadius: 32, padding: 18 }}>
