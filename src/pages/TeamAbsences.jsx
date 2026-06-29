@@ -67,6 +67,17 @@ export default function TeamAbsences({ embed = false }) {
   const [absences, setAbsences] = useState(null);  // onglet Absences = vraies absences équipe
   const [busyId, setBusyId] = useState(null);      // absence en cours de validation/refus
 
+  // Déclarer une absence POUR un membre (RH/CEO/admin -> tout le monde).
+  const [declUsers, setDeclUsers] = useState([]);
+  const [declTarget, setDeclTarget] = useState("");
+  const [declStart, setDeclStart] = useState("");
+  const [declEnd, setDeclEnd] = useState("");
+  const [declType, setDeclType] = useState("conge");
+  const [declDesc, setDeclDesc] = useState("");
+  const [declError, setDeclError] = useState("");
+  const [declSuccess, setDeclSuccess] = useState("");
+  const [declBusy, setDeclBusy] = useState(false);
+
   // Onglet Équipe : vrais utilisateurs (admin only). Lazy au 1er affichage de l'onglet.
   useEffect(() => {
     if (!ok || tab !== "equipe" || members !== null) return;
@@ -83,8 +94,17 @@ export default function TeamAbsences({ embed = false }) {
       .catch(() => setAbsences([]));
   }, [ok]);
 
+  // Personnes pour qui on peut déclarer une absence (RH/CEO/admin -> tous les actifs).
+  useEffect(() => {
+    if (!ok) return;
+    apiClient.get("/api/v1/users/manageable")
+      .then((data) => setDeclUsers(Array.isArray(data) ? data : []))
+      .catch(() => setDeclUsers([]));
+  }, [ok]);
+
   if (!ok) return <div style={{ minHeight: embed ? 240 : "100vh", background: embed ? "transparent" : C.surface }} />;
   const card = { background: C.bg, border: "1px solid " + C.border, borderRadius: 14, boxShadow: darkMode ? "none" : "0 1px 2px rgba(0,0,0,0.03)" };
+  const declInput = { width: "100%", padding: "9px 11px", borderRadius: 8, border: "1px solid " + C.border, background: C.subtle, color: C.text, fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" };
   const fmtJM = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
   const rangeLabel = (a) => (a.start_date === a.end_date ? "le " + fmtJM(a.start_date) : "du " + fmtJM(a.start_date) + " au " + fmtJM(a.end_date));
   // Jours posés par personne (mois courant + à venir), dérivé des vraies absences.
@@ -108,6 +128,29 @@ export default function TeamAbsences({ embed = false }) {
       setAbsences((list) => (list || []).filter((x) => x.id !== a.id));
     } catch (e) { window.alert("Échec du refus : " + (e?.message || e)); }
     setBusyId(null);
+  };
+
+  // Déclarer une absence pour la personne choisie. Le backend déclenche aussi la
+  // notif RH/admin + les events agenda (cross-user POST /users/{id}/unavailability).
+  const handleDeclare = async () => {
+    setDeclError(""); setDeclSuccess("");
+    if (!declTarget) { setDeclError("Choisis une personne."); return; }
+    if (!declStart || !declEnd) { setDeclError("Renseigne les deux dates."); return; }
+    if (declEnd < declStart) { setDeclError("La date de fin doit être après le début."); return; }
+    setDeclBusy(true);
+    try {
+      await apiClient.post(`/api/v1/users/${declTarget}/unavailability`, {
+        start_date: declStart, end_date: declEnd, absence_type: declType, description: declDesc.trim() || null,
+      });
+      const data = await apiClient.get("/api/v1/team-unavailability");
+      setAbsences(Array.isArray(data) ? data : []);
+      setDeclSuccess("Absence déclarée.");
+      setDeclTarget(""); setDeclStart(""); setDeclEnd(""); setDeclType("conge"); setDeclDesc("");
+      setTimeout(() => setDeclSuccess(""), 2500);
+    } catch (e) {
+      const msg = e?.message || "";
+      setDeclError(/409|chevauch/i.test(msg) ? "Cette période chevauche une absence déjà déclarée." : (msg || "Échec de la déclaration."));
+    } finally { setDeclBusy(false); }
   };
 
   // Distingue passé / à venir (date du jour locale en YYYY-MM-DD, comparaison de chaines).
@@ -202,6 +245,31 @@ export default function TeamAbsences({ embed = false }) {
                   </div>
                 </div>
               )}
+
+              {/* Déclarer une absence POUR un membre (RH/CEO/admin) */}
+              <div style={{ ...card, padding: "16px 18px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" /></svg>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Déclarer une absence pour un membre</span>
+                </div>
+                {declError && <div style={{ padding: "8px 12px", borderRadius: 8, background: darkMode ? "rgba(239,68,68,0.12)" : "#fef2f2", color: "#ef4444", fontSize: 12, marginBottom: 10, border: "1px solid " + (darkMode ? "rgba(239,68,68,0.25)" : "#fecaca") }}>{declError}</div>}
+                {declSuccess && <div style={{ padding: "8px 12px", borderRadius: 8, background: darkMode ? "rgba(34,197,94,0.12)" : "#f0fdf4", color: "#22c55e", fontSize: 12, marginBottom: 10, border: "1px solid " + (darkMode ? "rgba(34,197,94,0.25)" : "#bbf7d0") }}>{declSuccess}</div>}
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <select value={declTarget} onChange={(e) => setDeclTarget(e.target.value)} style={{ ...declInput, cursor: "pointer" }}>
+                    <option value="">Choisir une personne…</option>
+                    {declUsers.filter((u) => !u.is_self).map((u) => <option key={u.id} value={u.id}>{u.full_name || u.email}</option>)}
+                  </select>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <input type="date" value={declStart} min={todayStr} onChange={(e) => setDeclStart(e.target.value)} style={declInput} />
+                    <input type="date" value={declEnd} min={declStart || todayStr} onChange={(e) => setDeclEnd(e.target.value)} style={declInput} />
+                  </div>
+                  <select value={declType} onChange={(e) => setDeclType(e.target.value)} style={{ ...declInput, cursor: "pointer" }}>
+                    {Object.entries(ABSENCE_TYPE_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
+                  </select>
+                  <input type="text" value={declDesc} maxLength={200} placeholder="Description (optionnel)" onChange={(e) => setDeclDesc(e.target.value)} style={declInput} />
+                  <button onClick={handleDeclare} disabled={declBusy} style={{ padding: "10px 0", borderRadius: 9, border: "none", background: declBusy ? C.muted : C.accent, color: "#fff", fontSize: 13, fontWeight: 600, cursor: declBusy ? "wait" : "pointer", fontFamily: "inherit" }}>{declBusy ? "Déclaration…" : "Déclarer l'absence"}</button>
+                </div>
+              </div>
             </div>
 
             {/* Colonne droite : calendrier réel + jours posés */}
