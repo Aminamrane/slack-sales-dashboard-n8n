@@ -38,7 +38,7 @@ export default function Variables({ embed = false }) {
   useEffect(() => {
     if (embed) return;  // en embed (shell CEO), l'acces est garanti par le parent
     const u = apiClient.getUser();
-    if (!u || (u.role !== "admin" && u.role !== "ceo")) navigate("/login");
+    if (!u || (u.role !== "admin" && u.role !== "ceo" && u.role !== "hr")) navigate("/login");
   }, [navigate, embed]);
 
   const nowMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
