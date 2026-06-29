@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
+import { setNavScope } from "../utils/sidebarPermissions";
 import Sidebar from "../components/shared/Sidebar";
 import ceo1 from "../assets/ceo1.svg";
 import ceo2 from "../assets/ceo2.svg";
@@ -340,6 +341,8 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
 // ══════════════════════════════════════════════════════════════════════════
 export default function CeoDashboard() {
   const navigate = useNavigate();
+  // Vue CEO/admin "tout" -> reset du scope de navigation des sous-vues /ceo/*.
+  setNavScope(null);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
   const [genieExtended, setGenieExtended] = useState(true);
   const [genieMenuOpen, setGenieMenuOpen] = useState(false);

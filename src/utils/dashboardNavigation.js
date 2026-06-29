@@ -16,7 +16,16 @@ const ROLE_DASHBOARDS = {
 };
 
 export function getDashboardRoute(role) {
-  return ROLE_DASHBOARDS[role] || "/ceo";
+  // En contexte de dashboard de rôle (navScope posé par HrDashboard /
+  // AcquisitionDirectorDashboard), le "Dashboard" / retour renvoie au dashboard
+  // de CE contexte, pas à /ceo. Sinon un admin en contexte RH atterrirait sur le
+  // dashboard CEO complet (Finance + données CEO auxquelles le RH n'a pas droit).
+  let effective = role;
+  try {
+    const scope = sessionStorage.getItem("navScope");
+    if (scope) effective = scope;
+  } catch { /* noop */ }
+  return ROLE_DASHBOARDS[effective] || "/ceo";
 }
 
 // Navigue vers la dashboard home du user. Si la home est /ceo et qu'un

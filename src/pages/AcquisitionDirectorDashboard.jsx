@@ -20,13 +20,17 @@ import apiClient from "../services/apiClient";
 import Leaderboard from "./Leaderboard.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
-import { getVisibleSections } from "../utils/sidebarPermissions";
+import { getVisibleSections, setNavScope } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
 const ALLOWED_ROLES = ["admin", "ceo", "head_of_acquisition", "acquisition_director", "marketing"];
 
 export default function AcquisitionDirectorDashboard() {
   const navigate = useNavigate();
+  // Contexte acquisition : la sidebar reste scopée Acquisition (recent + acquisition)
+  // même dans les sous-vues /ceo/*, y compris pour un admin/ceo qui consulte. Et le
+  // "Dashboard" renvoie ici (/acquisition-director), pas au dashboard CEO complet.
+  setNavScope("acquisition_director");
 
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
   useEffect(() => {

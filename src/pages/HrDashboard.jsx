@@ -21,13 +21,16 @@ import apiClient from "../services/apiClient";
 import Leaderboard from "./Leaderboard.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
-import { getVisibleSections } from "../utils/sidebarPermissions";
+import { getVisibleSections, setNavScope } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
 const ALLOWED_ROLES = ["admin", "ceo", "hr"];
 
 export default function HrDashboard() {
   const navigate = useNavigate();
+  // Contexte de navigation RH : la sidebar reste scopée RH (pas de Finance/Marketing)
+  // même dans les sous-vues /ceo/* partagées, y compris pour un admin/ceo qui consulte.
+  setNavScope("hr");
 
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
   useEffect(() => {
@@ -80,6 +83,7 @@ export default function HrDashboard() {
   }, [authChecked]);
 
   const C = useMemo(() => getColors(darkMode), [darkMode]);
+  // navScope="hr" (posé plus haut) force la sidebar RH ici ET dans les sous-vues.
   const visibleSections = useMemo(() => getVisibleSections(SIDEBAR_SECTIONS, userRole), [userRole]);
 
   // Cliquer "Dashboard" = no-op (on est déjà dessus, il affiche le leaderboard).
