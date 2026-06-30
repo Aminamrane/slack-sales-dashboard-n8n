@@ -5199,10 +5199,10 @@ export default function TrackingSheetSetter() {
 
                       {/* Coordination multi-setters : "Pris par <setter(s)>" — les AUTRES
                           setters (email != le mien) ayant déjà appelé ce lead
-                          (lead.treated_by_setters, brique 2). Pas affiché en voicemail/callback
-                          où le badge anti-spam ci-dessus couvre déjà le cas (évite le doublon). */}
-                      {isSetter && activeCat.key !== 'voicemail' && activeCat.key !== 'callback'
-                        && Array.isArray(lead.treated_by_setters) && (() => {
+                          (lead.treated_by_setters, brique 2). Affiché sur TOUS les onglets
+                          (y compris Répondeurs / À rappeler) pour un indicateur solide partout ;
+                          coexiste avec le badge anti-spam (qui montre le dernier appelant). */}
+                      {isSetter && Array.isArray(lead.treated_by_setters) && (() => {
                         const myEmailLower = (currentUser?.email || '').toLowerCase();
                         const others = lead.treated_by_setters.filter(e => e?.email && e.email.toLowerCase() !== myEmailLower);
                         if (others.length === 0) return null;
