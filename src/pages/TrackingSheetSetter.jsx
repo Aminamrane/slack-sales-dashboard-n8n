@@ -44,6 +44,9 @@ import mynoteIcon from "../assets/mynote.svg";
 import iconFuse from "../assets/Fuse.svg";
 import iconMessage from "../assets/message.svg";
 import smsRecuIcon from "../assets/smsrecu.svg";
+import { useLeadCreative, CreativeButton, CreativePopup } from "../components/CreativePopup.jsx";
+import iconCreaActive from "../assets/metaads.png";
+import iconCreaEmpty from "../assets/metagris.png";
 
 // ── CATEGORIES ────────────────────────────────────────────────────────────────
 // ── CUSTOM DATETIME PICKER (date input + hour/minute selects, 5min step) ────
@@ -667,6 +670,8 @@ export default function TrackingSheetSetter() {
   useEffect(() => { leadsRef.current = leads; }, [leads]);
   const [activeTab, setActiveTab] = useState(0);
   const [selectedLead, setSelectedLead] = useState(null);
+  const [creaPopup, setCreaPopup] = useState(null);
+  const leadCreative = useLeadCreative(selectedLead);
   const [copiedField, setCopiedField] = useState(null); // 'phone-{id}' or 'email-{id}'
   const [exitingCards, setExitingCards] = useState(new Set());
   const [animatingBadges, setAnimatingBadges] = useState(new Set());
@@ -869,6 +874,9 @@ export default function TrackingSheetSetter() {
   // ── SIDEBAR NAV + FORM STATE ────────────────────────────────────────────
   const [cancelledExpanded, setCancelledExpanded] = useState(false);
   const [sidebarView, setSidebarView] = useState(initialView || 'leads');
+  // Sidebar repliable (hover) — overlay comme la vue sales
+  const [sidebarHover, setSidebarHover] = useState(false);
+  const sidebarCollapsed = !sidebarHover;
 
   // ── TRACKING SHEETS MANAGEMENT (admin, HoS only) ──────────────────────────
   const [allSheets, setAllSheets] = useState([]); // [{ email, full_name, lead_count, status, team_id, avatar_url }]
@@ -2303,7 +2311,7 @@ export default function TrackingSheetSetter() {
         }
       `}</style>
 
-      <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} notification={navNotif} />
+      <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} notification={navNotif} centerShift={78} />
 
       {/* ── FLYING CARD CLONE (Genie effect transition) ───────────────────── */}
       {flyingCard && (
@@ -2381,21 +2389,32 @@ export default function TrackingSheetSetter() {
         {/* ── FLEX ROW: sidebar + board + detail panel ──────────────────────── */}
         <div style={{ display: 'flex', alignItems: 'stretch', minHeight: '100vh' }}>
 
-          {/* ── LEFT SIDEBAR (full height) ──────────────────────────────────── */}
-          <div style={{
-            width: 220,
-            minWidth: 220,
+          {/* ── LEFT SIDEBAR — repliable (hover), overlay comme la vue sales ── */}
+          {/* Spacer : réserve la gouttière 64px pour que le contenu ne bouge jamais */}
+          <div style={{ width: 64, minWidth: 64, flexShrink: 0 }} />
+          {createPortal((
+          <div
+            onMouseEnter={() => setSidebarHover(true)}
+            onMouseLeave={() => setSidebarHover(false)}
+            style={{
+            position: 'fixed', top: 0, left: 0, height: '100vh', zIndex: 60,
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+            width: sidebarCollapsed ? 64 : 220,
             borderRight: `1px solid ${C.border}`,
             display: 'flex',
             flexDirection: 'column',
             background: darkMode ? C.subtle : '#eceef2',
             animation: 'sidebarReveal 0.4s ease both',
+            transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)',
+            overflow: 'hidden',
+            boxShadow: sidebarCollapsed ? 'none' : (darkMode ? '6px 0 28px rgba(0,0,0,0.45)' : '6px 0 28px rgba(0,0,0,0.12)'),
           }}>
             {/* Sidebar header — company logo like Quno */}
-            <div style={{ padding: '18px 16px 14px', borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
+            <div style={{ padding: sidebarCollapsed ? '14px 8px' : '18px 16px 14px', borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 8,
-                padding: '6px 8px',
+                justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+                padding: sidebarCollapsed ? '6px' : '6px 8px',
                 borderRadius: 10,
                 border: `1px solid ${C.border}`,
                 background: darkMode ? 'rgba(255,255,255,0.04)' : '#fff',
@@ -2408,7 +2427,7 @@ export default function TrackingSheetSetter() {
                 }}>
                   <img src={companyLogo} alt="" style={{ width: 20, height: 20, objectFit: 'contain', filter: darkMode ? 'none' : 'brightness(0) invert(1)' }} />
                 </div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>Owner</div>
+                {!sidebarCollapsed && <div style={{ fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>Owner</div>}
               </div>
             </div>
 
@@ -2438,6 +2457,7 @@ export default function TrackingSheetSetter() {
                   onClick={() => { setSidebarView(item.key); if (item.key !== 'leads') setSelectedLead(null); }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6,
+                    justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
                     padding: item.iconSize ? '2px 12px' : '9px 12px', margin: '1px 12px', cursor: 'pointer',
                     borderRadius: 10,
                     background: isActive ? (darkMode ? '#fff' : '#1e2330') : 'transparent',
@@ -2475,13 +2495,16 @@ export default function TrackingSheetSetter() {
                       {item.icon}
                     </span>
                   )}
+                  {!sidebarCollapsed && (
                   <span style={{
                     fontSize: 13, fontWeight: isActive ? 600 : 500,
                     color: isActive ? (darkMode ? '#1e2330' : '#fff') : C.muted, transition: 'color 0.15s',
+                    whiteSpace: 'nowrap',
                   }}>
                     {item.label}
                   </span>
-                  {item.key === 'leads' && (
+                  )}
+                  {!sidebarCollapsed && item.key === 'leads' && (
                     <span style={{
                       marginLeft: 'auto', fontSize: 10, fontWeight: 600,
                       padding: '2px 6px', borderRadius: 4,
@@ -2491,7 +2514,7 @@ export default function TrackingSheetSetter() {
                       {leads.length}
                     </span>
                   )}
-                  {item.badgeCount > 0 && (
+                  {!sidebarCollapsed && item.badgeCount > 0 && (
                     <span style={{
                       marginLeft: 'auto', fontSize: 10, fontWeight: 700,
                       padding: '2px 7px', borderRadius: 50,
@@ -2508,6 +2531,7 @@ export default function TrackingSheetSetter() {
             {/* Spacer */}
             <div style={{ flex: 1 }} />
           </div>
+          ), document.body)}
 
         {/* ── RIGHT COLUMN (single top card + content row) ─────────────────── */}
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: '8px 8px 8px 0', gap: 12 }}>
@@ -5640,6 +5664,20 @@ export default function TrackingSheetSetter() {
                 </button>
               </div>
 
+              {/* Bouton créa Meta — flotte sous la croix, sans pousser le contenu */}
+              <div style={{ position: 'relative', height: 0, zIndex: 5 }}>
+                <CreativeButton
+                  data={leadCreative.data}
+                  loading={leadCreative.loading}
+                  iconActive={iconCreaActive}
+                  iconEmpty={iconCreaEmpty}
+                  darkMode={darkMode}
+                  size={54}
+                  style={{ position: 'absolute', top: 2, right: -14 }}
+                  onOpen={(creative, rect) => setCreaPopup({ creative, rect })}
+                />
+              </div>
+
               {/* ─── PROFILE HEADER ─── */}
               <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '12px' }}>
                 {/* Name (editable) */}
@@ -8387,6 +8425,15 @@ export default function TrackingSheetSetter() {
       })()}
 
       {/* ═══ INVITE MODAL ═══ */}
+      {creaPopup && (
+        <CreativePopup
+          creative={creaPopup.creative}
+          triggerRect={creaPopup.rect}
+          darkMode={darkMode}
+          onClose={() => setCreaPopup(null)}
+        />
+      )}
+
       {inviteModal && createPortal(
         <>
           <div onClick={() => setInviteModal(null)} style={{
