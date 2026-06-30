@@ -158,6 +158,10 @@ export default function TeamAbsences({ embed = false }) {
   const todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
   const isPastAbs = (a) => a.end_date < todayStr && !a.active_now;
   const upcomingAbs = (absences || []).filter((a) => !isPastAbs(a));
+  // Scinde les absences à venir selon la validation : "à confirmer" (action
+  // requise → boutons Valider/Refuser) vs "validées" (badge Validé).
+  const pendingAbs = upcomingAbs.filter((a) => !a.validated_at);
+  const validatedAbs = upcomingAbs.filter((a) => a.validated_at);
   const pastAbs = (absences || []).filter((a) => isPastAbs(a));
 
   // Une ligne d'absence. `past` = grisée + lecture seule (validable/refusable n'a plus de sens).
@@ -219,16 +223,31 @@ export default function TeamAbsences({ embed = false }) {
 
             {/* Colonne gauche : à venir / en cours + passés (RÉEL) */}
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* À confirmer — absences à venir sans validated_at (action requise) */}
               <div style={{ ...card, padding: "16px 18px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={COLORS.secondary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Absences à venir</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.secondary, background: COLORS.secondary + "18", borderRadius: 20, padding: "2px 9px" }}>{absences ? upcomingAbs.length : "…"}</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>À confirmer</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.secondary, background: COLORS.secondary + "18", borderRadius: 20, padding: "2px 9px" }}>{absences ? pendingAbs.length : "…"}</span>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column" }}>
                   {absences === null && <div style={{ textAlign: "center", color: C.muted, fontSize: 13, padding: "40px 10px" }}>Chargement…</div>}
-                  {absences && upcomingAbs.length === 0 && <div style={{ textAlign: "center", color: C.muted, fontSize: 13, padding: "40px 10px" }}>Aucune absence à venir 🎉</div>}
-                  {upcomingAbs.map((a, i) => absenceRow(a, i, upcomingAbs, false))}
+                  {absences && pendingAbs.length === 0 && <div style={{ textAlign: "center", color: C.muted, fontSize: 13, padding: "40px 10px" }}>Aucune absence à confirmer ✅</div>}
+                  {pendingAbs.map((a, i) => absenceRow(a, i, pendingAbs, false))}
+                </div>
+              </div>
+
+              {/* Validées — absences à venir avec validated_at (badge Validé) */}
+              <div style={{ ...card, padding: "16px 18px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={COLORS.tertiary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Validées</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.tertiary, background: COLORS.tertiary + "18", borderRadius: 20, padding: "2px 9px" }}>{absences ? validatedAbs.length : "…"}</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  {absences === null && <div style={{ textAlign: "center", color: C.muted, fontSize: 13, padding: "40px 10px" }}>Chargement…</div>}
+                  {absences && validatedAbs.length === 0 && <div style={{ textAlign: "center", color: C.muted, fontSize: 13, padding: "40px 10px" }}>Aucune absence validée</div>}
+                  {validatedAbs.map((a, i) => absenceRow(a, i, validatedAbs, false))}
                 </div>
               </div>
 
