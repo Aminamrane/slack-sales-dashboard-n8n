@@ -1018,6 +1018,7 @@ export default function TrackingSheetSetter() {
   const [filterOrigins, setFilterOrigins] = useState([]); // multi-select: origin values (e.g. ['BTP', 'cc'])
   const [filterSalesOwners, setFilterSalesOwners] = useState([]); // multi-select setter only: emails des sales propriétaires (scope = teamSales)
   const [filterMyColdCallsOnly, setFilterMyColdCallsOnly] = useState(false); // toggle setter only (Nouveau lead): n'affiche que ses propres cold calls
+  const [filterHideOtherTreated, setFilterHideOtherTreated] = useState(false); // toggle setter only: masque les leads déjà appelés par un AUTRE setter (coordination)
   const [filterStatuses, setFilterStatuses] = useState([]); // multi-select: ['r1_done', 'r1_not_done', 'r2_done', 'r2_not_done']
   const [filterCallTime, setFilterCallTime] = useState([]); // multi-select: ['matin', 'apres_midi', 'soir'] — first_call_at time-of-day filter
   const [sortOrder, setSortOrder] = useState('newest'); // 'newest' | 'oldest'
@@ -1149,6 +1150,14 @@ export default function TrackingSheetSetter() {
       const myEmailLower = (currentUser?.email || '').toLowerCase();
       result = result.filter(l => (l.created_by_setter || '').toLowerCase() === myEmailLower);
     }
+    // Filter "Masquer ce qu'un autre setter a déjà traité" (coordination multi-setters).
+    // Cache le lead si AU MOINS un setter dont l'email != le mien l'a déjà appelé
+    // (treated_by_setters, brique 2). Mes propres appels ne masquent rien.
+    if (filterHideOtherTreated) {
+      const myEmailLower = (currentUser?.email || '').toLowerCase();
+      result = result.filter(l => !(Array.isArray(l.treated_by_setters)
+        && l.treated_by_setters.some(e => e?.email && e.email.toLowerCase() !== myEmailLower)));
+    }
     // Filter by tag (qualification result) — tab-contextual field
     if (filterTags.length > 0) {
       if (catKey === 'r1') {
@@ -1204,7 +1213,7 @@ export default function TrackingSheetSetter() {
       result = [...result].sort((a, b) => (b.assigned_at || '').localeCompare(a.assigned_at || ''));
     }
     return result;
-  }, [leads, activeTab, exitingCards, searchQuery, filterTags, filterStatuses, filterOrigins, filterSalesOwners, filterMyColdCallsOnly, filterCallTime, sortOrder]);
+  }, [leads, activeTab, exitingCards, searchQuery, filterTags, filterStatuses, filterOrigins, filterSalesOwners, filterMyColdCallsOnly, filterHideOtherTreated, filterCallTime, sortOrder]);
 
   // Dismiss a notification (optimistic + backend persist)
   const dismissNotif = (key) => {
@@ -4231,6 +4240,19 @@ export default function TrackingSheetSetter() {
                     )}
                   </>
                 )}
+
+                {/* Masquer ce qu'un autre setter a déjà traité — setter only, TOUS les
+                    onglets. Coordination quand plusieurs setters bossent le même sales :
+                    cache le lead si un AUTRE setter (email != le mien) l'a déjà appelé
+                    (lead.treated_by_setters, brique 2). */}
+                {isSetter && (
+                  <>
+                    {renderFilterRow('hide_other_treated', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>, 'Déjà traités', true)}
+                    {openFilterSections.has('hide_other_treated') && renderOptionsBox([
+                      <div key="hide_other_treated_toggle">{renderRadio(filterHideOtherTreated, "Masquer ce qu'un autre setter a traité", C.accent, () => setFilterHideOtherTreated(v => !v))}</div>
+                    ])}
+                  </>
+                )}
               </div>
 
               {/* ═══ GROUP: TRI & DATES ═══ */}
@@ -4278,9 +4300,9 @@ export default function TrackingSheetSetter() {
               <div style={{ flex: 1 }} />
 
               {/* Clear all — bottom */}
-              {(filterTags.length > 0 || filterStatuses.length > 0 || filterOrigins.length > 0 || filterSalesOwners.length > 0 || filterMyColdCallsOnly || filterCallTime.length > 0 || sortOrder !== 'newest') && (
+              {(filterTags.length > 0 || filterStatuses.length > 0 || filterOrigins.length > 0 || filterSalesOwners.length > 0 || filterMyColdCallsOnly || filterHideOtherTreated || filterCallTime.length > 0 || sortOrder !== 'newest') && (
                 <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}` }}>
-                  <button onClick={() => { setFilterTags([]); setFilterStatuses([]); setFilterOrigins([]); setFilterSalesOwners([]); setFilterMyColdCallsOnly(false); setFilterCallTime([]); setSortOrder('newest'); }} style={{
+                  <button onClick={() => { setFilterTags([]); setFilterStatuses([]); setFilterOrigins([]); setFilterSalesOwners([]); setFilterMyColdCallsOnly(false); setFilterHideOtherTreated(false); setFilterCallTime([]); setSortOrder('newest'); }} style={{
                     width: '100%', padding: '8px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
                     border: `1px solid ${C.accent}40`, background: `${C.accent}08`, color: C.accent,
                     cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
@@ -5142,6 +5164,33 @@ export default function TrackingSheetSetter() {
                               <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
                             </svg>
                             Setter {setterName}{cnt > 1 ? ` ×${cnt}` : ''}
+                          </span>
+                        );
+                      })()}
+
+                      {/* Coordination multi-setters : "Pris par <setter(s)>" — les AUTRES
+                          setters (email != le mien) ayant déjà appelé ce lead
+                          (lead.treated_by_setters, brique 2). Pas affiché en voicemail/callback
+                          où le badge anti-spam ci-dessus couvre déjà le cas (évite le doublon). */}
+                      {isSetter && activeCat.key !== 'voicemail' && activeCat.key !== 'callback'
+                        && Array.isArray(lead.treated_by_setters) && (() => {
+                        const myEmailLower = (currentUser?.email || '').toLowerCase();
+                        const others = lead.treated_by_setters.filter(e => e?.email && e.email.toLowerCase() !== myEmailLower);
+                        if (others.length === 0) return null;
+                        const names = others.map(e => e.name || e.email).join(', ');
+                        return (
+                          <span title={`Déjà appelé par : ${names}`} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 600, flexShrink: 0,
+                            background: darkMode ? 'rgba(245,158,11,0.16)' : 'rgba(245,158,11,0.10)',
+                            color: '#f59e0b',
+                            border: `1px solid ${darkMode ? 'rgba(245,158,11,0.30)' : 'rgba(245,158,11,0.22)'}`,
+                          }}>
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M3 11l18-5v12L3 14v-3z" />
+                              <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+                            </svg>
+                            Pris par {names}
                           </span>
                         );
                       })()}
