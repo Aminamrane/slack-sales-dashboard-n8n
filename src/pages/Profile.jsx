@@ -334,7 +334,16 @@ export default function Profile() {
     const f = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
     return a.start_date === a.end_date ? `Le ${f(a.start_date)}` : `${f(a.start_date)} → ${f(a.end_date)}`;
   };
-  const vacDays = (a) => Math.round((new Date(a.end_date) - new Date(a.start_date)) / 86400000) + 1;
+  // Jours OUVRÉS (lun→ven) : on ne décompte que les jours travaillés, samedi/dimanche exclus.
+  const vacDays = (a) => {
+    let n = 0;
+    const end = new Date(a.end_date + "T00:00:00");
+    for (let d = new Date(a.start_date + "T00:00:00"); d <= end; d.setDate(d.getDate() + 1)) {
+      const dow = d.getDay(); // 0 = dimanche, 6 = samedi
+      if (dow !== 0 && dow !== 6) n++;
+    }
+    return n;
+  };
 
   const isCloser = ['sales', 'head_of_sales', 'head_of_sales_manager', 'admin'].includes(session?.role);
   const roleLabel = ROLE_LABELS[session?.role] || session?.role || "";
