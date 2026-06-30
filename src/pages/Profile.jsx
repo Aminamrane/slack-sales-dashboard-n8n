@@ -69,6 +69,7 @@ export default function Profile() {
   // Partage des nouveaux leads PAR-SETTER : liste des setters rattachés + flag immédiat
   const [setters, setSetters] = useState([]);
   const [savingSetterId, setSavingSetterId] = useState(null);
+  const [savingManualId, setSavingManualId] = useState(null);
   const [shareError, setShareError] = useState("");
   const [shareSuccess, setShareSuccess] = useState("");
 
@@ -170,6 +171,25 @@ export default function Profile() {
       setShareError(e?.message || "Erreur lors de la mise à jour.");
     } finally {
       setSavingSetterId(null);
+    }
+  };
+
+  // Mode MANUEL : ce setter ne reçoit aucun lead auto, le sales lui donne les leads.
+  const toggleSetterManual = async (setterId, currentVal) => {
+    const newVal = !currentVal;
+    setSavingManualId(setterId);
+    setShareError("");
+    setShareSuccess("");
+    setSetters((prev) => prev.map((s) => (s.setter_id === setterId ? { ...s, manual_only: newVal } : s)));
+    try {
+      await apiClient.put(`/api/v1/users/me/setters/${setterId}/manual`, { value: newVal });
+      setShareSuccess(newVal ? "Mode manuel activé." : "Mode auto rétabli.");
+      setTimeout(() => setShareSuccess(""), 2500);
+    } catch (e) {
+      setSetters((prev) => prev.map((s) => (s.setter_id === setterId ? { ...s, manual_only: currentVal } : s)));
+      setShareError(e?.message || "Erreur lors de la mise à jour.");
+    } finally {
+      setSavingManualId(null);
     }
   };
 
@@ -642,19 +662,30 @@ export default function Profile() {
           {setters.map((s) => {
             const saving = savingSetterId === s.setter_id;
             const on = !!s.immediate_new_leads;
+            const manual = !!s.manual_only;
+            const savingManual = savingManualId === s.setter_id;
+            const renderSwitch = (active) => (
+              <div style={{
+                width: "44px", height: "24px", borderRadius: "999px",
+                background: active ? C.accent : (darkMode ? "#3a3b48" : "#d1d5db"),
+                position: "relative", transition: "background 0.2s", flexShrink: 0,
+              }}>
+                <div style={{
+                  position: "absolute", top: "2px", left: active ? "22px" : "2px",
+                  width: "20px", height: "20px", borderRadius: "50%",
+                  background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                  transition: "left 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                }} />
+              </div>
+            );
             return (
               <div
                 key={s.setter_id}
-                onClick={() => { if (!saving) toggleSetterImmediate(s.setter_id, on); }}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   padding: "14px 18px", borderRadius: "14px",
-                  border: `1px solid ${C.border}`, background: C.subtle,
-                  cursor: saving ? "not-allowed" : "pointer",
-                  opacity: saving ? 0.6 : 1, transition: "all 0.15s",
+                  border: `1px solid ${C.border}`, background: C.subtle, transition: "all 0.15s",
                 }}
-                onMouseEnter={(e) => { if (!saving) e.currentTarget.style.borderColor = C.accent; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; }}
               >
                 <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                   <span style={{ fontSize: "14px", fontWeight: 600, color: C.text, fontFamily: "Inter, sans-serif", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -663,23 +694,27 @@ export default function Profile() {
                   {s.target_type === "team" && (
                     <span title="Rattachement via équipe : le réglage s'applique à toute l'équipe" style={{ fontSize: 10, fontWeight: 600, color: C.muted, background: darkMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)", border: `1px solid ${C.border}`, borderRadius: 999, padding: "1px 7px", flexShrink: 0 }}>équipe</span>
                   )}
-                  <span style={{ fontSize: 11, fontWeight: 600, color: on ? C.accent : C.muted, flexShrink: 0 }}>
-                    {on ? "immédiat" : "24h"}
+                </span>
+                <span style={{ display: "flex", alignItems: "center", gap: 18, flexShrink: 0 }}>
+                  {/* Manuel : ce setter ne reçoit aucun lead auto, le sales lui donne les leads */}
+                  <span
+                    title="Manuel : ce setter ne reçoit aucun lead automatiquement ; vous lui donnez les leads à traiter depuis votre Tracking Sheet."
+                    onClick={() => { if (!savingManual) toggleSetterManual(s.setter_id, manual); }}
+                    style={{ display: "flex", alignItems: "center", gap: 7, cursor: savingManual ? "not-allowed" : "pointer", opacity: savingManual ? 0.6 : 1 }}
+                  >
+                    <span style={{ fontSize: 11, fontWeight: 600, color: manual ? C.accent : C.muted }}>manuel</span>
+                    {renderSwitch(manual)}
+                  </span>
+                  {/* Immédiat / 24h : sans objet en mode manuel (grisé) */}
+                  <span
+                    title={manual ? "Sans objet en mode manuel" : "Immédiat : ce setter voit vos nouveaux leads tout de suite (sinon après 24h)"}
+                    onClick={() => { if (!saving && !manual) toggleSetterImmediate(s.setter_id, on); }}
+                    style={{ display: "flex", alignItems: "center", gap: 7, cursor: (saving || manual) ? "not-allowed" : "pointer", opacity: manual ? 0.35 : (saving ? 0.6 : 1) }}
+                  >
+                    <span style={{ fontSize: 11, fontWeight: 600, color: on ? C.accent : C.muted }}>{on ? "immédiat" : "24h"}</span>
+                    {renderSwitch(on)}
                   </span>
                 </span>
-                <div style={{
-                  width: "44px", height: "24px", borderRadius: "999px",
-                  background: on ? C.accent : (darkMode ? "#3a3b48" : "#d1d5db"),
-                  position: "relative", transition: "background 0.2s", flexShrink: 0,
-                }}>
-                  <div style={{
-                    position: "absolute", top: "2px",
-                    left: on ? "22px" : "2px",
-                    width: "20px", height: "20px", borderRadius: "50%",
-                    background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-                    transition: "left 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
-                  }} />
-                </div>
               </div>
             );
           })}

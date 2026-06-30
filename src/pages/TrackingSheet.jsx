@@ -323,6 +323,12 @@ export default function TrackingSheet() {
         }
 
         await refreshData();
+        // Mode MANUEL : mes setters en mode manuel (pour le bouton "Donner à un setter").
+        // Si aucun, le bouton n'apparaît jamais (zéro impact pour les autres sales).
+        try {
+          const ms = await apiClient.get('/api/v1/users/me/setters');
+          setMyManualSetters((Array.isArray(ms) ? ms : []).filter(s => s.manual_only));
+        } catch { /* pas de setter manuel ou endpoint indispo -> rien */ }
         // Fetch calendar + relance settings immediately (for R3 tab visibility + toggle states)
         try {
           const cs = await apiClient.get('/api/v1/tracking/calendar-settings');
@@ -606,6 +612,7 @@ export default function TrackingSheet() {
 
   // ── LEAD STATE ────────────────────────────────────────────────────────────
   const [leads, setLeads] = useState([]);
+  const [myManualSetters, setMyManualSetters] = useState([]); // mes setters en mode MANUEL (pour le bouton "Donner à un setter")
   const leadsRef = useRef([]);
   useEffect(() => { leadsRef.current = leads; }, [leads]);
   const [activeTab, setActiveTab] = useState(0);
@@ -935,6 +942,18 @@ export default function TrackingSheet() {
     } catch (e) {
       console.warn('Reassign failed:', e);
       setContractErrorModal({ message: 'Erreur lors de la réaffectation. ' + (e?.message || ''), isNdaMissing: false });
+    }
+  };
+
+  // Mode MANUEL : donner (ou retirer) ce lead à un setter manuel. assigned_to inchangé.
+  const giveLeadToSetter = async (leadId, setterId) => {
+    setLeads(prev => prev.map(l => (l.id === leadId ? { ...l, manual_setter_id: setterId } : l)));
+    try {
+      const q = setterId ? `?setter_id=${setterId}` : '';
+      await apiClient.put(`/api/v1/tracking/leads/${leadId}/give-to-setter${q}`, {});
+    } catch (e) {
+      console.warn('give-to-setter failed:', e);
+      refreshData().catch(() => {}); // rollback par refetch
     }
   };
 
@@ -6032,6 +6051,39 @@ export default function TrackingSheet() {
                       <div style={{ fontSize: 12, color: '#1a73e8', fontWeight: 600 }}>Rejoindre le meeting</div>
                     </div>
                   </a>
+                )}
+                {/* Mode MANUEL — donner ce lead à un setter (visible seulement si le sales
+                    a au moins un setter en mode manuel ; 1 lead -> 1 setter). Additif. */}
+                {myManualSetters.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    <div style={{ width: 22, height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 2 }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>Donner à un setter</div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {myManualSetters.map((s) => {
+                          const active = String(lead.manual_setter_id || '') === String(s.setter_id);
+                          return (
+                            <button
+                              key={s.setter_id}
+                              onClick={() => giveLeadToSetter(lead.id, active ? null : s.setter_id)}
+                              title={active ? 'Donné à ce setter — cliquer pour retirer' : `Donner ce lead à ${s.full_name}`}
+                              style={{
+                                fontSize: 11.5, fontWeight: 600, padding: '4px 10px', borderRadius: 8, cursor: 'pointer',
+                                fontFamily: 'inherit', transition: 'all 0.15s',
+                                border: `1px solid ${active ? C.accent : C.border}`,
+                                background: active ? `${C.accent}1a` : 'transparent',
+                                color: active ? C.accent : C.text,
+                              }}
+                            >
+                              {active ? '✓ ' : ''}{(s.full_name || s.email).split(' ')[0]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
                 )}
                 <ReproLinkRow lead={lead} C={C} darkMode={darkMode} />
               </div>

@@ -4968,6 +4968,18 @@ export default function TrackingSheetSetter() {
                         </span>
                       )}
 
+                      {/* Mode MANUEL — badge "donné par [sales]" sur les leads donnés explicitement */}
+                      {isSetter && lead.manual_setter_id && (
+                        <span title={`Donné par ${lead.assigned_to_name || 'votre sales'}`} style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '3px 9px', borderRadius: 50, fontSize: 10, fontWeight: 700, flexShrink: 0,
+                          background: darkMode ? `${C.accent}26` : `${C.accent}14`,
+                          color: C.accent, border: `1px solid ${C.accent}40`,
+                        }}>
+                          donné par {lead.assigned_to_name?.split(' ')[0] || 'sales'}
+                        </span>
+                      )}
+
                       {/* Compact info pills */}
                       <span style={{ width: '1px', height: '14px', background: C.border, flexShrink: 0 }} />
                       <span
