@@ -362,11 +362,16 @@ export default function TrackingSheetSetter() {
       // Le backend ne renvoie un disqualifié que via my-leads (bucket 'mine') ; les
       // endpoints signed / r1-placed / r2-placed / team-leads filtrent déjà côté
       // serveur. Garde de sécurité : on ne masque jamais un lead signé (donnée de vente).
-      setLeads(
-        Array.from(dedup.values()).filter(
-          (l) => !l.setter_disqualified_at || l.status === 'signed',
-        ),
+      const nextLeads = Array.from(dedup.values()).filter(
+        (l) => !l.setter_disqualified_at || l.status === 'signed',
       );
+      // Garde d'identité : ne remplace le tableau (donc ne re-render le mur de
+      // cartes + recalcul des useMemo) QUE si les données ont vraiment changé.
+      // Évite un re-render complet inutile à chaque poll 30s quand rien ne bouge.
+      // Sûr : JSON.stringify est une comparaison totale -> aucun update raté.
+      let _changed = true;
+      try { _changed = JSON.stringify(nextLeads) !== JSON.stringify(leadsRef.current); } catch { _changed = true; }
+      if (_changed) setLeads(nextLeads);
 
       const sList = extractList(salesRes);
       setTeamSales(sList);
