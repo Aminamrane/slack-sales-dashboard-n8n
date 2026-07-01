@@ -2218,6 +2218,7 @@ export default function TrackingSheet() {
         }
         @keyframes solarOrbit { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes solarFadeIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
+        @keyframes iconWiggle { 0%,72%,100% { transform: rotate(0deg); } 78% { transform: rotate(-10deg); } 84% { transform: rotate(9deg); } 90% { transform: rotate(-5deg); } 96% { transform: rotate(3deg); } }
         @keyframes cardStaggerIn {
           from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -8563,7 +8564,7 @@ export default function TrackingSheet() {
                   <div style={{ textAlign: 'center', marginBottom: 20 }}>
                     <div style={{ width: 44, height: 44, borderRadius: '50%', background: darkMode ? 'rgba(255,255,255,0.06)' : '#f4f5f7', margin: '0 auto 10px',
                       display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'iconWiggle 3s ease-in-out infinite' }}>
                         <rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
                       </svg>
                     </div>
@@ -8619,7 +8620,7 @@ export default function TrackingSheet() {
                   </div>
 
                   {/* Continuer -> choix des créneaux (dispo agenda) */}
-                  <button onClick={() => setSaleStep('onboarding')}
+                  <button onClick={() => setSaleStep('lancement')}
                     disabled={!saleForm.email.trim() || !saleForm.employeeRange}
                     style={{
                       width: '100%', padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600,
@@ -8636,9 +8637,15 @@ export default function TrackingSheet() {
                     <div style={{ width: 44, height: 44, borderRadius: '50%', margin: '0 auto 10px',
                       background: darkMode ? 'rgba(255,255,255,0.06)' : '#f4f5f7',
                       display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M8 2v4M16 2v4M3 10h18" />
-                      </svg>
+                      {saleStep === 'lancement' ? (
+                        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'iconWiggle 3s ease-in-out infinite' }}>
+                          <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" /><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" /><path d="M7 21h10" /><path d="M12 3v18" /><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2" />
+                        </svg>
+                      ) : (
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'iconWiggle 3s ease-in-out infinite' }}>
+                          <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z" /><path d="M8 7h8M8 11h6M8 15h4" />
+                        </svg>
+                      )}
                     </div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>{saleStep === 'onboarding' ? 'RDV Onboarding' : 'RDV Lancement'}</div>
                     <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Choisis un créneau libre · {saleStep === 'onboarding' ? 'facturation' : "Opti'Lex"}</div>
@@ -8647,23 +8654,23 @@ export default function TrackingSheet() {
                   <SaleSlotPicker key={saleStep} kind={saleStep} value={saleSlots[saleStep]}
                     onChange={(v) => setSaleSlots(p => ({ ...p, [saleStep]: v }))} C={C} darkMode={darkMode} />
 
-                  {/* Navigation étapes */}
+                  {/* Navigation : d'abord Lancement (cabinet Opti'Lex), puis Onboarding (facturation) */}
                   <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
-                    <button onClick={() => setSaleStep(saleStep === 'lancement' ? 'onboarding' : 'form')} disabled={saleSubmitting}
+                    <button onClick={() => setSaleStep(saleStep === 'onboarding' ? 'lancement' : 'form')} disabled={saleSubmitting}
                       style={{ padding: '11px 16px', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent',
-                        color: C.muted, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', cursor: saleSubmitting ? 'default' : 'pointer' }}>‹ Retour</button>
-                    {saleStep === 'onboarding' ? (
-                      <button onClick={() => setSaleStep('lancement')} disabled={!saleSlots.onboarding}
+                        color: C.muted, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', cursor: saleSubmitting ? 'default' : 'pointer' }}>Retour</button>
+                    {saleStep === 'lancement' ? (
+                      <button onClick={() => setSaleStep('onboarding')} disabled={!saleSlots.lancement}
                         style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
-                          cursor: saleSlots.onboarding ? 'pointer' : 'default',
-                          background: saleSlots.onboarding ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
-                          color: saleSlots.onboarding ? '#fff' : C.muted, transition: 'all 0.2s' }}>Suivant → Lancement</button>
-                    ) : (
-                      <button onClick={() => handleSaleSubmitWithSlots(showSaleModal)} disabled={!saleSlots.lancement || saleSubmitting}
-                        style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
-                          cursor: saleSlots.lancement && !saleSubmitting ? 'pointer' : 'default',
+                          cursor: saleSlots.lancement ? 'pointer' : 'default',
                           background: saleSlots.lancement ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
-                          color: saleSlots.lancement ? '#fff' : C.muted, opacity: saleSubmitting ? 0.7 : 1, transition: 'all 0.2s' }}>{saleSubmitting ? 'Déclaration...' : 'Déclarer la vente'}</button>
+                          color: saleSlots.lancement ? '#fff' : C.muted, transition: 'all 0.2s' }}>Suivant → Onboarding</button>
+                    ) : (
+                      <button onClick={() => handleSaleSubmitWithSlots(showSaleModal)} disabled={!saleSlots.onboarding || saleSubmitting}
+                        style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
+                          cursor: saleSlots.onboarding && !saleSubmitting ? 'pointer' : 'default',
+                          background: saleSlots.onboarding ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
+                          color: saleSlots.onboarding ? '#fff' : C.muted, opacity: saleSubmitting ? 0.7 : 1, transition: 'all 0.2s' }}>{saleSubmitting ? 'Déclaration...' : 'Déclarer la vente'}</button>
                     )}
                   </div>
                 </>
