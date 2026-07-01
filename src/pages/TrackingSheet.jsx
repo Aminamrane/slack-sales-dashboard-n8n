@@ -129,6 +129,128 @@ function TimeSelect({ value, onChange, C, darkMode }) {
   );
 }
 
+// ── SLOT PICKER (créneaux libres freebusy 8h-18h) pour RDV Onboarding/Lancement ──
+function SaleSlotPicker({ kind, value, onChange, C, darkMode }) {
+  const accent = C.accent || '#2563eb';
+  const _pad = (n) => String(n).padStart(2, '0');
+  const _ymd = (yy, mm, dd) => `${yy}-${_pad(mm + 1)}-${_pad(dd)}`;
+  const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  const WD = ['DIM.', 'LUN.', 'MAR.', 'MER.', 'JEU.', 'VEN.', 'SAM.'];
+  const WD_SHORT = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
+
+  const _today = new Date(); _today.setHours(0, 0, 0, 0);
+  const curMonthKey = _today.getFullYear() * 12 + _today.getMonth();
+  const _initMonth = () => {
+    if (value) { const d = new Date(value.slice(0, 10) + 'T00:00:00'); return new Date(d.getFullYear(), d.getMonth(), 1); }
+    return new Date(_today.getFullYear(), _today.getMonth(), 1);
+  };
+
+  const [viewMonth, setViewMonth] = useState(_initMonth);
+  const [data, setData] = useState({ days: [] });
+  const [loading, setLoading] = useState(false);
+  const [selectedDay, setSelectedDay] = useState(value ? value.slice(0, 10) : null);
+
+  const y = viewMonth.getFullYear();
+  const m = viewMonth.getMonth();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const leading = new Date(y, m, 1).getDay(); // 0 = dimanche
+  const monthKey = y * 12 + m;
+  const canGoPrev = monthKey > curMonthKey;
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    apiClient.get(`/api/v1/tracking/sale-slots?kind=${kind}&start=${_ymd(y, m, 1)}&days=${daysInMonth}`)
+      .then(r => {
+        if (!alive) return;
+        const days = (r && r.days) || [];
+        setData({ days });
+        setSelectedDay(prev => {
+          if (prev && days.some(d => d.date === prev)) return prev;
+          if (value && days.some(d => d.date === value.slice(0, 10))) return value.slice(0, 10);
+          return days.length ? days[0].date : null;
+        });
+      })
+      .catch(() => { if (alive) setData({ days: [] }); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [kind, monthKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const daysMap = {};
+  (data.days || []).forEach(d => { daysMap[d.date] = d.slots; });
+  const selectedSlots = selectedDay ? (daysMap[selectedDay] || []) : [];
+  const valDay = value ? value.slice(0, 10) : null;
+  const valTime = value ? value.slice(11, 16) : null;
+  let selLabel = '';
+  if (selectedDay) { const sd = new Date(selectedDay + 'T00:00:00'); selLabel = `${WD_SHORT[sd.getDay()]} ${sd.getDate()}`; }
+
+  const cells = [];
+  for (let i = 0; i < leading; i++) cells.push(null);
+  for (let day = 1; day <= daysInMonth; day++) cells.push(day);
+
+  const navBtn = (enabled) => ({ width: 30, height: 30, borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent',
+    color: enabled ? C.text : (darkMode ? '#3a3b47' : '#cbd2e0'), cursor: enabled ? 'pointer' : 'default', fontSize: 15, fontFamily: 'inherit',
+    display: 'flex', alignItems: 'center', justifyContent: 'center' });
+
+  return (
+    <div style={{ display: 'flex', gap: 16 }}>
+      {/* Calendrier mensuel */}
+      <div style={{ flex: 1.7, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{MONTHS[m]} <span style={{ color: C.muted, fontWeight: 500 }}>{y}</span></div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={() => canGoPrev && setViewMonth(new Date(y, m - 1, 1))} disabled={!canGoPrev} style={navBtn(canGoPrev)}>‹</button>
+            <button onClick={() => setViewMonth(new Date(y, m + 1, 1))} style={navBtn(true)}>›</button>
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
+          {WD.map(w => <div key={w} style={{ textAlign: 'center', fontSize: 9.5, fontWeight: 600, color: C.muted, padding: '4px 0' }}>{w}</div>)}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 }}>
+          {cells.map((day, idx) => {
+            if (day === null) return <div key={'e' + idx} />;
+            const ymd = _ymd(y, m, day);
+            const clickable = !!daysMap[ymd];
+            const selected = selectedDay === ymd;
+            return (
+              <button key={ymd} onClick={() => clickable && setSelectedDay(ymd)} disabled={!clickable}
+                style={{ padding: '9px 0', borderRadius: 10, border: 'none', fontFamily: 'inherit', fontSize: 14,
+                  fontWeight: selected ? 700 : 500, cursor: clickable ? 'pointer' : 'default',
+                  background: selected ? '#1e2330' : (clickable ? (darkMode ? '#252636' : '#f4f5f7') : 'transparent'),
+                  color: selected ? '#fff' : (clickable ? C.text : (darkMode ? '#3a3b47' : '#c3cad6')),
+                  transition: 'all 0.12s' }}>{day}</button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Liste des créneaux du jour (occupés grisés/barrés) */}
+      <div style={{ width: 148, borderLeft: `1px solid ${C.border}`, paddingLeft: 16, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 10 }}>{selLabel || '—'}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto', paddingRight: 4 }}>
+          {loading ? (
+            <div style={{ color: C.muted, fontSize: 12, padding: '24px 0', textAlign: 'center' }}>…</div>
+          ) : !selectedDay ? (
+            <div style={{ color: C.muted, fontSize: 12, padding: '24px 0', textAlign: 'center' }}>Aucun créneau ce mois</div>
+          ) : selectedSlots.map((s, idx) => {
+            const sel = valDay === selectedDay && valTime === s.t;
+            return (
+              <button key={s.t} onClick={() => s.free && onChange(selectedDay + 'T' + s.t)} disabled={!s.free}
+                style={{ padding: '10px 0', borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                  cursor: s.free ? 'pointer' : 'default',
+                  border: `1px solid ${sel ? '#1e2330' : (s.free ? C.border : 'transparent')}`,
+                  background: sel ? '#1e2330' : (s.free ? (darkMode ? '#252636' : '#f9fafb') : (darkMode ? 'rgba(255,255,255,0.02)' : '#f3f4f6')),
+                  color: sel ? '#fff' : (s.free ? C.text : (darkMode ? '#4a4b57' : '#c3cad6')),
+                  textDecoration: s.free ? 'none' : 'line-through',
+                  animation: 'solarFadeIn 0.2s ease both', animationDelay: `${Math.min(idx * 0.012, 0.25)}s`, transition: 'all 0.12s' }}>{s.t}</button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const CATEGORIES = [
   { key: "new",          label: "Nouveaux leads",  color: "#6366f1", dotColor: "#a8c8f0", softBg: "#f0f1fb", softBgDark: "rgba(99,102,241,0.18)",  softText: "#7578c4", description: "Leads assignés, pas encore contactés" },
   { key: "r1",           label: "R1 Placés",       color: "#3b82f6", softBg: "#edf4fc", softBgDark: "rgba(59,130,246,0.18)",  softText: "#6a9fd8", description: "Premier rendez-vous programmé" },
@@ -745,6 +867,9 @@ export default function TrackingSheet() {
   const [showSaleModal, setShowSaleModal] = useState(null); // lead.id when modal is open
   const [saleForm, setSaleForm] = useState({ email: '', paymentModality: 'M', employeeRange: '' });
   const [saleSubmitting, setSaleSubmitting] = useState(false);
+  // Déclaration en 3 étapes : 'form' -> 'onboarding' (créneau facturation@) -> 'lancement' (créneau Opti'Lex)
+  const [saleStep, setSaleStep] = useState('form');
+  const [saleSlots, setSaleSlots] = useState({ onboarding: null, lancement: null }); // "YYYY-MM-DDTHH:MM"
   const [saleSuccess, setSaleSuccess] = useState(false);
   const EMPLOYEE_RANGES = [
     '1-2','3-5','6-10','11-19','20-29','30-39','40-49','50-74','75-99',
@@ -784,9 +909,30 @@ export default function TrackingSheet() {
       // Success
       setSaleClientNumero(clientNumero);
       setSaleSuccess(true);
-      setTimeout(() => { setSaleSuccess(false); setSaleClientNumero(null); setShowSaleModal(null); setSaleForm({ email: '', paymentModality: 'M', employeeRange: '' }); }, 2500);
+      setTimeout(() => { setSaleSuccess(false); setSaleClientNumero(null); setShowSaleModal(null); setSaleForm({ email: '', paymentModality: 'M', employeeRange: '' }); setSaleStep('form'); setSaleSlots({ onboarding: null, lancement: null }); }, 2500);
     } catch (e) { console.error('Sale submit error:', e); }
     setSaleSubmitting(false);
+  };
+
+  // Étape finale : pose les 2 créneaux choisis sur le lead (même convention naïve que le
+  // DateTimePicker), PUIS déclare la vente via le flux INCHANGÉ (declare-sale + webhooks).
+  const handleSaleSubmitWithSlots = async (leadId) => {
+    setSaleSubmitting(true);
+    try {
+      await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, {
+        rdv_onboarding_date: saleSlots.onboarding,
+        rdv_lancement_date: saleSlots.lancement,
+      });
+      // Reflète les dates choisies dans l'état local -> les pickers de reprogrammation
+      // (affichés seulement quand les dates sont posées) apparaissent aussitôt.
+      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, rdv_onboarding_date: saleSlots.onboarding, rdv_lancement_date: saleSlots.lancement } : l));
+    } catch (e) {
+      console.error('patch rdv dates failed:', e);
+      alert("Impossible d'enregistrer les créneaux. Réessaie.");
+      setSaleSubmitting(false);
+      return;
+    }
+    await handleSaleSubmit(leadId); // gère success + reset + setSaleSubmitting(false)
   };
 
   // ── WEBSOCKET: PRESENCE + CURSORS + TOASTS ────────────────────────────────
@@ -7165,14 +7311,20 @@ export default function TrackingSheet() {
 
               {/* ═══ SIGNED TAB: Onboarding + Lancement + Déclarer vente ═══ */}
               {activeCat.key === 'signed' && (() => {
-                const hasOnboarding = !!lead.rdv_onboarding_date;
-                const hasLancement = !!lead.rdv_lancement_date;
-                const canDeclare = hasOnboarding && hasLancement;
+                // Les dates Onboarding/Lancement se choisissent désormais DANS le pop-up
+                // de déclaration (créneaux libres de l'agenda) -> le bouton est actif dès
+                // qu'un lead est signé. Les pickers libres ci-dessus restent pour la
+                // reprogrammation APRÈS déclaration.
+                const canDeclare = true;
+                // Les pickers date/heure libres n'apparaissent qu'APRÈS déclaration (dates
+                // posées) -> avant, seul le bouton Déclarer (qui ouvre le pop-up créneaux).
+                const rdvDatesSet = !!(lead.rdv_onboarding_date || lead.rdv_lancement_date);
                 return (
                   <div style={{ marginBottom: 16 }}>
                     <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Post-signature</div>
 
-                    {/* RDV Onboarding */}
+                    {rdvDatesSet && (<>
+                    {/* RDV Onboarding / Lancement (reprogrammation APRÈS déclaration) */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                       <div style={{
                         display: 'flex', alignItems: 'center', gap: 5, flex: 1, padding: '8px 12px', borderRadius: 10,
@@ -7203,12 +7355,14 @@ export default function TrackingSheet() {
                           }} C={C} darkMode={darkMode} autoSave />
                       </div>
                     </div>
+                    </>)}
 
                     {/* Déclarer une vente button */}
                     <button
                       onClick={() => {
                         if (!canDeclare) return;
                         setSaleForm({ email: lead.email || '', paymentModality: 'M', employeeRange: lead.employee_range || '' });
+                        setSaleStep('form'); setSaleSlots({ onboarding: null, lancement: null });
                         setShowSaleModal(lead.id);
                       }}
                       disabled={!canDeclare}
@@ -8384,9 +8538,10 @@ export default function TrackingSheet() {
               style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both' }} />
             <div style={{
               position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
-              width: 420, maxWidth: '90vw', background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`,
+              width: saleStep === 'form' ? 420 : 680, maxWidth: '92vw', background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`,
               boxShadow: '0 24px 48px rgba(0,0,0,0.2)', padding: '28px 28px 24px',
               animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
+              fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
             }}>
               {/* Close */}
               <button onClick={() => { if (!saleSubmitting) { setShowSaleModal(null); setSaleSuccess(false); } }}
@@ -8402,12 +8557,16 @@ export default function TrackingSheet() {
                   {saleClientNumero && <div style={{ fontSize: 14, fontWeight: 600, color: '#10b981', marginBottom: 4 }}>{saleClientNumero}</div>}
                   <div style={{ fontSize: 13, color: C.muted }}>La vente a été enregistrée avec succès</div>
                 </div>
-              ) : (
+              ) : saleStep === 'form' ? (
                 <>
                   {/* Header */}
                   <div style={{ textAlign: 'center', marginBottom: 20 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: darkMode ? '#10b98120' : '#ecfdf5', margin: '0 auto 10px',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>💼</div>
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: darkMode ? 'rgba(255,255,255,0.06)' : '#f4f5f7', margin: '0 auto 10px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                      </svg>
+                    </div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Déclarer une vente</div>
                     {lead && <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>{lead.full_name}</div>}
                   </div>
@@ -8459,17 +8618,54 @@ export default function TrackingSheet() {
                     </div>
                   </div>
 
-                  {/* Submit */}
-                  <button onClick={() => handleSaleSubmit(showSaleModal)}
-                    disabled={!saleForm.email.trim() || !saleForm.employeeRange || saleSubmitting}
+                  {/* Continuer -> choix des créneaux (dispo agenda) */}
+                  <button onClick={() => setSaleStep('onboarding')}
+                    disabled={!saleForm.email.trim() || !saleForm.employeeRange}
                     style={{
                       width: '100%', padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600,
-                      fontFamily: 'inherit', cursor: saleForm.email.trim() && saleForm.employeeRange && !saleSubmitting ? 'pointer' : 'default',
-                      background: saleForm.email.trim() && saleForm.employeeRange ? '#10b981' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
-                      color: saleForm.email.trim() && saleForm.employeeRange ? '#fff' : C.muted,
-                      opacity: saleSubmitting ? 0.7 : 1, transition: 'all 0.2s',
+                      fontFamily: 'inherit', cursor: saleForm.email.trim() && saleForm.employeeRange ? 'pointer' : 'default',
+                      background: saleForm.email.trim() && saleForm.employeeRange ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
+                      color: saleForm.email.trim() && saleForm.employeeRange ? '#fff' : C.muted, transition: 'all 0.2s',
                     }}
-                  >{saleSubmitting ? 'Envoi en cours...' : 'Déclarer la vente'}</button>
+                  >Continuer</button>
+                </>
+              ) : (
+                <>
+                  {/* Étape créneau : Onboarding (facturation@) puis Lancement (Opti'Lex) */}
+                  <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', margin: '0 auto 10px',
+                      background: darkMode ? 'rgba(255,255,255,0.06)' : '#f4f5f7',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M8 2v4M16 2v4M3 10h18" />
+                      </svg>
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>{saleStep === 'onboarding' ? 'RDV Onboarding' : 'RDV Lancement'}</div>
+                    <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Choisis un créneau libre · {saleStep === 'onboarding' ? 'facturation' : "Opti'Lex"}</div>
+                  </div>
+
+                  <SaleSlotPicker key={saleStep} kind={saleStep} value={saleSlots[saleStep]}
+                    onChange={(v) => setSaleSlots(p => ({ ...p, [saleStep]: v }))} C={C} darkMode={darkMode} />
+
+                  {/* Navigation étapes */}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+                    <button onClick={() => setSaleStep(saleStep === 'lancement' ? 'onboarding' : 'form')} disabled={saleSubmitting}
+                      style={{ padding: '11px 16px', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent',
+                        color: C.muted, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', cursor: saleSubmitting ? 'default' : 'pointer' }}>‹ Retour</button>
+                    {saleStep === 'onboarding' ? (
+                      <button onClick={() => setSaleStep('lancement')} disabled={!saleSlots.onboarding}
+                        style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
+                          cursor: saleSlots.onboarding ? 'pointer' : 'default',
+                          background: saleSlots.onboarding ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
+                          color: saleSlots.onboarding ? '#fff' : C.muted, transition: 'all 0.2s' }}>Suivant → Lancement</button>
+                    ) : (
+                      <button onClick={() => handleSaleSubmitWithSlots(showSaleModal)} disabled={!saleSlots.lancement || saleSubmitting}
+                        style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
+                          cursor: saleSlots.lancement && !saleSubmitting ? 'pointer' : 'default',
+                          background: saleSlots.lancement ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
+                          color: saleSlots.lancement ? '#fff' : C.muted, opacity: saleSubmitting ? 0.7 : 1, transition: 'all 0.2s' }}>{saleSubmitting ? 'Déclaration...' : 'Déclarer la vente'}</button>
+                    )}
+                  </div>
                 </>
               )}
             </div>
