@@ -56,7 +56,7 @@ import { normalizeSiren, isValidSiren, formatSiren } from "../contracts/schemas.
 // ── CUSTOM DATETIME PICKER (date input + hour/minute selects, 5min step) ────
 const HOURS = Array.from({ length: 13 }, (_, i) => String(i + 8).padStart(2, '0')); // 08-20
 const MINUTES = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
-function DateTimePicker({ value, onChange, color = '#3b82f6', C, darkMode }) {
+function DateTimePicker({ value, onChange, color = '#3b82f6', C, darkMode, autoSave = false }) {
   const [localDate, setLocalDate] = useState(value ? value.slice(0, 10) : '');
   const [localHour, setLocalHour] = useState(value ? value.slice(11, 13) : '09');
   const [localMin, setLocalMin] = useState(() => {
@@ -81,21 +81,21 @@ function DateTimePicker({ value, onChange, color = '#3b82f6', C, darkMode }) {
   };
   return (
     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-      <input type="date" value={localDate} onChange={(e) => { setLocalDate(e.target.value); if (isNew && e.target.value) onChange(e.target.value + 'T' + localHour + ':' + localMin); }}
+      <input type="date" value={localDate} onChange={(e) => { setLocalDate(e.target.value); if ((isNew || autoSave) && e.target.value) onChange(e.target.value + 'T' + localHour + ':' + localMin); }}
         style={{
           width: 105, flexShrink: 1, padding: '6px 4px', borderRadius: 8, border: `1px solid ${C.border}`,
           background: darkMode ? C.subtle : '#f9fafb', color: C.text,
           fontSize: 12, fontWeight: 500, fontFamily: 'inherit', outline: 'none', cursor: 'pointer',
         }}
       />
-      <select value={localHour} onChange={(e) => { setLocalHour(e.target.value); if (isNew) onChange(localDate + 'T' + e.target.value + ':' + localMin); }} style={{ ...selectStyle, minWidth: 44, fontSize: 12, padding: '6px 6px 6px 6px', paddingRight: 18 }}>
+      <select value={localHour} onChange={(e) => { setLocalHour(e.target.value); if (isNew || autoSave) onChange(localDate + 'T' + e.target.value + ':' + localMin); }} style={{ ...selectStyle, minWidth: 44, fontSize: 12, padding: '6px 6px 6px 6px', paddingRight: 18 }}>
         {HOURS.map(h => <option key={h} value={h}>{h}h</option>)}
       </select>
       <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>:</span>
-      <select value={localMin} onChange={(e) => { setLocalMin(e.target.value); if (isNew) onChange(localDate + 'T' + localHour + ':' + e.target.value); }} style={{ ...selectStyle, minWidth: 44, fontSize: 12, padding: '6px 6px 6px 6px', paddingRight: 18 }}>
+      <select value={localMin} onChange={(e) => { setLocalMin(e.target.value); if (isNew || autoSave) onChange(localDate + 'T' + localHour + ':' + e.target.value); }} style={{ ...selectStyle, minWidth: 44, fontSize: 12, padding: '6px 6px 6px 6px', paddingRight: 18 }}>
         {MINUTES.map(m => <option key={m} value={m}>{m}</option>)}
       </select>
-      {hasChanged && (
+      {hasChanged && !autoSave && (
         <button onClick={confirm} style={{
           width: 26, height: 26, borderRadius: 6, border: 'none',
           background: '#10b981', color: '#fff', fontSize: 13, fontWeight: 700,
@@ -7184,7 +7184,7 @@ export default function TrackingSheet() {
                             setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_onboarding_date: val } : l));
                             try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { rdv_onboarding_date: val || null }); }
                             catch { setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_onboarding_date: lead.rdv_onboarding_date } : l)); }
-                          }} C={C} darkMode={darkMode} />
+                          }} C={C} darkMode={darkMode} autoSave />
                       </div>
                     </div>
 
@@ -7200,7 +7200,7 @@ export default function TrackingSheet() {
                             setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_lancement_date: val } : l));
                             try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { rdv_lancement_date: val || null }); }
                             catch { setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_lancement_date: lead.rdv_lancement_date } : l)); }
-                          }} C={C} darkMode={darkMode} />
+                          }} C={C} darkMode={darkMode} autoSave />
                       </div>
                     </div>
 
