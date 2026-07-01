@@ -8620,7 +8620,7 @@ export default function TrackingSheet() {
                   </div>
 
                   {/* Continuer -> choix des créneaux (dispo agenda) */}
-                  <button onClick={() => setSaleStep('lancement')}
+                  <button onClick={() => setSaleStep('onboarding')}
                     disabled={!saleForm.email.trim() || !saleForm.employeeRange}
                     style={{
                       width: '100%', padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600,
@@ -8654,23 +8654,23 @@ export default function TrackingSheet() {
                   <SaleSlotPicker key={saleStep} kind={saleStep} value={saleSlots[saleStep]}
                     onChange={(v) => setSaleSlots(p => ({ ...p, [saleStep]: v }))} C={C} darkMode={darkMode} />
 
-                  {/* Navigation : d'abord Lancement (cabinet Opti'Lex), puis Onboarding (facturation) */}
+                  {/* Navigation : d'abord Onboarding (facturation), puis Lancement (cabinet Opti'Lex) */}
                   <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
-                    <button onClick={() => setSaleStep(saleStep === 'onboarding' ? 'lancement' : 'form')} disabled={saleSubmitting}
+                    <button onClick={() => setSaleStep(saleStep === 'lancement' ? 'onboarding' : 'form')} disabled={saleSubmitting}
                       style={{ padding: '11px 16px', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent',
                         color: C.muted, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', cursor: saleSubmitting ? 'default' : 'pointer' }}>Retour</button>
-                    {saleStep === 'lancement' ? (
-                      <button onClick={() => setSaleStep('onboarding')} disabled={!saleSlots.lancement}
+                    {saleStep === 'onboarding' ? (
+                      <button onClick={() => setSaleStep('lancement')} disabled={!saleSlots.onboarding}
                         style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
-                          cursor: saleSlots.lancement ? 'pointer' : 'default',
-                          background: saleSlots.lancement ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
-                          color: saleSlots.lancement ? '#fff' : C.muted, transition: 'all 0.2s' }}>Suivant → Onboarding</button>
-                    ) : (
-                      <button onClick={() => handleSaleSubmitWithSlots(showSaleModal)} disabled={!saleSlots.onboarding || saleSubmitting}
-                        style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
-                          cursor: saleSlots.onboarding && !saleSubmitting ? 'pointer' : 'default',
+                          cursor: saleSlots.onboarding ? 'pointer' : 'default',
                           background: saleSlots.onboarding ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
-                          color: saleSlots.onboarding ? '#fff' : C.muted, opacity: saleSubmitting ? 0.7 : 1, transition: 'all 0.2s' }}>{saleSubmitting ? 'Déclaration...' : 'Déclarer la vente'}</button>
+                          color: saleSlots.onboarding ? '#fff' : C.muted, transition: 'all 0.2s' }}>Suivant → Lancement</button>
+                    ) : (
+                      <button onClick={() => handleSaleSubmitWithSlots(showSaleModal)} disabled={!saleSlots.lancement || saleSubmitting}
+                        style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
+                          cursor: saleSlots.lancement && !saleSubmitting ? 'pointer' : 'default',
+                          background: saleSlots.lancement ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
+                          color: saleSlots.lancement ? '#fff' : C.muted, opacity: saleSubmitting ? 0.7 : 1, transition: 'all 0.2s' }}>{saleSubmitting ? 'Déclaration...' : 'Déclarer la vente'}</button>
                     )}
                   </div>
                 </>
