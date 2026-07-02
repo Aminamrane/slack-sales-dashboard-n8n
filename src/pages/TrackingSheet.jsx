@@ -130,7 +130,7 @@ function TimeSelect({ value, onChange, C, darkMode }) {
 }
 
 // ── SLOT PICKER (créneaux libres freebusy 8h-18h) pour RDV Onboarding/Lancement ──
-function SaleSlotPicker({ kind, value, onChange, C, darkMode }) {
+function SaleSlotPicker({ kind, value, onChange, C, darkMode, band }) {
   const accent = C.accent || '#2563eb';
   const _pad = (n) => String(n).padStart(2, '0');
   const _ymd = (yy, mm, dd) => `${yy}-${_pad(mm + 1)}-${_pad(dd)}`;
@@ -160,7 +160,10 @@ function SaleSlotPicker({ kind, value, onChange, C, darkMode }) {
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    apiClient.get(`/api/v1/tracking/sale-slots?kind=${kind}&start=${_ymd(y, m, 1)}&days=${daysInMonth}`)
+    // band (tranche salariale) route le Lancement vers H. Moraru si 20+ salariés ->
+    // on lit les dispos du BON agenda. Sans effet sur l'onboarding (toujours facturation@).
+    const bandParam = band ? `&band=${encodeURIComponent(band)}` : '';
+    apiClient.get(`/api/v1/tracking/sale-slots?kind=${kind}&start=${_ymd(y, m, 1)}&days=${daysInMonth}${bandParam}`)
       .then(r => {
         if (!alive) return;
         const days = (r && r.days) || [];
@@ -174,7 +177,7 @@ function SaleSlotPicker({ kind, value, onChange, C, darkMode }) {
       .catch(() => { if (alive) setData({ days: [] }); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [kind, monthKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [kind, monthKey, band]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const daysMap = {};
   (data.days || []).forEach(d => { daysMap[d.date] = d.slots; });
@@ -867,7 +870,7 @@ export default function TrackingSheet() {
   const [showSaleModal, setShowSaleModal] = useState(null); // lead.id when modal is open
   const [saleForm, setSaleForm] = useState({ email: '', paymentModality: 'M', employeeRange: '' });
   const [saleSubmitting, setSaleSubmitting] = useState(false);
-  // Déclaration en 3 étapes : 'form' -> 'onboarding' (créneau facturation@) -> 'lancement' (créneau Opti'Lex)
+  // Déclaration en 3 étapes : 'form' -> 'lancement' (créneau Opti'Lex : L. Gentaire, ou H. Moraru si 20+) -> 'onboarding' (créneau facturation@)
   const [saleStep, setSaleStep] = useState('form');
   const [saleSlots, setSaleSlots] = useState({ onboarding: null, lancement: null }); // "YYYY-MM-DDTHH:MM"
   const [saleSuccess, setSaleSuccess] = useState(false);
@@ -8619,8 +8622,8 @@ export default function TrackingSheet() {
                     </div>
                   </div>
 
-                  {/* Continuer -> choix des créneaux (dispo agenda) */}
-                  <button onClick={() => setSaleStep('onboarding')}
+                  {/* Continuer -> choix des créneaux (dispo agenda). Ordre : Lancement d'abord. */}
+                  <button onClick={() => setSaleStep('lancement')}
                     disabled={!saleForm.email.trim() || !saleForm.employeeRange}
                     style={{
                       width: '100%', padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600,
@@ -8632,7 +8635,7 @@ export default function TrackingSheet() {
                 </>
               ) : (
                 <>
-                  {/* Étape créneau : Onboarding (facturation@) puis Lancement (Opti'Lex) */}
+                  {/* Étape créneau : Lancement (Opti'Lex) d'abord, puis Onboarding (facturation@) */}
                   <div style={{ textAlign: 'center', marginBottom: 16 }}>
                     <div style={{ width: 44, height: 44, borderRadius: '50%', margin: '0 auto 10px',
                       background: darkMode ? 'rgba(255,255,255,0.06)' : '#f4f5f7',
@@ -8651,26 +8654,26 @@ export default function TrackingSheet() {
                     <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Choisis un créneau libre · {saleStep === 'onboarding' ? 'facturation' : "Opti'Lex"}</div>
                   </div>
 
-                  <SaleSlotPicker key={saleStep} kind={saleStep} value={saleSlots[saleStep]}
+                  <SaleSlotPicker key={saleStep} kind={saleStep} value={saleSlots[saleStep]} band={saleForm.employeeRange}
                     onChange={(v) => setSaleSlots(p => ({ ...p, [saleStep]: v }))} C={C} darkMode={darkMode} />
 
-                  {/* Navigation : d'abord Onboarding (facturation), puis Lancement (cabinet Opti'Lex) */}
+                  {/* Navigation : d'abord Lancement (cabinet Opti'Lex), puis Onboarding (facturation) */}
                   <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
-                    <button onClick={() => setSaleStep(saleStep === 'lancement' ? 'onboarding' : 'form')} disabled={saleSubmitting}
+                    <button onClick={() => setSaleStep(saleStep === 'onboarding' ? 'lancement' : 'form')} disabled={saleSubmitting}
                       style={{ padding: '11px 16px', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent',
                         color: C.muted, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', cursor: saleSubmitting ? 'default' : 'pointer' }}>Retour</button>
-                    {saleStep === 'onboarding' ? (
-                      <button onClick={() => setSaleStep('lancement')} disabled={!saleSlots.onboarding}
+                    {saleStep === 'lancement' ? (
+                      <button onClick={() => setSaleStep('onboarding')} disabled={!saleSlots.lancement}
                         style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
-                          cursor: saleSlots.onboarding ? 'pointer' : 'default',
-                          background: saleSlots.onboarding ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
-                          color: saleSlots.onboarding ? '#fff' : C.muted, transition: 'all 0.2s' }}>Suivant → Lancement</button>
-                    ) : (
-                      <button onClick={() => handleSaleSubmitWithSlots(showSaleModal)} disabled={!saleSlots.lancement || saleSubmitting}
-                        style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
-                          cursor: saleSlots.lancement && !saleSubmitting ? 'pointer' : 'default',
+                          cursor: saleSlots.lancement ? 'pointer' : 'default',
                           background: saleSlots.lancement ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
-                          color: saleSlots.lancement ? '#fff' : C.muted, opacity: saleSubmitting ? 0.7 : 1, transition: 'all 0.2s' }}>{saleSubmitting ? 'Déclaration...' : 'Déclarer la vente'}</button>
+                          color: saleSlots.lancement ? '#fff' : C.muted, transition: 'all 0.2s' }}>Suivant → Onboarding</button>
+                    ) : (
+                      <button onClick={() => handleSaleSubmitWithSlots(showSaleModal)} disabled={!saleSlots.onboarding || saleSubmitting}
+                        style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
+                          cursor: saleSlots.onboarding && !saleSubmitting ? 'pointer' : 'default',
+                          background: saleSlots.onboarding ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
+                          color: saleSlots.onboarding ? '#fff' : C.muted, opacity: saleSubmitting ? 0.7 : 1, transition: 'all 0.2s' }}>{saleSubmitting ? 'Déclaration...' : 'Déclarer la vente'}</button>
                     )}
                   </div>
                 </>
