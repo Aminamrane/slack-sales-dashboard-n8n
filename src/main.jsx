@@ -42,6 +42,7 @@ import Marketing          from "./pages/Marketing/index.jsx";
 import FunnelLeads        from "./pages/FunnelLeads/index.jsx";
 import Dialer             from "./pages/Dialer/index.jsx";
 import ContractSplitMonitoring from "./pages/ContractSplitMonitoring.jsx";
+import OptilexBoard from "./pages/OptilexBoard.jsx";
 import MetaAds            from "./pages/MetaAds/index.jsx";
 import LeadAssignmentEquity from "./pages/LeadAssignmentEquity.jsx";
 import LeadAssignmentMonitor from "./pages/LeadAssignmentMonitor.jsx";
@@ -240,6 +241,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['admin']}>
               <ContractSplitMonitoring />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/optilex-board"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'optilex']}>
+              <OptilexBoard />
             </ProtectedRoute>
           }
         />
