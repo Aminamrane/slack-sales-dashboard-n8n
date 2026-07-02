@@ -17,8 +17,18 @@ const ETAT_STYLE = {
   "Self-Résiliation": { bg: "#fdecec", fg: "#b42318", dot: "#ef4444" },
   "Pause":            { bg: "#eef1f6", fg: "#5b6472", dot: "#94a3b8" },
   "Liquidation":      { bg: "#f6e9e9", fg: "#7a271a", dot: "#991b1b" },
+  "En cours":         { bg: "#eaf1fd", fg: "#1e40af", dot: "#2563eb" },
 };
 const ETAT_ORDER = ["Signé", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation"];
+
+// "En cours" = volet Opti'Lex actif : planifié (va être envoyé) ou envoyé (en attente signature).
+// Les contrats Owner non splittés (pas de volet Opti'Lex) ne concernent pas le cabinet.
+const isEnCours = (r) =>
+  r.optilex_status === "scheduled" || r.optilex_status === "ongoing";
+// État affiché : l'état du Sheet, ou "En cours" pour un contrat pré-client (pas encore dans le Sheet).
+const displayEtat = (r) => r.etat || (r.is_pending_contract ? "En cours" : null);
+// Clé de ligne stable (les contrats pré-client n'ont pas de numero_client).
+const rowKey = (r) => r.row_key || r.numero_client;
 const AVATAR_COLORS = ["#2563eb", "#7c3aed", "#0891b2", "#059669", "#d97706", "#db2777", "#4f46e5", "#0d9488"];
 
 const fmt = (iso) => {
@@ -83,17 +93,22 @@ export default function OptilexBoard() {
   }, []);
 
   const counts = useMemo(() => {
-    const c = {};
-    for (const r of rows) c[r.etat || "?"] = (c[r.etat || "?"] || 0) + 1;
+    const c = { "En cours": 0 };
+    for (const r of rows) {
+      if (r.etat) c[r.etat] = (c[r.etat] || 0) + 1;
+      if (isEnCours(r)) c["En cours"] += 1;
+    }
     return c;
   }, [rows]);
+  const establishedCount = useMemo(() => rows.filter((r) => !r.is_pending_contract).length, [rows]);
 
   const filtered = useMemo(() => {
     const ql = q.trim().toLowerCase();
     return rows.filter((r) => {
-      if (etatFilter !== "Tous" && r.etat !== etatFilter) return false;
+      if (etatFilter === "En cours") { if (!isEnCours(r)) return false; }
+      else if (etatFilter !== "Tous" && r.etat !== etatFilter) return false;
       if (ql) {
-        const hay = `${r.crm_societe || ""} ${r.societe_sheet || ""} ${r.numero_client || ""}`.toLowerCase();
+        const hay = `${r.crm_societe || ""} ${r.societe_sheet || ""} ${r.numero_client || ""} ${r.email || ""}`.toLowerCase();
         if (!hay.includes(ql)) return false;
       }
       return true;
@@ -101,13 +116,14 @@ export default function OptilexBoard() {
   }, [rows, etatFilter, q]);
 
   const patch = useCallback(async (numero, changes) => {
+    if (!numero) return; // contrat pré-client : pas de jalons éditables
     setRows((prev) => prev.map((r) => (r.numero_client === numero ? { ...r, ...changes } : r)));
     try { await apiClient.patch("/api/v1/optilex/board-tracking", { numero_client: numero, ...changes }); }
     catch (e) { console.error("patch failed", e); }
   }, []);
 
-  const selRow = useMemo(() => rows.find((r) => r.numero_client === selected) || null, [rows, selected]);
-  const TABS = ["Tous", ...ETAT_ORDER];
+  const selRow = useMemo(() => rows.find((r) => rowKey(r) === selected) || null, [rows, selected]);
+  const TABS = ["Tous", "En cours", ...ETAT_ORDER];
 
   const th = { textAlign: "left", padding: "11px 14px", fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: "0.02em", whiteSpace: "nowrap", position: "sticky", top: 0, background: "#f2f4f7", zIndex: 1 };
   const td = { padding: "11px 14px", fontSize: 13, color: TEXT, borderTop: `1px solid ${BORDER}`, verticalAlign: "middle", whiteSpace: "nowrap" };
@@ -118,7 +134,7 @@ export default function OptilexBoard() {
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 700, color: NAVY }}>Suivi cabinet Opti'Lex</div>
-          <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>{rows.length} clients · état temps réel + signatures + jalons</div>
+          <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>{establishedCount} clients{counts["En cours"] ? ` · ${counts["En cours"]} en cours d'envoi` : ""} · signatures + jalons temps réel</div>
         </div>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un client…" style={{ ...inputStyle, width: 260, padding: "9px 12px" }} />
       </div>
@@ -164,9 +180,10 @@ export default function OptilexBoard() {
             </thead>
             <tbody>
               {filtered.map((r) => {
-                const isSel = selected === r.numero_client;
+                const key = rowKey(r);
+                const isSel = selected === key;
                 return (
-                  <tr key={r.numero_client} onClick={() => setSelected(r.numero_client)}
+                  <tr key={key} onClick={() => setSelected(key)}
                     style={{ cursor: "pointer", background: isSel ? "#eff3fb" : "transparent" }}
                     onMouseEnter={(e) => { if (!isSel) e.currentTarget.style.background = "#f7f8fa"; }}
                     onMouseLeave={(e) => { if (!isSel) e.currentTarget.style.background = "transparent"; }}>
@@ -175,11 +192,11 @@ export default function OptilexBoard() {
                         <Avatar name={r.crm_societe || r.societe_sheet} n={r.sheet_num} />
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.crm_societe || r.societe_sheet || ""}>{r.crm_societe || r.societe_sheet || "—"}</div>
-                          <div style={{ fontSize: 11, color: MUTED }}>{r.numero_client}</div>
+                          <div style={{ fontSize: 11, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.numero_client || r.email || "en cours d'envoi"}</div>
                         </div>
                       </div>
                     </td>
-                    <td style={td}><EtatBadge etat={r.etat} /></td>
+                    <td style={td}><EtatBadge etat={displayEtat(r)} /></td>
                     <td style={td}><SigCell status={r.owner_status} sentAt={r.owner_sent_at} signedAt={r.owner_signed_at} /></td>
                     <td style={td}><SigCell status={r.optilex_status} sentAt={r.optilex_sent_at} signedAt={r.optilex_signed_at} scheduledAt={r.optilex_scheduled_at} /></td>
                     <td style={{ ...td, color: r.rdv_onboarding_date ? TEXT : "#cbd2e0" }}>{fmt(r.rdv_onboarding_date) || "—"}</td>
@@ -244,12 +261,12 @@ function DetailPanel({ row, onClose, patch }) {
               <Avatar name={row.crm_societe || row.societe_sheet} n={row.sheet_num} />
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{row.crm_societe || row.societe_sheet || "—"}</div>
-                <div style={{ fontSize: 12, color: MUTED }}>{row.numero_client} · {row.periodicite || "—"} · {row.nb_salaries || "—"}</div>
+                <div style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{[row.numero_client || row.email, row.periodicite, row.nb_salaries].filter(Boolean).join(" · ") || "—"}</div>
               </div>
             </div>
             <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "#eef1f6", color: MUTED, fontSize: 15, cursor: "pointer", flexShrink: 0 }}>✕</button>
           </div>
-          <div style={{ marginTop: 12 }}><EtatBadge etat={row.etat} /></div>
+          <div style={{ marginTop: 12 }}><EtatBadge etat={displayEtat(row)} /></div>
         </div>
 
         <div style={{ padding: "18px 22px 40px" }}>
@@ -267,18 +284,26 @@ function DetailPanel({ row, onClose, patch }) {
             <div><div style={{ fontSize: 12, color: MUTED }}>Lancement</div><div style={{ fontSize: 14, fontWeight: 600 }}>{fmt(row.rdv_lancement_date) || "—"}</div></div>
           </div>
 
-          {/* Jalons éditables */}
-          <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Suivi facturation</div>
-          <JalonRow label="Statut facturation Owner" done={row.facturation_honoraires_done} date={row.facturation_honoraires_date}
-            onToggle={(v) => patch(num, { facturation_honoraires_done: v })} onDate={(d) => patch(num, { facturation_honoraires_date: d })} />
-          <JalonRow label="Statut facturation Opti'Lex" done={row.setup_facturation_done} date={row.setup_facturation_date}
-            onToggle={(v) => patch(num, { setup_facturation_done: v })} onDate={(d) => patch(num, { setup_facturation_date: d })} />
-          <JalonRow label="RDV +1 mois" done={row.rdv_plus1mois_done} date={row.rdv_plus1mois_date}
-            onToggle={(v) => patch(num, { rdv_plus1mois_done: v })} onDate={(d) => patch(num, { rdv_plus1mois_date: d })} />
+          {/* Jalons éditables (indisponibles tant que le client n'est pas établi) */}
+          {num ? (
+            <>
+              <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Suivi facturation</div>
+              <JalonRow label="Statut facturation Owner" done={row.facturation_honoraires_done} date={row.facturation_honoraires_date}
+                onToggle={(v) => patch(num, { facturation_honoraires_done: v })} onDate={(d) => patch(num, { facturation_honoraires_date: d })} />
+              <JalonRow label="Statut facturation Opti'Lex" done={row.setup_facturation_done} date={row.setup_facturation_date}
+                onToggle={(v) => patch(num, { setup_facturation_done: v })} onDate={(d) => patch(num, { setup_facturation_date: d })} />
+              <JalonRow label="RDV +1 mois" done={row.rdv_plus1mois_done} date={row.rdv_plus1mois_date}
+                onToggle={(v) => patch(num, { rdv_plus1mois_done: v })} onDate={(d) => patch(num, { rdv_plus1mois_date: d })} />
 
-          {/* Commentaire */}
-          <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", margin: "20px 0 10px" }}>Commentaire</div>
-          <CommentBox value={row.commentaire || ""} onSave={(v) => patch(num, { commentaire: v })} />
+              {/* Commentaire */}
+              <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", margin: "20px 0 10px" }}>Commentaire</div>
+              <CommentBox value={row.commentaire || ""} onSave={(v) => patch(num, { commentaire: v })} />
+            </>
+          ) : (
+            <div style={{ padding: "14px 16px", borderRadius: 10, border: `1px dashed ${BORDER}`, background: "#fafbfc", fontSize: 13, color: MUTED, lineHeight: 1.5 }}>
+              Contrat en cours d'envoi. Le suivi facturation et les commentaires seront disponibles une fois la vente déclarée (client rattaché).
+            </div>
+          )}
         </div>
       </div>
     </>
