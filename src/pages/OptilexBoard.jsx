@@ -29,6 +29,28 @@ const isEnCours = (r) =>
 const displayEtat = (r) => r.etat || (r.is_pending_contract ? "En cours" : null);
 // Clé de ligne stable (les contrats pré-client n'ont pas de numero_client).
 const rowKey = (r) => r.row_key || r.numero_client;
+// Nom de la société (Sheet/CRM), et nom mis en avant : la PERSONNE (contact CRM) si on
+// l'a, sinon la société. Beaucoup de vieux clients n'ont que la société (pas de contrat lié).
+const companyName = (r) => r.crm_societe || r.societe_sheet || null;
+const primaryName = (r) => r.contact_name || r.crm_societe || r.societe_sheet || "—";
+const rowSubtitle = (r) => {
+  const parts = [];
+  const comp = companyName(r);
+  if (comp && comp !== primaryName(r)) parts.push(comp);
+  if (r.numero_client) parts.push(r.numero_client);
+  else if (r.email) parts.push(r.email);
+  return parts.join(" · ");
+};
+// Tranche salariale déclarée à la vente (employee_range CRM) -> libellé lisible.
+const fmtTranche = (t) => {
+  if (!t) return null;
+  const s = String(t).trim();
+  let m = s.match(/^(\d+)\s*[-_ ]+\s*(\d+)$/);
+  if (m) return `${m[1]} à ${m[2]} salariés`;
+  m = s.match(/^(\d+)\s*\+$/);
+  if (m) return `${m[1]}+ salariés`;
+  return s;
+};
 const AVATAR_COLORS = ["#2563eb", "#7c3aed", "#0891b2", "#059669", "#d97706", "#db2777", "#4f46e5", "#0d9488"];
 
 const fmt = (iso) => {
@@ -189,10 +211,10 @@ export default function OptilexBoard() {
                     onMouseLeave={(e) => { if (!isSel) e.currentTarget.style.background = "transparent"; }}>
                     <td style={td}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                        <Avatar name={r.crm_societe || r.societe_sheet} n={r.sheet_num} />
+                        <Avatar name={primaryName(r)} n={r.sheet_num} />
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.crm_societe || r.societe_sheet || ""}>{r.crm_societe || r.societe_sheet || "—"}</div>
-                          <div style={{ fontSize: 11, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.numero_client || r.email || "en cours d'envoi"}</div>
+                          <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={primaryName(r)}>{primaryName(r)}</div>
+                          <div style={{ fontSize: 11, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{rowSubtitle(r) || "en cours d'envoi"}</div>
                         </div>
                       </div>
                     </td>
@@ -231,6 +253,15 @@ function MiniDot({ label, on }) {
   );
 }
 
+function InfoField({ label, value, full }) {
+  return (
+    <div style={{ gridColumn: full ? "1 / -1" : "auto", minWidth: 0 }}>
+      <div style={{ fontSize: 11, color: MUTED, marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 13.5, fontWeight: 600, color: value ? TEXT : "#cbd2e0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={value || ""}>{value || "—"}</div>
+    </div>
+  );
+}
+
 // ── PANNEAU DÉTAILS (slide-in droite, façon Notion) ──────────────────────────
 function DetailPanel({ row, onClose, patch }) {
   const num = row.numero_client;
@@ -258,10 +289,10 @@ function DetailPanel({ row, onClose, patch }) {
         <div style={{ padding: "20px 22px 16px", borderBottom: `1px solid ${BORDER}`, position: "sticky", top: 0, background: CARD, zIndex: 1 }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-              <Avatar name={row.crm_societe || row.societe_sheet} n={row.sheet_num} />
+              <Avatar name={primaryName(row)} n={row.sheet_num} />
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{row.crm_societe || row.societe_sheet || "—"}</div>
-                <div style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{[row.numero_client || row.email, row.periodicite, row.nb_salaries].filter(Boolean).join(" · ") || "—"}</div>
+                <div style={{ fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{primaryName(row)}</div>
+                <div style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{[companyName(row) !== primaryName(row) ? companyName(row) : null, row.numero_client, row.periodicite].filter(Boolean).join(" · ") || row.email || "—"}</div>
               </div>
             </div>
             <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "#eef1f6", color: MUTED, fontSize: 15, cursor: "pointer", flexShrink: 0 }}>✕</button>
@@ -270,6 +301,16 @@ function DetailPanel({ row, onClose, patch }) {
         </div>
 
         <div style={{ padding: "18px 22px 40px" }}>
+          {/* Informations client (déclarées à la vente) */}
+          <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Informations client</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 16px", marginBottom: 22 }}>
+            <InfoField label="Nom du client" value={row.contact_name} />
+            <InfoField label="Tranche salariale" value={fmtTranche(row.contact_tranche)} />
+            <InfoField label="Email" value={row.email} />
+            <InfoField label="Téléphone" value={row.contact_phone} />
+            {companyName(row) && companyName(row) !== row.contact_name && <InfoField label="Société" value={companyName(row)} full />}
+          </div>
+
           {/* Signatures */}
           <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Contrats</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 22 }}>
