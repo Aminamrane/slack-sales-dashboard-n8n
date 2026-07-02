@@ -279,8 +279,8 @@ export default function TeamAbsences({ embed = false }) {
                     {declUsers.filter((u) => !u.is_self).map((u) => <option key={u.id} value={u.id}>{u.full_name || u.email}</option>)}
                   </select>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                    <input type="date" value={declStart} min={todayStr} onChange={(e) => setDeclStart(e.target.value)} style={declInput} />
-                    <input type="date" value={declEnd} min={declStart || todayStr} onChange={(e) => setDeclEnd(e.target.value)} style={declInput} />
+                    <input type="date" value={declStart} onChange={(e) => setDeclStart(e.target.value)} style={declInput} />
+                    <input type="date" value={declEnd} min={declStart || undefined} onChange={(e) => setDeclEnd(e.target.value)} style={declInput} />
                   </div>
                   <select value={declType} onChange={(e) => setDeclType(e.target.value)} style={{ ...declInput, cursor: "pointer" }}>
                     {Object.entries(ABSENCE_TYPE_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
