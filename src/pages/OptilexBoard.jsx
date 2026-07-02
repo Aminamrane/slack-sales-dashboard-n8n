@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import apiClient from "../services/apiClient";
 
 // ── Charte sobre (navy + neutre, style Attio/Linear) ─────────────────────────
@@ -62,7 +63,6 @@ const fmt = (iso) => {
 const toDateInput = (v) => (v ? String(v).slice(0, 10) : "");
 
 const inputStyle = { padding: "8px 10px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: TEXT, fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" };
-const selectStyle = { ...inputStyle, cursor: "pointer", appearance: "none", backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center", paddingRight: 26 };
 
 function Avatar({ name, n }) {
   const c = AVATAR_COLORS[(n || 0) % AVATAR_COLORS.length];
@@ -262,6 +262,51 @@ function InfoField({ label, value, full }) {
   );
 }
 
+// Toggle segmenté animé (remplace le dropdown Oui/Non). Pastille qui glisse en
+// spring (navy -> vert quand positif) + check qui pop. labels[1] = état positif.
+function StatusToggle({ value, onChange, labels = ["Non", "Oui"] }) {
+  return (
+    <div style={{ position: "relative", display: "grid", gridTemplateColumns: "1fr 1fr", background: "#eef1f6", borderRadius: 9, minWidth: 150, userSelect: "none", flexShrink: 0 }}>
+      <motion.div
+        animate={{ x: value ? "100%" : "0%", backgroundColor: value ? GREEN : NAVY }}
+        transition={{ type: "spring", stiffness: 480, damping: 34 }}
+        style={{ position: "absolute", top: 0, left: 0, width: "50%", height: "100%", borderRadius: 9, zIndex: 0, boxShadow: "0 1px 3px rgba(30,35,48,0.18)" }}
+      />
+      {labels.map((lab, i) => {
+        const active = (i === 1) === !!value;
+        return (
+          <button key={i} type="button" onClick={() => onChange(i === 1)}
+            style={{ position: "relative", zIndex: 1, border: "none", background: "transparent", cursor: "pointer",
+              padding: "7px 6px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit",
+              color: active ? "#fff" : MUTED, transition: "color 0.25s",
+              display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, whiteSpace: "nowrap" }}>
+            {i === 1 && (
+              <motion.svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"
+                initial={false} animate={{ scale: active ? 1 : 0, opacity: active ? 1 : 0 }} transition={{ type: "spring", stiffness: 600, damping: 18 }} style={{ overflow: "visible" }}>
+                <path d="M20 6 9 17l-5-5" />
+              </motion.svg>
+            )}
+            {lab}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Ligne RDV : date planifiée + toggle "effectué".
+function RdvRow({ label, date, done, editable, onToggle }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 12px", borderRadius: 10, border: `1px solid ${BORDER}`, background: "#fafbfc" }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 11, color: MUTED }}>{label}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: date ? TEXT : "#cbd2e0" }}>{fmt(date) || "—"}</div>
+      </div>
+      {editable && <StatusToggle value={!!done} onChange={onToggle} labels={["À venir", "Effectué"]} />}
+    </div>
+  );
+}
+
 // ── PANNEAU DÉTAILS (slide-in droite, façon Notion) ──────────────────────────
 function DetailPanel({ row, onClose, patch }) {
   const num = row.numero_client;
@@ -318,11 +363,13 @@ function DetailPanel({ row, onClose, patch }) {
             {sigBlock("Opti'Lex", row.optilex_status, row.optilex_sent_at, row.optilex_signed_at, row.optilex_scheduled_at)}
           </div>
 
-          {/* RDV */}
+          {/* RDV + statut "effectué" */}
           <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Rendez-vous</div>
-          <div style={{ display: "flex", gap: 24, marginBottom: 22 }}>
-            <div><div style={{ fontSize: 12, color: MUTED }}>Onboarding</div><div style={{ fontSize: 14, fontWeight: 600 }}>{fmt(row.rdv_onboarding_date) || "—"}</div></div>
-            <div><div style={{ fontSize: 12, color: MUTED }}>Lancement</div><div style={{ fontSize: 14, fontWeight: 600 }}>{fmt(row.rdv_lancement_date) || "—"}</div></div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
+            <RdvRow label="Onboarding" date={row.rdv_onboarding_date} done={row.rdv_onboarding_done} editable={!!num}
+              onToggle={(v) => patch(num, { rdv_onboarding_done: v })} />
+            <RdvRow label="Lancement" date={row.rdv_lancement_date} done={row.rdv_lancement_done} editable={!!num}
+              onToggle={(v) => patch(num, { rdv_lancement_done: v })} />
           </div>
 
           {/* Jalons éditables (indisponibles tant que le client n'est pas établi) */}
@@ -353,15 +400,22 @@ function DetailPanel({ row, onClose, patch }) {
 
 function JalonRow({ label, done, date, onToggle, onDate }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 0", borderBottom: `1px solid ${BORDER}` }}>
-      <div style={{ fontSize: 13.5, fontWeight: 500, color: TEXT }}>{label}</div>
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-        <select value={done ? "oui" : "non"} onChange={(e) => onToggle(e.target.value === "oui")} style={{ ...selectStyle, width: 86, padding: "7px 8px", paddingRight: 24 }}>
-          <option value="non">Non</option>
-          <option value="oui">Oui</option>
-        </select>
-        {done && <input type="date" value={toDateInput(date)} onChange={(e) => onDate(e.target.value || null)} style={{ ...inputStyle, width: 138, padding: "7px 8px", fontSize: 12.5 }} />}
+    <div style={{ padding: "12px 0", borderBottom: `1px solid ${BORDER}` }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 500, color: TEXT }}>{label}</div>
+        <StatusToggle value={!!done} onChange={onToggle} />
       </div>
+      <AnimatePresence initial={false}>
+        {done && (
+          <motion.div key="date" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }} style={{ overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 10 }}>
+              <input type="date" value={toDateInput(date)} onChange={(e) => onDate(e.target.value || null)}
+                style={{ ...inputStyle, width: 168, padding: "7px 10px", fontSize: 12.5 }} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
