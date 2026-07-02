@@ -56,18 +56,18 @@ function SignBadge({ status, date }) {
 
 function Jalon({ done, date, onToggle, onDate }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
       <button
         onClick={() => onToggle(!done)}
         style={{
-          padding: "5px 12px", borderRadius: 8, border: "none", cursor: "pointer",
-          fontSize: 12, fontWeight: 600, fontFamily: "inherit", minWidth: 46,
+          padding: "4px 11px", borderRadius: 7, border: "none", cursor: "pointer",
+          fontSize: 11.5, fontWeight: 600, fontFamily: "inherit", minWidth: 42,
           background: done ? NAVY : "#eef1f6", color: done ? "#fff" : MUTED, transition: "all 0.15s",
         }}
       >{done ? "Oui" : "Non"}</button>
       {done && (
         <input type="date" value={toDateInput(date)} onChange={(e) => onDate(e.target.value || null)}
-          style={{ ...inputStyle, padding: "5px 6px", fontSize: 11.5, width: 118 }} />
+          style={{ ...inputStyle, padding: "3px 4px", fontSize: 11, width: 106 }} />
       )}
     </div>
   );
@@ -113,8 +113,8 @@ export default function OptilexBoard() {
 
   const TABS = ["Tous", ...ETAT_ORDER];
 
-  const th = { textAlign: "left", padding: "10px 12px", fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap", position: "sticky", top: 0, background: "#f2f4f7", zIndex: 1 };
-  const td = { padding: "10px 12px", fontSize: 12.5, color: TEXT, borderTop: `1px solid ${BORDER}`, verticalAlign: "middle", whiteSpace: "nowrap" };
+  const th = { textAlign: "left", padding: "8px 8px", fontSize: 10.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: "0.02em", whiteSpace: "nowrap", position: "sticky", top: 0, background: "#f2f4f7", zIndex: 1, overflow: "hidden", textOverflow: "ellipsis" };
+  const td = { padding: "8px 8px", fontSize: 12.5, color: TEXT, borderTop: `1px solid ${BORDER}`, verticalAlign: "middle", whiteSpace: "nowrap" };
 
   return (
     <div style={{ minHeight: "100vh", background: BG, padding: "24px 28px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", color: TEXT }}>
@@ -148,22 +148,34 @@ export default function OptilexBoard() {
       </div>
 
       {/* Table */}
-      <div style={{ background: CARD, borderRadius: 14, border: `1px solid ${BORDER}`, overflow: "auto", maxHeight: "calc(100vh - 190px)" }}>
+      <div style={{ background: CARD, borderRadius: 14, border: `1px solid ${BORDER}`, overflowX: "hidden", overflowY: "auto", maxHeight: "calc(100vh - 190px)" }}>
         {loading ? (
           <div style={{ padding: "60px 0", textAlign: "center", color: MUTED }}>Chargement…</div>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+            <colgroup>
+              <col style={{ width: 210 }} />{/* client */}
+              <col style={{ width: 104 }} />{/* état */}
+              <col style={{ width: 84 }} />{/* owner */}
+              <col style={{ width: 88 }} />{/* opti'lex */}
+              <col style={{ width: 74 }} />{/* onboarding */}
+              <col style={{ width: 74 }} />{/* lancement */}
+              <col style={{ width: 116 }} />{/* fact hono */}
+              <col style={{ width: 116 }} />{/* setup */}
+              <col style={{ width: 104 }} />{/* rdv +1m */}
+              <col />{/* commentaire (reste) */}
+            </colgroup>
             <thead>
               <tr>
                 <th style={th}>Client</th>
                 <th style={th}>État</th>
-                <th style={th}>Signé Owner</th>
-                <th style={th}>Signé Opti'Lex</th>
-                <th style={th}>Onboarding</th>
-                <th style={th}>Lancement</th>
-                <th style={th}>Facturation honoraires</th>
-                <th style={th}>Setup facturation</th>
-                <th style={th}>RDV +1 mois</th>
+                <th style={th}>Owner</th>
+                <th style={th}>Opti'Lex</th>
+                <th style={th}>Onboard.</th>
+                <th style={th}>Lancemt</th>
+                <th style={th}>Fact. hono.</th>
+                <th style={th}>Setup fact.</th>
+                <th style={th}>RDV +1M</th>
                 <th style={th}>Commentaire</th>
               </tr>
             </thead>
@@ -171,7 +183,7 @@ export default function OptilexBoard() {
               {filtered.map((r) => (
                 <tr key={r.numero_client}>
                   <td style={td}>
-                    <div style={{ fontWeight: 600 }}>{r.crm_societe || r.societe_sheet || "—"}</div>
+                    <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.crm_societe || r.societe_sheet || ""}>{r.crm_societe || r.societe_sheet || "—"}</div>
                     <div style={{ fontSize: 11, color: MUTED }}>{r.numero_client}</div>
                   </td>
                   <td style={td}><EtatBadge etat={r.etat} /></td>
@@ -194,7 +206,7 @@ export default function OptilexBoard() {
                       onToggle={(v) => patch(r.numero_client, { rdv_plus1mois_done: v })}
                       onDate={(d) => patch(r.numero_client, { rdv_plus1mois_date: d })} />
                   </td>
-                  <td style={{ ...td, whiteSpace: "normal", minWidth: 200 }}>
+                  <td style={{ ...td, whiteSpace: "normal" }}>
                     <CommentCell value={r.commentaire || ""}
                       onSave={(v) => patch(r.numero_client, { commentaire: v })} />
                   </td>
@@ -218,6 +230,6 @@ function CommentCell({ value, onSave }) {
     <input value={v} onChange={(e) => setV(e.target.value)}
       onBlur={() => { if (v !== value) onSave(v); }}
       placeholder="Note…"
-      style={{ ...inputStyle, width: "100%", minWidth: 180 }} />
+      style={{ ...inputStyle, width: "100%", minWidth: 0, boxSizing: "border-box" }} />
   );
 }
