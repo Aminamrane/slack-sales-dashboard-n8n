@@ -18,16 +18,24 @@ const ETAT_STYLE = {
   "Self-Résiliation": { bg: "#fdecec", fg: "#b42318", dot: "#ef4444" },
   "Pause":            { bg: "#eef1f6", fg: "#5b6472", dot: "#94a3b8" },
   "Liquidation":      { bg: "#f6e9e9", fg: "#7a271a", dot: "#991b1b" },
+  "Attente Opti'Lex": { bg: "#fff3e3", fg: "#b45309", dot: "#f59e0b" },
   "En cours":         { bg: "#eaf1fd", fg: "#1e40af", dot: "#2563eb" },
 };
 const ETAT_ORDER = ["Signé", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation"];
 
-// "En cours" = volet Opti'Lex actif : planifié (va être envoyé) ou envoyé (en attente signature).
-// Les contrats Owner non splittés (pas de volet Opti'Lex) ne concernent pas le cabinet.
-const isEnCours = (r) =>
-  r.optilex_status === "scheduled" || r.optilex_status === "ongoing";
-// État affiché : l'état du Sheet, ou "En cours" pour un contrat pré-client (pas encore dans le Sheet).
-const displayEtat = (r) => r.etat || (r.is_pending_contract ? "En cours" : null);
+// Volet Opti'Lex actif : planifié (va être envoyé) ou envoyé (en attente signature).
+const optilexPending = (r) => r.optilex_status === "scheduled" || r.optilex_status === "ongoing";
+// "Attente Opti'Lex" = Owner SIGNÉ mais Opti'Lex encore en attente -> le cabinet doit agir.
+const isAttenteOptilex = (r) => r.owner_status === "done" && optilexPending(r);
+// "En cours" = Opti'Lex actif mais Owner PAS encore signé (les 2 contrats encore en vol).
+const isEnCours = (r) => r.owner_status !== "done" && optilexPending(r);
+// État affiché : l'état du Sheet en priorité, sinon le statut du contrat en cours.
+const displayEtat = (r) => {
+  if (r.etat) return r.etat;
+  if (isAttenteOptilex(r)) return "Attente Opti'Lex";
+  if (isEnCours(r)) return "En cours";
+  return null;
+};
 // Clé de ligne stable (les contrats pré-client n'ont pas de numero_client).
 const rowKey = (r) => r.row_key || r.numero_client;
 // Nom de la société (Sheet/CRM), et nom mis en avant : la PERSONNE (contact CRM) si on
@@ -61,13 +69,27 @@ const fmt = (iso) => {
   return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
 };
 const toDateInput = (v) => (v ? String(v).slice(0, 10) : "");
+const timeAgo = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  const s = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (s < 45) return "à l'instant";
+  const m = Math.floor(s / 60); if (m < 60) return `il y a ${m} min`;
+  const h = Math.floor(m / 60); if (h < 24) return `il y a ${h} h`;
+  const j = Math.floor(h / 24); if (j < 30) return `il y a ${j} j`;
+  return fmt(iso);
+};
 
 const inputStyle = { padding: "8px 10px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: TEXT, fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" };
 
-function Avatar({ name, n }) {
-  const c = AVATAR_COLORS[(n || 0) % AVATAR_COLORS.length];
+const hashStr = (s) => { let h = 0; const str = s || ""; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0; return h; };
+
+function Avatar({ name, n, src, size = 30 }) {
+  const c = AVATAR_COLORS[(n != null ? n : hashStr(name)) % AVATAR_COLORS.length];
   const letter = (name || "?").trim().charAt(0).toUpperCase();
-  return <div style={{ width: 30, height: 30, borderRadius: "50%", background: c, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{letter}</div>;
+  if (src) return <img src={src} alt="" style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
+  return <div style={{ width: size, height: size, borderRadius: "50%", background: c, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: Math.round(size * 0.43), fontWeight: 700, flexShrink: 0 }}>{letter}</div>;
 }
 
 function EtatBadge({ etat }) {
@@ -115,10 +137,11 @@ export default function OptilexBoard() {
   }, []);
 
   const counts = useMemo(() => {
-    const c = { "En cours": 0 };
+    const c = { "En cours": 0, "Attente Opti'Lex": 0 };
     for (const r of rows) {
       if (r.etat) c[r.etat] = (c[r.etat] || 0) + 1;
-      if (isEnCours(r)) c["En cours"] += 1;
+      if (isAttenteOptilex(r)) c["Attente Opti'Lex"] += 1;
+      else if (isEnCours(r)) c["En cours"] += 1;
     }
     return c;
   }, [rows]);
@@ -127,7 +150,8 @@ export default function OptilexBoard() {
   const filtered = useMemo(() => {
     const ql = q.trim().toLowerCase();
     return rows.filter((r) => {
-      if (etatFilter === "En cours") { if (!isEnCours(r)) return false; }
+      if (etatFilter === "Attente Opti'Lex") { if (!isAttenteOptilex(r)) return false; }
+      else if (etatFilter === "En cours") { if (!isEnCours(r)) return false; }
       else if (etatFilter !== "Tous" && r.etat !== etatFilter) return false;
       if (ql) {
         const hay = `${r.crm_societe || ""} ${r.societe_sheet || ""} ${r.numero_client || ""} ${r.email || ""}`.toLowerCase();
@@ -145,7 +169,7 @@ export default function OptilexBoard() {
   }, []);
 
   const selRow = useMemo(() => rows.find((r) => rowKey(r) === selected) || null, [rows, selected]);
-  const TABS = ["Tous", "En cours", ...ETAT_ORDER];
+  const TABS = ["Tous", "Attente Opti'Lex", "En cours", ...ETAT_ORDER];
 
   const th = { textAlign: "left", padding: "11px 14px", fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: "0.02em", whiteSpace: "nowrap", position: "sticky", top: 0, background: "#f2f4f7", zIndex: 1 };
   const td = { padding: "11px 14px", fontSize: 13, color: TEXT, borderTop: `1px solid ${BORDER}`, verticalAlign: "middle", whiteSpace: "nowrap" };
@@ -156,7 +180,7 @@ export default function OptilexBoard() {
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 700, color: NAVY }}>Suivi cabinet Opti'Lex</div>
-          <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>{establishedCount} clients{counts["En cours"] ? ` · ${counts["En cours"]} en cours d'envoi` : ""} · signatures + jalons temps réel</div>
+          <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>{establishedCount} clients{counts["Attente Opti'Lex"] ? ` · ${counts["Attente Opti'Lex"]} en attente Opti'Lex` : ""}{counts["En cours"] ? ` · ${counts["En cours"]} en cours` : ""} · temps réel</div>
         </div>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un client…" style={{ ...inputStyle, width: 260, padding: "9px 12px" }} />
       </div>
@@ -180,7 +204,7 @@ export default function OptilexBoard() {
           <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
             <colgroup>
               <col />{/* client (reste) */}
-              <col style={{ width: 130 }} />{/* état */}
+              <col style={{ width: 156 }} />{/* état */}
               <col style={{ width: 150 }} />{/* owner */}
               <col style={{ width: 170 }} />{/* opti'lex */}
               <col style={{ width: 108 }} />{/* onboarding */}
@@ -383,9 +407,9 @@ function DetailPanel({ row, onClose, patch }) {
               <JalonRow label="RDV +1 mois" done={row.rdv_plus1mois_done} date={row.rdv_plus1mois_date}
                 onToggle={(v) => patch(num, { rdv_plus1mois_done: v })} onDate={(d) => patch(num, { rdv_plus1mois_date: d })} />
 
-              {/* Commentaire */}
-              <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", margin: "20px 0 10px" }}>Commentaire</div>
-              <CommentBox value={row.commentaire || ""} onSave={(v) => patch(num, { commentaire: v })} />
+              {/* Commentaires (fil façon YouTube) */}
+              <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", margin: "22px 0 12px" }}>Commentaires{row.comment_count ? ` · ${row.comment_count}` : ""}</div>
+              <CommentThread numero={num} />
             </>
           ) : (
             <div style={{ padding: "14px 16px", borderRadius: 10, border: `1px dashed ${BORDER}`, background: "#fafbfc", fontSize: 13, color: MUTED, lineHeight: 1.5 }}>
@@ -420,12 +444,82 @@ function JalonRow({ label, done, date, onToggle, onDate }) {
   );
 }
 
-function CommentBox({ value, onSave }) {
-  const [v, setV] = useState(value);
-  useEffect(() => { setV(value); }, [value]);
+function CommentThread({ numero }) {
+  const me = useMemo(() => apiClient.getUser() || {}, []);
+  const meName = me.name || me.full_name || me.first_name || me.email || "Moi";
+  const [comments, setComments] = useState([]);
+  const [draft, setDraft] = useState("");
+  const [expanded, setExpanded] = useState(false);
+  const [posting, setPosting] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setComments([]); setExpanded(false);
+    apiClient.get(`/api/v1/optilex/comments?numero_client=${encodeURIComponent(numero)}`)
+      .then((r) => { if (alive) setComments(r.comments || []); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [numero]);
+
+  const submit = async () => {
+    const body = draft.trim();
+    if (!body || posting) return;
+    setPosting(true);
+    try {
+      const created = await apiClient.post("/api/v1/optilex/comments", { numero_client: numero, body });
+      setComments((prev) => [created, ...prev]);
+      setDraft("");
+    } catch (e) { console.error("comment failed", e); }
+    finally { setPosting(false); }
+  };
+
+  const shown = expanded ? comments : comments.slice(0, 3);
+
   return (
-    <textarea value={v} onChange={(e) => setV(e.target.value)} onBlur={() => { if (v !== value) onSave(v); }}
-      placeholder="Ajouter une note…" rows={4}
-      style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.4 }} />
+    <div>
+      {/* Nouveau commentaire */}
+      <div style={{ display: "flex", gap: 10, marginBottom: comments.length ? 18 : 4 }}>
+        <Avatar name={meName} src={me.avatar_url} size={32} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <textarea value={draft} onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); } }}
+            placeholder="Ajouter un commentaire…" rows={2}
+            style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.45 }} />
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+            <button onClick={submit} disabled={!draft.trim() || posting}
+              style={{ padding: "8px 18px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+                cursor: draft.trim() && !posting ? "pointer" : "default",
+                background: draft.trim() ? NAVY : "#e5e7eb", color: draft.trim() ? "#fff" : MUTED, transition: "background 0.2s" }}>
+              {posting ? "…" : "Publier"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Fil */}
+      <AnimatePresence initial={false}>
+        {shown.map((c) => (
+          <motion.div key={c.id} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }} style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+            <Avatar name={c.author_name || c.author_email} size={32} />
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>{c.author_name || c.author_email || "—"}</span>
+                <span style={{ fontSize: 11, color: MUTED }}>{timeAgo(c.created_at)}</span>
+              </div>
+              <div style={{ fontSize: 13.5, color: TEXT, lineHeight: 1.45, marginTop: 2, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{c.body}</div>
+            </div>
+          </motion.div>
+        ))}
+      </AnimatePresence>
+
+      {comments.length > 3 && (
+        <button onClick={() => setExpanded((v) => !v)}
+          style={{ border: "none", background: "transparent", color: NAVY, fontSize: 13, fontWeight: 600, cursor: "pointer", padding: "2px 0", fontFamily: "inherit" }}>
+          {expanded ? "Voir moins" : `Voir plus (${comments.length - 3})`}
+        </button>
+      )}
+      {comments.length === 0 && <div style={{ fontSize: 13, color: "#cbd2e0", marginTop: 6 }}>Aucun commentaire pour l'instant.</div>}
+    </div>
   );
 }
