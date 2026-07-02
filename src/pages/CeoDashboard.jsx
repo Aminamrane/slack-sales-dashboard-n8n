@@ -82,6 +82,10 @@ const SIDEBAR_TABS = [
   { key: 'dispatch', label: 'Dispatch', icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
   )},
+  { section: 'PRODUIT' },
+  { key: 'optilex_board', label: "Board Owner/Opti'Lex", icon: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg>
+  )},
 ];
 
 // ── Mapping SIDEBAR_TABS → sections (format Notion-style Sidebar) ─────────
@@ -1217,6 +1221,7 @@ export default function CeoDashboard() {
           if (tabId === 'variables') { navigate('/ceo/variables'); return; }
           if (tabId === 'conges') { navigate('/ceo/conges'); return; }
           if (tabId === 'campaigns') { navigate('/ceo/campaigns'); return; }
+          if (tabId === 'optilex_board') { navigate('/ceo/optilex-board'); return; }
           setActiveTab(tabId);
         }}
         C={C}

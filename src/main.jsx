@@ -32,6 +32,7 @@ import CeoAutoAssignView  from "./pages/CeoAutoAssignView.jsx";
 import CeoVariablesView   from "./pages/CeoVariablesView.jsx";
 import CeoCongesView      from "./pages/CeoCongesView.jsx";
 import CeoCampaignsView   from "./pages/CeoCampaignsView.jsx";
+import CeoOptilexBoardView from "./pages/CeoOptilexBoardView.jsx";
 import HrDashboard        from "./pages/HrDashboard.jsx";
 import CeoLeadQualityView from "./pages/CeoLeadQualityView.jsx";
 import CeoSalesTeamView   from "./pages/CeoSalesTeamView.jsx";
@@ -177,6 +178,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['admin', 'ceo', 'marketing']}>
               <CeoCampaignsView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ceo/optilex-board"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'ceo']}>
+              <CeoOptilexBoardView />
             </ProtectedRoute>
           }
         />

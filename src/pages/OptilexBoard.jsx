@@ -122,7 +122,7 @@ function SigCell({ status, sentAt, signedAt, scheduledAt }) {
   );
 }
 
-export default function OptilexBoard() {
+export default function OptilexBoard({ embed = false }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [etatFilter, setEtatFilter] = useState("Signé");
@@ -175,7 +175,7 @@ export default function OptilexBoard() {
   const td = { padding: "11px 14px", fontSize: 13, color: TEXT, borderTop: `1px solid ${BORDER}`, verticalAlign: "middle", whiteSpace: "nowrap" };
 
   return (
-    <div style={{ minHeight: "100vh", background: BG, padding: "24px 28px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", color: TEXT }}>
+    <div style={{ minHeight: embed ? "auto" : "100vh", background: embed ? "transparent" : BG, padding: embed ? "10px 24px 28px" : "24px 28px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", color: TEXT }}>
       <style>{`@keyframes obOverlayIn{from{opacity:0}to{opacity:1}}@keyframes obSlideIn{from{transform:translateX(28px);opacity:0}to{transform:translateX(0);opacity:1}}@keyframes mailWiggle{0%,100%{transform:translateX(0)}25%{transform:translateX(-2.5px)}75%{transform:translateX(2.5px)}}`}</style>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
         <div>

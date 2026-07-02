@@ -1,25 +1,24 @@
-// src/pages/CeoAutoAssignView.jsx
+// src/pages/CeoOptilexBoardView.jsx
 //
-// Route /ceo/auto-affectation — embed <LeadAssignmentLive embed /> dans le
-// shell CEO / Acquisition Director (sidebar shared + SharedNavbar conservés).
+// Route /ceo/optilex-board — embed <OptilexBoard embed /> dans le shell CEO
+// (sidebar shared + SharedNavbar conservés). Calque de CeoVariablesView.
 //
-// Calque de CeoPerfSalesView. Différence : LeadAssignmentLive prend le prop
-// `embed` directement (pas d'injection ?embed=true via l'URL). Lecture seule
-// pour ceo/acquisition_director (isAdmin=role==='admin' côté composant).
+// Section PRODUIT de la sidebar. Accès admin / ceo (le board interne cabinet
+// Opti'Lex ; les fiscalistes 'optilex' passent, eux, par /optilex-board direct).
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import { navigateBackToDashboard } from "../utils/dashboardNavigation";
-import LeadAssignmentLive from "./LeadAssignmentLive.jsx";
+import OptilexBoard from "./OptilexBoard.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "acquisition_director", "head_of_acquisition"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo"]);
 
-export default function CeoAutoAssignView() {
+export default function CeoOptilexBoardView() {
   const navigate = useNavigate();
 
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
@@ -61,12 +60,13 @@ export default function CeoAutoAssignView() {
   const C = useMemo(() => getColors(darkMode), [darkMode]);
   const visibleSections = useMemo(() => getVisibleSections(SIDEBAR_SECTIONS, userRole), [userRole]);
 
-  // Cliquer "Auto-affectation" depuis cette vue = no-op (déjà dessus).
-  // Les autres onglets-route renvoient vers leur route dédiée (sinon page blanche).
+  // Cliquer "Board Owner/Opti'Lex" ici = no-op (déjà dessus). Les autres
+  // onglets-route renvoient vers leur route dédiée (sinon page blanche).
   const handleSidebarTabClick = (tabId) => {
-    if (tabId === "autoassign") return;
-    if (tabId === "variables") { navigate("/ceo/variables"); return; }
+    if (tabId === "optilex_board") return;
     if (tabId === "conges") { navigate("/ceo/conges"); return; }
+    if (tabId === "variables") { navigate("/ceo/variables"); return; }
+    if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }
     if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }
     if (tabId === "dispatch") { navigate("/ceo/dispatch"); return; }
     if (tabId === "leaderboard") { navigate("/ceo/leaderboard"); return; }
@@ -75,7 +75,6 @@ export default function CeoAutoAssignView() {
     if (tabId === "webinar") { navigate("/ceo/webinar"); return; }
     if (tabId === "campaigns") { navigate("/ceo/campaigns"); return; }
     if (tabId === "funnel_leads") { navigate("/ceo/funnel-leads"); return; }
-    if (tabId === 'optilex_board') { navigate('/ceo/optilex-board'); return; }
     navigateBackToDashboard(navigate, userRole, tabId);
   };
 
@@ -130,7 +129,7 @@ export default function CeoAutoAssignView() {
           collapsed={sideCollapsed}
           onToggle={() => setSideCollapsed((v) => !v)}
           sections={visibleSections}
-          activeTab="autoassign"
+          activeTab="optilex_board"
           setActiveTab={handleSidebarTabClick}
           C={C}
           darkMode={darkMode}
@@ -139,7 +138,7 @@ export default function CeoAutoAssignView() {
 
       <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 64 }}>
         <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
-        <LeadAssignmentLive embed />
+        <OptilexBoard embed />
       </div>
     </div>
   );

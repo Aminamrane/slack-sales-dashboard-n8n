@@ -78,6 +78,7 @@ export default function CeoCampaignsView() {
     if (tabId === "sales_team") { navigate("/ceo/sales-team"); return; }
     if (tabId === "webinar") { navigate("/ceo/webinar"); return; }
     if (tabId === "funnel_leads") { navigate("/ceo/funnel-leads"); return; }
+    if (tabId === 'optilex_board') { navigate('/ceo/optilex-board'); return; }
     navigateBackToDashboard(navigate, userRole, tabId);
   };
 
