@@ -176,7 +176,7 @@ export default function OptilexBoard() {
 
   return (
     <div style={{ minHeight: "100vh", background: BG, padding: "24px 28px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", color: TEXT }}>
-      <style>{`@keyframes obOverlayIn{from{opacity:0}to{opacity:1}}@keyframes obSlideIn{from{transform:translateX(28px);opacity:0}to{transform:translateX(0);opacity:1}}`}</style>
+      <style>{`@keyframes obOverlayIn{from{opacity:0}to{opacity:1}}@keyframes obSlideIn{from{transform:translateX(28px);opacity:0}to{transform:translateX(0);opacity:1}}@keyframes mailWiggle{0%,100%{transform:translateX(0)}25%{transform:translateX(-2.5px)}75%{transform:translateX(2.5px)}}`}</style>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 700, color: NAVY }}>Suivi cabinet Opti'Lex</div>
@@ -331,6 +331,86 @@ function RdvRow({ label, date, done, editable, onToggle }) {
   );
 }
 
+// Enveloppe email qui gigote de droite à gauche (attire l'œil sur "Relancer").
+function MailIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      style={{ animation: "mailWiggle 0.9s ease-in-out infinite" }}>
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+    </svg>
+  );
+}
+
+// Lien de signature Opti'Lex (copier) + relance native Yousign (double-clic de confirmation).
+function OptilexSignatureBlock({ email }) {
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [relance, setRelance] = useState(null); // null | 'sending' | 'sent' | 'error'
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true); setData(null); setConfirming(false); setRelance(null);
+    apiClient.get(`/api/v1/optilex/optilex-signature?email=${encodeURIComponent(email)}`)
+      .then((r) => { if (alive) { setData(r); setLoading(false); } })
+      .catch(() => { if (alive) { setData({ available: false }); setLoading(false); } });
+    return () => { alive = false; };
+  }, [email]);
+
+  const link = data?.signature_link;
+  const canRemind = data?.can_remind;
+
+  const copy = () => {
+    if (!link) return;
+    try { navigator.clipboard.writeText(link); } catch { /* fallback: sélection manuelle */ }
+    setCopied(true); setTimeout(() => setCopied(false), 1600);
+  };
+
+  const sendReminder = async () => {
+    setRelance("sending"); setConfirming(false);
+    try { await apiClient.post("/api/v1/optilex/optilex-reminder", { email }); setRelance("sent"); }
+    catch { setRelance("error"); setTimeout(() => setRelance(null), 2600); }
+  };
+
+  if (loading) return <div style={{ fontSize: 13, color: MUTED }}>Chargement du lien…</div>;
+  if (!data?.available || !link) return <div style={{ fontSize: 13, color: "#cbd2e0" }}>Lien de signature indisponible.</div>;
+
+  const done = relance === "sent";
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <input readOnly value={link} onFocus={(e) => e.target.select()}
+          style={{ ...inputStyle, flex: 1, minWidth: 0, fontSize: 11.5, color: MUTED, background: "#fafbfc" }} />
+        <button onClick={copy}
+          style={{ flexShrink: 0, padding: "8px 14px", borderRadius: 8, border: "none", background: copied ? GREEN : NAVY, color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "background 0.2s" }}>
+          {copied ? "Copié ✓" : "Copier"}
+        </button>
+      </div>
+
+      {canRemind && (
+        <>
+          <div style={{ fontSize: 11.5, color: MUTED, margin: "10px 0 6px" }}>
+            Rappel Yousign à <strong style={{ color: TEXT }}>{data.recipient || email}</strong>
+          </div>
+          <button onClick={confirming ? sendReminder : () => setConfirming(true)}
+            onMouseLeave={() => { if (relance !== "sending") setConfirming(false); }}
+            disabled={relance === "sending" || done}
+            style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+              padding: "10px 0", borderRadius: 9, border: confirming ? "none" : `1px solid ${NAVY}`, fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+              background: done ? GREEN : confirming ? "#b42318" : "transparent",
+              color: done || confirming ? "#fff" : NAVY, cursor: relance === "sending" || done ? "default" : "pointer", transition: "all 0.2s" }}>
+            {!done && relance !== "sending" && <MailIcon />}
+            {done ? "Rappel envoyé ✓" : relance === "sending" ? "Envoi…" : relance === "error" ? "Échec, réessayer" : confirming ? "Confirmer l'envoi du rappel" : "Relancer le client"}
+          </button>
+        </>
+      )}
+      {!canRemind && <div style={{ fontSize: 12, color: MUTED, marginTop: 8 }}>Rappel indisponible (statut : {data.signer_status || data.optilex_status || "—"}).</div>}
+    </div>
+  );
+}
+
 // ── PANNEAU DÉTAILS (slide-in droite, façon Notion) ──────────────────────────
 function DetailPanel({ row, onClose, patch }) {
   const num = row.numero_client;
@@ -386,6 +466,14 @@ function DetailPanel({ row, onClose, patch }) {
             {sigBlock("Owner", row.owner_status, row.owner_sent_at, row.owner_signed_at)}
             {sigBlock("Opti'Lex", row.optilex_status, row.optilex_sent_at, row.optilex_signed_at, row.optilex_scheduled_at)}
           </div>
+
+          {/* Lien de signature Opti'Lex + relance (uniquement si le contrat est envoyé) */}
+          {row.optilex_status === "ongoing" && (
+            <>
+              <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Signature Opti'Lex</div>
+              <div style={{ marginBottom: 22 }}><OptilexSignatureBlock email={row.email} /></div>
+            </>
+          )}
 
           {/* RDV + statut "effectué" */}
           <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Rendez-vous</div>
