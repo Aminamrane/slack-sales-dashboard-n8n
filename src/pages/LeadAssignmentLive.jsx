@@ -269,9 +269,10 @@ export default function LeadAssignmentLive({ embed = false }) {
                                 <span style={{ fontWeight: 650, fontSize: 13.5, color: C.text, letterSpacing: "-0.01em", whiteSpace: "nowrap" }}>{p.full_name}</span>
                                 {p.microcreche && <span title="Reçoit en exclusivité les leads Micro-crèche" style={{ display: "inline-flex", alignItems: "center" }}><OriginIcon origin="micro-crèche" size={15} /></span>}
                                 {badge && <span title={badge.reason || undefined} style={{ fontSize: 9.5, fontWeight: 700, color: badge.color, background: badge.color + "1c", padding: "2px 7px", borderRadius: 6, whiteSpace: "nowrap" }}>{badge.txt}</span>}
+                                {!p.elig.includes(3) && <span title="Nouveau sales — reçoit uniquement les catégories 1 à 2" style={{ fontSize: 9.5, fontWeight: 700, color: C.accent, background: C.accentSoft, padding: "2px 7px", borderRadius: 6, whiteSpace: "nowrap" }}>Starter</span>}
                               </div>
                               <div style={{ fontSize: 10.5, color: C.muted, marginTop: 1 }}>
-                                {p.elig.includes(4) ? "Catégories 1 à 5" : "Catégories 1 à 3"}
+                                {`Catégories 1 à ${Math.max(...p.elig)}`}
                                 {p.credit_total > 0 && <span title="Leads d'écart neutralisés pendant une absence, pour éviter le rattrapage au retour." style={{ color: C.warn, fontWeight: 600 }}> · ≈{p.credit_total} non rattrapés</span>}
                               </div>
                             </div>
