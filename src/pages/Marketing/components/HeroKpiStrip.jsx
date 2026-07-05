@@ -282,10 +282,15 @@ export default function HeroKpiStrip({ webinar, summary, realtimeLeads, rankingP
       // contrairement au conversionPct historique (visiteurs site-wide,
       // pollué depuis le lancement de /v2). Fallback : cohortes sans
       // trafic v2 (26 mai, 22 juin) → tuile historique inchangée.
+      // Gate par COHORTE (pas par trafic) : la LP v2 n'existe que depuis la
+      // cohorte du 20 juillet — Plausible n'ayant pas de notion de cohorte,
+      // ses visites /v2 débordent dans les fenêtres des cohortes antérieures
+      // qui chevauchent (retour dev 06/07). Slugs webinar-YYYY-MM-DD →
+      // comparaison lexicographique = chronologique (couvre les futures).
+      const isV2Cohort = (webinar?.id || '') >= 'webinar-2026-07-20';
       const lp1 = summary.lpComparison?.find((l) => l.key === 'landing');
       const lp2 = summary.lpComparison?.find((l) => l.key === 'landing-v2');
-      const v2Live = lp2 && (lp2.visitors > 0 || lp2.leadsDb > 0);
-      if (!lp1 || !v2Live) {
+      if (!isV2Cohort || !lp1 || !lp2) {
         return {
           label: 'Taux conversion LP',
           value: fmtPct(summary.conversionPct),
