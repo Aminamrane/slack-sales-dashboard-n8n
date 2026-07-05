@@ -12,10 +12,11 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   TrendingUp, RefreshCw, Calendar, ChevronDown, Search, Layers,
-  LayoutGrid, Megaphone, AlertCircle,
+  LayoutGrid, Megaphone, AlertCircle, Trophy,
 } from 'lucide-react';
 import apiClient from '../../services/apiClient.js';
 import SharedNavbar from '../../components/SharedNavbar.jsx';
+import Leaderboard from './Leaderboard.jsx';
 
 const ALLOWED_ROLES = ['admin', 'ceo', 'marketing', 'acquisition_director'];
 const ACCENT = '#f0653e'; // coral, comme la réf
@@ -74,6 +75,7 @@ function presets() {
 }
 
 const TABS = [
+  { key: 'leaderboard', label: 'Leaderboard', icon: Trophy },
   { key: 'campaign', label: 'Campagnes', icon: Layers },
   { key: 'adset', label: 'Ensembles de pub', icon: LayoutGrid },
   { key: 'ad', label: 'Publicités', icon: Megaphone },
@@ -101,7 +103,8 @@ export default function MetaAds() {
   const PRESETS = useMemo(() => presets(), []);
   const [period, setPeriod] = useState(PRESETS[0]);
   const [periodOpen, setPeriodOpen] = useState(false);
-  const [level, setLevel] = useState('ad');
+  // Onglet par défaut : le leaderboard (la vue "jugement des créas").
+  const [level, setLevel] = useState('leaderboard');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // all | active | inactive
 
@@ -110,6 +113,9 @@ export default function MetaAds() {
   const [error, setError] = useState(null);
 
   const fetchData = useCallback(async () => {
+    // L'onglet Leaderboard fait son propre fetch (endpoint dédié) — le
+    // tableau standard n'a rien à charger dans ce mode.
+    if (level === 'leaderboard') { setLoading(false); return; }
     setLoading(true); setError(null);
     try {
       const q = `?level=${level}&since=${period.since}&until=${period.until}`;
@@ -203,6 +209,10 @@ export default function MetaAds() {
           })}
         </div>
 
+        {level === 'leaderboard' ? (
+          <Leaderboard T={T} period={period} />
+        ) : (
+        <>
         {/* ── card : toolbar + table ── */}
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 18, boxShadow: T.shadow, overflow: 'hidden' }}>
           {/* toolbar */}
@@ -265,6 +275,8 @@ export default function MetaAds() {
             <span>CA : <b style={{ color: T.text }}>{fmtEur(data.totals.ca)}</b></span>
             <span>ROAS : <b style={{ color: (data.totals.roas || 0) >= 1 ? T.green : T.red }}>{fmtRoas(data.totals.roas)}</b></span>
           </div>
+        )}
+        </>
         )}
       </div>
     </div>

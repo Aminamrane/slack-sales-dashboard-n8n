@@ -2,6 +2,7 @@ import React from 'react';
 // eslint-disable-next-line no-unused-vars -- motion used via JSX (false positive)
 import { motion } from 'framer-motion';
 import { fmtInt, fmtEur, fmtPct, fmtDuration } from '../theme';
+import Skeleton from './Skeleton';
 
 /**
  * Top of the page : one large gradient-violet HERO card (ref image 5
@@ -223,15 +224,24 @@ function KpiTile({ label, value, hint, tone, C, delay = 0, compact = false }) {
 
 export default function HeroKpiStrip({ webinar, summary, realtimeLeads, rankingPanel, donutPanel, C, loading }) {
   if (!summary) {
+    // Initial-load skeleton — same footprint as the real hero+tiles grid
+    // (hero 220px tall, tiles 96px) so the swap to real data is shift-free.
+    // Uses the shimmer <Skeleton> primitive (light/dark aware) rather than
+    // a flat pulse for the premium feel the rest of the page targets.
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) 2fr', gap: 16 }}>
-        <div style={{ height: 220, borderRadius: 24, background: C.subtle, animation: 'mktPulse 1.4s ease-in-out infinite' }} />
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) 2fr', gap: 16 }}
+      >
+        <Skeleton C={C} height={220} radius={24} />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
           {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} style={{ height: 96, borderRadius: 16, background: C.subtle, animation: 'mktPulse 1.4s ease-in-out infinite' }} />
+            <Skeleton key={i} C={C} height={96} radius={16} />
           ))}
         </div>
-      </div>
+      </motion.div>
     );
   }
 
@@ -264,12 +274,43 @@ export default function HeroKpiStrip({ webinar, summary, realtimeLeads, rankingP
         : undefined,
       tone: summary.leadsLargeCompany > 0 ? 'emerald' : undefined,
     },
-    {
-      label: 'Taux conversion LP',
-      value: fmtPct(summary.conversionPct),
-      hint: 'Inscrits landing ÷ Visiteurs (hors Meta/Broad)',
-      tone: summary.conversionPct >= 10 ? 'emerald' : undefined,
-    },
+    (() => {
+      // Séparation A/B des deux landing pages (cohorte 20 juillet+) :
+      // `summary.lpComparison` vient de la landing (/api/admin/stats) et
+      // transite tel quel via le proxy marketing — leads ÷ visiteurs DE
+      // CHAQUE page (Plausible event:page), donc dénominateurs corrects,
+      // contrairement au conversionPct historique (visiteurs site-wide,
+      // pollué depuis le lancement de /v2). Fallback : cohortes sans
+      // trafic v2 (26 mai, 22 juin) → tuile historique inchangée.
+      const lp1 = summary.lpComparison?.find((l) => l.key === 'landing');
+      const lp2 = summary.lpComparison?.find((l) => l.key === 'landing-v2');
+      const v2Live = lp2 && (lp2.visitors > 0 || lp2.leadsDb > 0);
+      if (!lp1 || !v2Live) {
+        return {
+          label: 'Taux conversion LP',
+          value: fmtPct(summary.conversionPct),
+          hint: 'Inscrits landing ÷ Visiteurs (hors Meta/Broad)',
+          tone: summary.conversionPct >= 10 ? 'emerald' : undefined,
+        };
+      }
+      const tag = (t) => (
+        <span style={{ fontSize: 11, fontWeight: 700, color: C.faded, marginLeft: 4, letterSpacing: '0.05em' }}>
+          {t}
+        </span>
+      );
+      return {
+        label: 'Taux conversion LP · V1 vs V2',
+        value: (
+          <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+            <span>{fmtPct(lp1.conversionPct)}{tag('LP')}</span>
+            <span style={{ color: C.faded, fontWeight: 400 }}>·</span>
+            <span>{fmtPct(lp2.conversionPct)}{tag('V2')}</span>
+          </span>
+        ),
+        hint: `LP ${fmtInt(lp1.leadsDb)}/${fmtInt(lp1.visitors)} · V2 ${fmtInt(lp2.leadsDb)}/${fmtInt(lp2.visitors)} (inscrits/visiteurs)`,
+        tone: (lp1.conversionPct >= 10 || lp2.conversionPct >= 10) ? 'emerald' : undefined,
+      };
+    })(),
     {
       label: 'Budget engagé',
       value: fmtEur(summary.budgetEur),
