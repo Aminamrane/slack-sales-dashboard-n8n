@@ -219,7 +219,7 @@ export default function OptilexBoard({ embed = false }) {
                 <th style={th}>Contrat Owner</th>
                 <th style={th}>Contrat Opti'Lex</th>
                 <th style={th}>Onboarding</th>
-                <th style={th}>Lancement</th>
+                <th style={th}>Intégration</th>
                 <th style={th}>Facturation</th>
                 <th style={th}></th>
               </tr>
@@ -251,7 +251,7 @@ export default function OptilexBoard({ embed = false }) {
                       <div style={{ display: "flex", gap: 5 }}>
                         <MiniDot label="O" on={r.facturation_honoraires_done} />
                         <MiniDot label="OL" on={r.setup_facturation_done} />
-                        <MiniDot label="+1M" on={r.rdv_plus1mois_done} />
+                        <MiniDot label="+2M" on={r.rdv_plus1mois_done} />
                       </div>
                     </td>
                     <td style={{ ...td, color: MUTED, textAlign: "center" }}>›</td>
@@ -318,15 +318,42 @@ function StatusToggle({ value, onChange, labels = ["Non", "Oui"] }) {
   );
 }
 
-// Ligne RDV : date planifiée + toggle "effectué".
-function RdvRow({ label, date, done, editable, onToggle }) {
+// Ligne RDV : date planifiée + toggle "effectué" + lien de prise de RDV (optionnel).
+function RdvRow({ label, date, done, editable, onToggle, link }) {
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 12px", borderRadius: 10, border: `1px solid ${BORDER}`, background: "#fafbfc" }}>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 11, color: MUTED }}>{label}</div>
         <div style={{ fontSize: 14, fontWeight: 700, color: date ? TEXT : "#cbd2e0" }}>{fmt(date) || "—"}</div>
+        {link && <RdvLink url={link} />}
       </div>
       {editable && <StatusToggle value={!!done} onChange={onToggle} labels={["À venir", "Effectué"]} />}
+    </div>
+  );
+}
+
+// Lien de prise de RDV (fiscal/social) : ouvrir dans un onglet + copier.
+function RdvLink({ url }) {
+  const [copied, setCopied] = useState(false);
+  const copy = (e) => {
+    e.preventDefault(); e.stopPropagation();
+    try { navigator.clipboard.writeText(url); } catch { /* fallback: sélection manuelle */ }
+    setCopied(true); setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 5 }}>
+      <a href={url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+        style={{ fontSize: 11.5, fontWeight: 600, color: NAVY, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
+        Lien de prise de RDV
+      </a>
+      <button type="button" onClick={copy}
+        style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 11, fontWeight: 600, color: copied ? GREEN : MUTED, padding: 0, fontFamily: "inherit" }}>
+        {copied ? "copié ✓" : "copier"}
+      </button>
     </div>
   );
 }
@@ -478,10 +505,16 @@ function DetailPanel({ row, onClose, patch }) {
           {/* RDV + statut "effectué" */}
           <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Rendez-vous</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
-            <RdvRow label="Onboarding" date={row.rdv_onboarding_date} done={row.rdv_onboarding_done} editable={!!num}
+            <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date} done={row.rdv_onboarding_done} editable={!!num}
               onToggle={(v) => patch(num, { rdv_onboarding_done: v })} />
-            <RdvRow label="Lancement" date={row.rdv_lancement_date} done={row.rdv_lancement_done} editable={!!num}
+            <RdvRow label="Rendez-vous Intégration Opti'Lex" date={row.rdv_lancement_date} done={row.rdv_lancement_done} editable={!!num}
               onToggle={(v) => patch(num, { rdv_lancement_done: v })} />
+            <RdvRow label="Rendez-vous lancement fiscal" date={row.rdv_fiscal_date} done={row.rdv_fiscal_done} editable={!!num && !!row.rdv_fiscal_date}
+              link={!row.rdv_fiscal_date && row.fiscal_url ? row.fiscal_url : null}
+              onToggle={(v) => patch(num, { rdv_fiscal_done: v })} />
+            <RdvRow label="Rendez-vous lancement social" date={row.rdv_social_date} done={row.rdv_social_done} editable={!!num && !!row.rdv_social_date}
+              link={!row.rdv_social_date && row.social_url ? row.social_url : null}
+              onToggle={(v) => patch(num, { rdv_social_done: v })} />
           </div>
 
           {/* Jalons éditables (indisponibles tant que le client n'est pas établi) */}
@@ -492,7 +525,7 @@ function DetailPanel({ row, onClose, patch }) {
                 onToggle={(v) => patch(num, { facturation_honoraires_done: v })} onDate={(d) => patch(num, { facturation_honoraires_date: d })} />
               <JalonRow label="Statut facturation Opti'Lex" done={row.setup_facturation_done} date={row.setup_facturation_date}
                 onToggle={(v) => patch(num, { setup_facturation_done: v })} onDate={(d) => patch(num, { setup_facturation_date: d })} />
-              <JalonRow label="RDV +1 mois" done={row.rdv_plus1mois_done} date={row.rdv_plus1mois_date}
+              <JalonRow label="RDV +2 mois" done={row.rdv_plus1mois_done} date={row.rdv_plus1mois_date}
                 onToggle={(v) => patch(num, { rdv_plus1mois_done: v })} onDate={(d) => patch(num, { rdv_plus1mois_date: d })} />
 
               {/* Commentaires (fil façon YouTube) */}
