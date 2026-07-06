@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import apiClient from "../services/apiClient";
 
@@ -20,8 +21,12 @@ const ETAT_STYLE = {
   "Liquidation":      { bg: "#f6e9e9", fg: "#7a271a", dot: "#991b1b" },
   "Attente Opti'Lex": { bg: "#fff3e3", fg: "#b45309", dot: "#f59e0b" },
   "En cours":         { bg: "#eaf1fd", fg: "#1e40af", dot: "#2563eb" },
+  "En cours de résiliation":  { bg: "#fdecec", fg: "#b42318", dot: "#ef4444" },
+  "En cours de rétractation": { bg: "#fff3e3", fg: "#b45309", dot: "#f59e0b" },
 };
-const ETAT_ORDER = ["Signé", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation"];
+const ETAT_ORDER = ["Signé", "En cours de résiliation", "En cours de rétractation", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation"];
+// États que le cabinet peut poser manuellement (badge cliquable, table + fiche).
+const ETAT_OPTIONS = ["Signé", "En cours de résiliation", "En cours de rétractation", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation"];
 
 // Volet Opti'Lex actif : planifié (va être envoyé) ou envoyé (en attente signature).
 const optilexPending = (r) => r.optilex_status === "scheduled" || r.optilex_status === "ongoing";
@@ -31,17 +36,20 @@ const isAttenteOptilex = (r) => r.owner_status === "done" && optilexPending(r);
 const isEnCours = (r) => r.owner_status !== "done" && optilexPending(r);
 // État affiché : l'état du Sheet en priorité, sinon le statut du contrat en cours.
 const displayEtat = (r) => {
+  if (r.etat_manuel) return r.etat_manuel;   // override manuel du cabinet (prioritaire)
   if (r.etat) return r.etat;
   if (isAttenteOptilex(r)) return "Attente Opti'Lex";
   if (isEnCours(r)) return "En cours";
   return null;
 };
+// Valeur affichée = override cabinet si présent, sinon original Owner (antériorité préservée).
+const ov = (r, ovrKey, origKey) => (r[ovrKey] != null && r[ovrKey] !== "" ? r[ovrKey] : r[origKey]);
 // Clé de ligne stable (les contrats pré-client n'ont pas de numero_client).
 const rowKey = (r) => r.row_key || r.numero_client;
 // Nom de la société (Sheet/CRM), et nom mis en avant : la PERSONNE (contact CRM) si on
 // l'a, sinon la société. Beaucoup de vieux clients n'ont que la société (pas de contrat lié).
 const companyName = (r) => r.crm_societe || r.societe_sheet || null;
-const primaryName = (r) => r.contact_name || r.crm_societe || r.societe_sheet || "—";
+const primaryName = (r) => ov(r, "contact_name_ovr", "contact_name") || r.crm_societe || r.societe_sheet || "—";
 const rowSubtitle = (r) => {
   const parts = [];
   const comp = companyName(r);
@@ -101,6 +109,74 @@ function EtatBadge({ etat }) {
   );
 }
 
+// Badge d'état CLIQUABLE : menu pour changer l'état (override cabinet). Read-only si disabled.
+// Menu en PORTAL (échappe l'overflow de la table) + fontFamily Inter réappliquée. "Automatique
+// (Sheet)" -> onPick(null) efface l'override. Se ferme au scroll/resize ; flip vers le haut.
+const ETAT_MENU_H = 360;
+function EtatPicker({ etat, onPick, disabled }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const btnRef = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = () => setOpen(false);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => { window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); };
+  }, [open]);
+  if (disabled) return <EtatBadge etat={etat} />;
+  const toggle = (e) => {
+    e.stopPropagation();
+    if (open) { setOpen(false); return; }
+    const r = btnRef.current.getBoundingClientRect();
+    const up = r.bottom + ETAT_MENU_H > window.innerHeight && r.top > ETAT_MENU_H;
+    setPos({ top: up ? r.top - 4 : r.bottom + 4, left: r.left, up });
+    setOpen(true);
+  };
+  const items = [{ opt: null, label: "Automatique (Sheet)" }, ...ETAT_OPTIONS.map((o) => ({ opt: o, label: o }))];
+  return (
+    <span onClick={(e) => e.stopPropagation()}>
+      <button ref={btnRef} type="button" onClick={toggle} title="Changer l'état"
+        style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", fontFamily: "inherit" }}>
+        <EtatBadge etat={etat} />
+      </button>
+      {open && pos && createPortal(
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 10050 }} />
+          <div style={{ position: "fixed", ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }), left: pos.left, zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 8px 28px rgba(17,24,39,0.14)", padding: 5, minWidth: 210, maxHeight: ETAT_MENU_H, overflowY: "auto", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+            {items.map(({ opt, label }) => {
+              const st = opt ? (ETAT_STYLE[opt] || {}) : null;
+              const sel = opt === etat;
+              return (
+                <button key={label} type="button" onClick={() => { setOpen(false); onPick(opt); }}
+                  style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", border: "none",
+                    background: sel ? "#f3f4f6" : "transparent", borderRadius: 7, padding: "8px 10px", cursor: "pointer",
+                    fontSize: 12.5, fontWeight: 600, color: opt ? TEXT : MUTED, fontFamily: "inherit", whiteSpace: "nowrap" }}
+                  onMouseEnter={(e) => { if (!sel) e.currentTarget.style.background = "#f7f8fa"; }}
+                  onMouseLeave={(e) => { if (!sel) e.currentTarget.style.background = "transparent"; }}>
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: st ? (st.dot || "#cbd2e0") : "transparent", border: opt ? "none" : `1.5px dashed ${MUTED}`, flexShrink: 0 }} />
+                  {label}
+                  {sel && <span style={{ marginLeft: "auto", color: GREEN }}>✓</span>}
+                </button>
+              );
+            })}
+          </div>
+        </>,
+        document.body,
+      )}
+    </span>
+  );
+}
+
+// Petit crayon = modification.
+function PencilIcon({ size = 13 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
 // Statut de signature riche : signé / envoyé (en attente) / planifié / expiré…
 function sigInfo(status, sentAt, signedAt, scheduledAt) {
   if (status === "done") return { label: "Signé", sub: fmt(signedAt), color: GREEN, icon: "✓" };
@@ -139,7 +215,8 @@ export default function OptilexBoard({ embed = false }) {
   const counts = useMemo(() => {
     const c = { "En cours": 0, "Attente Opti'Lex": 0 };
     for (const r of rows) {
-      if (r.etat) c[r.etat] = (c[r.etat] || 0) + 1;
+      const e = r.etat_manuel || r.etat;   // état effectif (override cabinet sinon Sheet)
+      if (e) c[e] = (c[e] || 0) + 1;
       if (isAttenteOptilex(r)) c["Attente Opti'Lex"] += 1;
       else if (isEnCours(r)) c["En cours"] += 1;
     }
@@ -152,9 +229,9 @@ export default function OptilexBoard({ embed = false }) {
     return rows.filter((r) => {
       if (etatFilter === "Attente Opti'Lex") { if (!isAttenteOptilex(r)) return false; }
       else if (etatFilter === "En cours") { if (!isEnCours(r)) return false; }
-      else if (etatFilter !== "Tous" && r.etat !== etatFilter) return false;
+      else if (etatFilter !== "Tous" && (r.etat_manuel || r.etat) !== etatFilter) return false;
       if (ql) {
-        const hay = `${r.crm_societe || ""} ${r.societe_sheet || ""} ${r.numero_client || ""} ${r.email || ""}`.toLowerCase();
+        const hay = `${ov(r, "contact_name_ovr", "contact_name") || ""} ${r.crm_societe || ""} ${r.societe_sheet || ""} ${r.numero_client || ""} ${ov(r, "email_ovr", "email") || ""}`.toLowerCase();
         if (!hay.includes(ql)) return false;
       }
       return true;
@@ -242,7 +319,7 @@ export default function OptilexBoard({ embed = false }) {
                         </div>
                       </div>
                     </td>
-                    <td style={td}><EtatBadge etat={displayEtat(r)} /></td>
+                    <td style={td}><EtatPicker etat={displayEtat(r)} disabled={!r.numero_client} onPick={(v) => patch(r.numero_client, { etat_manuel: v })} /></td>
                     <td style={td}><SigCell status={r.owner_status} sentAt={r.owner_sent_at} signedAt={r.owner_signed_at} /></td>
                     <td style={td}><SigCell status={r.optilex_status} sentAt={r.optilex_sent_at} signedAt={r.optilex_signed_at} scheduledAt={r.optilex_scheduled_at} /></td>
                     <td style={{ ...td, color: r.rdv_onboarding_date ? TEXT : "#cbd2e0" }}>{fmt(r.rdv_onboarding_date) || "—"}</td>
@@ -286,6 +363,79 @@ function InfoField({ label, value, full }) {
   );
 }
 
+// Bloc "Informations client" éditable : affiche override ?? original ; l'édition écrit la
+// couche cabinet (optilex_client_tracking) SANS toucher client_data (antériorité Owner préservée).
+const INFO_FIELDS = [
+  { ovr: "contact_name_ovr", orig: "contact_name", label: "Nom du client" },
+  { ovr: "tranche_ovr", orig: "contact_tranche", label: "Tranche salariale" },
+  { ovr: "email_ovr", orig: "email", label: "Email" },
+  { ovr: "phone_ovr", orig: "contact_phone", label: "Téléphone" },
+  { ovr: "siren_ovr", orig: "siren", label: "SIREN" },
+];
+function ClientInfoSection({ row, num, patch }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({});
+  const startEdit = () => {
+    const d = {};
+    INFO_FIELDS.forEach((f) => { d[f.ovr] = ov(row, f.ovr, f.orig) || ""; });
+    setDraft(d); setEditing(true);
+  };
+  const save = () => {
+    // Antériorité : on ne pose un override QUE s'il diffère de l'original ; sinon null
+    // (efface l'override -> retombe sur l'original Owner, et permet de réinitialiser).
+    const out = {};
+    INFO_FIELDS.forEach((f) => {
+      const v = (draft[f.ovr] || "").trim();
+      const orig = (row[f.orig] ?? "").toString();
+      out[f.ovr] = v && v !== orig ? v : null;
+    });
+    patch(num, out);
+    setEditing(false);
+  };
+  const name = ov(row, "contact_name_ovr", "contact_name");
+  return (
+    <>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em" }}>Informations client</div>
+        {num && !editing && (
+          <button type="button" onClick={startEdit} title="Modifier les informations"
+            style={{ border: "none", background: "transparent", padding: 3, cursor: "pointer", color: MUTED, display: "inline-flex", lineHeight: 0 }}>
+            <PencilIcon size={14} />
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <div style={{ marginBottom: 22 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 16px" }}>
+            {INFO_FIELDS.map((f) => (
+              <div key={f.ovr} style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11, color: MUTED, marginBottom: 3 }}>{f.label}</div>
+                <input value={draft[f.ovr] ?? ""} onChange={(e) => setDraft((d) => ({ ...d, [f.ovr]: e.target.value }))}
+                  style={{ ...inputStyle, width: "100%", fontSize: 13 }} />
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+            <button type="button" onClick={() => setEditing(false)}
+              style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: MUTED, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Annuler</button>
+            <button type="button" onClick={save}
+              style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: NAVY, color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Enregistrer</button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 16px", marginBottom: 22 }}>
+          <InfoField label="Nom du client" value={name} />
+          <InfoField label="Tranche salariale" value={fmtTranche(ov(row, "tranche_ovr", "contact_tranche"))} />
+          <InfoField label="Email" value={ov(row, "email_ovr", "email")} />
+          <InfoField label="Téléphone" value={ov(row, "phone_ovr", "contact_phone")} />
+          <InfoField label="SIREN" value={ov(row, "siren_ovr", "siren")} />
+          {companyName(row) && companyName(row) !== name && <InfoField label="Société" value={companyName(row)} full />}
+        </div>
+      )}
+    </>
+  );
+}
+
 // Toggle segmenté animé (remplace le dropdown Oui/Non). Pastille qui glisse en
 // spring (navy -> vert quand positif) + check qui pop. labels[1] = état positif.
 function StatusToggle({ value, onChange, labels = ["Non", "Oui"] }) {
@@ -318,13 +468,31 @@ function StatusToggle({ value, onChange, labels = ["Non", "Oui"] }) {
   );
 }
 
-// Ligne RDV : date planifiée + toggle "effectué" + lien de prise de RDV (optionnel).
-function RdvRow({ label, date, done, editable, onToggle, link }) {
+// Ligne RDV : date (planifiée ou saisie manuellement) + toggle "effectué" + lien (optionnel).
+// onDate présent -> crayon pour saisir/modifier la date à la main (antériorité).
+function RdvRow({ label, date, done, editable, onToggle, link, onDate }) {
+  const [editing, setEditing] = useState(false);
+  const cancelRef = useRef(false);
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 12px", borderRadius: 10, border: `1px solid ${BORDER}`, background: "#fafbfc" }}>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 11, color: MUTED }}>{label}</div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: date ? TEXT : "#cbd2e0" }}>{fmt(date) || "—"}</div>
+        {editing ? (
+          <input type="date" autoFocus defaultValue={toDateInput(date)}
+            onBlur={(e) => { if (cancelRef.current) { cancelRef.current = false; setEditing(false); return; } onDate(e.target.value || null); setEditing(false); }}
+            onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { cancelRef.current = true; setEditing(false); } }}
+            style={{ ...inputStyle, width: 156, padding: "6px 9px", fontSize: 13, marginTop: 2 }} />
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: date ? TEXT : "#cbd2e0" }}>{fmt(date) || "—"}</div>
+            {onDate && (
+              <button type="button" onClick={() => setEditing(true)} title="Saisir/modifier la date"
+                style={{ border: "none", background: "transparent", padding: 2, cursor: "pointer", color: MUTED, display: "inline-flex", lineHeight: 0 }}>
+                <PencilIcon />
+              </button>
+            )}
+          </div>
+        )}
         {link && <RdvLink url={link} />}
       </div>
       {editable && <StatusToggle value={!!done} onChange={onToggle} labels={["À venir", "Effectué"]} />}
@@ -473,19 +641,12 @@ function DetailPanel({ row, onClose, patch }) {
             </div>
             <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "#eef1f6", color: MUTED, fontSize: 15, cursor: "pointer", flexShrink: 0 }}>✕</button>
           </div>
-          <div style={{ marginTop: 12 }}><EtatBadge etat={displayEtat(row)} /></div>
+          <div style={{ marginTop: 12 }}><EtatPicker etat={displayEtat(row)} disabled={!num} onPick={(v) => patch(num, { etat_manuel: v })} /></div>
         </div>
 
         <div style={{ padding: "18px 22px 40px" }}>
-          {/* Informations client (déclarées à la vente) */}
-          <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Informations client</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 16px", marginBottom: 22 }}>
-            <InfoField label="Nom du client" value={row.contact_name} />
-            <InfoField label="Tranche salariale" value={fmtTranche(row.contact_tranche)} />
-            <InfoField label="Email" value={row.email} />
-            <InfoField label="Téléphone" value={row.contact_phone} />
-            {companyName(row) && companyName(row) !== row.contact_name && <InfoField label="Société" value={companyName(row)} full />}
-          </div>
+          {/* Informations client (override cabinet ?? original Owner, antériorité préservée) */}
+          <ClientInfoSection row={row} num={num} patch={patch} />
 
           {/* Signatures */}
           <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Contrats</div>
@@ -509,11 +670,13 @@ function DetailPanel({ row, onClose, patch }) {
               onToggle={(v) => patch(num, { rdv_onboarding_done: v })} />
             <RdvRow label="Rendez-vous Intégration Opti'Lex" date={row.rdv_lancement_date} done={row.rdv_lancement_done} editable={!!num}
               onToggle={(v) => patch(num, { rdv_lancement_done: v })} />
-            <RdvRow label="Rendez-vous lancement fiscal" date={row.rdv_fiscal_date} done={row.rdv_fiscal_done} editable={!!num && !!row.rdv_fiscal_date}
-              link={!row.rdv_fiscal_date && row.fiscal_url ? row.fiscal_url : null}
+            <RdvRow label="Rendez-vous lancement fiscal" date={row.rdv_fiscal_date_manual || row.rdv_fiscal_date} done={row.rdv_fiscal_done} editable={!!num && !!(row.rdv_fiscal_date_manual || row.rdv_fiscal_date)}
+              link={!(row.rdv_fiscal_date_manual || row.rdv_fiscal_date) && row.fiscal_url ? row.fiscal_url : null}
+              onDate={num ? (d) => patch(num, { rdv_fiscal_date_manual: d }) : undefined}
               onToggle={(v) => patch(num, { rdv_fiscal_done: v })} />
-            <RdvRow label="Rendez-vous lancement social" date={row.rdv_social_date} done={row.rdv_social_done} editable={!!num && !!row.rdv_social_date}
-              link={!row.rdv_social_date && row.social_url ? row.social_url : null}
+            <RdvRow label="Rendez-vous lancement social" date={row.rdv_social_date_manual || row.rdv_social_date} done={row.rdv_social_done} editable={!!num && !!(row.rdv_social_date_manual || row.rdv_social_date)}
+              link={!(row.rdv_social_date_manual || row.rdv_social_date) && row.social_url ? row.social_url : null}
+              onDate={num ? (d) => patch(num, { rdv_social_date_manual: d }) : undefined}
               onToggle={(v) => patch(num, { rdv_social_done: v })} />
           </div>
 
