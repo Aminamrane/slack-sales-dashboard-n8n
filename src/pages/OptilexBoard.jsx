@@ -327,6 +327,27 @@ function PencilIcon({ size = 13 }) {
   );
 }
 
+// Icônes de section du panneau détail (style lucide : trait 2, sobres, cohérentes).
+const SEC_ICONS = {
+  infos: <><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>,
+  etat: <><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><line x1="4" y1="22" x2="4" y2="15" /></>,
+  histo: <><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>,
+  contrats: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></>,
+  signature: <><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></>,
+  rdv: <><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></>,
+  facturation: <><rect x="1" y="4" width="22" height="16" rx="2" /><line x1="1" y1="10" x2="23" y2="10" /></>,
+  comments: <><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></>,
+};
+// Titre de section du panneau : icône + libellé (remplace les titres nus).
+function SecTitle({ icon, children, style }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10, ...style }}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>{SEC_ICONS[icon]}</svg>
+      {children}
+    </div>
+  );
+}
+
 // Statut de signature riche : signé / envoyé (en attente) / planifié / expiré…
 function sigInfo(status, sentAt, signedAt, scheduledAt) {
   if (status === "done") return { label: "Signé", sub: fmt(signedAt), color: GREEN, icon: "✓" };
@@ -720,7 +741,7 @@ function ClientInfoSection({ row, num, patch }) {
   return (
     <>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em" }}>Informations client</div>
+        <SecTitle icon="infos" style={{ marginBottom: 0 }}>Informations client</SecTitle>
         {num && !editing && (
           <button type="button" onClick={startEdit} title="Modifier les informations"
             style={{ border: "none", background: "transparent", padding: 3, cursor: "pointer", color: MUTED, display: "inline-flex", lineHeight: 0 }}>
@@ -987,8 +1008,15 @@ function EtatSection({ row, num, changeEtat }) {
   });
   return (
     <div style={{ marginBottom: 22 }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>État du client</div>
+      <SecTitle icon="etat">État du client</SecTitle>
       <EtatPicker etat={etat} disabled={!num} onPick={(v) => changeEtat(num, { etat: v })} />
+      {/* Contrat en vol (vente pas encore déclarée -> pas de n° client) : l'état est calculé,
+          en lecture seule. On le DIT au lieu de laisser un badge muet. */}
+      {!num && (
+        <div style={{ fontSize: 11.5, color: MUTED, marginTop: 8 }}>
+          État calculé automatiquement · modifiable une fois la vente déclarée.
+        </div>
+      )}
       {/* Pause échue : le rappel d'action est aussi visible sur la fiche. */}
       {(() => {
         const h = etatHint(row);
@@ -1055,7 +1083,7 @@ function EtatHistory({ num, version }) {
     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
       transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }} style={{ overflow: "hidden" }}>
     <div style={{ marginBottom: 22 }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 12 }}>Historique des états</div>
+      <SecTitle icon="histo" style={{ marginBottom: 12 }}>Historique des états</SecTitle>
       <div style={{ position: "relative", paddingLeft: 20 }}>
         <div style={{ position: "absolute", left: 4, top: 5, bottom: 5, width: 2, background: BORDER }} />
         {items.map((h, i) => {
@@ -1131,7 +1159,6 @@ function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion }) {
               </svg>
             </button>
           </div>
-          <div style={{ marginTop: 12 }}><EtatBadge etat={displayEtat(row)} /></div>
         </div>
 
         <div style={{ padding: "18px 22px 40px" }}>
@@ -1149,7 +1176,7 @@ function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion }) {
 
           {/* Signatures */}
           <div className="ob-sec" style={{ animationDelay: "0.15s" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Contrats</div>
+          <SecTitle icon="contrats">Contrats</SecTitle>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 22 }}>
             {sigBlock("Owner", row.owner_status, row.owner_sent_at, row.owner_signed_at)}
             {sigBlock("Opti'Lex", row.optilex_status, row.optilex_sent_at, row.optilex_signed_at, row.optilex_scheduled_at, row.owner_status === "done" && row.optilex_status == null)}
@@ -1158,7 +1185,7 @@ function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion }) {
           {/* Lien de signature Opti'Lex + relance (uniquement si le contrat est envoyé) */}
           {row.optilex_status === "ongoing" && (
             <>
-              <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Signature Opti'Lex</div>
+              <SecTitle icon="signature">Signature Opti'Lex</SecTitle>
               <div style={{ marginBottom: 22 }}><OptilexSignatureBlock email={row.email} /></div>
             </>
           )}
@@ -1166,7 +1193,7 @@ function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion }) {
 
           {/* RDV + statut "effectué" */}
           <div className="ob-sec" style={{ animationDelay: "0.2s" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Rendez-vous</div>
+          <SecTitle icon="rdv">Rendez-vous</SecTitle>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
             <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date} done={row.rdv_onboarding_done} editable={!!num}
               onToggle={(v) => patch(num, { rdv_onboarding_done: v })} />
@@ -1187,7 +1214,7 @@ function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion }) {
           <div className="ob-sec" style={{ animationDelay: "0.25s" }}>
           {num ? (
             <>
-              <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Suivi facturation</div>
+              <SecTitle icon="facturation">Suivi facturation</SecTitle>
               <JalonRow label="Statut facturation Owner" done={row.facturation_honoraires_done} date={row.facturation_honoraires_date}
                 onToggle={(v) => patch(num, { facturation_honoraires_done: v })} onDate={(d) => patch(num, { facturation_honoraires_date: d })} />
               <JalonRow label="Statut facturation Opti'Lex" done={row.setup_facturation_done} date={row.setup_facturation_date}
@@ -1196,7 +1223,7 @@ function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion }) {
                 onToggle={(v) => patch(num, { rdv_plus1mois_done: v })} onDate={(d) => patch(num, { rdv_plus1mois_date: d })} />
 
               {/* Commentaires (fil façon YouTube) */}
-              <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", margin: "22px 0 12px" }}>Commentaires{row.comment_count ? ` · ${row.comment_count}` : ""}</div>
+              <SecTitle icon="comments" style={{ margin: "22px 0 12px" }}>Commentaires{row.comment_count ? ` · ${row.comment_count}` : ""}</SecTitle>
               <CommentThread numero={num} />
             </>
           ) : (
