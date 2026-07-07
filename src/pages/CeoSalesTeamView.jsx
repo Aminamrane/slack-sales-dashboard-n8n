@@ -53,11 +53,11 @@ export default function CeoSalesTeamView() {
 
   // ── SIDEBAR COLLAPSE ────────────────────────────────────────────────
   const [sideCollapsed, setSideCollapsed] = useState(() => {
-    const stored = localStorage.getItem("ceoSideCollapsed");
-    return stored === null ? false : stored === "true";
+    const stored = localStorage.getItem("ceoSideCollapsed_v2");
+    return stored === null ? true : stored === "true";
   });
   useEffect(() => {
-    localStorage.setItem("ceoSideCollapsed", String(sideCollapsed));
+    localStorage.setItem("ceoSideCollapsed_v2", String(sideCollapsed));
   }, [sideCollapsed]);
 
   // ── AUTH GATE ───────────────────────────────────────────────────────

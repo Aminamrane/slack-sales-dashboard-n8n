@@ -891,14 +891,14 @@ export default function CeoDashboard() {
     return 'dashboard';
   });
   // Sidebar collapse state (persisted). Pattern miroir TSF :
-  // localStorage 'ceoSideCollapsed', défaut = expanded (false) car CEO
+  // localStorage 'ceoSideCollapsed_v2', défaut = REPLIÉ (true) : survol pour déplier (cohérent tous navigateurs), clé v2
   // navigation est la pierre angulaire de la page.
   const [sideCollapsed, setSideCollapsed] = useState(() => {
-    const stored = localStorage.getItem('ceoSideCollapsed');
-    return stored === null ? false : stored === 'true';
+    const stored = localStorage.getItem('ceoSideCollapsed_v2');
+    return stored === null ? true : stored === 'true';
   });
   useEffect(() => {
-    localStorage.setItem('ceoSideCollapsed', String(sideCollapsed));
+    localStorage.setItem('ceoSideCollapsed_v2', String(sideCollapsed));
   }, [sideCollapsed]);
   const [searchQuery, setSearchQuery] = useState('');
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
