@@ -7372,14 +7372,9 @@ export default function TrackingSheet() {
                 // Les pickers date/heure libres n'apparaissent qu'APRÈS déclaration (dates
                 // posées) -> avant, seul le bouton Déclarer (qui ouvre le pop-up créneaux).
                 const rdvDatesSet = !!(lead.rdv_onboarding_date || lead.rdv_lancement_date);
-                // Statut contrats (Owner + Opti'Lex) — lecture seule, pour savoir si relancer l'Opti'Lex.
-                const _contracts = leadContracts[lead.id] || [];
-                // Cible le contrat SIGNÉ (un lead peut avoir plusieurs lignes : annulé/expiré puis renvoyé).
-                const _latest = _contracts.find((c) => c.yousign_status === 'done') || _contracts[0] || null;
-                if (!leadContracts[lead.id] && typeof fetchLeadContracts === 'function') fetchLeadContracts(lead.id);
-                const OWNER_LABELS = { done: 'Signé', ongoing: 'En attente de signature', expired: 'Expiré', canceled: 'Annulé', failed: 'Erreur', draft: 'Brouillon' };
-                const _ownerDone = _latest?.yousign_status === 'done';
-                const _ol = _latest?.yousign_status_optilex;   // null = contrat groupé (pré-split), pas de statut Opti'Lex séparé
+                // Statut contrats (Owner + Opti'Lex) — depuis la donnée du lead (marche en vue admin, sans fetch user-scopé).
+                const _ownerDone = !!lead.contract_signed_at;   // onglet Signés -> Owner signé
+                const _ol = lead.contract_optilex_status;        // null = contrat groupé (pré-split), pas de statut Opti'Lex séparé
                 const OL_COLORS = { done: '#10b981', ongoing: '#3b82f6', scheduled: '#a855f7', awaiting_owner_signature: '#94a3b8', expired: '#fb923c', canceled: '#94a3b8', failed: '#ef4444' };
                 const OL_LABELS = { done: 'Signé', ongoing: 'En attente de signature', scheduled: 'Envoi programmé', awaiting_owner_signature: 'En attente', expired: 'Expiré', canceled: 'Annulé', failed: 'Erreur' };
                 // Split -> vrai statut Opti'Lex (signal de relance). Groupé (null) + Owner signé -> signé dans l'enveloppe Owner.
@@ -7388,17 +7383,17 @@ export default function TrackingSheet() {
                 const olLabel = _ol ? (OL_LABELS[_ol] || _ol) : (_grouped ? 'Signé (inclus au contrat Owner)' : '—');
                 return (
                   <div style={{ marginBottom: 16 }}>
-                    {_latest && (
+                    {_ownerDone && (
                       <div style={{ marginBottom: 16 }}>
                         <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Contrats</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: _ownerDone ? '#10b98120' : `${C.muted}20`, color: _ownerDone ? '#10b981' : C.muted }}>
-                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: _ownerDone ? '#10b981' : C.muted }} />Owner : {OWNER_LABELS[_latest.yousign_status] || _latest.yousign_status || '—'}
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: '#10b98120', color: '#10b981' }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />Owner : Signé
                           </span>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: `${olColor}20`, color: olColor }}>
                             <span style={{ width: 6, height: 6, borderRadius: '50%', background: olColor }} />Opti'Lex : {olLabel}
                           </span>
-                          {_ol === 'done' && _latest.signed_at_optilex && <span style={{ fontSize: 11, color: C.muted }}>signé le {formatDate(_latest.signed_at_optilex)}</span>}
+                          {_ol === 'done' && lead.contract_optilex_signed_at && <span style={{ fontSize: 11, color: C.muted }}>signé le {formatDate(lead.contract_optilex_signed_at)}</span>}
                         </div>
                       </div>
                     )}
