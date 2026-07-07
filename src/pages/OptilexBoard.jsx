@@ -37,7 +37,9 @@ const isEnCours = (r) => r.owner_status !== "done" && optilexPending(r);
 // État affiché : l'état du Sheet en priorité, sinon le statut du contrat en cours.
 const displayEtat = (r) => {
   if (r.etat_manuel) return r.etat_manuel;   // override manuel du cabinet (prioritaire)
-  if (r.etat) return r.etat;
+  if (r.etat) return r.etat;                 // état du Sheet (vérité des ÉTATS)
+  // Vérité des DATA = interne : signé Owner + Opti'Lex -> "Signé" même pas (encore) dans le Sheet.
+  if (r.owner_status === "done" && r.optilex_status === "done") return "Signé";
   if (isAttenteOptilex(r)) return "Attente Opti'Lex";
   if (isEnCours(r)) return "En cours";
   return null;
@@ -206,19 +208,24 @@ export default function OptilexBoard({ embed = false }) {
   const [selected, setSelected] = useState(null); // numero_client du client ouvert
 
   useEffect(() => {
-    apiClient.get("/api/v1/optilex/board")
-      .then((r) => setRows(r.clients || []))
-      .catch((e) => console.error("board load failed", e))
-      .finally(() => setLoading(false));
+    let alive = true;
+    const load = (spinner) => {
+      if (spinner) setLoading(true);
+      apiClient.get("/api/v1/optilex/board")
+        .then((r) => { if (alive) setRows(r.clients || []); })
+        .catch((e) => console.error("board load failed", e))
+        .finally(() => { if (alive && spinner) setLoading(false); });
+    };
+    load(true);
+    const id = setInterval(() => load(false), 30000);   // temps réel : refetch toutes les 30 s
+    return () => { alive = false; clearInterval(id); };
   }, []);
 
   const counts = useMemo(() => {
     const c = { "En cours": 0, "Attente Opti'Lex": 0 };
     for (const r of rows) {
-      const e = r.etat_manuel || r.etat;   // état effectif (override cabinet sinon Sheet)
+      const e = displayEtat(r);   // état effectif (override / Sheet / signé interne / attente / en cours)
       if (e) c[e] = (c[e] || 0) + 1;
-      if (isAttenteOptilex(r)) c["Attente Opti'Lex"] += 1;
-      else if (isEnCours(r)) c["En cours"] += 1;
     }
     return c;
   }, [rows]);
@@ -227,9 +234,7 @@ export default function OptilexBoard({ embed = false }) {
   const filtered = useMemo(() => {
     const ql = q.trim().toLowerCase();
     return rows.filter((r) => {
-      if (etatFilter === "Attente Opti'Lex") { if (!isAttenteOptilex(r)) return false; }
-      else if (etatFilter === "En cours") { if (!isEnCours(r)) return false; }
-      else if (etatFilter !== "Tous" && (r.etat_manuel || r.etat) !== etatFilter) return false;
+      if (etatFilter !== "Tous" && displayEtat(r) !== etatFilter) return false;
       if (ql) {
         const hay = `${ov(r, "contact_name_ovr", "contact_name") || ""} ${r.crm_societe || ""} ${r.societe_sheet || ""} ${r.numero_client || ""} ${ov(r, "email_ovr", "email") || ""}`.toLowerCase();
         if (!hay.includes(ql)) return false;
