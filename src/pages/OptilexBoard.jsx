@@ -23,8 +23,15 @@ const ETAT_STYLE = {
   "En cours":         { bg: "#eaf1fd", fg: "#1e40af", dot: "#2563eb" },
   "En cours de résiliation":  { bg: "#fdecec", fg: "#b42318", dot: "#ef4444" },
   "En cours de rétractation": { bg: "#fff3e3", fg: "#b45309", dot: "#f59e0b" },
+  "En attente":       { bg: "#eef1f6", fg: "#5b6472", dot: "#94a3b8" },
+  "Sans suite":       { bg: "#eef1f6", fg: "#5b6472", dot: "#cbd2e0" },
 };
-const ETAT_ORDER = ["Signé", "En cours de résiliation", "En cours de rétractation", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation"];
+// Onglets PRIMAIRES = les plus actionnables (toujours visibles). Le reste vit dans un
+// filtre multi-sélection "Filtre" pour désencombrer la barre.
+const PRIMARY_TABS = ["Tous", "Attente Opti'Lex", "Onboarding à venir", "En cours de résiliation", "En cours de rétractation"];
+const SECONDARY_CATS = ["Signé", "En cours", "Intégration à venir", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation", "En attente", "Sans suite"];
+const TAB_LABEL = { "Attente Opti'Lex": "En attente Opti'Lex" };
+const tabLabel = (t) => TAB_LABEL[t] || t;
 // États que le cabinet peut poser manuellement (badge cliquable, table + fiche).
 const ETAT_OPTIONS = ["Signé", "En cours de résiliation", "En cours de rétractation", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation"];
 
@@ -45,11 +52,24 @@ const isIntegrationUpcoming = (r) => !!r.numero_client && !!r.rdv_lancement_date
 const displayEtat = (r) => {
   if (r.etat_manuel) return r.etat_manuel;   // override manuel du cabinet (prioritaire)
   if (r.etat) return r.etat;                 // état du Sheet (vérité des ÉTATS)
-  // Vérité des DATA = interne : signé Owner + Opti'Lex -> "Signé" même pas (encore) dans le Sheet.
-  if (r.owner_status === "done" && r.optilex_status === "done") return "Signé";
+  // Vérité des DATA = interne : Owner signé -> "Signé" même pas (encore) dans le Sheet.
+  // Deux régimes : contrat GROUPÉ (optilex null = Opti'Lex inclus dans l'Owner, signé avec)
+  // ou SPLIT dont le volet Opti'Lex est signé (optilex 'done'). Owner signé + Opti'Lex
+  // encore en vol (scheduled/ongoing) reste "Attente Opti'Lex" (traité plus bas).
+  if (r.owner_status === "done" && (r.optilex_status == null || r.optilex_status === "done")) return "Signé";
   if (isAttenteOptilex(r)) return "Attente Opti'Lex";
   if (isEnCours(r)) return "En cours";
+  // Owner signé mais volet Opti'Lex terminal (expiré/annulé/refusé) : le client reste acquis
+  // côté Owner -> "Signé" (la colonne/le détail Opti'Lex montre le statut réel).
+  if (r.owner_status === "done") return "Signé";
   return null;
+};
+// Une ligne appartient-elle à une catégorie (onglet primaire OU secondaire) ? Unifie les
+// prédicats calculés (RDV à venir) et les états (Sheet/override/interne) pour un filtrage unique.
+const matchesCat = (r, cat) => {
+  if (cat === "Onboarding à venir") return isOnboardingUpcoming(r);
+  if (cat === "Intégration à venir") return isIntegrationUpcoming(r);
+  return displayEtat(r) === cat;
 };
 // Valeur affichée = override cabinet si présent, sinon original Owner (antériorité préservée).
 const ov = (r, ovrKey, origKey) => (r[ovrKey] != null && r[ovrKey] !== "" ? r[ovrKey] : r[origKey]);
@@ -177,6 +197,81 @@ function EtatPicker({ etat, onPick, disabled }) {
   );
 }
 
+function FunnelIcon({ size = 13, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
+    </svg>
+  );
+}
+
+// Filtre multi-sélection (catégories secondaires). Menu en PORTAL (échappe l'overflow),
+// fontFamily Inter réappliquée, se ferme au scroll/resize, flip vers le haut si besoin.
+// Cocher/décocher plusieurs états -> union affichée dans la table.
+const FILTER_MENU_H = 380;
+function FilterMenu({ cats, counts, selected, onToggle, onClear }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const btnRef = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = () => setOpen(false);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => { window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); };
+  }, [open]);
+  const active = selected.length > 0;
+  const toggle = (e) => {
+    e.stopPropagation();
+    if (open) { setOpen(false); return; }
+    const r = btnRef.current.getBoundingClientRect();
+    const up = r.bottom + FILTER_MENU_H > window.innerHeight && r.top > FILTER_MENU_H;
+    setPos({ top: up ? r.top - 4 : r.bottom + 4, left: r.left, up });
+    setOpen(true);
+  };
+  return (
+    <span onClick={(e) => e.stopPropagation()}>
+      <button ref={btnRef} type="button" onClick={toggle} title="Filtrer par état"
+        style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${active || open ? NAVY : BORDER}`, background: active ? NAVY : CARD, color: active ? "#fff" : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 7 }}>
+        <FunnelIcon color={active ? "#fff" : MUTED} />
+        Filtre
+        {active && <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>{selected.length}</span>}
+        <span style={{ fontSize: 9, color: active ? "rgba(255,255,255,0.7)" : MUTED, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>▾</span>
+      </button>
+      {open && pos && createPortal(
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 10050 }} />
+          <div style={{ position: "fixed", ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }), left: pos.left, zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 8px 28px rgba(17,24,39,0.14)", padding: 5, minWidth: 236, maxHeight: FILTER_MENU_H, overflowY: "auto", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px 8px" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em" }}>Filtrer par état</span>
+              {active && <button type="button" onClick={onClear} style={{ border: "none", background: "transparent", color: "#2563eb", fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Tout effacer</button>}
+            </div>
+            {cats.map((cat) => {
+              const on = selected.includes(cat);
+              const st = ETAT_STYLE[cat] || {};
+              const n = counts[cat] || 0;
+              return (
+                <button key={cat} type="button" onClick={() => onToggle(cat)}
+                  style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", border: "none", background: on ? "#f3f4f6" : "transparent", borderRadius: 7, padding: "8px 10px", cursor: "pointer", fontSize: 12.5, fontWeight: 600, color: TEXT, fontFamily: "inherit", whiteSpace: "nowrap" }}
+                  onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = "#f7f8fa"; }}
+                  onMouseLeave={(e) => { if (!on) e.currentTarget.style.background = "transparent"; }}>
+                  <span style={{ width: 15, height: 15, borderRadius: 4, border: `1.5px solid ${on ? NAVY : "#cbd2e0"}`, background: on ? NAVY : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    {on && <span style={{ color: "#fff", fontSize: 10, lineHeight: 1 }}>✓</span>}
+                  </span>
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: st.dot || "#cbd2e0", flexShrink: 0 }} />
+                  <span style={{ flex: 1 }}>{cat}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: MUTED }}>{n}</span>
+                </button>
+              );
+            })}
+          </div>
+        </>,
+        document.body,
+      )}
+    </span>
+  );
+}
+
 // Petit crayon = modification.
 function PencilIcon({ size = 13 }) {
   return (
@@ -196,8 +291,17 @@ function sigInfo(status, sentAt, signedAt, scheduledAt) {
   if (status === "failed") return { label: "Échec", sub: "", color: "#b42318", icon: "!" };
   return null;
 }
-function SigCell({ status, sentAt, signedAt, scheduledAt }) {
+function SigCell({ status, sentAt, signedAt, scheduledAt, grouped }) {
   const i = sigInfo(status, sentAt, signedAt, scheduledAt);
+  // Contrat groupé (pas de volet Opti'Lex séparé) : Opti'Lex est inclus dans l'Owner signé.
+  if (!i && grouped) {
+    return (
+      <div style={{ lineHeight: 1.25 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: GREEN }}>✓ Inclus</div>
+        <div style={{ fontSize: 11, color: MUTED, marginTop: 1 }}>au contrat Owner</div>
+      </div>
+    );
+  }
   if (!i) return <span style={{ color: "#cbd2e0" }}>—</span>;
   return (
     <div style={{ lineHeight: 1.25 }}>
@@ -210,7 +314,8 @@ function SigCell({ status, sentAt, signedAt, scheduledAt }) {
 export default function OptilexBoard({ embed = false }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [etatFilter, setEtatFilter] = useState("Signé");
+  const [etatFilter, setEtatFilter] = useState("Tous");   // onglet primaire actif
+  const [multiFilter, setMultiFilter] = useState([]);      // catégories secondaires cochées (union)
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState(null); // numero_client du client ouvert
 
@@ -243,16 +348,19 @@ export default function OptilexBoard({ embed = false }) {
   const filtered = useMemo(() => {
     const ql = q.trim().toLowerCase();
     return rows.filter((r) => {
-      if (etatFilter === "Onboarding à venir") { if (!isOnboardingUpcoming(r)) return false; }
-      else if (etatFilter === "Intégration à venir") { if (!isIntegrationUpcoming(r)) return false; }
-      else if (etatFilter !== "Tous" && displayEtat(r) !== etatFilter) return false;
+      // Multi-filtre (catégories cochées) prioritaire = union ; sinon onglet primaire unique.
+      if (multiFilter.length > 0) {
+        if (!multiFilter.some((cat) => matchesCat(r, cat))) return false;
+      } else if (etatFilter !== "Tous" && !matchesCat(r, etatFilter)) {
+        return false;
+      }
       if (ql) {
         const hay = `${ov(r, "contact_name_ovr", "contact_name") || ""} ${r.crm_societe || ""} ${r.societe_sheet || ""} ${r.numero_client || ""} ${ov(r, "email_ovr", "email") || ""}`.toLowerCase();
         if (!hay.includes(ql)) return false;
       }
       return true;
     });
-  }, [rows, etatFilter, q]);
+  }, [rows, etatFilter, multiFilter, q]);
 
   const patch = useCallback(async (numero, changes) => {
     if (!numero) return; // contrat pré-client : pas de jalons éditables
@@ -262,7 +370,12 @@ export default function OptilexBoard({ embed = false }) {
   }, []);
 
   const selRow = useMemo(() => rows.find((r) => rowKey(r) === selected) || null, [rows, selected]);
-  const TABS = ["Tous", "Attente Opti'Lex", "En cours", "Onboarding à venir", "Intégration à venir", ...ETAT_ORDER];
+  // Onglet primaire -> vide le multi-filtre ; cocher une catégorie -> vide l'onglet primaire.
+  const pickTab = (t) => { setEtatFilter(t); setMultiFilter([]); };
+  const toggleCat = (cat) => {
+    setEtatFilter("Tous");
+    setMultiFilter((prev) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]));
+  };
 
   const th = { textAlign: "left", padding: "11px 14px", fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: "0.02em", whiteSpace: "nowrap", position: "sticky", top: 0, background: "#f2f4f7", zIndex: 1 };
   const td = { padding: "11px 14px", fontSize: 13, color: TEXT, borderTop: `1px solid ${BORDER}`, verticalAlign: "middle", whiteSpace: "nowrap" };
@@ -278,16 +391,17 @@ export default function OptilexBoard({ embed = false }) {
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un client…" style={{ ...inputStyle, width: 260, padding: "9px 12px" }} />
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        {TABS.map((t) => {
-          const active = etatFilter === t;
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+        {PRIMARY_TABS.map((t) => {
+          const active = multiFilter.length === 0 && etatFilter === t;
           const n = t === "Tous" ? rows.length : (counts[t] || 0);
           return (
-            <button key={t} onClick={() => setEtatFilter(t)} style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${active ? NAVY : BORDER}`, background: active ? NAVY : CARD, color: active ? "#fff" : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 7 }}>
-              {t}<span style={{ fontSize: 11, fontWeight: 700, color: active ? "rgba(255,255,255,0.7)" : MUTED }}>{n}</span>
+            <button key={t} onClick={() => pickTab(t)} style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${active ? NAVY : BORDER}`, background: active ? NAVY : CARD, color: active ? "#fff" : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 7 }}>
+              {tabLabel(t)}<span style={{ fontSize: 11, fontWeight: 700, color: active ? "rgba(255,255,255,0.7)" : MUTED }}>{n}</span>
             </button>
           );
         })}
+        <FilterMenu cats={SECONDARY_CATS} counts={counts} selected={multiFilter} onToggle={toggleCat} onClear={() => setMultiFilter([])} />
       </div>
 
       <div style={{ background: CARD, borderRadius: 14, border: `1px solid ${BORDER}`, overflowX: "hidden", overflowY: "auto", maxHeight: "calc(100vh - 190px)" }}>
@@ -337,7 +451,7 @@ export default function OptilexBoard({ embed = false }) {
                     </td>
                     <td style={td}><EtatPicker etat={displayEtat(r)} disabled={!r.numero_client} onPick={(v) => patch(r.numero_client, { etat_manuel: v })} /></td>
                     <td style={td}><SigCell status={r.owner_status} sentAt={r.owner_sent_at} signedAt={r.owner_signed_at} /></td>
-                    <td style={td}><SigCell status={r.optilex_status} sentAt={r.optilex_sent_at} signedAt={r.optilex_signed_at} scheduledAt={r.optilex_scheduled_at} /></td>
+                    <td style={td}><SigCell status={r.optilex_status} sentAt={r.optilex_sent_at} signedAt={r.optilex_signed_at} scheduledAt={r.optilex_scheduled_at} grouped={r.owner_status === "done" && r.optilex_status == null} /></td>
                     <td style={{ ...td, color: r.rdv_onboarding_date ? TEXT : "#cbd2e0" }}>{fmt(r.rdv_onboarding_date) || "—"}</td>
                     <td style={{ ...td, color: r.rdv_lancement_date ? TEXT : "#cbd2e0" }}>{fmt(r.rdv_lancement_date) || "—"}</td>
                     <td style={td}>
@@ -625,7 +739,7 @@ function OptilexSignatureBlock({ email }) {
 // ── PANNEAU DÉTAILS (slide-in droite, façon Notion) ──────────────────────────
 function DetailPanel({ row, onClose, patch }) {
   const num = row.numero_client;
-  const sigBlock = (title, status, sentAt, signedAt, scheduledAt) => {
+  const sigBlock = (title, status, sentAt, signedAt, scheduledAt, grouped) => {
     const i = sigInfo(status, sentAt, signedAt, scheduledAt);
     return (
       <div style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${BORDER}`, background: "#fafbfc" }}>
@@ -636,6 +750,12 @@ function DetailPanel({ row, onClose, patch }) {
             {sentAt && <div style={{ fontSize: 12, color: MUTED, marginTop: 3 }}>Envoyé le {fmt(sentAt)}</div>}
             {scheduledAt && status === "scheduled" && <div style={{ fontSize: 12, color: MUTED, marginTop: 3 }}>Planifié le {fmt(scheduledAt)}</div>}
             {signedAt && <div style={{ fontSize: 12, color: GREEN, marginTop: 3 }}>Signé le {fmt(signedAt)}</div>}
+          </>
+        ) : grouped ? (
+          // Contrat groupé : pas de volet Opti'Lex séparé, il est inclus dans l'Owner signé.
+          <>
+            <div style={{ fontSize: 14, fontWeight: 700, color: GREEN }}>✓ Signé</div>
+            <div style={{ fontSize: 12, color: MUTED, marginTop: 3 }}>Inclus au contrat Owner</div>
           </>
         ) : <div style={{ fontSize: 13, color: "#cbd2e0" }}>—</div>}
       </div>
@@ -668,7 +788,7 @@ function DetailPanel({ row, onClose, patch }) {
           <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Contrats</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 22 }}>
             {sigBlock("Owner", row.owner_status, row.owner_sent_at, row.owner_signed_at)}
-            {sigBlock("Opti'Lex", row.optilex_status, row.optilex_sent_at, row.optilex_signed_at, row.optilex_scheduled_at)}
+            {sigBlock("Opti'Lex", row.optilex_status, row.optilex_sent_at, row.optilex_signed_at, row.optilex_scheduled_at, row.owner_status === "done" && row.optilex_status == null)}
           </div>
 
           {/* Lien de signature Opti'Lex + relance (uniquement si le contrat est envoyé) */}
