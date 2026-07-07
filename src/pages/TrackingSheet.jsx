@@ -973,6 +973,9 @@ export default function TrackingSheet() {
   // immédiate (leads issus des bookings webinaire avec R2 déjà placé par le
   // prospect). Mêmes mécaniques collapsible que cancelled/setter_placed.
   const [r2WebinaireExpanded, setR2WebinaireExpanded] = useState(true);
+  // Onglet Signés — conteneurs par mois de signature : { [monthKey]: bool } override
+  // du défaut (mois en cours ouvert, autres mois repliés).
+  const [signedMonthOpen, setSignedMonthOpen] = useState({});
   const [sidebarView, setSidebarView] = useState(initialView || 'leads');
   const [sidebarHover, setSidebarHover] = useState(false);
   const sidebarCollapsed = !sidebarHover; // repliee par defaut, s'ouvre au survol (overlay)
@@ -1319,7 +1322,7 @@ export default function TrackingSheet() {
     }
     // Sort: signed tab by most recent signature, others by assigned_at
     if (catKey === 'signed') {
-      result = [...result].sort((a, b) => (b.signed_at || b.assigned_at || '').localeCompare(a.signed_at || a.assigned_at || ''));
+      result = [...result].sort((a, b) => (b.contract_signed_at || b.assigned_at || '').localeCompare(a.contract_signed_at || a.assigned_at || ''));
     } else if (sortOrder === 'oldest') {
       result = [...result].sort((a, b) => (a.assigned_at || '').localeCompare(b.assigned_at || ''));
     } else {
@@ -5729,6 +5732,52 @@ export default function TrackingSheet() {
                       </>
                     );
                   })()
+                ) : activeCat.key === 'signed' ? (
+                  (() => {
+                    const MONTHS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+                    const now = new Date();
+                    const currentKey = `${now.getFullYear()}-${now.getMonth()}`;
+                    // Regroupe par mois de SIGNATURE (contract_signed_at, fallback assigned_at).
+                    const gmap = new Map();
+                    filteredLeads.forEach((lead) => {
+                      const raw = lead.contract_signed_at || lead.assigned_at;
+                      const d = raw ? new Date(raw) : null;
+                      const valid = d && !isNaN(d.getTime());
+                      const key = valid ? `${d.getFullYear()}-${d.getMonth()}` : 'nodate';
+                      if (!gmap.has(key)) gmap.set(key, { key, y: valid ? d.getFullYear() : 0, m: valid ? d.getMonth() : -1, nodate: !valid, leads: [] });
+                      gmap.get(key).leads.push(lead);
+                    });
+                    // Conteneurs triés desc par (année, mois) ; "Sans date" toujours en dernier.
+                    const grps = [...gmap.values()].sort((a, b) => (a.nodate - b.nodate) || (b.y - a.y) || (b.m - a.m));
+                    // Seul le mois en cours reste ouvert ; sinon le mois daté le plus récent.
+                    const firstDated = grps.find((g) => !g.nodate);
+                    const defaultKey = grps.some((g) => g.key === currentKey) ? currentKey : (firstDated && firstDated.key);
+                    return grps.map((g) => {
+                      const isOpen = g.key in signedMonthOpen ? signedMonthOpen[g.key] : (g.key === defaultKey);
+                      const label = g.nodate ? 'Sans date' : `${MONTHS_FR[g.m]} ${g.y}`;
+                      return (
+                        <div key={g.key} style={{
+                          border: `1.5px solid ${darkMode ? 'rgba(255,255,255,0.06)' : '#dfe1e6'}`,
+                          borderRadius: 14,
+                          background: darkMode ? 'rgba(255,255,255,0.04)' : '#fafafb',
+                          padding: isOpen ? '14px 10px 10px' : '14px 10px',
+                          marginBottom: 8, cursor: 'pointer',
+                        }} onClick={() => setSignedMonthOpen((prev) => ({ ...prev, [g.key]: !isOpen }))}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: isOpen ? 10 : 0, padding: '0 6px' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', padding: '3px 12px', borderRadius: 20, fontSize: 12.5, fontWeight: 700, border: `1.5px solid ${activeCat.color}35`, background: `${activeCat.color}10`, color: activeCat.color, textTransform: 'capitalize' }}>{label}</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>{g.leads.length}</span>
+                            <div style={{ flex: 1 }} />
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" style={{ transition: 'transform 0.25s ease', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', opacity: 0.5 }}><path d="m6 9 6 6 6-6" /></svg>
+                          </div>
+                          {isOpen && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                              {g.leads.map((lead, i) => renderLeadCard(lead, i))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()
                 ) : (
                   [...filteredLeads].sort((a, b) => {
                     const prioOrder = { high: 0, medium: 1, low: 2 };
@@ -7323,8 +7372,36 @@ export default function TrackingSheet() {
                 // Les pickers date/heure libres n'apparaissent qu'APRÈS déclaration (dates
                 // posées) -> avant, seul le bouton Déclarer (qui ouvre le pop-up créneaux).
                 const rdvDatesSet = !!(lead.rdv_onboarding_date || lead.rdv_lancement_date);
+                // Statut contrats (Owner + Opti'Lex) — lecture seule, pour savoir si relancer l'Opti'Lex.
+                const _contracts = leadContracts[lead.id] || [];
+                // Cible le contrat SIGNÉ (un lead peut avoir plusieurs lignes : annulé/expiré puis renvoyé).
+                const _latest = _contracts.find((c) => c.yousign_status === 'done') || _contracts[0] || null;
+                if (!leadContracts[lead.id] && typeof fetchLeadContracts === 'function') fetchLeadContracts(lead.id);
+                const OWNER_LABELS = { done: 'Signé', ongoing: 'En attente de signature', expired: 'Expiré', canceled: 'Annulé', failed: 'Erreur', draft: 'Brouillon' };
+                const _ownerDone = _latest?.yousign_status === 'done';
+                const _ol = _latest?.yousign_status_optilex;   // null = contrat groupé (pré-split), pas de statut Opti'Lex séparé
+                const OL_COLORS = { done: '#10b981', ongoing: '#3b82f6', scheduled: '#a855f7', awaiting_owner_signature: '#94a3b8', expired: '#fb923c', canceled: '#94a3b8', failed: '#ef4444' };
+                const OL_LABELS = { done: 'Signé', ongoing: 'En attente de signature', scheduled: 'Envoi programmé', awaiting_owner_signature: 'En attente', expired: 'Expiré', canceled: 'Annulé', failed: 'Erreur' };
+                // Split -> vrai statut Opti'Lex (signal de relance). Groupé (null) + Owner signé -> signé dans l'enveloppe Owner.
+                const _grouped = !_ol && _ownerDone;
+                const olColor = _ol ? (OL_COLORS[_ol] || C.muted) : (_grouped ? '#10b981' : C.muted);
+                const olLabel = _ol ? (OL_LABELS[_ol] || _ol) : (_grouped ? 'Signé (inclus au contrat Owner)' : '—');
                 return (
                   <div style={{ marginBottom: 16 }}>
+                    {_latest && (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Contrats</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: _ownerDone ? '#10b98120' : `${C.muted}20`, color: _ownerDone ? '#10b981' : C.muted }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: _ownerDone ? '#10b981' : C.muted }} />Owner : {OWNER_LABELS[_latest.yousign_status] || _latest.yousign_status || '—'}
+                          </span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: `${olColor}20`, color: olColor }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: olColor }} />Opti'Lex : {olLabel}
+                          </span>
+                          {_ol === 'done' && _latest.signed_at_optilex && <span style={{ fontSize: 11, color: C.muted }}>signé le {formatDate(_latest.signed_at_optilex)}</span>}
+                        </div>
+                      </div>
+                    )}
                     <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Post-signature</div>
 
                     {rdvDatesSet && (<>
