@@ -41,6 +41,7 @@ let railHovered = false;
 // que les entrées). easeOutExpo : gros déplacement immédiat puis pose douce.
 const OPEN_T = { duration: 0.06, ease: [0.16, 1, 0.3, 1] };
 const CLOSE_T = { duration: 0.08, ease: [0.16, 1, 0.3, 1] };
+const EXPANDED_W = 260;   // largeur de la barre dépliée au survol
 
 export default function Sidebar({ width, collapsed, onToggle, sections, activeTab, setActiveTab, C, darkMode }) {
   // Survol = dépliage automatique (réactif) : si la barre est repliée, la survoler
@@ -49,12 +50,30 @@ export default function Sidebar({ width, collapsed, onToggle, sections, activeTa
   const [hovered, setHovered] = useState(() => railHovered);
   const setHover = (v) => { railHovered = v; setHovered(v); };
   const effCollapsed = collapsed && !hovered;
-  const effWidth = (collapsed && hovered) ? 260 : width;
+  const effWidth = (collapsed && hovered) ? EXPANDED_W : width;
   // Le LAYOUT (labels + centrage icônes) suit un état RETARDÉ : à la fermeture, les labels restent
   // rendus pendant que le panneau rétrécit (l'overflow:hidden les rogne -> le panneau "avale" le
   // texte, cohérent), puis on bascule en mode replié à la fin de l'animation. À l'ouverture, direct.
   const [renderCollapsed, setRenderCollapsed] = useState(() => collapsed && !railHovered);
   useEffect(() => { if (!effCollapsed) setRenderCollapsed(false); }, [effCollapsed]);
+
+  // Backstop cross-navigateur du survol. Après un remontage de la barre SOUS le curseur (clic sur
+  // un onglet-route), Chrome ne déclenche PAS onMouseLeave (pas d'onMouseEnter apparié sur un
+  // élément monté sous la souris) -> la barre resterait ouverte. Safari, lui, le faisait par
+  // géométrie. On corrige d'après la position réelle du curseur : la barre est pleine hauteur et
+  // ancrée à gauche, donc seul X compte. Hystérésis (ouvre dans le rail replié <= width, ferme au
+  // sortir du panneau étendu > EXPANDED_W) pour éviter toute oscillation pendant l'animation.
+  // Actif uniquement en mode épinglé-replié (sinon pas de logique de survol).
+  useEffect(() => {
+    if (!collapsed) return undefined;
+    const onMove = (e) => {
+      const inside = e.clientX <= (railHovered ? EXPANDED_W : width);
+      if (inside !== railHovered) setHover(inside);
+    };
+    window.addEventListener("mousemove", onMove, { passive: true });
+    return () => window.removeEventListener("mousemove", onMove);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collapsed, width]);
   return (
     <>
       {/* Spacer : réserve la largeur repliée dans le flux -> les éléments de la page ne bougent JAMAIS. */}
