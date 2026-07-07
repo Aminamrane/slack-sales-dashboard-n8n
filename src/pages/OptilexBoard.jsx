@@ -28,8 +28,8 @@ const ETAT_STYLE = {
 };
 // Onglets PRIMAIRES = les plus actionnables (toujours visibles). Le reste vit dans un
 // filtre multi-sélection "Filtre" pour désencombrer la barre.
-const PRIMARY_TABS = ["Tous", "Attente Opti'Lex", "Onboarding à venir", "En cours de résiliation", "En cours de rétractation"];
-const SECONDARY_CATS = ["Signé", "En cours", "Intégration à venir", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation", "En attente", "Sans suite"];
+const PRIMARY_TABS = ["Tous", "Signé", "Attente Opti'Lex", "Onboarding à venir", "En cours de résiliation", "En cours de rétractation"];
+const SECONDARY_CATS = ["En cours", "Intégration à venir", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation", "En attente", "Sans suite"];
 const TAB_LABEL = { "Attente Opti'Lex": "En attente Opti'Lex" };
 const tabLabel = (t) => TAB_LABEL[t] || t;
 // États que le cabinet peut poser manuellement (badge cliquable, table + fiche).
