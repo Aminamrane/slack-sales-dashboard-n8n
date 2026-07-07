@@ -34,6 +34,16 @@ const TAB_LABEL = { "Attente Opti'Lex": "En attente Opti'Lex" };
 const tabLabel = (t) => TAB_LABEL[t] || t;
 // États que le cabinet peut poser manuellement (badge cliquable, table + fiche).
 const ETAT_OPTIONS = ["Signé", "En cours de résiliation", "En cours de rétractation", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation"];
+// Champ(s) date à saisir par état (raisonnement fiscaliste). Absent = pas de date.
+// Pause = période : début (etat_date) + fin CONNUE (pause_end_date) OU indéterminée -> relance
+// (pause_relance_date), car en B2B le dirigeant ne sait pas toujours quand il reprend.
+const ETAT_DATE_CONFIG = {
+  "Résiliation": { label: "Date de résiliation" },
+  "Self-Résiliation": { label: "Date de résiliation" },
+  "Rétractation": { label: "Date de rétractation" },
+  "Liquidation": { label: "Date de clôture" },
+  "Pause": { pause: true },
+};
 
 // Volet Opti'Lex actif : planifié (va être envoyé) ou envoyé (en attente signature).
 const optilexPending = (r) => r.optilex_status === "scheduled" || r.optilex_status === "ongoing";
@@ -70,6 +80,25 @@ const matchesCat = (r, cat) => {
   if (cat === "Onboarding à venir") return isOnboardingUpcoming(r);
   if (cat === "Intégration à venir") return isIntegrationUpcoming(r);
   return displayEtat(r) === cat;
+};
+// Alerte fiscaliste sur un état posé par le cabinet (etat_manuel) : pause échue (relance ou
+// fin passée -> AGIR) ou date d'effet manquante (état daté posé sans date). Restituée là où
+// l'œil se pose : sous le badge en table, sous le sélecteur en fiche. Les états hérités du
+// Sheet (sans etat_manuel) ne déclenchent rien : pas de bruit sur l'antériorité.
+const etatHint = (r) => {
+  if (!r.numero_client || !r.etat_manuel) return null;
+  const e = r.etat_manuel;
+  if (e === "Pause") {
+    const today = _todayParisISO();
+    if (r.pause_relance_date && String(r.pause_relance_date).slice(0, 10) < today)
+      return { text: `à relancer depuis le ${fmt(r.pause_relance_date)}`, urgent: true };
+    if (r.pause_end_date && String(r.pause_end_date).slice(0, 10) < today)
+      return { text: `fin de pause dépassée (${fmt(r.pause_end_date)})`, urgent: true };
+    if (!r.etat_date) return { text: "période à renseigner", urgent: false };
+    return null;
+  }
+  if (ETAT_DATE_CONFIG[e] && !r.etat_date) return { text: "date à renseigner", urgent: false };
+  return null;
 };
 // Valeur affichée = override cabinet si présent, sinon original Owner (antériorité préservée).
 const ov = (r, ovrKey, origKey) => (r[ovrKey] != null && r[ovrKey] !== "" ? r[ovrKey] : r[origKey]);
@@ -162,22 +191,28 @@ function EtatPicker({ etat, onPick, disabled }) {
     setPos({ top: up ? r.top - 4 : r.bottom + 4, left: r.left, up });
     setOpen(true);
   };
-  const items = [{ opt: null, label: "Automatique (Sheet)" }, ...ETAT_OPTIONS.map((o) => ({ opt: o, label: o }))];
+  // "Automatique" = état calculé (suivi cabinet / signatures), efface l'override manuel.
+  const items = [{ opt: null, label: "Automatique" }, ...ETAT_OPTIONS.map((o) => ({ opt: o, label: o }))];
   return (
     <span onClick={(e) => e.stopPropagation()}>
       <button ref={btnRef} type="button" onClick={toggle} title="Changer l'état"
-        style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", fontFamily: "inherit" }}>
+        style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4 }}>
         <EtatBadge etat={etat} />
+        {/* Caret d'affordance : le badge est cliquable ; pivote quand le menu est ouvert. */}
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.16s ease", flexShrink: 0 }}>
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
       </button>
       {open && pos && createPortal(
         <>
           <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 10050 }} />
-          <div style={{ position: "fixed", ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }), left: pos.left, zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 8px 28px rgba(17,24,39,0.14)", padding: 5, minWidth: 210, maxHeight: ETAT_MENU_H, overflowY: "auto", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+          <div style={{ position: "fixed", ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }), left: pos.left, zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 8px 28px rgba(17,24,39,0.14)", padding: 5, minWidth: 210, maxHeight: ETAT_MENU_H, overflowY: "auto", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", animation: "obMenuIn 0.15s cubic-bezier(0.16,1,0.3,1) both", transformOrigin: pos.up ? "bottom left" : "top left" }}>
             {items.map(({ opt, label }) => {
               const st = opt ? (ETAT_STYLE[opt] || {}) : null;
               const sel = opt === etat;
               return (
-                <button key={label} type="button" onClick={() => { setOpen(false); onPick(opt); }}
+                <button key={label} type="button" onClick={() => { setOpen(false); if (!sel) onPick(opt); }}
                   style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", border: "none",
                     background: sel ? "#f3f4f6" : "transparent", borderRadius: 7, padding: "8px 10px", cursor: "pointer",
                     fontSize: 12.5, fontWeight: 600, color: opt ? TEXT : MUTED, fontFamily: "inherit", whiteSpace: "nowrap" }}
@@ -185,7 +220,11 @@ function EtatPicker({ etat, onPick, disabled }) {
                   onMouseLeave={(e) => { if (!sel) e.currentTarget.style.background = "transparent"; }}>
                   <span style={{ width: 7, height: 7, borderRadius: "50%", background: st ? (st.dot || "#cbd2e0") : "transparent", border: opt ? "none" : `1.5px dashed ${MUTED}`, flexShrink: 0 }} />
                   {label}
-                  {sel && <span style={{ marginLeft: "auto", color: GREEN }}>✓</span>}
+                  {sel && (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: "auto", flexShrink: 0 }}>
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  )}
                 </button>
               );
             })}
@@ -236,12 +275,15 @@ function FilterMenu({ cats, counts, selected, onToggle, onClear }) {
         <FunnelIcon color={active ? "#fff" : MUTED} />
         Filtre
         {active && <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>{selected.length}</span>}
-        <span style={{ fontSize: 9, color: active ? "rgba(255,255,255,0.7)" : MUTED, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>▾</span>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={active ? "rgba(255,255,255,0.75)" : MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.16s ease", flexShrink: 0 }}>
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
       </button>
       {open && pos && createPortal(
         <>
           <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 10050 }} />
-          <div style={{ position: "fixed", ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }), left: pos.left, zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 8px 28px rgba(17,24,39,0.14)", padding: 5, minWidth: 236, maxHeight: FILTER_MENU_H, overflowY: "auto", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+          <div style={{ position: "fixed", ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }), left: pos.left, zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 8px 28px rgba(17,24,39,0.14)", padding: 5, minWidth: 236, maxHeight: FILTER_MENU_H, overflowY: "auto", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", animation: "obMenuIn 0.15s cubic-bezier(0.16,1,0.3,1) both", transformOrigin: pos.up ? "bottom left" : "top left" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px 8px" }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em" }}>Filtrer par état</span>
               {active && <button type="button" onClick={onClear} style={{ border: "none", background: "transparent", color: "#2563eb", fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Tout effacer</button>}
@@ -255,8 +297,12 @@ function FilterMenu({ cats, counts, selected, onToggle, onClear }) {
                   style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", border: "none", background: on ? "#f3f4f6" : "transparent", borderRadius: 7, padding: "8px 10px", cursor: "pointer", fontSize: 12.5, fontWeight: 600, color: TEXT, fontFamily: "inherit", whiteSpace: "nowrap" }}
                   onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = "#f7f8fa"; }}
                   onMouseLeave={(e) => { if (!on) e.currentTarget.style.background = "transparent"; }}>
-                  <span style={{ width: 15, height: 15, borderRadius: 4, border: `1.5px solid ${on ? NAVY : "#cbd2e0"}`, background: on ? NAVY : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    {on && <span style={{ color: "#fff", fontSize: 10, lineHeight: 1 }}>✓</span>}
+                  <span style={{ width: 15, height: 15, borderRadius: 4, border: `1.5px solid ${on ? NAVY : "#cbd2e0"}`, background: on ? NAVY : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.14s, border-color 0.14s" }}>
+                    {on && (
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                    )}
                   </span>
                   <span style={{ width: 7, height: 7, borderRadius: "50%", background: st.dot || "#cbd2e0", flexShrink: 0 }} />
                   <span style={{ flex: 1 }}>{cat}</span>
@@ -319,12 +365,26 @@ export default function OptilexBoard({ embed = false }) {
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState(null); // numero_client du client ouvert
 
+  // Anti-stale : toute mutation locale incrémente mutSeq ; une réponse de polling partie AVANT
+  // la mutation est jetée (sinon elle écraserait l'optimiste avec une photo périmée de la base).
+  const mutSeq = useRef(0);
+  // Feedback d'échec d'enregistrement (bandeau discret, auto-dismiss).
+  const [saveError, setSaveError] = useState(false);
+  const errTimer = useRef(null);
+  const flagSaveError = useCallback(() => {
+    setSaveError(true);
+    clearTimeout(errTimer.current);
+    errTimer.current = setTimeout(() => setSaveError(false), 4200);
+  }, []);
+  useEffect(() => () => clearTimeout(errTimer.current), []);
+
   useEffect(() => {
     let alive = true;
     const load = (spinner) => {
       if (spinner) setLoading(true);
+      const seq = mutSeq.current;
       apiClient.get("/api/v1/optilex/board")
-        .then((r) => { if (alive) setRows(r.clients || []); })
+        .then((r) => { if (alive && seq === mutSeq.current) setRows(r.clients || []); })
         .catch((e) => console.error("board load failed", e))
         .finally(() => { if (alive && spinner) setLoading(false); });
     };
@@ -364,12 +424,60 @@ export default function OptilexBoard({ embed = false }) {
 
   const patch = useCallback(async (numero, changes) => {
     if (!numero) return; // contrat pré-client : pas de jalons éditables
-    setRows((prev) => prev.map((r) => (r.numero_client === numero ? { ...r, ...changes } : r)));
+    mutSeq.current += 1;
+    let snapshot = null;   // ligne d'avant la MAJ optimiste, pour rollback si le PATCH échoue
+    setRows((prev) => prev.map((r) => {
+      if (r.numero_client !== numero) return r;
+      snapshot = r;
+      return { ...r, ...changes };
+    }));
     try { await apiClient.patch("/api/v1/optilex/board-tracking", { numero_client: numero, ...changes }); }
-    catch (e) { console.error("patch failed", e); }
-  }, []);
+    catch (e) {
+      console.error("patch failed", e);
+      if (snapshot) setRows((prev) => prev.map((r) => (r.numero_client === numero ? snapshot : r)));
+      flagSaveError();
+    }
+  }, [flagSaveError]);
+
+  // Poser un état + ses dates : passe par l'endpoint dédié (trace l'historique). Les dates de
+  // pause ne valent que pour "Pause". Optimiste avec ROLLBACK si le POST échoue (un état qui
+  // "a l'air posé" mais ne l'est pas est inacceptable pour un outil d'audit) ; la timeline ne
+  // se rafraîchit qu'en cas de succès.
+  const [etatHistVersion, setEtatHistVersion] = useState(0);
+  const changeEtat = useCallback(async (numero, { etat = null, etat_date = null, pause_end_date = null, pause_relance_date = null }) => {
+    if (!numero) return;
+    mutSeq.current += 1;
+    const pe = etat === "Pause" ? pause_end_date : null;
+    const pr = etat === "Pause" ? pause_relance_date : null;
+    let snapshot = null;
+    setRows((prev) => prev.map((r) => {
+      if (r.numero_client !== numero) return r;
+      snapshot = r;
+      return { ...r, etat_manuel: etat, etat_date, pause_end_date: pe, pause_relance_date: pr };
+    }));
+    try {
+      await apiClient.post("/api/v1/optilex/etat-change", { numero_client: numero, etat, etat_date, pause_end_date: pe, pause_relance_date: pr });
+      setEtatHistVersion((v) => v + 1);   // succès uniquement
+    } catch (e) {
+      console.error("etat-change failed", e);
+      if (snapshot) setRows((prev) => prev.map((r) => (r.numero_client === numero ? snapshot : r)));
+      flagSaveError();
+    }
+  }, [flagSaveError]);
 
   const selRow = useMemo(() => rows.find((r) => rowKey(r) === selected) || null, [rows, selected]);
+
+  // Stagger d'entrée SEEN-KEYS : seules les lignes jamais affichées s'animent. Plein replay au
+  // changement d'onglet primaire (reset + remount du tbody) ; les lignes révélées par la
+  // recherche (backspace) ou le multi-filtre entrent proprement SANS faire clignoter celles
+  // déjà en place (même famille que le fix cardStaggerIn du setter). Le polling ne rejoue rien.
+  const seenRows = useRef(new Set());
+  const prevTabRef = useRef(etatFilter);
+  if (prevTabRef.current !== etatFilter) { seenRows.current = new Set(); prevTabRef.current = etatFilter; }
+  const newIdxByKey = new Map();
+  { let ni = 0; for (const r of filtered) { const k = rowKey(r); if (!seenRows.current.has(k)) newIdxByKey.set(k, ni++); } }
+  useEffect(() => { for (const r of filtered) seenRows.current.add(rowKey(r)); }, [filtered]);
+
   // Onglet primaire -> vide le multi-filtre ; cocher une catégorie -> vide l'onglet primaire.
   const pickTab = (t) => { setEtatFilter(t); setMultiFilter([]); };
   const toggleCat = (cat) => {
@@ -382,13 +490,45 @@ export default function OptilexBoard({ embed = false }) {
 
   return (
     <div style={{ minHeight: embed ? "auto" : "100vh", background: embed ? "transparent" : BG, padding: embed ? "10px 24px 28px" : "24px 28px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", color: TEXT }}>
-      <style>{`@keyframes obOverlayIn{from{opacity:0}to{opacity:1}}@keyframes obSlideIn{from{transform:translateX(28px);opacity:0}to{transform:translateX(0);opacity:1}}@keyframes mailWiggle{0%,100%{transform:translateX(0)}25%{transform:translateX(-2.5px)}75%{transform:translateX(2.5px)}}`}</style>
+      <style>{`
+        @keyframes mailWiggle{0%,100%{transform:translateX(0)}25%{transform:translateX(-2.5px)}75%{transform:translateX(2.5px)}}
+        @keyframes obMenuIn{from{opacity:0;transform:scale(0.96)}to{opacity:1;transform:none}}
+        @keyframes obRowIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+        @keyframes obFadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+        @keyframes obShimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+        .ob-sk{background:linear-gradient(90deg,#eef1f6 25%,#f7f8fa 50%,#eef1f6 75%);background-size:200% 100%;animation:obShimmer 1.4s ease-in-out infinite;display:inline-block;flex-shrink:0}
+        .ob-chev{display:inline-flex;color:#c3cad6;transition:transform .18s ease,color .18s ease}
+        tr:hover .ob-chev{transform:translateX(3px);color:#1e2330}
+        .ob-sec{animation:obFadeUp .32s cubic-bezier(0.16,1,0.3,1) both}
+      `}</style>
+      {/* Échec d'enregistrement : l'UI a été restaurée (rollback), on le DIT clairement. */}
+      <AnimatePresence>
+        {saveError && (
+          <motion.div initial={{ opacity: 0, y: -10, x: "-50%" }} animate={{ opacity: 1, y: 0, x: "-50%" }} exit={{ opacity: 0, y: -10, x: "-50%" }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            style={{ position: "fixed", top: 16, left: "50%", zIndex: 10060, background: "#b42318", color: "#fff", padding: "9px 16px", borderRadius: 10, fontSize: 12.5, fontWeight: 600, boxShadow: "0 8px 24px rgba(180,35,24,0.32)", display: "flex", alignItems: "center", gap: 8 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            Enregistrement impossible. Vérifiez votre connexion et réessayez.
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 700, color: NAVY }}>Suivi cabinet Opti'Lex</div>
           <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>{establishedCount} clients{counts["Attente Opti'Lex"] ? ` · ${counts["Attente Opti'Lex"]} en attente Opti'Lex` : ""}{counts["En cours"] ? ` · ${counts["En cours"]} en cours` : ""} · temps réel</div>
         </div>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un client…" style={{ ...inputStyle, width: 260, padding: "9px 12px" }} />
+        <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            style={{ position: "absolute", left: 11, pointerEvents: "none" }}>
+            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+          </svg>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un client…"
+            onFocus={(e) => { e.target.style.borderColor = NAVY; }}
+            onBlur={(e) => { e.target.style.borderColor = BORDER; }}
+            style={{ ...inputStyle, width: 260, padding: "9px 12px 9px 33px", transition: "border-color 0.18s" }} />
+        </span>
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
@@ -396,9 +536,19 @@ export default function OptilexBoard({ embed = false }) {
           const active = multiFilter.length === 0 && etatFilter === t;
           const n = t === "Tous" ? rows.length : (counts[t] || 0);
           return (
-            <button key={t} onClick={() => pickTab(t)} style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${active ? NAVY : BORDER}`, background: active ? NAVY : CARD, color: active ? "#fff" : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 7 }}>
-              {tabLabel(t)}<span style={{ fontSize: 11, fontWeight: 700, color: active ? "rgba(255,255,255,0.7)" : MUTED }}>{n}</span>
-            </button>
+            <motion.button key={t} onClick={() => pickTab(t)} whileTap={{ scale: 0.96 }}
+              onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "#f7f8fa"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = active ? "transparent" : CARD; }}
+              style={{ position: "relative", padding: "7px 14px", borderRadius: 20, border: `1px solid ${active ? "transparent" : BORDER}`, background: active ? "transparent" : CARD, color: active ? "#fff" : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 7, transition: "color 0.18s, border-color 0.18s" }}>
+              {/* Pilule active : GLISSE d'un onglet à l'autre (layoutId partagé, ressort sobre). */}
+              {active && (
+                <motion.span layoutId="obActiveTab" transition={{ type: "spring", stiffness: 560, damping: 42 }}
+                  style={{ position: "absolute", inset: -1, background: NAVY, borderRadius: 20, zIndex: 0 }} />
+              )}
+              <span style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 7 }}>
+                {tabLabel(t)}<span style={{ fontSize: 11, fontWeight: 700, color: active ? "rgba(255,255,255,0.7)" : MUTED, transition: "color 0.18s" }}>{n}</span>
+              </span>
+            </motion.button>
           );
         })}
         <FilterMenu cats={SECONDARY_CATS} counts={counts} selected={multiFilter} onToggle={toggleCat} onClear={() => setMultiFilter([])} />
@@ -406,7 +556,19 @@ export default function OptilexBoard({ embed = false }) {
 
       <div style={{ background: CARD, borderRadius: 14, border: `1px solid ${BORDER}`, overflowX: "hidden", overflowY: "auto", maxHeight: "calc(100vh - 190px)" }}>
         {loading ? (
-          <div style={{ padding: "60px 0", textAlign: "center", color: MUTED }}>Chargement…</div>
+          // Skeleton shimmer : la structure de la table se devine pendant le chargement.
+          <div style={{ padding: "6px 0" }}>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderTop: i ? `1px solid ${BORDER}` : "none", opacity: Math.max(0.25, 1 - i * 0.11) }}>
+                <span className="ob-sk" style={{ width: 30, height: 30, borderRadius: "50%" }} />
+                <span className="ob-sk" style={{ width: 170 - (i % 3) * 22, height: 12, borderRadius: 6 }} />
+                <span className="ob-sk" style={{ width: 96, height: 22, borderRadius: 12, marginLeft: "auto" }} />
+                <span className="ob-sk" style={{ width: 110, height: 12, borderRadius: 6 }} />
+                <span className="ob-sk" style={{ width: 110, height: 12, borderRadius: 6 }} />
+                <span className="ob-sk" style={{ width: 64, height: 12, borderRadius: 6 }} />
+              </div>
+            ))}
+          </div>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
             <colgroup>
@@ -431,13 +593,17 @@ export default function OptilexBoard({ embed = false }) {
                 <th style={th}></th>
               </tr>
             </thead>
-            <tbody>
+            {/* key = onglet primaire : remount + plein stagger au changement d'onglet uniquement.
+                Recherche/multi-filtre/polling : DOM stable, seules les lignes NOUVELLES s'animent. */}
+            <tbody key={etatFilter}>
               {filtered.map((r) => {
                 const key = rowKey(r);
                 const isSel = selected === key;
+                const newIdx = newIdxByKey.get(key);   // undefined = déjà vue -> pas d'animation
                 return (
                   <tr key={key} onClick={() => setSelected(key)}
-                    style={{ cursor: "pointer", background: isSel ? "#eff3fb" : "transparent" }}
+                    style={{ cursor: "pointer", background: isSel ? "#eff3fb" : "transparent",
+                      ...(newIdx !== undefined ? { animation: "obRowIn 0.28s cubic-bezier(0.16,1,0.3,1) both", animationDelay: `${Math.min(newIdx, 14) * 20}ms` } : {}) }}
                     onMouseEnter={(e) => { if (!isSel) e.currentTarget.style.background = "#f7f8fa"; }}
                     onMouseLeave={(e) => { if (!isSel) e.currentTarget.style.background = "transparent"; }}>
                     <td style={td}>
@@ -449,7 +615,19 @@ export default function OptilexBoard({ embed = false }) {
                         </div>
                       </div>
                     </td>
-                    <td style={td}><EtatPicker etat={displayEtat(r)} disabled={!r.numero_client} onPick={(v) => patch(r.numero_client, { etat_manuel: v })} /></td>
+                    {/* État daté (Résiliation, Pause…) posé depuis la table -> on ouvre la fiche
+                        pour saisir la date dans la foulée. + rappel sous le badge si la pause est
+                        échue ou si la date d'effet manque. */}
+                    <td style={td}>
+                      <EtatPicker etat={displayEtat(r)} disabled={!r.numero_client}
+                        onPick={(v) => { changeEtat(r.numero_client, { etat: v }); if (ETAT_DATE_CONFIG[v]) setSelected(key); }} />
+                      {(() => {
+                        const h = etatHint(r);
+                        return h ? (
+                          <div style={{ fontSize: 10.5, fontWeight: 600, color: h.urgent ? "#b45309" : "#a3a9b6", marginTop: 3 }}>{h.text}</div>
+                        ) : null;
+                      })()}
+                    </td>
                     <td style={td}><SigCell status={r.owner_status} sentAt={r.owner_sent_at} signedAt={r.owner_signed_at} /></td>
                     <td style={td}><SigCell status={r.optilex_status} sentAt={r.optilex_sent_at} signedAt={r.optilex_signed_at} scheduledAt={r.optilex_scheduled_at} grouped={r.owner_status === "done" && r.optilex_status == null} /></td>
                     <td style={{ ...td, color: r.rdv_onboarding_date ? TEXT : "#cbd2e0" }}>{fmt(r.rdv_onboarding_date) || "—"}</td>
@@ -461,19 +639,35 @@ export default function OptilexBoard({ embed = false }) {
                         <MiniDot label="+2M" on={r.rdv_plus1mois_done} />
                       </div>
                     </td>
-                    <td style={{ ...td, color: MUTED, textAlign: "center" }}>›</td>
+                    <td style={{ ...td, textAlign: "center" }}>
+                      <span className="ob-chev">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                      </span>
+                    </td>
                   </tr>
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={8} style={{ ...td, textAlign: "center", color: MUTED, padding: "40px 0" }}>Aucun client</td></tr>
+                <tr style={{ animation: "obRowIn 0.3s cubic-bezier(0.16,1,0.3,1) both" }}>
+                  <td colSpan={8} style={{ ...td, textAlign: "center", padding: "52px 0" }}>
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#cbd2e0" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 8 }}>
+                      <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+                    </svg>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: MUTED }}>Aucun client</div>
+                    <div style={{ fontSize: 12, color: "#b6bdc9", marginTop: 3 }}>Modifiez vos filtres ou votre recherche.</div>
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
         )}
       </div>
 
-      {selRow && <DetailPanel row={selRow} onClose={() => setSelected(null)} patch={patch} />}
+      <AnimatePresence>
+        {selRow && <DetailPanel key="detail" row={selRow} onClose={() => setSelected(null)} patch={patch} changeEtat={changeEtat} etatHistVersion={etatHistVersion} />}
+      </AnimatePresence>
     </div>
   );
 }
@@ -737,7 +931,155 @@ function OptilexSignatureBlock({ email }) {
 }
 
 // ── PANNEAU DÉTAILS (slide-in droite, façon Notion) ──────────────────────────
-function DetailPanel({ row, onClose, patch }) {
+// Rangée date labellisée. COMMIT AU BLUR (pas à chaque frappe) : un input date natif émet un
+// change par segment valide -> une année en cours de saisie ("0002") partirait en base ET dans
+// l'historique d'audit. Enter = valider, Escape = annuler. key force la resynchro si la valeur
+// change de l'extérieur (optimiste / polling).
+function DateRow({ label, value, onChange }) {
+  const cancelRef = useRef(false);
+  const committed = toDateInput(value);
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+      <div style={{ fontSize: 13.5, fontWeight: 500, color: TEXT }}>{label}</div>
+      <input key={committed} type="date" defaultValue={committed}
+        onBlur={(e) => {
+          if (cancelRef.current) { cancelRef.current = false; return; }
+          const v = e.target.value || null;
+          if (v !== (committed || null)) onChange(v);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") { cancelRef.current = true; e.currentTarget.value = committed; e.currentTarget.blur(); }
+        }}
+        style={{ ...inputStyle, width: 168, padding: "7px 10px", fontSize: 12.5 }} />
+    </div>
+  );
+}
+
+// Libellé des dates d'une entrée d'historique (Pause = période, sinon date d'effet).
+const etatHistDates = (h) => {
+  if (h.etat === "Pause") {
+    const start = h.etat_date ? `Début ${fmt(h.etat_date)}` : "Début —";
+    const end = h.pause_end_date ? ` → fin ${fmt(h.pause_end_date)}`
+      : h.pause_relance_date ? ` → relance ${fmt(h.pause_relance_date)}` : " → fin indéterminée";
+    return start + end;
+  }
+  return h.etat_date ? fmt(h.etat_date) : "—";
+};
+
+// Bloc "État du client" (détail, sous le SIREN) : sélecteur d'état + date(s) selon l'état
+// (fiscaliste), révélation animée. Toute pose passe par changeEtat -> trace l'historique.
+function EtatSection({ row, num, changeEtat }) {
+  const etat = displayEtat(row);
+  const cfg = ETAT_DATE_CONFIG[etat];
+  // Mode fin de pause : connue (date de fin) vs indéterminée (date de relance). Dérivé des
+  // données UNIQUEMENT au changement de client : le choix local du toggle ne doit pas être
+  // écrasé par la MAJ optimiste qui suit (sinon snap-back visuel du toggle).
+  const [pauseMode, setPauseMode] = useState("connue");
+  useEffect(() => {
+    setPauseMode(row.pause_relance_date && !row.pause_end_date ? "indeterminee" : "connue");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [row.numero_client]);
+  // Applique un changement de date en conservant l'état + les autres dates courantes.
+  const applyDate = (chg) => changeEtat(num, {
+    etat, etat_date: row.etat_date, pause_end_date: row.pause_end_date,
+    pause_relance_date: row.pause_relance_date, ...chg,
+  });
+  return (
+    <div style={{ marginBottom: 22 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>État du client</div>
+      <EtatPicker etat={etat} disabled={!num} onPick={(v) => changeEtat(num, { etat: v })} />
+      {/* Pause échue : le rappel d'action est aussi visible sur la fiche. */}
+      {(() => {
+        const h = etatHint(row);
+        return h && h.urgent ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 9, fontSize: 12, fontWeight: 600, color: "#b45309" }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+            </svg>
+            {h.text.charAt(0).toUpperCase() + h.text.slice(1)}
+          </div>
+        ) : null;
+      })()}
+      <AnimatePresence initial={false}>
+        {cfg && num && (
+          <motion.div key={etat} initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }} style={{ overflow: "hidden" }}>
+            <div style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
+              {cfg.pause ? (
+                <>
+                  <DateRow label="Début de pause" value={row.etat_date} onChange={(d) => applyDate({ etat_date: d })} />
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 500, color: TEXT }}>Fin de pause</div>
+                    {/* Flip PUREMENT LOCAL : un clic exploratoire ne détruit jamais une date en
+                        base ni dans l'audit. La persistance passe par la saisie de la date
+                        elle-même (les DateRow nullent la contrepartie au commit). */}
+                    <StatusToggle value={pauseMode === "connue"} labels={["Indéterminée", "Connue"]}
+                      onChange={(v) => setPauseMode(v ? "connue" : "indeterminee")} />
+                  </div>
+                  {pauseMode === "connue"
+                    ? <DateRow label="Fin de pause" value={row.pause_end_date} onChange={(d) => applyDate({ pause_end_date: d, pause_relance_date: null })} />
+                    : <DateRow label="Relancer le" value={row.pause_relance_date} onChange={(d) => applyDate({ pause_relance_date: d, pause_end_date: null })} />}
+                </>
+              ) : (
+                <DateRow label={cfg.label} value={row.etat_date} onChange={(d) => applyDate({ etat_date: d })} />
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// Timeline verticale de l'historique des états (audit fiscaliste). Le plus récent en haut.
+function EtatHistory({ num, version }) {
+  const [items, setItems] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const prevNum = useRef(null);
+  useEffect(() => {
+    if (!num) return undefined;
+    let alive = true;
+    // changement de client : on vide d'abord (évite d'afficher l'historique du client précédent).
+    if (prevNum.current !== num) { setItems([]); setLoaded(false); prevNum.current = num; }
+    apiClient.get(`/api/v1/optilex/etat-history?numero_client=${encodeURIComponent(num)}`)
+      .then((r) => { if (alive) setItems(r.history || []); })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoaded(true); });
+    return () => { alive = false; };
+  }, [num, version]);
+  // Rien tant qu'on ne SAIT pas qu'il y a quelque chose à montrer : évite le flash du titre
+  // (apparu puis retiré) sur les clients sans historique, à chaque ouverture de fiche.
+  if (!num || !loaded || items.length === 0) return null;
+  return (
+    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+      transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }} style={{ overflow: "hidden" }}>
+    <div style={{ marginBottom: 22 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 12 }}>Historique des états</div>
+      <div style={{ position: "relative", paddingLeft: 20 }}>
+        <div style={{ position: "absolute", left: 4, top: 5, bottom: 5, width: 2, background: BORDER }} />
+        {items.map((h, i) => {
+          const st = ETAT_STYLE[h.etat] || {};
+          return (
+            <motion.div key={h.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1], delay: Math.min(i, 6) * 0.03 }}
+              style={{ position: "relative", paddingBottom: i === items.length - 1 ? 0 : 15 }}>
+              <div style={{ position: "absolute", left: -20, top: 3, width: 10, height: 10, borderRadius: "50%", background: st.dot || "#cbd2e0", border: `2px solid ${CARD}`, boxSizing: "content-box" }} />
+              <div style={{ fontSize: 13, fontWeight: 600, color: st.fg || TEXT }}>{h.etat}</div>
+              <div style={{ fontSize: 11.5, color: MUTED, marginTop: 1 }}>{etatHistDates(h)}</div>
+              <div style={{ fontSize: 10.5, color: "#aab2c0", marginTop: 1 }}>
+                {h.created_by ? `${String(h.created_by).split("@")[0]} · ` : ""}{timeAgo(h.created_at)}
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+    </motion.div>
+  );
+}
+
+function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion }) {
   const num = row.numero_client;
   const sigBlock = (title, status, sentAt, signedAt, scheduledAt, grouped) => {
     const i = sigInfo(status, sentAt, signedAt, scheduledAt);
@@ -763,8 +1105,13 @@ function DetailPanel({ row, onClose, patch }) {
   };
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.28)", zIndex: 9998, animation: "obOverlayIn 0.2s ease both" }} />
-      <div style={{ position: "fixed", top: 0, right: 0, height: "100vh", width: 460, maxWidth: "94vw", background: CARD, zIndex: 9999, boxShadow: "-12px 0 40px rgba(0,0,0,0.12)", overflowY: "auto", animation: "obSlideIn 0.28s cubic-bezier(0.22,1,0.36,1) both", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+      <motion.div onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.28)", zIndex: 9998 }} />
+      <motion.div
+        initial={{ x: 36, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
+        exit={{ x: 56, opacity: 0, transition: { duration: 0.18, ease: [0.4, 0, 1, 1] } }}
+        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+        style={{ position: "fixed", top: 0, right: 0, height: "100vh", width: 460, maxWidth: "94vw", background: CARD, zIndex: 9999, boxShadow: "-12px 0 40px rgba(0,0,0,0.12)", overflowY: "auto", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
         {/* Header */}
         <div style={{ padding: "20px 22px 16px", borderBottom: `1px solid ${BORDER}`, position: "sticky", top: 0, background: CARD, zIndex: 1 }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
@@ -775,16 +1122,33 @@ function DetailPanel({ row, onClose, patch }) {
                 <div style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{[companyName(row) !== primaryName(row) ? companyName(row) : null, row.numero_client, row.periodicite].filter(Boolean).join(" · ") || row.email || "—"}</div>
               </div>
             </div>
-            <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "#eef1f6", color: MUTED, fontSize: 15, cursor: "pointer", flexShrink: 0 }}>✕</button>
+            <button onClick={onClose} title="Fermer"
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#e2e6ee"; e.currentTarget.style.color = NAVY; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "#eef1f6"; e.currentTarget.style.color = MUTED; }}
+              style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "#eef1f6", color: MUTED, cursor: "pointer", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", transition: "background 0.16s, color 0.16s" }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-          <div style={{ marginTop: 12 }}><EtatPicker etat={displayEtat(row)} disabled={!num} onPick={(v) => patch(num, { etat_manuel: v })} /></div>
+          <div style={{ marginTop: 12 }}><EtatBadge etat={displayEtat(row)} /></div>
         </div>
 
         <div style={{ padding: "18px 22px 40px" }}>
+          {/* Sections en révélation douce (stagger léger, une seule fois à l'ouverture). */}
           {/* Informations client (override cabinet ?? original Owner, antériorité préservée) */}
-          <ClientInfoSection row={row} num={num} patch={patch} />
+          <div className="ob-sec" style={{ animationDelay: "0.05s" }}>
+            <ClientInfoSection row={row} num={num} patch={patch} />
+          </div>
+
+          {/* État du client (éditable, sous le SIREN) + dates fiscalistes + historique */}
+          <div className="ob-sec" style={{ animationDelay: "0.1s" }}>
+            <EtatSection row={row} num={num} changeEtat={changeEtat} />
+            <EtatHistory num={num} version={etatHistVersion} />
+          </div>
 
           {/* Signatures */}
+          <div className="ob-sec" style={{ animationDelay: "0.15s" }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Contrats</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 22 }}>
             {sigBlock("Owner", row.owner_status, row.owner_sent_at, row.owner_signed_at)}
@@ -798,8 +1162,10 @@ function DetailPanel({ row, onClose, patch }) {
               <div style={{ marginBottom: 22 }}><OptilexSignatureBlock email={row.email} /></div>
             </>
           )}
+          </div>
 
           {/* RDV + statut "effectué" */}
+          <div className="ob-sec" style={{ animationDelay: "0.2s" }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Rendez-vous</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
             <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date} done={row.rdv_onboarding_done} editable={!!num}
@@ -815,8 +1181,10 @@ function DetailPanel({ row, onClose, patch }) {
               onDate={num ? (d) => patch(num, { rdv_social_date_manual: d }) : undefined}
               onToggle={(v) => patch(num, { rdv_social_done: v })} />
           </div>
+          </div>
 
           {/* Jalons éditables (indisponibles tant que le client n'est pas établi) */}
+          <div className="ob-sec" style={{ animationDelay: "0.25s" }}>
           {num ? (
             <>
               <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Suivi facturation</div>
@@ -836,8 +1204,9 @@ function DetailPanel({ row, onClose, patch }) {
               Contrat en cours d'envoi. Le suivi facturation et les commentaires seront disponibles une fois la vente déclarée (client rattaché).
             </div>
           )}
+          </div>
         </div>
-      </div>
+      </motion.div>
     </>
   );
 }
@@ -854,7 +1223,10 @@ function JalonRow({ label, done, date, onToggle, onDate }) {
           <motion.div key="date" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }} style={{ overflow: "hidden" }}>
             <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 10 }}>
-              <input type="date" value={toDateInput(date)} onChange={(e) => onDate(e.target.value || null)}
+              {/* Commit au blur (cohérent avec DateRow) : pas d'écriture partielle pendant la frappe. */}
+              <input key={toDateInput(date)} type="date" defaultValue={toDateInput(date)}
+                onBlur={(e) => { const v = e.target.value || null; if (v !== (toDateInput(date) || null)) onDate(v); }}
+                onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                 style={{ ...inputStyle, width: 168, padding: "7px 10px", fontSize: 12.5 }} />
             </div>
           </motion.div>
