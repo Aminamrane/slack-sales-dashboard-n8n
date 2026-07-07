@@ -5580,7 +5580,7 @@ export default function TrackingSheet() {
                       <span style={{
                         fontSize: '10px', color: C.muted, flexShrink: 0, whiteSpace: 'nowrap',
                       }}>
-                        {formatDate(lead.assigned_at)}
+                        {formatDate(lead.created_at)}
                       </span>
 
                       {/* Selection chevron */}
@@ -6024,7 +6024,10 @@ export default function TrackingSheet() {
                 {[
                   { label: 'Salariés', value: lead.headcount || '—' },
                   { label: 'CA', value: lead.revenue || '—' },
-                  { label: 'Assigné', value: formatDate(lead.assigned_at) || '—' },
+                  // Date d'ENTRÉE du lead (created_at), pas la date d'assignation : c'est ce qui
+                  // intéresse le sales (quand le lead est arrivé). created_at = 100% peuplé sur les
+                  // leads assignés, et aucun lead assigné n'est dans le batch de migration.
+                  { label: 'Entrée', value: formatDate(lead.created_at) || '—' },
                 ].map(stat => (
                   <div key={stat.label} style={{
                     padding: '10px 6px', textAlign: 'center',
