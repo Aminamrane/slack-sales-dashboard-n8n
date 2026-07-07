@@ -34,6 +34,13 @@ const optilexPending = (r) => r.optilex_status === "scheduled" || r.optilex_stat
 const isAttenteOptilex = (r) => r.owner_status === "done" && optilexPending(r);
 // "En cours" = Opti'Lex actif mais Owner PAS encore signé (les 2 contrats encore en vol).
 const isEnCours = (r) => r.owner_status !== "done" && optilexPending(r);
+// RDV à venir (date de RDV >= aujourd'hui à Paris, pas encore effectué) — onglets dédiés.
+// Dates stockées en heure-mur Paris labellisée UTC -> on compare les PARTIES date (YYYY-MM-DD),
+// indépendamment du fuseau du navigateur, pour coller à l'affichage. Restreint aux lignes avec
+// un numéro client (RDV réellement pilotables ; un contrat pas encore résolu n'est pas actionnable).
+const _todayParisISO = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Paris" });
+const isOnboardingUpcoming = (r) => !!r.numero_client && !!r.rdv_onboarding_date && !r.rdv_onboarding_done && String(r.rdv_onboarding_date).slice(0, 10) >= _todayParisISO();
+const isIntegrationUpcoming = (r) => !!r.numero_client && !!r.rdv_lancement_date && !r.rdv_lancement_done && String(r.rdv_lancement_date).slice(0, 10) >= _todayParisISO();
 // État affiché : l'état du Sheet en priorité, sinon le statut du contrat en cours.
 const displayEtat = (r) => {
   if (r.etat_manuel) return r.etat_manuel;   // override manuel du cabinet (prioritaire)
@@ -226,6 +233,8 @@ export default function OptilexBoard({ embed = false }) {
     for (const r of rows) {
       const e = displayEtat(r);   // état effectif (override / Sheet / signé interne / attente / en cours)
       if (e) c[e] = (c[e] || 0) + 1;
+      if (isOnboardingUpcoming(r)) c["Onboarding à venir"] = (c["Onboarding à venir"] || 0) + 1;
+      if (isIntegrationUpcoming(r)) c["Intégration à venir"] = (c["Intégration à venir"] || 0) + 1;
     }
     return c;
   }, [rows]);
@@ -234,7 +243,9 @@ export default function OptilexBoard({ embed = false }) {
   const filtered = useMemo(() => {
     const ql = q.trim().toLowerCase();
     return rows.filter((r) => {
-      if (etatFilter !== "Tous" && displayEtat(r) !== etatFilter) return false;
+      if (etatFilter === "Onboarding à venir") { if (!isOnboardingUpcoming(r)) return false; }
+      else if (etatFilter === "Intégration à venir") { if (!isIntegrationUpcoming(r)) return false; }
+      else if (etatFilter !== "Tous" && displayEtat(r) !== etatFilter) return false;
       if (ql) {
         const hay = `${ov(r, "contact_name_ovr", "contact_name") || ""} ${r.crm_societe || ""} ${r.societe_sheet || ""} ${r.numero_client || ""} ${ov(r, "email_ovr", "email") || ""}`.toLowerCase();
         if (!hay.includes(ql)) return false;
@@ -251,7 +262,7 @@ export default function OptilexBoard({ embed = false }) {
   }, []);
 
   const selRow = useMemo(() => rows.find((r) => rowKey(r) === selected) || null, [rows, selected]);
-  const TABS = ["Tous", "Attente Opti'Lex", "En cours", ...ETAT_ORDER];
+  const TABS = ["Tous", "Attente Opti'Lex", "En cours", "Onboarding à venir", "Intégration à venir", ...ETAT_ORDER];
 
   const th = { textAlign: "left", padding: "11px 14px", fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: "0.02em", whiteSpace: "nowrap", position: "sticky", top: 0, background: "#f2f4f7", zIndex: 1 };
   const td = { padding: "11px 14px", fontSize: 13, color: TEXT, borderTop: `1px solid ${BORDER}`, verticalAlign: "middle", whiteSpace: "nowrap" };
@@ -286,7 +297,7 @@ export default function OptilexBoard({ embed = false }) {
           <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
             <colgroup>
               <col />{/* client (reste) */}
-              <col style={{ width: 156 }} />{/* état */}
+              <col style={{ width: 232 }} />{/* état (large pour "En cours de rétractation", le libellé le plus long) */}
               <col style={{ width: 150 }} />{/* owner */}
               <col style={{ width: 170 }} />{/* opti'lex */}
               <col style={{ width: 108 }} />{/* onboarding */}
