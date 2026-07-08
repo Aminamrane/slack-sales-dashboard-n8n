@@ -360,6 +360,9 @@ function SecTitle({ icon, children, style }) {
 // Statut de signature riche : signé / envoyé (en attente) / planifié / expiré…
 function sigInfo(status, sentAt, signedAt, scheduledAt) {
   if (status === "done") return { label: "Signé", sub: fmt(signedAt), color: GREEN, icon: "✓" };
+  // Pas de contrat lié mais une date de signature (fiche client interne, remplie à la
+  // déclaration de vente) : le client est signé, on l'affiche au lieu d'un "—" trompeur.
+  if (!status && signedAt) return { label: "Signé", sub: fmt(signedAt), color: GREEN, icon: "✓" };
   if (status === "ongoing") return { label: "Envoyé", sub: fmt(sentAt) + " · en attente", color: "#b45309", icon: "•" };
   if (status === "scheduled") return { label: "Planifié", sub: fmt(scheduledAt), color: "#5b6472", icon: "◷" };
   if (status === "expired") return { label: "Expiré", sub: "", color: "#b42318", icon: "✕" };
