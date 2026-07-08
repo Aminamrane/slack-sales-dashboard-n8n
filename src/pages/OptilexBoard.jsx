@@ -25,10 +25,11 @@ const ETAT_STYLE = {
   "En cours de rétractation": { bg: "#fff3e3", fg: "#b45309", dot: "#f59e0b" },
   "En attente":       { bg: "#eef1f6", fg: "#5b6472", dot: "#94a3b8" },
   "Sans suite":       { bg: "#eef1f6", fg: "#5b6472", dot: "#cbd2e0" },
+  "Inactifs":         { bg: "#fff3e3", fg: "#b45309", dot: "#f59e0b" },
 };
 // Onglets PRIMAIRES = les plus actionnables (toujours visibles). Le reste vit dans un
 // filtre multi-sélection "Filtre" pour désencombrer la barre.
-const PRIMARY_TABS = ["Tous", "Signé", "Attente Opti'Lex", "Onboarding à venir", "En cours de résiliation", "En cours de rétractation"];
+const PRIMARY_TABS = ["Tous", "Signé", "Attente Opti'Lex", "Inactifs", "Onboarding à venir", "En cours de résiliation", "En cours de rétractation"];
 const SECONDARY_CATS = ["En cours", "Intégration à venir", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation", "En attente", "Sans suite"];
 const TAB_LABEL = { "Attente Opti'Lex": "En attente Opti'Lex" };
 const tabLabel = (t) => TAB_LABEL[t] || t;
@@ -76,9 +77,13 @@ const displayEtat = (r) => {
 };
 // Une ligne appartient-elle à une catégorie (onglet primaire OU secondaire) ? Unifie les
 // prédicats calculés (RDV à venir) et les états (Sheet/override/interne) pour un filtrage unique.
+// Client cabinet sans mission suivie depuis 60 j (enrichissement SaaS Opti'Lex, jointure email).
+// Indépendant de l'état : un client peut être "Signé" ET inactif — signal de churn silencieux.
+const isInactif = (r) => r.is_inactive_60d === true;
 const matchesCat = (r, cat) => {
   if (cat === "Onboarding à venir") return isOnboardingUpcoming(r);
   if (cat === "Intégration à venir") return isIntegrationUpcoming(r);
+  if (cat === "Inactifs") return isInactif(r);
   return displayEtat(r) === cat;
 };
 // Alerte fiscaliste sur un état posé par le cabinet (etat_manuel) : pause échue (relance ou
@@ -337,6 +342,7 @@ const SEC_ICONS = {
   rdv: <><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></>,
   facturation: <><rect x="1" y="4" width="22" height="16" rx="2" /><line x1="1" y1="10" x2="23" y2="10" /></>,
   comments: <><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></>,
+  activity: <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></>,
 };
 // Titre de section du panneau : icône + libellé (remplace les titres nus).
 function SecTitle({ icon, children, style }) {
@@ -421,6 +427,7 @@ export default function OptilexBoard({ embed = false }) {
       if (e) c[e] = (c[e] || 0) + 1;
       if (isOnboardingUpcoming(r)) c["Onboarding à venir"] = (c["Onboarding à venir"] || 0) + 1;
       if (isIntegrationUpcoming(r)) c["Intégration à venir"] = (c["Intégration à venir"] || 0) + 1;
+      if (isInactif(r)) c["Inactifs"] = (c["Inactifs"] || 0) + 1;
     }
     return c;
   }, [rows]);
@@ -631,7 +638,15 @@ export default function OptilexBoard({ embed = false }) {
                       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                         <Avatar name={primaryName(r)} n={r.sheet_num} />
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={primaryName(r)}>{primaryName(r)}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={primaryName(r)}>{primaryName(r)}</div>
+                            {isInactif(r) && (
+                              <span title="Aucune mission suivie par le cabinet depuis 60 jours"
+                                style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: "#b45309", background: "#fff3e3", padding: "1px 7px", borderRadius: 10, whiteSpace: "nowrap" }}>
+                                Inactif{r.days_since_last_mission != null ? ` · ${r.days_since_last_mission} j` : ""}
+                              </span>
+                            )}
+                          </div>
                           <div style={{ fontSize: 11, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{rowSubtitle(r) || "en cours d'envoi"}</div>
                         </div>
                       </div>
@@ -1187,6 +1202,27 @@ function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion }) {
             <>
               <SecTitle icon="signature">Signature Opti'Lex</SecTitle>
               <div style={{ marginBottom: 22 }}><OptilexSignatureBlock email={row.email} /></div>
+            </>
+          )}
+
+          {/* Activité mission : client cabinet sans mission suivie depuis 60 j (churn silencieux). */}
+          {isInactif(row) && (
+            <>
+              <SecTitle icon="activity">Activité mission</SecTitle>
+              <div style={{ padding: "12px 14px", borderRadius: 10, border: "1px solid #f5deba", background: "#fff8ec", marginBottom: 22 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13.5, fontWeight: 700, color: "#b45309" }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  Client inactif côté cabinet
+                </div>
+                <div style={{ fontSize: 12.5, color: "#8a6a35", marginTop: 5, lineHeight: 1.5 }}>
+                  {row.last_mission_at
+                    ? <>Dernière activité mission le <strong>{fmt(row.last_mission_at)}</strong>{row.days_since_last_mission != null ? <> ({row.days_since_last_mission} jours)</> : null}.</>
+                    : <>Aucune mission suivie par le cabinet à ce jour.</>}
+                  {row.mission_count_total != null && <> {row.mission_count_total} mission{row.mission_count_total > 1 ? "s" : ""} au total.</>}
+                </div>
+              </div>
             </>
           )}
           </div>
