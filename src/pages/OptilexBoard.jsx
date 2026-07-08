@@ -35,6 +35,18 @@ const TAB_LABEL = { "Attente Opti'Lex": "En attente Opti'Lex" };
 const tabLabel = (t) => TAB_LABEL[t] || t;
 // États que le cabinet peut poser manuellement (badge cliquable, table + fiche).
 const ETAT_OPTIONS = ["Signé", "En cours de résiliation", "En cours de rétractation", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation"];
+// RÈGLE MÉTIER : le rôle optilex (fiscalistes du cabinet) ne peut pas POSER Résiliation/
+// Rétractation (états actés par Owner) — seulement les "En cours de ...". Le backend
+// applique la même règle (403) ; ici on retire les options de leur picker.
+const CABINET_FORBIDDEN_ETATS = ["Résiliation", "Rétractation"];
+const etatOptionsForUser = () => {
+  try {
+    if ((apiClient.getUser() || {}).role === "optilex") {
+      return ETAT_OPTIONS.filter((o) => !CABINET_FORBIDDEN_ETATS.includes(o));
+    }
+  } catch { /* défaut : liste complète */ }
+  return ETAT_OPTIONS;
+};
 // Champ(s) date à saisir par état (raisonnement fiscaliste). Absent = pas de date.
 // Pause = période : début (etat_date) + fin CONNUE (pause_end_date) OU indéterminée -> relance
 // (pause_relance_date), car en B2B le dirigeant ne sait pas toujours quand il reprend.
@@ -200,7 +212,7 @@ function EtatPicker({ etat, onPick, disabled }) {
     setOpen(true);
   };
   // "Automatique" = état calculé (suivi cabinet / signatures), efface l'override manuel.
-  const items = [{ opt: null, label: "Automatique" }, ...ETAT_OPTIONS.map((o) => ({ opt: o, label: o }))];
+  const items = [{ opt: null, label: "Automatique" }, ...etatOptionsForUser().map((o) => ({ opt: o, label: o }))];
   return (
     <span onClick={(e) => e.stopPropagation()}>
       <button ref={btnRef} type="button" onClick={toggle} title="Changer l'état"
