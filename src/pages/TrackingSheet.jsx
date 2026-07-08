@@ -868,7 +868,10 @@ export default function TrackingSheet() {
 
   // ── SALE DECLARATION MODAL (signed tab) ────────────────────────────────────
   const [showSaleModal, setShowSaleModal] = useState(null); // lead.id when modal is open
-  const [saleForm, setSaleForm] = useState({ email: '', paymentModality: 'M', employeeRange: '' });
+  // billingStructures ('une'|'plusieurs') + discount (null|false|true) + discountValue (texte
+  // libre "5 %") = questions facturation posées à l'étape 'questions' (après les créneaux),
+  // destinées à la description de l'event RDV Onboarding (agenda facturation@).
+  const [saleForm, setSaleForm] = useState({ email: '', paymentModality: 'M', employeeRange: '', billingStructures: '', structuresCount: '', discount: null, discountValue: '' });
   const [saleSubmitting, setSaleSubmitting] = useState(false);
   // Déclaration en 3 étapes : 'form' -> 'lancement' (créneau Opti'Lex : L. Gentaire, ou H. Moraru si 20+) -> 'onboarding' (créneau facturation@)
   const [saleStep, setSaleStep] = useState('form');
@@ -896,6 +899,10 @@ export default function TrackingSheet() {
           email: emailVal,
           payment_mode: paymentMode,
           employee_band: saleForm.employeeRange,
+          // Questions facturation (étape 'questions') -> description de l'event Onboarding.
+          billing_structures: saleForm.billingStructures || null,
+          structures_count: saleForm.billingStructures === 'plusieurs' ? (saleForm.structuresCount || null) : null,
+          discount: saleForm.discount === true ? ((saleForm.discountValue || '').trim() || 'Oui') : (saleForm.discount === false ? 'Non' : null),
         });
         clientNumero = res.client_numero || null;
       } catch (err) {
@@ -912,7 +919,7 @@ export default function TrackingSheet() {
       // Success
       setSaleClientNumero(clientNumero);
       setSaleSuccess(true);
-      setTimeout(() => { setSaleSuccess(false); setSaleClientNumero(null); setShowSaleModal(null); setSaleForm({ email: '', paymentModality: 'M', employeeRange: '' }); setSaleStep('form'); setSaleSlots({ onboarding: null, lancement: null }); }, 2500);
+      setTimeout(() => { setSaleSuccess(false); setSaleClientNumero(null); setShowSaleModal(null); setSaleForm({ email: '', paymentModality: 'M', employeeRange: '', billingStructures: '', structuresCount: '', discount: null, discountValue: '' }); setSaleStep('form'); setSaleSlots({ onboarding: null, lancement: null }); }, 2500);
     } catch (e) { console.error('Sale submit error:', e); }
     setSaleSubmitting(false);
   };
@@ -7440,7 +7447,7 @@ export default function TrackingSheet() {
                     <button
                       onClick={() => {
                         if (!canDeclare) return;
-                        setSaleForm({ email: lead.email || '', paymentModality: 'M', employeeRange: lead.employee_range || '' });
+                        setSaleForm({ email: lead.email || '', paymentModality: 'M', employeeRange: lead.employee_range || '', billingStructures: '', structuresCount: '', discount: null, discountValue: '' });
                         setSaleStep('form'); setSaleSlots({ onboarding: null, lancement: null });
                         setShowSaleModal(lead.id);
                       }}
@@ -8617,7 +8624,7 @@ export default function TrackingSheet() {
               style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both' }} />
             <div style={{
               position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
-              width: saleStep === 'form' ? 420 : 680, maxWidth: '92vw', background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`,
+              width: (saleStep === 'form' || saleStep === 'questions') ? 420 : 680, maxWidth: '92vw', background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`,
               boxShadow: '0 24px 48px rgba(0,0,0,0.2)', padding: '28px 28px 24px',
               animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
               fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
@@ -8708,6 +8715,100 @@ export default function TrackingSheet() {
                     }}
                   >Continuer</button>
                 </>
+              ) : saleStep === 'questions' ? (
+                <>
+                  {/* Étape questions facturation (après les créneaux, avant la déclaration).
+                      Réponses -> description de l'event RDV Onboarding (agenda facturation@).
+                      Style STRICTEMENT identique à l'étape 'form' (header rond + iconWiggle,
+                      labels 12px C.secondary, boutons segmentés C.accent). */}
+                  <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', margin: '0 auto 10px',
+                      background: darkMode ? 'rgba(255,255,255,0.06)' : '#f4f5f7',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'iconWiggle 3s ease-in-out infinite' }}>
+                        <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z" /><path d="M8 7h8M8 11h6M8 15h4" />
+                      </svg>
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Facturation</div>
+                    <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Deux précisions pour l'équipe facturation</div>
+                  </div>
+
+                  {/* Q1 : une ou plusieurs structures (+ combien si plusieurs) */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: C.secondary, display: 'block', marginBottom: 6 }}>La facturation porte sur</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {[{ key: 'une', label: 'Une structure' }, { key: 'plusieurs', label: 'Plusieurs structures' }].map(opt => (
+                        <button key={opt.key} onClick={() => setSaleForm(p => ({ ...p, billingStructures: opt.key, structuresCount: opt.key === 'une' ? '' : p.structuresCount }))}
+                          style={{
+                            flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+                            border: `1px solid ${saleForm.billingStructures === opt.key ? C.accent : C.border}`,
+                            background: saleForm.billingStructures === opt.key ? (darkMode ? C.accent + '20' : '#f0f1ff') : 'transparent',
+                            color: saleForm.billingStructures === opt.key ? C.accent : C.muted,
+                            transition: 'all 0.2s',
+                          }}>{opt.label}</button>
+                      ))}
+                    </div>
+                    {saleForm.billingStructures === 'plusieurs' && (
+                      <select value={saleForm.structuresCount || ''} onChange={(e) => setSaleForm(p => ({ ...p, structuresCount: e.target.value }))}
+                        style={{ width: '100%', marginTop: 8, padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`,
+                          background: darkMode ? '#252636' : '#f9fafb', color: (saleForm.structuresCount || '') ? C.text : C.muted, fontSize: 13, fontFamily: 'inherit',
+                          outline: 'none', boxSizing: 'border-box', cursor: 'pointer', appearance: 'auto', transition: 'border-color 0.2s' }}
+                        onFocus={(e) => e.target.style.borderColor = C.accent}
+                        onBlur={(e) => e.target.style.borderColor = C.border}>
+                        <option value="" disabled>Combien de structures ?</option>
+                        {['2', '3', '4', '5', '6', '7', '8', '9', '10+'].map(n => (
+                          <option key={n} value={n}>{n} structures</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Q2 : réduction oui/non + valeur libre si oui */}
+                  <div style={{ marginBottom: 18 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: C.secondary, display: 'block', marginBottom: 6 }}>Une réduction a été accordée ?</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {[{ key: false, label: 'Non' }, { key: true, label: 'Oui' }].map(opt => (
+                        <button key={String(opt.key)} onClick={() => setSaleForm(p => ({ ...p, discount: opt.key, discountValue: opt.key ? (p.discountValue || '') : '' }))}
+                          style={{
+                            flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+                            border: `1px solid ${saleForm.discount === opt.key ? C.accent : C.border}`,
+                            background: saleForm.discount === opt.key ? (darkMode ? C.accent + '20' : '#f0f1ff') : 'transparent',
+                            color: saleForm.discount === opt.key ? C.accent : C.muted,
+                            transition: 'all 0.2s',
+                          }}>{opt.label}</button>
+                      ))}
+                    </div>
+                    {saleForm.discount === true && (
+                      <input value={saleForm.discountValue || ''} onChange={(e) => setSaleForm(p => ({ ...p, discountValue: e.target.value }))}
+                        placeholder="Laquelle ? ex : 5 %, 10 %, 1 mois offert…"
+                        style={{ width: '100%', marginTop: 8, padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`,
+                          background: darkMode ? '#252636' : '#f9fafb', color: C.text, fontSize: 13, fontFamily: 'inherit',
+                          outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.2s' }}
+                        onFocus={(e) => e.target.style.borderColor = C.accent}
+                        onBlur={(e) => e.target.style.borderColor = C.border}
+                      />
+                    )}
+                  </div>
+
+                  {/* Navigation : Retour -> créneau Onboarding · Déclarer (gaté par les réponses) */}
+                  {(() => {
+                    const qReady = !!saleForm.billingStructures
+                      && (saleForm.billingStructures !== 'plusieurs' || !!(saleForm.structuresCount || ''))
+                      && (saleForm.discount === false || (saleForm.discount === true && (saleForm.discountValue || '').trim()));
+                    return (
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={() => setSaleStep('onboarding')} disabled={saleSubmitting}
+                          style={{ padding: '11px 16px', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent',
+                            color: C.muted, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', cursor: saleSubmitting ? 'default' : 'pointer' }}>Retour</button>
+                        <button onClick={() => handleSaleSubmitWithSlots(showSaleModal)} disabled={!qReady || saleSubmitting}
+                          style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
+                            cursor: qReady && !saleSubmitting ? 'pointer' : 'default',
+                            background: qReady ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
+                            color: qReady ? '#fff' : C.muted, opacity: saleSubmitting ? 0.7 : 1, transition: 'all 0.2s' }}>{saleSubmitting ? 'Déclaration...' : 'Déclarer la vente'}</button>
+                      </div>
+                    );
+                  })()}
+                </>
               ) : (
                 <>
                   {/* Étape créneau : Lancement (Opti'Lex) d'abord, puis Onboarding (facturation@) */}
@@ -8744,11 +8845,11 @@ export default function TrackingSheet() {
                           background: saleSlots.lancement ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
                           color: saleSlots.lancement ? '#fff' : C.muted, transition: 'all 0.2s' }}>Suivant → Onboarding</button>
                     ) : (
-                      <button onClick={() => handleSaleSubmitWithSlots(showSaleModal)} disabled={!saleSlots.onboarding || saleSubmitting}
+                      <button onClick={() => setSaleStep('questions')} disabled={!saleSlots.onboarding}
                         style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
-                          cursor: saleSlots.onboarding && !saleSubmitting ? 'pointer' : 'default',
+                          cursor: saleSlots.onboarding ? 'pointer' : 'default',
                           background: saleSlots.onboarding ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
-                          color: saleSlots.onboarding ? '#fff' : C.muted, opacity: saleSubmitting ? 0.7 : 1, transition: 'all 0.2s' }}>{saleSubmitting ? 'Déclaration...' : 'Déclarer la vente'}</button>
+                          color: saleSlots.onboarding ? '#fff' : C.muted, transition: 'all 0.2s' }}>Suivant → Questions</button>
                     )}
                   </div>
                 </>
