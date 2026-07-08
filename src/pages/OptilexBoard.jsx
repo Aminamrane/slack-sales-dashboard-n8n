@@ -26,12 +26,11 @@ const ETAT_STYLE = {
   "En attente":       { bg: "#eef1f6", fg: "#5b6472", dot: "#94a3b8" },
   "Sans suite":       { bg: "#eef1f6", fg: "#5b6472", dot: "#cbd2e0" },
   "Inactifs":         { bg: "#fff3e3", fg: "#b45309", dot: "#f59e0b" },
-  "Inactifs avec missions": { bg: "#fff3e3", fg: "#b45309", dot: "#d97706" },
 };
 // Onglets PRIMAIRES = les plus actionnables (toujours visibles). Le reste vit dans un
 // filtre multi-sélection "Filtre" pour désencombrer la barre.
 const PRIMARY_TABS = ["Tous", "Signé", "Attente Opti'Lex", "Inactifs", "Onboarding à venir", "En cours de résiliation", "En cours de rétractation"];
-const SECONDARY_CATS = ["En cours", "Intégration à venir", "Inactifs avec missions", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation", "En attente", "Sans suite"];
+const SECONDARY_CATS = ["En cours", "Intégration à venir", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation", "En attente", "Sans suite"];
 const TAB_LABEL = { "Attente Opti'Lex": "En attente Opti'Lex" };
 const tabLabel = (t) => TAB_LABEL[t] || t;
 // États que le cabinet peut poser manuellement (badge cliquable, table + fiche).
@@ -80,15 +79,14 @@ const displayEtat = (r) => {
 // prédicats calculés (RDV à venir) et les états (Sheet/override/interne) pour un filtrage unique.
 // Client cabinet sans mission suivie depuis 60 j (enrichissement SaaS Opti'Lex, jointure email).
 // Indépendant de l'état : un client peut être "Signé" ET inactif — signal de churn silencieux.
-const isInactif = (r) => r.is_inactive_60d === true;
-// Inactif AVEC au moins une mission = vrai churn (le cabinet a travaillé puis plus rien).
-// Zéro mission = probablement encore en onboarding -> exclu de ce filtre affiné.
-const isInactifAvecMissions = (r) => isInactif(r) && (r.mission_count_total || 0) > 0;
+// Inactif = sans mission depuis >= 60 j ET au moins une mission passée (le cabinet a
+// travaillé puis plus rien = vrai churn). Les zéro-mission (probablement encore en
+// onboarding) ne sont affichés NULLE PART comme inactifs (décision produit 2026-07-08).
+const isInactif = (r) => r.is_inactive_60d === true && (r.mission_count_total || 0) > 0;
 const matchesCat = (r, cat) => {
   if (cat === "Onboarding à venir") return isOnboardingUpcoming(r);
   if (cat === "Intégration à venir") return isIntegrationUpcoming(r);
   if (cat === "Inactifs") return isInactif(r);
-  if (cat === "Inactifs avec missions") return isInactifAvecMissions(r);
   return displayEtat(r) === cat;
 };
 // Alerte fiscaliste sur un état posé par le cabinet (etat_manuel) : pause échue (relance ou
@@ -433,7 +431,6 @@ export default function OptilexBoard({ embed = false }) {
       if (isOnboardingUpcoming(r)) c["Onboarding à venir"] = (c["Onboarding à venir"] || 0) + 1;
       if (isIntegrationUpcoming(r)) c["Intégration à venir"] = (c["Intégration à venir"] || 0) + 1;
       if (isInactif(r)) c["Inactifs"] = (c["Inactifs"] || 0) + 1;
-      if (isInactifAvecMissions(r)) c["Inactifs avec missions"] = (c["Inactifs avec missions"] || 0) + 1;
     }
     return c;
   }, [rows]);
