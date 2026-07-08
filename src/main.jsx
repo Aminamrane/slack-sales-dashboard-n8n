@@ -184,7 +184,7 @@ function App() {
         <Route
           path="/ceo/optilex-board"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'ceo']}>
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'customer_success_manager']}>
               <CeoOptilexBoardView />
             </ProtectedRoute>
           }
@@ -224,7 +224,7 @@ function App() {
         <Route
           path="/ceo/funnel-leads"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'ceo', 'acquisition_director', 'hr']}>
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'acquisition_director', 'hr', 'customer_success_manager']}>
               <CeoFunnelLeadsView />
             </ProtectedRoute>
           }
