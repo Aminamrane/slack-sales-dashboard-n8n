@@ -16,7 +16,7 @@ import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo", "customer_success_manager"]);
 
 export default function CeoOptilexBoardView() {
   const navigate = useNavigate();
