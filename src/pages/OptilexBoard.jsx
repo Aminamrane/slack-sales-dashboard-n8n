@@ -148,6 +148,81 @@ const fmtTranche = (t) => {
 };
 const AVATAR_COLORS = ["#2563eb", "#7c3aed", "#0891b2", "#059669", "#d97706", "#db2777", "#4f46e5", "#0d9488"];
 
+// ── Export CSV (extraction résiliés / en cours de résiliation, etc.) ─────────
+// Découpage prénom/nom "au feeling" : convention de la fiche RH = nom de famille
+// EN MAJUSCULES. Donc les tokens tout-en-capitales (>=2 lettres) = nom, le reste =
+// prénom. Repli : 1er token = prénom, reste = nom. Best-effort, pas garanti exact.
+const _isUpperToken = (t) => t.length >= 2 && t === t.toLocaleUpperCase("fr") && /[A-ZÀ-Ÿ]/.test(t);
+const splitName = (full) => {
+  const s = (full || "").trim();
+  if (!s) return { first: "", last: "" };
+  const tokens = s.split(/\s+/).filter(Boolean);
+  if (tokens.length === 1) return { first: "", last: tokens[0] };
+  const upper = tokens.filter(_isUpperToken);
+  if (upper.length && upper.length < tokens.length) {
+    return { first: tokens.filter((t) => !_isUpperToken(t)).join(" "), last: upper.join(" ") };
+  }
+  return { first: tokens[0], last: tokens.slice(1).join(" ") };
+};
+// Colonnes imposées (format de la feuille RH). Scoring/Statut/Suivi planifié = laissés
+// VIDES (renseignés par l'équipe, pas par nous).
+const CSV_HEADERS = ["Client", "Scoring", "Statut", "Suivi planifié", "Numéro", "First name", "Last name", "email"];
+const _csvCell = (v) => {
+  const s = (v ?? "").toString();
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+const rowToCsvCells = (r) => {
+  const societe = companyName(r);
+  const person = ov(r, "contact_name_ovr", "contact_name");
+  // "société - Personne", sauf si la société contient déjà le nom (évite le doublon
+  // "LOC DESIGN - Luis Fernandez - Luis Fernandez" quand la fiche société embarque le dirigeant).
+  const client = person && societe && !societe.toLowerCase().includes(person.toLowerCase())
+    ? `${societe} - ${person}`
+    : (societe || person || "");
+  const { first, last } = splitName(person);
+  const phone = ov(r, "phone_ovr", "contact_phone") || "";
+  const email = ov(r, "email_ovr", "email") || "";
+  return [client, "", "", "", phone, first, last, email];
+};
+const exportRowsToCsv = (rows, label) => {
+  const lines = [CSV_HEADERS, ...rows.map(rowToCsvCells)].map((cells) => cells.map(_csvCell).join(","));
+  // BOM UTF-8 (accents corrects dans Excel/Sheets) + CRLF.
+  const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0, 10);
+  const slug = (label || "export").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_|_$/g, "").toLowerCase();
+  a.href = url;
+  a.download = `optilex_${slug || "export"}_${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+// ── Filtre par date de signature Owner ──────────────────────────────────────
+// owner_signed_at (fallback fiche appliqué côté back) -> date seule YYYY-MM-DD.
+const sigDateOf = (r) => (r.owner_signed_at ? String(r.owner_signed_at).slice(0, 10) : null);
+const _toISODate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+// "2026-07" -> { from: "2026-07-01", to: "2026-07-31" }
+const monthToRange = (month) => {
+  const [y, m] = month.split("-").map(Number);
+  return { from: `${month}-01`, to: _toISODate(new Date(y, m, 0)) };
+};
+const _fmtShort = (iso) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y.slice(2)}`; };
+// Libellé du bouton : "juil. 2026" si mois plein, sinon "du → au".
+const sigRangeLabel = (from, to) => {
+  if (!from && !to) return null;
+  if (from && to) {
+    const r = monthToRange(from.slice(0, 7));
+    if (from === r.from && to === r.to) {
+      return new Date(`${from}T00:00:00`).toLocaleDateString("fr-FR", { month: "short", year: "numeric" });
+    }
+    return `${_fmtShort(from)} → ${_fmtShort(to)}`;
+  }
+  return from ? `dès ${_fmtShort(from)}` : `jusqu'au ${_fmtShort(to)}`;
+};
+
 const fmt = (iso) => {
   if (!iso) return "";
   const d = new Date(iso);
@@ -338,6 +413,72 @@ function FilterMenu({ cats, counts, selected, onToggle, onClear }) {
   );
 }
 
+// Filtre par date de signature Owner : un mois (raccourci) OU une période du/au.
+// Même mécanique de popup portalisé que FilterMenu (ferme au scroll/resize, flip haut).
+const SIG_MENU_H = 300;
+function SigDateFilter({ from, to, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const btnRef = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = () => setOpen(false);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => { window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); };
+  }, [open]);
+  const active = !!(from || to);
+  const label = sigRangeLabel(from, to);
+  const monthValue = (from && to && (() => { const r = monthToRange(from.slice(0, 7)); return from === r.from && to === r.to; })()) ? from.slice(0, 7) : "";
+  const toggle = (e) => {
+    e.stopPropagation();
+    if (open) { setOpen(false); return; }
+    const r = btnRef.current.getBoundingClientRect();
+    const up = r.bottom + SIG_MENU_H > window.innerHeight && r.top > SIG_MENU_H;
+    setPos({ top: up ? r.top - 4 : r.bottom + 4, left: r.left, up });
+    setOpen(true);
+  };
+  const fieldStyle = { padding: "8px 10px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: TEXT, fontSize: 12.5, fontFamily: "inherit", outline: "none", boxSizing: "border-box", width: "100%" };
+  return (
+    <span onClick={(e) => e.stopPropagation()}>
+      <button ref={btnRef} type="button" onClick={toggle} title="Filtrer par date de signature Owner"
+        style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${active || open ? NAVY : BORDER}`, background: active ? NAVY : CARD, color: active ? "#fff" : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 7 }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={active ? "#fff" : MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+        {active ? label : "Date signature"}
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={active ? "rgba(255,255,255,0.75)" : MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.16s ease", flexShrink: 0 }}>
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && pos && createPortal(
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 10050 }} />
+          <div style={{ position: "fixed", ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }), left: pos.left, zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 8px 28px rgba(17,24,39,0.14)", padding: 12, width: 250, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", animation: "obMenuIn 0.15s cubic-bezier(0.16,1,0.3,1) both", transformOrigin: pos.up ? "bottom left" : "top left" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em" }}>Signé le</span>
+              {active && <button type="button" onClick={() => onChange({ from: "", to: "" })} style={{ border: "none", background: "transparent", color: "#2563eb", fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Effacer</button>}
+            </div>
+            <label style={{ fontSize: 11, color: MUTED, display: "block", marginBottom: 4 }}>Mois</label>
+            <input type="month" value={monthValue} onChange={(e) => onChange(e.target.value ? monthToRange(e.target.value) : { from: "", to: "" })} style={{ ...fieldStyle, marginBottom: 12 }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 0 10px" }}>
+              <div style={{ flex: 1, height: 1, background: BORDER }} />
+              <span style={{ fontSize: 10.5, color: MUTED, fontWeight: 600 }}>ou période</span>
+              <div style={{ flex: 1, height: 1, background: BORDER }} />
+            </div>
+            <label style={{ fontSize: 11, color: MUTED, display: "block", marginBottom: 4 }}>Du</label>
+            <input type="date" value={from || ""} max={to || undefined} onChange={(e) => onChange({ from: e.target.value, to })} style={{ ...fieldStyle, marginBottom: 10 }} />
+            <label style={{ fontSize: 11, color: MUTED, display: "block", marginBottom: 4 }}>Au</label>
+            <input type="date" value={to || ""} min={from || undefined} onChange={(e) => onChange({ from, to: e.target.value })} style={fieldStyle} />
+          </div>
+        </>,
+        document.body,
+      )}
+    </span>
+  );
+}
+
 // Petit crayon = modification.
 function PencilIcon({ size = 13 }) {
   return (
@@ -408,6 +549,7 @@ export default function OptilexBoard({ embed = false }) {
   const [loading, setLoading] = useState(true);
   const [etatFilter, setEtatFilter] = useState("Tous");   // onglet primaire actif
   const [multiFilter, setMultiFilter] = useState([]);      // catégories secondaires cochées (union)
+  const [sigRange, setSigRange] = useState({ from: "", to: "" }); // filtre date signature Owner
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState(null); // numero_client du client ouvert
 
@@ -461,13 +603,21 @@ export default function OptilexBoard({ embed = false }) {
       } else if (etatFilter !== "Tous" && !matchesCat(r, etatFilter)) {
         return false;
       }
+      // Filtre date de signature Owner (mois ou période). Une ligne sans date de
+      // signature est exclue dès qu'un filtre date est actif.
+      if (sigRange.from || sigRange.to) {
+        const d = sigDateOf(r);
+        if (!d) return false;
+        if (sigRange.from && d < sigRange.from) return false;
+        if (sigRange.to && d > sigRange.to) return false;
+      }
       if (ql) {
         const hay = `${ov(r, "contact_name_ovr", "contact_name") || ""} ${r.crm_societe || ""} ${r.societe_sheet || ""} ${r.numero_client || ""} ${ov(r, "email_ovr", "email") || ""}`.toLowerCase();
         if (!hay.includes(ql)) return false;
       }
       return true;
     });
-  }, [rows, etatFilter, multiFilter, q]);
+  }, [rows, etatFilter, multiFilter, sigRange, q]);
 
   const patch = useCallback(async (numero, changes) => {
     if (!numero) return; // contrat pré-client : pas de jalons éditables
@@ -530,6 +680,13 @@ export default function OptilexBoard({ embed = false }) {
   const toggleCat = (cat) => {
     setEtatFilter("Tous");
     setMultiFilter((prev) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]));
+  };
+  // Export CSV de la vue filtrée courante (onglet + filtres + date + recherche).
+  // Le nom de fichier reflète le filtre actif (ex. resiliation, en_cours_de_resiliation).
+  const handleExportCsv = () => {
+    if (filtered.length === 0) return;
+    const label = multiFilter.length ? multiFilter.join("_") : (etatFilter !== "Tous" ? etatFilter : "board");
+    exportRowsToCsv(filtered, label);
   };
 
   const th = { textAlign: "left", padding: "11px 14px", fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: "0.02em", whiteSpace: "nowrap", position: "sticky", top: 0, background: "#f2f4f7", zIndex: 1 };
@@ -599,6 +756,22 @@ export default function OptilexBoard({ embed = false }) {
           );
         })}
         <FilterMenu cats={SECONDARY_CATS} counts={counts} selected={multiFilter} onToggle={toggleCat} onClear={() => setMultiFilter([])} />
+        <SigDateFilter from={sigRange.from} to={sigRange.to} onChange={setSigRange} />
+        <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+          {(sigRange.from || sigRange.to || multiFilter.length || etatFilter !== "Tous" || q) && (
+            <span style={{ fontSize: 11.5, color: MUTED, fontWeight: 600 }}>{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</span>
+          )}
+          <motion.button type="button" onClick={handleExportCsv} disabled={filtered.length === 0} whileTap={{ scale: 0.96 }}
+            title="Exporter la vue filtrée au format CSV"
+            onMouseEnter={(e) => { if (filtered.length) e.currentTarget.style.background = "#f7f8fa"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = CARD; }}
+            style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${BORDER}`, background: CARD, color: filtered.length ? TEXT : MUTED, fontSize: 12.5, fontWeight: 600, cursor: filtered.length ? "pointer" : "default", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 7, opacity: filtered.length ? 1 : 0.55 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Exporter CSV
+          </motion.button>
+        </span>
       </div>
 
       <div style={{ background: CARD, borderRadius: 14, border: `1px solid ${BORDER}`, overflowX: "hidden", overflowY: "auto", maxHeight: "calc(100vh - 190px)" }}>
