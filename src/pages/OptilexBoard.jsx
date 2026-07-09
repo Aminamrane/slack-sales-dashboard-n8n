@@ -209,6 +209,11 @@ const monthToRange = (month) => {
   const [y, m] = month.split("-").map(Number);
   return { from: `${month}-01`, to: _toISODate(new Date(y, m, 0)) };
 };
+// "2026-07" -> "Juillet 2026"
+const monthLabel = (m) => {
+  const s = new Date(`${m}-01T00:00:00`).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
 const _fmtShort = (iso) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y.slice(2)}`; };
 // Libellé du bouton : "juil. 2026" si mois plein, sinon "du → au".
 const sigRangeLabel = (from, to) => {
@@ -416,7 +421,7 @@ function FilterMenu({ cats, counts, selected, onToggle, onClear }) {
 // Filtre par date de signature Owner : un mois (raccourci) OU une période du/au.
 // Même mécanique de popup portalisé que FilterMenu (ferme au scroll/resize, flip haut).
 const SIG_MENU_H = 300;
-function SigDateFilter({ from, to, onChange }) {
+function SigDateFilter({ from, to, onChange, months = [] }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const btnRef = useRef(null);
@@ -461,7 +466,11 @@ function SigDateFilter({ from, to, onChange }) {
               {active && <button type="button" onClick={() => onChange({ from: "", to: "" })} style={{ border: "none", background: "transparent", color: "#2563eb", fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Effacer</button>}
             </div>
             <label style={{ fontSize: 11, color: MUTED, display: "block", marginBottom: 4 }}>Mois</label>
-            <input type="month" value={monthValue} onChange={(e) => onChange(e.target.value ? monthToRange(e.target.value) : { from: "", to: "" })} style={{ ...fieldStyle, marginBottom: 12 }} />
+            <select value={monthValue} onChange={(e) => onChange(e.target.value ? monthToRange(e.target.value) : { from: "", to: "" })}
+              style={{ ...fieldStyle, marginBottom: 12, cursor: "pointer", appearance: "auto" }}>
+              <option value="">Tous les mois</option>
+              {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+            </select>
             <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 0 10px" }}>
               <div style={{ flex: 1, height: 1, background: BORDER }} />
               <span style={{ fontSize: 10.5, color: MUTED, fontWeight: 600 }}>ou période</span>
@@ -619,6 +628,13 @@ export default function OptilexBoard({ embed = false }) {
     });
   }, [rows, etatFilter, multiFilter, sigRange, q]);
 
+  // Mois qui ont au moins une signature Owner (pour le dropdown), du + récent au + ancien.
+  const sigMonths = useMemo(() => {
+    const set = new Set();
+    for (const r of rows) { const d = sigDateOf(r); if (d) set.add(d.slice(0, 7)); }
+    return [...set].sort().reverse();
+  }, [rows]);
+
   const patch = useCallback(async (numero, changes) => {
     if (!numero) return; // contrat pré-client : pas de jalons éditables
     mutSeq.current += 1;
@@ -756,7 +772,7 @@ export default function OptilexBoard({ embed = false }) {
           );
         })}
         <FilterMenu cats={SECONDARY_CATS} counts={counts} selected={multiFilter} onToggle={toggleCat} onClear={() => setMultiFilter([])} />
-        <SigDateFilter from={sigRange.from} to={sigRange.to} onChange={setSigRange} />
+        <SigDateFilter from={sigRange.from} to={sigRange.to} onChange={setSigRange} months={sigMonths} />
         <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           {(sigRange.from || sigRange.to || multiFilter.length || etatFilter !== "Tous" || q) && (
             <span style={{ fontSize: 11.5, color: MUTED, fontWeight: 600 }}>{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</span>
