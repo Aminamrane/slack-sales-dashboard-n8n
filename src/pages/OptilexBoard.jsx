@@ -358,6 +358,7 @@ const SEC_ICONS = {
   facturation: <><rect x="1" y="4" width="22" height="16" rx="2" /><line x1="1" y1="10" x2="23" y2="10" /></>,
   comments: <><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></>,
   activity: <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></>,
+  emails: <><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></>,
 };
 // Titre de section du panneau : icône + libellé (remplace les titres nus).
 function SecTitle({ icon, children, style }) {
@@ -1164,6 +1165,35 @@ function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion }) {
       </div>
     );
   };
+  // Étape du parcours email Opti'Lex : enveloppe grise (non envoyé) -> verte (envoyé)
+  // + date. On trace l'ENVOI (dispatch Resend marque *_email_sent_at), pas l'ouverture.
+  const emailStep = (label, trigger, sentAt) => {
+    const sent = !!sentAt;
+    return (
+      <div style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${BORDER}`, background: "#fafbfc", display: "flex", alignItems: "flex-start", gap: 11 }}>
+        <div style={{ width: 34, height: 34, borderRadius: 9, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: sent ? "#e9f9f0" : "#eef1f6", color: sent ? GREEN : "#c0c7d4", transition: "background 0.25s, color 0.25s" }}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+          </svg>
+        </div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: sent ? NAVY : MUTED }}>{label}</div>
+          <div style={{ fontSize: 11, color: MUTED, marginTop: 1 }}>{trigger}</div>
+          <div style={{ fontSize: 12, fontWeight: 600, marginTop: 5, color: sent ? GREEN : "#c0c7d4", display: "flex", alignItems: "center", gap: 5 }}>
+            {sent ? (
+              <>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                Envoyé le {fmt(sentAt)}
+              </>
+            ) : "Non envoyé"}
+          </div>
+        </div>
+      </div>
+    );
+  };
+  // Le parcours email n'a de sens que pour un client dans le flux Opti'Lex (contrat
+  // séparé) : un contrat groupé (inclus à l'Owner) n'a pas d'emails cabinet dédiés.
+  const hasOptilexTrack = row.optilex_status != null || !!row.optilex_welcome_email_at || !!row.optilex_livret_email_at;
   return (
     <>
       <motion.div onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
@@ -1220,6 +1250,18 @@ function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion }) {
             <>
               <SecTitle icon="signature">Signature Opti'Lex</SecTitle>
               <div style={{ marginBottom: 22 }}><OptilexSignatureBlock email={row.email} /></div>
+            </>
+          )}
+
+          {/* Parcours des 2 emails Opti'Lex automatisés (accueil à l'envoi du contrat,
+              livret à la signature). Enveloppe grise = pas encore parti, verte = envoyé + date. */}
+          {hasOptilexTrack && (
+            <>
+              <SecTitle icon="emails">Emails Opti'Lex</SecTitle>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
+                {emailStep("1er email · Accueil", "À l'envoi du contrat Opti'Lex", row.optilex_welcome_email_at)}
+                {emailStep("2ème email · Livret", "À la signature du contrat", row.optilex_livret_email_at)}
+              </div>
             </>
           )}
 
