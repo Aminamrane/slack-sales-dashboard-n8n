@@ -29,9 +29,9 @@ const ETAT_STYLE = {
 };
 // Onglets PRIMAIRES = les plus actionnables (toujours visibles). Le reste vit dans un
 // filtre multi-sélection "Filtre" pour désencombrer la barre.
-const PRIMARY_TABS = ["Tous", "Signé", "Attente Opti'Lex", "Inactifs", "Onboarding à venir", "En cours de résiliation", "En cours de rétractation"];
-const SECONDARY_CATS = ["En cours", "Intégration à venir", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation", "En attente", "Sans suite"];
-const TAB_LABEL = { "Attente Opti'Lex": "En attente Opti'Lex" };
+const PRIMARY_TABS = ["Tous", "Signé", "Attente Opti'Lex", "Inactifs", "Onboarding à venir", "Intégration à venir", "En cours de résiliation", "En cours de rétractation"];
+const SECONDARY_CATS = ["En cours", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation", "En attente", "Sans suite"];
+const TAB_LABEL = { "Attente Opti'Lex": "En attente Opti'Lex", "Onboarding à venir": "Onboarding Owner à venir", "Intégration à venir": "RDV intégration à venir" };
 const tabLabel = (t) => TAB_LABEL[t] || t;
 // États que le cabinet peut poser manuellement (badge cliquable, table + fiche).
 const ETAT_OPTIONS = ["Signé", "En cours de résiliation", "En cours de rétractation", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation"];
@@ -71,6 +71,11 @@ const isEnCours = (r) => r.owner_status !== "done" && optilexPending(r);
 const _todayParisISO = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Paris" });
 const isOnboardingUpcoming = (r) => !!r.numero_client && !!r.rdv_onboarding_date && !r.rdv_onboarding_done && String(r.rdv_onboarding_date).slice(0, 10) >= _todayParisISO();
 const isIntegrationUpcoming = (r) => !!r.numero_client && !!r.rdv_lancement_date && !r.rdv_lancement_done && String(r.rdv_lancement_date).slice(0, 10) >= _todayParisISO();
+// Contrat Opti'Lex SÉPARÉ (split) pas encore signé : optilex_status existe (non null =
+// pas le cas "groupé/inclus") et != done. Sert l'alerte "RDV intégration mais Opti'Lex
+// non signé". Disparaît d'elle-même dès que le contrat est signé (status -> done).
+const optilexNotSigned = (r) => !!r.optilex_status && r.optilex_status !== "done";
+const integrationAlert = (r) => isIntegrationUpcoming(r) && optilexNotSigned(r);
 // État affiché : l'état du Sheet en priorité, sinon le statut du contrat en cours.
 const displayEtat = (r) => {
   if (r.etat_manuel) return r.etat_manuel;   // override manuel du cabinet (prioritaire)
@@ -875,7 +880,10 @@ export default function OptilexBoard({ embed = false }) {
                     <td style={td}><SigCell status={r.owner_status} sentAt={r.owner_sent_at} signedAt={r.owner_signed_at} /></td>
                     <td style={td}><SigCell status={r.optilex_status} sentAt={r.optilex_sent_at} signedAt={r.optilex_signed_at} scheduledAt={r.optilex_scheduled_at} grouped={r.owner_status === "done" && r.optilex_status == null} /></td>
                     <td style={{ ...td, color: r.rdv_onboarding_date ? TEXT : "#cbd2e0" }}>{fmt(r.rdv_onboarding_date) || "—"}</td>
-                    <td style={{ ...td, color: r.rdv_lancement_date ? TEXT : "#cbd2e0" }}>{fmt(r.rdv_lancement_date) || "—"}</td>
+                    <td style={{ ...td, color: r.rdv_lancement_date ? TEXT : "#cbd2e0" }}>
+                      {fmt(r.rdv_lancement_date) || "—"}
+                      {integrationAlert(r) && <div><OptilexAlertBadge compact /></div>}
+                    </td>
                     <td style={td}>
                       <div style={{ display: "flex", gap: 5 }}>
                         <MiniDot label="O" on={r.facturation_honoraires_done} />
@@ -919,6 +927,19 @@ export default function OptilexBoard({ embed = false }) {
 function MiniDot({ label, on }) {
   return (
     <span title={label} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 26, height: 20, padding: "0 5px", borderRadius: 6, fontSize: 10, fontWeight: 700, background: on ? "#e9f9f0" : "#eef1f6", color: on ? GREEN : "#b6bdc9" }}>{label}</span>
+  );
+}
+
+// Alerte : RDV d'intégration à venir mais contrat Opti'Lex non signé. Disparaît dès signature.
+function OptilexAlertBadge({ compact }) {
+  return (
+    <span title="RDV d'intégration à venir, mais le contrat Opti'Lex n'est pas signé"
+      style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, padding: "2px 7px", borderRadius: 10, background: "#fff3e3", color: "#b45309", fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+      </svg>
+      {compact ? "Opti'Lex non signé" : "Contrat Opti'Lex non signé"}
+    </span>
   );
 }
 
@@ -1429,6 +1450,14 @@ function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion }) {
           {/* Signatures */}
           <div className="ob-sec" style={{ animationDelay: "0.15s" }}>
           <SecTitle icon="contrats">Contrats</SecTitle>
+          {integrationAlert(row) && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", borderRadius: 10, border: "1px solid #f5deba", background: "#fff8ec", marginBottom: 12, fontSize: 12.5, fontWeight: 600, color: "#b45309" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              RDV d'intégration à venir, mais le contrat Opti'Lex n'est pas encore signé.
+            </div>
+          )}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 22 }}>
             {sigBlock("Owner", row.owner_status, row.owner_sent_at, row.owner_signed_at)}
             {sigBlock("Opti'Lex", row.optilex_status, row.optilex_sent_at, row.optilex_signed_at, row.optilex_scheduled_at, row.owner_status === "done" && row.optilex_status == null)}
