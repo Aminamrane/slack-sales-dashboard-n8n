@@ -1,24 +1,25 @@
-// src/pages/CeoVariablesView.jsx
+// src/pages/CeoSequencesView.jsx
 //
-// Route /ceo/variables — embed <Variables embed /> dans le shell CEO
-// (sidebar shared + SharedNavbar conservés). Calque de CeoAutoAssignView.
+// Route /ceo/sequences — embed <SequencesMonitor embed /> dans le
+// shell CEO / Acquisition Director (sidebar shared + SharedNavbar conservés).
 //
-// Salaires = donnée CONFIDENTIELLE -> acces restreint admin / ceo uniquement
-// (l'acquisition director ne voit de toute façon pas la section HUMAN).
+// Calque de CeoPerfSalesView. Différence : LeadAssignmentLive prend le prop
+// `embed` directement (pas d'injection ?embed=true via l'URL). Lecture seule
+// pour ceo/acquisition_director (isAdmin=role==='admin' côté composant).
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import { navigateBackToDashboard } from "../utils/dashboardNavigation";
-import Variables from "./Variables.jsx";
+import SequencesMonitor from "./SequencesMonitor.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo", "hr"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "acquisition_director", "head_of_acquisition"]);
 
-export default function CeoVariablesView() {
+export default function CeoSequencesView() {
   const navigate = useNavigate();
 
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
@@ -60,13 +61,13 @@ export default function CeoVariablesView() {
   const C = useMemo(() => getColors(darkMode), [darkMode]);
   const visibleSections = useMemo(() => getVisibleSections(SIDEBAR_SECTIONS, userRole), [userRole]);
 
-  // Cliquer "Variables Sales" depuis cette vue = no-op (déjà dessus).
+  // Cliquer "Auto-affectation" depuis cette vue = no-op (déjà dessus).
   // Les autres onglets-route renvoient vers leur route dédiée (sinon page blanche).
   const handleSidebarTabClick = (tabId) => {
-    if (tabId === "sequences") { navigate("/ceo/sequences"); return; }
-    if (tabId === "variables") return;
-    if (tabId === "conges") { navigate("/ceo/conges"); return; }
+    if (tabId === "sequences") return;
     if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }
+    if (tabId === "variables") { navigate("/ceo/variables"); return; }
+    if (tabId === "conges") { navigate("/ceo/conges"); return; }
     if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }
     if (tabId === "dispatch") { navigate("/ceo/dispatch"); return; }
     if (tabId === "leaderboard") { navigate("/ceo/leaderboard"); return; }
@@ -130,7 +131,7 @@ export default function CeoVariablesView() {
           collapsed={sideCollapsed}
           onToggle={() => setSideCollapsed((v) => !v)}
           sections={visibleSections}
-          activeTab="variables"
+          activeTab="sequences"
           setActiveTab={handleSidebarTabClick}
           C={C}
           darkMode={darkMode}
@@ -139,7 +140,7 @@ export default function CeoVariablesView() {
 
       <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 64 }}>
         <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
-        <Variables embed />
+        <SequencesMonitor embed />
       </div>
     </div>
   );

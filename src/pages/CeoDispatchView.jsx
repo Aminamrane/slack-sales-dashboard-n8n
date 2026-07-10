@@ -89,6 +89,7 @@ export default function CeoDispatchView() {
   // pre-selected via localStorage `ceoActiveTab`. Cliquer "Dispatch"
   // depuis cette vue est un no-op (déjà dessus).
   const handleSidebarTabClick = (tabId) => {
+    if (tabId === "sequences") { navigate("/ceo/sequences"); return; }
     if (tabId === "dispatch") return;
     if (tabId === "leaderboard") { navigate("/ceo/leaderboard"); return; }
     if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }

@@ -63,6 +63,7 @@ export default function CeoOptilexBoardView() {
   // Cliquer "Board Owner/Opti'Lex" ici = no-op (déjà dessus). Les autres
   // onglets-route renvoient vers leur route dédiée (sinon page blanche).
   const handleSidebarTabClick = (tabId) => {
+    if (tabId === "sequences") { navigate("/ceo/sequences"); return; }
     if (tabId === "optilex_board") return;
     if (tabId === "conges") { navigate("/ceo/conges"); return; }
     if (tabId === "variables") { navigate("/ceo/variables"); return; }

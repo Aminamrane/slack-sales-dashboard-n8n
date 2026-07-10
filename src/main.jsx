@@ -158,6 +158,14 @@ function App() {
           }
         />
         <Route
+          path="/ceo/sequences"
+          element={
+            <ProtectedRoute>
+              <CeoSequencesView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/ceo/variables"
           element={
             <ProtectedRoute allowedRoles={['admin', 'ceo', 'hr']}>
