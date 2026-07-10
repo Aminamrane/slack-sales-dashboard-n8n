@@ -63,7 +63,6 @@ export default function CeoVariablesView() {
   // Cliquer "Variables Sales" depuis cette vue = no-op (déjà dessus).
   // Les autres onglets-route renvoient vers leur route dédiée (sinon page blanche).
   const handleSidebarTabClick = (tabId) => {
-    if (tabId === "sequences") { navigate("/ceo/sequences"); return; }
     if (tabId === "variables") return;
     if (tabId === "conges") { navigate("/ceo/conges"); return; }
     if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }

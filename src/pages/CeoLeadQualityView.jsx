@@ -74,7 +74,6 @@ export default function CeoLeadQualityView() {
   const visibleSections = useMemo(() => getVisibleSections(SIDEBAR_SECTIONS, userRole), [userRole]);
 
   const handleSidebarTabClick = (tabId) => {
-    if (tabId === "sequences") { navigate("/ceo/sequences"); return; }
     if (tabId === "lead_quality") return;
     if (tabId === "dispatch") { navigate("/ceo/dispatch"); return; }
     if (tabId === "leaderboard") { navigate("/ceo/leaderboard"); return; }

@@ -83,7 +83,6 @@ export default function CeoWebinarView() {
 
   // ── SIDEBAR NAVIGATION HANDLER ──────────────────────────────────────
   const handleSidebarTabClick = (tabId) => {
-    if (tabId === "sequences") { navigate("/ceo/sequences"); return; }
     if (tabId === "webinar") return;
     if (tabId === "dispatch") { navigate("/ceo/dispatch"); return; }
     if (tabId === "leaderboard") { navigate("/ceo/leaderboard"); return; }

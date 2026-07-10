@@ -107,7 +107,6 @@ export default function CeoSheetView() {
   // which CeoDashboard reads at mount. Simple, no API change, no router-level
   // state. Cleared after consumption by CeoDashboard.
   const handleSidebarTabClick = (tabId) => {
-    if (tabId === "sequences") { navigate("/ceo/sequences"); return; }
     if (tabId === "dispatch") { navigate("/ceo/dispatch"); return; }
     if (tabId === "leaderboard") { navigate("/ceo/leaderboard"); return; }
     if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }

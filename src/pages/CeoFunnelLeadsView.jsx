@@ -82,7 +82,6 @@ export default function CeoFunnelLeadsView() {
 
   // ── SIDEBAR NAVIGATION HANDLER ──────────────────────────────────────
   const handleSidebarTabClick = (tabId) => {
-    if (tabId === "sequences") { navigate("/ceo/sequences"); return; }
     if (tabId === "funnel_leads") return; // déjà ici
     if (tabId === "webinar") { navigate("/ceo/webinar"); return; }
     if (tabId === "campaigns") { navigate("/ceo/campaigns"); return; }

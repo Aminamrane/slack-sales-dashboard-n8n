@@ -83,7 +83,6 @@ export default function CeoPerfSalesView() {
   // Les autres tabs renvoient vers leurs routes dédiées ou /ceo avec
   // localStorage pour pré-sélectionner l'onglet.
   const handleSidebarTabClick = (tabId) => {
-    if (tabId === "sequences") { navigate("/ceo/sequences"); return; }
     if (tabId === "perf_sales") return;
     if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }
     if (tabId === "variables") { navigate("/ceo/variables"); return; }

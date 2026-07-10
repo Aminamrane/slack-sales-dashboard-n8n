@@ -67,7 +67,6 @@ export default function CeoCampaignsView() {
   // Cliquer "Campagnes" depuis cette vue = no-op (déjà dessus).
   // Les autres onglets-route renvoient vers leur route dédiée (sinon page blanche).
   const handleSidebarTabClick = (tabId) => {
-    if (tabId === "sequences") { navigate("/ceo/sequences"); return; }
     if (tabId === "campaigns") return;
     if (tabId === "conges") { navigate("/ceo/conges"); return; }
     if (tabId === "variables") { navigate("/ceo/variables"); return; }
