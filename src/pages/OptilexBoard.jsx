@@ -1504,7 +1504,11 @@ function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion }) {
                 onToggle={(v) => patch(num, { facturation_honoraires_done: v })} onDate={(d) => patch(num, { facturation_honoraires_date: d })} />
               <JalonRow label="Statut facturation Opti'Lex" done={row.setup_facturation_done} date={row.setup_facturation_date}
                 onToggle={(v) => patch(num, { setup_facturation_done: v })} onDate={(d) => patch(num, { setup_facturation_date: d })} />
+              {/* RDV +2 mois : date prévue TOUJOURS saisissable (planifier avant), puis
+                  toggle À venir/Effectué. (Correction 2026-07-10 : la date n'était visible
+                  qu'une fois "effectué" -> impossible de planifier sans mentir sur le statut.) */}
               <JalonRow label="RDV +2 mois" done={row.rdv_plus1mois_done} date={row.rdv_plus1mois_date}
+                alwaysDate toggleLabels={["À venir", "Effectué"]}
                 onToggle={(v) => patch(num, { rdv_plus1mois_done: v })} onDate={(d) => patch(num, { rdv_plus1mois_date: d })} />
 
               {/* Commentaires (fil façon YouTube) */}
@@ -1523,18 +1527,23 @@ function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion }) {
   );
 }
 
-function JalonRow({ label, done, date, onToggle, onDate }) {
+// alwaysDate : la date est TOUJOURS saisissable (RDV à planifier), pas seulement une
+// fois "effectué". Sinon (statut fait/pas-fait), la date se révèle au passage à Oui.
+function JalonRow({ label, done, date, onToggle, onDate, alwaysDate = false, toggleLabels }) {
+  const showDate = alwaysDate || done;
+  const dateLabel = alwaysDate ? "Date prévue" : null;
   return (
     <div style={{ padding: "12px 0", borderBottom: `1px solid ${BORDER}` }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <div style={{ fontSize: 13.5, fontWeight: 500, color: TEXT }}>{label}</div>
-        <StatusToggle value={!!done} onChange={onToggle} />
+        <StatusToggle value={!!done} onChange={onToggle} labels={toggleLabels} />
       </div>
       <AnimatePresence initial={false}>
-        {done && (
-          <motion.div key="date" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+        {showDate && (
+          <motion.div key="date" initial={alwaysDate ? false : { height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }} style={{ overflow: "hidden" }}>
-            <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: dateLabel ? "space-between" : "flex-end", paddingTop: 10, gap: 10 }}>
+              {dateLabel && <div style={{ fontSize: 12, color: MUTED }}>{dateLabel}</div>}
               {/* Commit au blur (cohérent avec DateRow) : pas d'écriture partielle pendant la frappe. */}
               <input key={toDateInput(date)} type="date" defaultValue={toDateInput(date)}
                 onBlur={(e) => { const v = e.target.value || null; if (v !== (toDateInput(date) || null)) onDate(v); }}
