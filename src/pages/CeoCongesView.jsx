@@ -68,6 +68,7 @@ export default function CeoCongesView() {
   // Cliquer "Congés" depuis cette vue = no-op (déjà dessus).
   // Les autres onglets-route renvoient vers leur route dédiée (sinon page blanche).
   const handleSidebarTabClick = (tabId) => {
+    if (tabId === "sequences") { navigate("/ceo/sequences"); return; }
     if (tabId === "conges") return;
     if (tabId === "variables") { navigate("/ceo/variables"); return; }
     if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }

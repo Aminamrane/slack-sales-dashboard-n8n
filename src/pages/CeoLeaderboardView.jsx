@@ -98,6 +98,7 @@ export default function CeoLeaderboardView() {
   // pre-selected via localStorage `ceoActiveTab`. Cliquer "Leaderboard"
   // depuis cette vue est un no-op (déjà dessus).
   const handleSidebarTabClick = (tabId) => {
+    if (tabId === "sequences") { navigate("/ceo/sequences"); return; }
     if (tabId === "leaderboard") return;
     if (tabId === "dispatch") { navigate("/ceo/dispatch"); return; }
     if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }

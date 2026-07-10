@@ -64,6 +64,7 @@ export default function CeoAutoAssignView() {
   // Cliquer "Auto-affectation" depuis cette vue = no-op (déjà dessus).
   // Les autres onglets-route renvoient vers leur route dédiée (sinon page blanche).
   const handleSidebarTabClick = (tabId) => {
+    if (tabId === "sequences") { navigate("/ceo/sequences"); return; }
     if (tabId === "autoassign") return;
     if (tabId === "variables") { navigate("/ceo/variables"); return; }
     if (tabId === "conges") { navigate("/ceo/conges"); return; }
