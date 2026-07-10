@@ -35,6 +35,7 @@ export default function SequencesMonitor({ embed }) {
   const [error, setError] = useState(null);
   const [active, setActive] = useState(null); // clé de séquence sélectionnée
   const [q, setQ] = useState("");
+  const [viewMode, setViewMode] = useState(null); // null=auto | "in_seq" | "eligible"
 
   const load = () => {
     setLoading(true);
@@ -50,16 +51,24 @@ export default function SequencesMonitor({ embed }) {
 
   const seq = useMemo(() => (data ? data.sequences.find((s) => s.key === active) : null), [data, active]);
 
-  // Leads affichés : contactés si la séquence a tourné, sinon aperçu des éligibles.
+  // Au changement de séquence, on revient en mode auto (le défaut dépend de l'état on/off).
+  useEffect(() => { setViewMode(null); }, [active]);
+
+  // Deux vues : les leads réellement DANS la séquence (contactés) et le POOL éligible
+  // (prospects qui seront ciblés). Défaut auto : séquence ON -> "dans la séquence",
+  // OFF -> "éligibles" (ce qu'on veut voir tant que ça n'a pas tourné).
+  const effView = viewMode || (seq && seq.enabled ? "in_seq" : "eligible");
+
   const rows = useMemo(() => {
-    if (!seq) return { list: [], preview: false };
-    const base = seq.contacted.length ? seq.contacted : seq.eligible_sample;
-    const preview = seq.contacted.length === 0;
+    if (!seq) return { list: [], eligible: false, total: 0, truncated: false };
+    const eligible = effView === "eligible";
+    const base = eligible ? seq.eligible_sample : seq.contacted;
+    const total = eligible ? seq.stats.eligible : seq.contacted.length;
     const ql = q.trim().toLowerCase();
     const list = !ql ? base : base.filter((r) =>
       `${r.full_name || ""} ${r.email || ""} ${r.sales || ""}`.toLowerCase().includes(ql));
-    return { list, preview };
-  }, [seq, q]);
+    return { list, eligible, total, truncated: eligible && total > base.length };
+  }, [seq, q, effView]);
 
   const card = { background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14, boxShadow: C.shadow };
   const th = { textAlign: "left", padding: "10px 12px", fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.02em", whiteSpace: "nowrap", position: "sticky", top: 0, background: C.subtle, borderBottom: `1px solid ${C.border}` };
@@ -156,15 +165,32 @@ export default function SequencesMonitor({ embed }) {
         </div>
       )}
 
-      {/* Table des leads */}
+      {/* Table des leads : bascule "dans la séquence" (contactés) / "prospects éligibles" (pool) */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>
-          {rows.preview ? "Leads éligibles (aperçu)" : "Leads dans la séquence"}
-          <span style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginLeft: 8 }}>{rows.list.length}</span>
+        <div style={{ display: "inline-flex", background: C.subtle, borderRadius: 10, padding: 3, gap: 3 }}>
+          {[
+            { key: "in_seq", label: "Dans la séquence", n: seq.contacted.length },
+            { key: "eligible", label: "Prospects éligibles", n: seq.stats.eligible },
+          ].map((t) => {
+            const on = effView === t.key;
+            return (
+              <button key={t.key} onClick={() => setViewMode(t.key)}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 600, background: on ? C.bg : "transparent", color: on ? C.text : C.muted, boxShadow: on ? C.shadow : "none", ...font }}>
+                {t.label}
+                <span style={{ fontSize: 11, fontWeight: 700, padding: "1px 7px", borderRadius: 8, background: on ? C.subtle : "transparent", color: on ? C.text : C.muted }}>{t.n}</span>
+              </button>
+            );
+          })}
         </div>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher (nom, email, sales)…"
           style={{ width: 280, padding: "8px 12px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, outline: "none", ...font }} />
       </div>
+
+      {rows.truncated && (
+        <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 8 }}>
+          Aperçu des {seq.eligible_sample.length} premiers sur {rows.total} prospects éligibles — la recherche ne porte que sur cet aperçu.
+        </div>
+      )}
 
       <div style={{ ...card, overflow: "hidden" }}>
         <div style={{ overflowX: "auto", maxHeight: "calc(100vh - 420px)", overflowY: "auto" }}>
@@ -174,12 +200,12 @@ export default function SequencesMonitor({ embed }) {
                 <th style={th}>Prospect</th>
                 <th style={th}>Sales</th>
                 <th style={th}>Segment</th>
-                {!rows.preview && <><th style={th}>Dernier email</th><th style={th}>Statut</th><th style={th}>RDV repris</th></>}
+                {!rows.eligible && <><th style={th}>Dernier email</th><th style={th}>Statut</th><th style={th}>RDV repris</th></>}
               </tr>
             </thead>
             <tbody>
               {rows.list.length === 0 ? (
-                <tr><td colSpan={rows.preview ? 3 : 6} style={{ ...td, textAlign: "center", padding: 30, color: C.muted }}>Aucun lead.</td></tr>
+                <tr><td colSpan={rows.eligible ? 3 : 6} style={{ ...td, textAlign: "center", padding: 30, color: C.muted }}>{rows.eligible ? "Aucun prospect éligible." : "Aucun lead dans la séquence."}</td></tr>
               ) : rows.list.map((r, i) => (
                 <tr key={r.lead_id || i}>
                   <td style={td}>
@@ -188,7 +214,7 @@ export default function SequencesMonitor({ embed }) {
                   </td>
                   <td style={td}>{r.sales || <span style={{ color: C.muted }}>—</span>}</td>
                   <td style={td}><Badge bg={`${SEGMENT_COLOR[r.segment]}22`} fg={SEGMENT_COLOR[r.segment]}>{SEGMENT_LABEL[r.segment] || r.segment}</Badge></td>
-                  {!rows.preview && (
+                  {!rows.eligible && (
                     <>
                       <td style={td}>{r.last_email_num ? <>#{r.last_email_num} · {fmtDate(r.last_sent_at)}</> : "—"}</td>
                       <td style={td}>
