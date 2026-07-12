@@ -101,6 +101,12 @@ export default function Sidebar({ width, collapsed, onToggle, sections, activeTa
           boxShadow: renderCollapsed ? 'none' : (darkMode ? '4px 0 24px rgba(0,0,0,0.5)' : '4px 0 24px rgba(16,24,40,0.10)'),
         }}
       >
+      {/* Scroll invisible : on peut scroller le menu, mais jamais de barre visible
+          (source unique ici, prime sur le CSS .ceo-side-scroll des vues wrapper). */}
+      <style>{`
+        .ceo-side-scroll::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; }
+        .ceo-side-scroll { scrollbar-width: none !important; -ms-overflow-style: none !important; }
+      `}</style>
       <div style={{ flexShrink: 0 }}>
         <WorkspaceHeader collapsed={renderCollapsed} C={C} />
         <IconRow collapsed={renderCollapsed} C={C} />
