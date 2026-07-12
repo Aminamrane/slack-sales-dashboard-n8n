@@ -1,23 +1,39 @@
 // src/pages/SequencesMonitor.jsx
 //
 // Monitoring des séquences d'emails de réengagement (Broad / BTP / Restaurant).
-// Vue lecture seule : état on/off par séquence, funnel par email, leads dans la
-// séquence (à qui c'est envoyé, à quel sales), récupérés (rebookés/présentés/
-// signés) et RDV pris. Consomme GET /api/v1/tracking/broad-sequence/monitoring.
+// Vue lecture seule inspirée de la page auto-affectation (charte graphique, KPI
+// en cartes, parcours entonnoir, sensation "en direct"). Consomme
+// GET /api/v1/tracking/broad-sequence/monitoring.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import apiClient from "../services/apiClient";
-import { getColors } from "./CeoDashboard.jsx";
+import { makeCharte } from "../styles/charte.js";
 
-const SEGMENT_LABEL = { injoignable: "Injoignable", refus_r1: "Refus R1", no_show: "No-show" };
-const SEGMENT_COLOR = { injoignable: "#8b5cf6", refus_r1: "#f59e0b", no_show: "#ef4444" };
+const FONT = 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif';
+
+// Segments = qualifications qui entrent en séquence. Couleurs sobres (charte).
+const SEG = {
+  refus_r1:    { label: "Refus R1",    color: "#b5675f", desc: "Répondu, pas intéressé" },
+  injoignable: { label: "Injoignable", color: "#6b7c99", desc: "Tombé sur répondeur" },
+  no_show:     { label: "No-show",     color: "#bf945f", desc: "R1 manqué" },
+};
+const SEG_ORDER = ["refus_r1", "injoignable", "no_show"];
 
 const fmtDate = (iso) => {
-  if (!iso) return "—";
+  if (!iso) return "·";
   const d = new Date(iso);
-  if (isNaN(d)) return "—";
+  if (isNaN(d)) return "·";
   return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
 };
+const ago = (iso) => {
+  if (!iso) return "jamais";
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return "il y a " + Math.floor(s) + " s";
+  if (s < 3600) return "il y a " + Math.floor(s / 60) + " min";
+  if (s < 86400) return "il y a " + Math.floor(s / 3600) + " h";
+  return "il y a " + Math.floor(s / 86400) + " j";
+};
+const pct = (num, den) => (den > 0 ? Math.round((num / den) * 100) : 0);
 
 export default function SequencesMonitor({ embed }) {
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
@@ -28,35 +44,36 @@ export default function SequencesMonitor({ embed }) {
     }, 500);
     return () => clearInterval(t);
   }, []);
-  const C = useMemo(() => getColors(darkMode), [darkMode]);
+  const C = useMemo(() => makeCharte(darkMode), [darkMode]);
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [active, setActive] = useState(null); // clé de séquence sélectionnée
+  const [active, setActive] = useState(null);        // clé de séquence sélectionnée
   const [q, setQ] = useState("");
-  const [viewMode, setViewMode] = useState(null); // null=auto | "in_seq" | "eligible"
+  const [viewMode, setViewMode] = useState(null);    // null=auto | "in_seq" | "eligible"
+  const [refreshedAt, setRefreshedAt] = useState(null);
+  const firstLoad = useRef(true);
 
   const load = () => {
-    setLoading(true);
     apiClient.get("/api/v1/tracking/broad-sequence/monitoring")
       .then((r) => {
         setData(r);
         setActive((prev) => prev || (r.sequences[0] && r.sequences[0].key));
+        setRefreshedAt(new Date().toISOString());
         setLoading(false);
+        firstLoad.current = false;
       })
-      .catch((e) => { setError(e.message || "Erreur"); setLoading(false); });
+      .catch((e) => { if (firstLoad.current) { setError(e.message || "Erreur"); setLoading(false); } });
   };
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+    const id = setInterval(load, 20000); // sensation "en direct" (le tick cron tourne à la minute)
+    return () => clearInterval(id);
+  }, []);
 
   const seq = useMemo(() => (data ? data.sequences.find((s) => s.key === active) : null), [data, active]);
-
-  // Au changement de séquence, on revient en mode auto (le défaut dépend de l'état on/off).
   useEffect(() => { setViewMode(null); }, [active]);
-
-  // Deux vues : les leads réellement DANS la séquence (contactés) et le POOL éligible
-  // (prospects qui seront ciblés). Défaut auto : séquence ON -> "dans la séquence",
-  // OFF -> "éligibles" (ce qu'on veut voir tant que ça n'a pas tourné).
   const effView = viewMode || (seq && seq.enabled ? "in_seq" : "eligible");
 
   const rows = useMemo(() => {
@@ -70,171 +87,298 @@ export default function SequencesMonitor({ embed }) {
     return { list, eligible, total, truncated: eligible && total > base.length };
   }, [seq, q, effView]);
 
-  const card = { background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14, boxShadow: C.shadow };
-  const th = { textAlign: "left", padding: "10px 12px", fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.02em", whiteSpace: "nowrap", position: "sticky", top: 0, background: C.subtle, borderBottom: `1px solid ${C.border}` };
-  const td = { padding: "10px 12px", fontSize: 13, color: C.text, borderTop: `1px solid ${C.border}`, whiteSpace: "nowrap" };
+  const card = { background: C.bg, border: "1px solid " + C.border, borderRadius: 14, boxShadow: C.shadow };
 
-  const Kpi = ({ label, value, color, hint }) => (
-    <div style={{ ...card, padding: "14px 16px", flex: 1, minWidth: 120 }}>
-      <div style={{ fontSize: 11.5, color: C.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em" }}>{label}</div>
-      <div style={{ fontSize: 26, fontWeight: 700, color: color || C.text, marginTop: 4, lineHeight: 1 }}>{value}</div>
-      {hint && <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>{hint}</div>}
-    </div>
-  );
-
-  const Badge = ({ children, bg, fg }) => (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 10, fontSize: 11, fontWeight: 700, background: bg, color: fg, whiteSpace: "nowrap" }}>{children}</span>
-  );
-
-  const font = { fontFamily: "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif" };
-
-  if (loading) return <div style={{ ...font, padding: 40, color: C.muted }}>Chargement du monitoring…</div>;
-  if (error) return <div style={{ ...font, padding: 40, color: "#ef4444" }}>Erreur : {error}</div>;
-  if (!data || !seq) return <div style={{ ...font, padding: 40, color: C.muted }}>Aucune séquence.</div>;
+  if (loading) return <div style={{ fontFamily: FONT, padding: 48, color: C.muted, textAlign: "center" }}>Chargement du monitoring…</div>;
+  if (error) return <div style={{ fontFamily: FONT, padding: 48, color: "#b5675f", textAlign: "center" }}>Erreur : {error}</div>;
+  if (!data || !seq) return <div style={{ fontFamily: FONT, padding: 48, color: C.muted, textAlign: "center" }}>Aucune séquence.</div>;
 
   const st = seq.stats;
+  const anyEnabled = data.sequences.some((s) => s.enabled);
+  const contactedCount = seq.contacted.length;
+  const clickedLeads = seq.contacted.filter((c) => c.clicked).length;
+  const totalSeg = SEG_ORDER.reduce((a, k) => a + (seq.segments[k] || 0), 0);
+
+  // Parcours lead par lead (entonnoir). Réf = éligibles ; conversion vs étape précédente.
+  // Chaque étape convertit depuis un dénominateur sémantique (pas juste l'étape
+  // précédente) : contactés/éligibles, clics & RDV rapportés aux contactés,
+  // présentés/RDV, signés/présentés -> toujours des sous-ensembles, taux ≤ 100%.
+  const funnel = [
+    { key: "elig",  label: "Éligibles",   value: st.eligible,    ref: null,           color: C.slate,   hint: "dans la qualif" },
+    { key: "cont",  label: "Contactés",   value: contactedCount, ref: st.eligible,    color: C.accent,  hint: "≥ 1 email reçu" },
+    { key: "click", label: "Ont cliqué",  value: clickedLeads,   ref: contactedCount, color: "#4b8fb0", hint: "lien ouvert" },
+    { key: "rdv",   label: "RDV repris",  value: st.rebooked,    ref: contactedCount, color: C.ok,      hint: "via la séquence" },
+    { key: "prez",  label: "Présentés",   value: st.presented,   ref: st.rebooked,    color: C.ok,      hint: "R1 tenu" },
+    { key: "sign",  label: "Signés",      value: st.signed,      ref: st.presented,   color: C.ok,      hint: "clients" },
+  ];
+
+  // KPI (volume). Icônes SVG inline (charte : carré teinté + chiffre tabular).
+  const ic = (p) => <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">{p}</svg>;
+  const kpis = [
+    { l: "Éligibles",      v: st.eligible,  color: C.slate,   s: "prospects ciblables", icon: ic(<><circle cx="9" cy="7" r="4"/><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></>) },
+    { l: "Emails envoyés", v: st.sent,      color: C.accent,  s: "cumul séquence",      icon: ic(<><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></>) },
+    { l: "Clics",          v: st.clicked,   color: "#4b8fb0", s: "liens ouverts",       icon: ic(<><path d="M9 9l5 12 1.8-5.2L21 14 9 9z"/><path d="M7.2 2.2 8 5.1"/><path d="m5.1 7.2-2.9-.8"/></>) },
+    { l: "RDV repris",     v: st.rebooked,  color: C.ok,      s: "via la séquence",     icon: ic(<><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="m9 16 2 2 4-4"/></>) },
+    { l: "Présentés",      v: st.presented, color: C.ok,      s: "R1 tenu",             icon: ic(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></>) },
+    { l: "Signés",         v: st.signed,    color: C.ok,      s: "clients",             icon: ic(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></>) },
+  ];
+
+  const segBg = darkMode ? "rgba(255,255,255,0.04)" : "#f4f5f7";
 
   return (
-    <div style={{ ...font, minHeight: embed ? "auto" : "100vh", background: embed ? "transparent" : C.surface, padding: embed ? "8px 20px 28px" : "24px 28px", color: C.text }}>
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>Monitoring des séquences email</div>
-          <div style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>Réengagement des prospects Meta non convertis en R1.</div>
+    <div style={{ fontFamily: FONT, minHeight: embed ? "auto" : "100vh", background: embed ? "transparent" : C.surface, color: C.text, padding: embed ? "6px 20px 40px" : "24px 28px" }}>
+      <style>{`
+        @keyframes seqFadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+        @keyframes seqLiveDot{0%,100%{opacity:1}50%{opacity:0.3}}
+        @keyframes seqBar{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+        @keyframes seqRowIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+        .seq-row{transition:background .12s ease}
+        .seq-row:hover{background:${darkMode ? "rgba(255,255,255,0.035)" : "rgba(37,99,235,0.035)"}}
+        .seq-row td{border-top:1px solid ${C.border}}
+        .seq-pill{transition:all .14s ease}
+        .seq-scroll::-webkit-scrollbar{width:9px;height:9px}
+        .seq-scroll::-webkit-scrollbar-thumb{background:${darkMode ? "rgba(255,255,255,0.14)" : "rgba(55,53,47,0.14)"};border-radius:5px}
+      `}</style>
+
+      <div style={{ maxWidth: 1320, margin: "0 auto", animation: "seqFadeUp 0.4s ease both" }}>
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 750, letterSpacing: "-0.02em" }}>Monitoring des séquences email</div>
+            <div style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>
+              Réengagement des prospects Meta non convertis en R1 · à jour {ago(refreshedAt)}
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 12px", borderRadius: 9, fontSize: 12.5, fontWeight: 700, background: (anyEnabled ? C.ok : C.muted) + "18", color: anyEnabled ? C.ok : C.muted }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: anyEnabled ? C.ok : C.muted, animation: anyEnabled ? "seqLiveDot 1.4s infinite" : "none" }} />
+              {anyEnabled ? "En direct" : "Toutes en pause"}
+            </span>
+            <button onClick={load} style={{ padding: "7px 13px", borderRadius: 9, border: "1px solid " + C.border, background: C.bg, color: C.text2, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>Rafraîchir</button>
+          </div>
         </div>
-        <button onClick={load} style={{ padding: "8px 14px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 12.5, fontWeight: 600, cursor: "pointer", ...font }}>Rafraîchir</button>
-      </div>
 
-      {/* Sélecteur de séquence + état on/off */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
-        {data.sequences.map((s) => {
-          const on = s.key === active;
-          return (
-            <button key={s.key} onClick={() => setActive(s.key)}
-              style={{ padding: "8px 16px", borderRadius: 20, border: `1px solid ${on ? C.accent : C.border}`, background: on ? C.accent : C.bg, color: on ? "#fff" : C.text, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, ...font }}>
-              {s.label}
-              <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 8, background: s.enabled ? "#dcfce7" : (on ? "rgba(255,255,255,0.2)" : C.subtle), color: s.enabled ? "#15803d" : (on ? "#fff" : C.muted) }}>
-                {s.enabled ? "ACTIVE" : "OFF"}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Bandeau état */}
-      {!seq.enabled && (
-        <div style={{ ...card, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: C.secondary }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-          Séquence <strong style={{ margin: "0 3px", color: C.text }}>{seq.label}</strong> désactivée : aucun email n'est envoyé. Le tableau ci-dessous montre les <strong style={{ margin: "0 3px", color: C.text }}>{st.eligible}</strong> leads qui seront ciblés à l'activation.
+        {/* Sélecteur de séquence */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+          {data.sequences.map((s) => {
+            const on = s.key === active;
+            return (
+              <button key={s.key} className="seq-pill" onClick={() => setActive(s.key)}
+                style={{ padding: "8px 15px", borderRadius: 10, border: "1px solid " + (on ? C.text : C.border), background: on ? C.text : C.bg, color: on ? C.bg : C.text2, fontSize: 13, fontWeight: 650, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, fontFamily: FONT }}>
+                {s.label}
+                <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.04em", padding: "2px 7px", borderRadius: 6, textTransform: "uppercase", background: s.enabled ? C.ok + "22" : (on ? "rgba(255,255,255,0.16)" : segBg), color: s.enabled ? C.ok : (on ? C.bg : C.muted) }}>
+                  {s.enabled ? "Active" : "Pause"}
+                </span>
+              </button>
+            );
+          })}
         </div>
-      )}
 
-      {/* KPI */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
-        <Kpi label="Éligibles" value={st.eligible} hint="ciblés / à cibler" />
-        <Kpi label="Emails envoyés" value={st.sent} color={C.accent} />
-        <Kpi label="Clics" value={st.clicked} color="#0891b2" />
-        <Kpi label="RDV repris" value={st.rebooked} color="#16a34a" hint="via la séquence" />
-        <Kpi label="Présentés" value={st.presented} color="#16a34a" />
-        <Kpi label="Signés" value={st.signed} color="#15803d" />
-      </div>
+        {/* Bandeau OFF */}
+        {!seq.enabled && (
+          <div style={{ ...card, padding: "11px 15px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10, fontSize: 12.5, color: C.text2, background: C.surfaceAlt }}>
+            <span style={{ width: 26, height: 26, borderRadius: 8, background: C.warn + "18", color: C.warn, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </span>
+            <span>
+              Séquence <strong style={{ color: C.text }}>{seq.label}</strong> en pause : aucun email envoyé. Le tableau montre les <strong style={{ color: C.text }}>{st.eligible}</strong> prospects qui seront ciblés à l'activation.
+            </span>
+          </div>
+        )}
 
-      {/* Répartition par segment */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
-        {Object.entries(seq.segments).map(([s, n]) => (
-          <Badge key={s} bg={`${SEGMENT_COLOR[s]}22`} fg={SEGMENT_COLOR[s]}>{SEGMENT_LABEL[s] || s} · {n}</Badge>
-        ))}
-      </div>
+        {/* KPI */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 11, marginBottom: 16 }}>
+          {kpis.map((k) => (
+            <div key={k.l} style={{ ...card, padding: "13px 14px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}>
+                <div style={{ width: 30, height: 30, borderRadius: 8, background: k.color + "18", color: k.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{k.icon}</div>
+                <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: C.muted, lineHeight: 1.2 }}>{k.l}</div>
+              </div>
+              <div style={{ fontSize: 25, fontWeight: 780, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{k.v ?? 0}</div>
+              <div style={{ fontSize: 10.5, color: C.muted, marginTop: 3 }}>{k.s}</div>
+            </div>
+          ))}
+        </div>
 
-      {/* Funnel par email (si la séquence a tourné) */}
-      {seq.per_email.length > 0 && (
-        <div style={{ ...card, padding: 16, marginBottom: 18 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Funnel par email</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(10, 1fr)", gap: 6 }}>
-            {Array.from({ length: 10 }, (_, i) => {
-              const e = seq.per_email.find((x) => x.email_num === i + 1) || { sent: 0, clicked: 0, booked: 0 };
+        {/* Parcours (entonnoir lead par lead) */}
+        <div style={{ ...card, padding: "16px 18px", marginBottom: 16 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 14, letterSpacing: "-0.01em" }}>Parcours des prospects</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            {funnel.map((f, i) => {
+              const conv = f.ref == null ? null : (f.ref > 0 ? Math.min(100, pct(f.value, f.ref)) : 0);
+              const w = f.value === 0 ? 0 : Math.max(3, conv == null ? 100 : conv);
               return (
-                <div key={i} style={{ textAlign: "center", padding: "8px 4px", borderRadius: 8, background: C.subtle }}>
-                  <div style={{ fontSize: 10, color: C.muted, fontWeight: 700 }}>#{i + 1}</div>
-                  <div style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>{e.sent}</div>
-                  <div style={{ fontSize: 10, color: "#0891b2" }}>{e.clicked} clics</div>
-                  <div style={{ fontSize: 10, color: "#16a34a" }}>{e.booked} rdv</div>
+                <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 92, flexShrink: 0, fontSize: 12, fontWeight: 600, color: C.text2, textAlign: "right" }}>{f.label}</div>
+                  <div style={{ flex: 1, height: 26, background: segBg, borderRadius: 7, position: "relative", overflow: "hidden" }}>
+                    <div style={{ position: "absolute", inset: 0, width: w + "%", background: f.color + (darkMode ? "44" : "26"), borderRight: w > 0 ? "2px solid " + f.color : "none", borderRadius: 7, transformOrigin: "left", animation: "seqBar 0.6s cubic-bezier(0.16,1,0.3,1) both", animationDelay: i * 0.06 + "s" }} />
+                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", paddingLeft: 11, gap: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 750, color: C.text, fontVariantNumeric: "tabular-nums" }}>{f.value}</span>
+                      <span style={{ fontSize: 10.5, color: C.muted }}>{f.hint}</span>
+                    </div>
+                  </div>
+                  <div style={{ width: 54, flexShrink: 0, fontSize: 11, fontWeight: 600, color: conv == null ? "transparent" : C.muted, textAlign: "left", fontVariantNumeric: "tabular-nums" }}>
+                    {conv == null ? "" : conv + "%"}
+                  </div>
                 </div>
               );
             })}
           </div>
         </div>
-      )}
 
-      {/* Table des leads : bascule "dans la séquence" (contactés) / "prospects éligibles" (pool) */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
-        <div style={{ display: "inline-flex", background: C.subtle, borderRadius: 10, padding: 3, gap: 3 }}>
-          {[
-            { key: "in_seq", label: "Dans la séquence", n: seq.contacted.length },
-            { key: "eligible", label: "Prospects éligibles", n: seq.stats.eligible },
-          ].map((t) => {
-            const on = effView === t.key;
-            return (
-              <button key={t.key} onClick={() => setViewMode(t.key)}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 600, background: on ? C.bg : "transparent", color: on ? C.text : C.muted, boxShadow: on ? C.shadow : "none", ...font }}>
-                {t.label}
-                <span style={{ fontSize: 11, fontWeight: 700, padding: "1px 7px", borderRadius: 8, background: on ? C.subtle : "transparent", color: on ? C.text : C.muted }}>{t.n}</span>
-              </button>
-            );
-          })}
-        </div>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher (nom, email, sales)…"
-          style={{ width: 280, padding: "8px 12px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, outline: "none", ...font }} />
-      </div>
+        {/* 2 colonnes : segments + funnel par email */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.35fr", gap: 16, marginBottom: 16, alignItems: "start" }}>
 
-      {rows.truncated && (
-        <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 8 }}>
-          Aperçu des {seq.eligible_sample.length} premiers sur {rows.total} prospects éligibles — la recherche ne porte que sur cet aperçu.
-        </div>
-      )}
+          {/* Répartition par qualification */}
+          <div style={{ ...card, padding: "16px 18px" }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4, letterSpacing: "-0.01em" }}>Qualifications entrantes</div>
+            <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 14 }}>Répartition des {totalSeg} prospects par motif d'entrée.</div>
+            <div style={{ display: "flex", height: 10, borderRadius: 6, overflow: "hidden", background: segBg, marginBottom: 16 }}>
+              {SEG_ORDER.map((k) => {
+                const n = seq.segments[k] || 0;
+                if (!n) return null;
+                return <div key={k} title={`${SEG[k].label} · ${n}`} style={{ width: pct(n, totalSeg) + "%", background: SEG[k].color, transition: "width .4s ease" }} />;
+              })}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+              {SEG_ORDER.map((k) => {
+                const n = seq.segments[k] || 0;
+                return (
+                  <div key={k} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ width: 9, height: 9, borderRadius: 3, background: SEG[k].color, flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>{SEG[k].label}</div>
+                      <div style={{ fontSize: 10.5, color: C.muted }}>{SEG[k].desc}</div>
+                    </div>
+                    <span style={{ fontSize: 14, fontWeight: 750, fontVariantNumeric: "tabular-nums" }}>{n}</span>
+                    <span style={{ fontSize: 11, color: C.muted, width: 34, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{pct(n, totalSeg)}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
-      <div style={{ ...card, overflow: "hidden" }}>
-        <div style={{ overflowX: "auto", maxHeight: "calc(100vh - 420px)", overflowY: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th style={th}>Prospect</th>
-                <th style={th}>Sales</th>
-                <th style={th}>Segment</th>
-                {!rows.eligible && <><th style={th}>Dernier email</th><th style={th}>Statut</th><th style={th}>RDV repris</th></>}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.list.length === 0 ? (
-                <tr><td colSpan={rows.eligible ? 3 : 6} style={{ ...td, textAlign: "center", padding: 30, color: C.muted }}>{rows.eligible ? "Aucun prospect éligible." : "Aucun lead dans la séquence."}</td></tr>
-              ) : rows.list.map((r, i) => (
-                <tr key={r.lead_id || i}>
-                  <td style={td}>
-                    <div style={{ fontWeight: 600 }}>{r.full_name || "—"}</div>
-                    <div style={{ fontSize: 11, color: C.muted }}>{r.email}</div>
-                  </td>
-                  <td style={td}>{r.sales || <span style={{ color: C.muted }}>—</span>}</td>
-                  <td style={td}><Badge bg={`${SEGMENT_COLOR[r.segment]}22`} fg={SEGMENT_COLOR[r.segment]}>{SEGMENT_LABEL[r.segment] || r.segment}</Badge></td>
-                  {!rows.eligible && (
-                    <>
-                      <td style={td}>{r.last_email_num ? <>#{r.last_email_num} · {fmtDate(r.last_sent_at)}</> : "—"}</td>
-                      <td style={td}>
-                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                          {r.signed ? <Badge bg="#dcfce7" fg="#15803d">Signé</Badge>
-                            : r.presented ? <Badge bg="#dcfce7" fg="#16a34a">Présenté</Badge>
-                            : r.rebooked ? <Badge bg="#dcfce7" fg="#16a34a">RDV repris</Badge>
-                            : r.clicked ? <Badge bg="#e0f2fe" fg="#0891b2">A cliqué</Badge>
-                            : <Badge bg={C.subtle} fg={C.muted}>Envoyé</Badge>}
+          {/* Funnel par email 1 à 10 */}
+          <div style={{ ...card, padding: "16px 18px" }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4, letterSpacing: "-0.01em" }}>Funnel par email</div>
+            <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 14 }}>Envoyés, clics et RDV pour chacun des 10 emails.</div>
+            {st.sent === 0 ? (
+              <div style={{ padding: "34px 10px", textAlign: "center", color: C.muted, fontSize: 12.5 }}>Aucun envoi pour l'instant.</div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(10, 1fr)", gap: 5, alignItems: "end" }}>
+                {Array.from({ length: 10 }, (_, i) => {
+                  const e = seq.per_email.find((x) => x.email_num === i + 1) || { sent: 0, clicked: 0, booked: 0 };
+                  const maxSent = Math.max(1, ...seq.per_email.map((x) => x.sent));
+                  const h = Math.max(3, (e.sent / maxSent) * 70);
+                  return (
+                    <div key={i} style={{ textAlign: "center" }}>
+                      <div style={{ height: 74, display: "flex", flexDirection: "column", justifyContent: "flex-end", marginBottom: 5 }}>
+                        <div style={{ height: h, background: C.accent + (darkMode ? "40" : "22"), borderTop: "2px solid " + C.accent, borderRadius: "4px 4px 0 0", position: "relative" }}>
+                          {e.clicked > 0 && <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: Math.max(2, (e.clicked / Math.max(1, e.sent)) * h), background: "#4b8fb0" }} />}
                         </div>
-                      </td>
-                      <td style={td}>{r.rdv_at ? fmtDate(r.rdv_at) : <span style={{ color: C.muted }}>—</span>}</td>
-                    </>
-                  )}
+                      </div>
+                      <div style={{ fontSize: 9.5, color: C.muted, fontWeight: 700 }}>#{i + 1}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{e.sent}</div>
+                      <div style={{ fontSize: 9.5, color: "#4b8fb0" }}>{e.clicked} clic{e.clicked > 1 ? "s" : ""}</div>
+                      <div style={{ fontSize: 9.5, color: C.ok }}>{e.booked} rdv</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Table : bascule dans la séquence / prospects éligibles */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 11, flexWrap: "wrap", gap: 8 }}>
+          <div style={{ display: "inline-flex", background: segBg, borderRadius: 10, padding: 3, gap: 3 }}>
+            {[
+              { key: "in_seq", label: "Dans la séquence", n: contactedCount },
+              { key: "eligible", label: "Prospects éligibles", n: st.eligible },
+            ].map((t) => {
+              const on = effView === t.key;
+              return (
+                <button key={t.key} onClick={() => setViewMode(t.key)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 13px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 650, background: on ? C.bg : "transparent", color: on ? C.text : C.muted, boxShadow: on ? C.shadow : "none", fontFamily: FONT }}>
+                  {t.label}
+                  <span style={{ fontSize: 11, fontWeight: 750, padding: "1px 7px", borderRadius: 7, background: on ? segBg : "transparent", color: on ? C.text2 : C.muted, fontVariantNumeric: "tabular-nums" }}>{t.n}</span>
+                </button>
+              );
+            })}
+          </div>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher (nom, email, sales)…"
+            style={{ width: 280, padding: "8px 13px", borderRadius: 9, border: "1px solid " + C.border, background: C.bg, color: C.text, fontSize: 13, outline: "none", fontFamily: FONT }} />
+        </div>
+
+        {rows.truncated && (
+          <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 8 }}>
+            Aperçu des {seq.eligible_sample.length} premiers sur {rows.total} prospects éligibles · la recherche ne porte que sur cet aperçu.
+          </div>
+        )}
+
+        <div style={{ ...card, overflow: "hidden" }}>
+          <div className="seq-scroll" style={{ overflowX: "auto", maxHeight: "calc(100vh - 300px)", overflowY: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  {["Prospect", "Sales", "Qualification", ...(rows.eligible ? [] : ["Dernier email", "Statut", "RDV repris"])].map((h) => (
+                    <th key={h} style={{ textAlign: "left", padding: "11px 14px", fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap", position: "sticky", top: 0, background: C.surfaceAlt, borderBottom: "1px solid " + C.border, zIndex: 1 }}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.list.length === 0 ? (
+                  <tr><td colSpan={rows.eligible ? 3 : 6} style={{ textAlign: "center", padding: 34, color: C.muted, fontSize: 13 }}>{rows.eligible ? "Aucun prospect éligible." : "Aucun lead dans la séquence."}</td></tr>
+                ) : rows.list.map((r, i) => {
+                  const sm = SEG[r.segment] || { label: r.segment, color: C.muted };
+                  const sales = r.sales || "";
+                  return (
+                    <tr key={r.lead_id || i} className="seq-row">
+                      <td style={{ padding: "11px 14px", fontSize: 13 }}>
+                        <div style={{ fontWeight: 600, color: C.text }}>{r.full_name || "·"}</div>
+                        <div style={{ fontSize: 11, color: C.muted }}>{r.email}</div>
+                      </td>
+                      <td style={{ padding: "11px 14px", fontSize: 13 }}>
+                        {sales ? (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                            <span style={{ width: 22, height: 22, borderRadius: "50%", background: C.slate, color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{sales.charAt(0).toUpperCase()}</span>
+                            <span style={{ color: C.text, whiteSpace: "nowrap" }}>{sales}</span>
+                          </span>
+                        ) : <span style={{ color: C.muted }}>·</span>}
+                      </td>
+                      <td style={{ padding: "11px 14px" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 9px", borderRadius: 8, fontSize: 11, fontWeight: 700, background: sm.color + "1c", color: sm.color, whiteSpace: "nowrap" }}>
+                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: sm.color }} />{sm.label}
+                        </span>
+                      </td>
+                      {!rows.eligible && (
+                        <>
+                          <td style={{ padding: "11px 14px", fontSize: 12.5, color: C.text2, whiteSpace: "nowrap" }}>{r.last_email_num ? `#${r.last_email_num} · ${fmtDate(r.last_sent_at)}` : "·"}</td>
+                          <td style={{ padding: "11px 14px" }}>
+                            {r.signed ? <Tag c="#15a34a">Signé</Tag>
+                              : r.presented ? <Tag c={C.ok}>Présenté</Tag>
+                              : r.rebooked ? <Tag c={C.ok}>RDV repris</Tag>
+                              : r.clicked ? <Tag c="#4b8fb0">A cliqué</Tag>
+                              : <Tag c={C.muted} soft={segBg}>Envoyé</Tag>}
+                          </td>
+                          <td style={{ padding: "11px 14px", fontSize: 12.5, color: C.text2, whiteSpace: "nowrap" }}>{r.rdv_at ? fmtDate(r.rdv_at) : <span style={{ color: C.muted }}>·</span>}</td>
+                        </>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function Tag({ children, c, soft }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 9px", borderRadius: 8, fontSize: 11, fontWeight: 700, background: soft || (c + "1c"), color: c, whiteSpace: "nowrap" }}>{children}</span>
   );
 }
