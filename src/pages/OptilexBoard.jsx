@@ -1720,11 +1720,11 @@ function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion, recordM
             <RdvRow label="Rendez-vous Intégration Opti'Lex" date={row.rdv_lancement_date} done={row.rdv_lancement_done} editable={!!num}
               onToggle={(v) => patch(num, { rdv_lancement_done: v })} />
             <RdvRow label="Rendez-vous lancement fiscal" date={row.rdv_fiscal_date_manual || row.rdv_fiscal_date} done={row.rdv_fiscal_done} editable={!!num && !!(row.rdv_fiscal_date_manual || row.rdv_fiscal_date)}
-              link={!(row.rdv_fiscal_date_manual || row.rdv_fiscal_date) && row.fiscal_url ? row.fiscal_url : null}
+              link={row.fiscal_url || null}
               onDate={num ? (d) => patch(num, { rdv_fiscal_date_manual: d }) : undefined}
               onToggle={(v) => patch(num, { rdv_fiscal_done: v })} />
             <RdvRow label="Rendez-vous lancement social" date={row.rdv_social_date_manual || row.rdv_social_date} done={row.rdv_social_done} editable={!!num && !!(row.rdv_social_date_manual || row.rdv_social_date)}
-              link={!(row.rdv_social_date_manual || row.rdv_social_date) && row.social_url ? row.social_url : null}
+              link={row.social_url || null}
               onDate={num ? (d) => patch(num, { rdv_social_date_manual: d }) : undefined}
               onToggle={(v) => patch(num, { rdv_social_done: v })} />
           </div>
@@ -1744,7 +1744,7 @@ function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion, recordM
                   le client (rdv_plus2mois_date, via le booking). Lien copiable tant qu'aucune
                   date n'est posée. Toggle À venir/Effectué conservé (planifiable avant). */}
               <RdvRow label="RDV +2 mois" date={row.rdv_plus1mois_date || row.rdv_plus2mois_date} done={row.rdv_plus1mois_done} editable={!!num}
-                link={!(row.rdv_plus1mois_date || row.rdv_plus2mois_date) && row.plus2mois_url ? row.plus2mois_url : null}
+                link={row.plus2mois_url || null}
                 onDate={num ? (d) => patch(num, { rdv_plus1mois_date: d }) : undefined}
                 onToggle={(v) => patch(num, { rdv_plus1mois_done: v })} />
 
