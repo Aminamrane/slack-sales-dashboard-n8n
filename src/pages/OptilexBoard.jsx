@@ -1591,7 +1591,7 @@ function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion, recordM
   // Le parcours email n'a de sens que pour un client dans le flux Opti'Lex (contrat
   // séparé) : un contrat groupé (inclus à l'Owner) n'a pas d'emails cabinet dédiés.
   const [emailsOpen, setEmailsOpen] = useState(false);
-  const hasOptilexTrack = row.optilex_status != null || !!row.optilex_welcome_email_at || !!row.optilex_livret_email_at || !!row.optilex_docs_email_at || !!row.optilex_contract_forms_email_at;
+  const hasOptilexTrack = row.optilex_status != null || !!row.rdv_lancement_date || !!row.optilex_welcome_email_at || !!row.optilex_livret_email_at || !!row.optilex_docs_email_at || !!row.optilex_contract_forms_email_at;
   return (
     <>
       <motion.div onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
