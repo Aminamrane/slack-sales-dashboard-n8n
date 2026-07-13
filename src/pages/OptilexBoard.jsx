@@ -1728,12 +1728,14 @@ function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion, recordM
                 onToggle={(v) => patch(num, { facturation_honoraires_done: v })} onDate={(d) => patch(num, { facturation_honoraires_date: d })} />
               <JalonRow label="Statut facturation Opti'Lex" done={row.setup_facturation_done} date={row.setup_facturation_date}
                 onToggle={(v) => patch(num, { setup_facturation_done: v })} onDate={(d) => patch(num, { setup_facturation_date: d })} />
-              {/* RDV +2 mois : date prévue TOUJOURS saisissable (planifier avant), puis
-                  toggle À venir/Effectué. (Correction 2026-07-10 : la date n'était visible
-                  qu'une fois "effectué" -> impossible de planifier sans mentir sur le statut.) */}
-              <JalonRow label="RDV +2 mois" done={row.rdv_plus1mois_done} date={row.rdv_plus1mois_date}
-                alwaysDate toggleLabels={["À venir", "Effectué"]}
-                onToggle={(v) => patch(num, { rdv_plus1mois_done: v })} onDate={(d) => patch(num, { rdv_plus1mois_date: d })} />
+              {/* RDV +2 mois : RdvRow avec LIEN de prise de RDV (30 min avec Lisa Gentaire).
+                  Date affichée = manuelle (rdv_plus1mois_date, prime) sinon date réservée par
+                  le client (rdv_plus2mois_date, via le booking). Lien copiable tant qu'aucune
+                  date n'est posée. Toggle À venir/Effectué conservé (planifiable avant). */}
+              <RdvRow label="RDV +2 mois" date={row.rdv_plus1mois_date || row.rdv_plus2mois_date} done={row.rdv_plus1mois_done} editable={!!num}
+                link={!(row.rdv_plus1mois_date || row.rdv_plus2mois_date) && row.plus2mois_url ? row.plus2mois_url : null}
+                onDate={num ? (d) => patch(num, { rdv_plus1mois_date: d }) : undefined}
+                onToggle={(v) => patch(num, { rdv_plus1mois_done: v })} />
 
               {/* Commentaires (fil façon YouTube) */}
               <SecTitle icon="comments" style={{ margin: "22px 0 12px" }}>Commentaires{row.comment_count ? ` · ${row.comment_count}` : ""}</SecTitle>
