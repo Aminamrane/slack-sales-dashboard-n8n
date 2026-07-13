@@ -1590,7 +1590,8 @@ function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion, recordM
   };
   // Le parcours email n'a de sens que pour un client dans le flux Opti'Lex (contrat
   // séparé) : un contrat groupé (inclus à l'Owner) n'a pas d'emails cabinet dédiés.
-  const hasOptilexTrack = row.optilex_status != null || !!row.optilex_welcome_email_at || !!row.optilex_livret_email_at;
+  const [emailsOpen, setEmailsOpen] = useState(false);
+  const hasOptilexTrack = row.optilex_status != null || !!row.optilex_welcome_email_at || !!row.optilex_livret_email_at || !!row.optilex_docs_email_at || !!row.optilex_contract_forms_email_at;
   return (
     <>
       <motion.div onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
@@ -1666,15 +1667,25 @@ function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion, recordM
             </>
           )}
 
-          {/* Parcours des 2 emails Opti'Lex automatisés (accueil à l'envoi du contrat,
-              livret à la signature). Enveloppe grise = pas encore parti, verte = envoyé + date. */}
+          {/* Parcours des 4 emails Opti'Lex automatisés. Section repliable, pliée par
+              défaut (clic sur le titre). Enveloppe grise = pas parti, verte = envoyé + date. */}
           {hasOptilexTrack && (
             <>
-              <SecTitle icon="emails">Emails Opti'Lex</SecTitle>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
-                {emailStep("1er email · Accueil", "À l'envoi du contrat Opti'Lex", row.optilex_welcome_email_at)}
-                {emailStep("2ème email · Livret", "À la signature du contrat", row.optilex_livret_email_at)}
+              <div onClick={() => setEmailsOpen((o) => !o)} role="button" tabIndex={0}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setEmailsOpen((o) => !o); } }}
+                style={{ cursor: "pointer", userSelect: "none", display: "flex", alignItems: "center", gap: 6, marginBottom: emailsOpen ? 10 : 22 }}>
+                <SecTitle icon="emails" style={{ marginBottom: 0 }}>Emails Opti'Lex</SecTitle>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                  style={{ flexShrink: 0, transform: emailsOpen ? "none" : "rotate(-90deg)", transition: "transform 0.2s" }}><path d="m6 9 6 6 6-6" /></svg>
               </div>
+              {emailsOpen && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
+                  {emailStep("1er email · Accueil", "À l'envoi du contrat Opti'Lex", row.optilex_welcome_email_at)}
+                  {emailStep("2ème email · Livret", "À la signature du contrat", row.optilex_livret_email_at)}
+                  {emailStep("3ème email · Documents à envoyer", "Au RDV d'intégration effectué", row.optilex_docs_email_at)}
+                  {emailStep("4ème email · Formulaires contrats", "Au RDV d'intégration effectué", row.optilex_contract_forms_email_at)}
+                </div>
+              )}
             </>
           )}
 
