@@ -53,6 +53,7 @@ export default function SequencesMonitor({ embed }) {
   const [q, setQ] = useState("");
   const [viewMode, setViewMode] = useState(null);    // null=auto | "in_seq" | "eligible"
   const [refreshedAt, setRefreshedAt] = useState(null);
+  const [confData, setConfData] = useState(null);
   const firstLoad = useRef(true);
 
   const load = () => {
@@ -65,6 +66,7 @@ export default function SequencesMonitor({ embed }) {
         firstLoad.current = false;
       })
       .catch((e) => { if (firstLoad.current) { setError(e.message || "Erreur"); setLoading(false); } });
+    apiClient.get("/api/v1/tracking/confirmation-email/monitoring").then(setConfData).catch(() => {});
   };
   useEffect(() => {
     load();
@@ -72,6 +74,8 @@ export default function SequencesMonitor({ embed }) {
     return () => clearInterval(id);
   }, []);
 
+  const CONF_KEY = "__confirmation__";
+  const isConf = active === CONF_KEY;
   const seq = useMemo(() => (data ? data.sequences.find((s) => s.key === active) : null), [data, active]);
   useEffect(() => { setViewMode(null); }, [active]);
   const effView = viewMode || (seq && seq.enabled ? "in_seq" : "eligible");
@@ -91,37 +95,37 @@ export default function SequencesMonitor({ embed }) {
 
   if (loading) return <div style={{ fontFamily: FONT, padding: 48, color: C.muted, textAlign: "center" }}>Chargement du monitoring…</div>;
   if (error) return <div style={{ fontFamily: FONT, padding: 48, color: "#b5675f", textAlign: "center" }}>Erreur : {error}</div>;
-  if (!data || !seq) return <div style={{ fontFamily: FONT, padding: 48, color: C.muted, textAlign: "center" }}>Aucune séquence.</div>;
+  if (!data || (!seq && !isConf)) return <div style={{ fontFamily: FONT, padding: 48, color: C.muted, textAlign: "center" }}>Aucune séquence.</div>;
 
-  const st = seq.stats;
+  const st = seq ? seq.stats : null;
   const anyEnabled = data.sequences.some((s) => s.enabled);
-  const contactedCount = seq.contacted.length;
-  const clickedLeads = seq.contacted.filter((c) => c.clicked).length;
-  const totalSeg = SEG_ORDER.reduce((a, k) => a + (seq.segments[k] || 0), 0);
+  const contactedCount = seq ? seq.contacted.length : 0;
+  const clickedLeads = seq ? seq.contacted.filter((c) => c.clicked).length : 0;
+  const totalSeg = seq ? SEG_ORDER.reduce((a, k) => a + (seq.segments[k] || 0), 0) : 0;
 
   // Parcours lead par lead (entonnoir). Réf = éligibles ; conversion vs étape précédente.
   // Chaque étape convertit depuis un dénominateur sémantique (pas juste l'étape
   // précédente) : contactés/éligibles, clics & RDV rapportés aux contactés,
   // présentés/RDV, signés/présentés -> toujours des sous-ensembles, taux ≤ 100%.
-  const funnel = [
+  const funnel = seq ? [
     { key: "elig",  label: "Éligibles",   value: st.eligible,    ref: null,           color: C.slate,   hint: "dans la qualif" },
     { key: "cont",  label: "Contactés",   value: contactedCount, ref: st.eligible,    color: C.accent,  hint: "≥ 1 email reçu" },
     { key: "click", label: "Ont cliqué",  value: clickedLeads,   ref: contactedCount, color: "#4b8fb0", hint: "lien ouvert" },
     { key: "rdv",   label: "RDV repris",  value: st.rebooked,    ref: contactedCount, color: C.ok,      hint: "via la séquence" },
     { key: "prez",  label: "Présentés",   value: st.presented,   ref: st.rebooked,    color: C.ok,      hint: "R1 tenu" },
     { key: "sign",  label: "Signés",      value: st.signed,      ref: st.presented,   color: C.ok,      hint: "clients" },
-  ];
+  ] : [];
 
   // KPI (volume). Icônes SVG inline (charte : carré teinté + chiffre tabular).
   const ic = (p) => <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">{p}</svg>;
-  const kpis = [
+  const kpis = seq ? [
     { l: "Éligibles",      v: st.eligible,  color: C.slate,   s: "prospects ciblables", icon: ic(<><circle cx="9" cy="7" r="4"/><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></>) },
     { l: "Emails envoyés", v: st.sent,      color: C.accent,  s: "cumul séquence",      icon: ic(<><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></>) },
     { l: "Clics",          v: st.clicked,   color: "#4b8fb0", s: "liens ouverts",       icon: ic(<><path d="M9 9l5 12 1.8-5.2L21 14 9 9z"/><path d="M7.2 2.2 8 5.1"/><path d="m5.1 7.2-2.9-.8"/></>) },
     { l: "RDV repris",     v: st.rebooked,  color: C.ok,      s: "via la séquence",     icon: ic(<><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="m9 16 2 2 4-4"/></>) },
     { l: "Présentés",      v: st.presented, color: C.ok,      s: "R1 tenu",             icon: ic(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></>) },
     { l: "Signés",         v: st.signed,    color: C.ok,      s: "clients",             icon: ic(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></>) },
-  ];
+  ] : [];
 
   const segBg = darkMode ? "rgba(255,255,255,0.04)" : "#f4f5f7";
 
@@ -173,7 +177,54 @@ export default function SequencesMonitor({ embed }) {
               </button>
             );
           })}
+          <button className="seq-pill" onClick={() => setActive(CONF_KEY)}
+            style={{ padding: "8px 15px", borderRadius: 10, border: "1px solid " + (isConf ? C.text : C.border), background: isConf ? C.text : C.bg, color: isConf ? C.bg : C.text2, fontSize: 13, fontWeight: 650, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, fontFamily: FONT }}>
+            Mail de confirmation
+            <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.04em", padding: "2px 7px", borderRadius: 6, textTransform: "uppercase", background: C.ok + "22", color: C.ok }}>Actif</span>
+          </button>
         </div>
+
+        {isConf ? (
+          !confData ? (
+            <div style={{ ...card, padding: 40, textAlign: "center", color: C.muted }}>Chargement…</div>
+          ) : (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 11, marginBottom: 16 }}>
+                {[
+                  { l: "Confirmations envoyées", v: confData.total.sent, s: "leads ADS auto-affectés", color: C.accent },
+                  { l: "RDV R1 pris", v: confData.total.rdv, s: "parmi les destinataires", color: C.ok },
+                  { l: "Taux de prise de RDV", v: confData.total.rate + "%", s: "RDV / envoyés", color: C.slate },
+                ].map((k) => (
+                  <div key={k.l} style={{ ...card, padding: "13px 14px" }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: C.muted, marginBottom: 8 }}>{k.l}</div>
+                    <div style={{ fontSize: 25, fontWeight: 780, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", lineHeight: 1, color: k.color }}>{k.v ?? 0}</div>
+                    <div style={{ fontSize: 10.5, color: C.muted, marginTop: 3 }}>{k.s}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ ...card, padding: "16px 18px", marginBottom: 16 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4, letterSpacing: "-0.01em" }}>Ventilation par niche</div>
+                <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 14 }}>Confirmations envoyées et RDV R1 pris, selon la niche du lead (origine).</div>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead><tr>{["Niche", "Envoyés", "RDV R1 pris", "Taux"].map((h, i) => (
+                    <th key={h} style={{ textAlign: i === 0 ? "left" : "right", padding: "9px 12px", fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: "1px solid " + C.border }}>{h}</th>
+                  ))}</tr></thead>
+                  <tbody>
+                    {confData.niches.map((n) => (
+                      <tr key={n.key} className="seq-row">
+                        <td style={{ padding: "11px 12px", fontSize: 13, fontWeight: 600, color: C.text, borderTop: "1px solid " + C.border }}>{n.label}</td>
+                        <td style={{ padding: "11px 12px", fontSize: 13, textAlign: "right", fontVariantNumeric: "tabular-nums", borderTop: "1px solid " + C.border }}>{n.sent}</td>
+                        <td style={{ padding: "11px 12px", fontSize: 13, textAlign: "right", fontVariantNumeric: "tabular-nums", color: C.ok, borderTop: "1px solid " + C.border }}>{n.rdv}</td>
+                        <td style={{ padding: "11px 12px", fontSize: 13, textAlign: "right", fontVariantNumeric: "tabular-nums", color: C.muted, borderTop: "1px solid " + C.border }}>{n.rate}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{ fontSize: 10.5, color: C.muted, marginTop: 12 }}>« RDV R1 pris » = leads ayant reçu la confirmation et qui ont un R1 posé (conversion).</div>
+              </div>
+            </>
+          )
+        ) : (<>
 
         {/* Bandeau OFF */}
         {!seq.enabled && (
@@ -372,6 +423,7 @@ export default function SequencesMonitor({ embed }) {
             </table>
           </div>
         </div>
+        </>)}
       </div>
     </div>
   );
