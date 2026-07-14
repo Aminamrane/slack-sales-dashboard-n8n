@@ -192,7 +192,7 @@ export default function SequencesMonitor({ embed }) {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 11, marginBottom: 16 }}>
                 {[
                   { l: "Confirmations envoyées", v: confData.total.sent, s: "leads ADS auto-affectés", color: C.accent },
-                  { l: "RDV R1 pris", v: confData.total.rdv, s: "parmi les destinataires", color: C.ok },
+                  { l: "RDV pris via le lien", v: confData.total.rdv, s: "réservé via le mail", color: C.ok },
                   { l: "Taux de prise de RDV", v: confData.total.rate + "%", s: "RDV / envoyés", color: C.slate },
                 ].map((k) => (
                   <div key={k.l} style={{ ...card, padding: "13px 14px" }}>
@@ -206,7 +206,7 @@ export default function SequencesMonitor({ embed }) {
                 <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4, letterSpacing: "-0.01em" }}>Ventilation par niche</div>
                 <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 14 }}>Confirmations envoyées et RDV R1 pris, selon la niche du lead (origine).</div>
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead><tr>{["Niche", "Envoyés", "RDV R1 pris", "Taux"].map((h, i) => (
+                  <thead><tr>{["Niche", "Envoyés", "RDV pris", "Taux"].map((h, i) => (
                     <th key={h} style={{ textAlign: i === 0 ? "left" : "right", padding: "9px 12px", fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: "1px solid " + C.border }}>{h}</th>
                   ))}</tr></thead>
                   <tbody>
@@ -220,7 +220,7 @@ export default function SequencesMonitor({ embed }) {
                     ))}
                   </tbody>
                 </table>
-                <div style={{ fontSize: 10.5, color: C.muted, marginTop: 12 }}>« RDV R1 pris » = leads ayant reçu la confirmation et qui ont un R1 posé (conversion).</div>
+                <div style={{ fontSize: 10.5, color: C.muted, marginTop: 12 }}>« RDV pris » = leads ayant réservé leur R1 via le lien du mail de confirmation (attribution stricte).</div>
               </div>
             </>
           )
