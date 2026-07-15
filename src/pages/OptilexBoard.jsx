@@ -733,6 +733,14 @@ export default function OptilexBoard({ embed = false }) {
     return () => { alive = false; clearInterval(id); };
   }, []);
 
+  // Rechargement manuel du board (ex. apres un envoi force) -- additif, ne touche pas le polling.
+  const reloadBoard = useCallback(() => {
+    const seq = mutSeq.current;
+    apiClient.get("/api/v1/optilex/board")
+      .then((r) => { if (seq === mutSeq.current) setRows(r.clients || []); })
+      .catch((e) => console.error("board reload failed", e));
+  }, []);
+
   const counts = useMemo(() => {
     const c = { "En cours": 0, "Attente Opti'Lex": 0 };
     for (const r of rows) {
@@ -1105,7 +1113,7 @@ export default function OptilexBoard({ embed = false }) {
       </div>
 
       <AnimatePresence>
-        {selRow && <DetailPanel key="detail" row={selRow} onClose={() => setSelected(null)} patch={patch} changeEtat={changeEtat} etatHistVersion={etatHistVersion} recordMeteo={recordMeteo} meteoHistVersion={meteoHistVersion} />}
+        {selRow && <DetailPanel key="detail" row={selRow} onClose={() => setSelected(null)} reload={reloadBoard} patch={patch} changeEtat={changeEtat} etatHistVersion={etatHistVersion} recordMeteo={recordMeteo} meteoHistVersion={meteoHistVersion} />}
       </AnimatePresence>
     </div>
   );
@@ -1382,6 +1390,49 @@ function OptilexSignatureBlock({ email }) {
   );
 }
 
+// Forcage d'envoi du contrat Opti'Lex encore PLANIFIE (cas special : RDV d'integration le
+// jour meme de la signature Owner). Rejoue le dispatch existant cote api-owner (envoi immediat
+// + emails) sans toucher la regle de planification ni le flux. Double-clic de confirmation.
+function ForceSendBlock({ email, scheduledAt, onForced }) {
+  const [confirming, setConfirming] = useState(false);
+  const [state, setState] = useState(null); // null | 'sending' | 'sent' | 'error'
+
+  const doForce = async () => {
+    setState("sending"); setConfirming(false);
+    try {
+      await apiClient.post("/api/v1/optilex/force-send-contract", { email });
+      setState("sent");
+      setTimeout(() => { onForced && onForced(); }, 1200);
+    } catch {
+      setState("error"); setTimeout(() => setState(null), 2800);
+    }
+  };
+
+  const done = state === "sent";
+  const sending = state === "sending";
+  return (
+    <>
+      <SecTitle icon="signature">Contrat Opti'Lex planifie</SecTitle>
+      <div style={{ marginBottom: 22 }}>
+        <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, lineHeight: 1.5 }}>
+          Le contrat Opti'Lex partira automatiquement{scheduledAt && <> le <strong style={{ color: TEXT }}>{fmt(scheduledAt)}</strong></>}.
+          {" "}Cas special (RDV d'integration le jour meme) : force l'envoi maintenant.
+        </div>
+        <button onClick={confirming ? doForce : () => setConfirming(true)}
+          onMouseLeave={() => { if (!sending) setConfirming(false); }}
+          disabled={sending || done}
+          style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+            padding: "10px 0", borderRadius: 9, border: confirming ? "none" : `1px solid ${NAVY}`, fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+            background: done ? GREEN : confirming ? "#b42318" : "transparent",
+            color: done || confirming ? "#fff" : NAVY, cursor: sending || done ? "default" : "pointer", transition: "all 0.2s" }}>
+          {!done && !sending && <MailIcon />}
+          {done ? "Contrat envoye ✓" : sending ? "Envoi…" : state === "error" ? "Echec, reessayer" : confirming ? "Confirmer l'envoi immediat" : "Forcer l'envoi du contrat Opti'Lex"}
+        </button>
+      </div>
+    </>
+  );
+}
+
 // ── PANNEAU DÉTAILS (slide-in droite, façon Notion) ──────────────────────────
 // Rangée date labellisée. COMMIT AU BLUR (pas à chaque frappe) : un input date natif émet un
 // change par segment valide -> une année en cours de saisie ("0002") partirait en base ET dans
@@ -1538,7 +1589,7 @@ function EtatHistory({ num, version }) {
   );
 }
 
-function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion, recordMeteo, meteoHistVersion }) {
+function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion, recordMeteo, meteoHistVersion }) {
   const num = row.numero_client;
   const sigBlock = (title, status, sentAt, signedAt, scheduledAt, grouped) => {
     const i = sigInfo(status, sentAt, signedAt, scheduledAt);
@@ -1658,6 +1709,10 @@ function DetailPanel({ row, onClose, patch, changeEtat, etatHistVersion, recordM
             {sigBlock("Owner", row.owner_status, row.owner_sent_at, row.owner_signed_at)}
             {sigBlock("Opti'Lex", row.optilex_status, row.optilex_sent_at, row.optilex_signed_at, row.optilex_scheduled_at, row.owner_status === "done" && row.optilex_status == null)}
           </div>
+
+          {["admin", "optilex"].includes((apiClient.getUser() || {}).role) && row.owner_status === "done" && (row.optilex_status === "scheduled" || row.optilex_status === "awaiting_owner_signature") && (
+            <ForceSendBlock email={row.email} scheduledAt={row.optilex_scheduled_at} onForced={reload} />
+          )}
 
           {/* Lien de signature Opti'Lex + relance (uniquement si le contrat est envoyé) */}
           {row.optilex_status === "ongoing" && (
