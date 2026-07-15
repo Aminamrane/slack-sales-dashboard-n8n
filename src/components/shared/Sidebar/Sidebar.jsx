@@ -22,11 +22,15 @@
 // `.ceo-icon-btn` sont conservées telles quelles (déjà injectées dans le
 // `<style>` de chaque page hôte).
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, Home, MessageSquare, Mail, Search, Sparkles, PanelLeft } from "lucide-react";
 import companyLogo from "../../../assets/my_image.png";
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import apiClient from "../../../services/apiClient";
 
 // État de survol PERSISTANT entre les navigations. Sur les dashboards CEO/Acquisition, chaque
 // onglet est une ROUTE distincte : cliquer un onglet remonte toute la page (donc la Sidebar).
@@ -42,6 +46,32 @@ let railHovered = false;
 const OPEN_T = { duration: 0.06, ease: [0.16, 1, 0.3, 1] };
 const CLOSE_T = { duration: 0.08, ease: [0.16, 1, 0.3, 1] };
 const EXPANDED_W = 260;   // largeur de la barre dépliée au survol
+
+// ── Layout perso de la sidebar (ordre sections + items), fusionné avec le défaut ──
+// Les sections/items absents du layout sauvegardé sont AJOUTÉS à la fin -> rien perdu
+// si le catalogue de pages évolue plus tard.
+function applyLayout(sections, layout) {
+  if (!layout || !Array.isArray(layout.sections)) return sections;
+  const byKey = new Map(sections.map((s) => [s.key, s]));
+  const out = [];
+  layout.sections.forEach((k) => { if (byKey.has(k)) { out.push(byKey.get(k)); byKey.delete(k); } });
+  sections.forEach((s) => { if (byKey.has(s.key)) out.push(s); });
+  return out.map((sec) => {
+    const order = (layout.items || {})[sec.key];
+    if (!Array.isArray(order)) return sec;
+    const bi = new Map(sec.items.map((it) => [it.id, it]));
+    const oi = [];
+    order.forEach((id) => { if (bi.has(id)) { oi.push(bi.get(id)); bi.delete(id); } });
+    sec.items.forEach((it) => { if (bi.has(it.id)) oi.push(it); });
+    return { ...sec, items: oi };
+  });
+}
+function buildLayout(sections) {
+  return {
+    sections: sections.map((s) => s.key),
+    items: Object.fromEntries(sections.map((s) => [s.key, s.items.map((it) => it.id)])),
+  };
+}
 
 export default function Sidebar({ width, collapsed, onToggle, sections, activeTab, setActiveTab, C, darkMode }) {
   // Survol = dépliage automatique (réactif) : si la barre est repliée, la survoler
@@ -74,6 +104,53 @@ export default function Sidebar({ width, collapsed, onToggle, sections, activeTa
     return () => window.removeEventListener("mousemove", onMove);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collapsed, width]);
+
+  // ── Layout réordonnable (drag-and-drop) persistant PAR COMPTE ──
+  const [ordered, setOrdered] = useState(sections);
+  const layoutRef = useRef(null);
+  useEffect(() => {
+    let alive = true;
+    apiClient.get("/api/v1/me/sidebar-layout")
+      .then((d) => { if (!alive) return; layoutRef.current = (d && d.layout) || null; setOrdered(applyLayout(sections, layoutRef.current)); })
+      .catch(() => {});
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setOrdered(applyLayout(sections, layoutRef.current)); }, [sections]);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const persist = (next) => { const l = buildLayout(next); layoutRef.current = l; apiClient.put("/api/v1/me/sidebar-layout", l).catch(() => {}); };
+  const onDragEnd = (e) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const type = String(active.id).split(":")[0];
+    setOrdered((prev) => {
+      if (type === "sec") {
+        const oi = prev.findIndex((s) => "sec:" + s.key === active.id);
+        const ni = prev.findIndex((s) => "sec:" + s.key === over.id);
+        if (oi < 0 || ni < 0) return prev;
+        let next = arrayMove(prev, oi, ni);
+        const ri = next.findIndex((s) => s.key === "recent");
+        if (ri > 0) next = arrayMove(next, ri, 0); // Récentes reste épinglé en tête
+        persist(next);
+        return next;
+      }
+      if (type === "it") {
+        const si = prev.findIndex((s) => s.items.some((it) => "it:" + it.id === active.id));
+        if (si < 0) return prev;
+        const sec = prev[si];
+        const oi = sec.items.findIndex((it) => "it:" + it.id === active.id);
+        const ni = sec.items.findIndex((it) => "it:" + it.id === over.id);
+        if (ni < 0) return prev; // pas de saut inter-section
+        const items = arrayMove(sec.items, oi, ni);
+        const next = prev.map((s, i) => (i === si ? { ...s, items } : s));
+        persist(next);
+        return next;
+      }
+      return prev;
+    });
+  };
+
   return (
     <>
       {/* Spacer : réserve la largeur repliée dans le flux -> les éléments de la page ne bougent JAMAIS. */}
@@ -113,17 +190,22 @@ export default function Sidebar({ width, collapsed, onToggle, sections, activeTa
       </div>
 
       <nav style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 0' }} className="ceo-side-scroll">
-        {sections.map((sec) => (
-          <SidebarSection
-            key={sec.key}
-            section={sec}
-            collapsed={renderCollapsed}
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            C={C}
-            darkMode={darkMode}
-          />
-        ))}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={ordered.map((s) => 'sec:' + s.key)} strategy={verticalListSortingStrategy}>
+            {ordered.map((sec) => (
+              <SidebarSection
+                key={sec.key}
+                section={sec}
+                collapsed={renderCollapsed}
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                C={C}
+                darkMode={darkMode}
+                draggable={sec.key !== 'recent'}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
       </nav>
 
       <div style={{ flexShrink: 0 }}>
@@ -218,18 +300,22 @@ function IconRow({ collapsed, C }) {
   );
 }
 
-function SidebarSection({ section, collapsed, activeTab, setActiveTab, C, darkMode }) {
+function SidebarSection({ section, collapsed, activeTab, setActiveTab, C, darkMode, draggable = false }) {
   const [open, setOpen] = useState(true);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: 'sec:' + section.key, disabled: !draggable });
+  const dragStyle = draggable ? { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1, position: 'relative', zIndex: isDragging ? 50 : undefined } : undefined;
+  const handleProps = draggable ? { ...attributes, ...listeners } : {};
   return (
-    <div style={{ padding: collapsed ? '4px 6px' : '4px 8px' }}>
+    <div ref={draggable ? setNodeRef : undefined} style={{ padding: collapsed ? '4px 6px' : '4px 8px', ...dragStyle }}>
       {!collapsed && (
         <button
           onClick={() => setOpen((o) => !o)}
+          {...handleProps}
           style={{
             width: '100%',
             display: 'flex', alignItems: 'center', gap: 4,
             padding: '4px 6px',
-            border: 'none', background: 'transparent', cursor: 'pointer',
+            border: 'none', background: 'transparent', cursor: draggable ? 'grab' : 'pointer',
             fontFamily: 'inherit',
             color: C.muted,
             fontSize: 12, fontWeight: 600,
@@ -265,17 +351,17 @@ function SidebarSection({ section, collapsed, activeTab, setActiveTab, C, darkMo
             style={{ overflow: 'hidden' }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginTop: 2 }}>
-              {section.items.map((item) => (
-                <SidebarItem
-                  key={item.id}
-                  item={item}
-                  collapsed={collapsed}
-                  active={activeTab === item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  C={C}
-                  darkMode={darkMode}
-                />
-              ))}
+              {draggable ? (
+                <SortableContext items={section.items.map((it) => 'it:' + it.id)} strategy={verticalListSortingStrategy}>
+                  {section.items.map((item) => (
+                    <SortableItem key={item.id} item={item} collapsed={collapsed} active={activeTab === item.id} onClick={() => setActiveTab(item.id)} C={C} darkMode={darkMode} />
+                  ))}
+                </SortableContext>
+              ) : (
+                section.items.map((item) => (
+                  <SidebarItem key={item.id} item={item} collapsed={collapsed} active={activeTab === item.id} onClick={() => setActiveTab(item.id)} C={C} darkMode={darkMode} />
+                ))
+              )}
             </div>
           </motion.div>
         )}
@@ -324,6 +410,16 @@ function SidebarItem({ item, collapsed, active, onClick, C, darkMode }) {
         </span>
       )}
     </button>
+  );
+}
+
+function SortableItem({ item, collapsed, active, onClick, C, darkMode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: 'it:' + item.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, position: 'relative', zIndex: isDragging ? 50 : undefined };
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <SidebarItem item={item} collapsed={collapsed} active={active} onClick={onClick} C={C} darkMode={darkMode} />
+    </div>
   );
 }
 
