@@ -937,7 +937,7 @@ export default function CeoDashboard() {
   // ── AUTH CHECK ──────────────────────────────────────────────────────
   useEffect(() => {
     const u = apiClient.getUser();
-    if (!u || (u.role !== 'admin' && u.role !== 'ceo')) {
+    if (!u || (u.role !== 'admin' && u.role !== 'ceo' && u.role !== 'finance_director')) {
       navigate('/login');
       return;
     }
@@ -993,8 +993,8 @@ export default function CeoDashboard() {
     return () => { cancelled = true; };
   }, [user]);
 
-  // Authorization gate: only CEO and admin can edit objectives.
-  const canEditObjectives = user?.role === 'ceo' || user?.role === 'admin';
+  // Authorization gate: CEO, admin et finance_director (accès CEO complet) peuvent éditer les objectifs.
+  const canEditObjectives = user?.role === 'ceo' || user?.role === 'admin' || user?.role === 'finance_director';
   // Current month key (YYYY-MM, locale-independent).
   const currentMonthKey = useMemo(() => new Date().toISOString().slice(0, 7), []);
   // Rolling 6 months (current + 5 next) for the editable modal.

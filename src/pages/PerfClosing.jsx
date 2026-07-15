@@ -154,7 +154,7 @@ export default function PerfClosing() {
         const token = apiClient.getToken();
         const user = apiClient.getUser();
         if (!token || !user) { navigate("/login"); return; }
-        if (user.role !== 'admin' && user.role !== 'ceo') { navigate("/"); return; }
+        if (user.role !== 'admin' && user.role !== 'ceo' && user.role !== 'finance_director') { navigate("/"); return; }
         await fetchDashboard();
         // Fetch user avatars from multiple sources
         try {
