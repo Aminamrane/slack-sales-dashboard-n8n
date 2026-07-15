@@ -605,10 +605,11 @@ export default function MonitoringPerf() {
                               <div style={{fontSize:11.5,color:C.muted,marginTop:2}}>hors nuits &amp; week-ends</div>
                             </div>
                             {td.arrival && (
-                            <div style={{flex:'1 1 160px',minWidth:160,background:C.bg,border:'1px solid '+C.border,borderRadius:10,padding:'12px 16px',boxShadow:C.shadow}}>
+                            <div style={{flex:'1 1 210px',minWidth:210,background:C.bg,border:'1px solid '+C.border,borderRadius:10,padding:'12px 16px',boxShadow:C.shadow}}>
                               <div style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:'uppercase',letterSpacing:'0.04em'}}>Re&ccedil;us hors heures</div>
                               <div style={{fontSize:22,fontWeight:700,color:C.text,marginTop:2}}>{td.arrival.out_pct!=null?td.arrival.out_pct.toLocaleString('fr-FR',{maximumFractionDigits:0}):'\u2014'}<span style={{fontSize:13,fontWeight:600,color:C.muted}}>%</span></div>
-                              <div style={{fontSize:11.5,color:C.muted,marginTop:2}}>apr&egrave;s 17h {td.arrival.after_close} &middot; week-end {td.arrival.weekend}</div>
+                              <div style={{fontSize:11.5,color:C.muted,marginTop:2}}>{td.arrival.out_of_hours} / {td.arrival.n} leads re&ccedil;us</div>
+                              <div style={{fontSize:11,color:C.muted,marginTop:3}}>apr&egrave;s 17h {td.arrival.after_close} &middot; nuit {td.arrival.before_open} &middot; week-end {td.arrival.weekend}</div>
                             </div>
                             )}
                             <div style={{flex:'2 1 280px',minWidth:240,background:C.bg,border:'1px solid '+C.border,borderRadius:10,padding:'12px 16px',boxShadow:C.shadow}}>
