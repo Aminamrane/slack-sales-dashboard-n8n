@@ -39,11 +39,15 @@ const ETAT_OPTIONS = ["Signé", "En cours de résiliation", "En cours de rétrac
 // Rétractation (états actés par Owner) — seulement les "En cours de ...". Le backend
 // applique la même règle (403) ; ici on retire les options de leur picker.
 const CABINET_FORBIDDEN_ETATS = ["Résiliation", "Rétractation"];
+// finance_team (Aurélie) : accès très restreint -> ne peut poser QUE ces 2 états
+// (+ noter la météo + cocher l'onboarding owner). Tout le reste = lecture seule.
+const FINANCE_TEAM_ETATS = ["En cours de résiliation", "En cours de rétractation"];
+const isFinanceTeam = () => { try { return (apiClient.getUser() || {}).role === "finance_team"; } catch { return false; } };
 const etatOptionsForUser = () => {
   try {
-    if ((apiClient.getUser() || {}).role === "optilex") {
-      return ETAT_OPTIONS.filter((o) => !CABINET_FORBIDDEN_ETATS.includes(o));
-    }
+    const role = (apiClient.getUser() || {}).role;
+    if (role === "finance_team") return FINANCE_TEAM_ETATS;
+    if (role === "optilex") return ETAT_OPTIONS.filter((o) => !CABINET_FORBIDDEN_ETATS.includes(o));
   } catch { /* défaut : liste complète */ }
   return ETAT_OPTIONS;
 };
@@ -333,7 +337,7 @@ function EtatPicker({ etat, onPick, disabled }) {
     setOpen(true);
   };
   // "Automatique" = état calculé (suivi cabinet / signatures), efface l'override manuel.
-  const items = [{ opt: null, label: "Automatique" }, ...etatOptionsForUser().map((o) => ({ opt: o, label: o }))];
+  const items = [...(isFinanceTeam() ? [] : [{ opt: null, label: "Automatique" }]), ...etatOptionsForUser().map((o) => ({ opt: o, label: o }))];
   return (
     <span onClick={(e) => e.stopPropagation()}>
       <button ref={btnRef} type="button" onClick={toggle} title="Changer l'état"
@@ -790,6 +794,11 @@ export default function OptilexBoard({ embed = false }) {
 
   const patch = useCallback(async (numero, changes) => {
     if (!numero) return; // contrat pré-client : pas de jalons éditables
+    // finance_team : lecture seule sauf cocher l'onboarding owner.
+    if (isFinanceTeam()) {
+      if (!("rdv_onboarding_done" in changes)) return;
+      changes = { rdv_onboarding_done: changes.rdv_onboarding_done };
+    }
     mutSeq.current += 1;
     let snapshot = null;   // ligne d'avant la MAJ optimiste, pour rollback si le PATCH échoue
     setRows((prev) => prev.map((r) => {
@@ -812,6 +821,7 @@ export default function OptilexBoard({ embed = false }) {
   const [etatHistVersion, setEtatHistVersion] = useState(0);
   const changeEtat = useCallback(async (numero, { etat = null, etat_date = null, pause_end_date = null, pause_relance_date = null }) => {
     if (!numero) return;
+    if (isFinanceTeam() && !FINANCE_TEAM_ETATS.includes(etat)) return; // finance_team : seulement les 2 "en cours"
     mutSeq.current += 1;
     const pe = etat === "Pause" ? pause_end_date : null;
     const pr = etat === "Pause" ? pause_relance_date : null;
@@ -1181,7 +1191,7 @@ function ClientInfoSection({ row, num, patch }) {
     <>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <SecTitle icon="infos" style={{ marginBottom: 0 }}>Informations client</SecTitle>
-        {num && !editing && (
+        {num && !editing && !isFinanceTeam() && (
           <button type="button" onClick={startEdit} title="Modifier les informations"
             style={{ border: "none", background: "transparent", padding: 3, cursor: "pointer", color: MUTED, display: "inline-flex", lineHeight: 0 }}>
             <PencilIcon size={14} />
@@ -1772,13 +1782,13 @@ function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion,
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
             <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date} done={row.rdv_onboarding_done} editable={!!num}
               onToggle={(v) => patch(num, { rdv_onboarding_done: v })} />
-            <RdvRow label="Rendez-vous Intégration Opti'Lex" date={row.rdv_lancement_date} done={row.rdv_lancement_done} editable={!!num}
+            <RdvRow label="Rendez-vous Intégration Opti'Lex" date={row.rdv_lancement_date} done={row.rdv_lancement_done} editable={!!num && !isFinanceTeam()}
               onToggle={(v) => patch(num, { rdv_lancement_done: v })} />
-            <RdvRow label="Rendez-vous lancement fiscal" date={row.rdv_fiscal_date_manual || row.rdv_fiscal_date} done={row.rdv_fiscal_done} editable={!!num && !!(row.rdv_fiscal_date_manual || row.rdv_fiscal_date)}
+            <RdvRow label="Rendez-vous lancement fiscal" date={row.rdv_fiscal_date_manual || row.rdv_fiscal_date} done={row.rdv_fiscal_done} editable={!!num && !isFinanceTeam() && !!(row.rdv_fiscal_date_manual || row.rdv_fiscal_date)}
               link={row.fiscal_url || null}
               onDate={num ? (d) => patch(num, { rdv_fiscal_date_manual: d }) : undefined}
               onToggle={(v) => patch(num, { rdv_fiscal_done: v })} />
-            <RdvRow label="Rendez-vous lancement social" date={row.rdv_social_date_manual || row.rdv_social_date} done={row.rdv_social_done} editable={!!num && !!(row.rdv_social_date_manual || row.rdv_social_date)}
+            <RdvRow label="Rendez-vous lancement social" date={row.rdv_social_date_manual || row.rdv_social_date} done={row.rdv_social_done} editable={!!num && !isFinanceTeam() && !!(row.rdv_social_date_manual || row.rdv_social_date)}
               link={row.social_url || null}
               onDate={num ? (d) => patch(num, { rdv_social_date_manual: d }) : undefined}
               onToggle={(v) => patch(num, { rdv_social_done: v })} />
@@ -1790,15 +1800,15 @@ function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion,
           {num ? (
             <>
               <SecTitle icon="facturation">Suivi facturation</SecTitle>
-              <JalonRow label="Statut facturation Owner" done={row.facturation_honoraires_done} date={row.facturation_honoraires_date}
+              <JalonRow label="Statut facturation Owner" editable={!isFinanceTeam()} done={row.facturation_honoraires_done} date={row.facturation_honoraires_date}
                 onToggle={(v) => patch(num, { facturation_honoraires_done: v })} onDate={(d) => patch(num, { facturation_honoraires_date: d })} />
-              <JalonRow label="Statut facturation Opti'Lex" done={row.setup_facturation_done} date={row.setup_facturation_date}
+              <JalonRow label="Statut facturation Opti'Lex" editable={!isFinanceTeam()} done={row.setup_facturation_done} date={row.setup_facturation_date}
                 onToggle={(v) => patch(num, { setup_facturation_done: v })} onDate={(d) => patch(num, { setup_facturation_date: d })} />
               {/* RDV +2 mois : RdvRow avec LIEN de prise de RDV (30 min avec Lisa Gentaire).
                   Date affichée = manuelle (rdv_plus1mois_date, prime) sinon date réservée par
                   le client (rdv_plus2mois_date, via le booking). Lien copiable tant qu'aucune
                   date n'est posée. Toggle À venir/Effectué conservé (planifiable avant). */}
-              <RdvRow label="RDV +2 mois" date={row.rdv_plus1mois_date || row.rdv_plus2mois_date} done={row.rdv_plus1mois_done} editable={!!num}
+              <RdvRow label="RDV +2 mois" date={row.rdv_plus1mois_date || row.rdv_plus2mois_date} done={row.rdv_plus1mois_done} editable={!!num && !isFinanceTeam()}
                 link={row.plus2mois_url || null}
                 onDate={num ? (d) => patch(num, { rdv_plus1mois_date: d }) : undefined}
                 onToggle={(v) => patch(num, { rdv_plus1mois_done: v })} />
@@ -1821,14 +1831,16 @@ function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion,
 
 // alwaysDate : la date est TOUJOURS saisissable (RDV à planifier), pas seulement une
 // fois "effectué". Sinon (statut fait/pas-fait), la date se révèle au passage à Oui.
-function JalonRow({ label, done, date, onToggle, onDate, alwaysDate = false, toggleLabels }) {
+function JalonRow({ label, done, date, onToggle, onDate, alwaysDate = false, toggleLabels, editable = true }) {
   const showDate = alwaysDate || done;
   const dateLabel = alwaysDate ? "Date prévue" : null;
   return (
     <div style={{ padding: "12px 0", borderBottom: `1px solid ${BORDER}` }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <div style={{ fontSize: 13.5, fontWeight: 500, color: TEXT }}>{label}</div>
-        <StatusToggle value={!!done} onChange={onToggle} labels={toggleLabels} />
+        {editable
+          ? <StatusToggle value={!!done} onChange={onToggle} labels={toggleLabels} />
+          : <span style={{ fontSize: 12.5, fontWeight: 600, color: done ? GREEN : MUTED }}>{(toggleLabels || ["Non", "Oui"])[done ? 1 : 0]}</span>}
       </div>
       <AnimatePresence initial={false}>
         {showDate && (
@@ -1977,7 +1989,8 @@ function CommentThread({ numero }) {
 
   return (
     <div>
-      {/* Nouveau commentaire */}
+      {/* Nouveau commentaire (masqué pour finance_team = lecture seule) */}
+      {!isFinanceTeam() && (
       <div style={{ display: "flex", gap: 10, marginBottom: comments.length ? 18 : 4 }}>
         <Avatar name={meName} src={me.avatar_url} size={32} />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -1995,6 +2008,7 @@ function CommentThread({ numero }) {
           </div>
         </div>
       </div>
+      )}
 
       {/* Fil */}
       <AnimatePresence initial={false}>
