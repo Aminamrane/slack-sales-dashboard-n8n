@@ -587,7 +587,7 @@ export default function MonitoringPerf() {
                         return (
                         <div>
                           <h2 style={{fontSize:18,fontWeight:700,color:C.text,margin:'8px 0 2px'}}>D&eacute;lai affectation &rarr; 1er traitement</h2>
-                          <div style={{fontSize:12,color:C.muted,marginBottom:12}}>D&eacute;lai entre l'affectation d'un lead re&ccedil;u (hors cold call / setter) et sa 1&egrave;re action (appel, non-pertinent, R1&hellip;), par le sales ou son setter.</div>
+                          <div style={{fontSize:12,color:C.muted,marginBottom:12}}>D&eacute;lai entre l'affectation d'un lead re&ccedil;u (hors cold call / setter) et sa 1&egrave;re action (appel, non-pertinent, R1&hellip;), par le sales ou son setter. Le d&eacute;lai <b>ouvr&eacute;</b> exclut nuits et week-ends (fen&ecirc;tre 9h-17h) = la r&eacute;activit&eacute; r&eacute;elle.</div>
                           <div style={{display:'flex',gap:12,flexWrap:'wrap',marginBottom:16}}>
                             <div style={{flex:'1 1 150px',minWidth:150,background:C.bg,border:'1px solid '+C.border,borderRadius:10,padding:'12px 16px',boxShadow:C.shadow}}>
                               <div style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:'uppercase',letterSpacing:'0.04em'}}>Trait&eacute; le jour m&ecirc;me</div>
@@ -599,6 +599,18 @@ export default function MonitoringPerf() {
                               <div style={{fontSize:22,fontWeight:700,color:C.text,marginTop:2}}>{fmtMin(g.median_minutes)}</div>
                               <div style={{fontSize:11.5,color:C.muted,marginTop:2}}>moy. {fmtMin(g.mean_minutes)}</div>
                             </div>
+                            <div style={{flex:'1 1 150px',minWidth:150,background:C.bg,border:'1px solid '+C.border,borderRadius:10,padding:'12px 16px',boxShadow:C.shadow}}>
+                              <div style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:'uppercase',letterSpacing:'0.04em'}}>M&eacute;diane ouvr&eacute;e (9h-17h)</div>
+                              <div style={{fontSize:22,fontWeight:700,color:'#10b981',marginTop:2}}>{fmtMin(g.median_biz_minutes)}</div>
+                              <div style={{fontSize:11.5,color:C.muted,marginTop:2}}>hors nuits &amp; week-ends</div>
+                            </div>
+                            {td.arrival && (
+                            <div style={{flex:'1 1 160px',minWidth:160,background:C.bg,border:'1px solid '+C.border,borderRadius:10,padding:'12px 16px',boxShadow:C.shadow}}>
+                              <div style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:'uppercase',letterSpacing:'0.04em'}}>Re&ccedil;us hors heures</div>
+                              <div style={{fontSize:22,fontWeight:700,color:C.text,marginTop:2}}>{td.arrival.out_pct!=null?td.arrival.out_pct.toLocaleString('fr-FR',{maximumFractionDigits:0}):'\u2014'}<span style={{fontSize:13,fontWeight:600,color:C.muted}}>%</span></div>
+                              <div style={{fontSize:11.5,color:C.muted,marginTop:2}}>apr&egrave;s 17h {td.arrival.after_close} &middot; week-end {td.arrival.weekend}</div>
+                            </div>
+                            )}
                             <div style={{flex:'2 1 280px',minWidth:240,background:C.bg,border:'1px solid '+C.border,borderRadius:10,padding:'12px 16px',boxShadow:C.shadow}}>
                               <div style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:'uppercase',letterSpacing:'0.04em',marginBottom:8}}>R&eacute;partition du d&eacute;lai</div>
                               <div style={{display:'flex',height:10,borderRadius:5,overflow:'hidden',background:C.subtle}}>
@@ -618,7 +630,7 @@ export default function MonitoringPerf() {
                           {sales.length>0 && (
                             <div style={{overflowX:'auto'}}>
                               <table style={{width:'100%',borderCollapse:'collapse'}}>
-                                <thead><tr>{['Sales','Leads','Jour même','Médiane','J+1','J+2','J+3+'].map((h,i)=><th key={h} style={{textAlign:i===0?'left':'center',color:C.muted,fontWeight:600,padding:'6px 10px',borderBottom:'1px solid '+C.border,fontSize:11.5,whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead>
+                                <thead><tr>{['Sales','Leads','Jour même','Médiane','Méd. ouvrée','J+1','J+2','J+3+'].map((h,i)=><th key={h} style={{textAlign:i===0?'left':'center',color:C.muted,fontWeight:600,padding:'6px 10px',borderBottom:'1px solid '+C.border,fontSize:11.5,whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead>
                                 <tbody>
                                   {sales.map(s=>(
                                     <tr key={s.sales} style={{borderBottom:'1px solid '+C.subtle}}>
@@ -626,6 +638,7 @@ export default function MonitoringPerf() {
                                       <td style={{textAlign:'center',padding:'7px 10px',color:C.muted}}>{s.n}</td>
                                       <td style={{textAlign:'center',padding:'7px 10px',fontWeight:700,color:sdColor(s.same_day_pct)}}>{s.same_day_pct!=null?s.same_day_pct+'%':'—'}</td>
                                       <td style={{textAlign:'center',padding:'7px 10px',color:C.text}}>{fmtMin(s.median_minutes)}</td>
+                                      <td style={{textAlign:'center',padding:'7px 10px',fontWeight:600,color:'#10b981'}}>{fmtMin(s.median_biz_minutes)}</td>
                                       <td style={{textAlign:'center',padding:'7px 10px',color:C.muted}}>{s.d1}</td>
                                       <td style={{textAlign:'center',padding:'7px 10px',color:C.muted}}>{s.d2}</td>
                                       <td style={{textAlign:'center',padding:'7px 10px',color:s.d3plus>0?'#ef4444':C.muted,fontWeight:s.d3plus>0?700:400}}>{s.d3plus}</td>
