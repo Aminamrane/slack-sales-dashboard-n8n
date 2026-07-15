@@ -1443,6 +1443,47 @@ function ForceSendBlock({ email, scheduledAt, onForced }) {
   );
 }
 
+// Renouvellement d'un contrat Opti'Lex EXPIRE : recree une demande de signature Yousign.
+function RenewBlock({ email, sentAt, onRenewed }) {
+  const [confirming, setConfirming] = useState(false);
+  const [state, setState] = useState(null); // null | 'sending' | 'sent' | 'error'
+
+  const doRenew = async () => {
+    setState("sending"); setConfirming(false);
+    try {
+      await apiClient.post("/api/v1/optilex/renew-contract", { email });
+      setState("sent");
+      setTimeout(() => { onRenewed && onRenewed(); }, 1200);
+    } catch {
+      setState("error"); setTimeout(() => setState(null), 2800);
+    }
+  };
+
+  const done = state === "sent";
+  const sending = state === "sending";
+  return (
+    <>
+      <SecTitle icon="signature">Contrat Opti'Lex expiré</SecTitle>
+      <div style={{ marginBottom: 22 }}>
+        <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, lineHeight: 1.5 }}>
+          La demande de signature Opti'Lex a expiré{sentAt && <> (envoyée le <strong style={{ color: TEXT }}>{fmt(sentAt)}</strong>)</>}.
+          {" "}Renouvelle-la pour renvoyer le contrat à signer au client.
+        </div>
+        <button onClick={confirming ? doRenew : () => setConfirming(true)}
+          onMouseLeave={() => { if (!sending) setConfirming(false); }}
+          disabled={sending || done}
+          style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+            padding: "10px 0", borderRadius: 9, border: confirming ? "none" : `1px solid ${NAVY}`, fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+            background: done ? GREEN : confirming ? "#b42318" : "transparent",
+            color: done || confirming ? "#fff" : NAVY, cursor: sending || done ? "default" : "pointer", transition: "all 0.2s" }}>
+          {!done && !sending && <MailIcon />}
+          {done ? "Contrat renouvelé ✓" : sending ? "Envoi…" : state === "error" ? "Échec, réessayer" : confirming ? "Confirmer le renouvellement" : "Renouveler le contrat Opti'Lex"}
+        </button>
+      </div>
+    </>
+  );
+}
+
 // ── PANNEAU DÉTAILS (slide-in droite, façon Notion) ──────────────────────────
 // Rangée date labellisée. COMMIT AU BLUR (pas à chaque frappe) : un input date natif émet un
 // change par segment valide -> une année en cours de saisie ("0002") partirait en base ET dans
@@ -1722,6 +1763,10 @@ function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion,
 
           {["admin", "optilex"].includes((apiClient.getUser() || {}).role) && row.owner_status === "done" && (row.optilex_status === "scheduled" || row.optilex_status === "awaiting_owner_signature") && (
             <ForceSendBlock email={row.email} scheduledAt={row.optilex_scheduled_at} onForced={reload} />
+          )}
+
+          {["admin", "ceo", "optilex"].includes((apiClient.getUser() || {}).role) && row.optilex_status === "expired" && (
+            <RenewBlock email={row.email} sentAt={row.optilex_sent_at} onRenewed={reload} />
           )}
 
           {/* Lien de signature Opti'Lex + relance (uniquement si le contrat est envoyé) */}
