@@ -156,13 +156,18 @@ const CEO_SHEET_BUCKETS = [
     match: ['call onboarding à venir'],
   },
   {
-    key: 'resilies', label: 'Résiliés / Perdus', emoji: '🔴',
+    key: 'resilies', label: 'Résiliés', emoji: '🔴',
     match: [
       'résiliation',
-      'self résiliation',
+    ],
+  },
+  {
+    key: 'retractes', label: 'Rétractés', emoji: '🟤',
+    match: [
       'retractation',
-      'résiliation programmé',
+      'self résiliation',
       'liquidation',
+      'résiliation programmé',
     ],
   },
   {
@@ -432,10 +437,10 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
       onFocus={open}
       onBlur={close}
     >
-      <img src={kpi.iconSrc} alt="" style={{
+      {kpi.iconSrc && <img src={kpi.iconSrc} alt="" style={{
         position: 'absolute', top: -12, right: -10, width: 58, height: 55,
         objectFit: 'contain', pointerEvents: 'none', zIndex: 10,
-      }} />
+      }} />}
       <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 8 }}>{kpi.label}</div>
       <div style={{ fontSize: 28, fontWeight: 800, color: '#212121', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
         {dataLoading ? <span style={{ animation: 'ceoPulse 1.2s ease infinite' }}>—</span> : kpi.value}
@@ -1052,7 +1057,7 @@ export default function CeoDashboard() {
   }, [leaderboardData]);
 
   // États clients — source = snapshot Suivi Clients (ceoSheet), plus PerfClosing.
-  // 6 cartes : Total + Actifs + En retard + Onboarding + Résiliés + Autres.
+  // 7 cartes : Total + Actifs + En retard + Onboarding + Résiliés + Rétractés + Autres.
   // Cf. CEO_SHEET_BUCKETS pour le mapping libellés bruts → buckets.
   const kpiRow2 = useMemo(() => {
     const { buckets, total } = computeEtatBuckets(
@@ -1073,7 +1078,7 @@ export default function CeoDashboard() {
         sub: 'En cours, vip paul',
       },
       {
-        label: '🟠 En retard de paiement', value: String(buckets.retard.count), color: '#f97316', iconSrc: ceo6,
+        label: '🟠 En retard de paiement', value: String(buckets.retard.count), color: '#f97316', iconSrc: null,
         sub: buckets.retard.breakdown.length ? subList(buckets.retard) : 'Optilex, Owner, globale…',
         breakdown: buckets.retard.breakdown,
       },
@@ -1082,12 +1087,17 @@ export default function CeoDashboard() {
         sub: 'Call onboarding à venir',
       },
       {
-        label: '🔴 Résiliés / Perdus', value: String(buckets.resilies.count), color: '#ef4444', iconSrc: ceo3,
-        sub: buckets.resilies.breakdown.length ? subList(buckets.resilies) : 'Résiliation, liquidation…',
+        label: '🔴 Résiliés', value: String(buckets.resilies.count), color: '#ef4444', iconSrc: ceo3,
+        sub: buckets.resilies.breakdown.length ? subList(buckets.resilies) : 'Résiliation',
         breakdown: buckets.resilies.breakdown,
       },
       {
-        label: '⚪ Autres', value: String(buckets.autres.count), color: '#94a3b8', iconSrc: ceo5,
+        label: '🟤 Rétractés', value: String(buckets.retractes.count), color: '#b45309', iconSrc: null,
+        sub: buckets.retractes.breakdown.length ? subList(buckets.retractes) : 'Rétractation, self résiliation…',
+        breakdown: buckets.retractes.breakdown,
+      },
+      {
+        label: '⚪ Autres', value: String(buckets.autres.count), color: '#94a3b8', iconSrc: null,
         sub: buckets.autres.breakdown.length ? subList(buckets.autres) : 'Pause, restitution…',
         breakdown: buckets.autres.breakdown,
       },
