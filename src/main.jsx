@@ -265,7 +265,7 @@ function App() {
         <Route
           path="/optilex-board"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'optilex']}>
+            <ProtectedRoute allowedRoles={['admin', 'optilex', 'finance_team']}>
               <OptilexBoard />
             </ProtectedRoute>
           }
