@@ -169,7 +169,7 @@ function App() {
         <Route
           path="/ceo/variables"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'ceo', 'hr']}>
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'hr', 'finance_director']}>
               <CeoVariablesView />
             </ProtectedRoute>
           }
@@ -177,7 +177,7 @@ function App() {
         <Route
           path="/ceo/conges"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'ceo', 'hr']}>
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'hr', 'finance_director']}>
               <CeoCongesView />
             </ProtectedRoute>
           }
@@ -185,7 +185,7 @@ function App() {
         <Route
           path="/ceo/campaigns"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'ceo', 'marketing']}>
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'marketing', 'finance_director']}>
               <CeoCampaignsView />
             </ProtectedRoute>
           }
@@ -193,7 +193,7 @@ function App() {
         <Route
           path="/ceo/optilex-board"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'ceo', 'customer_success_manager']}>
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'customer_success_manager', 'finance_director']}>
               <CeoOptilexBoardView />
             </ProtectedRoute>
           }
@@ -233,7 +233,7 @@ function App() {
         <Route
           path="/ceo/funnel-leads"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'ceo', 'acquisition_director', 'hr', 'customer_success_manager']}>
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'acquisition_director', 'hr', 'customer_success_manager', 'finance_director']}>
               <CeoFunnelLeadsView />
             </ProtectedRoute>
           }

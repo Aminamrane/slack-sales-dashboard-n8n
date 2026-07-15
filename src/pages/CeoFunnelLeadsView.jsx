@@ -20,7 +20,7 @@ import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "acquisition_director", "customer_success_manager"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "acquisition_director", "customer_success_manager", "finance_director"]);
 
 export default function CeoFunnelLeadsView() {
   const navigate = useNavigate();

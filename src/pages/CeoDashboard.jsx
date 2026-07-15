@@ -1254,6 +1254,7 @@ export default function CeoDashboard() {
           {/* ═══ DASHBOARD TAB ═══ */}
           {activeTab === 'dashboard' && (
             <div style={{ animation: 'ceoFadeIn 0.35s ease both', marginTop: -68 }}>
+              {(apiClient.getUser()?.email === 'contact@ownertechnology.com') && (
               <div style={{ position: 'relative', width: 520, height: 220, overflow: 'hidden' }}>
                 <iframe
                   src="https://lottie.host/embed/47485bf9-4f15-49f9-9baa-076809dc1f82/hJCupH69nO.lottie"
@@ -1261,6 +1262,7 @@ export default function CeoDashboard() {
                   title="Bonjour animation"
                 />
               </div>
+              )}
               <div style={{ marginTop: -64, marginBottom: 24, position: 'relative', zIndex: 2500 }}>
                 <div style={{
                   maxWidth: 640,

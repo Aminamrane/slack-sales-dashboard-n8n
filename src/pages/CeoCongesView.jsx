@@ -21,7 +21,7 @@ import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo", "hr"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "finance_director"]);
 
 export default function CeoCongesView() {
   const navigate = useNavigate();

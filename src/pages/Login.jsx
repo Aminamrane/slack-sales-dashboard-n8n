@@ -33,6 +33,7 @@ export default function Login() {
       // Dashboard par défaut selon le rôle.
       const dashboardByRole = {
         ceo: '/ceo',
+        finance_director: '/ceo',
         acquisition_director: '/acquisition-director',
         head_of_acquisition: '/acquisition-director',
         hr: '/rh-dashboard',

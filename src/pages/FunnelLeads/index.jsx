@@ -10,7 +10,7 @@ import { buildTheme, fmtInt } from '../Marketing/theme';
 import Card from '../Marketing/components/Card';
 import FunnelAnalysis from './FunnelAnalysis';
 
-const ALLOWED_ROLES = ['admin', 'ceo', 'acquisition_director', 'hr', 'customer_success_manager'];
+const ALLOWED_ROLES = ['admin', 'ceo', 'acquisition_director', 'hr', 'customer_success_manager', 'finance_director'];
 
 const MONTH_NAMES = [
   'janvier', 'février', 'mars', 'avril', 'mai', 'juin',

@@ -27,7 +27,7 @@ import SharedNavbar from "../components/SharedNavbar.jsx";
 // admin / ceo en ont toujours eu accès ; on ajoute acquisition_director
 // pour qu'il puisse cliquer "Leaderboard" depuis son AcqDir Dashboard
 // et atterrir ici avec SA sidebar restreinte (le filter s'occupe du reste).
-const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "acquisition_director", "head_of_acquisition", "customer_success_manager"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "acquisition_director", "head_of_acquisition", "customer_success_manager", "finance_director"]);
 
 export default function CeoLeaderboardView() {
   const navigate = useNavigate();
