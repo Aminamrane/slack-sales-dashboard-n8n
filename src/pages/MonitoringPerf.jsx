@@ -587,7 +587,7 @@ export default function MonitoringPerf() {
                         return (
                         <div>
                           <h2 style={{fontSize:18,fontWeight:700,color:C.text,margin:'8px 0 2px'}}>D&eacute;lai affectation &rarr; 1er traitement</h2>
-                          <div style={{fontSize:12,color:C.muted,marginBottom:12}}>D&eacute;lai entre l'affectation d'un lead re&ccedil;u (hors cold call / setter) et sa 1&egrave;re action (appel, non-pertinent, R1&hellip;), par le sales ou son setter. Le d&eacute;lai <b>ouvr&eacute;</b> exclut nuits et week-ends (fen&ecirc;tre 9h-17h) = la r&eacute;activit&eacute; r&eacute;elle.</div>
+                          <div style={{fontSize:12,color:C.muted,marginBottom:12}}>D&eacute;lai entre l'affectation d'un lead <b>ADS</b> re&ccedil;u (hors cold call / setter) et sa 1&egrave;re action (appel, non-pertinent, R1&hellip;), par le sales ou son setter. Le d&eacute;lai <b>ouvr&eacute;</b> exclut nuits et week-ends (fen&ecirc;tre 9h-17h) = la r&eacute;activit&eacute; r&eacute;elle.</div>
                           <div style={{display:'flex',gap:12,flexWrap:'wrap',marginBottom:16}}>
                             <div style={{flex:'1 1 150px',minWidth:150,background:C.bg,border:'1px solid '+C.border,borderRadius:10,padding:'12px 16px',boxShadow:C.shadow}}>
                               <div style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:'uppercase',letterSpacing:'0.04em'}}>Trait&eacute; le jour m&ecirc;me</div>
@@ -608,7 +608,7 @@ export default function MonitoringPerf() {
                             <div style={{flex:'1 1 210px',minWidth:210,background:C.bg,border:'1px solid '+C.border,borderRadius:10,padding:'12px 16px',boxShadow:C.shadow}}>
                               <div style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:'uppercase',letterSpacing:'0.04em'}}>Re&ccedil;us hors heures</div>
                               <div style={{fontSize:22,fontWeight:700,color:C.text,marginTop:2}}>{td.arrival.out_pct!=null?td.arrival.out_pct.toLocaleString('fr-FR',{maximumFractionDigits:0}):'\u2014'}<span style={{fontSize:13,fontWeight:600,color:C.muted}}>%</span></div>
-                              <div style={{fontSize:11.5,color:C.muted,marginTop:2}}>{td.arrival.out_of_hours} / {td.arrival.n} leads re&ccedil;us</div>
+                              <div style={{fontSize:11.5,color:C.muted,marginTop:2}}>{td.arrival.out_of_hours} / {td.arrival.n} leads ADS</div>
                               <div style={{fontSize:11,color:C.muted,marginTop:3}}>apr&egrave;s 17h {td.arrival.after_close} &middot; nuit {td.arrival.before_open} &middot; week-end {td.arrival.weekend}</div>
                             </div>
                             )}
