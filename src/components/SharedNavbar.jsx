@@ -710,6 +710,22 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                 onMouseLeave={(e) => e.currentTarget.style.display = 'none'}
               >
                 {/* Navigation items - dynamically shown based on backend permissions */}
+                {apiClient.getUser()?.role === 'customer_success_manager' && (
+                  <button
+                    onClick={() => navigate("/ceo/leaderboard")}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px',
+                      borderRadius: '8px', border: 'none', background: 'transparent',
+                      color: darkMode ? '#f5f5f7' : '#1d1d1f', fontSize: '14px', fontWeight: 500,
+                      cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? '#2a2b2e' : '#f5f5f7'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    Dashboard
+                  </button>
+                )}
+
                 {apiClient.hasAccess('leaderboard') && (
                   <button
                     onClick={() => navigate("/")}
