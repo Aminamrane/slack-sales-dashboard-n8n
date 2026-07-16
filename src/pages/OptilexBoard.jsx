@@ -758,7 +758,9 @@ export default function OptilexBoard({ embed = false }) {
   }, [rows]);
   const establishedCount = useMemo(() => rows.filter((r) => !r.is_pending_contract).length, [rows]);
 
-  const filtered = useMemo(() => {
+  // Base : toutes les lignes passant les filtres SAUF la météo. Sert de socle à la vue finale
+  // ET aux compteurs par bande (qui restent stables quand on coche/décoche une bande météo).
+  const preMeteoRows = useMemo(() => {
     const ql = q.trim().toLowerCase();
     return rows.filter((r) => {
       // Multi-filtre (catégories cochées) prioritaire = union ; sinon onglet primaire unique.
@@ -767,8 +769,6 @@ export default function OptilexBoard({ embed = false }) {
       } else if (etatFilter !== "Tous" && !matchesCat(r, etatFilter)) {
         return false;
       }
-      // Filtre par bande météo (rouge 1-2 / orange 3 / vert 4-5), union des bandes cochées.
-      if (meteoFilter.length > 0 && !meteoFilter.includes(meteoBandOf(r.meteo_score))) return false;
       // Filtre date de signature Owner (mois ou période). Une ligne sans date de
       // signature est exclue dès qu'un filtre date est actif.
       if (sigRange.from || sigRange.to) {
@@ -783,7 +783,21 @@ export default function OptilexBoard({ embed = false }) {
       }
       return true;
     });
-  }, [rows, etatFilter, multiFilter, meteoFilter, sigRange, q]);
+  }, [rows, etatFilter, multiFilter, sigRange, q]);
+
+  // Compteurs par bande météo (rouge 1-2 / orange 3 / vert 4-5 / "none" = non noté), calculés
+  // sur la base pré-météo -> le nombre affiché sur chaque chip ne bouge pas quand on coche.
+  const meteoCounts = useMemo(() => {
+    const c = { rouge: 0, orange: 0, vert: 0, none: 0 };
+    for (const r of preMeteoRows) c[meteoBandOf(r.meteo_score) || "none"]++;
+    return c;
+  }, [preMeteoRows]);
+
+  // Vue finale = base pré-météo + filtre bande météo (union des bandes cochées ; "none" = non noté).
+  const filtered = useMemo(() => {
+    if (meteoFilter.length === 0) return preMeteoRows;
+    return preMeteoRows.filter((r) => meteoFilter.includes(meteoBandOf(r.meteo_score) || "none"));
+  }, [preMeteoRows, meteoFilter]);
 
   // Mois qui ont au moins une signature Owner (pour le dropdown), du + récent au + ancien.
   const sigMonths = useMemo(() => {
@@ -964,16 +978,21 @@ export default function OptilexBoard({ embed = false }) {
         <SigDateFilter from={sigRange.from} to={sigRange.to} onChange={setSigRange} months={sigMonths} />
         {/* Filtre météo (bandes couleur). Toggle multiple = union. */}
         <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
-        {["rouge", "orange", "vert"].map((b) => {
+        {["rouge", "orange", "vert", "none"].map((b) => {
           const on = meteoFilter.includes(b);
-          const st = METEO_BANDS[b];
+          const st = b === "none" ? { label: "Non noté", color: MUTED, bg: "#eef1f6", dot: "#cbd2e0" } : METEO_BANDS[b];
+          const cnt = meteoCounts[b] || 0;
           return (
-            <motion.button key={b} type="button" whileTap={{ scale: 0.96 }} title={`Météo ${st.label}`}
+            <motion.button key={b} type="button" whileTap={{ scale: 0.96 }} title={b === "none" ? "Clients non notés" : `Météo ${st.label}`}
               onClick={() => setMeteoFilter((prev) => (prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b]))}
               onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = "#f7f8fa"; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = on ? st.bg : CARD; }}
               style={{ padding: "7px 12px", borderRadius: 20, border: `1px solid ${on ? st.color : BORDER}`, background: on ? st.bg : CARD, color: on ? st.color : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
-              <MeteoIcon score={{ rouge: 1, orange: 3, vert: 5 }[b]} size={15} color={st.dot} />{st.label}
+              {b === "none"
+                ? <span style={{ width: 13, height: 13, borderRadius: "50%", border: `1.5px dashed ${st.dot}`, display: "inline-block" }} />
+                : <MeteoIcon score={{ rouge: 1, orange: 3, vert: 5 }[b]} size={15} color={st.dot} />}
+              {st.label}
+              <span style={{ fontSize: 11, fontWeight: 700, color: on ? st.color : MUTED }}>{cnt}</span>
             </motion.button>
           );
         })}
