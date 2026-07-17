@@ -70,6 +70,7 @@ export default function Profile() {
   const [setters, setSetters] = useState([]);
   const [savingSetterId, setSavingSetterId] = useState(null);
   const [savingManualId, setSavingManualId] = useState(null);
+  const [savingRepondeurId, setSavingRepondeurId] = useState(null);
   const [shareError, setShareError] = useState("");
   const [shareSuccess, setShareSuccess] = useState("");
 
@@ -154,13 +155,39 @@ export default function Profile() {
     }
   };
 
+  // Mode "Répondeur uniquement" (2026-07-17) : ce setter ne reçoit ni les
+  // nouveaux leads ni l'overflow 24h — seuls les leads passés en Répondeur
+  // lui basculent (comme nouveaux leads). Exclusif avec "immédiat" (le
+  // backend éteint l'autre flag, on fait pareil en optimistic).
+  const toggleSetterRepondeur = async (setterId, currentVal) => {
+    const newVal = !currentVal;
+    setSavingRepondeurId(setterId);
+    setShareError("");
+    setShareSuccess("");
+    setSetters((prev) => prev.map((s) => (s.setter_id === setterId
+      ? { ...s, repondeur_only: newVal, immediate_new_leads: newVal ? false : s.immediate_new_leads }
+      : s)));
+    try {
+      await apiClient.put(`/api/v1/users/me/setters/${setterId}/repondeur-only`, { value: newVal });
+      setShareSuccess(newVal ? "Répondeurs uniquement activé." : "Mode répondeurs désactivé.");
+      setTimeout(() => setShareSuccess(""), 2500);
+    } catch (e) {
+      setSetters((prev) => prev.map((s) => (s.setter_id === setterId ? { ...s, repondeur_only: currentVal } : s)));
+      setShareError(e?.message || "Erreur lors de la mise à jour.");
+    } finally {
+      setSavingRepondeurId(null);
+    }
+  };
+
   const toggleSetterImmediate = async (setterId, currentVal) => {
     const newVal = !currentVal;
     setSavingSetterId(setterId);
     setShareError("");
     setShareSuccess("");
     // Optimistic update for snappy UX
-    setSetters((prev) => prev.map((s) => (s.setter_id === setterId ? { ...s, immediate_new_leads: newVal } : s)));
+    setSetters((prev) => prev.map((s) => (s.setter_id === setterId
+      ? { ...s, immediate_new_leads: newVal, repondeur_only: newVal ? false : s.repondeur_only }
+      : s)));
     try {
       await apiClient.put(`/api/v1/users/me/setters/${setterId}/immediate`, { value: newVal });
       setShareSuccess(newVal ? "Immédiat activé." : "Repassé en 24h.");
@@ -664,6 +691,8 @@ export default function Profile() {
             const on = !!s.immediate_new_leads;
             const manual = !!s.manual_only;
             const savingManual = savingManualId === s.setter_id;
+            const repondeur = !!s.repondeur_only;
+            const savingRepondeur = savingRepondeurId === s.setter_id;
             const renderSwitch = (active) => (
               <div style={{
                 width: "44px", height: "24px", borderRadius: "999px",
@@ -704,6 +733,15 @@ export default function Profile() {
                   >
                     <span style={{ fontSize: 11, fontWeight: 600, color: manual ? C.accent : C.muted }}>manuel</span>
                     {renderSwitch(manual)}
+                  </span>
+                  {/* Répondeurs uniquement : seuls les leads passés en Répondeur basculent */}
+                  <span
+                    title={manual ? "Sans objet en mode manuel" : "Répondeurs uniquement : ce setter ne voit ni vos nouveaux leads ni vos leads après 24h — seuls vos leads passés en Répondeur lui arrivent, comme nouveaux leads."}
+                    onClick={() => { if (!savingRepondeur && !manual) toggleSetterRepondeur(s.setter_id, repondeur); }}
+                    style={{ display: "flex", alignItems: "center", gap: 7, cursor: (savingRepondeur || manual) ? "not-allowed" : "pointer", opacity: manual ? 0.35 : (savingRepondeur ? 0.6 : 1) }}
+                  >
+                    <span style={{ fontSize: 11, fontWeight: 600, color: repondeur ? C.accent : C.muted }}>répondeurs</span>
+                    {renderSwitch(repondeur)}
                   </span>
                   {/* Immédiat / 24h : sans objet en mode manuel (grisé) */}
                   <span
