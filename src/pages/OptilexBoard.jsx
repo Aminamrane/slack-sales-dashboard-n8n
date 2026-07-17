@@ -30,7 +30,10 @@ const ETAT_STYLE = {
 // Onglets PRIMAIRES = les plus actionnables (toujours visibles). Le reste vit dans un
 // filtre multi-sélection "Filtre" pour désencombrer la barre.
 const PRIMARY_TABS = ["Tous", "Signé", "Attente Opti'Lex", "Inactifs", "Onboarding à venir", "Intégration à venir", "En cours de résiliation", "En cours de rétractation"];
-const SECONDARY_CATS = ["En cours", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation", "En attente", "Sans suite"];
+const SECONDARY_CATS = ["En cours", "Self-Résiliation", "Pause", "Liquidation", "En attente", "Sans suite"];
+// États actés mis EN AVANT (chips visibles + compteur rouge) : résiliation et rétractation
+// sont l'info critique du board -> surfacés hors du menu déroulant, visibles dès l'arrivée.
+const HIGHLIGHTED_ETATS = ["Résiliation", "Rétractation"];
 const TAB_LABEL = { "Attente Opti'Lex": "En attente Opti'Lex", "Onboarding à venir": "Onboarding Owner à venir", "Intégration à venir": "RDV intégration à venir" };
 const tabLabel = (t) => TAB_LABEL[t] || t;
 // États que le cabinet peut poser manuellement (badge cliquable, table + fiche).
@@ -974,6 +977,26 @@ export default function OptilexBoard({ embed = false }) {
             </motion.button>
           );
         })}
+        {/* États ACTÉS mis en avant : résiliations + rétractations, compteur en ROUGE pour
+            que le volume saute aux yeux dès l'arrivée sur le board (hors menu déroulant). */}
+        <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
+        {HIGHLIGHTED_ETATS.map((cat) => {
+          const on = multiFilter.includes(cat);
+          const st = ETAT_STYLE[cat] || {};
+          const n = counts[cat] || 0;
+          return (
+            <motion.button key={cat} type="button" whileTap={{ scale: 0.96 }} title={`Filtrer : ${cat}`}
+              onClick={() => toggleCat(cat)}
+              onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = "#f7f8fa"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = on ? st.bg : CARD; }}
+              style={{ padding: "7px 12px", borderRadius: 20, border: `1px solid ${on ? st.dot : BORDER}`, background: on ? st.bg : CARD, color: on ? st.fg : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 7 }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: st.dot }} />
+              {cat === "Résiliation" ? "Résiliations" : "Rétractations"}
+              <span style={{ fontSize: 12.5, fontWeight: 800, color: "#dc2626" }}>{n}</span>
+            </motion.button>
+          );
+        })}
+        <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
         <FilterMenu cats={SECONDARY_CATS} counts={counts} selected={multiFilter} onToggle={toggleCat} onClear={() => setMultiFilter([])} />
         <SigDateFilter from={sigRange.from} to={sigRange.to} onChange={setSigRange} months={sigMonths} />
         {/* Filtre météo (bandes couleur). Toggle multiple = union. */}
