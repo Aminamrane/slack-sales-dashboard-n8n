@@ -109,7 +109,7 @@ const isEnCours = (r) => r.owner_status !== "done" && optilexPending(r);
 // indépendamment du fuseau du navigateur, pour coller à l'affichage. Restreint aux lignes avec
 // un numéro client (RDV réellement pilotables ; un contrat pas encore résolu n'est pas actionnable).
 const _todayParisISO = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Paris" });
-const isOnboardingUpcoming = (r) => !!r.numero_client && !!r.rdv_onboarding_date && !r.rdv_onboarding_done && String(r.rdv_onboarding_date).slice(0, 10) >= _todayParisISO();
+const isOnboardingUpcoming = (r) => { const d = r.rdv_onboarding_date_manual || r.rdv_onboarding_date; return !!r.numero_client && !!d && !r.rdv_onboarding_done && String(d).slice(0, 10) >= _todayParisISO(); };
 const isIntegrationUpcoming = (r) => !!r.numero_client && !!r.rdv_lancement_date && !r.rdv_lancement_done && String(r.rdv_lancement_date).slice(0, 10) >= _todayParisISO();
 // Contrat Opti'Lex SÉPARÉ (split) pas encore signé : optilex_status existe (non null =
 // pas le cas "groupé/inclus") et != done. Sert l'alerte "RDV intégration mais Opti'Lex
@@ -1126,7 +1126,11 @@ export default function OptilexBoard({ embed = false }) {
                     </td>
                     <td style={td}><SigCell status={r.owner_status} sentAt={r.owner_sent_at} signedAt={r.owner_signed_at} /></td>
                     <td style={td}><SigCell status={r.optilex_status} sentAt={r.optilex_sent_at} signedAt={r.optilex_signed_at} scheduledAt={r.optilex_scheduled_at} grouped={r.owner_status === "done" && r.optilex_status == null} /></td>
-                    <td style={{ ...td, color: r.rdv_onboarding_date ? TEXT : "#cbd2e0" }}>{fmt(r.rdv_onboarding_date) || "—"}</td>
+                    <td style={td}>
+                      <TableDateEdit value={r.rdv_onboarding_date_manual || r.rdv_onboarding_date}
+                        disabled={!r.numero_client || isFinanceTeam()}
+                        onSave={(d) => patch(r.numero_client, { rdv_onboarding_date_manual: d })} />
+                    </td>
                     <td style={{ ...td, color: r.rdv_lancement_date ? TEXT : "#cbd2e0" }}>
                       {fmt(r.rdv_lancement_date) || "—"}
                       {integrationAlert(r) && <div><OptilexAlertBadge compact /></div>}
@@ -1301,6 +1305,32 @@ function StatusToggle({ value, onChange, labels = ["Non", "Oui"] }) {
         );
       })}
     </div>
+  );
+}
+
+// Cellule date éditable inline dans le tableau (clic = saisir/modifier la date d'onboarding).
+// Stoppe la propagation pour ne PAS ouvrir la fiche ; désactivée -> texte simple (clic = ouvre la fiche).
+function TableDateEdit({ value, onSave, disabled }) {
+  const [editing, setEditing] = useState(false);
+  const cancelRef = useRef(false);
+  if (disabled) return <span style={{ color: value ? TEXT : "#cbd2e0" }}>{fmt(value) || "—"}</span>;
+  if (editing) {
+    return (
+      <input type="date" autoFocus defaultValue={toDateInput(value)}
+        onClick={(e) => e.stopPropagation()}
+        onBlur={(e) => { if (cancelRef.current) { cancelRef.current = false; setEditing(false); return; } onSave(e.target.value || null); setEditing(false); }}
+        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { cancelRef.current = true; setEditing(false); } }}
+        style={{ ...inputStyle, width: 140, padding: "4px 7px", fontSize: 12.5 }} />
+    );
+  }
+  return (
+    <button type="button" title="Saisir/modifier la date d'onboarding"
+      onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+      style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", fontFamily: "inherit", fontSize: "inherit",
+        display: "inline-flex", alignItems: "center", gap: 6, color: value ? TEXT : "#cbd2e0" }}>
+      {fmt(value) || "—"}
+      <span style={{ opacity: 0.4, display: "inline-flex", lineHeight: 0 }}><PencilIcon /></span>
+    </button>
   );
 }
 
@@ -1867,7 +1897,8 @@ function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion,
           <div className="ob-sec" style={{ animationDelay: "0.2s" }}>
           <SecTitle icon="rdv">Rendez-vous</SecTitle>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
-            <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date} done={row.rdv_onboarding_done} editable={!!num}
+            <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date_manual || row.rdv_onboarding_date} done={row.rdv_onboarding_done} editable={!!num}
+              onDate={num && !isFinanceTeam() ? (d) => patch(num, { rdv_onboarding_date_manual: d }) : undefined}
               onToggle={(v) => patch(num, { rdv_onboarding_done: v })} />
             <RdvRow label="Rendez-vous Intégration Opti'Lex" date={row.rdv_lancement_date} done={row.rdv_lancement_done} editable={!!num && !isFinanceTeam()}
               onToggle={(v) => patch(num, { rdv_lancement_done: v })} />
