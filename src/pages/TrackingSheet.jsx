@@ -285,6 +285,8 @@ const toDatetimeLocal = (val) => {
   if (val.length === 10) return val + 'T09:00'; // date-only → default 9am
   return val.slice(0, 16); // trim seconds + timezone
 };
+// Libellé court d'un RDV à partir du wall-clock naïf (aucune conversion tz) : "09/07/2026 à 14:00".
+const fmtRdvLabel = (val) => { const s = toDatetimeLocal(val); return s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)} à ${s.slice(11, 16)}` : ''; };
 const toDateOnly = (val) => {
   if (!val) return '';
   return val.slice(0, 10);
@@ -868,6 +870,7 @@ export default function TrackingSheet() {
 
   // ── SALE DECLARATION MODAL (signed tab) ────────────────────────────────────
   const [showSaleModal, setShowSaleModal] = useState(null); // lead.id when modal is open
+  const [reschedRdv, setReschedRdv] = useState(null); // { leadId, kind } RDV post-signature à reprogrammer (créneau + dispo agenda)
   // billingStructures ('une'|'plusieurs') + discount (null|false|true) + discountValue (texte
   // libre "5 %") = questions facturation posées à l'étape 'questions' (après les créneaux),
   // destinées à la description de l'event RDV Onboarding (agenda facturation@).
@@ -7410,35 +7413,50 @@ export default function TrackingSheet() {
                     <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Post-signature</div>
 
                     {rdvDatesSet && (<>
-                    {/* RDV Onboarding / Lancement (reprogrammation APRÈS déclaration) */}
+                    {/* RDV Onboarding / Lancement : clic = reprogrammer AVEC dispo agenda (SaleSlotPicker en modale).
+                        Le PATCH sur rdv_*_date déplace déjà l'event Google côté back (reschedule_sale_event). */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                       <div style={{
-                        display: 'flex', alignItems: 'center', gap: 5, flex: 1, padding: '8px 12px', borderRadius: 10,
+                        display: 'flex', alignItems: 'center', gap: 8, flex: 1, padding: '8px 12px', borderRadius: 10,
                         background: darkMode ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.05)',
                         border: `1px solid ${darkMode ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.15)'}`,
                       }}>
                         <span style={{ fontSize: 9, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Onboarding</span>
-                        <DateTimePicker value={lead.rdv_onboarding_date ? toDatetimeLocal(lead.rdv_onboarding_date) : ''} onChange={async (val) => {
-                            setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_onboarding_date: val } : l));
-                            try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { rdv_onboarding_date: val || null }); }
-                            catch { setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_onboarding_date: lead.rdv_onboarding_date } : l)); }
-                          }} C={C} darkMode={darkMode} autoSave />
+                        <button type="button" onClick={() => setReschedRdv({ leadId: lead.id, kind: 'onboarding' })}
+                          title="Reprogrammer (créneaux libres de l'agenda)"
+                          style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '6px 10px', borderRadius: 8,
+                            border: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#f9fafb', color: lead.rdv_onboarding_date ? C.text : C.muted,
+                            fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', transition: 'border-color 0.15s' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#10b981'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; }}>
+                          <span>{lead.rdv_onboarding_date ? fmtRdvLabel(lead.rdv_onboarding_date) : 'Choisir un créneau'}</span>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                            <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                          </svg>
+                        </button>
                       </div>
                     </div>
 
                     {/* RDV Lancement */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <div style={{
-                        display: 'flex', alignItems: 'center', gap: 5, flex: 1, padding: '8px 12px', borderRadius: 10,
+                        display: 'flex', alignItems: 'center', gap: 8, flex: 1, padding: '8px 12px', borderRadius: 10,
                         background: darkMode ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)',
                         border: `1px solid ${darkMode ? 'rgba(99,102,241,0.2)' : 'rgba(99,102,241,0.15)'}`,
                       }}>
                         <span style={{ fontSize: 9, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Lancement</span>
-                        <DateTimePicker value={lead.rdv_lancement_date ? toDatetimeLocal(lead.rdv_lancement_date) : ''} onChange={async (val) => {
-                            setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_lancement_date: val } : l));
-                            try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { rdv_lancement_date: val || null }); }
-                            catch { setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, rdv_lancement_date: lead.rdv_lancement_date } : l)); }
-                          }} C={C} darkMode={darkMode} autoSave />
+                        <button type="button" onClick={() => setReschedRdv({ leadId: lead.id, kind: 'lancement' })}
+                          title="Reprogrammer (créneaux libres de l'agenda)"
+                          style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '6px 10px', borderRadius: 8,
+                            border: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#f9fafb', color: lead.rdv_lancement_date ? C.text : C.muted,
+                            fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', transition: 'border-color 0.15s' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#6366f1'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; }}>
+                          <span>{lead.rdv_lancement_date ? fmtRdvLabel(lead.rdv_lancement_date) : 'Choisir un créneau'}</span>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                            <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                          </svg>
+                        </button>
                       </div>
                     </div>
                     </>)}
@@ -8616,6 +8634,47 @@ export default function TrackingSheet() {
       )}
 
       {/* ═══ SALE DECLARATION MODAL ═══ */}
+      {/* Reprogrammation d'un RDV post-signature (onboarding/lancement) AVEC dispo agenda :
+          même SaleSlotPicker qu'à la déclaration ; le PATCH rdv_*_date déplace l'event Google déjà câblé.
+          fontFamily Inter reposée : createPortal(document.body) sort du conteneur de police. */}
+      {reschedRdv && createPortal((() => {
+        const lead = leads.find(l => l.id === reschedRdv.leadId);
+        if (!lead) return null;
+        const kind = reschedRdv.kind;
+        const field = kind === 'onboarding' ? 'rdv_onboarding_date' : 'rdv_lancement_date';
+        const curVal = kind === 'onboarding' ? lead.rdv_onboarding_date : lead.rdv_lancement_date;
+        const save = async (val) => {
+          setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, [field]: val } : l));
+          setReschedRdv(null);
+          try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { [field]: val || null }); }
+          catch { setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, [field]: curVal } : l)); }
+        };
+        return (
+          <>
+            <div onClick={() => setReschedRdv(null)}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both' }} />
+            <div style={{
+              position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
+              width: 680, maxWidth: '92vw', background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`,
+              boxShadow: '0 24px 48px rgba(0,0,0,0.2)', padding: '28px 28px 24px',
+              animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
+              fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+            }}>
+              <button onClick={() => setReschedRdv(null)}
+                style={{ position: 'absolute', top: 16, right: 16, width: 28, height: 28, borderRadius: '50%', border: 'none',
+                  background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted, fontSize: 14,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+              <div style={{ textAlign: 'center', marginBottom: 18 }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Reprogrammer le RDV {kind === 'onboarding' ? 'Onboarding' : 'Lancement'}</div>
+                <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Choisis un créneau libre · {kind === 'onboarding' ? 'facturation' : "Opti'Lex"}{lead.full_name ? ` · ${lead.full_name}` : ''}</div>
+              </div>
+              <SaleSlotPicker kind={kind} band={lead.employee_range}
+                value={curVal ? toDatetimeLocal(curVal) : ''} onChange={save} C={C} darkMode={darkMode} />
+            </div>
+          </>
+        );
+      })(), document.body)}
+
       {showSaleModal && createPortal((() => {
         const lead = leads.find(l => l.id === showSaleModal);
         return (
