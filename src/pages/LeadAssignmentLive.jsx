@@ -217,7 +217,7 @@ export default function LeadAssignmentLive({ embed = false }) {
         </div>
 
         {/* Distribution + flux */}
-        <div style={{ display: "grid", gridTemplateColumns: "1.55fr 1fr", gap: 16, alignItems: "start" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.55fr) minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
           <div style={{ ...card, overflow: "hidden" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "15px 18px 13px", borderBottom: "1px solid " + C.border, flexWrap: "wrap" }}>
               <div>
