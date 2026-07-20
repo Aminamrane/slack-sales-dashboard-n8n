@@ -413,7 +413,16 @@ export default function SequencesMonitor({ embed }) {
                               : r.clicked ? <Tag c="#4b8fb0">A cliqué</Tag>
                               : <Tag c={C.muted} soft={segBg}>Envoyé</Tag>}
                           </td>
-                          <td style={{ padding: "11px 14px", fontSize: 12.5, color: C.text2, whiteSpace: "nowrap" }}>{r.rdv_at ? fmtDate(r.rdv_at) : <span style={{ color: C.muted }}>·</span>}</td>
+                          <td style={{ padding: "11px 14px", fontSize: 12.5, whiteSpace: "nowrap" }}>
+                            {!r.rdv_at ? <span style={{ color: C.muted }}>·</span>
+                              : r.rebooked ? <span style={{ color: C.ok, fontWeight: 600 }}>{fmtDate(r.rdv_at)}</span>
+                              : (
+                                <span title="RDV antérieur à la séquence, pas repris via la séquence (souvent un ancien R1 non honoré qui a fait entrer le prospect dans la relance). Non compté dans le total." style={{ display: "inline-flex", alignItems: "center", gap: 5, color: C.muted, cursor: "help" }}>
+                                  {fmtDate(r.rdv_at)}
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
+                                </span>
+                              )}
+                          </td>
                         </>
                       )}
                     </tr>
