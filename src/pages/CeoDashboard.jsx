@@ -1252,7 +1252,7 @@ export default function CeoDashboard() {
 
           {/* ═══ DASHBOARD TAB ═══ */}
           {activeTab === 'dashboard' && (
-            <div style={{ animation: 'ceoFadeIn 0.35s ease both', marginTop: -68 }}>
+            <div style={{ animation: 'ceoFadeIn 0.35s ease both', marginTop: (apiClient.getUser()?.email === 'contact@ownertechnology.com') ? -68 : 0 }}>
               {(apiClient.getUser()?.email === 'contact@ownertechnology.com') && (
               <div style={{ position: 'relative', width: 520, height: 220, overflow: 'hidden' }}>
                 <iframe
@@ -1262,7 +1262,7 @@ export default function CeoDashboard() {
                 />
               </div>
               )}
-              <div style={{ marginTop: -64, marginBottom: 24, position: 'relative', zIndex: 2500 }}>
+              <div style={{ marginTop: (apiClient.getUser()?.email === 'contact@ownertechnology.com') ? -64 : 48, marginBottom: 24, position: 'relative', zIndex: 2500 }}>
                 <div style={{
                   maxWidth: 640,
                   background: C.bg,

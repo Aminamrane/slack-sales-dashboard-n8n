@@ -106,12 +106,23 @@ export default function Sidebar({ width, collapsed, onToggle, sections, activeTa
   }, [collapsed, width]);
 
   // ── Layout réordonnable (drag-and-drop) persistant PAR COMPTE ──
-  const [ordered, setOrdered] = useState(sections);
-  const layoutRef = useRef(null);
+  // Layout perso mis en CACHE localStorage -> appliqué SYNCHRONE au montage : à chaque navigation
+  // la barre remonte directement dans le bon ordre, plus de flash "ordre par défaut -> ordre perso"
+  // quand le GET /sidebar-layout répond en différé (c'était la cause du réarrangement des items).
+  const LAYOUT_CACHE_KEY = "ceoSidebarLayout:" + (apiClient.getUser()?.email || "x");
+  const readCachedLayout = () => { try { return JSON.parse(localStorage.getItem(LAYOUT_CACHE_KEY) || "null"); } catch { return null; } };
+  const layoutRef = useRef(readCachedLayout());
+  const [ordered, setOrdered] = useState(() => applyLayout(sections, layoutRef.current));
   useEffect(() => {
     let alive = true;
     apiClient.get("/api/v1/me/sidebar-layout")
-      .then((d) => { if (!alive) return; layoutRef.current = (d && d.layout) || null; setOrdered(applyLayout(sections, layoutRef.current)); })
+      .then((d) => {
+        if (!alive) return;
+        const l = (d && d.layout) || null;
+        layoutRef.current = l;
+        try { localStorage.setItem(LAYOUT_CACHE_KEY, JSON.stringify(l)); } catch { /* quota */ }
+        setOrdered(applyLayout(sections, l));
+      })
       .catch(() => {});
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -119,7 +130,7 @@ export default function Sidebar({ width, collapsed, onToggle, sections, activeTa
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setOrdered(applyLayout(sections, layoutRef.current)); }, [sections]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
-  const persist = (next) => { const l = buildLayout(next); layoutRef.current = l; apiClient.put("/api/v1/me/sidebar-layout", l).catch(() => {}); };
+  const persist = (next) => { const l = buildLayout(next); layoutRef.current = l; try { localStorage.setItem(LAYOUT_CACHE_KEY, JSON.stringify(l)); } catch { /* quota */ } apiClient.put("/api/v1/me/sidebar-layout", l).catch(() => {}); };
   const onDragEnd = (e) => {
     const { active, over } = e;
     if (!over || active.id === over.id) return;
