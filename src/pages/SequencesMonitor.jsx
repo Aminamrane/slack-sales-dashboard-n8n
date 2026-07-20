@@ -424,7 +424,7 @@ export default function SequencesMonitor({ embed }) {
                             {!r.rdv_at ? <span style={{ color: C.muted }}>·</span>
                               : r.rebooked ? <span style={{ color: C.ok, fontWeight: 600 }}>{fmtDate(r.rdv_at)}</span>
                               : (
-                                <span onMouseEnter={(e) => { const b = e.currentTarget.getBoundingClientRect(); setTip({ x: b.left + b.width / 2, y: b.top, text: "RDV antérieur à la séquence, pas repris via la séquence (souvent un ancien R1 non honoré qui a fait entrer le prospect dans la relance). Non compté dans le total." }); }} onMouseLeave={() => setTip(null)} style={{ display: "inline-flex", alignItems: "center", gap: 5, color: C.muted, cursor: "help" }}>
+                                <span onMouseEnter={(e) => { const b = e.currentTarget.getBoundingClientRect(); setTip({ x: b.left + b.width / 2, y: b.top, text: "Pas une reprise. C'est le RDV que le prospect avait déjà pris AVANT la relance (son R1 resté injoignable ou no-show), et c'est précisément ce RDV manqué qui l'a fait entrer dans la séquence. La date apparaît ici car la séquence réutilise son lien de RDV. Non compté dans les reprises." }); }} onMouseLeave={() => setTip(null)} style={{ display: "inline-flex", alignItems: "center", gap: 5, color: C.muted, cursor: "help" }}>
                                   {fmtDate(r.rdv_at)}
                                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
                                 </span>
