@@ -109,8 +109,14 @@ const isEnCours = (r) => r.owner_status !== "done" && optilexPending(r);
 // indépendamment du fuseau du navigateur, pour coller à l'affichage. Restreint aux lignes avec
 // un numéro client (RDV réellement pilotables ; un contrat pas encore résolu n'est pas actionnable).
 const _todayParisISO = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Paris" });
+// Split des contrats effectif au 01/07/2026 : depuis cette date, un RDV intégration NON marqué
+// "effectué" reste "à venir" MÊME si sa date est passée (il n'a pas été réalisé par Lisa).
+// Avant le 01/07 = pré-split, pas de suivi "effectué" fiable -> exclu (on n'inonde pas la case).
+const SPLIT_EFFECTIVE_ISO = "2026-07-01";
 const isOnboardingUpcoming = (r) => { const d = r.rdv_onboarding_date_manual || r.rdv_onboarding_date; return !!r.numero_client && !!d && !r.rdv_onboarding_done && String(d).slice(0, 10) >= _todayParisISO(); };
-const isIntegrationUpcoming = (r) => !!r.numero_client && !!r.rdv_lancement_date && !r.rdv_lancement_done && String(r.rdv_lancement_date).slice(0, 10) >= _todayParisISO();
+const isIntegrationUpcoming = (r) => !!r.numero_client && !!r.rdv_lancement_date && !r.rdv_lancement_done && String(r.rdv_lancement_date).slice(0, 10) >= SPLIT_EFFECTIVE_ISO;
+// "En retard" : dans "à venir" (donc non effectué, depuis le 01/07) MAIS date déjà passée = non réalisé.
+const isIntegrationOverdue = (r) => isIntegrationUpcoming(r) && String(r.rdv_lancement_date).slice(0, 10) < _todayParisISO();
 // Contrat Opti'Lex SÉPARÉ (split) pas encore signé : optilex_status existe (non null =
 // pas le cas "groupé/inclus") et != done. Sert l'alerte "RDV intégration mais Opti'Lex
 // non signé". Disparaît d'elle-même dès que le contrat est signé (status -> done).
@@ -709,6 +715,7 @@ export default function OptilexBoard({ embed = false }) {
   const [multiFilter, setMultiFilter] = useState([]);      // catégories secondaires cochées (union)
   const [sigRange, setSigRange] = useState({ from: "", to: "" }); // filtre date signature Owner
   const [meteoFilter, setMeteoFilter] = useState([]);      // bandes météo cochées (rouge/orange/vert)
+  const [integrationView, setIntegrationView] = useState("all"); // sous-filtre onglet Intégration : "all" | "overdue"
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState(null); // numero_client du client ouvert
 
@@ -755,11 +762,14 @@ export default function OptilexBoard({ embed = false }) {
       if (e) c[e] = (c[e] || 0) + 1;
       if (isOnboardingUpcoming(r)) c["Onboarding à venir"] = (c["Onboarding à venir"] || 0) + 1;
       if (isIntegrationUpcoming(r)) c["Intégration à venir"] = (c["Intégration à venir"] || 0) + 1;
+      if (isIntegrationOverdue(r)) c["__integration_overdue"] = (c["__integration_overdue"] || 0) + 1;
       if (isInactif(r)) c["Inactifs"] = (c["Inactifs"] || 0) + 1;
     }
     return c;
   }, [rows]);
   const establishedCount = useMemo(() => rows.filter((r) => !r.is_pending_contract).length, [rows]);
+  // Quitter l'onglet Intégration -> réinitialise le sous-filtre (pas de filtre "En retard" caché au retour).
+  useEffect(() => { if (etatFilter !== "Intégration à venir") setIntegrationView("all"); }, [etatFilter]);
 
   // Base : toutes les lignes passant les filtres SAUF la météo. Sert de socle à la vue finale
   // ET aux compteurs par bande (qui restent stables quand on coche/décoche une bande météo).
@@ -772,6 +782,8 @@ export default function OptilexBoard({ embed = false }) {
       } else if (etatFilter !== "Tous" && !matchesCat(r, etatFilter)) {
         return false;
       }
+      // Sous-filtre contextuel "En retard" de l'onglet Intégration à venir.
+      if (etatFilter === "Intégration à venir" && multiFilter.length === 0 && integrationView === "overdue" && !isIntegrationOverdue(r)) return false;
       // Filtre date de signature Owner (mois ou période). Une ligne sans date de
       // signature est exclue dès qu'un filtre date est actif.
       if (sigRange.from || sigRange.to) {
@@ -786,7 +798,7 @@ export default function OptilexBoard({ embed = false }) {
       }
       return true;
     });
-  }, [rows, etatFilter, multiFilter, sigRange, q]);
+  }, [rows, etatFilter, multiFilter, sigRange, q, integrationView]);
 
   // Compteurs par bande météo (rouge 1-2 / orange 3 / vert 4-5 / "none" = non noté), calculés
   // sur la base pré-météo -> le nombre affiché sur chaque chip ne bouge pas quand on coche.
@@ -1036,6 +1048,31 @@ export default function OptilexBoard({ embed = false }) {
         </span>
       </div>
 
+      {/* Sous-filtre CONTEXTUEL : n'apparaît que dans l'onglet Intégration à venir. Segmented control
+          "Tous / En retard" -> évite de noyer ce filtre spécifique dans la barre principale. */}
+      {multiFilter.length === 0 && etatFilter === "Intégration à venir" && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: -6, marginBottom: 16 }}>
+          <span style={{ fontSize: 12, color: MUTED, fontWeight: 600 }}>Afficher :</span>
+          <div style={{ display: "inline-flex", background: "#f1f3f7", borderRadius: 11, padding: 3, gap: 2 }}>
+            {[{ key: "all", label: "Tous", n: counts["Intégration à venir"] || 0 }, { key: "overdue", label: "En retard", n: counts["__integration_overdue"] || 0 }].map((opt) => {
+              const on = integrationView === opt.key;
+              const isLate = opt.key === "overdue";
+              return (
+                <button key={opt.key} type="button" onClick={() => setIntegrationView(opt.key)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 9, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 600, transition: "all 0.15s",
+                    background: on ? "#fff" : "transparent",
+                    color: on ? (isLate ? "#c0392b" : TEXT) : MUTED,
+                    boxShadow: on ? "0 1px 3px rgba(16,24,40,0.14)" : "none" }}>
+                  {isLate && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15 14" /></svg>}
+                  {opt.label}
+                  <span style={{ fontSize: 11, fontWeight: 700, color: on ? (isLate ? "#c0392b" : MUTED) : "#b6bdc9" }}>{opt.n}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div style={{ background: CARD, borderRadius: 14, border: `1px solid ${BORDER}`, overflowX: "hidden", overflowY: "auto", maxHeight: "calc(100vh - 190px)" }}>
         {loading ? (
           // Skeleton shimmer : la structure de la table se devine pendant le chargement.
@@ -1133,6 +1170,7 @@ export default function OptilexBoard({ embed = false }) {
                     </td>
                     <td style={{ ...td, color: r.rdv_lancement_date ? TEXT : "#cbd2e0" }}>
                       {fmt(r.rdv_lancement_date) || "—"}
+                      {isIntegrationOverdue(r) && <div><IntegrationOverdueBadge /></div>}
                       {integrationAlert(r) && <div><OptilexAlertBadge compact /></div>}
                     </td>
                     <td style={td}>
@@ -1190,6 +1228,20 @@ function OptilexAlertBadge({ compact }) {
         <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
       </svg>
       {compact ? "Opti'Lex non signé" : "Contrat Opti'Lex non signé"}
+    </span>
+  );
+}
+
+// Badge "En retard" : RDV intégration dont la date est passée mais qui n'a PAS été marqué
+// "effectué" (donc pas réalisé). Aide Lisa à repérer immédiatement les RDV qui ont dérapé.
+function IntegrationOverdueBadge() {
+  return (
+    <span title="RDV d'intégration en retard : la date est passée mais il n'a pas été marqué « effectué »"
+      style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, padding: "2px 7px", borderRadius: 10, background: "#fdecec", color: "#c0392b", fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+        <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15 14" />
+      </svg>
+      En retard
     </span>
   );
 }
