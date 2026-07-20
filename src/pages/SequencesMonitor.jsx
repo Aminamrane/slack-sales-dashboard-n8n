@@ -54,7 +54,6 @@ export default function SequencesMonitor({ embed }) {
   const [viewMode, setViewMode] = useState(null);    // null=auto | "in_seq" | "eligible"
   const [refreshedAt, setRefreshedAt] = useState(null);
   const [confData, setConfData] = useState(null);
-  const [tip, setTip] = useState(null);              // tooltip flottant (position: fixed, échappe au clipping des overflow)
   const firstLoad = useRef(true);
 
   const load = () => {
@@ -144,12 +143,6 @@ export default function SequencesMonitor({ embed }) {
         .seq-scroll::-webkit-scrollbar{width:9px;height:9px}
         .seq-scroll::-webkit-scrollbar-thumb{background:${darkMode ? "rgba(255,255,255,0.14)" : "rgba(55,53,47,0.14)"};border-radius:5px}
       `}</style>
-
-      {tip && (
-        <div style={{ position: "fixed", left: tip.x, top: tip.y - 10, transform: "translate(-50%, -100%)", maxWidth: 250, padding: "9px 12px", borderRadius: 9, background: "#1e2330", color: "#fff", fontSize: 11.5, lineHeight: 1.45, fontWeight: 500, boxShadow: "0 10px 30px rgba(0,0,0,0.3)", zIndex: 9999, pointerEvents: "none", fontFamily: FONT, whiteSpace: "normal" }}>
-          {tip.text}
-        </div>
-      )}
 
       <div style={{ maxWidth: 1320, margin: "0 auto", animation: "seqFadeUp 0.4s ease both" }}>
 
@@ -421,14 +414,8 @@ export default function SequencesMonitor({ embed }) {
                               : <Tag c={C.muted} soft={segBg}>Envoyé</Tag>}
                           </td>
                           <td style={{ padding: "11px 14px", fontSize: 12.5, whiteSpace: "nowrap" }}>
-                            {!r.rdv_at ? <span style={{ color: C.muted }}>·</span>
-                              : r.rebooked ? <span style={{ color: C.ok, fontWeight: 600 }}>{fmtDate(r.rdv_at)}</span>
-                              : (
-                                <span onMouseEnter={(e) => { const b = e.currentTarget.getBoundingClientRect(); setTip({ x: b.left + b.width / 2, y: b.top, text: "Pas une reprise. C'est le RDV que le prospect avait déjà pris AVANT la relance (son R1 resté injoignable ou no-show), et c'est précisément ce RDV manqué qui l'a fait entrer dans la séquence. La date apparaît ici car la séquence réutilise son lien de RDV. Non compté dans les reprises." }); }} onMouseLeave={() => setTip(null)} style={{ display: "inline-flex", alignItems: "center", gap: 5, color: C.muted, cursor: "help" }}>
-                                  {fmtDate(r.rdv_at)}
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
-                                </span>
-                              )}
+                            {r.rebooked ? <span style={{ color: C.ok, fontWeight: 600 }}>{fmtDate(r.rdv_at)}</span>
+                              : <span style={{ color: C.muted }}>·</span>}
                           </td>
                         </>
                       )}
