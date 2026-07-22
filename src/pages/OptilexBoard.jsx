@@ -19,6 +19,8 @@ const ETAT_STYLE = {
   "Self-Résiliation": { bg: "#fdecec", fg: "#b42318", dot: "#ef4444" },
   "Pause":            { bg: "#eef1f6", fg: "#5b6472", dot: "#94a3b8" },
   "Liquidation":      { bg: "#f6e9e9", fg: "#7a271a", dot: "#991b1b" },
+  "En cours de liquidation": { bg: "#fef3e2", fg: "#92400e", dot: "#d97706" },
+  "Renouvellement client":   { bg: "#eef2ff", fg: "#3730a3", dot: "#6366f1" },
   "Attente Opti'Lex": { bg: "#fff3e3", fg: "#b45309", dot: "#f59e0b" },
   "En cours":         { bg: "#eaf1fd", fg: "#1e40af", dot: "#2563eb" },
   "En cours de résiliation":  { bg: "#fdecec", fg: "#b42318", dot: "#ef4444" },
@@ -29,7 +31,7 @@ const ETAT_STYLE = {
 };
 // Onglets PRIMAIRES = les plus actionnables (toujours visibles). Le reste vit dans un
 // filtre multi-sélection "Filtre" pour désencombrer la barre.
-const PRIMARY_TABS = ["Tous", "Signé", "Attente Opti'Lex", "Inactifs", "Onboarding à venir", "Intégration à venir", "En cours de résiliation", "En cours de rétractation"];
+const PRIMARY_TABS = ["Tous", "Signé", "Renouvellement client", "Attente Opti'Lex", "Inactifs", "Onboarding à venir", "Intégration à venir", "En cours de résiliation", "En cours de rétractation", "En cours de liquidation"];
 const SECONDARY_CATS = ["En cours", "Self-Résiliation", "Pause", "Liquidation", "En attente", "Sans suite"];
 // États actés mis EN AVANT (chips visibles + compteur rouge) : résiliation et rétractation
 // sont l'info critique du board -> surfacés hors du menu déroulant, visibles dès l'arrivée.
@@ -37,7 +39,7 @@ const HIGHLIGHTED_ETATS = ["Résiliation", "Rétractation"];
 const TAB_LABEL = { "Attente Opti'Lex": "En attente Opti'Lex", "Onboarding à venir": "Onboarding Owner à venir", "Intégration à venir": "RDV intégration à venir" };
 const tabLabel = (t) => TAB_LABEL[t] || t;
 // États que le cabinet peut poser manuellement (badge cliquable, table + fiche).
-const ETAT_OPTIONS = ["Signé", "En cours de résiliation", "En cours de rétractation", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation"];
+const ETAT_OPTIONS = ["Signé", "En cours de résiliation", "En cours de rétractation", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation", "En cours de liquidation"];
 // RÈGLE MÉTIER : le rôle optilex (fiscalistes du cabinet) ne peut pas POSER Résiliation/
 // Rétractation (états actés par Owner) — seulement les "En cours de ...". Le backend
 // applique la même règle (403) ; ici on retire les options de leur picker.
@@ -63,6 +65,9 @@ const METEO_BANDS = {
 };
 const meteoBandOf = (score) => (score == null ? null : score <= 2 ? "rouge" : score === 3 ? "orange" : "vert");
 const meteoStyle = (score) => { const b = meteoBandOf(score); return b ? METEO_BANDS[b] : null; };
+// Commentaire OBLIGATOIRE quand on signale un client Critique (1-2) ou Mécontent (3) : on
+// n'enregistre pas une alerte de risque sans contexte écrit (motif de la dégradation).
+const meteoNoteRequired = (score) => score != null && score <= 3;
 // Sens de chaque note (affiché dans le sélecteur) + action implicite (automatisable via CSV).
 const METEO_MEANING = {
   1: { txt: "Situation critique, fort risque de résiliation", action: "Plan de rétention (Owner)" },
@@ -95,6 +100,7 @@ const ETAT_DATE_CONFIG = {
   "Self-Résiliation": { label: "Date de résiliation" },
   "Rétractation": { label: "Date de rétractation" },
   "Liquidation": { label: "Date de clôture" },
+  "En cours de liquidation": { label: "Date d'ouverture de liquidation" },
   "Pause": { pause: true },
 };
 
@@ -146,10 +152,38 @@ const displayEtat = (r) => {
 // travaillé puis plus rien = vrai churn). Les zéro-mission (probablement encore en
 // onboarding) ne sont affichés NULLE PART comme inactifs (décision produit 2026-07-08).
 const isInactif = (r) => r.is_inactive_60d === true && (r.mission_count_total || 0) > 0;
+// ── Renouvellement client : anniversaire du contrat Owner (date de signature + 1 an).
+// Les contrats durent 1 an, renouvelables (ou rétractation) à l'échéance. L'onglet montre
+// les clients ENCORE actifs qui approchent l'anniversaire (fenêtre 90 j), pour anticiper
+// qui va renouveler / partir. La notif email J-90 (backend) est indépendante.
+const RENEWAL_WINDOW_DAYS = 90;
+const TERMINATED_ETATS = ["Résiliation", "Self-Résiliation", "Rétractation", "Liquidation", "Sans suite"];
+const anniversaryDaysLeft = (r) => {
+  const d = sigDateOf(r);
+  if (!d) return null;
+  const [, m, day] = d.split("-").map(Number);
+  const today = new Date(_todayParisISO() + "T00:00:00");
+  let anniv = new Date(today.getFullYear(), m - 1, day);
+  if (anniv < today) anniv = new Date(today.getFullYear() + 1, m - 1, day);
+  return Math.round((anniv - today) / 86400000);
+};
+// L'onglet ne montre QUE les clients actifs dont l'anniversaire de contrat tombe dans la
+// fenêtre de renouvellement (<= 90 j), triés par proximité de l'échéance (voir `filtered`).
+// Le badge J-X passe en alerte : rouge <=30 j, orange au-delà dans la fenêtre. La date de
+// signature vient de `owner_signed_at` (contrat OU fallback fiche appliqué côté back), ce qui
+// couvre les clients hérités sans contrat CRM lié (dates 2024/2025 -> anniversaire imminent).
+const isRenewalUpcoming = (r) => {
+  if (!r.numero_client) return false;
+  if (TERMINATED_ETATS.includes(displayEtat(r))) return false;
+  const days = anniversaryDaysLeft(r);
+  return days != null && days >= 0 && days <= RENEWAL_WINDOW_DAYS;
+};
+
 const matchesCat = (r, cat) => {
   if (cat === "Onboarding à venir") return isOnboardingUpcoming(r);
   if (cat === "Intégration à venir") return isIntegrationUpcoming(r);
   if (cat === "Inactifs") return isInactif(r);
+  if (cat === "Renouvellement client") return isRenewalUpcoming(r);
   return displayEtat(r) === cat;
 };
 // Alerte fiscaliste sur un état posé par le cabinet (etat_manuel) : pause échue (relance ou
@@ -436,8 +470,10 @@ function MeteoPicker({ score, onSave, disabled }) {
     setPos({ top: up ? r.top - 4 : r.bottom + 4, left: r.left, up });
     setOpen(true);
   };
+  const noteRequired = meteoNoteRequired(sel);
+  const canSave = !!sel && !saving && (!noteRequired || !!note.trim());
   const save = async () => {
-    if (!sel || saving) return;
+    if (!canSave) return;
     setSaving(true);
     try { await onSave(sel, note.trim() || null); setOpen(false); }
     finally { setSaving(false); }
@@ -474,13 +510,19 @@ function MeteoPicker({ score, onSave, disabled }) {
                 {METEO_MEANING[sel].action ? ` → ${METEO_MEANING[sel].action}` : ""}
               </div>
             )}
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note d'interaction (optionnel)…" rows={2}
-              style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.45, marginBottom: 10 }} />
+            <textarea value={note} onChange={(e) => setNote(e.target.value)}
+              placeholder={noteRequired ? "Commentaire obligatoire : motif de l'alerte…" : "Note d'interaction (optionnel)…"} rows={2}
+              style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.45, marginBottom: noteRequired && !note.trim() ? 6 : 10, ...(noteRequired && !note.trim() ? { border: "1px solid #dc2626" } : {}) }} />
+            {noteRequired && !note.trim() && (
+              <div style={{ fontSize: 11, color: "#dc2626", fontWeight: 600, marginBottom: 10 }}>
+                Commentaire obligatoire pour un client {meteoBandOf(sel) === "rouge" ? "critique" : "mécontent"}.
+              </div>
+            )}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button type="button" onClick={() => setOpen(false)}
                 style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: MUTED, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Annuler</button>
-              <button type="button" onClick={save} disabled={!sel || saving}
-                style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: sel ? NAVY : "#e5e7eb", color: sel ? "#fff" : MUTED, fontSize: 12.5, fontWeight: 600, cursor: sel && !saving ? "pointer" : "default", fontFamily: "inherit" }}>{saving ? "…" : "Enregistrer"}</button>
+              <button type="button" onClick={save} disabled={!canSave}
+                style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: canSave ? NAVY : "#e5e7eb", color: canSave ? "#fff" : MUTED, fontSize: 12.5, fontWeight: 600, cursor: canSave ? "pointer" : "default", fontFamily: "inherit" }}>{saving ? "…" : "Enregistrer"}</button>
             </div>
           </div>
         </>,
@@ -810,9 +852,15 @@ export default function OptilexBoard({ embed = false }) {
 
   // Vue finale = base pré-météo + filtre bande météo (union des bandes cochées ; "none" = non noté).
   const filtered = useMemo(() => {
-    if (meteoFilter.length === 0) return preMeteoRows;
-    return preMeteoRows.filter((r) => meteoFilter.includes(meteoBandOf(r.meteo_score) || "none"));
-  }, [preMeteoRows, meteoFilter]);
+    const base = meteoFilter.length === 0
+      ? preMeteoRows
+      : preMeteoRows.filter((r) => meteoFilter.includes(meteoBandOf(r.meteo_score) || "none"));
+    // Onglet Renouvellement : tri par anniversaire le plus proche (les échéances imminentes en haut).
+    if (etatFilter === "Renouvellement client" && multiFilter.length === 0) {
+      return [...base].sort((a, b) => (anniversaryDaysLeft(a) ?? Infinity) - (anniversaryDaysLeft(b) ?? Infinity));
+    }
+    return base;
+  }, [preMeteoRows, meteoFilter, etatFilter, multiFilter]);
 
   // Mois qui ont au moins une signature Owner (pour le dropdown), du + récent au + ancien.
   const sigMonths = useMemo(() => {
@@ -1139,6 +1187,23 @@ export default function OptilexBoard({ embed = false }) {
                                 Inactif{r.days_since_last_mission != null ? ` · ${r.days_since_last_mission} j` : ""}
                               </span>
                             )}
+                            {etatFilter === "Renouvellement client" && (() => {
+                              const days = anniversaryDaysLeft(r);
+                              if (days == null) return null;
+                              const tone = days <= 30 ? { fg: "#b42318", bg: "#fdecec", dot: "#ef4444" }
+                                : days <= 90 ? { fg: "#b45309", bg: "#fff3e3", dot: "#f59e0b" }
+                                : { fg: "#3730a3", bg: "#eef2ff", dot: "#6366f1" };
+                              return (
+                                <span title={`Anniversaire du contrat dans ${days} jour${days > 1 ? "s" : ""}`}
+                                  style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, color: tone.fg, background: tone.bg, padding: "1px 7px", borderRadius: 10, whiteSpace: "nowrap" }}>
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden>
+                                    <circle cx="12" cy="12" r="9" stroke={tone.dot} strokeWidth="2.4" />
+                                    <path d="M12 7.5V12l3 2" stroke={tone.dot} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                  J-{days}
+                                </span>
+                              );
+                            })()}
                           </div>
                           <div style={{ fontSize: 11, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{rowSubtitle(r) || "en cours d'envoi"}</div>
                         </div>
@@ -2050,8 +2115,10 @@ function MeteoSection({ row, num, recordMeteo, version }) {
   const current = hist[0] || (row.meteo_score != null
     ? { score: row.meteo_score, note: row.meteo_note, author_name: row.meteo_by, created_at: row.meteo_at }
     : null);
+  const noteRequired = meteoNoteRequired(sel);
+  const canSave = !!sel && !saving && (!noteRequired || !!note.trim());
   const save = async () => {
-    if (!sel || saving) return;
+    if (!canSave) return;
     setSaving(true);
     try { await recordMeteo(num, sel, note.trim() || null); setSel(null); setNote(""); }
     finally { setSaving(false); }
@@ -2086,11 +2153,17 @@ function MeteoSection({ row, num, recordMeteo, version }) {
               {METEO_MEANING[sel].action ? ` → ${METEO_MEANING[sel].action}` : ""}
             </div>
           )}
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note d'interaction (optionnel)…" rows={2}
-            style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.45 }} />
+          <textarea value={note} onChange={(e) => setNote(e.target.value)}
+            placeholder={noteRequired ? "Commentaire obligatoire : motif de l'alerte…" : "Note d'interaction (optionnel)…"} rows={2}
+            style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.45, ...(noteRequired && !note.trim() ? { border: "1px solid #dc2626" } : {}) }} />
+          {noteRequired && !note.trim() && (
+            <div style={{ fontSize: 11.5, color: "#dc2626", fontWeight: 600, marginTop: 6 }}>
+              Commentaire obligatoire pour un client {meteoBandOf(sel) === "rouge" ? "critique" : "mécontent"}.
+            </div>
+          )}
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
-            <button type="button" onClick={save} disabled={!sel || saving}
-              style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: sel ? NAVY : "#e5e7eb", color: sel ? "#fff" : MUTED, fontSize: 13, fontWeight: 600, cursor: sel && !saving ? "pointer" : "default", fontFamily: "inherit" }}>{saving ? "…" : "Enregistrer la note"}</button>
+            <button type="button" onClick={save} disabled={!canSave}
+              style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: canSave ? NAVY : "#e5e7eb", color: canSave ? "#fff" : MUTED, fontSize: 13, fontWeight: 600, cursor: canSave ? "pointer" : "default", fontFamily: "inherit" }}>{saving ? "…" : "Enregistrer la note"}</button>
           </div>
         </div>
       )}
