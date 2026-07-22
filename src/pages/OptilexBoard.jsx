@@ -33,6 +33,9 @@ const ETAT_STYLE = {
 // filtre multi-sélection "Filtre" pour désencombrer la barre.
 const PRIMARY_TABS = ["Tous", "Signé", "Renouvellement client", "Attente Opti'Lex", "Inactifs", "Onboarding à venir", "Intégration à venir", "En cours de résiliation", "En cours de rétractation", "En cours de liquidation"];
 const SECONDARY_CATS = ["En cours", "Self-Résiliation", "Pause", "Liquidation", "En attente", "Sans suite"];
+// Onglets à logique de tri PROPRE (pas le tri "entré le plus récemment dans l'état") : tout le
+// reste = onglet d'état -> tri par date d'entrée dans l'état, le plus récent en haut.
+const NON_ETAT_SORTED_TABS = ["Tous", "Renouvellement client", "Inactifs", "Onboarding à venir", "Intégration à venir"];
 // États actés mis EN AVANT (chips visibles + compteur rouge) : résiliation et rétractation
 // sont l'info critique du board -> surfacés hors du menu déroulant, visibles dès l'arrivée.
 const HIGHLIGHTED_ETATS = ["Résiliation", "Rétractation"];
@@ -859,6 +862,18 @@ export default function OptilexBoard({ embed = false }) {
     // Onglet Renouvellement : tri par anniversaire le plus proche (les échéances imminentes en haut).
     if (etatFilter === "Renouvellement client" && multiFilter.length === 0) {
       return [...base].sort((a, b) => (anniversaryDaysLeft(a) ?? Infinity) - (anniversaryDaysLeft(b) ?? Infinity));
+    }
+    // Onglet d'état précis (résiliation, rétractation, liquidation, Signé…) : le client entré le
+    // plus RÉCEMMENT dans cet état en haut. tracking_updated_at = date de pose de l'état ; NULLs en bas.
+    if (multiFilter.length === 0 && !NON_ETAT_SORTED_TABS.includes(etatFilter)) {
+      return [...base].sort((a, b) => {
+        const ta = a.tracking_updated_at ? Date.parse(a.tracking_updated_at) : null;
+        const tb = b.tracking_updated_at ? Date.parse(b.tracking_updated_at) : null;
+        if (ta == null && tb == null) return 0;
+        if (ta == null) return 1;
+        if (tb == null) return -1;
+        return tb - ta;
+      });
     }
     return base;
   }, [preMeteoRows, meteoFilter, etatFilter, multiFilter]);
