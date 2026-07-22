@@ -806,6 +806,7 @@ export default function OptilexBoard({ embed = false }) {
       if (isIntegrationUpcoming(r)) c["Intégration à venir"] = (c["Intégration à venir"] || 0) + 1;
       if (isIntegrationOverdue(r)) c["__integration_overdue"] = (c["__integration_overdue"] || 0) + 1;
       if (isInactif(r)) c["Inactifs"] = (c["Inactifs"] || 0) + 1;
+      if (isRenewalUpcoming(r)) c["Renouvellement client"] = (c["Renouvellement client"] || 0) + 1;
     }
     return c;
   }, [rows]);
