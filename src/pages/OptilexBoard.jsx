@@ -1710,6 +1710,15 @@ const etatHistDates = (h) => {
   }
   return h.etat_date ? fmt(h.etat_date) : "—";
 };
+// Auteur affiché d'un changement d'état : nom/prénom (users.full_name résolu côté back via
+// created_by_name, Owner ET cabinet), sinon libellé pour les imports d'antériorité, sinon email.
+const etatAuthor = (h) => {
+  if (h.created_by_name) return h.created_by_name;
+  const by = h.created_by;
+  if (!by) return "";
+  if (/^import/i.test(by)) return "Antériorité (import)";
+  return String(by).split("@")[0];
+};
 
 // Bloc "État du client" (détail, sous le SIREN) : sélecteur d'état + date(s) selon l'état
 // (fiscaliste), révélation animée. Toute pose passe par changeEtat -> trace l'historique.
@@ -1819,7 +1828,7 @@ function EtatHistory({ num, version }) {
               <div style={{ fontSize: 13, fontWeight: 600, color: st.fg || TEXT }}>{h.etat}</div>
               <div style={{ fontSize: 11.5, color: MUTED, marginTop: 1 }}>{etatHistDates(h)}</div>
               <div style={{ fontSize: 10.5, color: "#aab2c0", marginTop: 1 }}>
-                {h.created_by ? `${String(h.created_by).split("@")[0]} · ` : ""}{timeAgo(h.created_at)}
+                {etatAuthor(h) ? `${etatAuthor(h)} · ` : ""}{timeAgo(h.created_at)}
               </div>
             </motion.div>
           );
