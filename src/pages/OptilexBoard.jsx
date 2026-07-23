@@ -294,6 +294,32 @@ const exportRowsToCsv = (rows, label) => {
 // ── Filtre par date de signature Owner ──────────────────────────────────────
 // owner_signed_at (fallback fiche appliqué côté back) -> date seule YYYY-MM-DD.
 const sigDateOf = (r) => (r.owner_signed_at ? String(r.owner_signed_at).slice(0, 10) : null);
+
+// ── Tri par colonne de date (en-têtes cliquables) ────────────────────────────
+const SORT_ACCESSORS = {
+  owner_signed: (r) => sigDateOf(r),
+  onboarding: (r) => { const d = r.rdv_onboarding_date_manual || r.rdv_onboarding_date; return d ? String(d).slice(0, 10) : null; },
+  integration: (r) => (r.rdv_lancement_date ? String(r.rdv_lancement_date).slice(0, 10) : null),
+};
+// Comparateur : dates absentes toujours en bas, sinon ascendant / descendant.
+const byDateSort = (accessor, dir) => (a, b) => {
+  const da = accessor(a), db = accessor(b);
+  const ta = da ? Date.parse(da) : NaN, tb = db ? Date.parse(db) : NaN;
+  const na = Number.isNaN(ta), nb = Number.isNaN(tb);
+  if (na && nb) return 0;
+  if (na) return 1;
+  if (nb) return -1;
+  return dir === "asc" ? ta - tb : tb - ta;
+};
+// Flèche de tri : ▲ (asc) / ▼ (desc). Les deux grisées quand la colonne est triable mais inactive.
+function SortArrow({ dir }) {
+  return (
+    <svg width="9" height="13" viewBox="0 0 10 14" style={{ flexShrink: 0, marginLeft: 2 }} aria-hidden>
+      <path d="M5 1 L9 5.5 L1 5.5 Z" fill={dir === "asc" ? NAVY : "#cdd4df"} />
+      <path d="M5 13 L1 8.5 L9 8.5 Z" fill={dir === "desc" ? NAVY : "#cdd4df"} />
+    </svg>
+  );
+}
 const _toISODate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 // "2026-07" -> { from: "2026-07-01", to: "2026-07-31" }
 const monthToRange = (month) => {
@@ -761,6 +787,8 @@ export default function OptilexBoard({ embed = false }) {
   const [sigRange, setSigRange] = useState({ from: "", to: "" }); // filtre date signature Owner
   const [meteoFilter, setMeteoFilter] = useState([]);      // bandes météo cochées (rouge/orange/vert)
   const [integrationView, setIntegrationView] = useState("all"); // sous-filtre onglet Intégration : "all" | "overdue"
+  const [sortCol, setSortCol] = useState(null);   // tri manuel par en-tête : null | owner_signed | onboarding | integration
+  const [sortDir, setSortDir] = useState("asc");  // asc | desc
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState(null); // numero_client du client ouvert
 
@@ -816,6 +844,8 @@ export default function OptilexBoard({ embed = false }) {
   const establishedCount = useMemo(() => rows.filter((r) => !r.is_pending_contract).length, [rows]);
   // Quitter l'onglet Intégration -> réinitialise le sous-filtre (pas de filtre "En retard" caché au retour).
   useEffect(() => { if (etatFilter !== "Intégration à venir") setIntegrationView("all"); }, [etatFilter]);
+  // Changer d'onglet réinitialise le tri manuel -> on retombe sur le défaut intelligent de l'onglet.
+  useEffect(() => { setSortCol(null); }, [etatFilter]);
 
   // Base : toutes les lignes passant les filtres SAUF la météo. Sert de socle à la vue finale
   // ET aux compteurs par bande (qui restent stables quand on coche/décoche une bande météo).
@@ -859,24 +889,47 @@ export default function OptilexBoard({ embed = false }) {
     const base = meteoFilter.length === 0
       ? preMeteoRows
       : preMeteoRows.filter((r) => meteoFilter.includes(meteoBandOf(r.meteo_score) || "none"));
-    // Onglet Renouvellement : tri par anniversaire le plus proche (les échéances imminentes en haut).
-    if (etatFilter === "Renouvellement client" && multiFilter.length === 0) {
-      return [...base].sort((a, b) => (anniversaryDaysLeft(a) ?? Infinity) - (anniversaryDaysLeft(b) ?? Infinity));
+    // 1) Tri MANUEL par en-tête de colonne (clic) : prioritaire sur tout.
+    if (sortCol && SORT_ACCESSORS[sortCol]) {
+      return [...base].sort(byDateSort(SORT_ACCESSORS[sortCol], sortDir));
     }
-    // Onglet d'état précis (résiliation, rétractation, liquidation, Signé…) : le client entré le
-    // plus RÉCEMMENT dans cet état en haut. tracking_updated_at = date de pose de l'état ; NULLs en bas.
-    if (multiFilter.length === 0 && !NON_ETAT_SORTED_TABS.includes(etatFilter)) {
-      return [...base].sort((a, b) => {
-        const ta = a.tracking_updated_at ? Date.parse(a.tracking_updated_at) : null;
-        const tb = b.tracking_updated_at ? Date.parse(b.tracking_updated_at) : null;
-        if (ta == null && tb == null) return 0;
-        if (ta == null) return 1;
-        if (tb == null) return -1;
-        return tb - ta;
-      });
+    // 2) Tris par DÉFAUT selon l'onglet (jamais le bazar, même sans clic).
+    if (multiFilter.length === 0) {
+      if (etatFilter === "Renouvellement client")
+        return [...base].sort((a, b) => (anniversaryDaysLeft(a) ?? Infinity) - (anniversaryDaysLeft(b) ?? Infinity));
+      if (etatFilter === "Intégration à venir")
+        return [...base].sort(byDateSort(SORT_ACCESSORS.integration, "asc"));   // RDV le plus proche en haut
+      if (etatFilter === "Onboarding à venir")
+        return [...base].sort(byDateSort(SORT_ACCESSORS.onboarding, "asc"));    // RDV le plus proche en haut
+      if (etatFilter === "Signé")
+        return [...base].sort(byDateSort(SORT_ACCESSORS.owner_signed, "desc")); // signés récents en haut
+      // Autre onglet d'état : entré le plus RÉCEMMENT dans l'état en haut (tracking_updated_at ; NULLs en bas).
+      if (!NON_ETAT_SORTED_TABS.includes(etatFilter))
+        return [...base].sort((a, b) => {
+          const ta = a.tracking_updated_at ? Date.parse(a.tracking_updated_at) : null;
+          const tb = b.tracking_updated_at ? Date.parse(b.tracking_updated_at) : null;
+          if (ta == null && tb == null) return 0;
+          if (ta == null) return 1;
+          if (tb == null) return -1;
+          return tb - ta;
+        });
     }
     return base;
-  }, [preMeteoRows, meteoFilter, etatFilter, multiFilter]);
+  }, [preMeteoRows, meteoFilter, etatFilter, multiFilter, sortCol, sortDir]);
+  // Tri effectif (manuel OU défaut de l'onglet) -> pilote les flèches des en-têtes.
+  const effectiveSort = useMemo(() => {
+    if (sortCol) return { col: sortCol, dir: sortDir };
+    if (multiFilter.length === 0) {
+      if (etatFilter === "Intégration à venir") return { col: "integration", dir: "asc" };
+      if (etatFilter === "Onboarding à venir") return { col: "onboarding", dir: "asc" };
+      if (etatFilter === "Signé") return { col: "owner_signed", dir: "desc" };
+    }
+    return { col: null, dir: null };
+  }, [sortCol, sortDir, etatFilter, multiFilter]);
+  const clickSort = (col) => {
+    const nextDir = effectiveSort.col === col ? (effectiveSort.dir === "asc" ? "desc" : "asc") : "asc";
+    setSortCol(col); setSortDir(nextDir);
+  };
 
   // Mois qui ont au moins une signature Owner (pour le dropdown), du + récent au + ancien.
   const sigMonths = useMemo(() => {
@@ -974,8 +1027,9 @@ export default function OptilexBoard({ embed = false }) {
   useEffect(() => { for (const r of filtered) seenRows.current.add(rowKey(r)); }, [filtered]);
 
   // Onglet primaire -> vide le multi-filtre ; cocher une catégorie -> vide l'onglet primaire.
-  const pickTab = (t) => { setEtatFilter(t); setMultiFilter([]); };
+  const pickTab = (t) => { setSortCol(null); setEtatFilter(t); setMultiFilter([]); };
   const toggleCat = (cat) => {
+    setSortCol(null);
     setEtatFilter("Tous");
     setMultiFilter((prev) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]));
   };
@@ -1170,10 +1224,16 @@ export default function OptilexBoard({ embed = false }) {
                 <th style={th}>Client</th>
                 <th style={th}>Météo</th>
                 <th style={th}>État</th>
-                <th style={th}>Contrat Owner</th>
+                <th style={{ ...th, cursor: "pointer", userSelect: "none" }} onClick={() => clickSort("owner_signed")} title="Trier par date de signature">
+                  <span style={{ display: "inline-flex", alignItems: "center" }}>Contrat Owner<SortArrow dir={effectiveSort.col === "owner_signed" ? effectiveSort.dir : null} /></span>
+                </th>
                 <th style={th}>Contrat Opti'Lex</th>
-                <th style={th}>Onboarding</th>
-                <th style={th}>Intégration</th>
+                <th style={{ ...th, cursor: "pointer", userSelect: "none" }} onClick={() => clickSort("onboarding")} title="Trier par date d'onboarding">
+                  <span style={{ display: "inline-flex", alignItems: "center" }}>Onboarding<SortArrow dir={effectiveSort.col === "onboarding" ? effectiveSort.dir : null} /></span>
+                </th>
+                <th style={{ ...th, cursor: "pointer", userSelect: "none" }} onClick={() => clickSort("integration")} title="Trier par date d'intégration">
+                  <span style={{ display: "inline-flex", alignItems: "center" }}>Intégration<SortArrow dir={effectiveSort.col === "integration" ? effectiveSort.dir : null} /></span>
+                </th>
                 <th style={th}>Facturation</th>
                 <th style={th}></th>
               </tr>
