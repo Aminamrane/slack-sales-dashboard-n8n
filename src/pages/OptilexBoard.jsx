@@ -1401,7 +1401,7 @@ function InfoField({ label, value, full }) {
 // partent sur l'email sélectionné (backend). Réservé admin + ceo + optilex.
 const EMAIL_SELECT_ROLES = ["admin", "ceo", "optilex"];
 const canSelectEmail = () => { try { return EMAIL_SELECT_ROLES.includes((apiClient.getUser() || {}).role); } catch { return false; } };
-function EmailSelect({ row, patch }) {
+function EmailSelect({ row, patch, onSaved }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -1432,7 +1432,7 @@ function EmailSelect({ row, patch }) {
   const choose = async (email) => {
     setSaving(true);
     const ovr = email.toLowerCase() === owner.toLowerCase() ? null : email; // Owner = efface l'override
-    try { await patch(row.numero_client, { email_ovr: ovr }); setOpen(false); }
+    try { await patch(row.numero_client, { email_ovr: ovr }); onSaved?.(); setOpen(false); }
     finally { setSaving(false); }
   };
   const toggle = (e) => {
@@ -1487,7 +1487,7 @@ const INFO_FIELDS = [
   { ovr: "phone_ovr", orig: "contact_phone", label: "Téléphone" },
   { ovr: "siren_ovr", orig: "siren", label: "SIREN" },
 ];
-function ClientInfoSection({ row, num, patch }) {
+function ClientInfoSection({ row, num, patch, onEmailSaved }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({});
   const startEdit = () => {
@@ -1541,7 +1541,7 @@ function ClientInfoSection({ row, num, patch }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 16px", marginBottom: 22 }}>
           <InfoField label="Nom du client" value={name} />
           <InfoField label="Tranche salariale" value={fmtTranche(ov(row, "tranche_ovr", "contact_tranche"))} />
-          <EmailSelect row={row} patch={patch} />
+          <EmailSelect row={row} patch={patch} onSaved={onEmailSaved} />
           <InfoField label="Téléphone" value={ov(row, "phone_ovr", "contact_phone")} />
           <InfoField label="SIREN" value={ov(row, "siren_ovr", "siren")} />
           {companyName(row) && companyName(row) !== name && <InfoField label="Société" value={companyName(row)} full />}
@@ -1679,7 +1679,7 @@ function MailIcon() {
 }
 
 // Lien de signature Opti'Lex (copier) + relance native Yousign (double-clic de confirmation).
-function OptilexSignatureBlock({ email, chosenEmail }) {
+function OptilexSignatureBlock({ email, chosenEmail, refreshKey }) {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -1693,7 +1693,7 @@ function OptilexSignatureBlock({ email, chosenEmail }) {
       .then((r) => { if (alive) { setData(r); setLoading(false); } })
       .catch(() => { if (alive) { setData({ available: false }); setLoading(false); } });
     return () => { alive = false; };
-  }, [email]);
+  }, [email, refreshKey]);
 
   const link = data?.signature_link;
   const canRemind = data?.can_remind;
@@ -1728,7 +1728,7 @@ function OptilexSignatureBlock({ email, chosenEmail }) {
       {canRemind && (
         <>
           <div style={{ fontSize: 11.5, color: MUTED, margin: "10px 0 6px" }}>
-            Rappel Yousign à <strong style={{ color: TEXT }}>{chosenEmail || data.recipient || email}</strong>
+            Rappel Yousign à <strong style={{ color: TEXT }}>{data.recipient || chosenEmail || email}</strong>
           </div>
           <button onClick={confirming ? sendReminder : () => setConfirming(true)}
             onMouseLeave={() => { if (relance !== "sending") setConfirming(false); }}
@@ -1998,6 +1998,9 @@ function EtatHistory({ num, version }) {
 
 function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion, recordMeteo, meteoHistVersion }) {
   const num = row.numero_client;
+  // Rafraîchit le bloc signature Opti'Lex après un changement d'email (le destinataire du
+  // rappel Yousign est re-résolu côté backend) : bumpé par EmailSelect après le patch commité.
+  const [sigRefresh, setSigRefresh] = useState(0);
   // Antériorité emails : à l'ouverture d'une fiche, on enregistre les emails vus (Owner + Opti'Lex
   // courant par SIREN) dans l'historique -> on garde la trace même quand l'email change ensuite,
   // pour pouvoir revenir à un email antérieur dans le dropdown. Best-effort (silencieux).
@@ -2094,7 +2097,7 @@ function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion,
           {/* Sections en révélation douce (stagger léger, une seule fois à l'ouverture). */}
           {/* Informations client (override cabinet ?? original Owner, antériorité préservée) */}
           <div className="ob-sec" style={{ animationDelay: "0.05s" }}>
-            <ClientInfoSection row={row} num={num} patch={patch} />
+            <ClientInfoSection row={row} num={num} patch={patch} onEmailSaved={() => setSigRefresh((v) => v + 1)} />
           </div>
 
           {/* Météo client : note courante + saisie (score + note d'interaction) + historique */}
@@ -2139,7 +2142,7 @@ function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion,
           {row.optilex_status === "ongoing" && (
             <>
               <SecTitle icon="signature">Signature Opti'Lex</SecTitle>
-              <div style={{ marginBottom: 22 }}><OptilexSignatureBlock email={row.email} chosenEmail={ov(row, "email_ovr", "email")} /></div>
+              <div style={{ marginBottom: 22 }}><OptilexSignatureBlock email={row.email} chosenEmail={ov(row, "email_ovr", "email")} refreshKey={sigRefresh} /></div>
             </>
           )}
 
