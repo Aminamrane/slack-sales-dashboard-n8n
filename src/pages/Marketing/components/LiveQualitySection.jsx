@@ -608,15 +608,21 @@ function PresenceCurve({ q, C }) {
     [q.cta_phases]
   );
 
-  // Ticks horaires "ronds" à afficher sur l'axe X linéaire (minutes depuis
-  // 19:47). 20:00 → 13 min, 20:30 → 43, 21:00 → 73, 21:30 → 103, 22:00 → 133.
-  const TICK_TS = useMemo(() => ([
-    { t: 13, label: '20:00' },
-    { t: 43, label: '20:30' },
-    { t: 73, label: '21:00' },
-    { t: 103, label: '21:30' },
-    { t: 133, label: '22:00' },
-  ]), []);
+  // Ticks horaires "ronds" (toutes les 30 min) dérivés de l'heure de départ RÉELLE du live
+  // (clock du point t=0), pour marcher quelle que soit la cohorte : 19:47 le 22/06 (20:00→t13),
+  // 19:39 le 20/07 (20:00→t21), etc. Plus de hardcode spécifique à un webinaire.
+  const TICK_TS = useMemo(() => {
+    if (!points.length || !points[0]?.clock) return [];
+    const [bh, bm] = String(points[0].clock).split(':').map(Number);
+    const baseMin = bh * 60 + bm;
+    const lastT = points[points.length - 1].t;
+    const ticks = [];
+    for (let clockMin = Math.ceil(baseMin / 30) * 30; clockMin - baseMin <= lastT; clockMin += 30) {
+      const h = Math.floor(clockMin / 60) % 24, m = clockMin % 60;
+      ticks.push({ t: clockMin - baseMin, label: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}` });
+    }
+    return ticks;
+  }, [points]);
 
   // Tooltip HTML flottant — même handler externe que TrafficChart.
   const externalTooltipHandler = useCallback((context) => {
