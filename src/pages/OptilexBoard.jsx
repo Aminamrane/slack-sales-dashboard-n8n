@@ -1396,12 +1396,89 @@ function InfoField({ label, value, full }) {
   );
 }
 
+// Sélecteur d'email de destination Opti'Lex : dropdown Owner / Opti'Lex (par SIREN) / historique.
+// Pose email_ovr (via patch /board-tracking). Les 5 emails Opti'Lex + la relance contrat Yousign
+// partent sur l'email sélectionné (backend). Réservé admin + ceo + optilex.
+const EMAIL_SELECT_ROLES = ["admin", "ceo", "optilex"];
+const canSelectEmail = () => { try { return EMAIL_SELECT_ROLES.includes((apiClient.getUser() || {}).role); } catch { return false; } };
+function EmailSelect({ row, patch }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const btnRef = useRef(null);
+  const owner = (row.email || "").trim();
+  const optilex = (row.email_optilex || "").trim();
+  const current = ov(row, "email_ovr", "email") || "";
+  const opts = useMemo(() => {
+    const seen = new Set(); const list = [];
+    const add = (email, source) => {
+      const e = (email || "").trim();
+      if (!e || seen.has(e.toLowerCase())) return;
+      seen.add(e.toLowerCase()); list.push({ email: e, source });
+    };
+    add(owner, "Owner");
+    add(optilex, "Opti'Lex");
+    for (const h of (Array.isArray(row.email_history) ? row.email_history : [])) {
+      if (h && h.email) add(h.email, h.source === "optilex" ? "Opti'Lex" : "Owner");
+    }
+    return list;
+  }, [owner, optilex, row.email_history]);
+  const multiple = opts.length > 1 && canSelectEmail();
+  const choose = async (email) => {
+    setSaving(true);
+    const ovr = email.toLowerCase() === owner.toLowerCase() ? null : email; // Owner = efface l'override
+    try { await patch(row.numero_client, { email_ovr: ovr }); setOpen(false); }
+    finally { setSaving(false); }
+  };
+  const toggle = (e) => {
+    e.stopPropagation();
+    if (!multiple) return;
+    if (open) { setOpen(false); return; }
+    const r = btnRef.current.getBoundingClientRect();
+    setPos({ top: r.bottom + 4, left: r.left, width: r.width });
+    setOpen(true);
+  };
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 11, color: MUTED, marginBottom: 3 }}>Email</div>
+      <button ref={btnRef} type="button" onClick={toggle}
+        style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", textAlign: "left", background: "transparent", border: "none", padding: 0, cursor: multiple ? "pointer" : "default", fontFamily: "inherit", minWidth: 0 }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{current || "—"}</span>
+        {multiple && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.16s" }}><polyline points="6 9 12 15 18 9" /></svg>}
+      </button>
+      {open && pos && createPortal(
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 10050 }} />
+          <div style={{ position: "fixed", top: pos.top, left: pos.left, minWidth: Math.max(pos.width, 240), zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 8px 28px rgba(17,24,39,0.14)", padding: 6, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", animation: "obMenuIn 0.15s cubic-bezier(0.16,1,0.3,1) both" }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em", padding: "6px 8px 4px" }}>Email des envois Opti'Lex</div>
+            {opts.map((o) => {
+              const on = o.email.toLowerCase() === current.toLowerCase();
+              return (
+                <button key={o.email} type="button" disabled={saving} onClick={() => choose(o.email)}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, width: "100%", textAlign: "left", padding: "8px", borderRadius: 8, border: "none", background: on ? "#eff3fb" : "transparent", cursor: "pointer", fontFamily: "inherit" }}>
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: "block", fontSize: 13, fontWeight: on ? 700 : 500, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.email}</span>
+                    <span style={{ fontSize: 11, color: MUTED }}>{o.source}</span>
+                  </span>
+                  {on && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="20 6 9 17 4 12" /></svg>}
+                </button>
+              );
+            })}
+          </div>
+        </>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
 // Bloc "Informations client" éditable : affiche override ?? original ; l'édition écrit la
 // couche cabinet (optilex_client_tracking) SANS toucher client_data (antériorité Owner préservée).
 const INFO_FIELDS = [
   { ovr: "contact_name_ovr", orig: "contact_name", label: "Nom du client" },
   { ovr: "tranche_ovr", orig: "contact_tranche", label: "Tranche salariale" },
-  { ovr: "email_ovr", orig: "email", label: "Email" },
+  // email_ovr retiré du crayon libre : l'email de destination Opti'Lex se change UNIQUEMENT via
+  // le dropdown EmailSelect (gaté admin+ceo+optilex + enforce backend). Voir EmailSelect.
   { ovr: "phone_ovr", orig: "contact_phone", label: "Téléphone" },
   { ovr: "siren_ovr", orig: "siren", label: "SIREN" },
 ];
@@ -1459,7 +1536,7 @@ function ClientInfoSection({ row, num, patch }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 16px", marginBottom: 22 }}>
           <InfoField label="Nom du client" value={name} />
           <InfoField label="Tranche salariale" value={fmtTranche(ov(row, "tranche_ovr", "contact_tranche"))} />
-          <InfoField label="Email" value={ov(row, "email_ovr", "email")} />
+          <EmailSelect row={row} patch={patch} />
           <InfoField label="Téléphone" value={ov(row, "phone_ovr", "contact_phone")} />
           <InfoField label="SIREN" value={ov(row, "siren_ovr", "siren")} />
           {companyName(row) && companyName(row) !== name && <InfoField label="Société" value={companyName(row)} full />}
@@ -1597,7 +1674,7 @@ function MailIcon() {
 }
 
 // Lien de signature Opti'Lex (copier) + relance native Yousign (double-clic de confirmation).
-function OptilexSignatureBlock({ email }) {
+function OptilexSignatureBlock({ email, chosenEmail }) {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -1646,7 +1723,7 @@ function OptilexSignatureBlock({ email }) {
       {canRemind && (
         <>
           <div style={{ fontSize: 11.5, color: MUTED, margin: "10px 0 6px" }}>
-            Rappel Yousign à <strong style={{ color: TEXT }}>{data.recipient || email}</strong>
+            Rappel Yousign à <strong style={{ color: TEXT }}>{chosenEmail || data.recipient || email}</strong>
           </div>
           <button onClick={confirming ? sendReminder : () => setConfirming(true)}
             onMouseLeave={() => { if (relance !== "sending") setConfirming(false); }}
@@ -1916,6 +1993,16 @@ function EtatHistory({ num, version }) {
 
 function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion, recordMeteo, meteoHistVersion }) {
   const num = row.numero_client;
+  // Antériorité emails : à l'ouverture d'une fiche, on enregistre les emails vus (Owner + Opti'Lex
+  // courant par SIREN) dans l'historique -> on garde la trace même quand l'email change ensuite,
+  // pour pouvoir revenir à un email antérieur dans le dropdown. Best-effort (silencieux).
+  useEffect(() => {
+    if (!num) return;
+    const emails = [];
+    if (row.email) emails.push({ email: row.email, source: "owner" });
+    if (row.email_optilex) emails.push({ email: row.email_optilex, source: "optilex" });
+    if (emails.length) apiClient.post("/api/v1/optilex/email-history", { numero_client: num, emails }).catch(() => {});
+  }, [num, row.email, row.email_optilex]);
   const sigBlock = (title, status, sentAt, signedAt, scheduledAt, grouped) => {
     const i = sigInfo(status, sentAt, signedAt, scheduledAt);
     return (
@@ -2047,7 +2134,7 @@ function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion,
           {row.optilex_status === "ongoing" && (
             <>
               <SecTitle icon="signature">Signature Opti'Lex</SecTitle>
-              <div style={{ marginBottom: 22 }}><OptilexSignatureBlock email={row.email} /></div>
+              <div style={{ marginBottom: 22 }}><OptilexSignatureBlock email={row.email} chosenEmail={ov(row, "email_ovr", "email")} /></div>
             </>
           )}
 
