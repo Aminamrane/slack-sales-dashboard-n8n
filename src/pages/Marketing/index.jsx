@@ -24,6 +24,8 @@ import SalesWebinarRanking from './components/SalesWebinarRanking';
 import SalesWebinarRankingCompact from './components/SalesWebinarRankingCompact';
 import RdvBySourceDonut from './components/RdvBySourceDonut';
 import LiveQualitySection from './components/LiveQualitySection';
+import WebinarLiveReplay from './components/WebinarLiveReplay';
+import { WEBINAR_REPLAY } from './data/webinarReplay';
 import Card from './components/Card';
 
 const ALLOWED_ROLES = ['admin', 'ceo', 'marketing', 'acquisition_director', 'head_of_acquisition'];
@@ -49,6 +51,7 @@ const COHORT_WITH_CAMPAIGNS = 'webinar-2026-05-26';
 const COHORTS_WITH_NURTURE = new Set([
   'webinar-2026-05-26',
   'webinar-2026-06-22',
+  'webinar-2026-07-20',
 ]);
 
 function readWebinarFromUrl() {
@@ -576,6 +579,11 @@ export default function Marketing() {
           <section style={{ marginBottom: 24 }}>
             <LiveQualitySection realtimeLeads={realtimeLeads} C={C} />
           </section>
+        )}
+
+        {/* Analyse IA du live : replay vidéo + segments horodatés + synthèse (data statique par cohorte). */}
+        {WEBINAR_REPLAY[webinarId] && (
+          <WebinarLiveReplay data={WEBINAR_REPLAY[webinarId]} C={C} />
         )}
 
         {/* ── SOURCE BREAKDOWN ── */}
