@@ -1407,7 +1407,12 @@ function EmailSelect({ row, patch }) {
   const [saving, setSaving] = useState(false);
   const btnRef = useRef(null);
   const owner = (row.email || "").trim();
-  const optilex = (row.email_optilex || "").trim();
+  // Emails Opti'Lex : liste labellisée (client + dirigeants), résolue par SIREN côté backend
+  // (un client à plusieurs sociétés matche si UN SIREN correspond). Fallback sur l'ancien
+  // champ unique email_optilex si la liste n'est pas encore servie.
+  const optilexOpts = (Array.isArray(row.email_optilex_options) && row.email_optilex_options.length)
+    ? row.email_optilex_options
+    : (row.email_optilex ? [{ email: row.email_optilex, label: "" }] : []);
   const current = ov(row, "email_ovr", "email") || "";
   const opts = useMemo(() => {
     const seen = new Set(); const list = [];
@@ -1417,12 +1422,12 @@ function EmailSelect({ row, patch }) {
       seen.add(e.toLowerCase()); list.push({ email: e, source });
     };
     add(owner, "Owner");
-    add(optilex, "Opti'Lex");
+    for (const o of optilexOpts) if (o && o.email) add(o.email, o.label ? `Opti'Lex · ${o.label}` : "Opti'Lex");
     for (const h of (Array.isArray(row.email_history) ? row.email_history : [])) {
       if (h && h.email) add(h.email, h.source === "optilex" ? "Opti'Lex" : "Owner");
     }
     return list;
-  }, [owner, optilex, row.email_history]);
+  }, [owner, row.email_optilex_options, row.email_optilex, row.email_history]);
   const multiple = opts.length > 1 && canSelectEmail();
   const choose = async (email) => {
     setSaving(true);
