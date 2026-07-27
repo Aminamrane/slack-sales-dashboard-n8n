@@ -380,27 +380,41 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
       onFocus={open}
       onBlur={close}
     >
-      {/* Libellé : glyphe SVG porteur de sens (à la place de l'ancienne pastille
-          de couleur), teinté par la couleur du KPI. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, minWidth: 0 }}>
-        {Icon && <Icon size={14} strokeWidth={2.2} color={kpi.color} style={{ flexShrink: 0 }} aria-hidden="true" />}
-        <span style={{
-          fontSize: 12, color: C.muted, fontWeight: 600,
+      {/* Glyphe en GRAND à droite : il occupe le vide que laissait le texte et
+          donne sa lecture immédiate à la carte. Discret par défaut (filigrane),
+          plein pour la météo dont l'icône EST la valeur (façon widget météo). */}
+      {Icon && (
+        <div aria-hidden="true" style={{
+          position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)',
+          display: 'flex', alignItems: 'center', pointerEvents: 'none',
+          opacity: kpi.artworkStrong ? 1 : 0.17,
+        }}>
+          <Icon
+            size={kpi.artworkStrong ? 54 : 44}
+            strokeWidth={kpi.artworkStrong ? 1.6 : 1.8}
+            color={kpi.color}
+          />
+        </div>
+      )}
+      {/* Réserve la place du glyphe : le texte s'ellipse avant de passer dessous. */}
+      <div style={{ paddingRight: kpi.artworkStrong ? 70 : 60, minWidth: 0 }}>
+        <div style={{
+          fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 6,
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-        }}>{kpi.label}</span>
+        }}>{kpi.label}</div>
+        <div style={{ fontSize: 26, fontWeight: 800, color: '#212121', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+          {/* `kpi.loading` : chargement PROPRE à la carte (source distincte du
+              bloc principal, ex. le board Owner/Opti'Lex). Défaut = dataLoading. */}
+          {(kpi.loading ?? dataLoading) ? <span style={{ animation: 'ceoPulse 1.2s ease infinite' }}>—</span> : kpi.value}
+        </div>
+        {/* Sous-titre sur UNE ligne : c'est lui qui gonflait la hauteur des cartes
+            quand le libellé était long. Le détail complet reste au survol
+            (tooltip) et dans l'attribut title. */}
+        <div style={{
+          marginTop: 6, fontSize: 12, fontWeight: 500, color: C.muted,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }} title={kpi.sub}>{kpi.sub}</div>
       </div>
-      <div style={{ fontSize: 26, fontWeight: 800, color: '#212121', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
-        {/* `kpi.loading` : chargement PROPRE à la carte (source distincte du
-            bloc principal, ex. le board Owner/Opti'Lex). Défaut = dataLoading. */}
-        {(kpi.loading ?? dataLoading) ? <span style={{ animation: 'ceoPulse 1.2s ease infinite' }}>—</span> : kpi.value}
-      </div>
-      {/* Sous-titre sur UNE ligne : c'est lui qui gonflait la hauteur des cartes
-          quand le libellé était long. Le détail complet reste au survol
-          (tooltip) et dans l'attribut title. */}
-      <div style={{
-        marginTop: 6, fontSize: 12, fontWeight: 500, color: C.muted,
-        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-      }} title={kpi.sub}>{kpi.sub}</div>
 
       {hasTooltip && (
         <KpiTooltipPortal
@@ -1440,8 +1454,11 @@ export default function CeoDashboard() {
       },
       {
         label: 'Météo client',
+        // Icône pleine et surdimensionnée : sur cette carte, le dessin (orage →
+        // grand soleil) porte la note autant que le chiffre.
+        artworkStrong: meteoRounded != null,
         Icon: meteoRounded != null
-          ? (props) => <MeteoIcon score={meteoRounded} size={props.size} color={props.color} />
+          ? (props) => <MeteoIcon score={meteoRounded} size={props.size} color={props.color} strokeWidth={props.strokeWidth} />
           : Cloud,
         value: boardStats?.meteoAvg != null ? `${boardStats.meteoAvg.toFixed(1).replace('.', ',')}/5` : '—',
         color: meteoBand ? METEO_BANDS[meteoBand].color : '#94a3b8',

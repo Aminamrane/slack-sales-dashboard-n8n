@@ -90,10 +90,12 @@ const METEO_ICONS = {
   4: <><path d="M12 2v2M4.93 4.93l1.41 1.41M20 12h2M19.07 4.93l-1.41 1.41" /><path d="M15.947 12.65a4 4 0 0 0-5.925-4.128" /><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z" /></>, // éclaircie
   5: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" /></>, // grand soleil
 };
-export function MeteoIcon({ score, size = 16, color = "currentColor" }) {
+// `strokeWidth` réglable : à 16 px un trait de 2 est juste, à 54 px (carte
+// météo du dashboard CEO) il faut l'affiner pour que le dessin respire.
+export function MeteoIcon({ score, size = 16, color = "currentColor", strokeWidth = 2 }) {
   const paths = METEO_ICONS[score];
   if (!paths) return null;
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>{paths}</svg>;
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>{paths}</svg>;
 }
 // Champ(s) date à saisir par état (raisonnement fiscaliste). Absent = pas de date.
 // Pause = période : début (etat_date) + fin CONNUE (pause_end_date) OU indéterminée -> relance
