@@ -9,7 +9,10 @@ import medal1 from "../assets/1st-place.png";
 import medal2 from "../assets/2st-place.png";
 import medal3 from "../assets/3st-place.png";
 import ceo6 from "../assets/ceo6.svg";
-import { displayEtat, isOnboardingUpcoming, isIntegrationUpcoming, isIntegrationOverdue } from "./OptilexBoard.jsx";
+import {
+  displayEtat, isOnboardingUpcoming, isIntegrationUpcoming, isIntegrationOverdue,
+  MeteoIcon, meteoBandOf, METEO_BANDS,
+} from "./OptilexBoard.jsx";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import testLottie from "../assets/test.lottie?url";
@@ -17,7 +20,7 @@ import {
   ChevronDown, Home, MessageSquare, Mail, Search, PanelLeft, Sparkles,
   // Glyphes des cartes d'états : un pictogramme qui PORTE le sens du KPI,
   // à la place des anciennes pastilles de couleur.
-  Users, CircleCheck, Clock, CalendarClock, Rocket, CircleX, RotateCcw, Ellipsis,
+  Users, CircleCheck, Cloud, CalendarClock, Rocket, CircleX, RotateCcw, Ellipsis,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import "../index.css";
@@ -127,64 +130,25 @@ const KPI_ICONS = {
 };
 const formatEuro = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n || 0);
 
-// ── CEO SHEET — états Suivi Clients → 6 buckets dashboard ──────────────────
-// Source : GET /api/v1/ceo-sheet/current → snapshot.etats { <libellé brut>: count }.
-// Les libellés bruts viennent du Google Sheet (orthographe/casse non garantie).
-// On normalise (trim + lowercase) avant comparaison. Tout état NON présent dans
-// cette table tombe dans le bucket "Autres" (fallback) → aucun client perdu, et
-// la somme des 6 buckets == etats_total par construction.
-//
-// ⚠️ Depuis le rebranchement des cartes sur le board Owner/Opti'Lex (qui applique
-// override cabinet > Sheet > contrats, et fait donc autorité sur les états), seul
-// le bucket `retard` est encore consommé — la notion de retard de paiement
-// n'existe pas côté board. Le reste de la table est conservé tel quel : c'est ce
-// qui servira le jour où le retard sera lui aussi re-sourcé.
-const normEtat = (s) => (s || '').toString().trim().toLowerCase();
-
-// Ordre = ordre d'affichage des cartes. `key` sert d'id stable, `match` liste
-// les libellés bruts attendus (déjà normalisés). `autres` est le catch-all.
-const CEO_SHEET_BUCKETS = [
-  {
-    key: 'actifs', label: 'Actifs', emoji: '🟢',
-    match: ['en cours', 'vip paul'],
-  },
-  {
-    key: 'retard', label: 'En retard de paiement', emoji: '🟠',
-    match: [
-      'en retard de paiement optilex',
-      'en retard de paiement owner',
-      'en retard de paiement globale',
-      'anomalie de paiement',
-      'on boarding fait à rappeler si pas payer',
-    ],
-  },
-  {
-    key: 'onboarding', label: 'Onboarding à venir', emoji: '🟡',
-    match: ['call onboarding à venir'],
-  },
-  {
-    key: 'resilies', label: 'Résiliés', emoji: '🔴',
-    match: [
-      'résiliation',
-    ],
-  },
-  {
-    key: 'retractes', label: 'Rétractés', emoji: '🟤',
-    match: [
-      'retractation',
-      'self résiliation',
-      'liquidation',
-      'résiliation programmé',
-    ],
-  },
-  {
-    key: 'autres', label: 'Autres', emoji: '⚪',
-    // Catch-all : "pause", "restitution optilex", "en attente recupération tax
-    // sur les salaires", "(vide)" + TOUT libellé non mappé ci-dessus.
-    match: [],
-    isFallback: true,
-  },
+const MONTH_LABELS_FR = [
+  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
 ];
+
+// ── ÉTATS : périmètre temporel ────────────────────────────────────────────
+// Dernier jour du mois d'une clé 'YYYY-MM', en ISO court : les dates du board
+// sont comparées en chaînes (YYYY-MM-DD), indépendamment du fuseau du client.
+const periodEndISO = (key) => {
+  const [y, m] = key.split('-').map(Number);
+  return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+};
+const dateOnly = (v) => (v ? String(v).slice(0, 10) : null);
+// États de SORTIE : c'est leur `etat_date` qui date le mouvement, et c'est ce
+// qui permet de savoir qu'un client aujourd'hui parti était actif avant.
+const BOARD_TERMINAL_ETATS = new Set(['Résiliation', 'Rétractation', 'Self-Résiliation', 'Liquidation']);
+// Ton de la météo moyenne, dérivé de la bande du board (rouge/orange/vert).
+const METEO_TONE = { rouge: 'critiques', orange: 'mécontents', vert: 'satisfaits' };
+
 
 // € arrondi à l'entier, séparateur de milliers garanti (format FR).
 // Déterministe : on n'utilise pas Intl currency (le séparateur de milliers ICU
@@ -204,38 +168,6 @@ const fmtPct = (v) => {
   return `${pct.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 1 })}\u00A0%`;
 };
 
-// Construit les 6 buckets (Total + 5 catégories) depuis snapshot.etats.
-// Retourne { buckets: { key: { count, breakdown:[{label,value}] } }, total, covered }
-// où `covered` = somme des 5 catégories (doit == total).
-function computeEtatBuckets(etats, etatsTotal) {
-  const src = etats || {};
-  // Index libellé normalisé → bucket key (hors fallback).
-  const lookup = {};
-  CEO_SHEET_BUCKETS.forEach((b) => {
-    if (b.isFallback) return;
-    b.match.forEach((m) => { lookup[m] = b.key; });
-  });
-  const buckets = {};
-  CEO_SHEET_BUCKETS.forEach((b) => { buckets[b.key] = { count: 0, breakdown: [] }; });
-  Object.entries(src).forEach(([rawLabel, rawCount]) => {
-    const count = Number(rawCount) || 0;
-    if (count === 0 && !rawLabel) return;
-    const key = lookup[normEtat(rawLabel)] || 'autres';
-    buckets[key].count += count;
-    const displayLabel = (rawLabel && rawLabel.trim()) ? rawLabel.trim() : '(vide)';
-    buckets[key].breakdown.push({ label: displayLabel, value: count });
-  });
-  // Tri des breakdowns par count décroissant (lisibilité tooltip).
-  Object.values(buckets).forEach((b) => b.breakdown.sort((a, z) => z.value - a.value));
-  const covered = CEO_SHEET_BUCKETS
-    .filter((b) => !b.isFallback || b.key === 'autres')
-    .reduce((s, b) => s + buckets[b.key].count, 0);
-  return {
-    buckets,
-    total: Number(etatsTotal) || covered,
-    covered,
-  };
-}
 
 // Sélectionne le mois "cash" à afficher : le mois courant (YYYY-MM) s'il existe
 // dans le tableau et porte des valeurs, sinon le mois le plus récent non vide.
@@ -758,6 +690,85 @@ function CeoCashBanner({ months, defaultMonthKey, dataLoading, darkMode, C }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// FILTRE DE PÉRIODE DES ÉTATS — sélecteur au-dessus de la grille de cartes.
+// Distinct du sélecteur du bandeau Cash : celui-ci pilote la PHOTO DU PARC
+// (combien d'actifs à telle date, combien de résiliés tel mois), l'autre pilote
+// les montants du mois. Les deux ne se parlent pas.
+// ══════════════════════════════════════════════════════════════════════════
+function EtatPeriodPicker({ value, options, onChange, darkMode, C }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [open]);
+  const current = options.find((o) => o.key === value) || options[0];
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '6px 10px 6px 13px', borderRadius: 11,
+          border: `1px solid ${C.border}`,
+          background: open ? (darkMode ? '#2a2b36' : '#f4f6fb') : C.bg,
+          cursor: 'pointer', color: C.text, fontFamily: 'inherit',
+          fontSize: 13, fontWeight: 700, letterSpacing: '-0.01em',
+          boxShadow: darkMode ? '0 1px 2px rgba(0,0,0,0.25)' : '0 1px 2px rgba(0,0,0,0.04)',
+          transition: 'background 0.15s, box-shadow 0.15s',
+        }}
+      >
+        <span style={{ textTransform: 'capitalize' }}>{current.label}</span>
+        <ChevronDown size={14} strokeWidth={2.4} color={C.muted}
+          style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s ease' }} />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+            className="ceo-scroll"
+            style={{
+              position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 60,
+              minWidth: 190, maxHeight: 288, overflowY: 'auto',
+              background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12,
+              boxShadow: '0 8px 28px rgba(0,0,0,0.12)', padding: 4,
+            }}
+          >
+            {options.map((o) => {
+              const on = o.key === value;
+              return (
+                <button
+                  key={o.key}
+                  type="button"
+                  onClick={() => { onChange(o.key); setOpen(false); }}
+                  style={{
+                    display: 'block', width: '100%', textAlign: 'left',
+                    padding: '7px 11px', borderRadius: 8, border: 'none',
+                    background: on ? (darkMode ? 'rgba(255,255,255,0.06)' : '#f1f2f6') : 'transparent',
+                    color: on ? C.text : C.secondary, cursor: 'pointer',
+                    fontFamily: 'inherit', fontSize: 13, fontWeight: on ? 700 : 500,
+                    textTransform: 'capitalize',
+                  }}
+                >
+                  {o.label}
+                </button>
+              );
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // TRANSACTIONS RÉCENTES — derniers encaissements réellement enregistrés.
 // Source : GET /api/v1/finance-periods/recent-payments. Les deux jambes d'une
 // ligne mensuelle (Owner / Opti'Lex) arrivent comme deux transactions
@@ -1124,6 +1135,10 @@ export default function CeoDashboard() {
   // Owner/Opti'Lex (carte "RDV intégration à venir"). Chargés SÉPARÉMENT du
   // bloc principal : ni l'un ni l'autre ne doit retarder l'affichage du haut
   // de page, et l'échec de l'un n'emporte pas l'autre.
+  // Période des cartes d'états : 'all' = photo actuelle du parc (défaut),
+  // 'YYYY-MM' = on se replace à ce mois-là. Strictement indépendant du
+  // sélecteur du bandeau Cash, qui ne pilote que les montants.
+  const [etatPeriod, setEtatPeriod] = useState('all');
   const [recentPayments, setRecentPayments] = useState([]);
   const [paymentsLoading, setPaymentsLoading] = useState(true);
   const [boardRows, setBoardRows] = useState(null); // null = pas encore chargé
@@ -1300,6 +1315,21 @@ export default function CeoDashboard() {
     ];
   }, [leaderboardData]);
 
+  // Options du sélecteur : "Tout" + les 24 derniers mois (antériorité couvrant
+  // largement les états datés du board, dont les plus anciens remontent à 2025).
+  const etatPeriodOptions = useMemo(() => {
+    const now = new Date();
+    const list = [{ key: 'all', label: 'Tout' }];
+    for (let i = 0; i < 24; i += 1) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      list.push({
+        key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+        label: `${MONTH_LABELS_FR[d.getMonth()]} ${d.getFullYear()}`,
+      });
+    }
+    return list;
+  }, []);
+
   // ── ÉTATS CLIENTS : le board Owner/Opti'Lex fait autorité ─────────────
   // Le snapshot du Sheet ne connaît que la colonne "État" brute ; le board, lui,
   // applique la vraie règle : override manuel du cabinet > état du Sheet > état
@@ -1317,55 +1347,113 @@ export default function CeoDashboard() {
     // un contrat encore en vol n'est pas un client tant que la vente n'est pas
     // déclarée. Sans ce filtre, le total ne retomberait pas sur ses pattes.
     const established = boardRows.filter((r) => !r.is_pending_contract);
-    const byEtat = {};
-    for (const r of established) {
+    const allTime = etatPeriod === 'all';
+    const end = allTime ? null : periodEndISO(etatPeriod);
+    const inPeriod = (v) => { const d = dateOnly(v); return !!d && d.slice(0, 7) === etatPeriod; };
+    // Signé au plus tard à la fin de la période. Les 27 clients sans date de
+    // signature ne sont comptés qu'en "Tout" : on ne les place pas d'office
+    // dans un mois qu'on ne connaît pas.
+    const signedBy = (r) => {
+      if (allTime) return true;
+      const d = dateOnly(r.owner_signed_at);
+      return !!d && d <= end;
+    };
+
+    // ── STOCKS : la photo du parc à la fin de la période ──
+    const total = established.filter(signedBy).length;
+    // Un client aujourd'hui sorti était ACTIF avant sa sortie : `etat_date` le
+    // dit (rempli sur 45/45 résiliations et 41/44 rétractations). Les états
+    // intermédiaires (pause, en cours de…) ne sont PAS historisés : ils comptent
+    // à leur valeur actuelle. Approximation assumée, signalée sous le titre.
+    const actifs = established.filter((r) => {
+      if (!signedBy(r)) return false;
       const e = displayEtat(r);
-      if (e) byEtat[e] = (byEtat[e] || 0) + 1;
-    }
-    // "Autres" = tout ce qui n'est ni actif, ni résilié, ni rétracté (en cours de
-    // résiliation, pause, liquidation, attente Opti'Lex…) — détail au survol.
-    const autresBreakdown = Object.entries(byEtat)
-      .filter(([e]) => e !== BOARD_ACTIF && e !== BOARD_RESILIE && e !== BOARD_RETRACTE)
-      .map(([label, value]) => ({ label, value }))
-      .sort((a, z) => z.value - a.value);
+      if (e === BOARD_ACTIF) return true;
+      if (allTime || !BOARD_TERMINAL_ETATS.has(e)) return false;
+      const d = dateOnly(r.etat_date);
+      return !!d && d > end;   // sorti après la fin de période → encore actif à cette date
+    }).length;
+
+    // ── FLUX : les entrées dans l'état pendant la période ──
+    const countEtat = (name) => established
+      .filter((r) => displayEtat(r) === name && (allTime || inPeriod(r.etat_date))).length;
+    const autresRows = established.filter((r) => {
+      const e = displayEtat(r);
+      if (!e || e === BOARD_ACTIF || e === BOARD_RESILIE || e === BOARD_RETRACTE) return false;
+      return allTime || inPeriod(r.etat_date);
+    });
+    const autresMap = {};
+    autresRows.forEach((r) => { const e = displayEtat(r); autresMap[e] = (autresMap[e] || 0) + 1; });
+
+    // ── À DATE : insensibles à la période ──
+    // Un RDV "à venir" est par nature dans le futur, et la météo est un relevé
+    // courant (l'historique par client vit dans /optilex/meteo-history, pas ici).
+    const scores = established
+      .map((r) => r.meteo_score)
+      .filter((s) => typeof s === 'number');
+    const meteoBands = { rouge: 0, orange: 0, vert: 0 };
+    scores.forEach((s) => { const b = meteoBandOf(s); if (b) meteoBands[b] += 1; });
+
     return {
-      total: established.length,
-      actifs: byEtat[BOARD_ACTIF] || 0,
-      resilies: byEtat[BOARD_RESILIE] || 0,
-      retractes: byEtat[BOARD_RETRACTE] || 0,
-      autres: autresBreakdown.reduce((s, x) => s + x.value, 0),
-      autresBreakdown,
+      total,
+      actifs,
+      resilies: countEtat(BOARD_RESILIE),
+      retractes: countEtat(BOARD_RETRACTE),
+      autres: autresRows.length,
+      autresBreakdown: Object.entries(autresMap)
+        .map(([label, value]) => ({ label, value }))
+        .sort((a, z) => z.value - a.value),
       onboarding: established.filter(isOnboardingUpcoming).length,
       integration: established.filter(isIntegrationUpcoming).length,
       integrationOverdue: established.filter(isIntegrationOverdue).length,
+      meteoAvg: scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null,
+      meteoRated: scores.length,
+      meteoBands,
     };
-  }, [boardRows]);
+  }, [boardRows, etatPeriod]);
 
   // États clients — 8 cartes, TOUTES alignées sur le board Owner/Opti'Lex, sauf
   // "En retard de paiement" : la notion de retard n'existe pas dans le board
   // (elle est orthogonale à l'état : un client "Signé" peut être en retard),
   // elle reste donc servie par le snapshot Suivi Clients.
   const kpiRow2 = useMemo(() => {
-    const { buckets } = computeEtatBuckets(ceoSheet?.etats, ceoSheet?.etats_total);
-    const subList = (b) => b.breakdown
-      .map((r) => r.label)
-      .slice(0, 3)
-      .join(', ') || '—';
     const n = (v) => (boardStats ? String(v) : '—');
     const boardLoading = boardStats === null;
+    const periodLabel = etatPeriod === 'all'
+      ? null
+      : `${MONTH_LABELS_FR[Number(etatPeriod.slice(5, 7)) - 1]} ${etatPeriod.slice(0, 4)}`.toLowerCase();
+    // Météo moyenne : la note arrondie donne l'icône et la couleur (mêmes bandes
+    // que le board), la moyenne exacte reste la valeur affichée.
+    const meteoRounded = boardStats?.meteoAvg != null ? Math.round(boardStats.meteoAvg) : null;
+    const meteoBand = meteoRounded != null ? meteoBandOf(meteoRounded) : null;
+    const meteoBands = boardStats?.meteoBands;
     return [
       {
         label: 'Total Clients', Icon: Users, value: n(boardStats?.total), color: '#5b6abf',
-        loading: boardLoading, sub: 'Clients établis du board',
+        loading: boardLoading,
+        sub: periodLabel ? `Signés au plus tard en ${periodLabel}` : 'Clients établis du board',
       },
       {
         label: 'Actifs', Icon: CircleCheck, value: n(boardStats?.actifs), color: '#10b981',
-        loading: boardLoading, sub: 'Onglet Signé du board',
+        loading: boardLoading,
+        sub: periodLabel ? `Encore actifs fin ${periodLabel}` : 'Onglet Signé du board',
       },
       {
-        label: 'En retard de paiement', Icon: Clock, value: String(buckets.retard.count), color: '#f97316',
-        sub: buckets.retard.breakdown.length ? subList(buckets.retard) : 'Optilex, Owner, globale…',
-        breakdown: buckets.retard.breakdown,
+        label: 'Météo client',
+        Icon: meteoRounded != null
+          ? (props) => <MeteoIcon score={meteoRounded} size={props.size} color={props.color} />
+          : Cloud,
+        value: boardStats?.meteoAvg != null ? `${boardStats.meteoAvg.toFixed(1).replace('.', ',')}/5` : '—',
+        color: meteoBand ? METEO_BANDS[meteoBand].color : '#94a3b8',
+        loading: boardLoading,
+        sub: meteoBand
+          ? `Plutôt ${METEO_TONE[meteoBand]} · ${boardStats.meteoRated} notés`
+          : 'Aucune note posée',
+        breakdown: meteoBands ? [
+          { label: 'Satisfaits (4-5)', value: meteoBands.vert },
+          { label: 'Mécontents (3)', value: meteoBands.orange },
+          { label: 'Critiques (1-2)', value: meteoBands.rouge },
+        ].filter((b) => b.value > 0) : [],
       },
       {
         label: 'Onboarding Owner à venir', Icon: CalendarClock, value: n(boardStats?.onboarding), color: '#eab308',
@@ -1380,11 +1468,13 @@ export default function CeoDashboard() {
       },
       {
         label: 'Résiliés', Icon: CircleX, value: n(boardStats?.resilies), color: '#ef4444',
-        loading: boardLoading, sub: 'Résiliation actée',
+        loading: boardLoading,
+        sub: periodLabel ? `Résiliations actées en ${periodLabel}` : 'Résiliation actée',
       },
       {
         label: 'Rétractés', Icon: RotateCcw, value: n(boardStats?.retractes), color: '#b45309',
-        loading: boardLoading, sub: 'Rétractation actée',
+        loading: boardLoading,
+        sub: periodLabel ? `Rétractations actées en ${periodLabel}` : 'Rétractation actée',
       },
       {
         label: 'Autres', Icon: Ellipsis, value: n(boardStats?.autres), color: '#94a3b8',
@@ -1395,7 +1485,7 @@ export default function CeoDashboard() {
         breakdown: boardStats?.autresBreakdown || [],
       },
     ];
-  }, [ceoSheet, boardStats]);
+  }, [boardStats, etatPeriod]);
 
   // ── CASH : mois par défaut du bandeau (snapshot.months) ───────────────
   // Clé du mois affiché au montage : mois courant si présent + non vide,
@@ -1869,6 +1959,25 @@ export default function CeoDashboard() {
               </div>
 
               {/* KPI Cards — États Clients (Suivi Clients snapshot) */}
+              {/* ── ÉTATS CLIENTS : titre + sélecteur de période ── */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, paddingLeft: 2 }}>
+                <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: 0, letterSpacing: '-0.01em' }}>
+                  États clients
+                </h2>
+                <EtatPeriodPicker
+                  value={etatPeriod}
+                  options={etatPeriodOptions}
+                  onChange={setEtatPeriod}
+                  darkMode={darkMode}
+                  C={C}
+                />
+                {etatPeriod !== 'all' && (
+                  <span style={{ fontSize: 11, color: C.muted }}>
+                    Onboarding, RDV intégration et météo restent à date
+                  </span>
+                )}
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 28 }}>
                 {kpiRow2.map((kpi, i) => (
                   <CeoKpiCard

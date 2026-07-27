@@ -61,12 +61,12 @@ const etatOptionsForUser = () => {
 };
 // ── Météo client : note 1-5 -> bande couleur + sens/action ───────────────────
 // 1-2 rouge (critique, risque résiliation), 3 orange (mécontent), 4-5 vert (satisfait).
-const METEO_BANDS = {
+export const METEO_BANDS = {
   rouge:  { label: "Critique",  color: "#dc2626", bg: "#fdecec", dot: "#dc2626" },
   orange: { label: "Mécontent", color: "#d97706", bg: "#fff3e3", dot: "#d97706" },
   vert:   { label: "Satisfait", color: "#15a34a", bg: "#e9f9ef", dot: "#15a34a" },
 };
-const meteoBandOf = (score) => (score == null ? null : score <= 2 ? "rouge" : score === 3 ? "orange" : "vert");
+export const meteoBandOf = (score) => (score == null ? null : score <= 2 ? "rouge" : score === 3 ? "orange" : "vert");
 const meteoStyle = (score) => { const b = meteoBandOf(score); return b ? METEO_BANDS[b] : null; };
 // Commentaire OBLIGATOIRE quand on signale un client Critique (1-2) ou Mécontent (3) : on
 // n'enregistre pas une alerte de risque sans contexte écrit (motif de la dégradation).
@@ -90,7 +90,7 @@ const METEO_ICONS = {
   4: <><path d="M12 2v2M4.93 4.93l1.41 1.41M20 12h2M19.07 4.93l-1.41 1.41" /><path d="M15.947 12.65a4 4 0 0 0-5.925-4.128" /><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z" /></>, // éclaircie
   5: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" /></>, // grand soleil
 };
-function MeteoIcon({ score, size = 16, color = "currentColor" }) {
+export function MeteoIcon({ score, size = 16, color = "currentColor" }) {
   const paths = METEO_ICONS[score];
   if (!paths) return null;
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>{paths}</svg>;
