@@ -1406,6 +1406,8 @@ function EmailSelect({ row, patch, onSaved }) {
   const [pos, setPos] = useState(null);
   const [saving, setSaving] = useState(false);
   const btnRef = useRef(null);
+  const [newEmail, setNewEmail] = useState("");
+  const [extra, setExtra] = useState([]); // emails ajoutés à la main, affichés localement de suite
   const owner = (row.email || "").trim();
   // Emails Opti'Lex : liste labellisée (client + dirigeants), résolue par SIREN côté backend
   // (un client à plusieurs sociétés matche si UN SIREN correspond). Fallback sur l'ancien
@@ -1426,18 +1428,35 @@ function EmailSelect({ row, patch, onSaved }) {
     for (const h of (Array.isArray(row.email_history) ? row.email_history : [])) {
       if (h && h.email) add(h.email, h.source === "optilex" ? "Opti'Lex" : "Owner");
     }
+    for (const e of extra) add(e, "Owner");
     return list;
-  }, [owner, row.email_optilex_options, row.email_optilex, row.email_history]);
-  const multiple = opts.length > 1 && canSelectEmail();
+  }, [owner, row.email_optilex_options, row.email_optilex, row.email_history, extra]);
+  const canOpen = canSelectEmail(); // autorisé à choisir/ajouter (admin/ceo/optilex)
   const choose = async (email) => {
     setSaving(true);
     const ovr = email.toLowerCase() === owner.toLowerCase() ? null : email; // Owner = efface l'override
     try { await patch(row.numero_client, { email_ovr: ovr }); onSaved?.(); setOpen(false); }
     finally { setSaving(false); }
   };
+  // Ajouter un email saisi à la main : l'enregistre dans l'historique ET le pose en destination.
+  const addEmail = async () => {
+    const e = newEmail.trim();
+    if (!e || !e.includes("@") || saving) return;
+    setSaving(true);
+    try {
+      await apiClient.post("/api/v1/optilex/email-history", { numero_client: row.numero_client, emails: [{ email: e, source: "owner" }] });
+      const ovr = e.toLowerCase() === owner.toLowerCase() ? null : e;
+      await patch(row.numero_client, { email_ovr: ovr });
+      setExtra((prev) => (prev.some((x) => x.toLowerCase() === e.toLowerCase()) ? prev : [...prev, e]));
+      setNewEmail("");
+      onSaved?.();
+      setOpen(false);
+    } catch (err) { console.error("addEmail failed", err); }
+    finally { setSaving(false); }
+  };
   const toggle = (e) => {
     e.stopPropagation();
-    if (!multiple) return;
+    if (!canOpen) return;
     if (open) { setOpen(false); return; }
     const r = btnRef.current.getBoundingClientRect();
     setPos({ top: r.bottom + 4, left: r.left, width: r.width });
@@ -1447,9 +1466,9 @@ function EmailSelect({ row, patch, onSaved }) {
     <div style={{ minWidth: 0 }}>
       <div style={{ fontSize: 11, color: MUTED, marginBottom: 3 }}>Email</div>
       <button ref={btnRef} type="button" onClick={toggle}
-        style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", textAlign: "left", background: "transparent", border: "none", padding: 0, cursor: multiple ? "pointer" : "default", fontFamily: "inherit", minWidth: 0 }}>
+        style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", textAlign: "left", background: "transparent", border: "none", padding: 0, cursor: canOpen ? "pointer" : "default", fontFamily: "inherit", minWidth: 0 }}>
         <span style={{ fontSize: 14, fontWeight: 600, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{current || "—"}</span>
-        {multiple && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.16s" }}><polyline points="6 9 12 15 18 9" /></svg>}
+        {canOpen && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.16s" }}><polyline points="6 9 12 15 18 9" /></svg>}
       </button>
       {open && pos && createPortal(
         <>
@@ -1469,6 +1488,14 @@ function EmailSelect({ row, patch, onSaved }) {
                 </button>
               );
             })}
+            <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 4, paddingTop: 6 }}>
+              <form onSubmit={(ev) => { ev.preventDefault(); addEmail(); }} style={{ display: "flex", gap: 6, padding: "2px 4px" }}>
+                <input type="email" value={newEmail} disabled={saving} onClick={(ev) => ev.stopPropagation()} onChange={(ev) => setNewEmail(ev.target.value)} placeholder="Ajouter un email…"
+                  style={{ flex: 1, minWidth: 0, fontSize: 13, padding: "7px 9px", border: `1px solid ${BORDER}`, borderRadius: 8, fontFamily: "inherit", color: TEXT, outline: "none", background: CARD }} />
+                <button type="submit" disabled={saving || !newEmail.trim()}
+                  style={{ flexShrink: 0, fontSize: 13, fontWeight: 600, padding: "7px 12px", border: "none", borderRadius: 8, background: NAVY, color: "#fff", cursor: (saving || !newEmail.trim()) ? "default" : "pointer", opacity: (saving || !newEmail.trim()) ? 0.5 : 1 }}>Ajouter</button>
+              </form>
+            </div>
           </div>
         </>,
         document.body,
