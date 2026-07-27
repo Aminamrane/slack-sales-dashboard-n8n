@@ -356,7 +356,11 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
   const tooltipId = hasTooltip ? `ceo-kpi-tooltip-${index}` : undefined;
   const anchorRef = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
+  // Survol suivi séparément de `isOpen` : celui-ci ne s'ouvre que s'il y a un
+  // tooltip, alors que l'illustration réagit au survol dans tous les cas.
+  const [hovered, setHovered] = useState(false);
   const Icon = kpi.Icon;
+  const Artwork = kpi.Artwork;
 
   const open = () => hasTooltip && setIsOpen(true);
   const close = () => setIsOpen(false);
@@ -375,29 +379,29 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
       }}
       tabIndex={hasTooltip ? 0 : undefined}
       aria-describedby={isOpen ? tooltipId : undefined}
-      onMouseEnter={open}
-      onMouseLeave={close}
-      onFocus={open}
-      onBlur={close}
+      onMouseEnter={() => { setHovered(true); open(); }}
+      onMouseLeave={() => { setHovered(false); close(); }}
+      onFocus={() => { setHovered(true); open(); }}
+      onBlur={() => { setHovered(false); close(); }}
     >
       {/* Illustration en grand à droite : réservée à la météo, dont le dessin
           EST la valeur (façon widget météo). Les autres cartes gardent leur
           glyphe discret dans le libellé. */}
-      {kpi.artwork && (
+      {Artwork && (
         <div aria-hidden="true" style={{
           position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)',
           display: 'flex', alignItems: 'center', pointerEvents: 'none',
         }}>
-          {kpi.artwork}
+          <Artwork hovered={hovered} />
         </div>
       )}
       {/* Quand il y a une illustration, le texte réserve sa place et s'ellipse
           avant de passer dessous. */}
-      <div style={{ paddingRight: kpi.artwork ? 70 : 0, minWidth: 0 }}>
+      <div style={{ paddingRight: Artwork ? 70 : 0, minWidth: 0 }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, minWidth: 0,
         }}>
-          {Icon && !kpi.artwork && (
+          {Icon && !Artwork && (
             <Icon size={14} strokeWidth={2.2} color={kpi.color} style={{ flexShrink: 0 }} aria-hidden="true" />
           )}
           <span style={{
@@ -766,6 +770,45 @@ function AnimatedMeteoIcon({ score, size = 54, color, strokeWidth = 1.6 }) {
     default:
       return null;
   }
+}
+
+// Défilé météo : au repos les 5 temps s'enchaînent en fondu (grand soleil →
+// orage), au survol de la carte on s'arrête sur la note réelle du parc. Le bleu
+// est fixe : `.ceo-card` a un fond clair indépendant du thème, une seule teinte
+// suffit. On ne colore PAS par bande ici — la couleur dirait le temps affiché,
+// pas la note, et induirait en erreur pendant le défilé.
+const METEO_BLUE = '#3b82f6';
+const METEO_SHOWCASE_ORDER = [5, 4, 3, 2, 1];
+const METEO_SHOWCASE_MS = 3200;
+
+function MeteoShowcase({ realScore, hovered, size = 54 }) {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    if (hovered) return undefined;   // survol = on fige, le défilé reprend après
+    const id = setInterval(
+      () => setStep((s) => (s + 1) % METEO_SHOWCASE_ORDER.length),
+      METEO_SHOWCASE_MS,
+    );
+    return () => clearInterval(id);
+  }, [hovered]);
+
+  const score = hovered && realScore != null ? realScore : METEO_SHOWCASE_ORDER[step];
+  return (
+    <div style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={score}
+          initial={{ opacity: 0, scale: 0.86 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.86 }}
+          transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
+          style={{ display: 'flex' }}
+        >
+          <AnimatedMeteoIcon score={score} size={size} color={METEO_BLUE} />
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -1519,10 +1562,10 @@ export default function CeoDashboard() {
       },
       {
         label: 'Météo client',
-        // Seule carte à porter une illustration : le dessin animé (orage →
-        // grand soleil) porte la note autant que le chiffre.
-        artwork: meteoRounded != null
-          ? <AnimatedMeteoIcon score={meteoRounded} size={54} color={METEO_BANDS[meteoBand].color} />
+        // Seule carte à porter une illustration : au repos les 5 temps
+        // défilent, au survol on voit la météo réelle du parc.
+        Artwork: meteoRounded != null
+          ? (props) => <MeteoShowcase {...props} realScore={meteoRounded} size={54} />
           : null,
         Icon: Cloud,
         value: boardStats?.meteoAvg != null ? `${boardStats.meteoAvg.toFixed(1).replace('.', ',')}/5` : '—',
@@ -1625,7 +1668,7 @@ export default function CeoDashboard() {
         .ceo-meteo-drift, .ceo-meteo-rain, .ceo-meteo-flash {
           transform-box: view-box; transform-origin: 12px 12px;
         }
-        .ceo-meteo-spin { animation: ceoMeteoSpin 22s linear infinite; }
+        .ceo-meteo-spin { animation: ceoMeteoSpin 12s linear infinite; }
         .ceo-meteo-breathe { animation: ceoMeteoBreathe 4.5s ease-in-out infinite; }
         .ceo-meteo-twinkle { animation: ceoMeteoTwinkle 3.2s ease-in-out infinite; }
         .ceo-meteo-drift { animation: ceoMeteoDrift 6s ease-in-out infinite; }
