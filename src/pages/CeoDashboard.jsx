@@ -11,7 +11,7 @@ import medal3 from "../assets/3st-place.png";
 import ceo6 from "../assets/ceo6.svg";
 import {
   displayEtat, isOnboardingUpcoming, isIntegrationUpcoming, isIntegrationOverdue,
-  MeteoIcon, meteoBandOf, METEO_BANDS,
+  meteoBandOf, METEO_BANDS,
 } from "./OptilexBoard.jsx";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
@@ -380,28 +380,31 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
       onFocus={open}
       onBlur={close}
     >
-      {/* Glyphe en GRAND à droite : il occupe le vide que laissait le texte et
-          donne sa lecture immédiate à la carte. Discret par défaut (filigrane),
-          plein pour la météo dont l'icône EST la valeur (façon widget météo). */}
-      {Icon && (
+      {/* Illustration en grand à droite : réservée à la météo, dont le dessin
+          EST la valeur (façon widget météo). Les autres cartes gardent leur
+          glyphe discret dans le libellé. */}
+      {kpi.artwork && (
         <div aria-hidden="true" style={{
           position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)',
           display: 'flex', alignItems: 'center', pointerEvents: 'none',
-          opacity: kpi.artworkStrong ? 1 : 0.17,
         }}>
-          <Icon
-            size={kpi.artworkStrong ? 54 : 44}
-            strokeWidth={kpi.artworkStrong ? 1.6 : 1.8}
-            color={kpi.color}
-          />
+          {kpi.artwork}
         </div>
       )}
-      {/* Réserve la place du glyphe : le texte s'ellipse avant de passer dessous. */}
-      <div style={{ paddingRight: kpi.artworkStrong ? 70 : 60, minWidth: 0 }}>
+      {/* Quand il y a une illustration, le texte réserve sa place et s'ellipse
+          avant de passer dessous. */}
+      <div style={{ paddingRight: kpi.artwork ? 70 : 0, minWidth: 0 }}>
         <div style={{
-          fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 6,
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-        }}>{kpi.label}</div>
+          display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, minWidth: 0,
+        }}>
+          {Icon && !kpi.artwork && (
+            <Icon size={14} strokeWidth={2.2} color={kpi.color} style={{ flexShrink: 0 }} aria-hidden="true" />
+          )}
+          <span style={{
+            fontSize: 12, color: C.muted, fontWeight: 600,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>{kpi.label}</span>
+        </div>
         <div style={{ fontSize: 26, fontWeight: 800, color: '#212121', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
           {/* `kpi.loading` : chargement PROPRE à la carte (source distincte du
               bloc principal, ex. le board Owner/Opti'Lex). Défaut = dataLoading. */}
@@ -701,6 +704,68 @@ function CeoCashBanner({ months, defaultMonthKey, dataLoading, darkMode, C }) {
       </div>
     </div>
   );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// MÉTÉO ANIMÉE — même dessin que `MeteoIcon` du board (orage → grand soleil),
+// mais découpé en groupes pour que chaque élément vive : les rayons tournent,
+// les nuages dérivent, la pluie tombe, l'éclair claque. Le board garde sa
+// version statique 16 px ; ici on est en 54 px, à l'échelle d'un widget météo.
+// Les keyframes `ceoMeteo*` sont injectées avec le reste du CSS de la page et
+// coupées sous `prefers-reduced-motion`.
+// ══════════════════════════════════════════════════════════════════════════
+function AnimatedMeteoIcon({ score, size = 54, color, strokeWidth = 1.6 }) {
+  const stroke = {
+    fill: 'none', stroke: color, strokeWidth,
+    strokeLinecap: 'round', strokeLinejoin: 'round',
+  };
+  const svg = (children) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ overflow: 'visible' }}>
+      <g {...stroke}>{children}</g>
+    </svg>
+  );
+
+  switch (score) {
+    case 5: // grand soleil — les rayons tournent, le disque respire
+      return svg(<>
+        <g className="ceo-meteo-spin">
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+        </g>
+        <circle className="ceo-meteo-breathe" cx="12" cy="12" r="4" />
+      </>);
+    case 4: // éclaircie — rayons qui scintillent, nuage qui dérive
+      return svg(<>
+        <g className="ceo-meteo-twinkle">
+          <path d="M12 2v2M4.93 4.93l1.41 1.41M20 12h2M19.07 4.93l-1.41 1.41" />
+        </g>
+        <path d="M15.947 12.65a4 4 0 0 0-5.925-4.128" />
+        <g className="ceo-meteo-drift">
+          <path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z" />
+        </g>
+      </>);
+    case 3: // nuageux — dérive seule
+      return svg(
+        <g className="ceo-meteo-drift">
+          <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+        </g>,
+      );
+    case 2: // pluie — nuage qui dérive, trois gouttes décalées
+      return svg(<>
+        <g className="ceo-meteo-drift">
+          <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+        </g>
+        <path className="ceo-meteo-rain" style={{ animationDelay: '0ms' }} d="M8 14v5" />
+        <path className="ceo-meteo-rain" style={{ animationDelay: '260ms' }} d="M12 16v5" />
+        <path className="ceo-meteo-rain" style={{ animationDelay: '520ms' }} d="M16 14v5" />
+      </>);
+    case 1: // orage — nuage lourd, éclair qui claque
+      return svg(<>
+        <path d="M6 16.326A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 .5 8.973" />
+        <path className="ceo-meteo-flash" d="m13 12-3 5h4l-3 5" />
+      </>);
+    default:
+      return null;
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -1454,12 +1519,12 @@ export default function CeoDashboard() {
       },
       {
         label: 'Météo client',
-        // Icône pleine et surdimensionnée : sur cette carte, le dessin (orage →
+        // Seule carte à porter une illustration : le dessin animé (orage →
         // grand soleil) porte la note autant que le chiffre.
-        artworkStrong: meteoRounded != null,
-        Icon: meteoRounded != null
-          ? (props) => <MeteoIcon score={meteoRounded} size={props.size} color={props.color} strokeWidth={props.strokeWidth} />
-          : Cloud,
+        artwork: meteoRounded != null
+          ? <AnimatedMeteoIcon score={meteoRounded} size={54} color={METEO_BANDS[meteoBand].color} />
+          : null,
+        Icon: Cloud,
         value: boardStats?.meteoAvg != null ? `${boardStats.meteoAvg.toFixed(1).replace('.', ',')}/5` : '—',
         color: meteoBand ? METEO_BANDS[meteoBand].color : '#94a3b8',
         loading: boardLoading,
@@ -1553,6 +1618,38 @@ export default function CeoDashboard() {
         @keyframes ceoPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         @keyframes ceoTooltipPortalIn { from { opacity: 0; transform: translateX(-50%) translateY(-2px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
         @keyframes ceoSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        /* Météo animée (carte Météo client) — chaque élément a son propre
+           tempo, jamais synchrone, pour que ça vive sans clignoter. Origine des
+           transformations en coordonnées du viewBox (12 12 = centre du soleil). */
+        .ceo-meteo-spin, .ceo-meteo-breathe, .ceo-meteo-twinkle,
+        .ceo-meteo-drift, .ceo-meteo-rain, .ceo-meteo-flash {
+          transform-box: view-box; transform-origin: 12px 12px;
+        }
+        .ceo-meteo-spin { animation: ceoMeteoSpin 22s linear infinite; }
+        .ceo-meteo-breathe { animation: ceoMeteoBreathe 4.5s ease-in-out infinite; }
+        .ceo-meteo-twinkle { animation: ceoMeteoTwinkle 3.2s ease-in-out infinite; }
+        .ceo-meteo-drift { animation: ceoMeteoDrift 6s ease-in-out infinite; }
+        .ceo-meteo-rain { animation: ceoMeteoRain 1.6s ease-in infinite; }
+        .ceo-meteo-flash { animation: ceoMeteoFlash 3.4s steps(1, end) infinite; }
+        @keyframes ceoMeteoSpin { to { transform: rotate(360deg); } }
+        @keyframes ceoMeteoBreathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+        @keyframes ceoMeteoTwinkle { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        @keyframes ceoMeteoDrift { 0%, 100% { transform: translateX(-0.5px); } 50% { transform: translateX(0.5px); } }
+        @keyframes ceoMeteoRain {
+          0% { opacity: 0; transform: translateY(-2.5px); }
+          25% { opacity: 1; }
+          70% { opacity: 1; transform: translateY(1.5px); }
+          100% { opacity: 0; transform: translateY(3px); }
+        }
+        @keyframes ceoMeteoFlash {
+          0%, 55%, 100% { opacity: 0.3; }
+          58%, 63% { opacity: 1; }
+          60% { opacity: 0.35; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .ceo-meteo-spin, .ceo-meteo-breathe, .ceo-meteo-twinkle,
+          .ceo-meteo-drift, .ceo-meteo-rain, .ceo-meteo-flash { animation: none; opacity: 1; }
+        }
         /* Objectifs mensuels modal — input number Notion-style (pas de
            spinners natifs, plus discret et cohérent avec le pattern de la page). */
         .ceo-objective-input { -moz-appearance: textfield; appearance: textfield; }
