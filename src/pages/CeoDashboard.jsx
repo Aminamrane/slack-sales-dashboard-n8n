@@ -13,6 +13,8 @@ import medal1 from "../assets/1st-place.png";
 import medal2 from "../assets/2st-place.png";
 import medal3 from "../assets/3st-place.png";
 import ceo6 from "../assets/ceo6.svg";
+import rdvIntegrationIcon from "../assets/En attente rdv lancement.svg";
+import { displayEtat, isOnboardingUpcoming, isIntegrationUpcoming, isIntegrationOverdue } from "./OptilexBoard.jsx";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import testLottie from "../assets/test.lottie?url";
@@ -131,6 +133,12 @@ const formatEuro = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', cu
 // On normalise (trim + lowercase) avant comparaison. Tout état NON présent dans
 // cette table tombe dans le bucket "Autres" (fallback) → aucun client perdu, et
 // la somme des 6 buckets == etats_total par construction.
+//
+// ⚠️ Depuis le rebranchement des cartes sur le board Owner/Opti'Lex (qui applique
+// override cabinet > Sheet > contrats, et fait donc autorité sur les états), seul
+// le bucket `retard` est encore consommé — la notion de retard de paiement
+// n'existe pas côté board. Le reste de la table est conservé tel quel : c'est ce
+// qui servira le jour où le retard sera lui aussi re-sourcé.
 const normEtat = (s) => (s || '').toString().trim().toLowerCase();
 
 // Ordre = ordre d'affichage des cartes. `key` sert d'id stable, `match` liste
@@ -442,7 +450,9 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
       }} />}
       <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 8 }}>{kpi.label}</div>
       <div style={{ fontSize: 28, fontWeight: 800, color: '#212121', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
-        {dataLoading ? <span style={{ animation: 'ceoPulse 1.2s ease infinite' }}>—</span> : kpi.value}
+        {/* `kpi.loading` : chargement PROPRE à la carte (source distincte du
+            bloc principal, ex. le board Owner/Opti'Lex). Défaut = dataLoading. */}
+        {(kpi.loading ?? dataLoading) ? <span style={{ animation: 'ceoPulse 1.2s ease infinite' }}>—</span> : kpi.value}
       </div>
       <div style={{ marginTop: 8, fontSize: 12, fontWeight: 500, color: C.muted }}>{kpi.sub}</div>
 
@@ -734,6 +744,185 @@ function CeoCashBanner({ months, defaultMonthKey, dataLoading, darkMode, C }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// TRANSACTIONS RÉCENTES — derniers encaissements réellement enregistrés.
+// Source : GET /api/v1/finance-periods/recent-payments. Les deux jambes d'une
+// ligne mensuelle (Owner / Opti'Lex) arrivent comme deux transactions
+// distinctes, d'où le filtre par jambe. RIEN n'est reconstitué ici : une
+// période sans saisie finance affiche l'état vide, jamais une ligne inventée.
+// ══════════════════════════════════════════════════════════════════════════
+const TX_FILTERS = [
+  { key: 'all', label: 'Tout' },
+  { key: 'owner', label: 'Owner' },
+  { key: 'optilex', label: "Opti'Lex" },
+];
+
+// Vert = encaissement (convention argent qui rentre, cohérente avec le CA).
+// La jambe ne change que la teinte du badge, pas celle du montant.
+const TX_LEG_ACCENT = { owner: '#10b981', optilex: '#5b6abf' };
+const TX_LEG_LABEL = { owner: 'Owner', optilex: "Opti'Lex" };
+
+// La saisie PSP du sheet finance n'est pas normalisée ("ok Learnypay", "timou").
+// On n'affiche que ce qu'on sait reconnaître — le reste est tu plutôt que
+// restitué sale.
+const TX_KNOWN_PSPS = { learnypay: 'Learnypay', quonto: 'Qonto', ifx: 'IFX', stripe: 'Stripe', gocardless: 'GoCardless' };
+const prettyPsp = (raw) => {
+  if (!raw) return null;
+  const hay = String(raw).toLowerCase();
+  const hit = Object.keys(TX_KNOWN_PSPS).find((k) => hay.includes(k));
+  return hit ? TX_KNOWN_PSPS[hit] : null;
+};
+
+const txAmount = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
+
+// "2026-05-12" -> "12 mai" (+ année si ce n'est pas l'année courante).
+const txDate = (iso) => {
+  if (!iso) return '—';
+  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return '—';
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) });
+};
+
+// Badge carré arrondi : flèche entrante = argent qui rentre. Teinte = jambe.
+function TxIcon({ leg }) {
+  const accent = TX_LEG_ACCENT[leg] || '#5b6abf';
+  return (
+    <div style={{
+      width: 34, height: 34, flexShrink: 0, borderRadius: 11,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: `${accent}14`, color: accent,
+    }}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 5v13" /><path d="m18 12-6 6-6-6" />
+      </svg>
+    </div>
+  );
+}
+
+function CeoRecentTransactions({ payments, loading, darkMode, C }) {
+  const [filter, setFilter] = useState('all');
+  const list = Array.isArray(payments) ? payments : [];
+  const rows = useMemo(
+    () => (filter === 'all' ? list : list.filter((p) => p.leg === filter)),
+    [list, filter],
+  );
+
+  return (
+    <div className="ceo-card" style={{ marginBottom: 28, animation: 'ceoCardPop 0.4s ease 260ms both' }}>
+      {/* En-tête : titre + segmented control (pilote uniquement cette carte) */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: 16, padding: '14px 18px 14px 22px', borderBottom: `1px solid ${C.border}`,
+      }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>Transactions récentes</div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Derniers encaissements enregistrés</div>
+        </div>
+        <div style={{
+          display: 'flex', gap: 2, padding: 3, borderRadius: 999,
+          background: darkMode ? 'rgba(255,255,255,0.05)' : '#f1f2f6',
+        }}>
+          {TX_FILTERS.map((f) => {
+            const on = filter === f.key;
+            return (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setFilter(f.key)}
+                style={{
+                  position: 'relative', border: 'none', background: 'transparent',
+                  padding: '6px 14px', borderRadius: 999, cursor: 'pointer',
+                  fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
+                  color: on ? C.text : C.muted,
+                  transition: 'color 0.18s ease',
+                }}
+              >
+                {on && (
+                  <motion.span
+                    layoutId="ceo-tx-pill"
+                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                    style={{
+                      position: 'absolute', inset: 0, borderRadius: 999, zIndex: -1,
+                      background: darkMode ? '#2a2b36' : '#ffffff',
+                      boxShadow: darkMode ? 'none' : '0 1px 2px rgba(0,0,0,0.06)',
+                    }}
+                  />
+                )}
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Liste — scroll interne au-delà de ~6 lignes, la carte garde sa hauteur */}
+      <div className="ceo-scroll" style={{ maxHeight: 322, overflowY: 'auto', padding: '4px 0' }}>
+        {loading && (
+          [0, 1, 2, 3].map((i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 22px' }}>
+              <div style={{ width: 34, height: 34, borderRadius: 11, background: C.subtle, animation: 'ceoPulse 1.2s ease infinite' }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ width: 180, height: 11, borderRadius: 4, background: C.subtle, animation: 'ceoPulse 1.2s ease infinite' }} />
+                <div style={{ width: 96, height: 9, borderRadius: 4, background: C.subtle, marginTop: 7, animation: 'ceoPulse 1.2s ease infinite' }} />
+              </div>
+              <div style={{ width: 72, height: 12, borderRadius: 4, background: C.subtle, animation: 'ceoPulse 1.2s ease infinite' }} />
+            </div>
+          ))
+        )}
+
+        {!loading && rows.length === 0 && (
+          <div style={{ padding: '38px 22px 40px', textAlign: 'center' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: C.secondary }}>
+              {list.length === 0 ? 'Aucun encaissement enregistré' : 'Aucun encaissement sur cette jambe'}
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 5 }}>
+              Les paiements saisis côté finance apparaissent ici.
+            </div>
+          </div>
+        )}
+
+        {!loading && rows.map((p, i) => {
+          const psp = prettyPsp(p.psp);
+          return (
+            <motion.div
+              key={`${p.row_id}-${p.leg}`}
+              layout
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1], delay: Math.min(i, 8) * 0.025 }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '13px 22px',
+                borderTop: i === 0 ? 'none' : `1px dashed ${C.border}`,
+              }}
+            >
+              <TxIcon leg={p.leg} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: 13, fontWeight: 600, color: C.text, letterSpacing: '-0.01em',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }} title={p.societe || ''}>
+                  {p.societe || `Client ${p.client_id}`}
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                  {TX_LEG_LABEL[p.leg] || p.leg}{psp ? ` · ${psp}` : ''} · {txDate(p.paid_on)}
+                </div>
+              </div>
+              <div style={{
+                fontSize: 13, fontWeight: 700, color: '#10b981',
+                fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+              }}>
+                +{txAmount(p.amount)}
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // COMPONENT
 // ══════════════════════════════════════════════════════════════════════════
 export default function CeoDashboard() {
@@ -917,6 +1106,13 @@ export default function CeoDashboard() {
   // données disponibles ici pour un futur usage (délais, autres KPI).
   const [perfClosingData, setPerfClosingData] = useState(null); // eslint-disable-line no-unused-vars
   const [ceoSheet, setCeoSheet] = useState(null); // snapshot Suivi Clients (GET /ceo-sheet/current)
+  // Encaissements réels (carte "Transactions récentes") et lignes du board
+  // Owner/Opti'Lex (carte "RDV intégration à venir"). Chargés SÉPARÉMENT du
+  // bloc principal : ni l'un ni l'autre ne doit retarder l'affichage du haut
+  // de page, et l'échec de l'un n'emporte pas l'autre.
+  const [recentPayments, setRecentPayments] = useState([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(true);
+  const [boardRows, setBoardRows] = useState(null); // null = pas encore chargé
   const [perfClients, setPerfClients] = useState([]); // perf-closing clients list
   const [dataLoading, setDataLoading] = useState(true);
   const [avatarMap, setAvatarMap] = useState({});
@@ -973,6 +1169,41 @@ export default function CeoDashboard() {
       } catch (e) { console.warn('CEO dashboard data fetch failed:', e); }
       setDataLoading(false);
     })();
+  }, [user]);
+
+  // ── TRANSACTIONS RÉCENTES + BOARD OWNER/OPTI'LEX ───────────────────
+  // Deux fetchs indépendants du bloc principal. Échec = état vide côté carte
+  // (aucune donnée de repli n'est fabriquée), jamais une page cassée.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await apiClient.get('/api/v1/finance-periods/recent-payments?limit=12');
+        if (!cancelled) setRecentPayments(data?.payments || []);
+      } catch {
+        if (!cancelled) setRecentPayments([]);
+      } finally {
+        if (!cancelled) setPaymentsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await apiClient.get('/api/v1/optilex/board');
+        if (!cancelled) setBoardRows(data?.clients || []);
+      } catch (e) {
+        // On laisse `boardRows` à null : la carte reste sur "—". Un board
+        // indisponible ne doit pas se lire comme "0 RDV à venir".
+        console.warn('[CeoDashboard] board Owner/Opti\'Lex indisponible:', e);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [user]);
 
   // ── MONTHLY OBJECTIVES — load on mount, refetch when modal opens ───
@@ -1055,26 +1286,67 @@ export default function CeoDashboard() {
     ];
   }, [leaderboardData]);
 
-  // États clients — source = snapshot Suivi Clients (ceoSheet), plus PerfClosing.
-  // 7 cartes : Total + Actifs + En retard + Onboarding + Résiliés + Rétractés + Autres.
-  // Cf. CEO_SHEET_BUCKETS pour le mapping libellés bruts → buckets.
+  // ── ÉTATS CLIENTS : le board Owner/Opti'Lex fait autorité ─────────────
+  // Le snapshot du Sheet ne connaît que la colonne "État" brute ; le board, lui,
+  // applique la vraie règle : override manuel du cabinet > état du Sheet > état
+  // déduit des contrats. D'où des chiffres qui divergeaient (42 vs 45 résiliés).
+  // On compte donc ICI avec `displayEtat` et les prédicats du board eux-mêmes
+  // (importés, jamais recopiés) : chaque carte = un onglet du board, vérifiable
+  // en un clic. null tant que le board n'est pas chargé → les cartes montrent
+  // "—" plutôt qu'un chiffre faux.
+  const BOARD_ACTIF = 'Signé';
+  const BOARD_RESILIE = 'Résiliation';
+  const BOARD_RETRACTE = 'Rétractation';
+  const boardStats = useMemo(() => {
+    if (!Array.isArray(boardRows)) return null;
+    // Périmètre = lignes ÉTABLIES, comme le "X clients" affiché en tête du board :
+    // un contrat encore en vol n'est pas un client tant que la vente n'est pas
+    // déclarée. Sans ce filtre, le total ne retomberait pas sur ses pattes.
+    const established = boardRows.filter((r) => !r.is_pending_contract);
+    const byEtat = {};
+    for (const r of established) {
+      const e = displayEtat(r);
+      if (e) byEtat[e] = (byEtat[e] || 0) + 1;
+    }
+    // "Autres" = tout ce qui n'est ni actif, ni résilié, ni rétracté (en cours de
+    // résiliation, pause, liquidation, attente Opti'Lex…) — détail au survol.
+    const autresBreakdown = Object.entries(byEtat)
+      .filter(([e]) => e !== BOARD_ACTIF && e !== BOARD_RESILIE && e !== BOARD_RETRACTE)
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, z) => z.value - a.value);
+    return {
+      total: established.length,
+      actifs: byEtat[BOARD_ACTIF] || 0,
+      resilies: byEtat[BOARD_RESILIE] || 0,
+      retractes: byEtat[BOARD_RETRACTE] || 0,
+      autres: autresBreakdown.reduce((s, x) => s + x.value, 0),
+      autresBreakdown,
+      onboarding: established.filter(isOnboardingUpcoming).length,
+      integration: established.filter(isIntegrationUpcoming).length,
+      integrationOverdue: established.filter(isIntegrationOverdue).length,
+    };
+  }, [boardRows]);
+
+  // États clients — 8 cartes, TOUTES alignées sur le board Owner/Opti'Lex, sauf
+  // "En retard de paiement" : la notion de retard n'existe pas dans le board
+  // (elle est orthogonale à l'état : un client "Signé" peut être en retard),
+  // elle reste donc servie par le snapshot Suivi Clients.
   const kpiRow2 = useMemo(() => {
-    const { buckets, total } = computeEtatBuckets(
-      ceoSheet?.etats,
-      ceoSheet?.etats_total,
-    );
+    const { buckets } = computeEtatBuckets(ceoSheet?.etats, ceoSheet?.etats_total);
     const subList = (b) => b.breakdown
       .map((r) => r.label)
       .slice(0, 3)
       .join(', ') || '—';
+    const n = (v) => (boardStats ? String(v) : '—');
+    const boardLoading = boardStats === null;
     return [
       {
-        label: 'Total Clients', value: String(total), color: '#5b6abf', iconSrc: ceo1,
-        sub: 'Tous états confondus',
+        label: 'Total Clients', value: n(boardStats?.total), color: '#5b6abf', iconSrc: ceo1,
+        loading: boardLoading, sub: 'Clients établis du board',
       },
       {
-        label: '🟢 Actifs', value: String(buckets.actifs.count), color: '#10b981', iconSrc: ceo2,
-        sub: 'En cours, vip paul',
+        label: '🟢 Actifs', value: n(boardStats?.actifs), color: '#10b981', iconSrc: ceo2,
+        loading: boardLoading, sub: 'Onglet Signé du board',
       },
       {
         label: '🟠 En retard de paiement', value: String(buckets.retard.count), color: '#f97316', iconSrc: null,
@@ -1082,26 +1354,34 @@ export default function CeoDashboard() {
         breakdown: buckets.retard.breakdown,
       },
       {
-        label: '🟡 Onboarding à venir', value: String(buckets.onboarding.count), color: '#eab308', iconSrc: ceo4,
-        sub: 'Call onboarding à venir',
+        label: '🟡 Onboarding Owner à venir', value: n(boardStats?.onboarding), color: '#eab308', iconSrc: ceo4,
+        loading: boardLoading, sub: 'RDV onboarding non effectués',
       },
       {
-        label: '🔴 Résiliés', value: String(buckets.resilies.count), color: '#ef4444', iconSrc: ceo3,
-        sub: buckets.resilies.breakdown.length ? subList(buckets.resilies) : 'Résiliation',
-        breakdown: buckets.resilies.breakdown,
+        label: '🔵 RDV intégration à venir', value: n(boardStats?.integration),
+        color: '#3b82f6', iconSrc: rdvIntegrationIcon, loading: boardLoading,
+        sub: boardStats?.integrationOverdue
+          ? `dont ${boardStats.integrationOverdue} en retard`
+          : 'RDV de lancement non effectués',
       },
       {
-        label: '🟤 Rétractés', value: String(buckets.retractes.count), color: '#b45309', iconSrc: null,
-        sub: buckets.retractes.breakdown.length ? subList(buckets.retractes) : 'Rétractation, self résiliation…',
-        breakdown: buckets.retractes.breakdown,
+        label: '🔴 Résiliés', value: n(boardStats?.resilies), color: '#ef4444', iconSrc: ceo3,
+        loading: boardLoading, sub: 'Résiliation actée',
       },
       {
-        label: '⚪ Autres', value: String(buckets.autres.count), color: '#94a3b8', iconSrc: null,
-        sub: buckets.autres.breakdown.length ? subList(buckets.autres) : 'Pause, restitution…',
-        breakdown: buckets.autres.breakdown,
+        label: '🟤 Rétractés', value: n(boardStats?.retractes), color: '#b45309', iconSrc: null,
+        loading: boardLoading, sub: 'Rétractation actée',
+      },
+      {
+        label: '⚪ Autres', value: n(boardStats?.autres), color: '#94a3b8', iconSrc: null,
+        loading: boardLoading,
+        sub: boardStats?.autresBreakdown?.length
+          ? boardStats.autresBreakdown.map((r) => r.label).slice(0, 3).join(', ')
+          : 'En cours de résiliation, pause…',
+        breakdown: boardStats?.autresBreakdown || [],
       },
     ];
-  }, [ceoSheet]);
+  }, [ceoSheet, boardStats]);
 
   // ── CASH : mois par défaut du bandeau (snapshot.months) ───────────────
   // Clé du mois affiché au montage : mois courant si présent + non vide,
@@ -1594,6 +1874,14 @@ export default function CeoDashboard() {
                 months={ceoSheet?.months}
                 defaultMonthKey={defaultCashMonthKey}
                 dataLoading={dataLoading}
+                darkMode={darkMode}
+                C={C}
+              />
+
+              {/* ── TRANSACTIONS RÉCENTES — encaissements réels, sous le cash ── */}
+              <CeoRecentTransactions
+                payments={recentPayments}
+                loading={paymentsLoading}
                 darkMode={darkMode}
                 C={C}
               />

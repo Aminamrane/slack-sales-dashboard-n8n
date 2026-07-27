@@ -122,17 +122,22 @@ const _todayParisISO = () => new Date().toLocaleDateString("en-CA", { timeZone: 
 // "effectué" reste "à venir" MÊME si sa date est passée (il n'a pas été réalisé par Lisa).
 // Avant le 01/07 = pré-split, pas de suivi "effectué" fiable -> exclu (on n'inonde pas la case).
 const SPLIT_EFFECTIVE_ISO = "2026-07-01";
-const isOnboardingUpcoming = (r) => { const d = r.rdv_onboarding_date_manual || r.rdv_onboarding_date; return !!r.numero_client && !!d && !r.rdv_onboarding_done && String(d).slice(0, 10) >= _todayParisISO(); };
-const isIntegrationUpcoming = (r) => !!r.numero_client && !!r.rdv_lancement_date && !r.rdv_lancement_done && String(r.rdv_lancement_date).slice(0, 10) >= SPLIT_EFFECTIVE_ISO;
+// Exportés (avec `displayEtat` plus bas) : les cartes d'états du dashboard CEO
+// comptent avec CES prédicats-ci. Une seule définition de la règle métier, pas de
+// copie qui dérive — board et dashboard affichent forcément les mêmes chiffres.
+export const isOnboardingUpcoming = (r) => { const d = r.rdv_onboarding_date_manual || r.rdv_onboarding_date; return !!r.numero_client && !!d && !r.rdv_onboarding_done && String(d).slice(0, 10) >= _todayParisISO(); };
+export const isIntegrationUpcoming = (r) => !!r.numero_client && !!r.rdv_lancement_date && !r.rdv_lancement_done && String(r.rdv_lancement_date).slice(0, 10) >= SPLIT_EFFECTIVE_ISO;
 // "En retard" : dans "à venir" (donc non effectué, depuis le 01/07) MAIS date déjà passée = non réalisé.
-const isIntegrationOverdue = (r) => isIntegrationUpcoming(r) && String(r.rdv_lancement_date).slice(0, 10) < _todayParisISO();
+export const isIntegrationOverdue = (r) => isIntegrationUpcoming(r) && String(r.rdv_lancement_date).slice(0, 10) < _todayParisISO();
 // Contrat Opti'Lex SÉPARÉ (split) pas encore signé : optilex_status existe (non null =
 // pas le cas "groupé/inclus") et != done. Sert l'alerte "RDV intégration mais Opti'Lex
 // non signé". Disparaît d'elle-même dès que le contrat est signé (status -> done).
 const optilexNotSigned = (r) => !!r.optilex_status && r.optilex_status !== "done";
 const integrationAlert = (r) => isIntegrationUpcoming(r) && optilexNotSigned(r);
 // État affiché : l'état du Sheet en priorité, sinon le statut du contrat en cours.
-const displayEtat = (r) => {
+// Exporté : les cartes d'états du dashboard CEO comptent avec CETTE fonction, pour
+// afficher exactement les mêmes chiffres que les onglets du board.
+export const displayEtat = (r) => {
   if (r.etat_manuel) return r.etat_manuel;   // override manuel du cabinet (prioritaire)
   if (r.etat) return r.etat;                 // état du Sheet (vérité des ÉTATS)
   // Vérité des DATA = interne : Owner signé -> "Signé" même pas (encore) dans le Sheet.
