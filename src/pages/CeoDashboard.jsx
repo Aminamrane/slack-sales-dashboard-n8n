@@ -146,8 +146,23 @@ const dateOnly = (v) => (v ? String(v).slice(0, 10) : null);
 // États de SORTIE : c'est leur `etat_date` qui date le mouvement, et c'est ce
 // qui permet de savoir qu'un client aujourd'hui parti était actif avant.
 const BOARD_TERMINAL_ETATS = new Set(['Résiliation', 'Rétractation', 'Self-Résiliation', 'Liquidation']);
-// Ton de la météo moyenne, dérivé de la bande du board (rouge/orange/vert).
-const METEO_TONE = { rouge: 'critiques', orange: 'mécontents', vert: 'satisfaits' };
+// Dégradé du chiffre, par bande du board. Deux tons de la même teinte : le
+// chiffre reste lisible, le dégradé ne fait que lui donner du relief.
+const METEO_VALUE_GRADIENT = {
+  rouge:  ['#dc2626', '#f2614f'],
+  orange: ['#d97706', '#f0a53a'],
+  vert:   ['#15a34a', '#3fce85'],
+};
+// Formulation de la moyenne. On n'affirme ("Clients satisfaits") que loin des
+// frontières de bande ; près d'une frontière on nuance ("Plutôt satisfaits"),
+// parce qu'un dixième de point ferait alors basculer le verdict.
+const meteoWording = (avg) => {
+  if (avg >= 4.3) return 'Clients satisfaits';
+  if (avg >= 3.6) return 'Plutôt satisfaits';
+  if (avg >= 2.6) return 'Clients mécontents';
+  if (avg >= 2.0) return 'Plutôt critiques';
+  return 'Situation critique';
+};
 
 
 // € arrondi à l'entier, séparateur de milliers garanti (format FR).
@@ -368,7 +383,7 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
   return (
     <div
       ref={anchorRef}
-      className={`ceo-card${hasTooltip ? ' ceo-kpi-has-tooltip' : ''}`}
+      className={`ceo-card${kpi.cardClass ? ` ${kpi.cardClass}` : ''}${hasTooltip ? ' ceo-kpi-has-tooltip' : ''}`}
       style={{
         // Compact : ces cartes portent un libellé, un nombre et une ligne de
         // contexte — elles n'ont pas à occuper le tiers de la largeur.
@@ -409,9 +424,19 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>{kpi.label}</span>
         </div>
-        <div style={{ fontSize: 26, fontWeight: 800, color: '#212121', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
-          {/* `kpi.loading` : chargement PROPRE à la carte (source distincte du
-              bloc principal, ex. le board Owner/Opti'Lex). Défaut = dataLoading. */}
+        {/* `kpi.loading` : chargement PROPRE à la carte (source distincte du
+            bloc principal, ex. le board Owner/Opti'Lex). Défaut = dataLoading.
+            `kpi.valueGradient` : chiffre en dégradé (météo) — désactivé pendant
+            le chargement, un tiret en remplissage transparent serait invisible. */}
+        <div style={{
+          fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.1,
+          ...(kpi.valueGradient && !(kpi.loading ?? dataLoading) ? {
+            width: 'fit-content',
+            background: `linear-gradient(135deg, ${kpi.valueGradient[0]} 0%, ${kpi.valueGradient[1]} 100%)`,
+            WebkitBackgroundClip: 'text', backgroundClip: 'text',
+            WebkitTextFillColor: 'transparent', color: 'transparent',
+          } : { color: '#212121' }),
+        }}>
           {(kpi.loading ?? dataLoading) ? <span style={{ animation: 'ceoPulse 1.2s ease infinite' }}>—</span> : kpi.value}
         </div>
         {/* Sous-titre sur UNE ligne : c'est lui qui gonflait la hauteur des cartes
@@ -1570,9 +1595,11 @@ export default function CeoDashboard() {
         Icon: Cloud,
         value: boardStats?.meteoAvg != null ? `${boardStats.meteoAvg.toFixed(1).replace('.', ',')}/5` : '—',
         color: meteoBand ? METEO_BANDS[meteoBand].color : '#94a3b8',
+        cardClass: 'ceo-card--meteo',
+        valueGradient: meteoBand ? METEO_VALUE_GRADIENT[meteoBand] : null,
         loading: boardLoading,
         sub: meteoBand
-          ? `Plutôt ${METEO_TONE[meteoBand]} · ${boardStats.meteoRated} notés`
+          ? `${meteoWording(boardStats.meteoAvg)} · ${boardStats.meteoRated} notés`
           : 'Aucune note posée',
         breakdown: meteoBands ? [
           { label: 'Satisfaits (4-5)', value: meteoBands.vert },
@@ -1748,6 +1775,15 @@ export default function CeoDashboard() {
           box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.85);
           pointer-events: none;
           z-index: -1;
+        }
+        /* Variante météo : un lavis bleu, en diagonale comme un ciel, pour que
+           la carte se distingue des sept autres sans rompre la famille. */
+        .ceo-card--meteo::before {
+          background: linear-gradient(180deg, #DDE7F8 0%, #C9D9F1 100%);
+        }
+        .ceo-card--meteo::after {
+          background: linear-gradient(150deg, #FFFFFF 0%, #F4F8FF 42%, #E9F1FF 78%, #DFEAFD 100%);
+          box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.9);
         }
       `}</style>
 
