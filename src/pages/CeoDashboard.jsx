@@ -4,10 +4,6 @@ import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import { setNavScope } from "../utils/sidebarPermissions";
 import Sidebar from "../components/shared/Sidebar";
-import ceo1 from "../assets/ceo1.svg";
-import ceo2 from "../assets/ceo2.svg";
-import ceo3 from "../assets/ceo3.svg";
-import ceo4 from "../assets/ceo4.svg";
 import ceo5 from "../assets/ceo5.svg";
 import medal1 from "../assets/1st-place.png";
 import medal2 from "../assets/2st-place.png";
@@ -452,13 +448,9 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
       onFocus={open}
       onBlur={close}
     >
-      {kpi.iconSrc && <img src={kpi.iconSrc} alt="" style={{
-        position: 'absolute', top: -12, right: -10, width: 58, height: 55,
-        objectFit: 'contain', pointerEvents: 'none', zIndex: 10,
-      }} />}
       {/* Libellé : glyphe SVG porteur de sens (à la place de l'ancienne pastille
           de couleur), teinté par la couleur du KPI. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, minWidth: 0, paddingRight: kpi.iconSrc ? 44 : 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, minWidth: 0 }}>
         {Icon && <Icon size={14} strokeWidth={2.2} color={kpi.color} style={{ flexShrink: 0 }} aria-hidden="true" />}
         <span style={{
           fontSize: 12, color: C.muted, fontWeight: 600,
@@ -1363,39 +1355,39 @@ export default function CeoDashboard() {
     const boardLoading = boardStats === null;
     return [
       {
-        label: 'Total Clients', Icon: Users, value: n(boardStats?.total), color: '#5b6abf', iconSrc: ceo1,
+        label: 'Total Clients', Icon: Users, value: n(boardStats?.total), color: '#5b6abf',
         loading: boardLoading, sub: 'Clients établis du board',
       },
       {
-        label: 'Actifs', Icon: CircleCheck, value: n(boardStats?.actifs), color: '#10b981', iconSrc: ceo2,
+        label: 'Actifs', Icon: CircleCheck, value: n(boardStats?.actifs), color: '#10b981',
         loading: boardLoading, sub: 'Onglet Signé du board',
       },
       {
-        label: 'En retard de paiement', Icon: Clock, value: String(buckets.retard.count), color: '#f97316', iconSrc: null,
+        label: 'En retard de paiement', Icon: Clock, value: String(buckets.retard.count), color: '#f97316',
         sub: buckets.retard.breakdown.length ? subList(buckets.retard) : 'Optilex, Owner, globale…',
         breakdown: buckets.retard.breakdown,
       },
       {
-        label: 'Onboarding Owner à venir', Icon: CalendarClock, value: n(boardStats?.onboarding), color: '#eab308', iconSrc: ceo4,
+        label: 'Onboarding Owner à venir', Icon: CalendarClock, value: n(boardStats?.onboarding), color: '#eab308',
         loading: boardLoading, sub: 'RDV onboarding non effectués',
       },
       {
         label: 'RDV intégration à venir', Icon: Rocket, value: n(boardStats?.integration),
-        color: '#3b82f6', iconSrc: null, loading: boardLoading,
+        color: '#3b82f6', loading: boardLoading,
         sub: boardStats?.integrationOverdue
           ? `dont ${boardStats.integrationOverdue} en retard`
           : 'RDV de lancement non effectués',
       },
       {
-        label: 'Résiliés', Icon: CircleX, value: n(boardStats?.resilies), color: '#ef4444', iconSrc: ceo3,
+        label: 'Résiliés', Icon: CircleX, value: n(boardStats?.resilies), color: '#ef4444',
         loading: boardLoading, sub: 'Résiliation actée',
       },
       {
-        label: 'Rétractés', Icon: RotateCcw, value: n(boardStats?.retractes), color: '#b45309', iconSrc: null,
+        label: 'Rétractés', Icon: RotateCcw, value: n(boardStats?.retractes), color: '#b45309',
         loading: boardLoading, sub: 'Rétractation actée',
       },
       {
-        label: 'Autres', Icon: Ellipsis, value: n(boardStats?.autres), color: '#94a3b8', iconSrc: null,
+        label: 'Autres', Icon: Ellipsis, value: n(boardStats?.autres), color: '#94a3b8',
         loading: boardLoading,
         sub: boardStats?.autresBreakdown?.length
           ? boardStats.autresBreakdown.map((r) => r.label).slice(0, 3).join(', ')
