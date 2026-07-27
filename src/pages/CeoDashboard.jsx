@@ -1574,16 +1574,6 @@ export default function CeoDashboard() {
                 </div>
               </div>
 
-              {/* ── BANDEAU CASH — Suivi Clients snapshot (sélecteur de mois) ── */}
-              {/* Le cash d'abord, le risque en avant (vue fiscaliste-CEO). */}
-              <CeoCashBanner
-                months={ceoSheet?.months}
-                defaultMonthKey={defaultCashMonthKey}
-                dataLoading={dataLoading}
-                darkMode={darkMode}
-                C={C}
-              />
-
               {/* KPI Cards — États Clients (Suivi Clients snapshot) */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 28 }}>
                 {kpiRow2.map((kpi, i) => (
@@ -1598,6 +1588,15 @@ export default function CeoDashboard() {
                 ))}
               </div>
 
+              {/* ── BANDEAU CASH — Suivi Clients snapshot (sélecteur de mois) ── */}
+              {/* Les états clients d'abord (façon board Owner) ; le cash / finance ensuite. */}
+              <CeoCashBanner
+                months={ceoSheet?.months}
+                defaultMonthKey={defaultCashMonthKey}
+                dataLoading={dataLoading}
+                darkMode={darkMode}
+                C={C}
+              />
 
               {/* ── DÉLAIS MOYENS + GLOBE ── */}
               <div style={{ display: 'flex', gap: 20, marginBottom: 28, alignItems: 'stretch' }}>
