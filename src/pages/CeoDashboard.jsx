@@ -13,12 +13,16 @@ import medal1 from "../assets/1st-place.png";
 import medal2 from "../assets/2st-place.png";
 import medal3 from "../assets/3st-place.png";
 import ceo6 from "../assets/ceo6.svg";
-import rdvIntegrationIcon from "../assets/En attente rdv lancement.svg";
 import { displayEtat, isOnboardingUpcoming, isIntegrationUpcoming, isIntegrationOverdue } from "./OptilexBoard.jsx";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import testLottie from "../assets/test.lottie?url";
-import { ChevronDown, Home, MessageSquare, Mail, Search, PanelLeft, Sparkles } from "lucide-react";
+import {
+  ChevronDown, Home, MessageSquare, Mail, Search, PanelLeft, Sparkles,
+  // Glyphes des cartes d'états : un pictogramme qui PORTE le sens du KPI,
+  // à la place des anciennes pastilles de couleur.
+  Users, CircleCheck, Clock, CalendarClock, Rocket, CircleX, RotateCcw, Ellipsis,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import "../index.css";
 
@@ -424,6 +428,7 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
   const tooltipId = hasTooltip ? `ceo-kpi-tooltip-${index}` : undefined;
   const anchorRef = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
+  const Icon = kpi.Icon;
 
   const open = () => hasTooltip && setIsOpen(true);
   const close = () => setIsOpen(false);
@@ -433,9 +438,12 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
       ref={anchorRef}
       className={`ceo-card${hasTooltip ? ' ceo-kpi-has-tooltip' : ''}`}
       style={{
-        padding: '22px 22px 18px',
+        // Compact : ces cartes portent un libellé, un nombre et une ligne de
+        // contexte — elles n'ont pas à occuper le tiers de la largeur.
+        padding: '16px 18px 14px',
         animation: `ceoCardPop 0.4s ease ${index * 80}ms both`,
         position: 'relative',
+        minWidth: 0,
       }}
       tabIndex={hasTooltip ? 0 : undefined}
       aria-describedby={isOpen ? tooltipId : undefined}
@@ -448,13 +456,27 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
         position: 'absolute', top: -12, right: -10, width: 58, height: 55,
         objectFit: 'contain', pointerEvents: 'none', zIndex: 10,
       }} />}
-      <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 8 }}>{kpi.label}</div>
-      <div style={{ fontSize: 28, fontWeight: 800, color: '#212121', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+      {/* Libellé : glyphe SVG porteur de sens (à la place de l'ancienne pastille
+          de couleur), teinté par la couleur du KPI. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, minWidth: 0, paddingRight: kpi.iconSrc ? 44 : 0 }}>
+        {Icon && <Icon size={14} strokeWidth={2.2} color={kpi.color} style={{ flexShrink: 0 }} aria-hidden="true" />}
+        <span style={{
+          fontSize: 12, color: C.muted, fontWeight: 600,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>{kpi.label}</span>
+      </div>
+      <div style={{ fontSize: 26, fontWeight: 800, color: '#212121', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
         {/* `kpi.loading` : chargement PROPRE à la carte (source distincte du
             bloc principal, ex. le board Owner/Opti'Lex). Défaut = dataLoading. */}
         {(kpi.loading ?? dataLoading) ? <span style={{ animation: 'ceoPulse 1.2s ease infinite' }}>—</span> : kpi.value}
       </div>
-      <div style={{ marginTop: 8, fontSize: 12, fontWeight: 500, color: C.muted }}>{kpi.sub}</div>
+      {/* Sous-titre sur UNE ligne : c'est lui qui gonflait la hauteur des cartes
+          quand le libellé était long. Le détail complet reste au survol
+          (tooltip) et dans l'attribut title. */}
+      <div style={{
+        marginTop: 6, fontSize: 12, fontWeight: 500, color: C.muted,
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      }} title={kpi.sub}>{kpi.sub}</div>
 
       {hasTooltip && (
         <KpiTooltipPortal
@@ -1341,39 +1363,39 @@ export default function CeoDashboard() {
     const boardLoading = boardStats === null;
     return [
       {
-        label: 'Total Clients', value: n(boardStats?.total), color: '#5b6abf', iconSrc: ceo1,
+        label: 'Total Clients', Icon: Users, value: n(boardStats?.total), color: '#5b6abf', iconSrc: ceo1,
         loading: boardLoading, sub: 'Clients établis du board',
       },
       {
-        label: '🟢 Actifs', value: n(boardStats?.actifs), color: '#10b981', iconSrc: ceo2,
+        label: 'Actifs', Icon: CircleCheck, value: n(boardStats?.actifs), color: '#10b981', iconSrc: ceo2,
         loading: boardLoading, sub: 'Onglet Signé du board',
       },
       {
-        label: '🟠 En retard de paiement', value: String(buckets.retard.count), color: '#f97316', iconSrc: null,
+        label: 'En retard de paiement', Icon: Clock, value: String(buckets.retard.count), color: '#f97316', iconSrc: null,
         sub: buckets.retard.breakdown.length ? subList(buckets.retard) : 'Optilex, Owner, globale…',
         breakdown: buckets.retard.breakdown,
       },
       {
-        label: '🟡 Onboarding Owner à venir', value: n(boardStats?.onboarding), color: '#eab308', iconSrc: ceo4,
+        label: 'Onboarding Owner à venir', Icon: CalendarClock, value: n(boardStats?.onboarding), color: '#eab308', iconSrc: ceo4,
         loading: boardLoading, sub: 'RDV onboarding non effectués',
       },
       {
-        label: '🔵 RDV intégration à venir', value: n(boardStats?.integration),
-        color: '#3b82f6', iconSrc: rdvIntegrationIcon, loading: boardLoading,
+        label: 'RDV intégration à venir', Icon: Rocket, value: n(boardStats?.integration),
+        color: '#3b82f6', iconSrc: null, loading: boardLoading,
         sub: boardStats?.integrationOverdue
           ? `dont ${boardStats.integrationOverdue} en retard`
           : 'RDV de lancement non effectués',
       },
       {
-        label: '🔴 Résiliés', value: n(boardStats?.resilies), color: '#ef4444', iconSrc: ceo3,
+        label: 'Résiliés', Icon: CircleX, value: n(boardStats?.resilies), color: '#ef4444', iconSrc: ceo3,
         loading: boardLoading, sub: 'Résiliation actée',
       },
       {
-        label: '🟤 Rétractés', value: n(boardStats?.retractes), color: '#b45309', iconSrc: null,
+        label: 'Rétractés', Icon: RotateCcw, value: n(boardStats?.retractes), color: '#b45309', iconSrc: null,
         loading: boardLoading, sub: 'Rétractation actée',
       },
       {
-        label: '⚪ Autres', value: n(boardStats?.autres), color: '#94a3b8', iconSrc: null,
+        label: 'Autres', Icon: Ellipsis, value: n(boardStats?.autres), color: '#94a3b8', iconSrc: null,
         loading: boardLoading,
         sub: boardStats?.autresBreakdown?.length
           ? boardStats.autresBreakdown.map((r) => r.label).slice(0, 3).join(', ')
@@ -1855,7 +1877,7 @@ export default function CeoDashboard() {
               </div>
 
               {/* KPI Cards — États Clients (Suivi Clients snapshot) */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 28 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 28 }}>
                 {kpiRow2.map((kpi, i) => (
                   <CeoKpiCard
                     key={kpi.label}
