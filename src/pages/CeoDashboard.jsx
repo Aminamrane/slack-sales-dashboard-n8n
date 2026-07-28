@@ -382,7 +382,7 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
   const [reading, setReading] = useState(0);
   useEffect(() => {
     if (!readings || hovered) return undefined;
-    const id = setInterval(() => setReading((r) => (r + 1) % readings.length), 3600);
+    const id = setInterval(() => setReading((r) => (r + 1) % readings.length), 6000);
     return () => clearInterval(id);
   }, [readings, hovered]);
   const shownIndex = readings ? (hovered ? 0 : reading % readings.length) : 0;
@@ -397,8 +397,9 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
       className={`ceo-card${kpi.cardClass ? ` ${kpi.cardClass}` : ''}${hasTooltip ? ' ceo-kpi-has-tooltip' : ''}`}
       style={{
         // Compact : ces cartes portent un libellé, un nombre et une ligne de
-        // contexte — elles n'ont pas à occuper le tiers de la largeur.
-        padding: '16px 18px 14px',
+        // contexte — elles n'ont pas à occuper le tiers de la largeur. Avec une
+        // courbe, on rend du talon au texte pour qu'il ne tombe pas dans le pic.
+        padding: kpi.spark ? '16px 18px 30px' : '16px 18px 14px',
         animation: `ceoCardPop 0.4s ease ${index * 80}ms both`,
         position: 'relative',
         minWidth: 0,
@@ -414,7 +415,17 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
           EST la valeur (façon widget météo). Les autres cartes gardent leur
           glyphe discret dans le libellé. */}
       {kpi.spark && (
-        <CardSparkline id={kpi.spark.id} values={kpi.spark.values} color={kpi.color} />
+        <>
+          <CardSparkline id={kpi.spark.id} values={kpi.spark.values} color={kpi.color} />
+          {/* Voile dégradé entre la courbe et le texte : la courbe monte haut,
+              le texte doit rester lisible sans qu'on ait à écraser la courbe. */}
+          <div aria-hidden="true" style={{
+            position: 'absolute', left: 0, right: 0, top: 0, height: '76%',
+            borderTopLeftRadius: 16, borderTopRightRadius: 16,
+            background: 'linear-gradient(180deg, #FBFBFC 0%, rgba(251,251,252,0.94) 48%, rgba(251,251,252,0) 100%)',
+            pointerEvents: 'none', zIndex: 1,
+          }} />
+        </>
       )}
       {Artwork && (
         <div aria-hidden="true" style={{
@@ -426,7 +437,7 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
       )}
       {/* Quand il y a une illustration, le texte réserve sa place et s'ellipse
           avant de passer dessous. */}
-      <div style={{ paddingRight: Artwork ? 70 : 0, minWidth: 0, position: 'relative', zIndex: 1 }}>
+      <div style={{ paddingRight: Artwork ? 70 : 0, minWidth: 0, position: 'relative', zIndex: 2 }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, minWidth: 0,
         }}>
@@ -445,12 +456,12 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={shownIndex}
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -5 }}
-            transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
+            variants={READING_GROUP}
+            initial="initial"
+            animate="enter"
+            exit="exit"
           >
-            <div style={{
+            <motion.div variants={READING_VALUE} style={{
               fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.1,
               ...(kpi.valueGradient && !(kpi.loading ?? dataLoading) ? {
                 width: 'fit-content',
@@ -460,14 +471,17 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
               } : { color: '#212121' }),
             }}>
               {(kpi.loading ?? dataLoading) ? <span style={{ animation: 'ceoPulse 1.2s ease infinite' }}>—</span> : shown.value}
-            </div>
+            </motion.div>
             {/* Sous-titre sur UNE ligne : c'est lui qui gonflait la hauteur des
                 cartes quand le libellé était long. Le détail complet reste au
                 survol (tooltip) et dans l'attribut title. */}
-            <div style={{
-              marginTop: 6, fontSize: 12, fontWeight: 500, color: C.muted,
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            }} title={shown.sub}>{shown.sub}</div>
+            <motion.div variants={READING_SUB} style={{
+              marginTop: 6, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              // Sur une carte à courbe, le texte passe devant le dégradé :
+              // il lui faut plus de contraste que le gris de sous-titre habituel.
+              fontWeight: kpi.spark ? 600 : 500,
+              color: kpi.spark ? C.secondary : C.muted,
+            }} title={shown.sub}>{shown.sub}</motion.div>
           </motion.div>
         </AnimatePresence>
       </div>
@@ -822,6 +836,28 @@ function AnimatedMeteoIcon({ score, size = 54, color, strokeWidth = 1.6 }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// MOTION DES LECTURES ALTERNÉES — le chiffre ne se contente pas d'apparaître :
+// il arrive par le bas, dépasse légèrement sa position puis se pose (ressort
+// sous-amorti), et le sous-titre le suit 70 ms plus tard. Les sorties, elles,
+// sont sèches et rapides : on ne fait pas rebondir ce qui s'en va, et une
+// sortie lente donne l'impression d'une interface qui traîne.
+// ══════════════════════════════════════════════════════════════════════════
+const READING_GROUP = {
+  enter: { transition: { staggerChildren: 0.07, delayChildren: 0.02 } },
+  exit: { transition: { staggerChildren: 0.04, staggerDirection: -1 } },
+};
+const READING_VALUE = {
+  initial: { opacity: 0, y: 18, scale: 0.86 },
+  enter: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 430, damping: 18, mass: 0.7 } },
+  exit: { opacity: 0, y: -12, scale: 0.94, transition: { duration: 0.16, ease: [0.4, 0, 1, 1] } },
+};
+const READING_SUB = {
+  initial: { opacity: 0, y: 10 },
+  enter: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 420, damping: 24, mass: 0.6 } },
+  exit: { opacity: 0, y: -7, transition: { duration: 0.14, ease: [0.4, 0, 1, 1] } },
+};
+
+// ══════════════════════════════════════════════════════════════════════════
 // SPARKLINE — courbe d'aire calée en bas de carte, derrière le texte. Elle
 // donne la tendance, jamais un chiffre : pas d'axe, pas de valeur lisible.
 // Lissage Catmull-Rom → Bézier : sur 12 points mensuels, une ligne brisée
@@ -852,7 +888,7 @@ function sparkPaths(values) {
   return { line, area: `${line} L ${SPARK_W} ${SPARK_H} L 0 ${SPARK_H} Z` };
 }
 
-function CardSparkline({ id, values, color, height = 46 }) {
+function CardSparkline({ id, values, color, height = 78 }) {
   const { line, area } = useMemo(() => sparkPaths(values), [values]);
   if (!values || values.length < 2) return null;
   return (
@@ -1837,9 +1873,19 @@ export default function CeoDashboard() {
           58%, 63% { opacity: 1; }
           60% { opacity: 0.35; }
         }
+        /* La courbe se trace à l'arrivée, de gauche à droite, sur une sortie
+           d'ease franche : elle raconte une trajectoire, elle doit se dessiner
+           comme telle plutôt que d'apparaître d'un bloc. */
+        .ceo-spark-line {
+          stroke-dasharray: 1200;
+          stroke-dashoffset: 1200;
+          animation: ceoSparkDraw 1.5s cubic-bezier(0.22, 1, 0.36, 1) 0.2s forwards;
+        }
+        @keyframes ceoSparkDraw { to { stroke-dashoffset: 0; } }
         @media (prefers-reduced-motion: reduce) {
           .ceo-meteo-spin, .ceo-meteo-breathe, .ceo-meteo-twinkle,
           .ceo-meteo-drift, .ceo-meteo-rain, .ceo-meteo-flash { animation: none; opacity: 1; }
+          .ceo-spark-line { animation: none; stroke-dashoffset: 0; }
         }
         /* Objectifs mensuels modal — input number Notion-style (pas de
            spinners natifs, plus discret et cohérent avec le pattern de la page). */
