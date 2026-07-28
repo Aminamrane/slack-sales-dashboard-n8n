@@ -489,12 +489,15 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
           // est masqué, donc on voit un mouvement continu et non une apparition.
           // La fenêtre masque le débordement vertical, mais `overflow: hidden`
           // rogne aussi les côtés : la pastille, décalée de 9 px à gauche pour
-          // aligner son texte, s'y faisait couper. On élargit donc la fenêtre
-          // en marge négative et on lui rend la même valeur en padding — la
-          // zone de padding reste à l'intérieur de la découpe.
+          // aligner son texte, s'y faisait couper. On élargit donc la fenêtre de
+          // READING_GUTTER en marge négative — la découpe s'écarte d'autant.
+          // Les lectures sont en position absolue, donc calées sur la boîte de
+          // PADDING : elles doivent reprendre cette même valeur en `left`/`right`
+          // pour retomber exactement où elles étaient. Sans ça, tout le contenu
+          // glisse vers la gauche et la pastille sort de la carte.
           <div style={{
             position: 'relative', height: readingWindowH, overflow: 'hidden',
-            marginLeft: -14, paddingLeft: 14, marginRight: -14, paddingRight: 14,
+            marginLeft: -READING_GUTTER, marginRight: -READING_GUTTER,
           }}>
             <AnimatePresence initial={false}>
               <motion.div
@@ -503,7 +506,7 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
                 initial="initial"
                 animate="enter"
                 exit="exit"
-                style={{ position: 'absolute', left: 0, right: 0, top: 0 }}
+                style={{ position: 'absolute', left: READING_GUTTER, right: READING_GUTTER, top: 0 }}
               >
                 {renderReading(shown)}
               </motion.div>
@@ -874,6 +877,9 @@ function AnimatedMeteoIcon({ score, size = 54, color, strokeWidth = 1.6 }) {
 // sa course — il « sort de nulle part » et on ne lit plus rien.
 // Ressort volontairement peu bondissant (amortissement 26) : sur un chiffre
 // qu'on doit lire, le dépassement se sent, il ne se voit pas.
+// Débord latéral toléré par la fenêtre des lectures : la pastille recule de
+// 9 px pour aligner son texte sur le chiffre, il faut de la marge au-delà.
+const READING_GUTTER = 14;
 const READING_SLIDE = {
   initial: { y: '112%' },
   enter: { y: '0%', transition: { type: 'spring', stiffness: 300, damping: 26, mass: 0.9 } },
