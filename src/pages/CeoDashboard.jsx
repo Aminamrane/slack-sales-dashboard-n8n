@@ -392,6 +392,21 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
   const valueSize = kpi.valueSize ?? 36;
   const readingWindowH = Math.round(valueSize * 1.08) + 34;
 
+  // Coordonnées du point désigné, en pourcentages : le viewBox de la courbe est
+  // étiré (`preserveAspectRatio="none"`), donc un ratio se convertit directement.
+  const markerPos = useMemo(() => {
+    if (!kpi.spark || kpi.spark.markerOnReading == null) return null;
+    const { pts } = sparkPaths(kpi.spark.values);
+    const p = pts?.[pts.length - 1];
+    if (!p) return null;
+    return {
+      x: (p[0] / SPARK_W) * 100,
+      // en `bottom` plutôt qu'en `top` : le cadre de la courbe est ancré au bas
+      // de la carte, le repère doit suivre ce même repère.
+      bottom: ((SPARK_H - p[1]) / SPARK_H) * 100,
+    };
+  }, [kpi.spark]);
+
   const renderReading = (r) => (
     <>
       <div style={{
@@ -410,9 +425,14 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
           toujours et il redevient une information, pas une légende. */}
       {kpi.subChip ? (
         <div style={{
-          marginTop: 8, maxWidth: '100%', display: 'inline-flex', alignItems: 'center',
-          padding: '3px 10px', borderRadius: 999,
-          background: `${kpi.color}18`, color: kpi.color,
+          // marginLeft négatif = le TEXTE de la pastille s'aligne sur le chiffre,
+          // pas son fond. Sinon la pastille paraît décalée d'un cran vers la droite.
+          marginTop: 8, marginLeft: -9, maxWidth: '100%',
+          display: 'inline-flex', alignItems: 'center',
+          padding: '3px 9px', borderRadius: 999,
+          // Neutre ardoise plutôt que la teinte de la carte : sur une courbe
+          // rouge, une pastille rouge se fond dans son propre fond.
+          background: '#EBEEF3', color: '#3C4457',
           fontSize: 11.5, fontWeight: 700, letterSpacing: '-0.01em',
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }} title={r.sub}>{r.sub}</div>
@@ -453,15 +473,42 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
           glyphe discret dans le libellé. */}
       {kpi.spark && (
         <>
-          <CardSparkline id={kpi.spark.id} values={kpi.spark.values} color={kpi.color} />
+          <CardSparkline values={kpi.spark.values} color={kpi.color} />
           {/* Voile dégradé entre la courbe et le texte : la courbe monte haut,
               le texte doit rester lisible sans qu'on ait à écraser la courbe. */}
           <div aria-hidden="true" style={{
-            position: 'absolute', left: 0, right: 0, top: 0, height: '76%',
+            position: 'absolute', left: 0, right: 0, top: 0, height: '62%',
             borderTopLeftRadius: 16, borderTopRightRadius: 16,
-            background: 'linear-gradient(180deg, #FBFBFC 0%, rgba(251,251,252,0.94) 48%, rgba(251,251,252,0) 100%)',
+            background: 'linear-gradient(180deg, #FBFBFC 0%, rgba(251,251,252,0.92) 42%, rgba(251,251,252,0) 100%)',
             pointerEvents: 'none', zIndex: 1,
           }} />
+          {/* Le graphe participe à la lecture : quand la carte annonce le mois
+              en cours, un repère vient se poser sur SON point. La courbe cesse
+              d'être un décor derrière du texte qui change tout seul. */}
+          <AnimatePresence>
+            {markerPos && shownIndex === kpi.spark.markerOnReading && (
+              <motion.div
+                aria-hidden="true"
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0, opacity: 0, transition: { duration: 0.14, ease: [0.4, 0, 1, 1] } }}
+                transition={{ type: 'spring', stiffness: 520, damping: 17, mass: 0.6, delay: 0.14 }}
+                style={{
+                  position: 'absolute', left: 0, right: 0, bottom: 0, height: SPARK_BOX,
+                  zIndex: 3, pointerEvents: 'none', transformOrigin: `${markerPos.x}% ${100 - markerPos.bottom}%`,
+                }}
+              >
+                <span style={{
+                  position: 'absolute',
+                  left: `${markerPos.x}%`, bottom: `${markerPos.bottom}%`,
+                  width: 11, height: 11, marginLeft: -5.5, marginBottom: -5.5,
+                  borderRadius: '50%', background: '#ffffff',
+                  border: `2.5px solid ${kpi.color}`,
+                  boxShadow: `0 0 0 4px ${kpi.color}22`,
+                }} />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </>
       )}
       {Artwork && (
@@ -887,6 +934,8 @@ const READING_SLIDE = {
 // ══════════════════════════════════════════════════════════════════════════
 const SPARK_W = 320;
 const SPARK_H = 100;
+// Hauteur réelle de la courbe dans la carte, partagée avec le calque du repère.
+const SPARK_BOX = 112;
 
 function sparkPaths(values) {
   if (!Array.isArray(values) || values.length < 2) return { line: '', area: '' };
@@ -910,10 +959,10 @@ function sparkPaths(values) {
     line += ` C ${c1[0].toFixed(1)} ${c1[1].toFixed(1)}, ${c2[0].toFixed(1)} ${c2[1].toFixed(1)}, ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
   }
   line += ` L ${SPARK_W} ${pts[pts.length - 1][1].toFixed(1)}`;
-  return { line, area: `${line} L ${SPARK_W} ${SPARK_H} L 0 ${SPARK_H} Z` };
+  return { line, area: `${line} L ${SPARK_W} ${SPARK_H} L 0 ${SPARK_H} Z`, pts };
 }
 
-function CardSparkline({ id, values, color, height = 78 }) {
+function CardSparkline({ values, color, height = SPARK_BOX }) {
   const { line, area } = useMemo(() => sparkPaths(values), [values]);
   if (!values || values.length < 2) return null;
   return (
@@ -923,13 +972,9 @@ function CardSparkline({ id, values, color, height = 78 }) {
       overflow: 'hidden', pointerEvents: 'none', zIndex: 0,
     }}>
       <svg width="100%" height="100%" viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} preserveAspectRatio="none">
-        <defs>
-          <linearGradient id={`${id}-fill`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.30" />
-            <stop offset="100%" stopColor={color} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d={area} fill={`url(#${id}-fill)`} />
+        {/* Aplat, pas de dégradé : une aire qui se dissout vers le bas donne une
+            tache, pas une surface. Ici l'aire tient jusqu'au bas de la carte. */}
+        <path d={area} fill={color} fillOpacity="0.13" />
         {/* vectorEffect : l'étirement horizontal du viewBox ne doit pas
             écraser l'épaisseur du trait. */}
         <path
@@ -1804,7 +1849,12 @@ export default function CeoDashboard() {
           { value: String(boardStats.resiliesThisMonth), sub: `En ${boardStats.currentMonthLabel}` },
         ] : null,
         subChip: true,
-        spark: boardStats ? { id: 'ceo-spark-resilies', values: boardStats.resiliesSeries.map((m) => m.value) } : null,
+        // markerOnReading : le repère se pose sur le dernier point quand la
+        // carte affiche la lecture du mois — c'est ce point-là dont elle parle.
+        spark: boardStats ? {
+          values: boardStats.resiliesSeries.map((m) => m.value),
+          markerOnReading: 1,
+        } : null,
       },
       {
         label: 'Rétractés', Icon: RotateCcw, value: n(boardStats?.retractes), color: '#b45309',
