@@ -1083,6 +1083,10 @@ function EtatPeriodPicker({ value, options, onChange, darkMode, C }) {
 // distinctes, d'où le filtre par jambe. RIEN n'est reconstitué ici : une
 // période sans saisie finance affiche l'état vide, jamais une ligne inventée.
 // ══════════════════════════════════════════════════════════════════════════
+// Hauteur commune de la rangée basse. C'est le globe qui la fixe : il est
+// carré (340 de large), donc 340 de haut. Tout le reste s'y aligne.
+const ROW_H = 340;
+
 const TX_FILTERS = [
   { key: 'all', label: 'Tout' },
   { key: 'owner', label: 'Owner' },
@@ -1150,6 +1154,11 @@ function CeoRecentTransactions({ payments, loading, darkMode, C }) {
     <div className="ceo-card" style={{
       animation: 'ceoCardPop 0.4s ease 260ms both',
       flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
+      // Plafond de hauteur INDISPENSABLE : sans lui, cette carte grandit avec
+      // le nombre d'encaissements et impose sa taille à toute la rangée. Le
+      // globe s'étire alors en œuf et les deux autres cartes se vident. C'est
+      // à la liste de défiler, pas à la composition de se déformer.
+      maxHeight: ROW_H,
     }}>
       {/* En-tête : titre + segmented control (pilote uniquement cette carte) */}
       <div style={{
