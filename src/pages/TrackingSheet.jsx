@@ -5815,7 +5815,6 @@ export default function TrackingSheet() {
                           }} onClick={() => setGivenLeadsOpen((o) => !o)}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: givenLeadsOpen ? 10 : 0, padding: '0 6px' }}>
                               <span style={{ display: 'inline-flex', alignItems: 'center', padding: '3px 12px', borderRadius: 20, fontSize: 12.5, fontWeight: 700, border: `1.5px solid ${C.border}`, background: darkMode ? 'rgba(255,255,255,0.05)' : '#f0f1f3', color: C.muted }}>Donnés</span>
-                              <span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>{given.length}</span>
                               <div style={{ flex: 1 }} />
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" style={{ transition: 'transform 0.25s ease', transform: givenLeadsOpen ? 'rotate(180deg)' : 'rotate(0deg)', opacity: 0.5 }}><path d="m6 9 6 6 6-6" /></svg>
                             </div>
