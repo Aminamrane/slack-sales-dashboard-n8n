@@ -1121,12 +1121,18 @@ function TxIcon({ leg }) {
   const accent = TX_LEG_ACCENT[leg] || '#5b6abf';
   return (
     <div style={{
-      width: 34, height: 34, flexShrink: 0, borderRadius: 11,
+      width: 30, height: 30, flexShrink: 0, borderRadius: '50%',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: `${accent}14`, color: accent,
     }}>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 5v13" /><path d="m18 12-6 6-6-6" />
+      {/* Glyphe de dépôt : la flèche descend et se pose sur le trait du
+          compte. C'est le vocabulaire des relevés bancaires — plus juste
+          qu'une flèche seule, qui ne dit pas où va l'argent. */}
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 4v9" />
+        <path d="m8.5 9.5 3.5 3.5 3.5-3.5" />
+        <path d="M5 18h14" />
       </svg>
     </div>
   );
@@ -1141,11 +1147,14 @@ function CeoRecentTransactions({ payments, loading, darkMode, C }) {
   );
 
   return (
-    <div className="ceo-card" style={{ marginBottom: 28, animation: 'ceoCardPop 0.4s ease 260ms both' }}>
+    <div className="ceo-card" style={{
+      animation: 'ceoCardPop 0.4s ease 260ms both',
+      flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
+    }}>
       {/* En-tête : titre + segmented control (pilote uniquement cette carte) */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        gap: 16, padding: '14px 18px 14px 22px', borderBottom: `1px solid ${C.border}`,
+        gap: 12, padding: '12px 14px 12px 18px', borderBottom: `1px solid ${C.border}`,
       }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>Transactions récentes</div>
@@ -1189,7 +1198,7 @@ function CeoRecentTransactions({ payments, loading, darkMode, C }) {
       </div>
 
       {/* Liste — scroll interne au-delà de ~6 lignes, la carte garde sa hauteur */}
-      <div className="ceo-scroll" style={{ maxHeight: 322, overflowY: 'auto', padding: '4px 0' }}>
+      <div className="ceo-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '2px 0' }}>
         {loading && (
           [0, 1, 2, 3].map((i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 22px' }}>
@@ -1224,8 +1233,8 @@ function CeoRecentTransactions({ payments, loading, darkMode, C }) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1], delay: Math.min(i, 8) * 0.025 }}
               style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '13px 22px',
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '9px 18px',
                 borderTop: i === 0 ? 'none' : `1px dashed ${C.border}`,
               }}
             >
@@ -2409,22 +2418,23 @@ export default function CeoDashboard() {
                 C={C}
               />
 
-              {/* ── TRANSACTIONS RÉCENTES — encaissements réels, sous le cash ── */}
+              {/* ── TRANSACTIONS · DÉLAIS · GLOBE · CLASSEMENT ──
+                  Quatre cartes de même hauteur sur une seule rangée. Les deux
+                  premières se partagent la place restante, le globe et le
+                  classement gardent leur largeur fixe. */}
+              <div style={{ display: 'flex', gap: 20, marginBottom: 28, alignItems: 'stretch' }}>
               <CeoRecentTransactions
                 payments={recentPayments}
                 loading={paymentsLoading}
                 darkMode={darkMode}
                 C={C}
               />
-
-              {/* ── DÉLAIS MOYENS + GLOBE ── */}
-              <div style={{ display: 'flex', gap: 20, marginBottom: 28, alignItems: 'stretch' }}>
               <div className="ceo-card" style={{
                 animation: 'ceoCardPop 0.4s ease 320ms both', flex: 1, minWidth: 0,
               }}>
-                <div style={{ padding: '14px 22px', borderBottom: `1px solid ${C.border}` }}>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>Délais Moyens</div>
-                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Temps moyen entre les étapes clés</div>
+                <div style={{ padding: '12px 18px', borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>Délais Moyens</div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Temps moyen entre les étapes clés</div>
                 </div>
                 <div style={{ padding: '2px 0' }}>
                   {[
