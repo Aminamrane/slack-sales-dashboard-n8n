@@ -28,7 +28,7 @@ import WebinarLiveReplay from './components/WebinarLiveReplay';
 import { WEBINAR_REPLAY } from './data/webinarReplay';
 import Card from './components/Card';
 
-const ALLOWED_ROLES = ['admin', 'ceo', 'marketing', 'acquisition_director', 'head_of_acquisition'];
+const ALLOWED_ROLES = ['admin', 'ceo', 'marketing', 'acquisition_director', 'head_of_acquisition', 'finance_director'];
 // Édition des budgets réservée à Timothy (marketing) + admin (debug/safety).
 // CEO/AcqDir/head_of_acquisition voient le BudgetEditor en lecture seule.
 const ROLES_WITH_BUDGET_EDIT = ['admin', 'marketing'];
