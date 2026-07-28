@@ -392,21 +392,6 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
   const valueSize = kpi.valueSize ?? 36;
   const readingWindowH = Math.round(valueSize * 1.08) + 34;
 
-  // Coordonnées du point désigné, en pourcentages : le viewBox de la courbe est
-  // étiré (`preserveAspectRatio="none"`), donc un ratio se convertit directement.
-  const markerPos = useMemo(() => {
-    if (!kpi.spark || kpi.spark.markerOnReading == null) return null;
-    const { pts } = sparkPaths(kpi.spark.values);
-    const p = pts?.[pts.length - 1];
-    if (!p) return null;
-    return {
-      x: (p[0] / SPARK_W) * 100,
-      // en `bottom` plutôt qu'en `top` : le cadre de la courbe est ancré au bas
-      // de la carte, le repère doit suivre ce même repère.
-      bottom: ((SPARK_H - p[1]) / SPARK_H) * 100,
-    };
-  }, [kpi.spark]);
-
   const renderReading = (r) => (
     <>
       <div style={{
@@ -471,46 +456,7 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
       {/* Illustration en grand à droite : réservée à la météo, dont le dessin
           EST la valeur (façon widget météo). Les autres cartes gardent leur
           glyphe discret dans le libellé. */}
-      {kpi.spark && (
-        <>
-          <CardSparkline values={kpi.spark.values} color={kpi.color} />
-          {/* Voile dégradé entre la courbe et le texte : la courbe monte haut,
-              le texte doit rester lisible sans qu'on ait à écraser la courbe. */}
-          <div aria-hidden="true" style={{
-            position: 'absolute', left: 0, right: 0, top: 0, height: '62%',
-            borderTopLeftRadius: 16, borderTopRightRadius: 16,
-            background: 'linear-gradient(180deg, #FBFBFC 0%, rgba(251,251,252,0.92) 42%, rgba(251,251,252,0) 100%)',
-            pointerEvents: 'none', zIndex: 1,
-          }} />
-          {/* Le graphe participe à la lecture : quand la carte annonce le mois
-              en cours, un repère vient se poser sur SON point. La courbe cesse
-              d'être un décor derrière du texte qui change tout seul. */}
-          <AnimatePresence>
-            {markerPos && shownIndex === kpi.spark.markerOnReading && (
-              <motion.div
-                aria-hidden="true"
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0, opacity: 0, transition: { duration: 0.14, ease: [0.4, 0, 1, 1] } }}
-                transition={{ type: 'spring', stiffness: 520, damping: 17, mass: 0.6, delay: 0.14 }}
-                style={{
-                  position: 'absolute', left: 0, right: 0, bottom: 0, height: SPARK_BOX,
-                  zIndex: 3, pointerEvents: 'none', transformOrigin: `${markerPos.x}% ${100 - markerPos.bottom}%`,
-                }}
-              >
-                <span style={{
-                  position: 'absolute',
-                  left: `${markerPos.x}%`, bottom: `${markerPos.bottom}%`,
-                  width: 11, height: 11, marginLeft: -5.5, marginBottom: -5.5,
-                  borderRadius: '50%', background: '#ffffff',
-                  border: `2.5px solid ${kpi.color}`,
-                  boxShadow: `0 0 0 4px ${kpi.color}22`,
-                }} />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </>
-      )}
+      {kpi.spark && <CardSparkline values={kpi.spark.values} color={kpi.color} />}
       {Artwork && (
         <div aria-hidden="true" style={{
           position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)',
@@ -959,7 +905,7 @@ function sparkPaths(values) {
     line += ` C ${c1[0].toFixed(1)} ${c1[1].toFixed(1)}, ${c2[0].toFixed(1)} ${c2[1].toFixed(1)}, ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
   }
   line += ` L ${SPARK_W} ${pts[pts.length - 1][1].toFixed(1)}`;
-  return { line, area: `${line} L ${SPARK_W} ${SPARK_H} L 0 ${SPARK_H} Z`, pts };
+  return { line, area: `${line} L ${SPARK_W} ${SPARK_H} L 0 ${SPARK_H} Z` };
 }
 
 function CardSparkline({ values, color, height = SPARK_BOX }) {
@@ -1849,12 +1795,7 @@ export default function CeoDashboard() {
           { value: String(boardStats.resiliesThisMonth), sub: `En ${boardStats.currentMonthLabel}` },
         ] : null,
         subChip: true,
-        // markerOnReading : le repère se pose sur le dernier point quand la
-        // carte affiche la lecture du mois — c'est ce point-là dont elle parle.
-        spark: boardStats ? {
-          values: boardStats.resiliesSeries.map((m) => m.value),
-          markerOnReading: 1,
-        } : null,
+        spark: boardStats ? { values: boardStats.resiliesSeries.map((m) => m.value) } : null,
       },
       {
         label: 'Rétractés', Icon: RotateCcw, value: n(boardStats?.retractes), color: '#b45309',
