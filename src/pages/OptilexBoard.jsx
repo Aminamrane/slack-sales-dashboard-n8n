@@ -742,6 +742,7 @@ const SEC_ICONS = {
   activity: <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></>,
   emails: <><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></>,
   meteo: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" /></>,
+  ambassador: <><path d="m3 11 18-5v12L3 13v-2z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" /></>,
 };
 // Titre de section du panneau : icône + libellé (remplace les titres nus).
 function SecTitle({ icon, children, style }) {
@@ -793,6 +794,7 @@ export default function OptilexBoard({ embed = false }) {
   const [multiFilter, setMultiFilter] = useState([]);      // catégories secondaires cochées (union)
   const [sigRange, setSigRange] = useState({ from: "", to: "" }); // filtre date signature Owner
   const [meteoFilter, setMeteoFilter] = useState([]);      // bandes météo cochées (rouge/orange/vert)
+  const [ambassadorFilter, setAmbassadorFilter] = useState(false); // filtre "Programme ambassadeur" : clients cochés éligibles
   const [integrationView, setIntegrationView] = useState("all"); // sous-filtre onglet Intégration : "all" | "overdue"
   const [sortCol, setSortCol] = useState(null);   // tri manuel par en-tête : null | owner_signed | onboarding | integration
   const [sortDir, setSortDir] = useState("asc");  // asc | desc
@@ -865,6 +867,8 @@ export default function OptilexBoard({ embed = false }) {
       } else if (etatFilter !== "Tous" && !matchesCat(r, etatFilter)) {
         return false;
       }
+      // Filtre "Programme ambassadeur" : ne garde que les clients cochés éligibles.
+      if (ambassadorFilter && !r.ambassador_eligible) return false;
       // Sous-filtre contextuel "En retard" de l'onglet Intégration à venir.
       if (etatFilter === "Intégration à venir" && multiFilter.length === 0 && integrationView === "overdue" && !isIntegrationOverdue(r)) return false;
       // Filtre date de signature Owner (mois ou période). Une ligne sans date de
@@ -881,7 +885,7 @@ export default function OptilexBoard({ embed = false }) {
       }
       return true;
     });
-  }, [rows, etatFilter, multiFilter, sigRange, q, integrationView]);
+  }, [rows, etatFilter, multiFilter, sigRange, q, integrationView, ambassadorFilter]);
 
   // Compteurs par bande météo (rouge 1-2 / orange 3 / vert 4-5 / "none" = non noté), calculés
   // sur la base pré-météo -> le nombre affiché sur chaque chip ne bouge pas quand on coche.
@@ -1156,6 +1160,23 @@ export default function OptilexBoard({ embed = false }) {
             </motion.button>
           );
         })}
+        {/* Filtre Programme ambassadeur : n'affiche que les clients cochés éligibles. */}
+        <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
+        {(() => {
+          const on = ambassadorFilter;
+          const cnt = rows.filter((r) => r.ambassador_eligible).length;
+          return (
+            <motion.button type="button" whileTap={{ scale: 0.96 }} title="Programme ambassadeur : clients éligibles"
+              onClick={() => setAmbassadorFilter((v) => !v)}
+              onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = "#f7f8fa"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = on ? "#eef1f6" : CARD; }}
+              style={{ padding: "7px 12px", borderRadius: 20, border: `1px solid ${on ? NAVY : BORDER}`, background: on ? "#eef1f6" : CARD, color: on ? NAVY : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={on ? NAVY : MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 11 18-5v12L3 13v-2z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" /></svg>
+              Programme ambassadeur
+              <span style={{ fontSize: 11, fontWeight: 700, color: on ? NAVY : MUTED }}>{cnt}</span>
+            </motion.button>
+          );
+        })()}
         <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           {(sigRange.from || sigRange.to || multiFilter.length || etatFilter !== "Tous" || q) && (
             <span style={{ fontSize: 11.5, color: MUTED, fontWeight: 600 }}>{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</span>
@@ -2139,6 +2160,32 @@ function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion,
             <div className="ob-sec" style={{ animationDelay: "0.075s" }}>
               <SecTitle icon="meteo">Météo client</SecTitle>
               <MeteoSection row={row} num={num} recordMeteo={recordMeteo} version={meteoHistVersion} />
+            </div>
+          )}
+
+          {/* Programme ambassadeur : client à valoriser / à solliciter pour un témoignage (case à cocher). */}
+          {row.numero_client && (
+            <div className="ob-sec" style={{ animationDelay: "0.085s" }}>
+              <SecTitle icon="ambassador">Programme ambassadeur</SecTitle>
+              {(() => {
+                const on = !!row.ambassador_eligible;
+                const editable = meteoSettable() && !isFinanceTeam();
+                return (
+                  <div style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${BORDER}`, background: "#fafbfc" }}>
+                    <motion.button type="button" disabled={!editable} whileTap={editable ? { scale: 0.99 } : undefined}
+                      onClick={() => { if (editable) patch(num, { ambassador_eligible: !on }); }}
+                      style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: 0, border: "none", background: "none", cursor: editable ? "pointer" : "default", textAlign: "left", fontFamily: "inherit" }}>
+                      <span style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${on ? GREEN : "#cbd2e0"}`, background: on ? GREEN : "transparent", transition: "background .15s ease, border-color .15s ease" }}>
+                        {on && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
+                      </span>
+                      <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>Éligible au programme ambassadeur</span>
+                        <span style={{ fontSize: 11.5, color: MUTED, lineHeight: 1.4 }}>Client à valoriser, à solliciter pour un témoignage / une recommandation.</span>
+                      </span>
+                    </motion.button>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
