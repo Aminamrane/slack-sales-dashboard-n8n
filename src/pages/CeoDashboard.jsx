@@ -20,7 +20,7 @@ import {
   ChevronDown, Home, MessageSquare, Mail, Search, PanelLeft, Sparkles,
   // Glyphes des cartes d'états : un pictogramme qui PORTE le sens du KPI,
   // à la place des anciennes pastilles de couleur.
-  Users, CircleCheck, Cloud, CalendarClock, Rocket, CircleX, RotateCcw, Ellipsis,
+  Users, CircleCheck, Cloud, CalendarClock, Rocket, UserRoundX, RotateCcw, Ellipsis,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import "../index.css";
@@ -376,6 +376,17 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
   const [hovered, setHovered] = useState(false);
   const Icon = kpi.Icon;
   const Artwork = kpi.Artwork;
+  // Lectures alternées (ex. résiliés : total puis mois courant). Au survol on
+  // revient sur la première, celle qui porte le titre de la carte.
+  const readings = Array.isArray(kpi.readings) && kpi.readings.length > 1 ? kpi.readings : null;
+  const [reading, setReading] = useState(0);
+  useEffect(() => {
+    if (!readings || hovered) return undefined;
+    const id = setInterval(() => setReading((r) => (r + 1) % readings.length), 3600);
+    return () => clearInterval(id);
+  }, [readings, hovered]);
+  const shownIndex = readings ? (hovered ? 0 : reading % readings.length) : 0;
+  const shown = readings ? readings[shownIndex] : { value: kpi.value, sub: kpi.sub };
 
   const open = () => hasTooltip && setIsOpen(true);
   const close = () => setIsOpen(false);
@@ -402,6 +413,9 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
       {/* Illustration en grand à droite : réservée à la météo, dont le dessin
           EST la valeur (façon widget météo). Les autres cartes gardent leur
           glyphe discret dans le libellé. */}
+      {kpi.spark && (
+        <CardSparkline id={kpi.spark.id} values={kpi.spark.values} color={kpi.color} />
+      )}
       {Artwork && (
         <div aria-hidden="true" style={{
           position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)',
@@ -412,7 +426,7 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
       )}
       {/* Quand il y a une illustration, le texte réserve sa place et s'ellipse
           avant de passer dessous. */}
-      <div style={{ paddingRight: Artwork ? 70 : 0, minWidth: 0 }}>
+      <div style={{ paddingRight: Artwork ? 70 : 0, minWidth: 0, position: 'relative', zIndex: 1 }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, minWidth: 0,
         }}>
@@ -428,24 +442,34 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
             bloc principal, ex. le board Owner/Opti'Lex). Défaut = dataLoading.
             `kpi.valueGradient` : chiffre en dégradé (météo) — désactivé pendant
             le chargement, un tiret en remplissage transparent serait invisible. */}
-        <div style={{
-          fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.1,
-          ...(kpi.valueGradient && !(kpi.loading ?? dataLoading) ? {
-            width: 'fit-content',
-            background: `linear-gradient(135deg, ${kpi.valueGradient[0]} 0%, ${kpi.valueGradient[1]} 100%)`,
-            WebkitBackgroundClip: 'text', backgroundClip: 'text',
-            WebkitTextFillColor: 'transparent', color: 'transparent',
-          } : { color: '#212121' }),
-        }}>
-          {(kpi.loading ?? dataLoading) ? <span style={{ animation: 'ceoPulse 1.2s ease infinite' }}>—</span> : kpi.value}
-        </div>
-        {/* Sous-titre sur UNE ligne : c'est lui qui gonflait la hauteur des cartes
-            quand le libellé était long. Le détail complet reste au survol
-            (tooltip) et dans l'attribut title. */}
-        <div style={{
-          marginTop: 6, fontSize: 12, fontWeight: 500, color: C.muted,
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-        }} title={kpi.sub}>{kpi.sub}</div>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={shownIndex}
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <div style={{
+              fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.1,
+              ...(kpi.valueGradient && !(kpi.loading ?? dataLoading) ? {
+                width: 'fit-content',
+                background: `linear-gradient(135deg, ${kpi.valueGradient[0]} 0%, ${kpi.valueGradient[1]} 100%)`,
+                WebkitBackgroundClip: 'text', backgroundClip: 'text',
+                WebkitTextFillColor: 'transparent', color: 'transparent',
+              } : { color: '#212121' }),
+            }}>
+              {(kpi.loading ?? dataLoading) ? <span style={{ animation: 'ceoPulse 1.2s ease infinite' }}>—</span> : shown.value}
+            </div>
+            {/* Sous-titre sur UNE ligne : c'est lui qui gonflait la hauteur des
+                cartes quand le libellé était long. Le détail complet reste au
+                survol (tooltip) et dans l'attribut title. */}
+            <div style={{
+              marginTop: 6, fontSize: 12, fontWeight: 500, color: C.muted,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }} title={shown.sub}>{shown.sub}</div>
+          </motion.div>
+        </AnimatePresence>
       </div>
 
       {hasTooltip && (
@@ -795,6 +819,72 @@ function AnimatedMeteoIcon({ score, size = 54, color, strokeWidth = 1.6 }) {
     default:
       return null;
   }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// SPARKLINE — courbe d'aire calée en bas de carte, derrière le texte. Elle
+// donne la tendance, jamais un chiffre : pas d'axe, pas de valeur lisible.
+// Lissage Catmull-Rom → Bézier : sur 12 points mensuels, une ligne brisée
+// ferait graphique de secours, une courbe lissée fait signal.
+// ══════════════════════════════════════════════════════════════════════════
+const SPARK_W = 320;
+const SPARK_H = 100;
+
+function sparkPaths(values) {
+  if (!Array.isArray(values) || values.length < 2) return { line: '', area: '' };
+  const max = Math.max(...values, 1);
+  const pad = 8;
+  const step = SPARK_W / Math.max(values.length - 1, 1);
+  const pts = values.map((v, i) => [
+    i * step,
+    SPARK_H - pad - (v / max) * (SPARK_H - pad * 2),
+  ]);
+  let line = `M ${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i += 1) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    line += ` C ${c1[0].toFixed(1)} ${c1[1].toFixed(1)}, ${c2[0].toFixed(1)} ${c2[1].toFixed(1)}, ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
+  }
+  return { line, area: `${line} L ${SPARK_W} ${SPARK_H} L 0 ${SPARK_H} Z` };
+}
+
+function CardSparkline({ id, values, color, height = 46 }) {
+  const { line, area } = useMemo(() => sparkPaths(values), [values]);
+  if (!values || values.length < 2) return null;
+  return (
+    <div aria-hidden="true" style={{
+      position: 'absolute', left: 0, right: 0, bottom: 0, height,
+      borderBottomLeftRadius: 16, borderBottomRightRadius: 16,
+      overflow: 'hidden', pointerEvents: 'none', zIndex: 0,
+    }}>
+      <svg width="100%" height="100%" viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} preserveAspectRatio="none">
+        <defs>
+          <linearGradient id={`${id}-fill`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.30" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={area} fill={`url(#${id}-fill)`} />
+        {/* vectorEffect : l'étirement horizontal du viewBox ne doit pas
+            écraser l'épaisseur du trait. */}
+        <path
+          className="ceo-spark-line"
+          d={line}
+          fill="none"
+          stroke={color}
+          strokeOpacity="0.55"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+    </div>
+  );
 }
 
 // Défilé météo : au repos les 5 temps s'enchaînent en fondu (grand soleil →
@@ -1532,6 +1622,26 @@ export default function CeoDashboard() {
     const autresMap = {};
     autresRows.forEach((r) => { const e = displayEtat(r); autresMap[e] = (autresMap[e] || 0) + 1; });
 
+    // ── HISTORIQUE DES RÉSILIATIONS : hors filtre ──
+    // 12 derniers mois + mois courant. Ils nourrissent la courbe et l'alternance
+    // de la carte, qui racontent la trajectoire quelle que soit la période
+    // sélectionnée. Une résiliation sans `etat_date` n'entre dans aucun mois :
+    // on ne la place pas au hasard (aucune aujourd'hui, les 45 sont datées).
+    const resilByMonth = {};
+    established.forEach((r) => {
+      if (displayEtat(r) !== BOARD_RESILIE) return;
+      const k = (dateOnly(r.etat_date) || '').slice(0, 7);
+      if (k) resilByMonth[k] = (resilByMonth[k] || 0) + 1;
+    });
+    const now = new Date();
+    const resiliesSeries = [];
+    for (let i = 11; i >= 0; i -= 1) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      resiliesSeries.push({ key: k, value: resilByMonth[k] || 0 });
+    }
+    const currentMonthKeyLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
     // ── À DATE : insensibles à la période ──
     // Un RDV "à venir" est par nature dans le futur, et la météo est un relevé
     // courant (l'historique par client vit dans /optilex/meteo-history, pas ici).
@@ -1550,6 +1660,9 @@ export default function CeoDashboard() {
       autresBreakdown: Object.entries(autresMap)
         .map(([label, value]) => ({ label, value }))
         .sort((a, z) => z.value - a.value),
+      resiliesSeries,
+      resiliesThisMonth: resilByMonth[currentMonthKeyLocal] || 0,
+      currentMonthLabel: `${MONTH_LABELS_FR[now.getMonth()].toLowerCase()} ${now.getFullYear()}`,
       onboarding: established.filter(isOnboardingUpcoming).length,
       integration: established.filter(isIntegrationUpcoming).length,
       integrationOverdue: established.filter(isIntegrationOverdue).length,
@@ -1619,9 +1732,17 @@ export default function CeoDashboard() {
           : 'RDV de lancement non effectués',
       },
       {
-        label: 'Résiliés', Icon: CircleX, value: n(boardStats?.resilies), color: '#ef4444',
+        label: 'Résiliés', Icon: UserRoundX, value: n(boardStats?.resilies), color: '#ef4444',
         loading: boardLoading,
-        sub: periodLabel ? `Résiliations actées en ${periodLabel}` : 'Résiliation actée',
+        sub: periodLabel ? `Résiliations actées en ${periodLabel}` : 'Résiliations actées',
+        // Sans filtre, la carte alterne le cumul et le mois en cours : le total
+        // dit le poids, le mois dit le rythme. Avec un filtre, un seul chiffre
+        // a du sens — celui de la période demandée.
+        readings: (!periodLabel && boardStats) ? [
+          { value: String(boardStats.resilies), sub: 'Résiliations actées' },
+          { value: String(boardStats.resiliesThisMonth), sub: `En ${boardStats.currentMonthLabel}` },
+        ] : null,
+        spark: boardStats ? { id: 'ceo-spark-resilies', values: boardStats.resiliesSeries.map((m) => m.value) } : null,
       },
       {
         label: 'Rétractés', Icon: RotateCcw, value: n(boardStats?.retractes), color: '#b45309',
