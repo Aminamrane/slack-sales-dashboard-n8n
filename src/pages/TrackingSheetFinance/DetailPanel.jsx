@@ -32,7 +32,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, ChevronRight, Maximize2, Minimize2, MoreHorizontal, ChevronsRight,
-  Calendar, User, Briefcase, History,
+  Calendar, Briefcase, History, Lock, Landmark, PenLine, FileSignature,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
@@ -46,11 +46,14 @@ import {
   PSP_OPTIONS, PSP_COLORS, PSP_FALLBACK,
   EMPLOYEE_RANGES,
   AUDIT_FIELD_LABELS,
+  PROFILE_CHANGE_LABELS,
+  ALLOWED_ROLES,
   toNumber,
 } from './constants.js';
 import {
   EditableNumber, EditableDate, EditableSelect, EditableText, CopyButton,
 } from './EditableCell.jsx';
+import ContactList from './ContactList.jsx';
 
 // Notion palette (sync with index.jsx N).
 const N = {
@@ -86,6 +89,11 @@ export default function DetailPanel({
   const [loadingAudit, setLoadingAudit] = useState(false);
   const [error, setError] = useState(null);
   const [fullscreen, setFullscreen] = useState(false);
+  // Fiche client (profil) : SIREN, contacts typés, effectif courant, état
+  // hérité du board, fin de contrat, journal des changements de la fiche.
+  const [profile, setProfile] = useState(null);
+  // Écriture réservée à l'équipe finance + admin (le CEO lit).
+  const canEdit = ALLOWED_ROLES.includes(apiClient.getUser()?.role);
 
   // Reset on close
   useEffect(() => {
@@ -94,8 +102,24 @@ export default function DetailPanel({
       setAudit(null);
       setError(null);
       setFullscreen(false);
+      setProfile(null);
     }
   }, [open]);
+
+  // Profil client — rechargeable après chaque édition (SIREN, contacts,
+  // effectif) pour que la fiche et son journal restent d'accord.
+  const refreshProfile = useCallback(() => {
+    if (!clientId) return;
+    apiClient.get(`/api/v1/finance-periods/client/${clientId}/profile`)
+      .then(setProfile)
+      .catch((e) => console.error('[DetailPanel profile]', e));
+  }, [clientId]);
+
+  useEffect(() => {
+    if (!open || !clientId) return;
+    setProfile(null);
+    refreshProfile();
+  }, [open, clientId, refreshProfile]);
 
   // Fetch timeline whenever clientId changes
   useEffect(() => {
@@ -145,7 +169,11 @@ export default function DetailPanel({
 
   const periods = timeline?.periods || [];
   const client = focusedRow?.client || periods[0]?.client || null;
-  const etatMeta = (client?.etat && ETAT_COLORS[client.etat]) || ETAT_FALLBACK;
+  // Une Résiliation / Rétractation actée sur le board Owner/Opti'Lex fait
+  // autorité : la fiche l'affiche à la place de l'état finance.
+  const inheritedEtat = profile?.etat_inherited || null;
+  const effectiveEtat = inheritedEtat || client?.etat;
+  const etatMeta = (effectiveEtat && ETAT_COLORS[effectiveEtat]) || ETAT_FALLBACK;
 
   // Patch helper bound to current rowId — reuses table's onPatchRow flow.
   // Falls back to a direct PATCH if the parent didn't wire onPatchRow.
@@ -210,10 +238,10 @@ export default function DetailPanel({
             padding: '24px 32px 64px',
           }}>
             {/* Title block */}
-            <TitleBlock client={client} etatMeta={etatMeta} focusedRow={focusedRow} onCopied={onCopied} />
+            <TitleBlock client={client} etatMeta={etatMeta} focusedRow={focusedRow} inheritedEtat={inheritedEtat} onCopied={onCopied} />
 
             {/* Meta row */}
-            <MetaRow client={client} focusedRow={focusedRow} />
+            <MetaRow client={client} focusedRow={focusedRow} profile={profile} />
 
             {/* Error state */}
             {error && (
@@ -229,10 +257,15 @@ export default function DetailPanel({
             <Section title="Identité client" delay={0.05}>
               <IdentitySection
                 client={client}
+                clientId={clientId}
                 focusedRow={focusedRow}
+                profile={profile}
+                canEdit={canEdit}
+                refreshProfile={refreshProfile}
                 patch={patch}
                 patchEtat={patchEtat}
                 onCopied={onCopied}
+                onShowToast={onShowToast}
               />
             </Section>
 
@@ -240,9 +273,14 @@ export default function DetailPanel({
             <Section title="Modalités" delay={0.08}>
               <ModalitesSection
                 client={client}
+                clientId={clientId}
                 focusedRow={focusedRow}
+                profile={profile}
+                canEdit={canEdit}
+                refreshProfile={refreshProfile}
                 patch={patch}
                 onCopied={onCopied}
+                onShowToast={onShowToast}
               />
             </Section>
 
@@ -255,10 +293,15 @@ export default function DetailPanel({
               />
             </Section>
 
-            {/* Section : Audit */}
-            <Section title="Historique des modifications" delay={0.14}>
+            {/* Section : Audit — replié par défaut, la fiche reste lisible */}
+            <CollapsibleSection
+              title="Historique des modifications"
+              count={(audit?.entries?.length || 0) + (profile?.changes?.length || 0)}
+              delay={0.14}
+            >
               <AuditList loading={loadingAudit} entries={audit?.entries} />
-            </Section>
+              <ProfileChangesList changes={profile?.changes} />
+            </CollapsibleSection>
 
             {/* Section : Timeline périodes */}
             <Section title="Timeline mensuelle" delay={0.17}>
@@ -267,6 +310,7 @@ export default function DetailPanel({
                 loading={loadingTimeline}
                 focusedRowId={rowId}
                 onSelectRow={onSelectRow}
+                dateSignature={profile?.date_signature}
               />
             </Section>
           </div>
@@ -355,7 +399,7 @@ const iconBtnStyle = {
 // `focusedRow` reserved for future use (e.g. period badge in the title).
 // Kept in the prop list so callers don't break if we re-introduce it.
 // eslint-disable-next-line no-unused-vars
-function TitleBlock({ client, etatMeta, focusedRow, onCopied }) {
+function TitleBlock({ client, etatMeta, focusedRow, inheritedEtat, onCopied }) {
   const { societeName, representant: repFromSociete } = splitSocieteRep(client?.societe);
   const rep = client?.representative_name || repFromSociete;
   return (
@@ -412,13 +456,25 @@ function TitleBlock({ client, etatMeta, focusedRow, onCopied }) {
             <CopyButton value={rep} onCopied={onCopied} size={12} />
           </span>
         )}
+        {inheritedEtat && (
+          <div style={{
+            marginTop: 8,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '3px 9px', borderRadius: 4,
+            background: N.redBg, color: N.red,
+            fontSize: 11.5, fontWeight: 600,
+          }}>
+            <Lock size={11} />
+            {inheritedEtat === 'retractation' ? 'Rétractation' : 'Résiliation'} actée sur le board Owner/Opti'Lex
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 // ── Meta row (pills) ────────────────────────────────────────────────────────
-function MetaRow({ client, focusedRow }) {
+function MetaRow({ client, focusedRow, profile }) {
   const items = [];
   if (client?.etat) {
     const meta = ETAT_COLORS[client.etat] || ETAT_FALLBACK;
@@ -438,11 +494,32 @@ function MetaRow({ client, focusedRow }) {
       value: formatMonthLabel(periodFromDate(focusedRow.period)),
     });
   }
-  if (focusedRow?.employee_range || client?.employee_range) {
+  if (profile?.employee_range || focusedRow?.employee_range || client?.employee_range) {
     items.push({
       icon: <Briefcase size={12} />,
       label: 'Effectif',
-      value: focusedRow?.employee_range || client?.employee_range,
+      value: profile?.employee_range || focusedRow?.employee_range || client?.employee_range,
+    });
+  }
+  if (profile?.siren) {
+    items.push({
+      icon: <Landmark size={12} />,
+      label: 'SIREN',
+      value: profile.siren,
+    });
+  }
+  // Échéance annuelle : visible en un coup d'œil quand elle approche —
+  // rouge à un mois, orange dans la fenêtre de renouvellement (90 j),
+  // même seuils que le board.
+  if (profile?.contract_days_left != null && profile.contract_days_left <= 90) {
+    const d = profile.contract_days_left;
+    const urgent = d <= 30;
+    items.push({
+      icon: <FileSignature size={12} />,
+      label: 'Fin contrat',
+      value: `J-${d}`,
+      pillBg: urgent ? N.redBg : '#fdecc8',
+      pillFg: urgent ? N.red : '#9f6b00',
     });
   }
 
@@ -553,7 +630,10 @@ function Field({ label, children, copyValue, onCopied, align = 'right' }) {
 }
 
 // ── Section : Identité client ───────────────────────────────────────────────
-function IdentitySection({ client, focusedRow, patch, patchEtat, onCopied }) {
+function IdentitySection({
+  client, clientId, focusedRow, profile, canEdit, refreshProfile,
+  patch, patchEtat, onCopied, onShowToast,
+}) {
   if (!focusedRow) return <Empty />;
   // Pattern "Société - Nom Prénom" présent sur la grande majorité des
   // clients (cf. splitSocieteRep dans constants.js). La donnée brute
@@ -561,6 +641,15 @@ function IdentitySection({ client, focusedRow, patch, patchEtat, onCopied }) {
   // l'affichage UI pour cohérence visuelle entre clients anciens et récents.
   const { societeName, representant: repFromSociete } = splitSocieteRep(client?.societe);
   const rep = client?.representative_name || repFromSociete;
+  const inherited = profile?.etat_inherited || null;
+
+  // SIREN : le backfill est une donnée sourcée (lecture) ; sans lui, la
+  // saisie alimente l'override du board (siren_ovr) et le journal.
+  const sirenEditable = canEdit && profile && profile.siren_source !== 'backfill';
+  const commitSiren = async (value) => {
+    await apiClient.patch(`/api/v1/finance-periods/client/${clientId}/profile`, { siren: value || '' });
+    refreshProfile();
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -576,40 +665,84 @@ function IdentitySection({ client, focusedRow, patch, patchEtat, onCopied }) {
         <ReadOnlyText value={rep} />
       </Field>
 
-      <Field label="Téléphone" copyValue={client?.phone} onCopied={onCopied}>
-        <ReadOnlyText value={client?.phone} />
+      <Field label="SIREN" copyValue={profile?.siren} onCopied={onCopied}>
+        {sirenEditable ? (
+          <EditableText
+            value={profile?.siren}
+            placeholder="9 chiffres"
+            onCommit={commitSiren}
+            width="auto"
+          />
+        ) : (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <ReadOnlyText value={profile?.siren} mono />
+            {profile?.siren_source === 'backfill' && (
+              <span style={{ fontSize: 10.5, color: N.textFaint }}>source interne</span>
+            )}
+          </span>
+        )}
       </Field>
 
-      <Field label="Email" copyValue={client?.email} onCopied={onCopied}>
-        <ReadOnlyText value={client?.email} />
-      </Field>
+      {/* Contacts typés — partagés avec le board Owner/Opti'Lex. */}
+      <ContactList
+        clientId={clientId}
+        kind="email"
+        contacts={profile?.contacts}
+        canEdit={canEdit}
+        onChanged={refreshProfile}
+        onShowToast={onShowToast}
+        onCopied={onCopied}
+      />
+      <ContactList
+        clientId={clientId}
+        kind="phone"
+        contacts={profile?.contacts}
+        inheritedValue={client?.phone}
+        canEdit={canEdit}
+        onChanged={refreshProfile}
+        onShowToast={onShowToast}
+        onCopied={onCopied}
+      />
 
-      <Field label="Email finance" copyValue={focusedRow.finance_email || client?.email} onCopied={onCopied}>
-        <EditableText
-          value={focusedRow.finance_email}
-          placeholder={client?.email || '—'}
-          onCommit={patch('finance_email')}
-          placeholderItalic={false}
-          width="auto"
-        />
-      </Field>
-
-      <Field label="État" copyValue={client?.etat && (ETAT_COLORS[client.etat]?.label || client.etat)} onCopied={onCopied}>
-        <EditableSelect
-          value={client?.etat}
-          options={ETAT_OPTIONS}
-          onCommit={patchEtat}
-          pillColors={Object.fromEntries(
-            Object.entries(ETAT_COLORS).map(([k, v]) => [k, { fg: v.fg, bg: v.bg }])
-          )}
-          pillFallback={ETAT_FALLBACK}
-          optionLabels={Object.fromEntries(
-            Object.entries(ETAT_COLORS).map(([k, v]) => [k, v.label])
-          )}
-          notionSolid
-          placeholderItalic
-          width="auto"
-        />
+      <Field
+        label="État"
+        copyValue={
+          inherited
+            ? (ETAT_COLORS[inherited]?.label || inherited)
+            : (client?.etat && (ETAT_COLORS[client.etat]?.label || client.etat))
+        }
+        onCopied={onCopied}
+      >
+        {inherited ? (
+          // L'état est imposé par le board : on l'affiche verrouillé plutôt
+          // que d'offrir une édition qui serait écrasée à la prochaine sync.
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '2px 10px', borderRadius: 4,
+            background: (ETAT_COLORS[inherited] || ETAT_FALLBACK).bg,
+            color: (ETAT_COLORS[inherited] || ETAT_FALLBACK).fg,
+            fontSize: 12.5, fontWeight: 600,
+          }}>
+            <Lock size={11} />
+            {(ETAT_COLORS[inherited] || ETAT_FALLBACK).label || inherited}
+          </span>
+        ) : (
+          <EditableSelect
+            value={client?.etat}
+            options={ETAT_OPTIONS}
+            onCommit={patchEtat}
+            pillColors={Object.fromEntries(
+              Object.entries(ETAT_COLORS).map(([k, v]) => [k, { fg: v.fg, bg: v.bg }])
+            )}
+            pillFallback={ETAT_FALLBACK}
+            optionLabels={Object.fromEntries(
+              Object.entries(ETAT_COLORS).map(([k, v]) => [k, v.label])
+            )}
+            notionSolid
+            placeholderItalic
+            width="auto"
+          />
+        )}
       </Field>
 
       <Field label="État détail" copyValue={focusedRow.finance_status_detail} onCopied={onCopied}>
@@ -637,8 +770,32 @@ function IdentitySection({ client, focusedRow, patch, patchEtat, onCopied }) {
 }
 
 // ── Section : Modalités ─────────────────────────────────────────────────────
-function ModalitesSection({ client, focusedRow, patch, onCopied }) {
+function ModalitesSection({
+  client, clientId, focusedRow, profile, canEdit, refreshProfile,
+  patch, onCopied, onShowToast,
+}) {
   if (!focusedRow) return <Empty />;
+
+  // Effectif COURANT du client (fiche), pas le snapshot du mois affiché.
+  // L'édition alimente l'override partagé avec le board (tranche_ovr) et le
+  // journal de la fiche — d'où vient le mini-historique juste dessous.
+  const commitEffectif = async (value) => {
+    try {
+      await apiClient.patch(`/api/v1/finance-periods/client/${clientId}/profile`, { employee_range: value });
+      refreshProfile();
+    } catch (e) {
+      onShowToast?.(e?.message || 'Erreur', 'error');
+      throw e;
+    }
+  };
+  const lastRangeChange = (profile?.changes || []).find((c) => c.field === 'employee_range');
+
+  // Fin de contrat = anniversaire de la signature (contrats d'un an) —
+  // calculée par le backend avec la même règle que le renouvellement du board.
+  const daysLeft = profile?.contract_days_left;
+  const endBadge = daysLeft != null && daysLeft <= 90
+    ? { bg: daysLeft <= 30 ? N.redBg : '#fdecc8', fg: daysLeft <= 30 ? N.red : '#9f6b00' }
+    : null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -669,19 +826,64 @@ function ModalitesSection({ client, focusedRow, patch, onCopied }) {
         />
       </Field>
 
-      <Field label="Effectif" copyValue={focusedRow.employee_range} onCopied={onCopied}>
+      <Field label="Effectif" copyValue={profile?.employee_range} onCopied={onCopied}>
         <EditableSelect
-          value={focusedRow.employee_range}
+          value={profile?.employee_range}
           options={EMPLOYEE_RANGES}
-          onCommit={patch('employee_range')}
+          onCommit={commitEffectif}
+          disabled={!canEdit}
           placeholderItalic
           width="auto"
         />
       </Field>
+      {lastRangeChange && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '2px 0 6px', marginTop: -2,
+          borderBottom: `1px solid ${N.borderSft}`,
+          fontSize: 11, color: N.textFaint,
+        }}>
+          <PenLine size={10} />
+          <span>
+            {lastRangeChange.old_value || '∅'} → {lastRangeChange.new_value || '∅'}
+            {' · '}{formatAuditDate(lastRangeChange.changed_at)}
+            {lastRangeChange.changed_by ? ` · ${lastRangeChange.changed_by}` : ''}
+          </span>
+        </div>
+      )}
 
-      <Field label="Fin contrat" copyValue={client?.finance_contract_end_date && formatDateFR(client.finance_contract_end_date)} onCopied={onCopied}>
-        <ReadOnlyDate value={client?.finance_contract_end_date} />
+      <Field
+        label="Fin contrat"
+        copyValue={profile?.contract_end && formatDateFR(profile.contract_end)}
+        onCopied={onCopied}
+      >
+        {profile?.contract_end ? (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 13.5, color: N.text, fontVariantNumeric: 'tabular-nums' }}>
+              {formatDateFR(profile.contract_end)}
+            </span>
+            {endBadge && (
+              <span style={{
+                padding: '1px 8px', borderRadius: 4,
+                background: endBadge.bg, color: endBadge.fg,
+                fontSize: 11.5, fontWeight: 700,
+              }}>
+                J-{daysLeft}
+              </span>
+            )}
+          </span>
+        ) : (
+          <ReadOnlyDate value={client?.finance_contract_end_date} />
+        )}
       </Field>
+      {profile?.date_signature && (
+        <div style={{
+          padding: '2px 0 6px', marginTop: -2,
+          fontSize: 11, color: N.textFaint,
+        }}>
+          Anniversaire de la signature du {formatDateFR(profile.date_signature)} (contrat 1 an)
+        </div>
+      )}
     </div>
   );
 }
@@ -763,8 +965,26 @@ function OwnerOptilexSection({ focusedRow, patch, onCopied }) {
     },
     {
       label: 'Date paiement',
-      ownerNode: <EditableDate value={focusedRow.payment_date_owner} onCommit={patch('payment_date_owner')} />,
-      optiNode:  <EditableDate value={focusedRow.payment_date_optilex} onCommit={patch('payment_date_optilex')} />,
+      // « prévue » = date issue d'une formule du classeur (échéance +30 j),
+      // pas d'une saisie. Elle date une attente, jamais un encaissement —
+      // le badge empêche de confondre les deux. Une saisie manuelle ici
+      // fait tomber le drapeau (côté backend).
+      ownerNode: (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {focusedRow.payment_date_owner_projected && focusedRow.payment_date_owner && (
+            <span style={projectedBadgeStyle}>prévue</span>
+          )}
+          <EditableDate value={focusedRow.payment_date_owner} onCommit={patch('payment_date_owner')} />
+        </span>
+      ),
+      optiNode: (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {focusedRow.payment_date_optilex_projected && focusedRow.payment_date_optilex && (
+            <span style={projectedBadgeStyle}>prévue</span>
+          )}
+          <EditableDate value={focusedRow.payment_date_optilex} onCommit={patch('payment_date_optilex')} />
+        </span>
+      ),
       ownerCopy: focusedRow.payment_date_owner && formatDateFR(focusedRow.payment_date_owner),
       optiCopy:  focusedRow.payment_date_optilex && formatDateFR(focusedRow.payment_date_optilex),
     },
@@ -919,10 +1139,131 @@ function OverdueInline({ amount }) {
   );
 }
 
+const projectedBadgeStyle = {
+  padding: '1px 6px', borderRadius: 3,
+  background: '#fdecc8', color: '#9f6b00',
+  fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase',
+  letterSpacing: '0.03em', flexShrink: 0,
+};
+
 function formatAmountForCopy(v) {
   const n = toNumber(v);
   if (n === null || n === 0) return null;
   return formatEUR(n);
+}
+
+// ── Section repliable ───────────────────────────────────────────────────────
+// L'historique complet allongeait la fiche au point de noyer la timeline :
+// replié par défaut, le compteur dit qu'il y a de la matière, le chevron
+// l'ouvre. (Demande dev : « qu'il soit plié et qu'on puisse le déplier ».)
+function CollapsibleSection({ title, count, children, delay = 0 }) {
+  const [openSec, setOpenSec] = useState(false);
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay, ease: [0.4, 0, 0.2, 1] }}
+      style={{ marginTop: 28 }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpenSec((v) => !v)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          width: '100%', border: 'none', background: 'transparent',
+          cursor: 'pointer', padding: 0, margin: '0 0 12px',
+          fontFamily: 'inherit', textAlign: 'left',
+        }}
+      >
+        <motion.span
+          animate={{ rotate: openSec ? 90 : 0 }}
+          transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
+          style={{ display: 'inline-flex', color: N.textFaint }}
+        >
+          <ChevronRight size={13} />
+        </motion.span>
+        <span style={{
+          fontSize: 11, fontWeight: 600, color: N.textMuted,
+          textTransform: 'uppercase', letterSpacing: '0.04em',
+        }}>
+          {title}
+        </span>
+        {count > 0 && (
+          <span style={{
+            fontSize: 10.5, fontWeight: 600, color: N.textMuted,
+            background: N.sideBg, borderRadius: 999, padding: '1px 8px',
+          }}>
+            {count}
+          </span>
+        )}
+      </button>
+      <AnimatePresence initial={false}>
+        {openSec && (
+          <motion.div
+            key="body"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+            style={{ overflow: 'hidden' }}
+          >
+            {children}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.section>
+  );
+}
+
+// ── Journal de la FICHE client (effectif, SIREN, contacts, état…) ───────────
+// Complète l'audit mensuel : ici vivent les changements du client lui-même,
+// qu'ils viennent du classeur (origin=sheet) ou d'une édition interne.
+function ProfileChangesList({ changes }) {
+  if (!changes?.length) return null;
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={{
+        fontSize: 10.5, fontWeight: 600, color: N.textFaint,
+        textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6,
+      }}>
+        Fiche client
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {changes.slice(0, 15).map((c, i) => (
+          <div key={i} style={{
+            padding: '10px 12px', background: N.sideBg, borderRadius: 6,
+            display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12.5,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <span style={{
+                fontSize: 12.5, fontWeight: 600, color: N.text,
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}>
+                <History size={11} style={{ color: N.textFaint }} />
+                {PROFILE_CHANGE_LABELS[c.field] || c.field}
+                <span style={{
+                  fontSize: 9.5, fontWeight: 700, letterSpacing: '0.04em',
+                  textTransform: 'uppercase', borderRadius: 3, padding: '1px 5px',
+                  background: c.origin === 'internal' ? '#e7f0fb' : '#efeeec',
+                  color: c.origin === 'internal' ? '#1e40af' : N.textMuted,
+                }}>
+                  {c.origin === 'internal' ? 'interne' : 'sheet'}
+                </span>
+              </span>
+              <span style={{ fontSize: 11, color: N.textFaint, whiteSpace: 'nowrap' }}>
+                {formatAuditDate(c.changed_at)}{c.changed_by ? ` · ${c.changed_by}` : ''}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: N.textMuted, flexWrap: 'wrap' }}>
+              <AuditValue v={c.old_value} muted />
+              <ChevronRight size={11} style={{ color: N.textFaint }} />
+              <AuditValue v={c.new_value} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ── Section : Audit ─────────────────────────────────────────────────────────
@@ -1018,7 +1359,9 @@ function formatAuditDate(iso) {
 }
 
 // ── Section : Timeline ──────────────────────────────────────────────────────
-function TimelineList({ periods, loading, focusedRowId, onSelectRow }) {
+function TimelineList({ periods, loading, focusedRowId, onSelectRow, dateSignature }) {
+  // Mois de la signature (YYYY-MM) : point de départ de l'histoire du client.
+  const signatureMonth = dateSignature ? String(dateSignature).slice(0, 7) : null;
   if (loading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1060,6 +1403,13 @@ function TimelineList({ periods, loading, focusedRowId, onSelectRow }) {
                         (Number(p.overdue_optilex_current_month) || 0);
         const received = (Number(p.received_owner) || 0) +
                          (Number(p.received_optilex_ttc) || 0);
+        // Régularisation : du cash récupéré ce mois-ci SUR LES CRÉANCES des
+        // mois précédents. C'est la réponse à « ses retards ont-ils été
+        // réglés ? » — on la montre là où l'œil cherche le retard.
+        const regularised = (Number(p.received_overdue_owner) || 0) +
+                            (Number(p.received_overdue_optilex_ttc) || 0);
+        const isSignature = signatureMonth &&
+          String(p.period).slice(0, 7) === signatureMonth;
         return (
           <button
             key={p.id}
@@ -1084,8 +1434,25 @@ function TimelineList({ periods, loading, focusedRowId, onSelectRow }) {
             onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = N.sideBg; }}
             onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
           >
-            <div style={{ fontWeight: isActive ? 600 : 500 }}>
-              {formatMonthLabel(periodFromDate(p.period))}
+            <div style={{
+              fontWeight: isActive ? 600 : 500,
+              display: 'flex', alignItems: 'center', gap: 6, minWidth: 0,
+            }}>
+              <span style={{ whiteSpace: 'nowrap' }}>
+                {formatMonthLabel(periodFromDate(p.period))}
+              </span>
+              {isSignature && (
+                <span title="Mois de signature du contrat" style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 3,
+                  padding: '1px 6px', borderRadius: 3,
+                  background: '#e7f0fb', color: '#1e40af',
+                  fontSize: 10, fontWeight: 700,
+                  textTransform: 'uppercase', letterSpacing: '0.03em',
+                  flexShrink: 0,
+                }}>
+                  Signature
+                </span>
+              )}
             </div>
             <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
               {formatEUR(p.expected_global_ttc)}
@@ -1093,8 +1460,12 @@ function TimelineList({ periods, loading, focusedRowId, onSelectRow }) {
             <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: N.textMuted }}>
               {formatEUR(received)}
             </div>
-            <div style={{ textAlign: 'right' }}>
-              {overdue > 0 ? (
+            <div style={{
+              textAlign: 'right',
+              display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
+              gap: 4, flexWrap: 'wrap',
+            }}>
+              {overdue > 0 && (
                 <span style={{
                   background: N.redBg, color: N.red,
                   padding: '2px 8px', borderRadius: 4,
@@ -1103,7 +1474,18 @@ function TimelineList({ periods, loading, focusedRowId, onSelectRow }) {
                 }}>
                   {formatEUR(overdue)}
                 </span>
-              ) : (
+              )}
+              {regularised > 0 && (
+                <span title="Récupéré sur les créances des mois précédents" style={{
+                  background: N.greenBg, color: N.green,
+                  padding: '2px 8px', borderRadius: 4,
+                  fontSize: 12, fontWeight: 600,
+                  fontVariantNumeric: 'tabular-nums',
+                }}>
+                  +{formatEUR(regularised)}
+                </span>
+              )}
+              {overdue <= 0 && regularised <= 0 && (
                 <span style={{ color: N.textFaint }}>—</span>
               )}
             </div>

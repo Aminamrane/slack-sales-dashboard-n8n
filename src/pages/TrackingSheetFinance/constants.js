@@ -119,6 +119,33 @@ export const EMPLOYEE_RANGES = [
   '+400',
 ];
 
+
+// ── Contacts typés (fiche client) ────────────────────────────────────────
+//
+// Miroir exact de CONTACT_LABELS côté backend (finance_client_profile.py).
+// `value` est ce qui part au POST/PATCH ; `label` est l'affichage FR.
+export const CONTACT_LABEL_OPTIONS = [
+  { value: 'perso',       label: 'Perso' },
+  { value: 'pro',         label: 'Pro' },
+  { value: 'associe',     label: 'Associé' },
+  { value: 'comptable',   label: 'Comptable' },
+  { value: 'facturation', label: 'Facturation' },
+];
+
+// Libellés FR du journal de la fiche client (finance_sheet_change).
+export const PROFILE_CHANGE_LABELS = {
+  employee_range: 'Effectif',
+  siren:          'SIREN',
+  contact_email:  'Email',
+  contact_phone:  'Téléphone',
+  etat:           'État',
+  nom:            'Nom client',
+  sales:          'Sales',
+  modalite:       'Modalité',
+  prelevement_automatise: 'Prélèvement automatisé',
+  date_signature: 'Date de signature',
+};
+
 // ── Visual hints for cells ───────────────────────────────────────────────
 
 // Color palette for finance_status_detail pills. Maps to text + bg colors.
