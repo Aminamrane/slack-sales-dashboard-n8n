@@ -387,6 +387,43 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
   }, [readings, hovered]);
   const shownIndex = readings ? (hovered ? 0 : reading % readings.length) : 0;
   const shown = readings ? readings[shownIndex] : { value: kpi.value, sub: kpi.sub };
+  const isLoading = kpi.loading ?? dataLoading;
+  // Le chiffre est ce qu'on vient chercher sur ces cartes : il domine.
+  const valueSize = kpi.valueSize ?? 36;
+  const readingWindowH = Math.round(valueSize * 1.08) + 34;
+
+  const renderReading = (r) => (
+    <>
+      <div style={{
+        fontSize: valueSize, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.08,
+        ...(kpi.valueGradient && !isLoading ? {
+          width: 'fit-content',
+          background: `linear-gradient(135deg, ${kpi.valueGradient[0]} 0%, ${kpi.valueGradient[1]} 100%)`,
+          WebkitBackgroundClip: 'text', backgroundClip: 'text',
+          WebkitTextFillColor: 'transparent', color: 'transparent',
+        } : { color: '#212121' }),
+      }}>
+        {isLoading ? <span style={{ animation: 'ceoPulse 1.2s ease infinite' }}>—</span> : r.value}
+      </div>
+      {/* En pastille quand la carte porte une courbe : posé à plat sur le
+          dégradé, ce texte se perdait. Avec son propre fond, il se lit
+          toujours et il redevient une information, pas une légende. */}
+      {kpi.subChip ? (
+        <div style={{
+          marginTop: 8, maxWidth: '100%', display: 'inline-flex', alignItems: 'center',
+          padding: '3px 10px', borderRadius: 999,
+          background: `${kpi.color}18`, color: kpi.color,
+          fontSize: 11.5, fontWeight: 700, letterSpacing: '-0.01em',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }} title={r.sub}>{r.sub}</div>
+      ) : (
+        <div style={{
+          marginTop: 6, fontSize: 12, fontWeight: 500, color: C.muted,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }} title={r.sub}>{r.sub}</div>
+      )}
+    </>
+  );
 
   const open = () => hasTooltip && setIsOpen(true);
   const close = () => setIsOpen(false);
@@ -453,37 +490,25 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
             bloc principal, ex. le board Owner/Opti'Lex). Défaut = dataLoading.
             `kpi.valueGradient` : chiffre en dégradé (météo) — désactivé pendant
             le chargement, un tiret en remplissage transparent serait invisible. */}
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={shownIndex}
-            variants={READING_GROUP}
-            initial="initial"
-            animate="enter"
-            exit="exit"
-          >
-            <motion.div variants={READING_VALUE} style={{
-              fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.1,
-              ...(kpi.valueGradient && !(kpi.loading ?? dataLoading) ? {
-                width: 'fit-content',
-                background: `linear-gradient(135deg, ${kpi.valueGradient[0]} 0%, ${kpi.valueGradient[1]} 100%)`,
-                WebkitBackgroundClip: 'text', backgroundClip: 'text',
-                WebkitTextFillColor: 'transparent', color: 'transparent',
-              } : { color: '#212121' }),
-            }}>
-              {(kpi.loading ?? dataLoading) ? <span style={{ animation: 'ceoPulse 1.2s ease infinite' }}>—</span> : shown.value}
-            </motion.div>
-            {/* Sous-titre sur UNE ligne : c'est lui qui gonflait la hauteur des
-                cartes quand le libellé était long. Le détail complet reste au
-                survol (tooltip) et dans l'attribut title. */}
-            <motion.div variants={READING_SUB} style={{
-              marginTop: 6, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-              // Sur une carte à courbe, le texte passe devant le dégradé :
-              // il lui faut plus de contraste que le gris de sous-titre habituel.
-              fontWeight: kpi.spark ? 600 : 500,
-              color: kpi.spark ? C.secondary : C.muted,
-            }} title={shown.sub}>{shown.sub}</motion.div>
-          </motion.div>
-        </AnimatePresence>
+        {readings ? (
+          // Les deux lectures coexistent le temps du passage : l'ancienne monte
+          // et sort du cadre pendant que la nouvelle arrive par le bas. Le cadre
+          // est masqué, donc on voit un mouvement continu et non une apparition.
+          <div style={{ position: 'relative', height: readingWindowH, overflow: 'hidden' }}>
+            <AnimatePresence initial={false}>
+              <motion.div
+                key={shownIndex}
+                variants={READING_SLIDE}
+                initial="initial"
+                animate="enter"
+                exit="exit"
+                style={{ position: 'absolute', left: 0, right: 0, top: 0 }}
+              >
+                {renderReading(shown)}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        ) : renderReading(shown)}
       </div>
 
       {hasTooltip && (
@@ -842,19 +867,16 @@ function AnimatedMeteoIcon({ score, size = 54, color, strokeWidth = 1.6 }) {
 // sont sèches et rapides : on ne fait pas rebondir ce qui s'en va, et une
 // sortie lente donne l'impression d'une interface qui traîne.
 // ══════════════════════════════════════════════════════════════════════════
-const READING_GROUP = {
-  enter: { transition: { staggerChildren: 0.07, delayChildren: 0.02 } },
-  exit: { transition: { staggerChildren: 0.04, staggerDirection: -1 } },
-};
-const READING_VALUE = {
-  initial: { opacity: 0, y: 18, scale: 0.86 },
-  enter: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 430, damping: 18, mass: 0.7 } },
-  exit: { opacity: 0, y: -12, scale: 0.94, transition: { duration: 0.16, ease: [0.4, 0, 1, 1] } },
-};
-const READING_SUB = {
-  initial: { opacity: 0, y: 10 },
-  enter: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 420, damping: 24, mass: 0.6 } },
-  exit: { opacity: 0, y: -7, transition: { duration: 0.14, ease: [0.4, 0, 1, 1] } },
+// Défilement dans une fenêtre masquée, à PLEINE OPACITÉ : la lecture qui part
+// sort par le haut, celle qui arrive entre par le bas. C'est le mouvement qui
+// raconte le changement. Un fondu, lui, fait disparaître l'élément au milieu de
+// sa course — il « sort de nulle part » et on ne lit plus rien.
+// Ressort volontairement peu bondissant (amortissement 26) : sur un chiffre
+// qu'on doit lire, le dépassement se sent, il ne se voit pas.
+const READING_SLIDE = {
+  initial: { y: '112%' },
+  enter: { y: '0%', transition: { type: 'spring', stiffness: 300, damping: 26, mass: 0.9 } },
+  exit: { y: '-112%', transition: { type: 'spring', stiffness: 300, damping: 30, mass: 0.9 } },
 };
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -870,12 +892,14 @@ function sparkPaths(values) {
   if (!Array.isArray(values) || values.length < 2) return { line: '', area: '' };
   const max = Math.max(...values, 1);
   const pad = 8;
-  const step = SPARK_W / Math.max(values.length - 1, 1);
-  const pts = values.map((v, i) => [
-    i * step,
-    SPARK_H - pad - (v / max) * (SPARK_H - pad * 2),
-  ]);
-  let line = `M ${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+  // Épaulements plats aux deux bords : sans eux, le dernier mois tombe pile sur
+  // l'arrondi de la carte et la courbe se fait trancher en pleine pente — on
+  // croit à un accident de découpe. Là, elle se pose avant de sortir du cadre.
+  const tail = SPARK_W * 0.055;
+  const step = (SPARK_W - tail * 2) / Math.max(values.length - 1, 1);
+  const y = (v) => SPARK_H - pad - (v / max) * (SPARK_H - pad * 2);
+  const pts = values.map((v, i) => [tail + i * step, y(v)]);
+  let line = `M 0 ${pts[0][1].toFixed(1)} L ${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
   for (let i = 0; i < pts.length - 1; i += 1) {
     const p0 = pts[i - 1] || pts[i];
     const p1 = pts[i];
@@ -885,6 +909,7 @@ function sparkPaths(values) {
     const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
     line += ` C ${c1[0].toFixed(1)} ${c1[1].toFixed(1)}, ${c2[0].toFixed(1)} ${c2[1].toFixed(1)}, ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
   }
+  line += ` L ${SPARK_W} ${pts[pts.length - 1][1].toFixed(1)}`;
   return { line, area: `${line} L ${SPARK_W} ${SPARK_H} L 0 ${SPARK_H} Z` };
 }
 
@@ -1778,6 +1803,7 @@ export default function CeoDashboard() {
           { value: String(boardStats.resilies), sub: 'Résiliations actées' },
           { value: String(boardStats.resiliesThisMonth), sub: `En ${boardStats.currentMonthLabel}` },
         ] : null,
+        subChip: true,
         spark: boardStats ? { id: 'ceo-spark-resilies', values: boardStats.resiliesSeries.map((m) => m.value) } : null,
       },
       {
