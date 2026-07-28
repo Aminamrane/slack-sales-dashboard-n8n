@@ -487,7 +487,15 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
           // Les deux lectures coexistent le temps du passage : l'ancienne monte
           // et sort du cadre pendant que la nouvelle arrive par le bas. Le cadre
           // est masqué, donc on voit un mouvement continu et non une apparition.
-          <div style={{ position: 'relative', height: readingWindowH, overflow: 'hidden' }}>
+          // La fenêtre masque le débordement vertical, mais `overflow: hidden`
+          // rogne aussi les côtés : la pastille, décalée de 9 px à gauche pour
+          // aligner son texte, s'y faisait couper. On élargit donc la fenêtre
+          // en marge négative et on lui rend la même valeur en padding — la
+          // zone de padding reste à l'intérieur de la découpe.
+          <div style={{
+            position: 'relative', height: readingWindowH, overflow: 'hidden',
+            marginLeft: -14, paddingLeft: 14, marginRight: -14, paddingRight: 14,
+          }}>
             <AnimatePresence initial={false}>
               <motion.div
                 key={shownIndex}
@@ -1674,25 +1682,29 @@ export default function CeoDashboard() {
     const autresMap = {};
     autresRows.forEach((r) => { const e = displayEtat(r); autresMap[e] = (autresMap[e] || 0) + 1; });
 
-    // ── HISTORIQUE DES RÉSILIATIONS : hors filtre ──
-    // 12 derniers mois + mois courant. Ils nourrissent la courbe et l'alternance
-    // de la carte, qui racontent la trajectoire quelle que soit la période
-    // sélectionnée. Une résiliation sans `etat_date` n'entre dans aucun mois :
-    // on ne la place pas au hasard (aucune aujourd'hui, les 45 sont datées).
-    const resilByMonth = {};
-    established.forEach((r) => {
-      if (displayEtat(r) !== BOARD_RESILIE) return;
-      const k = (dateOnly(r.etat_date) || '').slice(0, 7);
-      if (k) resilByMonth[k] = (resilByMonth[k] || 0) + 1;
-    });
+    // ── HISTORIQUE DES SORTIES : hors filtre ──
+    // 12 derniers mois + mois courant, par état. Ils nourrissent les courbes et
+    // l'alternance des cartes, qui racontent la trajectoire quelle que soit la
+    // période sélectionnée. Une sortie sans `etat_date` n'entre dans aucun mois :
+    // on ne la place pas au hasard (0 sur 45 résiliations, 3 sur 44 rétractations).
     const now = new Date();
-    const resiliesSeries = [];
-    for (let i = 11; i >= 0; i -= 1) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      resiliesSeries.push({ key: k, value: resilByMonth[k] || 0 });
-    }
     const currentMonthKeyLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const monthlyExits = (etatName) => {
+      const byMonth = {};
+      established.forEach((r) => {
+        if (displayEtat(r) !== etatName) return;
+        const k = (dateOnly(r.etat_date) || '').slice(0, 7);
+        if (k) byMonth[k] = (byMonth[k] || 0) + 1;
+      });
+      const series = [];
+      for (let i = 11; i >= 0; i -= 1) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        series.push(byMonth[`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`] || 0);
+      }
+      return { series, thisMonth: byMonth[currentMonthKeyLocal] || 0 };
+    };
+    const resiliesExits = monthlyExits(BOARD_RESILIE);
+    const retractesExits = monthlyExits(BOARD_RETRACTE);
 
     // ── À DATE : insensibles à la période ──
     // Un RDV "à venir" est par nature dans le futur, et la météo est un relevé
@@ -1712,8 +1724,10 @@ export default function CeoDashboard() {
       autresBreakdown: Object.entries(autresMap)
         .map(([label, value]) => ({ label, value }))
         .sort((a, z) => z.value - a.value),
-      resiliesSeries,
-      resiliesThisMonth: resilByMonth[currentMonthKeyLocal] || 0,
+      resiliesSeries: resiliesExits.series,
+      resiliesThisMonth: resiliesExits.thisMonth,
+      retractesSeries: retractesExits.series,
+      retractesThisMonth: retractesExits.thisMonth,
       currentMonthLabel: `${MONTH_LABELS_FR[now.getMonth()].toLowerCase()} ${now.getFullYear()}`,
       onboarding: established.filter(isOnboardingUpcoming).length,
       integration: established.filter(isIntegrationUpcoming).length,
@@ -1795,12 +1809,18 @@ export default function CeoDashboard() {
           { value: String(boardStats.resiliesThisMonth), sub: `En ${boardStats.currentMonthLabel}` },
         ] : null,
         subChip: true,
-        spark: boardStats ? { values: boardStats.resiliesSeries.map((m) => m.value) } : null,
+        spark: boardStats ? { values: boardStats.resiliesSeries } : null,
       },
       {
-        label: 'Rétractés', Icon: RotateCcw, value: n(boardStats?.retractes), color: '#b45309',
+        label: 'Rétractés', Icon: RotateCcw, value: n(boardStats?.retractes), color: '#f97316',
         loading: boardLoading,
-        sub: periodLabel ? `Rétractations actées en ${periodLabel}` : 'Rétractation actée',
+        sub: periodLabel ? `Rétractations actées en ${periodLabel}` : 'Rétractations actées',
+        subChip: true,
+        readings: (!periodLabel && boardStats) ? [
+          { value: String(boardStats.retractes), sub: 'Rétractations actées' },
+          { value: String(boardStats.retractesThisMonth), sub: `En ${boardStats.currentMonthLabel}` },
+        ] : null,
+        spark: boardStats ? { values: boardStats.retractesSeries } : null,
       },
       {
         label: 'Autres', Icon: Ellipsis, value: n(boardStats?.autres), color: '#94a3b8',
