@@ -20,7 +20,7 @@ import {
   ChevronDown, Home, MessageSquare, Mail, Search, PanelLeft, Sparkles,
   // Glyphes des cartes d'états : un pictogramme qui PORTE le sens du KPI,
   // à la place des anciennes pastilles de couleur.
-  Users, CircleCheck, Cloud, CalendarClock, Rocket, UserRoundX, RotateCcw, Ellipsis,
+  Users, TrendingUp, Cloud, CalendarClock, Rocket, UserRoundX, RotateCcw, Send,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import "../index.css";
@@ -1680,13 +1680,14 @@ export default function CeoDashboard() {
     // ── FLUX : les entrées dans l'état pendant la période ──
     const countEtat = (name) => established
       .filter((r) => displayEtat(r) === name && (allTime || inPeriod(r.etat_date))).length;
-    const autresRows = established.filter((r) => {
-      const e = displayEtat(r);
-      if (!e || e === BOARD_ACTIF || e === BOARD_RESILIE || e === BOARD_RETRACTE) return false;
-      return allTime || inPeriod(r.etat_date);
-    });
-    const autresMap = {};
-    autresRows.forEach((r) => { const e = displayEtat(r); autresMap[e] = (autresMap[e] || 0) + 1; });
+
+    // ── CONTRATS ENVOYÉS ──
+    // Comptés sur TOUTES les lignes du board, contrats en vol compris : une
+    // vente pas encore déclarée reste un contrat parti. `owner_sent_at` n'existe
+    // que depuis le passage à Yousign (premiers envois tracés en mars 2026) —
+    // avant, rien n'est daté, la carte ne peut pas inventer ces envois.
+    const contratsEnvoyes = boardRows
+      .filter((r) => r.owner_sent_at && (allTime || inPeriod(r.owner_sent_at))).length;
 
     // ── HISTORIQUE DES SORTIES : hors filtre ──
     // 12 derniers mois + mois courant, par état. Ils nourrissent les courbes et
@@ -1726,10 +1727,7 @@ export default function CeoDashboard() {
       actifs,
       resilies: countEtat(BOARD_RESILIE),
       retractes: countEtat(BOARD_RETRACTE),
-      autres: autresRows.length,
-      autresBreakdown: Object.entries(autresMap)
-        .map(([label, value]) => ({ label, value }))
-        .sort((a, z) => z.value - a.value),
+      contratsEnvoyes,
       resiliesSeries: resiliesExits.series,
       resiliesThisMonth: resiliesExits.thisMonth,
       retractesSeries: retractesExits.series,
@@ -1766,7 +1764,7 @@ export default function CeoDashboard() {
         sub: periodLabel ? `Signés au plus tard en ${periodLabel}` : 'Clients établis du board',
       },
       {
-        label: 'Actifs', Icon: CircleCheck, value: n(boardStats?.actifs), color: '#10b981',
+        label: 'Actifs', Icon: TrendingUp, value: n(boardStats?.actifs), color: '#10b981',
         loading: boardLoading,
         sub: periodLabel ? `Encore actifs fin ${periodLabel}` : 'Onglet Signé du board',
       },
@@ -1829,12 +1827,9 @@ export default function CeoDashboard() {
         spark: boardStats ? { values: boardStats.retractesSeries } : null,
       },
       {
-        label: 'Autres', Icon: Ellipsis, value: n(boardStats?.autres), color: '#94a3b8',
-        loading: boardLoading,
-        sub: boardStats?.autresBreakdown?.length
-          ? boardStats.autresBreakdown.map((r) => r.label).slice(0, 3).join(', ')
-          : 'En cours de résiliation, pause…',
-        breakdown: boardStats?.autresBreakdown || [],
+        label: 'Contrats envoyés', Icon: Send, value: n(boardStats?.contratsEnvoyes),
+        color: '#8b5cf6', loading: boardLoading,
+        sub: periodLabel ? `Envoyés en ${periodLabel}` : 'Tous mois confondus',
       },
     ];
   }, [boardStats, etatPeriod]);
