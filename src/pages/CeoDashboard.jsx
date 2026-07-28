@@ -20,7 +20,7 @@ import {
   ChevronDown, Home, MessageSquare, Mail, Search, PanelLeft, Sparkles,
   // Glyphes des cartes d'états : un pictogramme qui PORTE le sens du KPI,
   // à la place des anciennes pastilles de couleur.
-  Users, TrendingUp, Cloud, CalendarClock, Rocket, UserRoundX, RotateCcw, Send,
+  Users, TrendingUp, Cloud, CalendarClock, Scale, UserRoundX, RotateCcw, Send,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import "../index.css";
@@ -415,12 +415,23 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
           marginTop: 8, marginLeft: -9, maxWidth: '100%',
           display: 'inline-flex', alignItems: 'center',
           padding: '3px 9px', borderRadius: 999,
-          // Neutre ardoise plutôt que la teinte de la carte : sur une courbe
-          // rouge, une pastille rouge se fond dans son propre fond.
-          background: '#EBEEF3', color: '#3C4457',
-          fontSize: 11.5, fontWeight: 700, letterSpacing: '-0.01em',
+          // Neutre ardoise par défaut : sur une courbe rouge, une pastille
+          // rouge se fondrait dans son propre fond. Ton `alert` réservé à ce
+          // qui appelle une action — un retard, pas un simple libellé.
+          ...(kpi.subChipTone === 'alert'
+            ? { background: '#FDECEC', color: '#DC2626' }
+            : { background: '#EBEEF3', color: '#3C4457' }),
+          fontSize: kpi.subChipTone === 'alert' ? 12.5 : 11.5,
+          fontWeight: 700, letterSpacing: '-0.01em', gap: 6,
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-        }} title={r.sub}>{r.sub}</div>
+        }} title={r.sub}>
+          {/* Point plein : donne du poids à l'alerte sans avoir à grossir le
+              texte au point de concurrencer le chiffre. */}
+          {kpi.subChipTone === 'alert' && (
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#DC2626', flexShrink: 0 }} />
+          )}
+          {r.sub}
+        </div>
       ) : (
         <div style={{
           marginTop: 6, fontSize: 12, fontWeight: 500, color: C.muted,
@@ -1795,10 +1806,15 @@ export default function CeoDashboard() {
         loading: boardLoading, sub: 'RDV onboarding non effectués',
       },
       {
-        label: 'RDV intégration à venir', Icon: Rocket, value: n(boardStats?.integration),
+        // Ce RDV est celui du CABINET (Opti'Lex), pas d'Owner : la balance le
+        // dit, là où une fusée ne disait rien. Et un RDV en retard appelle une
+        // action — il passe en pastille d'alerte plutôt qu'en ligne de légende.
+        label: 'RDV intégration à venir', Icon: Scale, value: n(boardStats?.integration),
         color: '#3b82f6', loading: boardLoading,
+        subChip: boardStats?.integrationOverdue > 0,
+        subChipTone: 'alert',
         sub: boardStats?.integrationOverdue
-          ? `dont ${boardStats.integrationOverdue} en retard`
+          ? `${boardStats.integrationOverdue} en retard`
           : 'RDV de lancement non effectués',
       },
       {
