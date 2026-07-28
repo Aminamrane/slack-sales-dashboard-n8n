@@ -2171,7 +2171,7 @@ function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion,
                 const on = !!row.ambassador_eligible;
                 const editable = meteoSettable() && !isFinanceTeam();
                 return (
-                  <div style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${BORDER}`, background: "#fafbfc" }}>
+                  <div style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${BORDER}`, background: "#fafbfc", marginBottom: 22 }}>
                     <motion.button type="button" disabled={!editable} whileTap={editable ? { scale: 0.99 } : undefined}
                       onClick={() => { if (editable) patch(num, { ambassador_eligible: !on }); }}
                       style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: 0, border: "none", background: "none", cursor: editable ? "pointer" : "default", textAlign: "left", fontFamily: "inherit" }}>
