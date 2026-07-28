@@ -1267,7 +1267,14 @@ export default function TrackingSheet() {
   const tabCounts = useMemo(() => {
     const counts = {};
     CATEGORIES.forEach(cat => { counts[cat.key] = 0; });
-    leads.forEach(l => { if (counts[l.status] !== undefined) counts[l.status]++; });
+    // Onglet Nouveau lead : on ne compte PAS les leads donnés à un setter
+    // (manual_setter_id) — ce ne sont plus des leads que le sales doit traiter,
+    // ils vivent dans le conteneur "Donnés". Les autres onglets comptent normalement.
+    leads.forEach(l => {
+      if (counts[l.status] === undefined) return;
+      if (l.status === 'new' && l.manual_setter_id) return;
+      counts[l.status]++;
+    });
     return counts;
   }, [leads]);
 
