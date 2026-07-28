@@ -986,6 +986,9 @@ export default function TrackingSheet() {
   // Onglet Signés — conteneurs par mois de signature : { [monthKey]: bool } override
   // du défaut (mois en cours ouvert, autres mois repliés).
   const [signedMonthOpen, setSignedMonthOpen] = useState({});
+  // Onglet Nouveau lead — conteneur "Donnés" (leads donnés à un setter) : replié
+  // par défaut, séparé de la liste "à traiter". Additif, pur affichage.
+  const [givenLeadsOpen, setGivenLeadsOpen] = useState(false);
   const [sidebarView, setSidebarView] = useState(initialView || 'leads');
   const [sidebarHover, setSidebarHover] = useState(false);
   const sidebarCollapsed = !sidebarHover; // repliee par defaut, s'ouvre au survol (overlay)
@@ -5787,6 +5790,44 @@ export default function TrackingSheet() {
                         </div>
                       );
                     });
+                  })()
+                ) : activeCat.key === 'new' ? (
+                  (() => {
+                    // Onglet Nouveau lead : on sépare les leads "à traiter" (non donnés)
+                    // des leads DONNÉS à un setter (manual_setter_id != null). Ces derniers
+                    // vont dans un conteneur "Donnés" replié par défaut. Purement additif.
+                    const byPrio = (arr) => [...arr].sort((a, b) => {
+                      const prioOrder = { high: 0, medium: 1, low: 2 };
+                      return (prioOrder[a.lead_priority] ?? 1) - (prioOrder[b.lead_priority] ?? 1);
+                    });
+                    const toProcess = byPrio(filteredLeads.filter((l) => !l.manual_setter_id));
+                    const given = byPrio(filteredLeads.filter((l) => l.manual_setter_id));
+                    return (
+                      <>
+                        {toProcess.map((lead, i) => renderLeadCard(lead, i))}
+                        {given.length > 0 && (
+                          <div style={{
+                            border: `1.5px solid ${darkMode ? 'rgba(255,255,255,0.06)' : '#dfe1e6'}`,
+                            borderRadius: 14,
+                            background: darkMode ? 'rgba(255,255,255,0.04)' : '#fafafb',
+                            padding: givenLeadsOpen ? '14px 10px 10px' : '14px 10px',
+                            marginTop: 8, marginBottom: 8, cursor: 'pointer',
+                          }} onClick={() => setGivenLeadsOpen((o) => !o)}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: givenLeadsOpen ? 10 : 0, padding: '0 6px' }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', padding: '3px 12px', borderRadius: 20, fontSize: 12.5, fontWeight: 700, border: `1.5px solid ${C.border}`, background: darkMode ? 'rgba(255,255,255,0.05)' : '#f0f1f3', color: C.muted }}>Donnés</span>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>{given.length}</span>
+                              <div style={{ flex: 1 }} />
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" style={{ transition: 'transform 0.25s ease', transform: givenLeadsOpen ? 'rotate(180deg)' : 'rotate(0deg)', opacity: 0.5 }}><path d="m6 9 6 6 6-6" /></svg>
+                            </div>
+                            {givenLeadsOpen && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                                {given.map((lead, i) => renderLeadCard(lead, i))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    );
                   })()
                 ) : (
                   [...filteredLeads].sort((a, b) => {
