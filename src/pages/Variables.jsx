@@ -168,6 +168,7 @@ function BaremePanel({ C, bareme }) {
           <div><b>Commission</b> = base (tranche du client) <b>×</b> coefficient (poste · CC/ADS · Mensuel/Annuel).</div>
           <div style={{ marginTop: 6 }}><b>Commission d'équipe</b> du head = base <b>×</b> {coefFmt(bareme.override?.CC)} (CC) ou {coefFmt(bareme.override?.ADS)} (ADS), sur chaque vente de son équipe.</div>
           <div style={{ marginTop: 6 }}><b>Net à verser</b> = Fixe + Variable (commissions + commission d'équipe + primes).</div>
+          {bareme.webinaire && <div style={{ marginTop: 6 }}><b>Webinaire</b> = base <b>×</b> {coefFmt(bareme.webinaire.coef)} (sans mensuel/annuel, idem pour tous) ; le head touche base <b>×</b> {coefFmt(bareme.webinaire.override)} sur les webinaires de son équipe.</div>}
         </div>
         <div style={{ ...head, marginTop: 16 }}>D'ou vient chaque donnee</div>
         <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12.5, color: C.text2, lineHeight: 1.7 }}>
@@ -194,6 +195,11 @@ function BaremePanel({ C, bareme }) {
             </Frag>
           ))}
         </div>
+        {bareme.webinaire && (
+          <div style={{ marginTop: 10, fontSize: 12.5, color: C.text2, lineHeight: 1.6 }}>
+            <b style={{ color: C.text }}>Webinaire</b> : base × <b style={{ color: C.text, fontVariantNumeric: "tabular-nums" }}>{coefFmt(bareme.webinaire.coef)}</b> (plat, sans mensuel/annuel) · sur équipe × <b style={{ color: C.text, fontVariantNumeric: "tabular-nums" }}>{coefFmt(bareme.webinaire.override)}</b>
+          </div>
+        )}
         <div style={{ ...head, marginTop: 16 }}>Base par tranche (salaries client)</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
           {bases.map(([t, b]) => (
@@ -336,8 +342,8 @@ function DealLine({ C, d }) {
     <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "7px 0", borderBottom: `1px dashed ${C.border}` }}>
       <span style={{ color: C.text, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={`Origine : ${d.origin || "non renseignee"}`}>{d.client || "·"}</span>
       <Tag C={C} title="Tranche de salaries du client (a la vente)">{d.tranche || "?"}</Tag>
-      <Tag C={C} accent={d.cat === "CC"} title="CC = cold call ; ADS = autre origine">{d.cat}</Tag>
-      <Tag C={C} title="Mode de paiement declare">{planLabel(d.plan)}</Tag>
+      <Tag C={C} accent={d.cat === "CC"} title="CC = cold call ; ADS = autre origine ; WEB = webinaire">{d.cat === "WEB" ? "Webinaire" : d.cat}</Tag>
+      {d.cat !== "WEB" && <Tag C={C} title="Mode de paiement declare">{planLabel(d.plan)}</Tag>}
       {d.tranche_unknown ? (
         <span style={{ ...mono(C), color: C.warn, minWidth: 120, textAlign: "right" }}>tranche inconnue</span>
       ) : (
@@ -356,7 +362,7 @@ function OverrideLine({ C, o }) {
         {o.from}{o.client ? ` · ${o.client}` : ""}
       </span>
       <Tag C={C}>{o.tranche || "?"}</Tag>
-      <Tag C={C} accent={o.cat === "CC"}>{o.cat}</Tag>
+      <Tag C={C} accent={o.cat === "CC"}>{o.cat === "WEB" ? "Webinaire" : o.cat}</Tag>
       <span style={{ ...mono(C), minWidth: 130, textAlign: "right", color: C.text2 }}>
         {eur(o.base)} × {coefFmt(o.coef)} = <b style={{ color: C.accentText }}>{eur(o.amount)}</b>
       </span>
