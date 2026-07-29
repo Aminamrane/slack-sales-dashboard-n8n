@@ -2051,11 +2051,98 @@ function EtatHistory({ num, version }) {
   );
 }
 
+// Pop-up "Agenda du client" : consolide les RDV standards (fiche) + les RDV
+// juristes (GET /optilex/client-agenda) en une timeline, avec le juriste de
+// référence (= dernier juriste "booked"). createPortal -> fontFamily Inter remise
+// sur le root du portail (sort du conteneur de police sinon).
+function ClientAgendaModal({ row, num, onClose }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    apiClient.get(`/api/v1/optilex/client-agenda?numero_client=${encodeURIComponent(num)}`)
+      .then((r) => { if (alive) { setData(r); setLoading(false); } })
+      .catch(() => { if (alive) { setData({ rdv: [], reference_jurist: null, count: 0 }); setLoading(false); } });
+    return () => { alive = false; };
+  }, [num]);
+
+  const items = useMemo(() => {
+    const std = [
+      { key: "onb", label: "Onboarding Owner", type: "Owner", date: row.rdv_onboarding_date_manual || row.rdv_onboarding_date, done: row.rdv_onboarding_done },
+      { key: "int", label: "Intégration Opti'Lex", type: "Opti'Lex", date: row.rdv_lancement_date, done: row.rdv_lancement_done },
+      { key: "fis", label: "Lancement fiscal", type: "Opti'Lex", date: row.rdv_fiscal_date_manual || row.rdv_fiscal_date, done: row.rdv_fiscal_done },
+      { key: "soc", label: "Lancement social", type: "Opti'Lex", date: row.rdv_social_date_manual || row.rdv_social_date, done: row.rdv_social_done },
+    ].filter((x) => x.date).map((x) => ({ ...x, kind: "standard", when: String(x.date) }));
+    const jur = ((data && data.rdv) || []).map((b) => ({
+      key: b.booking_id, label: `RDV juriste ${b.team || ""}`.trim(),
+      juriste: b.juriste_name, cancelled: b.status === "cancelled",
+      kind: "jurist", when: String(b.slot_start),
+    }));
+    return [...std, ...jur].sort((a, b) => (b.when || "").localeCompare(a.when || ""));
+  }, [row, data]);
+
+  const ref = data && data.reference_jurist;
+
+  return createPortal(
+    <div style={{ position: "fixed", inset: 0, zIndex: 10070, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={onClose}
+        style={{ position: "absolute", inset: 0, background: "rgba(17,24,39,0.42)" }} />
+      <motion.div initial={{ opacity: 0, scale: 0.97, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+        style={{ position: "relative", width: "min(560px, 100%)", maxHeight: "82vh", display: "flex", flexDirection: "column", background: CARD, borderRadius: 16, border: `1px solid ${BORDER}`, boxShadow: "0 24px 60px rgba(17,24,39,0.28)", overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${BORDER}` }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>Agenda du client</div>
+            <div style={{ fontSize: 12, color: MUTED, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ov(row, "contact_name_ovr", "contact_name") || row.crm_societe || row.numero_client}</div>
+          </div>
+          <button type="button" onClick={onClose} style={{ border: "none", background: "none", cursor: "pointer", color: MUTED, fontSize: 17, lineHeight: 1, padding: 4, flexShrink: 0 }}>✕</button>
+        </div>
+        <div style={{ padding: "16px 20px", overflowY: "auto" }}>
+          <div style={{ padding: "11px 14px", borderRadius: 10, border: `1px solid ${ref ? GREEN + "55" : BORDER}`, background: ref ? "#f0f7f3" : "#fafbfc", display: "flex", alignItems: "center", gap: 11, marginBottom: 16 }}>
+            <span style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", background: ref ? GREEN : "#e5e8ee", color: "#fff", fontSize: 12, fontWeight: 800 }}>
+              {ref ? (ref.name || "?").trim().charAt(0).toUpperCase() : "?"}
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 10.5, color: MUTED, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>Juriste de référence</div>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: ref ? NAVY : MUTED }}>
+                {ref ? `${ref.name}${ref.team ? " · " + ref.team : ""}` : "Aucun RDV juriste pour l'instant"}
+              </div>
+            </div>
+          </div>
+          {loading ? (
+            <div style={{ fontSize: 13, color: MUTED, padding: "8px 0" }}>Chargement de l'agenda…</div>
+          ) : items.length === 0 ? (
+            <div style={{ fontSize: 13, color: MUTED, padding: "8px 0" }}>Aucun rendez-vous enregistré.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {items.map((it) => (
+                <div key={it.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, opacity: it.cancelled ? 0.5 : 1 }}>
+                  <span style={{ width: 54, flexShrink: 0, fontSize: 11, fontWeight: 700, color: MUTED, lineHeight: 1.3 }}>{fmt(it.when)}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: NAVY, textDecoration: it.cancelled ? "line-through" : "none" }}>{it.label}</div>
+                    <div style={{ fontSize: 11.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {it.kind === "jurist" ? (it.juriste || "Juriste") + (it.cancelled ? " · annulé" : "") : it.type}
+                    </div>
+                  </div>
+                  {it.kind === "standard" && (
+                    <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 20, color: it.done ? GREEN : MUTED, background: it.done ? "#e7f3ec" : "#eef1f6" }}>{it.done ? "Effectué" : "À venir"}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </div>,
+    document.body
+  );
+}
+
 function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion, recordMeteo, meteoHistVersion }) {
   const num = row.numero_client;
   // Rafraîchit le bloc signature Opti'Lex après un changement d'email (le destinataire du
   // rappel Yousign est re-résolu côté backend) : bumpé par EmailSelect après le patch commité.
   const [sigRefresh, setSigRefresh] = useState(0);
+  const [agendaOpen, setAgendaOpen] = useState(false); // pop-up "Agenda du client" (RDV standards + RDV juristes)
   // Antériorité emails : à l'ouverture d'une fiche, on enregistre les emails vus (Owner + Opti'Lex
   // courant par SIREN) dans l'historique -> on garde la trace même quand l'email change ensuite,
   // pour pouvoir revenir à un email antérieur dans le dropdown. Best-effort (silencieux).
@@ -2273,7 +2360,18 @@ function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion,
 
           {/* RDV + statut "effectué" */}
           <div className="ob-sec" style={{ animationDelay: "0.2s" }}>
-          <SecTitle icon="rdv">Rendez-vous</SecTitle>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <SecTitle icon="rdv" style={{ marginBottom: 0 }}>Rendez-vous</SecTitle>
+            {num && (
+              <motion.button type="button" whileTap={{ scale: 0.96 }} onClick={() => setAgendaOpen(true)}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#f7f8fa"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = CARD; }}
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+                Voir l'agenda
+              </motion.button>
+            )}
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
             <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date_manual || row.rdv_onboarding_date} done={row.rdv_onboarding_done} editable={!!num}
               onDate={num && !isFinanceTeam() ? (d) => patch(num, { rdv_onboarding_date_manual: d }) : undefined}
@@ -2290,6 +2388,8 @@ function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion,
               onToggle={(v) => patch(num, { rdv_social_done: v })} />
           </div>
           </div>
+
+          {agendaOpen && <ClientAgendaModal row={row} num={num} onClose={() => setAgendaOpen(false)} />}
 
           {/* Jalons éditables (indisponibles tant que le client n'est pas établi) */}
           <div className="ob-sec" style={{ animationDelay: "0.25s" }}>
