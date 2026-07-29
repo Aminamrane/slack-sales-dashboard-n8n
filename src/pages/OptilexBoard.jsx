@@ -2073,9 +2073,11 @@ function ClientAgendaModal({ row, num, onClose }) {
       { key: "fis", label: "Lancement fiscal", type: "Opti'Lex", date: row.rdv_fiscal_date_manual || row.rdv_fiscal_date, done: row.rdv_fiscal_done },
       { key: "soc", label: "Lancement social", type: "Opti'Lex", date: row.rdv_social_date_manual || row.rdv_social_date, done: row.rdv_social_done },
     ].filter((x) => x.date).map((x) => ({ ...x, kind: "standard", when: String(x.date) }));
-    const jur = ((data && data.rdv) || []).map((b) => ({
-      key: b.booking_id, label: `RDV juriste ${b.team || ""}`.trim(),
-      juriste: b.juriste_name, cancelled: b.status === "cancelled",
+    const jur = ((data && data.rdv) || []).map((b, i) => ({
+      key: `jur-${b.juriste_email || ""}-${b.slot_start || i}`,
+      label: b.summary || `RDV juriste ${b.team || ""}`.trim(),
+      juriste: `${b.juriste_name || "Juriste"}${b.team ? " · " + b.team : ""}`,
+      cancelled: b.status === "cancelled",
       kind: "jurist", when: String(b.slot_start),
     }));
     return [...std, ...jur].sort((a, b) => (b.when || "").localeCompare(a.when || ""));
