@@ -2083,6 +2083,26 @@ function ClientAgendaModal({ row, num, onClose }) {
     return [...std, ...jur].sort((a, b) => (b.when || "").localeCompare(a.when || ""));
   }, [row, data]);
 
+  // Heure (Europe/Paris) d'un RDV ; "·" si date seule (RDV standard sans heure).
+  const timeOf = (iso) => {
+    const s = String(iso || "");
+    if (!/T\d\d:\d\d/.test(s)) return "·";
+    try { return new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" }); }
+    catch { return "·"; }
+  };
+  // Groupe les RDV par JOUR (Paris), jour le plus récent d'abord -> vue agenda.
+  const days = useMemo(() => {
+    const dayKey = (iso) => { try { return new Date(iso).toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" }); } catch { return String(iso).slice(0, 10); } };
+    const dayLabel = (iso) => { try { return new Date(iso).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Paris" }); } catch { return String(iso).slice(0, 10); } };
+    const map = new Map();
+    for (const it of items) {
+      const k = dayKey(it.when);
+      if (!map.has(k)) map.set(k, { key: k, label: dayLabel(it.when), items: [] });
+      map.get(k).items.push(it);
+    }
+    return [...map.values()].sort((a, b) => b.key.localeCompare(a.key));
+  }, [items]);
+
   const ref = data && data.reference_jurist;
 
   return createPortal(
@@ -2115,19 +2135,27 @@ function ClientAgendaModal({ row, num, onClose }) {
           ) : items.length === 0 ? (
             <div style={{ fontSize: 13, color: MUTED, padding: "8px 0" }}>Aucun rendez-vous enregistré.</div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {items.map((it) => (
-                <div key={it.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, opacity: it.cancelled ? 0.5 : 1 }}>
-                  <span style={{ width: 54, flexShrink: 0, fontSize: 11, fontWeight: 700, color: MUTED, lineHeight: 1.3 }}>{fmt(it.when)}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 600, color: NAVY, textDecoration: it.cancelled ? "line-through" : "none" }}>{it.label}</div>
-                    <div style={{ fontSize: 11.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {it.kind === "jurist" ? (it.juriste || "Juriste") + (it.cancelled ? " · annulé" : "") : it.type}
-                    </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {days.map((d) => (
+                <div key={d.key}>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: NAVY, textTransform: "capitalize", marginBottom: 7, paddingLeft: 2 }}>{d.label}</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {d.items.map((it) => (
+                      <div key={it.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 12px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, opacity: it.cancelled ? 0.5 : 1 }}>
+                        <span style={{ width: 46, flexShrink: 0, fontSize: 12.5, fontWeight: 700, color: it.cancelled ? MUTED : NAVY, textAlign: "center" }}>{timeOf(it.when)}</span>
+                        <span style={{ width: 1, alignSelf: "stretch", background: BORDER, flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: NAVY, textDecoration: it.cancelled ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.label}</div>
+                          <div style={{ fontSize: 11.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {it.kind === "jurist" ? (it.juriste || "Juriste") + (it.cancelled ? " · annulé" : "") : it.type}
+                          </div>
+                        </div>
+                        {it.kind === "standard" && (
+                          <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 20, color: it.done ? GREEN : MUTED, background: it.done ? "#e7f3ec" : "#eef1f6" }}>{it.done ? "Effectué" : "À venir"}</span>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                  {it.kind === "standard" && (
-                    <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 20, color: it.done ? GREEN : MUTED, background: it.done ? "#e7f3ec" : "#eef1f6" }}>{it.done ? "Effectué" : "À venir"}</span>
-                  )}
                 </div>
               ))}
             </div>
