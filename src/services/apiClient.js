@@ -333,6 +333,12 @@ class ApiClient {
     return this.request('/api/v1/users/assignable');
   }
 
+  // Équipes (capitaine + membres, avec avatar_url) — sert au regroupement
+  // par équipe de la grille "Équipe Sales".
+  async getTeams() {
+    return this.request('/api/v1/teams');
+  }
+
   // ============ TRACKING ============
   async getMyLeads() {
     return this.request('/api/v1/tracking/my-leads');

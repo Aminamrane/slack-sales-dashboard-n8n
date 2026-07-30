@@ -14,6 +14,7 @@ import {
   meteoBandOf, METEO_BANDS,
 } from "./OptilexBoard.jsx";
 import SharedNavbar from "../components/SharedNavbar.jsx";
+import SalesTeamGrid from "../components/SalesTeamGrid.jsx";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import testLottie from "../assets/test.lottie?url";
 import {
@@ -1473,6 +1474,7 @@ export default function CeoDashboard() {
   const [avatarMap, setAvatarMap] = useState({});
   // Sales team tab (CEO → opens individual sales' TrackingSheet in ghost mode).
   const [salesTeamUsers, setSalesTeamUsers] = useState([]);
+  const [salesTeams, setSalesTeams] = useState([]);
   const [salesTeamLoading, setSalesTeamLoading] = useState(false);
 
   // ── MONTHLY OBJECTIVES — CEO/admin editable modal ───────────────────
@@ -1881,12 +1883,15 @@ export default function CeoDashboard() {
   useEffect(() => {
     if (activeTab !== 'sales_team' || salesTeamUsers.length > 0 || salesTeamLoading) return;
     setSalesTeamLoading(true);
-    apiClient.getAssignableUsers()
-      .then((resp) => {
-        const list = Array.isArray(resp) ? resp : (resp?.users || resp?.data || []);
+    Promise.all([
+      apiClient.getAssignableUsers().catch((e) => { console.warn('[CeoDashboard] getAssignableUsers failed:', e); return null; }),
+      apiClient.getTeams().catch((e) => { console.warn('[CeoDashboard] getTeams failed:', e); return null; }),
+    ])
+      .then(([usersResp, teamsResp]) => {
+        const list = Array.isArray(usersResp) ? usersResp : (usersResp?.users || usersResp?.data || []);
         setSalesTeamUsers(list);
+        setSalesTeams(Array.isArray(teamsResp) ? teamsResp : (teamsResp?.teams || []));
       })
-      .catch((e) => { console.warn('[CeoDashboard] getAssignableUsers failed:', e); })
       .finally(() => setSalesTeamLoading(false));
   }, [activeTab, salesTeamUsers.length, salesTeamLoading]);
 
@@ -2909,70 +2914,17 @@ export default function CeoDashboard() {
             <div style={{ animation: 'ceoFadeIn 0.35s ease both', paddingTop: 96 }}>
               <h1 style={{ fontSize: 24, fontWeight: 700, color: C.text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>Équipe Sales</h1>
               <p style={{ fontSize: 14, color: C.muted, margin: '0 0 28px' }}>
-                Accédez aux Tracking Sheets individuels — mode ghost (lecture transparente, pas de notification).
+                Accédez aux Tracking Sheets individuels en mode ghost (lecture transparente, pas de notification).
               </p>
 
-              {salesTeamLoading && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
-                  {[0,1,2,3,4,5].map(i => (
-                    <div key={i} className="ceo-card" style={{ padding: '18px 20px', height: 96, animation: `ceoCardPop 0.4s ease ${i * 60}ms both` }}>
-                      <div style={{ width: '100%', height: '100%', background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', borderRadius: 8, animation: 'ceoPulse 1.4s ease-in-out infinite' }} />
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {!salesTeamLoading && salesTeamUsers.length === 0 && (
-                <div className="ceo-card" style={{ padding: 40, textAlign: 'center', color: C.muted, animation: 'ceoCardPop 0.4s ease both' }}>
-                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="1.5" style={{ marginBottom: 12, opacity: 0.4 }}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-                  <p style={{ fontSize: 14, margin: 0 }}>Aucun commercial trouvé.</p>
-                </div>
-              )}
-
-              {!salesTeamLoading && salesTeamUsers.length > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
-                  {salesTeamUsers.map((u, i) => {
-                    const name = u.full_name || u.name || u.email;
-                    const colors = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#3b82f6', '#fb923c'];
-                    const color = colors[i % colors.length];
-                    return (
-                      <div key={u.email || u.id} className="ceo-card" style={{
-                        padding: '18px 20px',
-                        display: 'flex', flexDirection: 'column', gap: 14,
-                        animation: `ceoCardPop 0.4s ease ${i * 60}ms both`,
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                          <div style={{
-                            width: 44, height: 44, borderRadius: 14, flexShrink: 0,
-                            background: color, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            color: '#fff', fontSize: 14, fontWeight: 700,
-                          }}>{getInitials(name)}</div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 14, fontWeight: 650, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
-                            <div style={{ fontSize: 11.5, color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.email}</div>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => navigate(`/ceo/sheet/${encodeURIComponent(u.email)}?ghost=true`)}
-                          style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                            padding: '9px 14px', borderRadius: 10,
-                            border: `1px solid ${C.border}`,
-                            background: darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
-                            color: C.text, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                            transition: 'all 0.15s',
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = C.accent; e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = C.accent; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)'; e.currentTarget.style.color = C.text; e.currentTarget.style.borderColor = C.border; }}
-                        >
-                          Voir tracking sheet
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6" /></svg>
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <SalesTeamGrid
+                users={salesTeamUsers}
+                teams={salesTeams}
+                loading={salesTeamLoading}
+                C={C}
+                darkMode={darkMode}
+                onOpenSheet={(email) => navigate(`/ceo/sheet/${encodeURIComponent(email)}?ghost=true`)}
+              />
             </div>
           )}
         </div>
