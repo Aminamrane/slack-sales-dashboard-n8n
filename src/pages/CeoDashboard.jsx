@@ -15,6 +15,8 @@ import {
 } from "./OptilexBoard.jsx";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import SalesTeamGrid from "../components/SalesTeamGrid.jsx";
+import SettersGrid from "../components/SettersGrid.jsx";
+import SalesSettersToggle from "../components/SalesSettersToggle.jsx";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import testLottie from "../assets/test.lottie?url";
 import {
@@ -1476,6 +1478,10 @@ export default function CeoDashboard() {
   const [salesTeamUsers, setSalesTeamUsers] = useState([]);
   const [salesTeams, setSalesTeams] = useState([]);
   const [salesTeamLoading, setSalesTeamLoading] = useState(false);
+  const [salesTeamView, setSalesTeamView] = useState("sales");
+  const [settersOverview, setSettersOverview] = useState([]);
+  const [settersLoading, setSettersLoading] = useState(false);
+  const [settersFetched, setSettersFetched] = useState(false);
 
   // ── MONTHLY OBJECTIVES — CEO/admin editable modal ───────────────────
   // map { 'YYYY-MM': target } sourced from /api/v1/monthly-objectives.
@@ -1894,6 +1900,16 @@ export default function CeoDashboard() {
       })
       .finally(() => setSalesTeamLoading(false));
   }, [activeTab, salesTeamUsers.length, salesTeamLoading]);
+
+  // ── LAZY FETCH: Setters (au 1er switch sur la vue Setters) ─────────
+  useEffect(() => {
+    if (activeTab !== 'sales_team' || salesTeamView !== 'setters' || settersFetched || settersLoading) return;
+    setSettersLoading(true);
+    apiClient.getSettersOverview()
+      .then((resp) => { setSettersOverview(Array.isArray(resp) ? resp : (resp?.setters || [])); })
+      .catch((e) => { console.warn('[CeoDashboard] getSettersOverview failed:', e); })
+      .finally(() => { setSettersLoading(false); setSettersFetched(true); });
+  }, [activeTab, salesTeamView, settersFetched, settersLoading]);
 
   // ── CURRENT TIME (for team pulse) ──────────────────────────────────
   const [now, setNow] = useState(Date.now());
@@ -2912,19 +2928,38 @@ export default function CeoDashboard() {
           {/* ═══ SALES TEAM TAB (CEO → Tracking Sheets individuels) ═══════════ */}
           {activeTab === 'sales_team' && (
             <div style={{ animation: 'ceoFadeIn 0.35s ease both', paddingTop: 96 }}>
-              <h1 style={{ fontSize: 24, fontWeight: 700, color: C.text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>Équipe Sales</h1>
-              <p style={{ fontSize: 14, color: C.muted, margin: '0 0 28px' }}>
-                Accédez aux Tracking Sheets individuels en mode ghost (lecture transparente, pas de notification).
-              </p>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 28 }}>
+                <div>
+                  <h1 style={{ fontSize: 24, fontWeight: 700, color: C.text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>
+                    {salesTeamView === 'sales' ? 'Équipe Sales' : 'Setters'}
+                  </h1>
+                  <p style={{ fontSize: 14, color: C.muted, margin: 0 }}>
+                    {salesTeamView === 'sales'
+                      ? 'Accédez aux Tracking Sheets individuels en mode ghost (lecture transparente, pas de notification).'
+                      : 'Les setters classés par équipe, avec les sales dont ils traitent les leads.'}
+                  </p>
+                </div>
+                <SalesSettersToggle view={salesTeamView} setView={setSalesTeamView} C={C} darkMode={darkMode} />
+              </div>
 
-              <SalesTeamGrid
-                users={salesTeamUsers}
-                teams={salesTeams}
-                loading={salesTeamLoading}
-                C={C}
-                darkMode={darkMode}
-                onOpenSheet={(email) => navigate(`/ceo/sheet/${encodeURIComponent(email)}?ghost=true`)}
-              />
+              {salesTeamView === 'sales' ? (
+                <SalesTeamGrid
+                  users={salesTeamUsers}
+                  teams={salesTeams}
+                  loading={salesTeamLoading}
+                  C={C}
+                  darkMode={darkMode}
+                  onOpenSheet={(email) => navigate(`/ceo/sheet/${encodeURIComponent(email)}?ghost=true`)}
+                />
+              ) : (
+                <SettersGrid
+                  setters={settersOverview}
+                  teams={salesTeams}
+                  loading={settersLoading}
+                  C={C}
+                  darkMode={darkMode}
+                />
+              )}
             </div>
           )}
         </div>

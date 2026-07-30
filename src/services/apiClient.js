@@ -339,6 +339,12 @@ class ApiClient {
     return this.request('/api/v1/teams');
   }
 
+  // Vue d'ensemble des setters (rattachements + équipe(s) dérivée(s) + flags)
+  // pour le toggle "Setters" de la page Équipe.
+  async getSettersOverview() {
+    return this.request('/api/v1/users/setters-overview');
+  }
+
   // ============ TRACKING ============
   async getMyLeads() {
     return this.request('/api/v1/tracking/my-leads');

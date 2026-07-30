@@ -22,6 +22,8 @@ import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import SalesTeamGrid from "../components/SalesTeamGrid.jsx";
+import SettersGrid from "../components/SettersGrid.jsx";
+import SalesSettersToggle from "../components/SalesSettersToggle.jsx";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "acquisition_director", "head_of_acquisition", "finance_director"]);
 
@@ -90,6 +92,22 @@ export default function CeoSalesTeamView() {
       .finally(() => { if (alive) setSalesTeamLoading(false); });
     return () => { alive = false; };
   }, [authChecked]);
+
+  // ── VUE Sales / Setters (toggle) + fetch setters (lazy, 1re visite) ──
+  const [view, setView] = useState("sales");
+  const [setters, setSetters] = useState([]);
+  const [settersLoading, setSettersLoading] = useState(false);
+  const [settersFetched, setSettersFetched] = useState(false);
+  useEffect(() => {
+    if (view !== "setters" || settersFetched || settersLoading) return;
+    let alive = true;
+    setSettersLoading(true);
+    apiClient.getSettersOverview()
+      .then((resp) => { if (alive) setSetters(Array.isArray(resp) ? resp : (resp?.setters || [])); })
+      .catch((e) => { console.warn("[CeoSalesTeamView] getSettersOverview failed:", e); })
+      .finally(() => { if (alive) { setSettersLoading(false); setSettersFetched(true); } });
+    return () => { alive = false; };
+  }, [view, settersFetched, settersLoading]);
 
   const C = useMemo(() => getColors(darkMode), [darkMode]);
   const visibleSections = useMemo(() => getVisibleSections(SIDEBAR_SECTIONS, userRole), [userRole]);
@@ -209,19 +227,38 @@ export default function CeoSalesTeamView() {
 
         <div style={{ padding: '32px 56px 64px' }}>
           <div style={{ animation: 'ceoFadeIn 0.35s ease both' }}>
-            <h1 style={{ fontSize: 24, fontWeight: 700, color: C.text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>Équipe Sales</h1>
-            <p style={{ fontSize: 14, color: C.muted, margin: '0 0 28px' }}>
-              Accédez aux Tracking Sheets individuels en mode ghost (lecture transparente, pas de notification).
-            </p>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 28 }}>
+              <div>
+                <h1 style={{ fontSize: 24, fontWeight: 700, color: C.text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>
+                  {view === 'sales' ? 'Équipe Sales' : 'Setters'}
+                </h1>
+                <p style={{ fontSize: 14, color: C.muted, margin: 0 }}>
+                  {view === 'sales'
+                    ? 'Accédez aux Tracking Sheets individuels en mode ghost (lecture transparente, pas de notification).'
+                    : 'Les setters classés par équipe, avec les sales dont ils traitent les leads.'}
+                </p>
+              </div>
+              <SalesSettersToggle view={view} setView={setView} C={C} darkMode={darkMode} />
+            </div>
 
-            <SalesTeamGrid
-              users={salesTeamUsers}
-              teams={teams}
-              loading={salesTeamLoading}
-              C={C}
-              darkMode={darkMode}
-              onOpenSheet={(email) => navigate(`/ceo/sheet/${encodeURIComponent(email)}?ghost=true`)}
-            />
+            {view === 'sales' ? (
+              <SalesTeamGrid
+                users={salesTeamUsers}
+                teams={teams}
+                loading={salesTeamLoading}
+                C={C}
+                darkMode={darkMode}
+                onOpenSheet={(email) => navigate(`/ceo/sheet/${encodeURIComponent(email)}?ghost=true`)}
+              />
+            ) : (
+              <SettersGrid
+                setters={setters}
+                teams={teams}
+                loading={settersLoading}
+                C={C}
+                darkMode={darkMode}
+              />
+            )}
           </div>
         </div>
       </div>
