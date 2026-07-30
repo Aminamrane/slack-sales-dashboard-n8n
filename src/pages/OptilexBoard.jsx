@@ -136,11 +136,19 @@ export const isIntegrationOverdue = (r) => isIntegrationUpcoming(r) && String(r.
 // non signé". Disparaît d'elle-même dès que le contrat est signé (status -> done).
 const optilexNotSigned = (r) => !!r.optilex_status && r.optilex_status !== "done";
 const integrationAlert = (r) => isIntegrationUpcoming(r) && optilexNotSigned(r);
+// Un état DATÉ (Résiliation/Rétractation/Pause/Liquidation…) n'est EFFECTIF qu'à partir de sa date
+// d'effet. Posé avec une date FUTURE (ou sans date = à renseigner) = "PRÉVU", pas encore appliqué :
+// le client reste dans son état actuel, puis bascule AUTOMATIQUEMENT à l'échéance (calcul à la
+// volée, aucun cron). La date devient donc de fait obligatoire : sans elle, l'état ne prend jamais
+// effet. Les "En cours de résiliation/rétractation" (sans date) restent des marqueurs immédiats.
+export const isEtatPending = (r) => !!(r.etat_manuel && ETAT_DATE_CONFIG[r.etat_manuel]
+  && (!r.etat_date || String(r.etat_date).slice(0, 10) > _todayParisISO()));
+
 // État affiché : l'état du Sheet en priorité, sinon le statut du contrat en cours.
 // Exporté : les cartes d'états du dashboard CEO comptent avec CETTE fonction, pour
 // afficher exactement les mêmes chiffres que les onglets du board.
 export const displayEtat = (r) => {
-  if (r.etat_manuel) return r.etat_manuel;   // override manuel du cabinet (prioritaire)
+  if (r.etat_manuel && !isEtatPending(r)) return r.etat_manuel;   // override cabinet, une fois EFFECTIF (date d'effet atteinte)
   if (r.etat) return r.etat;                 // état du Sheet (vérité des ÉTATS)
   // Vérité des DATA = interne : Owner signé -> "Signé" même pas (encore) dans le Sheet.
   // Deux régimes : contrat GROUPÉ (optilex null = Opti'Lex inclus dans l'Owner, signé avec)
@@ -1323,6 +1331,12 @@ export default function OptilexBoard({ embed = false }) {
                     <td style={td}>
                       <EtatPicker etat={displayEtat(r)} disabled={!r.numero_client}
                         onPick={(v) => { changeEtat(r.numero_client, { etat: v }); if (ETAT_DATE_CONFIG[v]) setSelected(key); }} />
+                      {isEtatPending(r) && r.etat_date && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, padding: "2px 8px", borderRadius: 20, background: "#fff3e3", color: "#b45309", fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap" }}
+                          title={`${r.etat_manuel} prévue le ${fmt(r.etat_date)} — pas encore effective, le client reste actif jusqu'à cette date`}>
+                          ⏳ {r.etat_manuel} · prévu {fmt(r.etat_date)}
+                        </span>
+                      )}
                       {(() => {
                         const h = etatHint(r);
                         return h ? (
@@ -1935,7 +1949,7 @@ const etatAuthor = (h) => {
 // Bloc "État du client" (détail, sous le SIREN) : sélecteur d'état + date(s) selon l'état
 // (fiscaliste), révélation animée. Toute pose passe par changeEtat -> trace l'historique.
 function EtatSection({ row, num, changeEtat }) {
-  const etat = displayEtat(row);
+  const etat = row.etat_manuel || displayEtat(row);  // le détail montre l'état POSÉ (pour éditer sa date d'effet, même s'il est encore prévu)
   const cfg = ETAT_DATE_CONFIG[etat];
   // Mode fin de pause : connue (date de fin) vs indéterminée (date de relance). Dérivé des
   // données UNIQUEMENT au changement de client : le choix local du toggle ne doit pas être
@@ -1954,6 +1968,14 @@ function EtatSection({ row, num, changeEtat }) {
     <div style={{ marginBottom: 22 }}>
       <SecTitle icon="etat">État du client</SecTitle>
       <EtatPicker etat={etat} disabled={!num} onPick={(v) => changeEtat(num, { etat: v })} />
+      {num && isEtatPending(row) && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 9, padding: "6px 10px", borderRadius: 8, background: "#fff3e3", color: "#b45309", fontSize: 12, fontWeight: 600, lineHeight: 1.45 }}>
+          <span style={{ flexShrink: 0 }}>⏳</span>
+          {row.etat_date
+            ? `${row.etat_manuel} prévue le ${fmt(row.etat_date)} — pas encore effective, le client reste actif jusqu'à cette date.`
+            : `${row.etat_manuel} : renseignez la date d'effet (obligatoire). Sans elle, l'état ne s'applique pas.`}
+        </div>
+      )}
       {/* Contrat en vol (vente pas encore déclarée -> pas de n° client) : l'état est calculé,
           en lecture seule. On le DIT au lieu de laisser un badge muet. */}
       {!num && (
