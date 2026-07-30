@@ -1332,10 +1332,10 @@ export default function OptilexBoard({ embed = false }) {
                       <EtatPicker etat={displayEtat(r)} disabled={!r.numero_client}
                         onPick={(v) => { changeEtat(r.numero_client, { etat: v }); if (ETAT_DATE_CONFIG[v]) setSelected(key); }} />
                       {isEtatPending(r) && r.etat_date && (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, padding: "2px 8px", borderRadius: 20, background: "#fff3e3", color: "#b45309", fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap" }}
+                        <div style={{ fontSize: 10.5, fontWeight: 700, color: "#b45309", marginTop: 4, lineHeight: 1.3 }}
                           title={`${r.etat_manuel} prévue le ${fmt(r.etat_date)} — pas encore effective, le client reste actif jusqu'à cette date`}>
                           ⏳ {r.etat_manuel} · prévu {fmt(r.etat_date)}
-                        </span>
+                        </div>
                       )}
                       {(() => {
                         const h = etatHint(r);
@@ -1972,8 +1972,8 @@ function EtatSection({ row, num, changeEtat }) {
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 9, padding: "6px 10px", borderRadius: 8, background: "#fff3e3", color: "#b45309", fontSize: 12, fontWeight: 600, lineHeight: 1.45 }}>
           <span style={{ flexShrink: 0 }}>⏳</span>
           {row.etat_date
-            ? `${row.etat_manuel} prévue le ${fmt(row.etat_date)} — pas encore effective, le client reste actif jusqu'à cette date.`
-            : `${row.etat_manuel} : renseignez la date d'effet (obligatoire). Sans elle, l'état ne s'applique pas.`}
+            ? `${row.etat_manuel} prévue le ${fmt(row.etat_date)} — pas encore effective.`
+            : `${row.etat_manuel} : renseignez la date d'effet (obligatoire).`}
         </div>
       )}
       {/* Contrat en vol (vente pas encore déclarée -> pas de n° client) : l'état est calculé,
