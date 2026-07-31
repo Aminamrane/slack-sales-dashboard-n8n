@@ -25,6 +25,7 @@ import TrackingSheetSetter from "./pages/TrackingSheetSetter.jsx";
 import TrackingSheetFinance from "./pages/TrackingSheetFinance/index.jsx";
 import CeoDashboard       from "./pages/CeoDashboard.jsx";
 import CeoSheetView       from "./pages/CeoSheetView.jsx";
+import CeoSetterSheetView from "./pages/CeoSetterSheetView.jsx";
 import CeoDispatchView    from "./pages/CeoDispatchView.jsx";
 import CeoLeaderboardView from "./pages/CeoLeaderboardView.jsx";
 import CeoPerfSalesView   from "./pages/CeoPerfSalesView.jsx";
@@ -51,6 +52,7 @@ import LeadAssignmentMonitor from "./pages/LeadAssignmentMonitor.jsx";
 import LeadAssignmentLive from "./pages/LeadAssignmentLive.jsx";
 import TeamAbsences from "./pages/TeamAbsences.jsx";
 import Variables from "./pages/Variables.jsx";
+import OptilexRdvMonitoring from "./pages/OptilexRdvMonitoring.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import MouseDot from "./components/MouseDot.jsx";
@@ -123,6 +125,14 @@ function App() {
           element={
             <ProtectedRoute>
               <CeoSheetView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ceo/setter-sheet/:email"
+          element={
+            <ProtectedRoute>
+              <CeoSetterSheetView />
             </ProtectedRoute>
           }
         />
@@ -283,6 +293,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['admin', 'ceo', 'hr']}>
               <Variables />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/optilex-rdv-monitoring"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <OptilexRdvMonitoring />
             </ProtectedRoute>
           }
         />

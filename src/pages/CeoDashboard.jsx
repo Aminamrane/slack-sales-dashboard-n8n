@@ -1903,13 +1903,14 @@ export default function CeoDashboard() {
 
   // ── LAZY FETCH: Setters (au 1er switch sur la vue Setters) ─────────
   useEffect(() => {
-    if (activeTab !== 'sales_team' || salesTeamView !== 'setters' || settersFetched || settersLoading) return;
+    // settersLoading hors deps/guard (on le modifie ici -> re-run inutile).
+    if (activeTab !== 'sales_team' || salesTeamView !== 'setters' || settersFetched) return;
     setSettersLoading(true);
     apiClient.getSettersOverview()
       .then((resp) => { setSettersOverview(Array.isArray(resp) ? resp : (resp?.setters || [])); })
       .catch((e) => { console.warn('[CeoDashboard] getSettersOverview failed:', e); })
       .finally(() => { setSettersLoading(false); setSettersFetched(true); });
-  }, [activeTab, salesTeamView, settersFetched, settersLoading]);
+  }, [activeTab, salesTeamView, settersFetched]);
 
   // ── CURRENT TIME (for team pulse) ──────────────────────────────────
   const [now, setNow] = useState(Date.now());
@@ -2958,6 +2959,7 @@ export default function CeoDashboard() {
                   loading={settersLoading}
                   C={C}
                   darkMode={darkMode}
+                  onOpenAccount={(email) => navigate(`/ceo/setter-sheet/${encodeURIComponent(email)}?ghost=true`)}
                 />
               )}
             </div>

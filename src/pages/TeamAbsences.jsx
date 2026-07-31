@@ -74,6 +74,7 @@ export default function TeamAbsences({ embed = false }) {
   const [declEnd, setDeclEnd] = useState("");
   const [declType, setDeclType] = useState("conge");
   const [declDesc, setDeclDesc] = useState("");
+  const [declPeriod, setDeclPeriod] = useState("full"); // full | am (matin) | pm (après-midi)
   const [declError, setDeclError] = useState("");
   const [declSuccess, setDeclSuccess] = useState("");
   const [declBusy, setDeclBusy] = useState(false);
@@ -135,17 +136,19 @@ export default function TeamAbsences({ embed = false }) {
   const handleDeclare = async () => {
     setDeclError(""); setDeclSuccess("");
     if (!declTarget) { setDeclError("Choisis une personne."); return; }
-    if (!declStart || !declEnd) { setDeclError("Renseigne les deux dates."); return; }
-    if (declEnd < declStart) { setDeclError("La date de fin doit être après le début."); return; }
+    if (!declStart) { setDeclError("Renseigne la date."); return; }
+    const _end = declPeriod === "full" ? declEnd : declStart; // demi-journée = un seul jour
+    if (declPeriod === "full" && !declEnd) { setDeclError("Renseigne les deux dates."); return; }
+    if (_end < declStart) { setDeclError("La date de fin doit être après le début."); return; }
     setDeclBusy(true);
     try {
       await apiClient.post(`/api/v1/users/${declTarget}/unavailability`, {
-        start_date: declStart, end_date: declEnd, absence_type: declType, description: declDesc.trim() || null,
+        start_date: declStart, end_date: _end, absence_type: declType, description: declDesc.trim() || null, period: declPeriod,
       });
       const data = await apiClient.get("/api/v1/team-unavailability");
       setAbsences(Array.isArray(data) ? data : []);
       setDeclSuccess("Absence déclarée.");
-      setDeclTarget(""); setDeclStart(""); setDeclEnd(""); setDeclType("conge"); setDeclDesc("");
+      setDeclTarget(""); setDeclStart(""); setDeclEnd(""); setDeclType("conge"); setDeclDesc(""); setDeclPeriod("full");
       setTimeout(() => setDeclSuccess(""), 2500);
     } catch (e) {
       const msg = e?.message || "";
@@ -176,7 +179,7 @@ export default function TeamAbsences({ embed = false }) {
           {(() => { const m = ABSENCE_TYPE_META[a.absence_type] || ABSENCE_TYPE_META.conge; return <span style={{ fontSize: 9.5, fontWeight: 700, color: m.color, background: m.color + "1e", borderRadius: 5, padding: "1px 6px" }}>{m.label}</span>; })()}
           {!past && a.active_now && <span style={{ fontSize: 9.5, fontWeight: 700, color: COLORS.secondary, background: COLORS.secondary + "1e", borderRadius: 5, padding: "1px 6px" }}>EN COURS</span>}
         </div>
-        <div style={{ fontSize: 11.5, color: C.muted, marginTop: 1 }}>{rangeLabel(a)} · {a.days} j</div>
+        <div style={{ fontSize: 11.5, color: C.muted, marginTop: 1 }}>{rangeLabel(a)}{a.period && a.period !== "full" ? ` · ${a.period === "am" ? "matin" : "après-midi"}` : ""} · {(a.days ?? 0).toLocaleString("fr-FR")} j</div>
         {a.description && a.description.trim() && (
           <div style={{ fontSize: 11.5, color: C.muted, marginTop: 4, fontStyle: "italic", paddingLeft: 9, borderLeft: "2px solid " + C.border, lineHeight: 1.45 }}>{a.description.trim()}</div>
         )}
@@ -278,10 +281,15 @@ export default function TeamAbsences({ embed = false }) {
                     <option value="">Choisir une personne…</option>
                     {declUsers.filter((u) => !u.is_self).map((u) => <option key={u.id} value={u.id}>{u.full_name || u.email}</option>)}
                   </select>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                    <input type="date" value={declStart} onChange={(e) => setDeclStart(e.target.value)} style={declInput} />
-                    <input type="date" value={declEnd} min={declStart || undefined} onChange={(e) => setDeclEnd(e.target.value)} style={declInput} />
+                  <div style={{ display: "grid", gridTemplateColumns: declPeriod === "full" ? "1fr 1fr" : "1fr", gap: 10 }}>
+                    <input type="date" value={declStart} onChange={(e) => { setDeclStart(e.target.value); if (declPeriod !== "full") setDeclEnd(e.target.value); }} style={declInput} />
+                    {declPeriod === "full" && <input type="date" value={declEnd} min={declStart || undefined} onChange={(e) => setDeclEnd(e.target.value)} style={declInput} />}
                   </div>
+                  <select value={declPeriod} onChange={(e) => { const p = e.target.value; setDeclPeriod(p); if (p !== "full") setDeclEnd(declStart); }} style={{ ...declInput, cursor: "pointer" }} title="Journée entière ou demi-journée (matin / après-midi)">
+                    <option value="full">Journée complète</option>
+                    <option value="am">Demi-journée · matin</option>
+                    <option value="pm">Demi-journée · après-midi</option>
+                  </select>
                   <select value={declType} onChange={(e) => setDeclType(e.target.value)} style={{ ...declInput, cursor: "pointer" }}>
                     {Object.entries(ABSENCE_TYPE_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
                   </select>

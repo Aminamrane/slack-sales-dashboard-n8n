@@ -94,12 +94,16 @@ export default function CeoSalesTeamView() {
   }, [authChecked]);
 
   // ── VUE Sales / Setters (toggle) + fetch setters (lazy, 1re visite) ──
-  const [view, setView] = useState("sales");
+  // ?view=setters (retour depuis un compte setter en ghost) -> ouvre l'onglet Setters.
+  const [view, setView] = useState(() => (new URLSearchParams(window.location.search).get("view") === "setters" ? "setters" : "sales"));
   const [setters, setSetters] = useState([]);
   const [settersLoading, setSettersLoading] = useState(false);
   const [settersFetched, setSettersFetched] = useState(false);
   useEffect(() => {
-    if (view !== "setters" || settersFetched || settersLoading) return;
+    // NB: settersLoading ne DOIT PAS être dans les deps ni le guard — on le
+    // modifie dans l'effet, ce qui relancerait l'effet, tuerait le fetch en vol
+    // (alive=false) et bloquerait le loading à true (skeletons infinis).
+    if (view !== "setters" || settersFetched) return;
     let alive = true;
     setSettersLoading(true);
     apiClient.getSettersOverview()
@@ -107,7 +111,7 @@ export default function CeoSalesTeamView() {
       .catch((e) => { console.warn("[CeoSalesTeamView] getSettersOverview failed:", e); })
       .finally(() => { if (alive) { setSettersLoading(false); setSettersFetched(true); } });
     return () => { alive = false; };
-  }, [view, settersFetched, settersLoading]);
+  }, [view, settersFetched]);
 
   const C = useMemo(() => getColors(darkMode), [darkMode]);
   const visibleSections = useMemo(() => getVisibleSections(SIDEBAR_SECTIONS, userRole), [userRole]);
@@ -257,6 +261,7 @@ export default function CeoSalesTeamView() {
                 loading={settersLoading}
                 C={C}
                 darkMode={darkMode}
+                onOpenAccount={(email) => navigate(`/ceo/setter-sheet/${encodeURIComponent(email)}?ghost=true`)}
               />
             )}
           </div>

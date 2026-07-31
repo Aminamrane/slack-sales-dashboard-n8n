@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabaseClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import LeadsManagement from "./LeadsManagement.jsx";
 import PerfSalesTable from "../components/PerfSalesTable.jsx";
+import CommonVoicemailPool from "../components/CommonVoicemailPool.jsx";
 import ReproLinkRow from "../components/booking/ReproLinkRow.jsx";
 import BookingSettings from "../components/booking/BookingSettings.jsx";
 import "../index.css";
@@ -739,6 +740,11 @@ export default function TrackingSheet() {
 
   // ── LEAD STATE ────────────────────────────────────────────────────────────
   const [leads, setLeads] = useState([]);
+  const [commonVoicemailLeads, setCommonVoicemailLeads] = useState([]); // pool "Répondeur commun"
+  const [commonPoolLoading, setCommonPoolLoading] = useState(false);
+  const [claimingId, setClaimingId] = useState(null); // lead en cours de prise
+  const [commonPoolSearch, setCommonPoolSearch] = useState(""); // recherche dans le pool commun
+  const [commonPoolTotal, setCommonPoolTotal] = useState(0); // vrai total du pool (non plafonné à 500)
   const [myManualSetters, setMyManualSetters] = useState([]); // mes setters en mode MANUEL (pour le bouton "Donner à un setter")
   const leadsRef = useRef([]);
   useEffect(() => { leadsRef.current = leads; }, [leads]);
@@ -1120,6 +1126,49 @@ export default function TrackingSheet() {
       console.warn('give-to-setter failed:', e);
       refreshData().catch(() => {}); // rollback par refetch
     }
+  };
+
+  // ── RÉPONDEUR COMMUN (pool global) ────────────────────────────────────────
+  // Fetch du pool des répondeurs anciens (communs à tous les sales).
+  const fetchCommonPool = useCallback(async () => {
+    setCommonPoolLoading(true);
+    try {
+      const r = await apiClient.get('/api/v1/tracking/common-voicemail-pool');
+      setCommonVoicemailLeads(Array.isArray(r?.leads) ? r.leads : []);
+      setCommonPoolTotal(typeof r?.total === 'number' ? r.total : (Array.isArray(r?.leads) ? r.leads.length : 0));
+    } catch (e) {
+      console.warn('common-voicemail-pool fetch failed:', e);
+    } finally {
+      setCommonPoolLoading(false);
+    }
+  }, []);
+  // Fetch au MONTAGE (compteur de la sidebar juste) + refresh à chaque ouverture
+  // de la vue "Répondeur commun" (fraîcheur : d'autres ont pu prendre des leads).
+  useEffect(() => { fetchCommonPool(); }, [fetchCommonPool]);
+  useEffect(() => {
+    if (sidebarView === 'common_pool') fetchCommonPool();
+  }, [sidebarView, fetchCommonPool]);
+  // Prise EXCLUSIVE d'un répondeur du pool (premier arrivé). Optimiste + rollback.
+  const claimCommonVoicemail = async (leadId) => {
+    setClaimingId(leadId);
+    const _prevPool = commonVoicemailLeads;
+    const _prevTotal = commonPoolTotal;
+    setCommonVoicemailLeads(prev => prev.filter(l => l.id !== leadId)); // optimiste
+    setCommonPoolTotal(t => Math.max(0, t - 1)); // compteur -1
+    try {
+      await apiClient.post(`/api/v1/tracking/leads/${leadId}/claim-common-voicemail`, {});
+    } catch (e) {
+      console.warn('claim-common-voicemail failed:', e);
+      setCommonVoicemailLeads(_prevPool); // échec de la PRISE seulement -> on remet le lead
+      setCommonPoolTotal(_prevTotal);
+      setClaimingId(null);
+      return;
+    }
+    // Succès : la prise tient (le lead a quitté le pool) -> on NE re-fetch PAS le pool (il est
+    // plafonné, un re-fetch le remplirait et ferait rebondir le compteur). refreshData en
+    // best-effort pour que le lead pris apparaisse dans "Nouveau lead".
+    refreshData().catch(() => {});
+    setClaimingId(null);
   };
 
   const handleInviteSales = async (sheetEmail, invitedEmail) => {
@@ -2598,6 +2647,9 @@ export default function TrackingSheet() {
             {/* Nav items */}
             {[
               { key: 'leads', label: 'Mes leads', iconSrc: iconMyLead, accent: C.accent, keepColor: true },
+              { key: 'common_pool', label: 'Répondeur commun', accent: '#06b6d4', iconNode: (active) => (
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              ) },
               { key: 'calendar', label: 'Calendrier', iconSrc: iconCalendrier, accent: '#3b82f6' },
               { key: 'notifications', label: 'Notifications', iconSrc: iconNotif, accent: '#ef4444', iconSize: 55, badgeCount: (() => {
                 const meetingKeys = [
@@ -2864,6 +2916,43 @@ export default function TrackingSheet() {
             <LeadAssignmentLive embed />
           </div>
         )}
+
+        {/* ════ VIEW: RÉPONDEUR COMMUN (pool global des répondeurs anciens) ═══ */}
+        {sidebarView === 'common_pool' && (() => {
+          const _q = commonPoolSearch.trim().toLowerCase();
+          const shown = _q
+            ? commonVoicemailLeads.filter((l) => (
+                (l.full_name || '').toLowerCase().includes(_q) ||
+                (l.company_name || l.company || '').toLowerCase().includes(_q) ||
+                String(l.phone || '').replace(/\s/g, '').includes(_q.replace(/\s/g, ''))
+              ))
+            : commonVoicemailLeads;
+          return (
+            <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px 48px', animation: 'tabFadeIn 0.3s ease-out both' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#06b6d4', flexShrink: 0 }} />
+                <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: 0, letterSpacing: '-0.01em' }}>Répondeur commun</h2>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#0e8fa8', background: darkMode ? 'rgba(6,182,212,0.16)' : '#e6f9fc', borderRadius: 20, padding: '2px 10px' }}>{commonPoolTotal}</span>
+              </div>
+              <p style={{ fontSize: 13.5, color: C.muted, margin: '0 0 18px', maxWidth: 660, lineHeight: 1.5 }}>
+                Répondeurs anciens (2 mois+, hors mois en cours et précédent), communs à tous les sales. Clique « Prendre » pour t'en attribuer un : il passe dans tes « Nouveaux leads » avec le badge « issu des répondeurs ».
+              </p>
+              <div style={{ marginBottom: 14, maxWidth: 380 }}>
+                <input type="text" value={commonPoolSearch} onChange={(e) => setCommonPoolSearch(e.target.value)} placeholder="Rechercher (nom, société, téléphone)…"
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: darkMode ? 'rgba(255,255,255,0.04)' : '#fff', color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <CommonVoicemailPool
+                leads={shown}
+                loading={commonPoolLoading}
+                claimingId={claimingId}
+                onClaim={claimCommonVoicemail}
+                canClaim={!embedMode}
+                C={C}
+                darkMode={darkMode}
+              />
+            </div>
+          );
+        })()}
         {sidebarView === 'kpis' && !['admin', 'head_of_sales', 'head_of_sales_manager'].includes(currentUser?.role) && (
           <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
             <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
@@ -5398,6 +5487,16 @@ export default function TrackingSheet() {
                         </span>
                       )}
 
+                      {/* Badge "issu des répondeurs communs" */}
+                      {lead.from_common_pool && (
+                        <span title="Récupéré depuis le pool des répondeurs communs" style={{
+                          display: 'inline-flex', alignItems: 'center', flexShrink: 0,
+                          padding: '2px 9px', borderRadius: 50, fontSize: 10, fontWeight: 700,
+                          background: darkMode ? 'rgba(6,182,212,0.16)' : 'rgba(6,182,212,0.1)',
+                          color: '#0891b2', border: '1px solid rgba(6,182,212,0.25)',
+                        }}>issu des répondeurs</span>
+                      )}
+
                       {/* R1 qualification badge */}
                       {activeCat.key === 'r1' && lead.r1_result && (() => {
                         const R1_BADGES = {
@@ -6754,6 +6853,7 @@ export default function TrackingSheet() {
                           {wfPill('Non pertinent', '#ef4444', '✕', 110, () => handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, contact_result: 'not_relevant', status: 'not_relevant' }))}
                           {wfPill('Non traitable', '#f59e0b', '⚠', 150, () => handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, contact_result: 'not_processable', status: 'not_relevant' }))}
                           {wfPill('À relancer', '#14b8a6', '↻', 190, () => setActiveWorkflow(prev => ({ ...prev, contactResult: 'to_recontact', newDate: '' })))}
+                          {wfPill('Injoignable', '#475569', '🚫', 230, () => handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, contact_result: 'unreachable', status: 'unreachable' }))}
                         </div>
                         <button onClick={() => setActiveWorkflow(null)}
                           style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', marginTop: 2, opacity: 0.7, animation: 'wfSplitIn 0.3s ease 200ms both' }}

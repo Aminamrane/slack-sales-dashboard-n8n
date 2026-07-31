@@ -22,6 +22,9 @@ const getInitials = (name) => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
+// Compte test setter à ne jamais afficher (ex. "Setter Test").
+const isTestSetter = (s) => /@test\.com$/i.test(s.email || "") || /\btest\b/i.test(s.full_name || "");
+
 // Mode d'arrivée des leads pour un rattachement (navy, pas de violet).
 const modeOf = (a) =>
   a.repondeur_only ? { key: "rep", label: "Répondeurs", color: "#b45309", bg: "#fff3e3" }
@@ -49,7 +52,7 @@ export default function SettersGrid({ setters = [], teams = [], loading = false,
     const byLabel = new Map(order.map((t) => [t.label, { label: t.label, color: t.color || "#64748b", setters: [] }]));
     const orphan = { label: "Sans équipe", color: "#1e2330", setters: [] };
 
-    (setters || []).forEach((s) => {
+    (setters || []).filter((s) => !isTestSetter(s)).forEach((s) => {
       const labels = (s.teams || []).map((t) => t.label);
       if (labels.length === 0) {
         orphan.setters.push({ ...s, sectionLabel: orphan.label, sectionColor: orphan.color });

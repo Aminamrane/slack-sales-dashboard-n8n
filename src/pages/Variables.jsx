@@ -64,8 +64,8 @@ export default function Variables({ embed = false }) {
 
   const people = data?.people || [];
   const totals = useMemo(() => {
-    const t = { fixe: 0, variable: 0, net: 0, n_deals: 0 };
-    for (const p of people) { t.fixe += p.fixe; t.variable += p.variable; t.net += p.net; t.n_deals += p.n_deals; }
+    const t = { fixe: 0, variable: 0, net: 0, n_deals: 0, n_deals_pending: 0 };
+    for (const p of people) { t.fixe += p.fixe; t.variable += p.variable; t.net += p.net; t.n_deals += p.n_deals; t.n_deals_pending += (p.n_deals_pending || 0); }
     return t;
   }, [people]);
 
@@ -111,7 +111,8 @@ export default function Variables({ embed = false }) {
           <Kpi C={C} label="Total a verser (net)" value={eur(totals.net)} strong title="Somme des nets de tous les commerciaux ce mois." />
           <Kpi C={C} label="Dont variable" value={eur(totals.variable)} title="Commissions + commission d'équipe + primes exceptionnelles." />
           <Kpi C={C} label="Dont fixe" value={eur(totals.fixe)} title="Salaires fixes (barme RH)." />
-          <Kpi C={C} label="Ventes du mois" value={`${totals.n_deals}`} title="Contrats signes pris en compte." />
+          <Kpi C={C} label="Ventes comptees" value={`${totals.n_deals}`} title="Contrats signes ce mois dont le client a PAYE (seuls ceux-la sont comptabilises)." />
+          <Kpi C={C} label="En attente de paiement" value={`${totals.n_deals_pending}`} title="Ventes signees ce mois dont le client n'a pas encore paye : affichees mais non comptees tant que le paiement n'est pas recu." />
         </div>
 
         {/* Table / etats */}
@@ -169,12 +170,16 @@ function BaremePanel({ C, bareme }) {
           <div style={{ marginTop: 6 }}><b>Commission d'équipe</b> du head = base <b>×</b> {coefFmt(bareme.override?.CC)} (CC) ou {coefFmt(bareme.override?.ADS)} (ADS), sur chaque vente de son équipe.</div>
           <div style={{ marginTop: 6 }}><b>Net à verser</b> = Fixe + Variable (commissions + commission d'équipe + primes).</div>
           {bareme.webinaire && <div style={{ marginTop: 6 }}><b>Webinaire</b> = base <b>×</b> {coefFmt(bareme.webinaire.coef)} (sans mensuel/annuel, idem pour tous) ; le head touche base <b>×</b> {coefFmt(bareme.webinaire.override)} sur les webinaires de son équipe.</div>}
+          <div style={{ marginTop: 6 }}><b>Paiement</b> : une vente n'est comptée qu'une fois le client <b>payé</b>. Tant qu'il n'a pas payé, elle est affichée (grisée) mais hors total ; elle bascule dès réception.</div>
+          {bareme.planchers?.length > 0 && <div style={{ marginTop: 6 }}><b>Planchers</b> (Sales) : variable minimale garantie selon le nb de ventes comptées — {bareme.planchers.map((pl) => `${pl.min_ventes} → ${eur(pl.montant)}`).join(" · ")}. On verse le max entre la variable calculée et le plancher.</div>}
         </div>
         <div style={{ ...head, marginTop: 16 }}>D'ou vient chaque donnee</div>
         <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12.5, color: C.text2, lineHeight: 1.7 }}>
           <li>Tranche : {bareme.sources?.tranche}</li>
           <li>CC / ADS : {bareme.sources?.cc_ads}</li>
           <li>Mensuel / Annuel : {bareme.sources?.plan}</li>
+          <li>Paiement : {bareme.sources?.paiement}</li>
+          {bareme.planchers?.length > 0 && <li>Planchers : {bareme.sources?.planchers}</li>}
         </ul>
       </div>
 
@@ -208,6 +213,18 @@ function BaremePanel({ C, bareme }) {
             </span>
           ))}
         </div>
+        {bareme.planchers?.length > 0 && (
+          <>
+            <div style={{ ...head, marginTop: 16 }}>Planchers (variable garantie · Sales)</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+              {bareme.planchers.map((pl) => (
+                <span key={pl.min_ventes} style={{ fontSize: 11.5, color: C.text2, background: C.surfaceAlt, border: `1px solid ${C.border}`, borderRadius: 6, padding: "2px 7px", fontVariantNumeric: "tabular-nums" }}>
+                  ≥ {pl.min_ventes} ventes <b style={{ color: C.text }}>{eur(pl.montant)}</b>
+                </span>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -267,12 +284,18 @@ function PersonRow({ C, p, index, open, onToggle, month, onChanged }) {
             <div style={{ fontSize: 11.5, color: C.muted }}>{isHead ? "Head of Sales" : "Sales"}</div>
           </div>
         </div>
-        <div style={{ fontSize: 13.5, color: p.n_deals ? C.text : C.muted, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{p.n_deals}</div>
+        <div style={{ textAlign: "center", fontVariantNumeric: "tabular-nums" }}>
+          <span style={{ fontSize: 13.5, color: p.n_deals ? C.text : C.muted }}>{p.n_deals}</span>
+          {p.n_deals_pending > 0 && <span title={`${p.n_deals_pending} vente(s) en attente de paiement`} style={{ fontSize: 11, color: C.warn, fontWeight: 700, marginLeft: 3 }}>+{p.n_deals_pending}</span>}
+        </div>
         <div style={num}>{p.own_commission ? eur(p.own_commission) : "·"}</div>
         <div style={{ ...num, color: p.override_received ? C.accentText : C.muted }}>{p.override_received ? eur(p.override_received) : "·"}</div>
         <div style={{ ...num, color: p.exceptional_total ? (p.exceptional_total < 0 ? C.warn : C.ok) : C.muted }}>{p.exceptional_total ? eur(p.exceptional_total) : "·"}</div>
         <div style={{ ...num, color: C.text2 }}>{eur(p.fixe)}</div>
-        <div style={{ ...num, fontSize: 15, fontWeight: 700 }} title="Fixe + Variable">{eur(p.net)}</div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ ...num, fontSize: 15, fontWeight: 700 }} title="Fixe + Variable">{eur(p.net)}</div>
+          {p.plancher_applied > 0 && <div title={`Variable calculée ${eur(p.variable_raw)} · plancher garanti ${eur(p.plancher_applied)}`} style={{ fontSize: 10, color: C.ok, fontWeight: 600, marginTop: 1 }}>plancher {eur(p.plancher_applied)}</div>}
+        </div>
         <div style={{ textAlign: "center", color: C.muted, fontSize: 13, transform: open ? "rotate(90deg)" : "none", transition: "transform 0.2s" }}>›</div>
       </div>
 
@@ -292,11 +315,16 @@ function PersonDetail({ C, p, month, onChanged }) {
     <div style={{ padding: "16px 20px 22px", display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 24 }}>
       {/* Colonne gauche : la PREUVE (deals + override, chacun avec son calcul) */}
       <div style={{ minWidth: 0 }}>
-        <SectionTitle C={C}>Commissions · {p.n_deals} vente{p.n_deals > 1 ? "s" : ""}</SectionTitle>
+        <SectionTitle C={C}>Commissions · {p.n_deals} compt{p.n_deals > 1 ? "ées" : "ée"}{p.n_deals_pending > 0 ? ` · ${p.n_deals_pending} en attente` : ""}</SectionTitle>
         {p.deals?.length > 0 ? (
           <div style={{ display: "flex", flexDirection: "column" }}>
             {p.deals.map((d, i) => <DealLine key={i} C={C} d={d} />)}
-            <SubTotal C={C} label="Total commissions" value={p.own_commission} />
+            <SubTotal C={C} label="Total commissions comptees" value={p.own_commission} />
+            {p.n_deals_pending > 0 && (
+              <div style={{ fontSize: 11.5, color: C.warn, marginTop: 6, lineHeight: 1.5 }}>
+                {p.n_deals_pending} vente{p.n_deals_pending > 1 ? "s" : ""} en attente de paiement ({eur(p.pending_commission)}) — comptée{p.n_deals_pending > 1 ? "s" : ""} dès réception du paiement.
+              </div>
+            )}
           </div>
         ) : (
           <div style={{ fontSize: 12.5, color: C.muted }}>Aucune vente ce mois.</div>
@@ -336,19 +364,24 @@ function PersonDetail({ C, p, month, onChanged }) {
   );
 }
 
-// Une vente, montree comme une formule : tranche (base) × coef [CC · Mensuel] = commission
+// Une vente, montree comme une formule : tranche (base) × coef [CC · Mensuel] = commission.
+// Si le client n'a pas encore paye (d.counted === false) : ligne grisee + barree + badge.
 function DealLine({ C, d }) {
+  const unpaid = d.counted === false;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "7px 0", borderBottom: `1px dashed ${C.border}` }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "7px 0", borderBottom: `1px dashed ${C.border}`, opacity: unpaid ? 0.6 : 1 }}>
       <span style={{ color: C.text, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={`Origine : ${d.origin || "non renseignee"}`}>{d.client || "·"}</span>
+      {unpaid && (
+        <span title="Client pas encore paye : vente affichee mais non comptabilisee tant que le paiement n'est pas recu." style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 6, background: C.warn === "#b06a12" ? "#fef3c7" : "rgba(240,181,62,0.16)", color: C.warn, whiteSpace: "nowrap", flexShrink: 0 }}>pas encore payé</span>
+      )}
       <Tag C={C} title="Tranche de salaries du client (a la vente)">{d.tranche || "?"}</Tag>
       <Tag C={C} accent={d.cat === "CC"} title="CC = cold call ; ADS = autre origine ; WEB = webinaire">{d.cat === "WEB" ? "Webinaire" : d.cat}</Tag>
       {d.cat !== "WEB" && <Tag C={C} title="Mode de paiement declare">{planLabel(d.plan)}</Tag>}
       {d.tranche_unknown ? (
         <span style={{ ...mono(C), color: C.warn, minWidth: 120, textAlign: "right" }}>tranche inconnue</span>
       ) : (
-        <span style={{ ...mono(C), minWidth: 138, textAlign: "right", color: C.text2 }}>
-          {eur(d.base)} × {coefFmt(d.coef)} = <b style={{ color: C.text }}>{eur(d.commission)}</b>
+        <span style={{ ...mono(C), minWidth: 138, textAlign: "right", color: C.text2, textDecoration: unpaid ? "line-through" : "none" }}>
+          {eur(d.base)} × {coefFmt(d.coef)} = <b style={{ color: unpaid ? C.muted : C.text }}>{eur(d.commission)}</b>
         </span>
       )}
     </div>
@@ -373,20 +406,29 @@ function OverrideLine({ C, o }) {
 function BuildUp({ C, p }) {
   const line = (label, value, opts = {}) => (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "5px 0", fontSize: opts.big ? 14.5 : 13 }}>
-      <span style={{ color: opts.big ? C.text : C.text2, fontWeight: opts.big ? 700 : 500 }}>{label}</span>
-      <span style={{ ...mono(C), fontSize: opts.big ? 15 : 13, fontWeight: opts.big ? 700 : 600, color: opts.accent ? C.accentText : C.text }}>
+      <span style={{ color: opts.big ? C.text : (opts.ok ? C.ok : C.text2), fontWeight: (opts.big || opts.ok) ? 700 : 500 }}>{label}</span>
+      <span style={{ ...mono(C), fontSize: opts.big ? 15 : 13, fontWeight: opts.big ? 700 : 600, color: opts.big ? C.text : (opts.ok ? C.ok : (opts.accent ? C.accentText : (opts.strike ? C.muted : C.text))), textDecoration: opts.strike ? "line-through" : "none" }}>
         {opts.sign && value > 0 ? "+" : ""}{eur(value)}
       </span>
     </div>
   );
   const rule = <div style={{ height: 1, background: C.border, margin: "4px 0" }} />;
+  const floored = p.plancher_applied > 0;
   return (
     <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 14px" }}>
       {line("Commissions propres", p.own_commission)}
       {line("Commission d'équipe", p.override_received, { sign: true, accent: !!p.override_received })}
       {line("Primes exceptionnelles", p.exceptional_total, { sign: true })}
       {rule}
-      {line("Variable", p.variable, { big: false })}
+      {floored ? (
+        <>
+          {line("Variable calculée", p.variable_raw, { strike: true })}
+          {line("Plancher garanti", p.variable, { ok: true })}
+          <div style={{ fontSize: 11, color: C.muted, margin: "0 0 3px", lineHeight: 1.4 }}>Minimum garanti atteint ({p.n_deals} ventes). Sans plancher : {eur(p.variable_raw)}.</div>
+        </>
+      ) : (
+        line("Variable", p.variable)
+      )}
       {line("Fixe", p.fixe, { sign: true })}
       {rule}
       {line("Net a verser", p.net, { big: true })}

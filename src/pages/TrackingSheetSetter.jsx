@@ -293,6 +293,10 @@ export default function TrackingSheetSetter() {
   const urlParams = new URLSearchParams(window.location.search);
   const viewingSheetId = urlParams.get('sheet_id');
   const isAdminView = !!viewingSheetId;
+  // Embed (shell CEO ghost) : la page est rendue DANS le dashboard (sidebar CEO
+  // + SharedNavbar fournis par CeoSetterSheetView) -> on masque la navbar et la
+  // sidebar propres de cette page, comme le fait TrackingSheet (vue sales).
+  const embedMode = urlParams.get('embed') === 'true';
   const initialView = urlParams.get('view');
 
   // ── REFRESH DATA (setter version, P3 — 5 buckets) ─────────────────────────
@@ -310,15 +314,21 @@ export default function TrackingSheetSetter() {
   // garantit que le bucket le plus prioritaire l'emporte au final.
   const refreshData = useCallback(async () => {
     try {
+      // Ghost CEO : si on consulte le compte d'un setter (sheet_id + ghost=true),
+      // on impersonne ce setter en lecture via ?as_setter=<email>. En usage normal
+      // (setter sur son propre compte), sheet_id est absent -> aucun suffixe.
+      const _u = new URLSearchParams(window.location.search);
+      const _asSetter = _u.get('ghost') === 'true' ? _u.get('sheet_id') : null;
+      const _q = _asSetter ? `?as_setter=${encodeURIComponent(_asSetter)}` : '';
       const [mineRes, teamRes, callbackRes, r1PlacedRes, r2PlacedRes, signedRes, scopeRdvRes, salesRes] = await Promise.all([
-        apiClient.get('/api/v1/tracking/setter/my-leads').catch((e) => ({ __err: e })),
-        apiClient.get('/api/v1/tracking/setter/team-leads').catch((e) => ({ __err: e })),
-        apiClient.get('/api/v1/tracking/setter/callback-leads').catch((e) => ({ __err: e })),
-        apiClient.get('/api/v1/tracking/setter/r1-placed').catch((e) => ({ __err: e })),
-        apiClient.get('/api/v1/tracking/setter/r2-placed').catch((e) => ({ __err: e })),
-        apiClient.get('/api/v1/tracking/setter/signed').catch((e) => ({ __err: e })),
-        apiClient.get('/api/v1/tracking/setter/scope-rdv').catch((e) => ({ __err: e })),
-        apiClient.get('/api/v1/tracking/setter/my-team-sales').catch((e) => ({ __err: e })),
+        apiClient.get('/api/v1/tracking/setter/my-leads' + _q).catch((e) => ({ __err: e })),
+        apiClient.get('/api/v1/tracking/setter/team-leads' + _q).catch((e) => ({ __err: e })),
+        apiClient.get('/api/v1/tracking/setter/callback-leads' + _q).catch((e) => ({ __err: e })),
+        apiClient.get('/api/v1/tracking/setter/r1-placed' + _q).catch((e) => ({ __err: e })),
+        apiClient.get('/api/v1/tracking/setter/r2-placed' + _q).catch((e) => ({ __err: e })),
+        apiClient.get('/api/v1/tracking/setter/signed' + _q).catch((e) => ({ __err: e })),
+        apiClient.get('/api/v1/tracking/setter/scope-rdv' + _q).catch((e) => ({ __err: e })),
+        apiClient.get('/api/v1/tracking/setter/my-team-sales' + _q).catch((e) => ({ __err: e })),
       ]);
 
       const extractList = (resp) => {
@@ -2316,7 +2326,7 @@ export default function TrackingSheetSetter() {
         }
       `}</style>
 
-      <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} notification={navNotif} centerShift={78} />
+      {!embedMode && <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} notification={navNotif} centerShift={78} />}
 
       {/* ── FLYING CARD CLONE (Genie effect transition) ───────────────────── */}
       {flyingCard && (
@@ -2395,9 +2405,10 @@ export default function TrackingSheetSetter() {
         <div style={{ display: 'flex', alignItems: 'stretch', minHeight: '100vh' }}>
 
           {/* ── LEFT SIDEBAR — repliable (hover), overlay comme la vue sales ── */}
-          {/* Spacer : réserve la gouttière 64px pour que le contenu ne bouge jamais */}
-          <div style={{ width: 64, minWidth: 64, flexShrink: 0 }} />
-          {createPortal((
+          {/* Spacer : réserve la gouttière 64px pour que le contenu ne bouge jamais.
+              En embed (shell CEO ghost) : spacer + sidebar propres masqués. */}
+          {!embedMode && <div style={{ width: 64, minWidth: 64, flexShrink: 0 }} />}
+          {!embedMode && createPortal((
           <div
             onMouseEnter={() => setSidebarHover(true)}
             onMouseLeave={() => setSidebarHover(false)}
@@ -2539,13 +2550,13 @@ export default function TrackingSheetSetter() {
           ), document.body)}
 
         {/* ── RIGHT COLUMN (single top card + content row) ─────────────────── */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: '8px 8px 8px 0', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: embedMode ? '8px 8px 8px 8px' : '8px 8px 8px 0', gap: 12 }}>
 
           {/* ── KPI HEADER CARD (3 left + gap for navbar + 3 right) ────────── */}
           <div style={{ height: 76, background: darkMode ? C.bg : '#f6f7f9', borderRadius: 8, flexShrink: 0, border: `1px solid ${isAdminView ? '#8b5cf640' : C.border}`, marginLeft: 8, display: 'flex', alignItems: 'center', padding: '0 24px' }}>
             {isAdminView && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 'auto' }}>
-                <button onClick={() => { window.location.href = '/tracking-sheet'; }} style={{
+                <button onClick={() => { window.location.href = embedMode ? '/ceo/sales-team?view=setters' : '/tracking-sheet'; }} style={{
                   display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8,
                   border: `1px solid ${C.border}`, background: 'transparent', color: C.muted,
                   fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
