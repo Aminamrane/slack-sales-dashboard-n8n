@@ -345,6 +345,38 @@ class ApiClient {
     return this.request('/api/v1/users/setters-overview');
   }
 
+  // Enregistrements sales (Meet Recordings) : par sales, nb vidéos + nb
+  // transcriptions + liste. Scan Drive via le service account (cache 30 min).
+  async getRecordingsOverview(refresh = false) {
+    return this.request(`/api/v1/recordings/overview${refresh ? '?refresh=1' : ''}`);
+  }
+
+  // URL de streaming vidéo (proxy backend). Le <video> ne peut pas envoyer le
+  // header Bearer -> on passe le JWT en query. owner = email du sales propriétaire.
+  getRecordingStreamUrl(fileId, owner) {
+    const t = encodeURIComponent(this.getToken() || '');
+    return `${this.baseUrl}/api/v1/recordings/${encodeURIComponent(fileId)}/stream?owner=${encodeURIComponent(owner)}&token=${t}`;
+  }
+
+  async getRecordingTranscription(fileId, owner) {
+    return this.request(`/api/v1/recordings/${encodeURIComponent(fileId)}/transcription?owner=${encodeURIComponent(owner)}`);
+  }
+
+  // Scorecards (analyses stockées) + analyses globales.
+  async getScorecards(owner) {
+    return this.request(`/api/v1/recordings/scorecards${owner ? `?owner=${encodeURIComponent(owner)}` : ''}`);
+  }
+  async getScorecard(id) {
+    return this.request(`/api/v1/recordings/scorecards/${encodeURIComponent(id)}`);
+  }
+  async getRecordingAnalysis(scope, kind, period) {
+    const p = period ? `&period=${encodeURIComponent(period)}` : '';
+    return this.request(`/api/v1/recordings/analysis?scope=${encodeURIComponent(scope)}&kind=${encodeURIComponent(kind)}${p}`);
+  }
+  async getAnalysisPeriods(kind) {
+    return this.request(`/api/v1/recordings/analysis-periods?kind=${encodeURIComponent(kind)}`);
+  }
+
   // ============ TRACKING ============
   async getMyLeads() {
     return this.request('/api/v1/tracking/my-leads');

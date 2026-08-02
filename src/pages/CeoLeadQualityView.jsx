@@ -83,6 +83,7 @@ export default function CeoLeadQualityView() {
     if (tabId === "variables") { navigate("/ceo/variables"); return; }
     if (tabId === "conges") { navigate("/ceo/conges"); return; }
     if (tabId === "sales_team") { navigate("/ceo/sales-team"); return; }
+    if (tabId === "sales_recordings") { navigate("/ceo/sales-recordings"); return; }
     if (tabId === "webinar") { navigate("/ceo/webinar"); return; }
     if (tabId === "campaigns") { navigate("/ceo/campaigns"); return; }
     if (tabId === "funnel_leads") { navigate("/ceo/funnel-leads"); return; }

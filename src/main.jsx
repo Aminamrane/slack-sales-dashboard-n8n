@@ -38,6 +38,7 @@ import CeoOptilexBoardView from "./pages/CeoOptilexBoardView.jsx";
 import HrDashboard        from "./pages/HrDashboard.jsx";
 import CeoLeadQualityView from "./pages/CeoLeadQualityView.jsx";
 import CeoSalesTeamView   from "./pages/CeoSalesTeamView.jsx";
+import CeoSalesRecordingsView from "./pages/CeoSalesRecordingsView.jsx";
 import CeoWebinarView     from "./pages/CeoWebinarView.jsx";
 import CeoFunnelLeadsView from "./pages/CeoFunnelLeadsView.jsx";
 import AcquisitionDirectorDashboard from "./pages/AcquisitionDirectorDashboard.jsx";
@@ -229,6 +230,14 @@ function App() {
           element={
             <ProtectedRoute>
               <CeoSalesTeamView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ceo/sales-recordings"
+          element={
+            <ProtectedRoute>
+              <CeoSalesRecordingsView />
             </ProtectedRoute>
           }
         />

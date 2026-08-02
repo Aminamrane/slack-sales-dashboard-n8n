@@ -73,6 +73,7 @@ export default function CeoSequencesView() {
     if (tabId === "leaderboard") { navigate("/ceo/leaderboard"); return; }
     if (tabId === "lead_quality") { navigate("/ceo/lead-quality"); return; }
     if (tabId === "sales_team") { navigate("/ceo/sales-team"); return; }
+    if (tabId === "sales_recordings") { navigate("/ceo/sales-recordings"); return; }
     if (tabId === "webinar") { navigate("/ceo/webinar"); return; }
     if (tabId === "campaigns") { navigate("/ceo/campaigns"); return; }
     if (tabId === "funnel_leads") { navigate("/ceo/funnel-leads"); return; }

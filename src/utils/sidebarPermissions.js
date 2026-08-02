@@ -27,6 +27,13 @@ const ROLE_ITEMS = {
   },
 };
 
+// Gate par ONGLET (id -> rôles autorisés). Un item listé ici n'apparaît QUE
+// pour ces rôles, même pour un rôle qui voit par ailleurs toute la section.
+// Additif : un id absent d'ici garde le comportement précédent.
+const ITEM_ROLE_GATE = {
+  sales_recordings: new Set(["ceo", "admin", "acquisition_director", "head_of_sales_manager"]),
+};
+
 // ── Scope de navigation persistant (sessionStorage) ────────────────
 // Les vues /ceo/* sont PARTAGÉES entre contextes (CEO, RH, Acquisition) et
 // filtrent la sidebar selon le rôle du viewer -> un admin/ceo y voit TOUT.
@@ -52,6 +59,12 @@ export function getVisibleSections(allSections, role) {
     const scope = sessionStorage.getItem("navScope");
     if (scope) effective = scope;
   } catch { /* noop */ }
+  // Gate par-item (global) : retire les onglets réservés à certains rôles.
+  allSections = allSections.map((s) => (
+    s.items
+      ? { ...s, items: s.items.filter((it) => { const g = ITEM_ROLE_GATE[it.id]; return !g || g.has(effective); }) }
+      : s
+  ));
   const allowed = ROLE_SECTIONS[effective];
   if (!allowed) return allSections;
   const itemsFilter = ROLE_ITEMS[effective];
