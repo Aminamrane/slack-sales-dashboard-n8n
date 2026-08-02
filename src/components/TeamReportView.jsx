@@ -36,14 +36,11 @@ function AlertCards({ title, color, items, C, darkMode }) {
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color, marginBottom: 10 }}>{title}</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {items.map((a, i) => (
-          <div key={i} style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 14px", background: darkMode ? "rgba(255,255,255,0.02)" : "#fff" }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: a.impact ? 4 : 0 }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0, transform: "translateY(-2px)" }} />
-              <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text, flex: 1 }}>{a.pratique}</span>
-              {a.freq && <span style={{ fontSize: 10.5, fontWeight: 600, color, fontFamily: "'IBM Plex Mono', monospace", whiteSpace: "nowrap" }}>{a.freq}</span>}
-            </div>
-            {a.impact && <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5, marginLeft: 14 }}>{a.impact}</div>}
-            {a.action && <div style={{ fontSize: 12.5, color: darkMode ? "#5eead4" : "#0E4749", lineHeight: 1.5, marginLeft: 14, marginTop: 5 }}><b>→</b> {a.action}</div>}
+          <div key={i} style={{ border: `1px solid ${C.border}`, borderLeft: `3px solid ${color}`, borderRadius: 12, padding: "12px 15px", background: darkMode ? "rgba(255,255,255,0.02)" : "#fff", overflow: "hidden" }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, lineHeight: 1.4 }}>{a.pratique}</div>
+            {a.freq && <div style={{ fontSize: 11, fontWeight: 600, color, fontFamily: "'IBM Plex Mono', ui-monospace, monospace", lineHeight: 1.45, marginTop: 5, overflowWrap: "anywhere", wordBreak: "break-word" }}>{a.freq}</div>}
+            {a.impact && <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5, marginTop: 6 }}>{a.impact}</div>}
+            {a.action && <div style={{ fontSize: 12.5, color: darkMode ? "#5eead4" : "#0E4749", lineHeight: 1.5, marginTop: 6 }}><b>→</b> {a.action}</div>}
           </div>
         ))}
       </div>
