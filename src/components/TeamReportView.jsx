@@ -1,22 +1,49 @@
 // src/components/TeamReportView.jsx
 //
-// Rapport direction tous-sales (agrège les bilans hebdo). Affiché en bandeau/onglet
-// en haut de la page Enregistrement sales. Rendu depuis le payload
-// « OWNER SALES DIRECTOR INTELLIGENCE ».
+// Rapport direction tous-sales, rendu comme un TABLEAU DE BORD D'INTELLIGENCE
+// (modèle « analytics dashboard » fourni par Youcef) : KPI en tête, classement
+// des sales de la semaine, alertes collectives, actions à imposer. Vue de pilotage
+// pour la direction (≠ dossier de coaching adressé au sales).
+//
+// Props :
+//   report = payload « OWNER SALES DIRECTOR INTELLIGENCE »
+//            { synthese, alertes_r1[], alertes_r2[], ecarts_top[],
+//              alertes_individuelles[], alertes_critiques[], actions[] }
+//   stats  = [{ email, name, avatar, nb, nb_r1, nb_r2, avg }] (agrégé côté page)
 
-const BLUE = "#3b82f6", AMBER = "#B4740B", RED = "#A4262C", GREEN = "#2F6B4F", DEEP = "#0E4749";
+const band = (s) => (s >= 80 ? "#22c55e" : s >= 70 ? "#3b82f6" : s >= 60 ? "#eab308" : "#ef4444");
 
-function AlertBlock({ title, color, items }) {
+function Kpi({ label, value, sub, accent, C, darkMode }) {
+  return (
+    <div style={{ flex: "1 1 180px", minWidth: 160, border: `1px solid ${C.border}`, borderRadius: 14, padding: "16px 18px", background: darkMode ? "rgba(255,255,255,0.02)" : "#fff" }}>
+      <div style={{ fontSize: 12.5, color: C.muted, fontWeight: 500, marginBottom: 10 }}>{label}</div>
+      <div style={{ fontSize: 34, fontWeight: 700, color: accent || C.text, letterSpacing: "-0.02em", lineHeight: 1 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 10, fontFamily: "'IBM Plex Mono', ui-monospace, monospace" }}>{sub}</div>}
+    </div>
+  );
+}
+
+function Avatar({ url, name, size = 28 }) {
+  const ini = (name || "").split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+  if (url) return <img src={url} alt="" style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
+  return <div style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, background: "#1e2330", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.38, fontWeight: 700 }}>{ini}</div>;
+}
+
+function AlertCards({ title, color, items, C, darkMode }) {
   if (!items || items.length === 0) return null;
   return (
-    <div style={{ flex: 1, minWidth: 260 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color, marginBottom: 8 }}>{title}</div>
+    <div style={{ flex: 1, minWidth: 280 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color, marginBottom: 10 }}>{title}</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {items.map((a, i) => (
-          <div key={i} style={{ borderLeft: `2px solid ${color}`, paddingLeft: 11 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "inherit" }}>{a.pratique}{a.freq ? <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.75 }}> — {a.freq}</span> : null}</div>
-            {a.impact && <div style={{ fontSize: 12, opacity: 0.85, lineHeight: 1.45, marginTop: 2 }}>{a.impact}</div>}
-            {a.action && <div style={{ fontSize: 12, color: DEEP, marginTop: 4 }}><b>Action :</b> {a.action}</div>}
+          <div key={i} style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 14px", background: darkMode ? "rgba(255,255,255,0.02)" : "#fff" }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: a.impact ? 4 : 0 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0, transform: "translateY(-2px)" }} />
+              <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text, flex: 1 }}>{a.pratique}</span>
+              {a.freq && <span style={{ fontSize: 10.5, fontWeight: 600, color, fontFamily: "'IBM Plex Mono', monospace", whiteSpace: "nowrap" }}>{a.freq}</span>}
+            </div>
+            {a.impact && <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5, marginLeft: 14 }}>{a.impact}</div>}
+            {a.action && <div style={{ fontSize: 12.5, color: darkMode ? "#5eead4" : "#0E4749", lineHeight: 1.5, marginLeft: 14, marginTop: 5 }}><b>→</b> {a.action}</div>}
           </div>
         ))}
       </div>
@@ -24,52 +51,95 @@ function AlertBlock({ title, color, items }) {
   );
 }
 
-export default function TeamReportView({ report, period, C, darkMode }) {
+export default function TeamReportView({ report, stats, period, C, darkMode }) {
   if (!report) return null;
-  const box = { color: C.text };
+  const ranked = (stats || []).filter((s) => s.nb > 0 && s.avg != null).slice().sort((a, b) => b.avg - a.avg);
+  const totR1 = (stats || []).reduce((n, s) => n + (s.nb_r1 || 0), 0);
+  const totR2 = (stats || []).reduce((n, s) => n + (s.nb_r2 || 0), 0);
+  const totNb = ranked.reduce((n, s) => n + s.nb, 0);
+  const teamAvg = totNb ? Math.round(ranked.reduce((n, s) => n + s.avg * s.nb, 0) / totNb) : null;
+  const nbCrit = report.alertes_critiques?.length || 0;
+
+  const SectionTitle = ({ children, color }) => (
+    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: color || C.muted, marginBottom: 12 }}>{children}</div>
+  );
 
   return (
-    <div style={{ borderRadius: 16, border: `1px solid ${C.border}`, background: darkMode ? "rgba(255,255,255,0.03)" : "#fff", padding: "18px 20px", ...box }}>
-      {/* Synthèse direction */}
+    <div style={{ display: "flex", flexDirection: "column", gap: 26 }}>
+      {/* KPI */}
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+        <Kpi label="R1 analysés" value={totR1} sub={`semaine ${period || ""}`.trim()} C={C} darkMode={darkMode} />
+        <Kpi label="R2 analysés" value={totR2} sub={`${ranked.length} sales couverts`} C={C} darkMode={darkMode} />
+        <Kpi label="Score équipe" value={teamAvg != null ? teamAvg : "—"} sub={teamAvg != null ? "moyenne d'exécution /100" : "pas de scorecard"} accent={teamAvg != null ? band(teamAvg) : undefined} C={C} darkMode={darkMode} />
+        <Kpi label="Alertes critiques" value={nbCrit} sub={nbCrit ? "à traiter en priorité" : "aucune cette semaine"} accent={nbCrit ? "#ef4444" : undefined} C={C} darkMode={darkMode} />
+      </div>
+
+      {/* Synthèse */}
       {report.synthese && (
-        <div style={{ background: darkMode ? "rgba(14,71,73,0.16)" : "#E6EEEC", borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: DEEP, marginBottom: 6 }}>Synthèse direction{period ? ` · ${period}` : ""}</div>
-          <p style={{ fontSize: 13.5, lineHeight: 1.6, color: C.text, margin: 0 }}>{report.synthese}</p>
+        <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: "18px 20px", background: darkMode ? "rgba(59,130,246,0.06)" : "#f8fafc" }}>
+          <SectionTitle color={darkMode ? "#93c5fd" : "#2563eb"}>Synthèse direction</SectionTitle>
+          <p style={{ fontSize: 14.5, lineHeight: 1.65, color: C.text, margin: 0 }}>{report.synthese}</p>
+        </div>
+      )}
+
+      {/* Classement de la semaine */}
+      {ranked.length > 0 && (
+        <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: "18px 20px", background: darkMode ? "rgba(255,255,255,0.02)" : "#fff" }}>
+          <SectionTitle>Classement de la semaine · exécution</SectionTitle>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            {ranked.map((s, i) => {
+              const col = band(s.avg);
+              return (
+                <div key={s.email} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: i < ranked.length - 1 ? `1px solid ${C.border}` : "none" }}>
+                  <span style={{ width: 22, fontSize: 13, fontWeight: 700, color: i === 0 ? col : C.muted, fontFamily: "'IBM Plex Mono', monospace", flexShrink: 0 }}>{i + 1}</span>
+                  <Avatar url={s.avatar} name={s.name} />
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: C.text, width: 150, flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name}</span>
+                  <div style={{ flex: 1, height: 8, borderRadius: 999, background: darkMode ? "rgba(255,255,255,0.07)" : "#eef1f4", overflow: "hidden", minWidth: 80 }}>
+                    <div style={{ width: `${Math.max(4, Math.min(100, s.avg))}%`, height: "100%", background: col, borderRadius: 999 }} />
+                  </div>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: col, width: 30, textAlign: "right", flexShrink: 0 }}>{s.avg}</span>
+                  <span style={{ fontSize: 11.5, color: C.muted, width: 74, textAlign: "right", flexShrink: 0, fontFamily: "'IBM Plex Mono', monospace" }}>{s.nb} RDV</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
       {/* Alertes collectives R1 / R2 */}
       {(report.alertes_r1?.length || report.alertes_r2?.length) ? (
-        <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginBottom: 20 }}>
-          <AlertBlock title="Alertes collectives R1" color={BLUE} items={report.alertes_r1} />
-          <AlertBlock title="Alertes collectives R2" color={AMBER} items={report.alertes_r2} />
+        <div style={{ display: "flex", gap: 22, flexWrap: "wrap" }}>
+          <AlertCards title="Alertes collectives R1" color="#3b82f6" items={report.alertes_r1} C={C} darkMode={darkMode} />
+          <AlertCards title="Alertes collectives R2" color="#eab308" items={report.alertes_r2} C={C} darkMode={darkMode} />
         </div>
       ) : null}
 
       {/* Écarts avec les top sales */}
       {report.ecarts_top?.length ? (
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: GREEN, marginBottom: 8 }}>Écarts avec les top sales</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+        <div>
+          <SectionTitle color="#22c55e">Écarts avec les top sales</SectionTitle>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
             {report.ecarts_top.map((e, i) => (
-              <div key={i} style={{ borderLeft: `2px solid ${GREEN}`, paddingLeft: 11 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{e.competence}</div>
-                <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45 }}><b style={{ color: GREEN }}>Top :</b> {e.top} · <b>Autres :</b> {e.autres}</div>
-                {e.standard && <div style={{ fontSize: 12, color: DEEP, marginTop: 2 }}><b>Standard à imposer :</b> {e.standard}</div>}
+              <div key={i} style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: "13px 15px", background: darkMode ? "rgba(255,255,255,0.02)" : "#fff" }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, marginBottom: 6 }}>{e.competence}</div>
+                <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}><b style={{ color: "#22c55e" }}>Top :</b> {e.top}</div>
+                <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}><b>Autres :</b> {e.autres}</div>
+                {e.standard && <div style={{ fontSize: 12.5, color: darkMode ? "#5eead4" : "#0E4749", lineHeight: 1.5, marginTop: 5 }}><b>Standard :</b> {e.standard}</div>}
               </div>
             ))}
           </div>
         </div>
       ) : null}
 
-      {/* Alertes individuelles par sales */}
+      {/* Par sales */}
       {report.alertes_individuelles?.length ? (
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>Par sales</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div>
+          <SectionTitle>Par sales</SectionTitle>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 10 }}>
             {report.alertes_individuelles.map((a, i) => (
-              <div key={i} style={{ fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
-                <b>{a.nom}</b> — {a.alerte} {a.a_changer && <span style={{ color: DEEP }}>→ {a.a_changer}</span>}
+              <div key={i} style={{ borderLeft: `2px solid ${C.border}`, paddingLeft: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{a.nom}</div>
+                <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}>{a.alerte}{a.a_changer && <span style={{ color: darkMode ? "#5eead4" : "#0E4749" }}> → {a.a_changer}</span>}</div>
               </div>
             ))}
           </div>
@@ -78,12 +148,12 @@ export default function TeamReportView({ report, period, C, darkMode }) {
 
       {/* Alertes critiques */}
       {report.alertes_critiques?.length ? (
-        <div style={{ marginBottom: 20, background: darkMode ? "rgba(164,38,44,0.12)" : "#fdf0f0", borderRadius: 12, padding: "12px 15px" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: RED, marginBottom: 8 }}>⚠ Alertes critiques</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ border: `1px solid ${darkMode ? "rgba(239,68,68,0.4)" : "#fecaca"}`, borderRadius: 14, padding: "16px 18px", background: darkMode ? "rgba(239,68,68,0.08)" : "#fef2f2" }}>
+          <SectionTitle color="#ef4444">⚠ Alertes critiques</SectionTitle>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {report.alertes_critiques.map((a, i) => (
-              <div key={i} style={{ fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
-                <b style={{ color: RED }}>{a.pratique}</b>{a.sales ? ` · ${a.sales}` : ""}{a.risque ? ` — ${a.risque}` : ""} {a.action && <span style={{ color: DEEP }}>→ {a.action}</span>}
+              <div key={i} style={{ fontSize: 13, color: C.text, lineHeight: 1.55 }}>
+                <b style={{ color: "#ef4444" }}>{a.pratique}</b>{a.sales ? ` · ${a.sales}` : ""}{a.risque ? ` — ${a.risque}` : ""}{a.action && <span style={{ color: darkMode ? "#5eead4" : "#0E4749" }}> → {a.action}</span>}
               </div>
             ))}
           </div>
@@ -92,14 +162,17 @@ export default function TeamReportView({ report, period, C, darkMode }) {
 
       {/* Actions à imposer */}
       {report.actions?.length ? (
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: DEEP, marginBottom: 8 }}>Actions à imposer</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+        <div style={{ border: `1px solid ${C.border}`, borderRadius: 14, padding: "18px 20px", background: darkMode ? "rgba(255,255,255,0.02)" : "#fff" }}>
+          <SectionTitle color={darkMode ? "#5eead4" : "#0E4749"}>Actions à imposer cette semaine</SectionTitle>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {report.actions.map((a, i) => (
-              <div key={i} style={{ display: "flex", gap: 10 }}>
-                <span style={{ fontSize: 13, fontWeight: 800, color: DEEP, flexShrink: 0 }}>{i + 1}.</span>
-                <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
-                  <b>{a.decision}</b>{a.cible ? ` · Cible : ${a.cible}` : ""}{a.mise_en_oeuvre ? ` · ${a.mise_en_oeuvre}` : ""}{a.controle ? ` · Contrôle : ${a.controle}` : ""}{a.delai ? ` · ${a.delai}` : ""}
+              <div key={i} style={{ display: "flex", gap: 12 }}>
+                <span style={{ fontSize: 15, fontWeight: 800, color: darkMode ? "#5eead4" : "#0E4749", flexShrink: 0, fontFamily: "'IBM Plex Mono', monospace" }}>{String(i + 1).padStart(2, "0")}</span>
+                <div style={{ fontSize: 13, color: C.text, lineHeight: 1.55 }}>
+                  <b>{a.decision}</b>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                    {[a.cible && `Cible : ${a.cible}`, a.mise_en_oeuvre, a.controle && `Contrôle : ${a.controle}`, a.delai].filter(Boolean).join(" · ")}
+                  </div>
                 </div>
               </div>
             ))}

@@ -101,8 +101,8 @@ export default function SalesRecordingsDetail({ sales, onBack, C, darkMode }) {
         </div>
       </div>
 
-      {/* Bilan hebdomadaire (en tête de fiche) */}
-      <WeeklyBilanView bilan={bilan} C={C} darkMode={darkMode} />
+      {/* Bilan hebdomadaire (dossier de coaching, en tête de fiche) */}
+      <WeeklyBilanView bilan={bilan} salesName={sales.name} avatarUrl={sales.avatar_url} team={sales.team} />
 
       {/* Onglets */}
       <div style={{ display: "flex", gap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 18 }}>

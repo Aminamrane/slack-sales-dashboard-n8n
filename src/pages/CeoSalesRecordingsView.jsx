@@ -69,10 +69,11 @@ export default function CeoSalesRecordingsView() {
   const [avatars, setAvatars] = useState({});
 
   // ── ANALYSES HEBDO : rapport direction + sélecteur de semaine ────────
+  const [pageTab, setPageTab] = useState("equipes"); // 'equipes' (défaut) | 'direction'
   const [periods, setPeriods] = useState([]);
   const [selectedPeriod, setSelectedPeriod] = useState(null);
   const [teamReport, setTeamReport] = useState(null);
-  const [teamOpen, setTeamOpen] = useState(true);
+  const [allScorecards, setAllScorecards] = useState([]);
 
   const load = (refresh = false) => {
     if (refresh) setRefreshing(true); else setLoading(true);
@@ -134,8 +135,41 @@ export default function CeoSalesRecordingsView() {
     return () => { alive = false; };
   }, [selectedPeriod]);
 
+  // Toutes les scorecards (agrégées pour le classement du rapport direction).
+  useEffect(() => {
+    if (!authChecked) return;
+    let alive = true;
+    apiClient.getScorecards()
+      .then((r) => { if (alive) setAllScorecards(r?.scorecards || []); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [authChecked]);
+
   const C = useMemo(() => getColors(darkMode), [darkMode]);
   const visibleSections = useMemo(() => getVisibleSections(SIDEBAR_SECTIONS, userRole), [userRole]);
+
+  // Agrégat par sales : moyenne d'exécution + nb R1/R2 (pour le classement direction).
+  const teamStats = useMemo(() => {
+    const nameByEmail = {};
+    for (const s of (data?.sales || [])) if (s.email) nameByEmail[s.email.toLowerCase()] = s.name;
+    const acc = {};
+    for (const sc of allScorecards) {
+      const em = (sc.owner_email || "").toLowerCase();
+      if (!em) continue;
+      const a = acc[em] || (acc[em] = { email: em, scores: [], nb_r1: 0, nb_r2: 0 });
+      if (typeof sc.score === "number") a.scores.push(sc.score);
+      if (sc.rdv_type === "R1") a.nb_r1 += 1; else if (sc.rdv_type === "R2") a.nb_r2 += 1;
+    }
+    return Object.values(acc).map((a) => ({
+      email: a.email,
+      name: nameByEmail[a.email] || a.email.split("@")[0],
+      avatar: avatars[a.email] || null,
+      nb: a.scores.length || a.nb_r1 + a.nb_r2,
+      nb_r1: a.nb_r1,
+      nb_r2: a.nb_r2,
+      avg: a.scores.length ? Math.round(a.scores.reduce((x, y) => x + y, 0) / a.scores.length) : null,
+    }));
+  }, [allScorecards, data, avatars]);
 
   // ── SIDEBAR NAVIGATION HANDLER ──────────────────────────────────────
   const handleSidebarTabClick = (tabId) => {
@@ -209,49 +243,70 @@ export default function CeoSalesRecordingsView() {
               />
             ) : (
               <>
-                <div style={{ marginBottom: 24 }}>
+                <div style={{ marginBottom: 20 }}>
                   <h1 style={{ fontSize: 24, fontWeight: 700, color: C.text, margin: "0 0 4px", letterSpacing: "-0.02em" }}>
                     Enregistrement sales
                   </h1>
                   <p style={{ fontSize: 14, color: C.muted, margin: 0 }}>
-                    Cliquez un sales pour voir ses analyses (chaque RDV + sa scorecard). Vidéos et transcriptions en onglets.
+                    Les équipes et leurs analyses. Ouvrez « Rapport direction » pour la vue de pilotage tous-sales.
                   </p>
                 </div>
 
-                {/* Rapport direction (tous-sales) — semaine sélectionnable */}
-                {teamReport && (
-                  <div style={{ marginBottom: 26 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: teamOpen ? 12 : 0, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 15 }}>🧭</span>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Rapport direction</div>
+                {/* Onglets de page : Équipes (défaut) | Rapport direction */}
+                <div style={{ display: "flex", gap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 24 }}>
+                  {[{ key: "equipes", label: "Équipes" }, { key: "direction", label: "Rapport direction" }].map((t) => {
+                    const active = pageTab === t.key;
+                    return (
+                      <button key={t.key} onClick={() => setPageTab(t.key)} style={{
+                        padding: "9px 16px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit",
+                        fontSize: 14, fontWeight: active ? 700 : 500, color: active ? C.text : C.muted,
+                        borderBottom: `2px solid ${active ? "#3b82f6" : "transparent"}`, marginBottom: -1,
+                      }}>{t.label}</button>
+                    );
+                  })}
+                </div>
+
+                {/* ÉQUIPES (défaut) */}
+                {pageTab === "equipes" && (
+                  <SalesRecordingsGrid
+                    data={data}
+                    loading={loading}
+                    error={error}
+                    onRefresh={() => load(true)}
+                    refreshing={refreshing}
+                    onSelectSales={setSelectedEmail}
+                    avatars={avatars}
+                    C={C}
+                    darkMode={darkMode}
+                  />
+                )}
+
+                {/* RAPPORT DIRECTION — onglet à part, semaine sélectionnable */}
+                {pageTab === "direction" && (
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>
+                        Pilotage de la semaine{selectedPeriod ? ` · ${fmtPeriod(selectedPeriod)}` : ""}
+                      </div>
                       {periods.length > 0 && (
                         <select
                           value={selectedPeriod || ""}
                           onChange={(e) => setSelectedPeriod(e.target.value)}
-                          style={{ fontSize: 12.5, fontWeight: 600, color: C.text, background: darkMode ? "rgba(255,255,255,0.05)" : "#fff", border: `1px solid ${C.border}`, borderRadius: 8, padding: "5px 9px", cursor: "pointer", fontFamily: "inherit" }}
+                          style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 600, color: C.text, background: darkMode ? "rgba(255,255,255,0.05)" : "#fff", border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontFamily: "inherit" }}
                         >
                           {periods.map((p) => <option key={p} value={p}>{fmtPeriod(p)}</option>)}
                         </select>
                       )}
-                      <button onClick={() => setTeamOpen((v) => !v)} style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 600, color: C.muted, background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, padding: "5px 11px", cursor: "pointer", fontFamily: "inherit" }}>
-                        {teamOpen ? "Masquer" : "Afficher"}
-                      </button>
                     </div>
-                    {teamOpen && <TeamReportView report={teamReport} period={fmtPeriod(selectedPeriod)} C={C} darkMode={darkMode} />}
+                    {teamReport ? (
+                      <TeamReportView report={teamReport} stats={teamStats} period={selectedPeriod} C={C} darkMode={darkMode} />
+                    ) : (
+                      <div style={{ border: `1px dashed ${C.border}`, borderRadius: 14, padding: 36, textAlign: "center", color: C.muted, fontSize: 14 }}>
+                        Pas encore de rapport direction pour cette semaine. Il sera généré au prochain passage d'analyse.
+                      </div>
+                    )}
                   </div>
                 )}
-
-                <SalesRecordingsGrid
-                  data={data}
-                  loading={loading}
-                  error={error}
-                  onRefresh={() => load(true)}
-                  refreshing={refreshing}
-                  onSelectSales={setSelectedEmail}
-                  avatars={avatars}
-                  C={C}
-                  darkMode={darkMode}
-                />
               </>
             )}
           </div>
