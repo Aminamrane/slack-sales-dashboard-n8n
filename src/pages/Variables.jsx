@@ -48,6 +48,7 @@ export default function Variables({ embed = false }) {
   const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState(null);
   const [showRules, setShowRules] = useState(false);
+  const [view, setView] = useState("variables"); // 'variables' | 'setters'
 
   const load = async (m) => {
     setLoading(true); setError(null);
@@ -87,6 +88,16 @@ export default function Variables({ embed = false }) {
           <MonthPicker C={C} month={month} setMonth={setMonth} />
         </div>
 
+        {/* Onglets */}
+        <div style={{ display: "flex", gap: 6, borderBottom: `1px solid ${C.border}`, margin: "14px 0 0" }}>
+          {[{ k: "variables", l: "Variables sales" }, { k: "setters", l: "Contribution des setters" }].map((t) => (
+            <button key={t.k} onClick={() => setView(t.k)} style={{ padding: "9px 16px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 13.5, fontWeight: view === t.k ? 700 : 500, color: view === t.k ? C.text : C.muted, borderBottom: `2px solid ${view === t.k ? C.accentText : "transparent"}`, marginBottom: -1 }}>{t.l}</button>
+          ))}
+        </div>
+
+        {view === "setters" && <SettersContribution C={C} />}
+
+        {view === "variables" && (<>
         {/* Bandeau de confiance + toggle regles */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", margin: "14px 0 18px", padding: "10px 14px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10 }}>
           <div style={{ fontSize: 12.5, color: C.text2 }}>
@@ -144,6 +155,59 @@ export default function Variables({ embed = false }) {
             {data.unmapped.map((u) => `${u.name} (${u.n_deals} vente${u.n_deals > 1 ? "s" : ""})`).join(", ")}.
           </div>
         )}
+        </>)}
+      </div>
+    </div>
+  );
+}
+
+// ── Contribution des setters ────────────────────────────────────────────
+// Leads SIGNÉS où le setter a placé lui-même le R1 ou le R2, répartis Cold Call
+// (leads qu'il a créés/démarchés : origin cc/setter) vs ADS (le reste) + détail.
+function SettersContribution({ C }) {
+  const [d, setD] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    apiClient.get("/api/v1/variables/setters-contribution")
+      .then((r) => { if (alive) setD(r); })
+      .catch(() => { if (alive) setD({ setters: [] }); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+  if (loading) return <div style={{ padding: 40, textAlign: "center", color: C.muted, fontSize: 14 }}>Chargement…</div>;
+  const setters = d?.setters || [];
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ fontSize: 12.5, color: C.text2, margin: "0 0 14px" }}>
+        Leads <b style={{ color: C.text }}>signés</b> où le setter a placé lui-même le R1 ou le R2, répartis <b style={{ color: C.text }}>Cold Call</b> (leads qu'il a créés / démarchés) vs <b style={{ color: C.text }}>ADS</b>. Clique un setter pour le détail.
+      </div>
+      {setters.length === 0 && <div style={{ padding: 40, textAlign: "center", color: C.muted, fontSize: 14 }}>Aucune contribution setter.</div>}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {setters.map((s) => (
+          <div key={s.email} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden" }}>
+            <div onClick={() => setOpen(open === s.email ? null : s.email)} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 18px", cursor: "pointer", flexWrap: "wrap" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.text, flex: 1, minWidth: 120 }}>{s.setter}</div>
+              <div style={{ fontSize: 13, color: C.text2 }}><b style={{ color: C.text, fontSize: 17 }}>{s.leads}</b> leads signés</div>
+              <div style={{ fontSize: 12.5, color: "#0891b2", fontWeight: 600 }}>{s.cc} Cold Call</div>
+              <div style={{ fontSize: 12.5, color: "#7c3aed", fontWeight: 600 }}>{s.ads} ADS</div>
+              <span style={{ fontSize: 13, color: C.muted }}>{open === s.email ? "▲" : "▼"}</span>
+            </div>
+            {open === s.email && (
+              <div style={{ borderTop: `1px solid ${C.border}`, padding: "6px 18px 14px" }}>
+                {s.detail.map((row, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: i < s.detail.length - 1 ? `1px solid ${C.border}` : "none" }}>
+                    <span style={{ fontSize: 13, color: C.text, flex: 1, minWidth: 0 }}>{row.prospect}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: row.rdv.includes("R1") ? "#3b82f6" : "#fb923c", width: 44, textAlign: "center" }}>{row.rdv}</span>
+                    <span style={{ fontSize: 12, color: C.muted, width: 140, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.origin}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: row.canal === "CC" ? "#0891b2" : "#7c3aed", width: 40, textAlign: "right" }}>{row.canal}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
