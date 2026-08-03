@@ -67,6 +67,7 @@ export default function CeoSalesRecordingsView() {
   // ── FETCH OVERVIEW (scan Drive, cache 30 min côté backend) ──────────
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [videosLoading, setVideosLoading] = useState(false); // scan Drive (vidéos) en arrière-plan
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [selectedEmail, setSelectedEmail] = useState(null);
@@ -90,11 +91,17 @@ export default function CeoSalesRecordingsView() {
   useEffect(() => {
     if (!authChecked) return;
     let alive = true;
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setVideosLoading(true);
+    // 1) LIGHT : structure + analyses (DB, immédiat) -> la grille s'affiche tout de suite.
+    apiClient.getRecordingsOverview(false, true)
+      .then((resp) => { if (alive) setData((prev) => (prev && !prev.light ? prev : resp)); }) // ne pas écraser un complet déjà arrivé
+      .catch((e) => { if (alive && !data) { console.warn("[CeoSalesRecordingsView] light overview failed:", e); } })
+      .finally(() => { if (alive) setLoading(false); });
+    // 2) COMPLET : scan Drive (vidéos + transcriptions) en arrière-plan -> complète les compteurs.
     apiClient.getRecordingsOverview(false)
       .then((resp) => { if (alive) setData(resp); })
-      .catch((e) => { if (alive) { console.warn("[CeoSalesRecordingsView] overview failed:", e); setError(e?.message || "erreur"); } })
-      .finally(() => { if (alive) setLoading(false); });
+      .catch((e) => { if (alive) { console.warn("[CeoSalesRecordingsView] full overview failed:", e); } })
+      .finally(() => { if (alive) setVideosLoading(false); });
     return () => { alive = false; };
   }, [authChecked]);
 
@@ -280,6 +287,7 @@ export default function CeoSalesRecordingsView() {
                   <SalesRecordingsGrid
                     data={data}
                     loading={loading}
+                    videosLoading={videosLoading}
                     error={error}
                     onRefresh={() => load(true)}
                     refreshing={refreshing}

@@ -347,8 +347,11 @@ class ApiClient {
 
   // Enregistrements sales (Meet Recordings) : par sales, nb vidéos + nb
   // transcriptions + liste. Scan Drive via le service account (cache 30 min).
-  async getRecordingsOverview(refresh = false) {
-    return this.request(`/api/v1/recordings/overview${refresh ? '?refresh=1' : ''}`);
+  async getRecordingsOverview(refresh = false, light = false) {
+    const params = [];
+    if (refresh) params.push('refresh=1');
+    if (light) params.push('light=1');
+    return this.request(`/api/v1/recordings/overview${params.length ? '?' + params.join('&') : ''}`);
   }
 
   // URL de streaming vidéo (proxy backend). Le <video> ne peut pas envoyer le

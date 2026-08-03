@@ -15,16 +15,17 @@ function Avatar({ url, name, size = 38 }) {
 }
 
 function Metric({ n, label, color, darkMode, dim }) {
-  const on = n > 0 && !dim;
+  const pending = n === null || n === undefined; // scan Drive pas encore arrivé
+  const on = !pending && n > 0 && !dim;
   return (
-    <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4, flexShrink: 0, whiteSpace: "nowrap" }}>
-      <span style={{ fontSize: 15, fontWeight: 800, color: on ? color : (darkMode ? "#6b7280" : "#c4c8cf") }}>{n}</span>
+    <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4, flexShrink: 0, whiteSpace: "nowrap" }} title={pending ? "Chargement en arrière-plan…" : undefined}>
+      <span style={{ fontSize: 15, fontWeight: 800, color: on ? color : (darkMode ? "#6b7280" : "#c4c8cf"), opacity: pending ? 0.6 : 1 }}>{pending ? "…" : n}</span>
       <span style={{ fontSize: 11, fontWeight: 600, color: on ? (darkMode ? "#9aa2ad" : "#6b7280") : (darkMode ? "#6b7280" : "#c4c8cf") }}>{label}</span>
     </span>
   );
 }
 
-export default function SalesRecordingsGrid({ data, loading, error, onRefresh, refreshing, onSelectSales, avatars = {}, C, darkMode }) {
+export default function SalesRecordingsGrid({ data, loading, videosLoading, error, onRefresh, refreshing, onSelectSales, avatars = {}, C, darkMode }) {
   const teams = useMemo(() => {
     const sales = data?.sales || [];
     const byTeam = new Map();
@@ -72,8 +73,9 @@ export default function SalesRecordingsGrid({ data, loading, error, onRefresh, r
         <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
           <div style={{ fontSize: 13, color: C.muted }}><b style={{ color: "#2F6B4F", fontSize: 15 }}>{totalScored}</b> analyses</div>
           <div style={{ fontSize: 13, color: C.muted }}><b style={{ color: C.text, fontSize: 15 }}>{totals.sales}</b> sales</div>
-          <div style={{ fontSize: 13, color: C.muted }}><b style={{ color: "#0891b2", fontSize: 15 }}>{totals.videos}</b> vidéos</div>
-          <div style={{ fontSize: 13, color: C.muted }}><b style={{ color: "#7c3aed", fontSize: 15 }}>{totals.transcriptions}</b> transcriptions</div>
+          <div style={{ fontSize: 13, color: C.muted }}><b style={{ color: "#0891b2", fontSize: 15 }}>{totals.videos == null ? "…" : totals.videos}</b> vidéos</div>
+          <div style={{ fontSize: 13, color: C.muted }}><b style={{ color: "#7c3aed", fontSize: 15 }}>{totals.transcriptions == null ? "…" : totals.transcriptions}</b> transcriptions</div>
+          {videosLoading && <span style={{ fontSize: 11.5, color: C.muted, opacity: 0.8, display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", border: "1.5px solid " + C.border, borderTopColor: "#0891b2", animation: "recSpin 0.7s linear infinite" }} />vidéos en cours…</span>}
           {data?.cached && <span style={{ fontSize: 11, color: C.muted, opacity: 0.7 }}>· cache</span>}
         </div>
         <button onClick={onRefresh} disabled={refreshing} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 9, border: `1px solid ${C.border}`, background: "transparent", color: C.text, fontSize: 12.5, fontWeight: 600, cursor: refreshing ? "wait" : "pointer", fontFamily: "inherit", opacity: refreshing ? 0.6 : 1 }}>

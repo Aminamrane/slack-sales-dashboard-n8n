@@ -163,13 +163,14 @@ function SaleSlotPicker({ kind, value, onChange, C, darkMode, band }) {
     let alive = true;
     setLoading(true);
     // band (tranche salariale) route le Lancement vers H. Moraru si 20+ salariés ->
-    // on lit les dispos du BON agenda. Sans effet sur l'onboarding (toujours facturation@).
+    // on lit les dispos du BON agenda. Onboarding = créneaux 50 min avec dispo CROISÉE
+    // Vincent (v.chaintron@) + facturation@ sur les 15 dernières min (géré côté backend).
     const bandParam = band ? `&band=${encodeURIComponent(band)}` : '';
     apiClient.get(`/api/v1/tracking/sale-slots?kind=${kind}&start=${_ymd(y, m, 1)}&days=${daysInMonth}${bandParam}`)
       .then(r => {
         if (!alive) return;
         const days = (r && r.days) || [];
-        setData({ days });
+        setData({ days, slotMinutes: (r && r.slot_minutes) || null });
         setSelectedDay(prev => {
           if (prev && days.some(d => d.date === prev)) return prev;
           if (value && days.some(d => d.date === value.slice(0, 10))) return value.slice(0, 10);
@@ -231,7 +232,8 @@ function SaleSlotPicker({ kind, value, onChange, C, darkMode, band }) {
 
       {/* Liste des créneaux du jour (occupés grisés/barrés) */}
       <div style={{ width: 148, borderLeft: `1px solid ${C.border}`, paddingLeft: 16, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 10 }}>{selLabel || '—'}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 2 }}>{selLabel || '—'}</div>
+        {data.slotMinutes ? <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>Créneaux de {data.slotMinutes} min</div> : <div style={{ marginBottom: 8 }} />}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto', paddingRight: 4 }}>
           {loading ? (
             <div style={{ color: C.muted, fontSize: 12, padding: '24px 0', textAlign: 'center' }}>…</div>
