@@ -27,10 +27,10 @@ const ALLOWED_ROLES = ["admin", "ceo", "head_of_acquisition", "acquisition_direc
 
 export default function AcquisitionDirectorDashboard() {
   const navigate = useNavigate();
-  // Contexte acquisition : la sidebar reste scopée Acquisition (recent + acquisition)
-  // même dans les sous-vues /ceo/*, y compris pour un admin/ceo qui consulte. Et le
-  // "Dashboard" renvoie ici (/acquisition-director), pas au dashboard CEO complet.
-  setNavScope("acquisition_director", "head_of_acquisition");
+  // Le navScope (scope Acquisition) est posé dans le gate auth ci-dessous selon le VRAI
+  // rôle : un rôle acquisition (acquisition_director / head_of_acquisition) garde son rôle
+  // pour un gating d'onglet FIN (ex: Gestion des leads réservé à head_of_acquisition) ;
+  // un admin/ceo qui consulte est scopé "acquisition_director" (vue Acquisition standard).
 
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
   useEffect(() => {
@@ -64,6 +64,8 @@ export default function AcquisitionDirectorDashboard() {
       navigate("/login");
       return;
     }
+    // Rôle acquisition -> garde son rôle (gating fin) ; admin/ceo/marketing -> scope Acquisition.
+    setNavScope((u.role === "head_of_acquisition" || u.role === "acquisition_director") ? u.role : "acquisition_director");
     setUserRole(u.role);
     setAuthChecked(true);
   }, [navigate]);
