@@ -95,7 +95,7 @@ export default function Variables({ embed = false }) {
           ))}
         </div>
 
-        {view === "setters" && <SettersContribution C={C} />}
+        {view === "setters" && <SettersContribution C={C} month={month} />}
 
         {view === "variables" && (<>
         {/* Bandeau de confiance + toggle regles */}
@@ -164,18 +164,18 @@ export default function Variables({ embed = false }) {
 // ── Contribution des setters ────────────────────────────────────────────
 // Leads SIGNÉS où le setter a placé lui-même le R1 ou le R2, répartis Cold Call
 // (leads qu'il a créés/démarchés : origin cc/setter) vs ADS (le reste) + détail.
-function SettersContribution({ C }) {
+function SettersContribution({ C, month }) {
   const [d, setD] = useState(null);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(null);
   useEffect(() => {
-    let alive = true;
-    apiClient.get("/api/v1/variables/setters-contribution")
+    let alive = true; setLoading(true);
+    apiClient.get(`/api/v1/variables/setters-contribution?month=${month}`)
       .then((r) => { if (alive) setD(r); })
       .catch(() => { if (alive) setD({ setters: [] }); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, []);
+  }, [month]);
   if (loading) return <div style={{ padding: 40, textAlign: "center", color: C.muted, fontSize: 14 }}>Chargement…</div>;
   const setters = d?.setters || [];
   return (
