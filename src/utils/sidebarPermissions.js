@@ -31,7 +31,10 @@ const ROLE_ITEMS = {
 // pour ces rôles, même pour un rôle qui voit par ailleurs toute la section.
 // Additif : un id absent d'ici garde le comportement précédent.
 const ITEM_ROLE_GATE = {
-  sales_recordings: new Set(["ceo", "admin", "acquisition_director", "head_of_sales_manager"]),
+  sales_recordings: new Set(["ceo", "admin", "acquisition_director", "head_of_acquisition", "head_of_sales_manager"]),
+  // « Gestion des leads » dans le dashboard acquisition : réservé à head_of_acquisition
+  // (Timothy) + admin/ceo. acquisition_director (Gaylord) ne le voit PAS.
+  leads_management: new Set(["ceo", "admin", "head_of_acquisition"]),
 };
 
 // ── Scope de navigation persistant (sessionStorage) ────────────────

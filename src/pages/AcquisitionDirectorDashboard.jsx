@@ -30,7 +30,7 @@ export default function AcquisitionDirectorDashboard() {
   // Contexte acquisition : la sidebar reste scopée Acquisition (recent + acquisition)
   // même dans les sous-vues /ceo/*, y compris pour un admin/ceo qui consulte. Et le
   // "Dashboard" renvoie ici (/acquisition-director), pas au dashboard CEO complet.
-  setNavScope("acquisition_director");
+  setNavScope("acquisition_director", "head_of_acquisition");
 
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
   useEffect(() => {
@@ -101,6 +101,7 @@ export default function AcquisitionDirectorDashboard() {
     if (tabId === "webinar") { navigate("/ceo/webinar"); return; }
     if (tabId === "campaigns") { navigate("/ceo/campaigns"); return; }
     if (tabId === "funnel_leads") { navigate("/ceo/funnel-leads"); return; }
+    if (tabId === "leads_management") { navigate("/ceo/leads-management"); return; }
     if (tabId === "sequences") { navigate("/ceo/sequences"); return; }
     try { localStorage.setItem("ceoActiveTab", tabId); } catch { /* noop */ }
     navigate("/ceo");

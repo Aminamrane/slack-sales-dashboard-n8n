@@ -1,58 +1,48 @@
-// src/pages/CeoOptilexBoardView.jsx
+// src/pages/CeoLeadsManagementView.jsx
 //
-// Route /ceo/optilex-board — embed <OptilexBoard embed /> dans le shell CEO
-// (sidebar shared + SharedNavbar conservés). Calque de CeoVariablesView.
+// Route /ceo/leads-management — page Gestion des leads (LeadsManagement) embeddée
+// dans le shell CEO / Acquisition Director (sidebar shared + SharedNavbar).
+// Onglet réservé (via ITEM_ROLE_GATE) à head_of_acquisition (Timothy) + admin/ceo.
 //
-// Section PRODUIT de la sidebar. Accès admin / ceo (le board interne cabinet
-// Opti'Lex ; les fiscalistes 'optilex' passent, eux, par /optilex-board direct).
+// Pattern strictement aligné sur CeoFunnelLeadsView.
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import { navigateBackToDashboard } from "../utils/dashboardNavigation";
-import OptilexBoard from "./OptilexBoard.jsx";
+import LeadsManagement from "./LeadsManagement.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo", "customer_success_manager", "finance_director"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo", "head_of_acquisition"]);
 
-export default function CeoOptilexBoardView() {
+export default function CeoLeadsManagementView() {
   const navigate = useNavigate();
 
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
   useEffect(() => {
-    const onStorage = (e) => {
-      if (e.key === "darkMode") setDarkMode(e.newValue === "true");
-    };
+    const onStorage = (e) => { if (e.key === "darkMode") setDarkMode(e.newValue === "true"); };
     window.addEventListener("storage", onStorage);
     const interval = setInterval(() => {
       const isDark = document.body.classList.contains("dark-mode");
       setDarkMode((prev) => (prev !== isDark ? isDark : prev));
     }, 500);
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      clearInterval(interval);
-    };
+    return () => { window.removeEventListener("storage", onStorage); clearInterval(interval); };
   }, []);
 
   const [sideCollapsed, setSideCollapsed] = useState(() => {
     const stored = localStorage.getItem("ceoSideCollapsed_v2");
     return stored === null ? true : stored === "true";
   });
-  useEffect(() => {
-    localStorage.setItem("ceoSideCollapsed_v2", String(sideCollapsed));
-  }, [sideCollapsed]);
+  useEffect(() => { localStorage.setItem("ceoSideCollapsed_v2", String(sideCollapsed)); }, [sideCollapsed]);
 
   const [authChecked, setAuthChecked] = useState(false);
   const [userRole, setUserRole] = useState(null);
   useEffect(() => {
     const u = apiClient.getUser();
-    if (!u || !ALLOWED_ROLES.has(u.role)) {
-      navigate("/");
-      return;
-    }
+    if (!u || !ALLOWED_ROLES.has(u.role)) { navigate("/"); return; }
     setUserRole(u.role);
     setAuthChecked(true);
   }, [navigate]);
@@ -60,54 +50,36 @@ export default function CeoOptilexBoardView() {
   const C = useMemo(() => getColors(darkMode), [darkMode]);
   const visibleSections = useMemo(() => getVisibleSections(SIDEBAR_SECTIONS, userRole), [userRole]);
 
-  // Cliquer "Board Owner/Opti'Lex" ici = no-op (déjà dessus). Les autres
-  // onglets-route renvoient vers leur route dédiée (sinon page blanche).
+  // ── SIDEBAR NAVIGATION HANDLER ──────────────────────────────────────
   const handleSidebarTabClick = (tabId) => {
+    if (tabId === "leads_management") return; // déjà ici
     if (tabId === "sequences") { navigate("/ceo/sequences"); return; }
-    if (tabId === "optilex_board") return;
-    if (tabId === "conges") { navigate("/ceo/conges"); return; }
-    if (tabId === "variables") { navigate("/ceo/variables"); return; }
-    if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }
-    if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }
+    if (tabId === "funnel_leads") { navigate("/ceo/funnel-leads"); return; }
+    if (tabId === "webinar") { navigate("/ceo/webinar"); return; }
+    if (tabId === "campaigns") { navigate("/ceo/campaigns"); return; }
     if (tabId === "dispatch") { navigate("/ceo/dispatch"); return; }
     if (tabId === "leaderboard") { navigate("/ceo/leaderboard"); return; }
+    if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }
+    if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }
+    if (tabId === "variables") { navigate("/ceo/variables"); return; }
+    if (tabId === "conges") { navigate("/ceo/conges"); return; }
     if (tabId === "lead_quality") { navigate("/ceo/lead-quality"); return; }
     if (tabId === "sales_team") { navigate("/ceo/sales-team"); return; }
     if (tabId === "sales_recordings") { navigate("/ceo/sales-recordings"); return; }
-    if (tabId === "webinar") { navigate("/ceo/webinar"); return; }
-    if (tabId === "campaigns") { navigate("/ceo/campaigns"); return; }
-    if (tabId === "funnel_leads") { navigate("/ceo/funnel-leads"); return; }
-    if (tabId === "leads_management") { navigate("/ceo/leads-management"); return; }
+    if (tabId === 'optilex_board') { navigate('/ceo/optilex-board'); return; }
     navigateBackToDashboard(navigate, userRole, tabId);
   };
 
   if (!authChecked) {
     return (
-      <div style={{
-        minHeight: "100vh",
-        background: C.surface,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        color: C.muted, fontFamily: "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-        fontSize: 14,
-      }}>
+      <div style={{ minHeight: "100vh", background: C.surface, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, fontFamily: "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif", fontSize: 14 }}>
         Chargement…
       </div>
     );
   }
 
   return (
-    <div
-      className="ceo-page"
-      style={{
-        display: "flex",
-        minHeight: "100vh",
-        background: darkMode ? "#13141b" : "#f7f8fa",
-        fontFamily: "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-        WebkitFontSmoothing: "antialiased",
-        MozOsxFontSmoothing: "grayscale",
-        textRendering: "optimizeLegibility",
-      }}
-    >
+    <div className="ceo-page" style={{ display: "flex", minHeight: "100vh", background: darkMode ? "#0f1117" : "#ecedf2", fontFamily: "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif", WebkitFontSmoothing: "antialiased", MozOsxFontSmoothing: "grayscale", textRendering: "optimizeLegibility" }}>
       <style>{`
         .ceo-side { transition: width 0.22s cubic-bezier(0.4,0,0.2,1); }
         .ceo-side-item { transition: background 0.12s ease; }
@@ -120,28 +92,22 @@ export default function CeoOptilexBoardView() {
         .ceo-side-scroll::-webkit-scrollbar-track { background: transparent; }
       `}</style>
 
-      <div style={{
-        position: "sticky",
-        top: 0,
-        alignSelf: "flex-start",
-        height: "100vh",
-        display: "flex",
-      }}>
+      <div style={{ position: "sticky", top: 0, alignSelf: "flex-start", height: "100vh", display: "flex" }}>
         <Sidebar
           width={sideCollapsed ? 56 : 260}
           collapsed={sideCollapsed}
           onToggle={() => setSideCollapsed((v) => !v)}
           sections={visibleSections}
-          activeTab="optilex_board"
+          activeTab="leads_management"
           setActiveTab={handleSidebarTabClick}
           C={C}
           darkMode={darkMode}
         />
       </div>
 
-      <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 64 }}>
+      <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingTop: 64 }}>
         <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
-        <OptilexBoard embed />
+        <LeadsManagement embedded={true} darkModeOverride={darkMode} C={C} />
       </div>
     </div>
   );

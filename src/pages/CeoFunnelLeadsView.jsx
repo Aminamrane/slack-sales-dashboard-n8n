@@ -20,7 +20,7 @@ import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "acquisition_director", "customer_success_manager", "finance_director"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "acquisition_director", "head_of_acquisition", "customer_success_manager", "finance_director"]);
 
 export default function CeoFunnelLeadsView() {
   const navigate = useNavigate();
@@ -96,6 +96,7 @@ export default function CeoFunnelLeadsView() {
     if (tabId === "sales_team") { navigate("/ceo/sales-team"); return; }
     if (tabId === "sales_recordings") { navigate("/ceo/sales-recordings"); return; }
     if (tabId === 'optilex_board') { navigate('/ceo/optilex-board'); return; }
+    if (tabId === "leads_management") { navigate("/ceo/leads-management"); return; }
     navigateBackToDashboard(navigate, userRole, tabId);
   };
 

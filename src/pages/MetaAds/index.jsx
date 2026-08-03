@@ -18,7 +18,7 @@ import apiClient from '../../services/apiClient.js';
 import SharedNavbar from '../../components/SharedNavbar.jsx';
 import Leaderboard from './Leaderboard.jsx';
 
-const ALLOWED_ROLES = ['admin', 'ceo', 'marketing', 'acquisition_director'];
+const ALLOWED_ROLES = ['admin', 'ceo', 'marketing', 'acquisition_director', 'head_of_acquisition'];
 const ACCENT = '#f0653e'; // coral, comme la réf
 
 // ── theme (light / dark, palette CRM) ──────────────────────────────────────

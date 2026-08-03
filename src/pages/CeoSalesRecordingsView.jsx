@@ -19,7 +19,7 @@ import SalesRecordingsGrid from "../components/SalesRecordingsGrid.jsx";
 import SalesRecordingsDetail from "../components/SalesRecordingsDetail.jsx";
 import TeamReportView from "../components/TeamReportView.jsx";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo", "acquisition_director", "head_of_sales_manager"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo", "acquisition_director", "head_of_acquisition", "head_of_sales_manager"]);
 
 // Sales dont la transcription Meet est coupée -> analysés depuis Whisper (basse
 // fidélité) : à signaler dans le classement pour ne pas sur-interpréter le score.
@@ -203,6 +203,7 @@ export default function CeoSalesRecordingsView() {
     if (tabId === "campaigns") { navigate("/ceo/campaigns"); return; }
     if (tabId === "funnel_leads") { navigate("/ceo/funnel-leads"); return; }
     if (tabId === "optilex_board") { navigate("/ceo/optilex-board"); return; }
+    if (tabId === "leads_management") { navigate("/ceo/leads-management"); return; }
     navigateBackToDashboard(navigate, userRole, tabId);
   };
 

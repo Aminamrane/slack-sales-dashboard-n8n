@@ -902,7 +902,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                   </button>
                 )}
 
-                {(apiClient.getUser()?.role === 'admin' || apiClient.getUser()?.role === 'ceo' || apiClient.getUser()?.role === 'acquisition_director') && (
+                {(apiClient.getUser()?.role === 'admin' || apiClient.getUser()?.role === 'ceo' || apiClient.getUser()?.role === 'acquisition_director', 'head_of_acquisition') && (
                   <button
                     onClick={() => navigate("/funnel-leads")}
                     style={{
@@ -950,7 +950,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                   </button>
                 )}
 
-                {(apiClient.getUser()?.role === 'admin' || apiClient.getUser()?.role === 'ceo' || apiClient.getUser()?.role === 'marketing' || apiClient.getUser()?.role === 'acquisition_director') && (
+                {(apiClient.getUser()?.role === 'admin' || apiClient.getUser()?.role === 'ceo' || apiClient.getUser()?.role === 'marketing' || apiClient.getUser()?.role === 'acquisition_director', 'head_of_acquisition') && (
                   <button
                     onClick={() => navigate("/meta-ads")}
                     style={{

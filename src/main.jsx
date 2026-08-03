@@ -41,6 +41,7 @@ import CeoSalesTeamView   from "./pages/CeoSalesTeamView.jsx";
 import CeoSalesRecordingsView from "./pages/CeoSalesRecordingsView.jsx";
 import CeoWebinarView     from "./pages/CeoWebinarView.jsx";
 import CeoFunnelLeadsView from "./pages/CeoFunnelLeadsView.jsx";
+import CeoLeadsManagementView from "./pages/CeoLeadsManagementView.jsx";
 import AcquisitionDirectorDashboard from "./pages/AcquisitionDirectorDashboard.jsx";
 import Marketing          from "./pages/Marketing/index.jsx";
 import FunnelLeads        from "./pages/FunnelLeads/index.jsx";
@@ -108,7 +109,7 @@ function App() {
         <Route
           path="/funnel-leads"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'ceo', 'acquisition_director']}>
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'acquisition_director', 'head_of_acquisition']}>
               <FunnelLeads />
             </ProtectedRoute>
           }
@@ -252,8 +253,16 @@ function App() {
         <Route
           path="/ceo/funnel-leads"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'ceo', 'acquisition_director', 'hr', 'customer_success_manager', 'finance_director']}>
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'acquisition_director', 'head_of_acquisition', 'hr', 'customer_success_manager', 'finance_director']}>
               <CeoFunnelLeadsView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ceo/leads-management"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'head_of_acquisition']}>
+              <CeoLeadsManagementView />
             </ProtectedRoute>
           }
         />

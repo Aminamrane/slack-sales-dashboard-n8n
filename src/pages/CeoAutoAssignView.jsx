@@ -78,6 +78,7 @@ export default function CeoAutoAssignView() {
     if (tabId === "campaigns") { navigate("/ceo/campaigns"); return; }
     if (tabId === "funnel_leads") { navigate("/ceo/funnel-leads"); return; }
     if (tabId === 'optilex_board') { navigate('/ceo/optilex-board'); return; }
+    if (tabId === "leads_management") { navigate("/ceo/leads-management"); return; }
     navigateBackToDashboard(navigate, userRole, tabId);
   };
 
