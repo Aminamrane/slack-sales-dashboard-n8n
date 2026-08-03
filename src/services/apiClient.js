@@ -376,6 +376,11 @@ class ApiClient {
   async getAnalysisPeriods(kind) {
     return this.request(`/api/v1/recordings/analysis-periods?kind=${encodeURIComponent(kind)}`);
   }
+  // Self-service : bilan du sales CONNECTÉ (scope forcé à l'email du JWT côté backend).
+  async getMyAnalysis(kind = "sales_weekly", period) {
+    const p = period ? `&period=${encodeURIComponent(period)}` : '';
+    return this.request(`/api/v1/recordings/my-analysis?kind=${encodeURIComponent(kind)}${p}`);
+  }
 
   // ============ TRACKING ============
   async getMyLeads() {

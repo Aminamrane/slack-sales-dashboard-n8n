@@ -38,10 +38,20 @@ export default function SalesRecordingsGrid({ data, loading, error, onRefresh, r
 
   if (loading && !data) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {[0, 1, 2, 3, 4].map((i) => (
-          <div key={i} style={{ height: 58, borderRadius: 14, background: darkMode ? "rgba(255,255,255,0.04)" : "#f4f5f7", opacity: 1 - i * 0.14 }} />
-        ))}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: "56px 24px" }}>
+        <style>{`@keyframes recSpinG { to { transform: rotate(360deg); } }
+          @keyframes recPulseG { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }`}</style>
+        <span style={{ width: 34, height: 34, borderRadius: "50%", border: "3px solid " + (darkMode ? "rgba(255,255,255,0.12)" : "#E1DED5"), borderTopColor: "#E8A317", animation: "recSpinG 0.7s linear infinite" }} />
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace", fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", color: C.text, fontWeight: 600 }}>Scan des enregistrements…</div>
+          <div style={{ fontSize: 12.5, color: C.muted, marginTop: 6, animation: "recPulseG 1.6s ease-in-out infinite" }}>Lecture des dossiers Meet de chaque sales, quelques secondes.</div>
+        </div>
+        {/* Aperçu structurel en fond, pour signaler que du contenu arrive */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%", maxWidth: 620, marginTop: 8 }}>
+          {[0, 1, 2].map((i) => (
+            <div key={i} style={{ height: 52, borderRadius: 14, background: darkMode ? "rgba(255,255,255,0.035)" : "#f4f5f7", animation: "recPulseG 1.6s ease-in-out infinite", animationDelay: `${i * 0.2}s` }} />
+          ))}
+        </div>
       </div>
     );
   }

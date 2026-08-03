@@ -21,6 +21,10 @@ import TeamReportView from "../components/TeamReportView.jsx";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo", "acquisition_director", "head_of_sales_manager"]);
 
+// Sales dont la transcription Meet est coupée -> analysés depuis Whisper (basse
+// fidélité) : à signaler dans le classement pour ne pas sur-interpréter le score.
+const WHISPER_SALES = new Set(["y.debowski@ownertechnology.com", "y.zairi@ownertechnology.com"]);
+
 // "2026-W31" -> "Semaine 31 · 2026"
 const fmtPeriod = (p) => {
   if (!p) return "";
@@ -148,26 +152,31 @@ export default function CeoSalesRecordingsView() {
   const C = useMemo(() => getColors(darkMode), [darkMode]);
   const visibleSections = useMemo(() => getVisibleSections(SIDEBAR_SECTIONS, userRole), [userRole]);
 
-  // Agrégat par sales : moyenne d'exécution + nb R1/R2 (pour le classement direction).
+  // Agrégat par sales, SÉPARÉ closing (R2) / pré-audit (R1) : on ne classe pas
+  // tout le monde sur un chiffre unique (Yohan sans R2 finissait 7e à tort).
+  // rdv_type reflète le type FONCTIONNEL après re-score (close-au-R1 -> R2).
   const teamStats = useMemo(() => {
     const nameByEmail = {};
     for (const s of (data?.sales || [])) if (s.email) nameByEmail[s.email.toLowerCase()] = s.name;
+    const mean = (xs) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
     const acc = {};
     for (const sc of allScorecards) {
       const em = (sc.owner_email || "").toLowerCase();
       if (!em) continue;
-      const a = acc[em] || (acc[em] = { email: em, scores: [], nb_r1: 0, nb_r2: 0 });
-      if (typeof sc.score === "number") a.scores.push(sc.score);
-      if (sc.rdv_type === "R1") a.nb_r1 += 1; else if (sc.rdv_type === "R2") a.nb_r2 += 1;
+      const a = acc[em] || (acc[em] = { email: em, r1: [], r2: [] });
+      if (typeof sc.score === "number") {
+        if (sc.rdv_type === "R2") a.r2.push(sc.score); else a.r1.push(sc.score);
+      }
     }
     return Object.values(acc).map((a) => ({
       email: a.email,
       name: nameByEmail[a.email] || a.email.split("@")[0],
       avatar: avatars[a.email] || null,
-      nb: a.scores.length || a.nb_r1 + a.nb_r2,
-      nb_r1: a.nb_r1,
-      nb_r2: a.nb_r2,
-      avg: a.scores.length ? Math.round(a.scores.reduce((x, y) => x + y, 0) / a.scores.length) : null,
+      nb_r1: a.r1.length,
+      nb_r2: a.r2.length,
+      avg_r1: mean(a.r1),
+      avg_r2: mean(a.r2),
+      whisper: WHISPER_SALES.has(a.email), // transcription Meet coupée -> Whisper (basse fidélité)
     }));
   }, [allScorecards, data, avatars]);
 
@@ -284,20 +293,20 @@ export default function CeoSalesRecordingsView() {
                 {/* RAPPORT DIRECTION — onglet à part, semaine sélectionnable */}
                 {pageTab === "direction" && (
                   <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>
-                        Pilotage de la semaine{selectedPeriod ? ` · ${fmtPeriod(selectedPeriod)}` : ""}
-                      </div>
-                      {periods.length > 0 && (
+                    {/* Le dossier porte son propre titre (masthead) : ici on ne garde que
+                        le sélecteur de semaine, aligné à droite. */}
+                    {periods.length > 0 && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, marginLeft: "auto" }}>Semaine</span>
                         <select
                           value={selectedPeriod || ""}
                           onChange={(e) => setSelectedPeriod(e.target.value)}
-                          style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 600, color: C.text, background: darkMode ? "rgba(255,255,255,0.05)" : "#fff", border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontFamily: "inherit" }}
+                          style={{ fontSize: 12.5, fontWeight: 600, color: C.text, background: darkMode ? "rgba(255,255,255,0.05)" : "#fff", border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontFamily: "inherit" }}
                         >
                           {periods.map((p) => <option key={p} value={p}>{fmtPeriod(p)}</option>)}
                         </select>
-                      )}
-                    </div>
+                      </div>
+                    )}
                     {teamReport ? (
                       <TeamReportView report={teamReport} stats={teamStats} period={selectedPeriod} C={C} darkMode={darkMode} />
                     ) : (

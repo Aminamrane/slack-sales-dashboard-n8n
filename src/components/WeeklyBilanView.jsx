@@ -19,12 +19,12 @@ const FONT_HREF = "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@4
 const CSS = `
 .owner-wb{--paper:#FBFAF7;--ink:#14181C;--ink-soft:#4A5259;--rule:#E1DED5;--deep:#0E4749;--deep-soft:#E6EEEC;--alert:#A4262C;--warn:#B4740B;--good:#2F6B4F;--amber:#E8A317;
   color:var(--ink);font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:15.5px;line-height:1.6;}
-/* Effet cartes empilées derrière le dossier */
+/* Effet cartes empilées DERRIÈRE le dossier (z-index : bandes sous la carte) */
 .owner-wb .stack{position:relative;padding-top:16px;}
-.owner-wb .stack::before,.owner-wb .stack::after{content:"";position:absolute;left:22px;right:22px;height:26px;top:0;border-radius:16px 16px 0 0;border:2px solid var(--ink);border-bottom:0;}
+.owner-wb .stack::before,.owner-wb .stack::after{content:"";position:absolute;left:22px;right:22px;height:26px;top:0;border-radius:16px 16px 0 0;border:2px solid var(--ink);border-bottom:0;z-index:0;}
 .owner-wb .stack::before{top:0;background:var(--amber);left:40px;right:40px;}
 .owner-wb .stack::after{top:8px;background:#E27BB8;left:31px;right:31px;}
-.owner-wb .doc{position:relative;background:var(--paper);border:2px solid var(--ink);border-radius:16px;overflow:hidden;}
+.owner-wb .doc{position:relative;z-index:1;background:var(--paper);border:2px solid var(--ink);border-radius:16px;overflow:hidden;}
 .owner-wb .wrap{padding:26px 34px 40px;}
 /* Masthead */
 .owner-wb .masthead{display:flex;align-items:center;gap:18px;padding-bottom:22px;margin-bottom:6px;border-bottom:1px solid var(--rule);}

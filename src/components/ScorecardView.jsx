@@ -99,6 +99,68 @@ const band = (s) => (s >= 80 ? "#2F6B4F" : s >= 70 ? "#0E4749" : s >= 60 ? "#B47
 const critColor = (s) => (s >= 4 ? "#2F6B4F" : s === 3 ? "#B4740B" : "#A4262C");
 const toneClass = (t) => (t === "yes" ? "yes" : t === "no" ? "no" : t === "part" ? "part" : "note");
 
+// Ne rendre que du texte : tout objet/tableau inattendu devient vide (jamais un
+// « Objects are not valid as a React child »).
+const asText = (v) => (v == null || typeof v === "object" ? "" : v);
+const asPreuves = (arr) => (Array.isArray(arr) ? arr : []).map((p) =>
+  typeof p === "string" ? { text: p } : { ts: p?.ts, text: asText(p?.text != null ? p.text : p?.texte) }
+);
+const asRows = (arr) => (Array.isArray(arr) ? arr : []).map((r) => ({
+  label: asText(r?.label), value: asText(r?.value != null ? r.value : r?.valeur), tone: r?.tone, note: asText(r?.note),
+}));
+
+// Normalise un payload de scorecard : accepte les deux jeux de clés (title|titre,
+// name|nom, score|note, value|valeur, preuves string|objet, psychologie
+// text|analyse|moteur, qualification.details→rows) pour un rendu toujours propre.
+function normalize(sc) {
+  const out = { ...sc, summary: asText(sc.summary), verdict: asText(sc.verdict) };
+
+  if (sc.points_forts) out.points_forts = sc.points_forts.map((p) => ({ title: p?.title || p?.titre, detail: asText(p?.detail) }));
+  if (sc.alerts) out.alerts = sc.alerts.map((a) => ({ title: a?.title || a?.titre, ts: a?.ts, detail: asText(a?.detail), fix: asText(a?.fix) }));
+  if (sc.issue) out.issue = asRows(sc.issue);
+
+  if (sc.qualification) {
+    const q = sc.qualification;
+    let rows = q.rows;
+    if (!rows && q.details && typeof q.details === "object") {
+      rows = Object.entries(q.details).map(([k, v]) => ({ label: k.replace(/_/g, " "), value: asText(v) }));
+    }
+    out.qualification = { niveau: asText(q.niveau), rows: asRows(rows), conclusion: asText(q.conclusion) };
+  }
+
+  if (sc.criteria) out.criteria = sc.criteria.map((c) => ({
+    name: c?.name || c?.nom,
+    score: typeof c?.score === "number" ? c.score : (typeof c?.note === "number" ? c.note : undefined),
+    constat: asText(c?.constat),
+    preuves: asPreuves(c?.preuves),
+    action: asText(c?.action),
+    question: c?.question || c?.question_recommandee,
+  }));
+
+  if (sc.psychologie != null) {
+    const ps = sc.psychologie;
+    out.psychologie = typeof ps === "string"
+      ? { text: ps }
+      : { text: asText(ps.text || ps.analyse || ps.moteur), confiance: asText(ps.confiance) };
+  }
+
+  if (sc.coaching && typeof sc.coaching === "object") out.coaching = {
+    priorite: asText(sc.coaching.priorite || sc.coaching.axe),
+    exercice: asText(sc.coaching.exercice),
+    mesure: asText(sc.coaching.mesure || sc.coaching.indicateur),
+  };
+
+  if (sc.r2_prep && typeof sc.r2_prep === "object") out.r2_prep = {
+    ...sc.r2_prep,
+    infos_manquantes: (sc.r2_prep.infos_manquantes || []).map(asText),
+    rows: asRows(sc.r2_prep.rows),
+    niveau: asText(sc.r2_prep.niveau),
+    decideur: asText(sc.r2_prep.decideur),
+  };
+
+  return out;
+}
+
 function FactsTable({ rows }) {
   return (
     <table className="facts"><tbody>
@@ -112,7 +174,7 @@ function FactsTable({ rows }) {
   );
 }
 
-export default function ScorecardView({ sc }) {
+export default function ScorecardView({ sc: rawSc }) {
   useEffect(() => {
     if (document.getElementById(FONT_ID)) return;
     const l = document.createElement("link");
@@ -120,7 +182,8 @@ export default function ScorecardView({ sc }) {
     document.head.appendChild(l);
   }, []);
 
-  if (!sc) return null;
+  if (!rawSc) return null;
+  const sc = normalize(rawSc);
   const on = Math.max(0, Math.min(10, Math.round((sc.score || 0) / 10)));
   const scColor = band(sc.score || 0);
 

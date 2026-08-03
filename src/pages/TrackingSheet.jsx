@@ -9,6 +9,7 @@ import PerfSalesTable from "../components/PerfSalesTable.jsx";
 import CommonVoicemailPool from "../components/CommonVoicemailPool.jsx";
 import ReproLinkRow from "../components/booking/ReproLinkRow.jsx";
 import BookingSettings from "../components/booking/BookingSettings.jsx";
+import MyWeeklyBilan from "../components/MyWeeklyBilan.jsx";
 import "../index.css";
 
 // ── SIDEBAR ICONS ────────────────────────────────────────────────────────────
@@ -2660,7 +2661,9 @@ export default function TrackingSheet() {
                 return allKeys.filter(k => !dismissedNotifs.includes(k)).length + (invitationsSeen ? 0 : myInvitations.length);
               })() },
               { key: 'email', label: 'Relance', iconSrc: iconEmail, accent: C.accent },
-              { key: 'campaigns', label: 'Campagnes', iconSrc: iconCampaigns, accent: '#f59e0b' },
+              { key: 'ai_bilan', label: 'Bilan IA', accent: '#E8A317', iconNode: (active) => (
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.9 4.9L18.8 9.8 13.9 11.7 12 16.6 10.1 11.7 5.2 9.8 10.1 7.9z"/><path d="M18.5 14.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>
+              ) },
               { key: 'kpis', label: 'KPIs & Stats', iconSrc: iconKpis, accent: '#6366f1' },
               ...(['head_of_sales_manager', 'admin'].includes(currentUser?.role) ? [{ key: 'autoassign', label: 'Auto-affectation', accent: '#2563eb', iconNode: (active) => (
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></svg>
@@ -2986,7 +2989,14 @@ export default function TrackingSheet() {
           </div>
         )}
 
-        {/* ════ VIEW: CAMPAIGNS ═══════════════════════════════════════════ */}
+        {/* ════ VIEW: BILAN IA ════════════════════════════════════════════ */}
+        {sidebarView === 'ai_bilan' && (
+          <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
+            <MyWeeklyBilan name={currentUser?.name} avatarUrl={currentUser?.avatar_url} team={currentUser?.team} />
+          </div>
+        )}
+
+        {/* ════ VIEW: CAMPAIGNS (retiré de la sidebar — panneau conservé inerte) ══ */}
         {sidebarView === 'campaigns' && (() => {
           const MOCK_CAMPAIGNS = [];
           return (
