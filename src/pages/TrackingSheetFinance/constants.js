@@ -31,7 +31,6 @@ export const COLUMN_LABELS = {
   numero:               'Numéro client',
   societe:              'Nom client + entreprise',
   etat:                 'État',
-  statusDetail:         'État détail',
   rdvLancement:         'RDV lancement',
   rdvOnboarding:        'RDV onboarding',
   paymentMode:          'Mode de paiement (Annuel / Mensuel)',
@@ -55,37 +54,14 @@ export const COLUMN_LABELS = {
 // ── Editable enums (backend Pydantic strict) ─────────────────────────────
 export const PSP_OPTIONS = ['Learnypay', 'IFX', 'whop', 'Quonto'];
 
-// État client (top-level enum, modifiable via dropdown col 3 du tableau).
-// Mirror exact des valeurs backend (`clients.etat`).
-export const ETAT_OPTIONS = [
-  'a_signe',
-  'en_attente',
-  'resilie',
-  'sans_suite',
-  'liquidation',
-  'pause',
-  'self_resiliation',
-  'retractation',
-];
-
-export const FINANCE_STATUS_DETAILS = [
-  'Non traité',
-  'Traité',
-  'Relancer Owner',
-  'Relancer Optilex',
-  'A partiellement validé sur certaine structure',
-  'En attente de retour',
-  'À rembourser',
-  'Relancé à voir si pas payé',
-  'Promesse de règlement',
-  'Attente retour cabinet',
-  'Prélèvement en cours',
-  'Pas de réponse',
-  'Promesse de règlement partiel',
-  'RDV lancement reprogrammé',
-  'VIP',
-  'Mandataire',
-];
+// 2026-08-18 : `ETAT_OPTIONS` (enum snake_case `clients.etat`) et
+// `FINANCE_STATUS_DETAILS` (colonne « État détail ») supprimés. La colonne
+// État du tableau affiche/pose désormais l'état du board Owner/Opti'Lex
+// (cf. components/BoardEtatCell.jsx) — le PATCH `etat` sur finance-periods
+// est mort côté backend, et « État détail » a été retirée du tableau.
+// `ETAT_COLORS` / `STATUS_DETAIL_COLORS` plus bas restent : encore importés
+// par ClientDetailModal.jsx (legacy conservé), EditableCell.jsx et les
+// fallbacks lecture seule du DetailPanel.
 
 export const PAYMENT_SPECIFICITIES = [
   'Paye / 2 sct',

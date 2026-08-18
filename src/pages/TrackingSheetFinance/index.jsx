@@ -341,6 +341,64 @@ export default function TrackingSheetFinance() {
     fetchPeriod(period);
   }, [authChecked, period, fetchPeriod]);
 
+  // ── Board Owner/Opti'Lex : source de vérité des ÉTATS clients ─────────
+  // La colonne « État » du tableau n'édite plus `clients.etat` (champ retiré
+  // du PATCH backend) : elle affiche et pose l'état du board via
+  // GET /optilex/board + POST /optilex/etat-change. Fetch UNE fois au
+  // chargement (pas de polling : la page finance n'est pas un board temps réel).
+  const [boardMap, setBoardMap] = useState(null); // Map numero_client → row board (null = pas encore chargé)
+  useEffect(() => {
+    if (!authChecked) return;
+    let alive = true;
+    apiClient.get('/api/v1/optilex/board')
+      .then((r) => {
+        if (!alive) return;
+        const list = r?.clients || [];
+        const map = new Map();
+        for (const br of list) if (br.numero_client) map.set(br.numero_client, br);
+        setBoardMap(map);
+      })
+      .catch((e) => console.error('[TrackingFinance] board load failed', e));
+    return () => { alive = false; };
+  }, [authChecked]);
+
+  // Poser un état board (ou corriger ses dates d'effet). Même sémantique que
+  // `changeEtat` d'OptilexBoard : optimiste + ROLLBACK si le POST échoue, les
+  // dates de pause ne valent que pour « Pause ». L'historique (auteur inclus)
+  // est écrit côté backend par l'endpoint — rien à faire ici.
+  const onBoardEtatChange = useCallback(async (numero, { etat = null, etat_date = null, pause_end_date = null, pause_relance_date = null }) => {
+    if (!numero) return;
+    const pe = etat === 'Pause' ? pause_end_date : null;
+    const pr = etat === 'Pause' ? pause_relance_date : null;
+    let snapshot = null;
+    setBoardMap((prev) => {
+      if (!prev) return prev;
+      const cur = prev.get(numero);
+      if (!cur) return prev;
+      snapshot = cur;
+      const next = new Map(prev);
+      next.set(numero, { ...cur, etat_manuel: etat, etat_date, pause_end_date: pe, pause_relance_date: pr });
+      return next;
+    });
+    try {
+      await apiClient.post('/api/v1/optilex/etat-change', {
+        numero_client: numero, etat, etat_date, pause_end_date: pe, pause_relance_date: pr,
+      });
+    } catch (e) {
+      // Un état qui « a l'air posé » mais ne l'est pas est inacceptable → rollback visible.
+      if (snapshot) {
+        setBoardMap((prev) => {
+          if (!prev) return prev;
+          const next = new Map(prev);
+          next.set(numero, snapshot);
+          return next;
+        });
+      }
+      const msg = e?.data?.detail || e?.message || "Erreur lors du changement d'état";
+      showToast(typeof msg === 'string' ? msg : "Erreur lors du changement d'état", 'error');
+    }
+  }, [showToast]);
+
   // ── Patch a row (optimistic + reconcile) ─────────────────────────────
   const onPatchRow = useCallback(async (rowId, patch) => {
     const prev = rows.find((r) => r.id === rowId);
@@ -537,6 +595,8 @@ export default function TrackingSheetFinance() {
               <TableView
                 rows={filteredRows}
                 onPatchRow={onPatchRow}
+                boardMap={boardMap}
+                onBoardEtatChange={onBoardEtatChange}
                 onOpenRow={onOpenRow}
                 activeRowId={panelOpen ? panelRowId : null}
                 splitActive={false}
@@ -559,6 +619,8 @@ export default function TrackingSheetFinance() {
         onClose={closePanel}
         onSelectRow={onSelectPanelRow}
         onPatchRow={onPatchRow}
+        boardMap={boardMap}
+        onBoardEtatChange={onBoardEtatChange}
         onShowToast={showToast}
         rows={rows}
       />

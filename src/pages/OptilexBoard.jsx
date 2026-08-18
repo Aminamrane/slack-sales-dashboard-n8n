@@ -12,7 +12,7 @@ const BG = "#f6f7f9";
 const CARD = "#ffffff";
 const GREEN = "#15794a";
 
-const ETAT_STYLE = {
+export const ETAT_STYLE = {
   "Signé":            { bg: "#e9f9f0", fg: "#15794a", dot: "#22c55e" },
   "Résiliation":      { bg: "#fdecec", fg: "#b42318", dot: "#ef4444" },
   "Rétractation":     { bg: "#fff3e3", fg: "#b45309", dot: "#f59e0b" },
@@ -100,7 +100,7 @@ export function MeteoIcon({ score, size = 16, color = "currentColor", strokeWidt
 // Champ(s) date à saisir par état (raisonnement fiscaliste). Absent = pas de date.
 // Pause = période : début (etat_date) + fin CONNUE (pause_end_date) OU indéterminée -> relance
 // (pause_relance_date), car en B2B le dirigeant ne sait pas toujours quand il reprend.
-const ETAT_DATE_CONFIG = {
+export const ETAT_DATE_CONFIG = {
   "Résiliation": { label: "Date de résiliation" },
   "Self-Résiliation": { label: "Date de résiliation" },
   "Rétractation": { label: "Date de rétractation" },
@@ -390,7 +390,7 @@ function Avatar({ name, n, src, size = 30 }) {
   return <div style={{ width: size, height: size, borderRadius: "50%", background: c, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: Math.round(size * 0.43), fontWeight: 700, flexShrink: 0 }}>{letter}</div>;
 }
 
-function EtatBadge({ etat }) {
+export function EtatBadge({ etat }) {
   const s = ETAT_STYLE[etat] || { bg: "#eef1f6", fg: MUTED, dot: "#cbd2e0" };
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 20, background: s.bg, color: s.fg, fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>

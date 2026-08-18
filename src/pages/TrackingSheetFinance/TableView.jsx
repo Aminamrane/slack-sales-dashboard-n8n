@@ -9,23 +9,29 @@
 // Layout (gauche → droite, ordre figé) :
 //   1.  Numéro client                              (read-only, mono)
 //   2.  Nom client + entreprise                    (read-only, hover → OUVRIR)
-//   3.  État                                       (dropdown 8 valeurs)
-//   4.  État détail                                (dropdown 16 valeurs)
-//   5.  RDV lancement                              (read-only date)
-//   6.  RDV onboarding                             (read-only date)
-//   7.  Modalité de paiement                       (dropdown 4 valeurs)
-//   8.  Prélèvement automatisé                     (dropdown 7 valeurs)
-//   9.  Montant Attendu Owner                      (read-only EUR)
-//  10.  Montant Attendu Opti'lex                   (read-only EUR)
-//  11.  Montant Récupéré Owner                     (modifiable EUR)
-//  12.  Montant Récupéré Opti'lex                  (modifiable EUR)
-//  13.  Retard de paiement                         (pill rouge, somme courant)
-//  14.  Retard ... mois précédents Owner           (pill rouge cumul)
-//  15.  Retard ... mois précédents Opti'lex        (pill rouge cumul)
-//  16.  Montant récupéré sur créances ... Owner    (modifiable EUR)
-//  17.  Montant récupéré sur créances ... Opti'lex (modifiable EUR)
-//  18.  Check Owner                                (dropdown PSP, pill verte)
-//  19.  Check Opti'lex                             (dropdown PSP, pill verte)
+//   3.  État                                       (état du board Owner/Opti'Lex,
+//                                                   picker profil optilex — cf.
+//                                                   components/BoardEtatCell.jsx.
+//                                                   Depuis 2026-08-18 ; l'ancien
+//                                                   dropdown `clients.etat` et la
+//                                                   colonne « État détail » sont
+//                                                   supprimés — PATCH etat mort
+//                                                   côté backend, vérité = board)
+//   4.  RDV lancement                              (read-only date)
+//   5.  RDV onboarding                             (read-only date)
+//   6.  Modalité de paiement                       (dropdown 4 valeurs)
+//   7.  Prélèvement automatisé                     (dropdown 7 valeurs)
+//   8.  Montant Attendu Owner                      (read-only EUR)
+//   9.  Montant Attendu Opti'lex                   (read-only EUR)
+//  10.  Montant Récupéré Owner                     (modifiable EUR)
+//  11.  Montant Récupéré Opti'lex                  (modifiable EUR)
+//  12.  Retard de paiement                         (pill rouge, somme courant)
+//  13.  Retard ... mois précédents Owner           (pill rouge cumul)
+//  14.  Retard ... mois précédents Opti'lex        (pill rouge cumul)
+//  15.  Montant récupéré sur créances ... Owner    (modifiable EUR)
+//  16.  Montant récupéré sur créances ... Opti'lex (modifiable EUR)
+//  17.  Check Owner                                (dropdown PSP, pill verte)
+//  18.  Check Opti'lex                             (dropdown PSP, pill verte)
 //
 // Notion styling :
 //   - Row height 44px (aéré, lisibilité finance team)
@@ -54,14 +60,8 @@ import {
 
 import {
   PSP_OPTIONS,
-  FINANCE_STATUS_DETAILS,
   PAYMENT_SPECIFICITIES,
   AUTO_DEBIT_OPTIONS,
-  ETAT_OPTIONS,
-  ETAT_COLORS,
-  ETAT_FALLBACK,
-  STATUS_DETAIL_COLORS,
-  STATUS_DETAIL_FALLBACK,
   PSP_COLORS,
   PSP_FALLBACK,
   AUTO_DEBIT_COLORS,
@@ -77,6 +77,7 @@ import {
   toNumber,
 } from './constants.js';
 import { EditableNumber, EditableSelect, EditableDate } from './EditableCell.jsx';
+import BoardEtatCell from './components/BoardEtatCell.jsx';
 import CommentPopup from './CommentPopup.jsx';
 import apiClient from '../../services/apiClient.js';
 
@@ -122,8 +123,9 @@ const CELL_PAD_X = 12;
 const COLS_FULL = {
   numero:               { w: 85,  group: 'identite',  shortLabel: 'N° client',    labelKey: 'numero',               kind: 'text',   sticky: true,  splitVisible: true,  align: 'center', editable: false, hideKindIcon: true },
   societe:              { w: 240, group: 'identite',  shortLabel: 'Nom + entreprise', labelKey: 'societe',          kind: 'text',   sticky: true,  splitVisible: true,  align: 'left',  editable: false },
-  etat:                 { w: 130, group: 'statut',    shortLabel: 'État',          labelKey: 'etat',                 kind: 'state',  sticky: true,  splitVisible: true,  align: 'left',  editable: true,  heavyRight: true },
-  statusDetail:         { w: 200, group: 'statut',    shortLabel: 'État détail',   labelKey: 'statusDetail',         kind: 'select', sticky: false, splitVisible: false, align: 'left',  editable: true  },
+  // w 190 (au lieu de 130) : les badges board (« En cours de résiliation »…)
+  // sont plus longs que les anciens labels snake_case.
+  etat:                 { w: 190, group: 'statut',    shortLabel: 'État',          labelKey: 'etat',                 kind: 'state',  sticky: true,  splitVisible: true,  align: 'left',  editable: true,  heavyRight: true },
   paymentMode:          { w: 50,  group: 'modalites', shortLabel: 'Mode',          labelKey: 'paymentMode',          kind: 'recurrence', sticky: false, splitVisible: false, align: 'center', editable: false, headerIconOnly: true },
   paymentSpec:          { w: 130, group: 'modalites', shortLabel: 'Modalité',      labelKey: 'paymentSpec',          kind: 'select', sticky: false, splitVisible: false, align: 'left',  editable: true  },
   autoDebit:            { w: 160, group: 'modalites', shortLabel: 'Prélèvement',   labelKey: 'autoDebit',            kind: 'select', sticky: false, splitVisible: false, align: 'center', editable: true  },
@@ -697,6 +699,8 @@ function Cell({
 const RowRenderer = React.memo(function RowRenderer({
   row,
   onPatchRow,
+  boardRow,           // row du board Owner/Opti'Lex pour ce client (ou null)
+  onBoardEtatChange,  // (numero_client, payload) → POST /optilex/etat-change
   onOpenRow,
   isActive,
   cols,
@@ -840,36 +844,13 @@ const RowRenderer = React.memo(function RowRenderer({
         </>
       ))}
 
-      {/* Statut — État */}
+      {/* Statut — État : celui du board Owner/Opti'Lex (source de vérité).
+          Pose via POST /optilex/etat-change ; client absent du board → tiret
+          read-only (rien à piloter). */}
       {keys.includes('etat') && C('etat', (
-        <EditableSelect
-          value={row.client?.etat}
-          options={ETAT_OPTIONS}
-          onCommit={async (next) => { await onPatchRow(row.id, { etat: next }); }}
-          pillColors={Object.fromEntries(
-            Object.entries(ETAT_COLORS).map(([k, v]) => [k, { fg: v.fg, bg: v.bg }])
-          )}
-          pillFallback={ETAT_FALLBACK}
-          optionLabels={Object.fromEntries(
-            Object.entries(ETAT_COLORS).map(([k, v]) => [k, v.label])
-          )}
-          notionSolid
-          placeholderItalic
-          placeholder="État"
-        />
-      ))}
-
-      {/* Statut — État détail */}
-      {keys.includes('statusDetail') && C('statusDetail', (
-        <EditableSelect
-          value={row.finance_status_detail}
-          options={FINANCE_STATUS_DETAILS}
-          onCommit={patch('finance_status_detail')}
-          pillColors={STATUS_DETAIL_COLORS}
-          pillFallback={STATUS_DETAIL_FALLBACK}
-          notionSolid
-          placeholderItalic
-          placeholder="État détail"
+        <BoardEtatCell
+          boardRow={boardRow}
+          onEtatChange={(payload) => onBoardEtatChange?.(row.client?.numero_client, payload)}
         />
       ))}
 
@@ -1364,6 +1345,8 @@ export function AnimatedAmount({ value, previous, style }) {
 export default function TableView({
   rows,
   onPatchRow,
+  boardMap,            // Map numero_client → row board (états Owner/Opti'Lex)
+  onBoardEtatChange,   // (numero_client, payload) → POST /optilex/etat-change
   onOpenClient,        // legacy (kept for back-compat)
   onOpenRow,           // (row) → opens the DetailPanel (only via OUVRIR button)
   activeRowId,         // currently focused row in the DetailPanel
@@ -1593,6 +1576,8 @@ export default function TableView({
               <RowRenderer
                 row={row}
                 onPatchRow={onPatchRow}
+                boardRow={(row.client?.numero_client && boardMap?.get(row.client.numero_client)) || null}
+                onBoardEtatChange={onBoardEtatChange}
                 onOpenRow={handleOpenRow}
                 isActive={activeRowId === row.id}
                 cols={cols}

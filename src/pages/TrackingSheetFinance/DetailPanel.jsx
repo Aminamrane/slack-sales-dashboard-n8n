@@ -13,7 +13,8 @@
 // Sections (ordre vertical) :
 //   1. Header                  (existant : breadcrumb + 4 icônes + X)
 //   2. TitleBlock              (société 28px bold + représentant + meta pills)
-//   3. Identité client         (Numéro, Société, Représentant, État, État détail,
+//   3. Identité client         (Numéro, Société, Représentant, État [board
+//                               Owner/Opti'Lex depuis 2026-08-18],
 //                               RDV lancement, RDV onboarding)
 //   4. Modalités               (Modalité de paiement, Prélèvement automatisé,
 //                               Effectif, Fin contrat)
@@ -39,8 +40,6 @@ import apiClient from '../../services/apiClient.js';
 import {
   formatEUR, formatDateFR, formatMonthLabel, periodFromDate, splitSocieteRep,
   ETAT_COLORS, ETAT_FALLBACK,
-  ETAT_OPTIONS,
-  FINANCE_STATUS_DETAILS, STATUS_DETAIL_COLORS, STATUS_DETAIL_FALLBACK,
   PAYMENT_SPECIFICITIES, PAYMENT_SPECIFICITY_COLORS, PAYMENT_SPECIFICITY_FALLBACK,
   AUTO_DEBIT_OPTIONS, AUTO_DEBIT_COLORS, AUTO_DEBIT_FALLBACK,
   PSP_OPTIONS, PSP_COLORS, PSP_FALLBACK,
@@ -54,6 +53,10 @@ import {
   EditableNumber, EditableDate, EditableSelect, EditableText, CopyButton,
 } from './EditableCell.jsx';
 import ContactList from './ContactList.jsx';
+// État board Owner/Opti'Lex : briques exportées par le board (source de
+// vérité des états) + cellule picker partagée avec la TableView.
+import { ETAT_STYLE, displayEtat } from '../OptilexBoard.jsx';
+import BoardEtatCell from './components/BoardEtatCell.jsx';
 
 // Notion palette (sync with index.jsx N).
 const N = {
@@ -80,6 +83,8 @@ export default function DetailPanel({
   onClose,
   onSelectRow,     // (rowId) → caller updates rowId
   onPatchRow,      // (rowId, patch) → reuses table's optimistic patch flow
+  boardMap,        // Map numero_client → row board Owner/Opti'Lex (états)
+  onBoardEtatChange, // (numero_client, payload) → POST /optilex/etat-change
   onShowToast,     // (msg, type?) → reuses page-level toast
   rows,            // current period rows (so we can find focused row immediately)
 }) {
@@ -169,11 +174,16 @@ export default function DetailPanel({
 
   const periods = timeline?.periods || [];
   const client = focusedRow?.client || periods[0]?.client || null;
-  // Une Résiliation / Rétractation actée sur le board Owner/Opti'Lex fait
-  // autorité : la fiche l'affiche à la place de l'état finance.
+  // État du client = celui du board Owner/Opti'Lex (source de vérité depuis
+  // 2026-08-18). Fallbacks conservés pour les clients hors board : état
+  // hérité (résiliation/rétractation actée) puis `clients.etat` legacy.
+  const boardRow = (client?.numero_client && boardMap?.get(client.numero_client)) || null;
+  const boardEtat = boardRow ? displayEtat(boardRow) : null;
   const inheritedEtat = profile?.etat_inherited || null;
   const effectiveEtat = inheritedEtat || client?.etat;
-  const etatMeta = (effectiveEtat && ETAT_COLORS[effectiveEtat]) || ETAT_FALLBACK;
+  const etatMeta = (boardEtat && ETAT_STYLE[boardEtat])
+    || (effectiveEtat && ETAT_COLORS[effectiveEtat])
+    || ETAT_FALLBACK;
 
   // Patch helper bound to current rowId — reuses table's onPatchRow flow.
   // Falls back to a direct PATCH if the parent didn't wire onPatchRow.
@@ -184,15 +194,6 @@ export default function DetailPanel({
     } else {
       await apiClient.patch(`/api/v1/finance-periods/${rowId}`, { [field]: value });
     }
-  }, [rowId, onPatchRow]);
-
-  // Etat is on the client, not on the row — backend currently treats `etat`
-  // on the finance-periods PATCH as a routed update to clients.etat (cf.
-  // existing TableView wiring). We mirror that here.
-  const patchEtat = useCallback(async (value) => {
-    if (!rowId) return;
-    if (onPatchRow) await onPatchRow(rowId, { etat: value });
-    else await apiClient.patch(`/api/v1/finance-periods/${rowId}`, { etat: value });
   }, [rowId, onPatchRow]);
 
   const onCopied = useCallback(() => {
@@ -241,7 +242,7 @@ export default function DetailPanel({
             <TitleBlock client={client} etatMeta={etatMeta} focusedRow={focusedRow} inheritedEtat={inheritedEtat} onCopied={onCopied} />
 
             {/* Meta row */}
-            <MetaRow client={client} focusedRow={focusedRow} profile={profile} />
+            <MetaRow client={client} focusedRow={focusedRow} profile={profile} boardEtat={boardEtat} />
 
             {/* Error state */}
             {error && (
@@ -262,8 +263,8 @@ export default function DetailPanel({
                 profile={profile}
                 canEdit={canEdit}
                 refreshProfile={refreshProfile}
-                patch={patch}
-                patchEtat={patchEtat}
+                boardRow={boardRow}
+                onBoardEtatChange={onBoardEtatChange}
                 onCopied={onCopied}
                 onShowToast={onShowToast}
               />
@@ -474,9 +475,21 @@ function TitleBlock({ client, etatMeta, focusedRow, inheritedEtat, onCopied }) {
 }
 
 // ── Meta row (pills) ────────────────────────────────────────────────────────
-function MetaRow({ client, focusedRow, profile }) {
+function MetaRow({ client, focusedRow, profile, boardEtat }) {
   const items = [];
-  if (client?.etat) {
+  // État board Owner/Opti'Lex en priorité ; fallback legacy `clients.etat`
+  // pour les clients hors board.
+  if (boardEtat) {
+    const meta = ETAT_STYLE[boardEtat] || ETAT_FALLBACK;
+    items.push({
+      icon: <span style={{
+        width: 8, height: 8, borderRadius: '50%', background: meta.dot || meta.fg,
+      }} />,
+      label: 'État',
+      value: boardEtat,
+      pillBg: meta.bg, pillFg: meta.fg,
+    });
+  } else if (client?.etat) {
     const meta = ETAT_COLORS[client.etat] || ETAT_FALLBACK;
     items.push({
       icon: <span style={{
@@ -632,7 +645,7 @@ function Field({ label, children, copyValue, onCopied, align = 'right' }) {
 // ── Section : Identité client ───────────────────────────────────────────────
 function IdentitySection({
   client, clientId, focusedRow, profile, canEdit, refreshProfile,
-  patch, patchEtat, onCopied, onShowToast,
+  boardRow, onBoardEtatChange, onCopied, onShowToast,
 }) {
   if (!focusedRow) return <Empty />;
   // Pattern "Société - Nom Prénom" présent sur la grande majorité des
@@ -704,16 +717,28 @@ function IdentitySection({
         onCopied={onCopied}
       />
 
+      {/* État = celui du board Owner/Opti'Lex (source de vérité, même picker
+          que la colonne État du tableau). Fallbacks pour les clients hors
+          board : état hérité verrouillé, sinon `clients.etat` legacy en
+          lecture seule (le PATCH etat sur finance-periods est mort côté back). */}
       <Field
         label="État"
         copyValue={
-          inherited
-            ? (ETAT_COLORS[inherited]?.label || inherited)
-            : (client?.etat && (ETAT_COLORS[client.etat]?.label || client.etat))
+          boardRow
+            ? displayEtat(boardRow)
+            : inherited
+              ? (ETAT_COLORS[inherited]?.label || inherited)
+              : (client?.etat && (ETAT_COLORS[client.etat]?.label || client.etat))
         }
         onCopied={onCopied}
       >
-        {inherited ? (
+        {boardRow ? (
+          <BoardEtatCell
+            boardRow={boardRow}
+            disabled={!canEdit}
+            onEtatChange={(payload) => onBoardEtatChange?.(client?.numero_client, payload)}
+          />
+        ) : inherited ? (
           // L'état est imposé par le board : on l'affiche verrouillé plutôt
           // que d'offrir une édition qui serait écrasée à la prochaine sync.
           <span style={{
@@ -726,36 +751,19 @@ function IdentitySection({
             <Lock size={11} />
             {(ETAT_COLORS[inherited] || ETAT_FALLBACK).label || inherited}
           </span>
+        ) : client?.etat ? (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '2px 10px', borderRadius: 4,
+            background: (ETAT_COLORS[client.etat] || ETAT_FALLBACK).bg,
+            color: (ETAT_COLORS[client.etat] || ETAT_FALLBACK).fg,
+            fontSize: 12.5, fontWeight: 600,
+          }}>
+            {(ETAT_COLORS[client.etat] || ETAT_FALLBACK).label || client.etat}
+          </span>
         ) : (
-          <EditableSelect
-            value={client?.etat}
-            options={ETAT_OPTIONS}
-            onCommit={patchEtat}
-            pillColors={Object.fromEntries(
-              Object.entries(ETAT_COLORS).map(([k, v]) => [k, { fg: v.fg, bg: v.bg }])
-            )}
-            pillFallback={ETAT_FALLBACK}
-            optionLabels={Object.fromEntries(
-              Object.entries(ETAT_COLORS).map(([k, v]) => [k, v.label])
-            )}
-            notionSolid
-            placeholderItalic
-            width="auto"
-          />
+          <ReadOnlyText value={null} />
         )}
-      </Field>
-
-      <Field label="État détail" copyValue={focusedRow.finance_status_detail} onCopied={onCopied}>
-        <EditableSelect
-          value={focusedRow.finance_status_detail}
-          options={FINANCE_STATUS_DETAILS}
-          onCommit={patch('finance_status_detail')}
-          pillColors={STATUS_DETAIL_COLORS}
-          pillFallback={STATUS_DETAIL_FALLBACK}
-          notionSolid
-          placeholderItalic
-          width="auto"
-        />
       </Field>
 
       <Field label="RDV lancement" copyValue={client?.rdv_lancement && formatDateFR(client.rdv_lancement)} onCopied={onCopied}>
