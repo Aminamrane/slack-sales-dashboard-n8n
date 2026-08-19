@@ -815,6 +815,7 @@ export default function TrackingSheetSetter() {
   };
   const [prioDropdownPos, setPrioDropdownPos] = useState({ x: 0, y: 0 });
   const [confirmModal, setConfirmModal] = useState(null); // { title, message, icon, color, confirmLabel, onConfirm } or null
+  const [duplicateLeadModal, setDuplicateLeadModal] = useState(false); // pop-up anti-doublon (création CC ou édition email/tél sur un lead déjà existant)
 
   // ── SALE DECLARATION MODAL (signed tab) ────────────────────────────────────
   const [showSaleModal, setShowSaleModal] = useState(null); // lead.id when modal is open
@@ -1894,8 +1895,14 @@ export default function TrackingSheetSetter() {
       setTimeout(() => setFormSuccess(false), 2500);
       return true;
     } catch (err) {
+      // Anti-doublon backend (409 duplicate_lead) → pop-up « recherchez avec Cmd+F »
+      if (err?.status === 409 && err?.data?.detail?.code === 'duplicate_lead') {
+        setDuplicateLeadModal(true);
+        return false;
+      }
       console.error("Erreur création lead:", err);
-      const message = err?.response?.data?.detail || err?.message || "Erreur lors de la création du lead";
+      const detail = err?.response?.data?.detail || err?.data?.detail;
+      const message = (typeof detail === 'string' && detail) || err?.message || "Erreur lors de la création du lead";
       setFormError(message);
       return false;
     } finally {
@@ -1920,6 +1927,11 @@ export default function TrackingSheetSetter() {
       await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, { [field]: trimmed || null });
       setLeads(prev => prev.map(l => l.id === leadId ? { ...l, [field]: trimmed || null } : l));
     } catch (err) {
+      // Anti-doublon backend : email/tél déjà portés par un autre lead → pop-up,
+      // la valeur n'est pas appliquée.
+      if (err?.status === 409 && err?.data?.detail?.code === 'duplicate_lead') {
+        setDuplicateLeadModal(true);
+      }
       console.error('Erreur mise à jour champ:', err);
     }
     setEditingField(null);
@@ -8647,6 +8659,46 @@ export default function TrackingSheetSetter() {
       )}
 
       {/* ═══ CONFIRM MODAL (resend/cancel contract) ═══ */}
+      {/* ── POP-UP ANTI-DOUBLON (lead déjà existant, création ou édition email/tél) ── */}
+      {duplicateLeadModal && createPortal(
+        <>
+          <div onClick={() => setDuplicateLeadModal(false)} style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+            zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both',
+          }} />
+          <div style={{
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
+            width: 400, maxWidth: '90vw', background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`,
+            boxShadow: darkMode ? '0 24px 48px rgba(0,0,0,0.4)' : '0 24px 48px rgba(0,0,0,0.08), 0 8px 16px rgba(0,0,0,0.04)',
+            padding: '32px 28px 26px',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, system-ui, sans-serif',
+            animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: 22 }}>
+              <div style={{
+                width: 52, height: 52, borderRadius: 16, margin: '0 auto 16px',
+                background: 'rgba(248,113,113,0.12)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
+              }}>⚠️</div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 8, letterSpacing: '-0.02em' }}>
+                Ce lead existe déjà
+              </div>
+              <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6, letterSpacing: '-0.01em', maxWidth: 320, margin: '0 auto' }}>
+                Un lead avec cet email ou ce numéro de téléphone existe déjà dans votre tracking sheet.
+                Retrouvez-le avec une recherche <b style={{ color: C.text }}>⌘&nbsp;F</b> (Mac)
+                ou <b style={{ color: C.text }}>Ctrl&nbsp;F</b> (PC) plutôt que d'en créer un nouveau.
+              </div>
+            </div>
+            <button onClick={() => setDuplicateLeadModal(false)} style={{
+              width: '100%', padding: '12px 0', borderRadius: 12, fontSize: 14, fontWeight: 600,
+              fontFamily: 'inherit', cursor: 'pointer', letterSpacing: '-0.01em',
+              border: 'none', background: '#f87171', color: '#fff',
+            }}>Compris</button>
+          </div>
+        </>,
+        document.body
+      )}
+
       {confirmModal && createPortal(
         <>
           <div onClick={() => setConfirmModal(null)} style={{
@@ -9088,6 +9140,12 @@ export default function TrackingSheetSetter() {
                 setTimeout(() => setSetterModal(null), 1200);
                 return true;
               } catch (e) {
+                // Anti-doublon backend (409 duplicate_lead) → pop-up dédié
+                if (e?.status === 409 && e?.data?.detail?.code === 'duplicate_lead') {
+                  setSetterModal(null);
+                  setDuplicateLeadModal(true);
+                  return false;
+                }
                 console.error('[Setter] create cold lead failed', e);
                 showSetterToast(e?.message || 'Échec création.', 'err');
                 return false;
