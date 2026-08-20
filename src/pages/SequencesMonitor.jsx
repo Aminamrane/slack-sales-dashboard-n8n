@@ -259,10 +259,6 @@ export default function SequencesMonitor({ embed }) {
                   </div>
                 </div>
               ))}
-              <div style={{ fontSize: 10.5, color: C.muted }}>
-                Email + SMS partent automatiquement à la qualification Lapin (R1) et à la classification auto des R2 sans suite depuis 14 jours (cron 11h).
-                Anti-spam : un seul SMS no-show par type de RDV et par lead, à vie. « RDV repris » = une nouvelle date postérieure au RDV manqué existe après la relance.
-              </div>
             </>
           );
         })() : (<>
