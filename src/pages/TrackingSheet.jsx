@@ -4721,6 +4721,7 @@ export default function TrackingSheet() {
             { value: 'cancelled', label: 'Annulé', color: '#ef4444' },
           ];
           const R2_TAGS = [
+            { value: 'no_show', label: 'Lapin', color: '#f59e0b' },
             { value: 'done', label: 'R2 effectué', color: '#10b981' },
             { value: 'comptable', label: 'Comptable', color: '#8b5cf6' },
             { value: 'associe', label: 'Associé', color: '#6366f1' },
@@ -4730,7 +4731,7 @@ export default function TrackingSheet() {
             { value: 'pas_interesse', label: 'Pas intéressé', color: '#ef4444' },
             { value: 'annule', label: 'Annulé', color: '#ef4444' },
           ];
-          const tagOptions = catKey === 'r1' ? R1_TAGS : catKey === 'r2' ? R2_TAGS : catKey === 'new' ? [] : [...R1_TAGS, ...R2_TAGS.filter(t => t.value !== 'done')];
+          const tagOptions = catKey === 'r1' ? R1_TAGS : catKey === 'r2' ? R2_TAGS : catKey === 'new' ? [] : [...R1_TAGS, ...R2_TAGS.filter(t => t.value !== 'done' && t.value !== 'no_show')];
           const prioOptions = [{ value: 'prio_high', label: 'High', color: '#ef4444' }, { value: 'prio_medium', label: 'Medium', color: '#f59e0b' }, { value: 'prio_low', label: 'Low', color: '#94a3b8' }];
           const statusOptions = catKey === 'new'
             ? prioOptions
@@ -5063,6 +5064,7 @@ export default function TrackingSheet() {
                   { value: 'cancelled', label: 'Annulé', color: '#ef4444' },
                 ];
                 const R2_TAGS = [
+                  { value: 'no_show', label: 'Lapin', color: '#f59e0b' },
                   { value: 'done', label: 'R2 effectué', color: '#10b981' },
                   { value: 'comptable', label: 'Comptable', color: '#8b5cf6' },
                   { value: 'associe', label: 'Associé', color: '#6366f1' },
@@ -5072,7 +5074,7 @@ export default function TrackingSheet() {
                   { value: 'pas_interesse', label: 'Pas intéressé', color: '#ef4444' },
                   { value: 'annule', label: 'Annulé', color: '#ef4444' },
                 ];
-                const tagOptions = catKey === 'r1' ? R1_TAGS : catKey === 'r2' ? R2_TAGS : catKey === 'new' ? [] : [...R1_TAGS, ...R2_TAGS.filter(t => t.value !== 'done')];
+                const tagOptions = catKey === 'r1' ? R1_TAGS : catKey === 'r2' ? R2_TAGS : catKey === 'new' ? [] : [...R1_TAGS, ...R2_TAGS.filter(t => t.value !== 'done' && t.value !== 'no_show')];
                 const prioOpts = [{ value: 'prio_high', label: 'High', color: '#ef4444' }, { value: 'prio_medium', label: 'Medium', color: '#f59e0b' }, { value: 'prio_low', label: 'Low', color: '#94a3b8' }];
                 const statusOptions = catKey === 'new'
                   ? prioOpts
@@ -5150,6 +5152,7 @@ export default function TrackingSheet() {
                 { value: 'cancelled', label: 'Annulé', color: '#ef4444' },
               ];
               const R2_TAGS = [
+                { value: 'no_show', label: 'Lapin', color: '#f59e0b' },
                 { value: 'done', label: 'R2 effectué', color: '#10b981' },
                 { value: 'comptable', label: 'Comptable', color: '#8b5cf6' },
                 { value: 'associe', label: 'Associé', color: '#6366f1' },
@@ -5159,7 +5162,7 @@ export default function TrackingSheet() {
                 { value: 'pas_interesse', label: 'Pas intéressé', color: '#ef4444' },
                 { value: 'annule', label: 'Annulé', color: '#ef4444' },
               ];
-              const opts = catKey === 'r1' ? R1_TAGS : catKey === 'r2' ? R2_TAGS : [...R1_TAGS, ...R2_TAGS.filter(t => t.value !== 'done')];
+              const opts = catKey === 'r1' ? R1_TAGS : catKey === 'r2' ? R2_TAGS : [...R1_TAGS, ...R2_TAGS.filter(t => t.value !== 'done' && t.value !== 'no_show')];
               return (
                 <div style={{
                   display: 'flex', flexWrap: 'wrap', gap: 6, padding: '10px 12px',
@@ -5685,6 +5688,7 @@ export default function TrackingSheet() {
                           relire_contrat:  { icon: '📄', label: 'Relire contrat', color: '#0ea5e9' },
                           pas_decision_jour: { icon: '⏸', label: 'Pas de décision', color: '#94a3b8' },
                           tresorerie:      { icon: '💰', label: 'Trésorerie',    color: '#f59e0b' },
+                          no_show:         { icon: '🐇', label: 'Lapin',         color: '#f59e0b' },
                           reporte:         { icon: '↻',  label: 'Reporté',       color: '#fb923c' },
                           pas_interesse:   { icon: '✕',  label: 'Pas intéressé', color: '#ef4444' },
                           annule:          { icon: '🚫', label: 'Annulé',        color: '#ef4444' },
@@ -6758,6 +6762,7 @@ export default function TrackingSheet() {
                   { value: 'relire_contrat',   label: 'Relire contrat',   icon: '📄' },
                   { value: 'pas_decision_jour',label: 'Pas de décision',  icon: '⏸' },
                   { value: 'tresorerie',       label: 'Pb trésorerie',    icon: '💰' },
+                  ...(isR3 ? [] : [{ value: 'no_show', label: 'Lapin (no-show)', icon: '🐇' }]),
                   { value: 'reporte',          label: 'R2 reporté',       icon: '↻' },
                   { value: 'pas_interesse',    label: 'Pas intéressé',    icon: '✕' },
                   { value: 'annule',           label: 'R2 annulé',        icon: '🚫' },

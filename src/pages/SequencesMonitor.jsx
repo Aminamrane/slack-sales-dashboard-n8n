@@ -76,6 +76,8 @@ export default function SequencesMonitor({ embed }) {
 
   const CONF_KEY = "__confirmation__";
   const isConf = active === CONF_KEY;
+  const NOSHOW_KEY = "__noshow__";
+  const isNoshow = active === NOSHOW_KEY;
   const seq = useMemo(() => (data ? data.sequences.find((s) => s.key === active) : null), [data, active]);
   useEffect(() => { setViewMode(null); }, [active]);
   const effView = viewMode || (seq && seq.enabled ? "in_seq" : "eligible");
@@ -95,7 +97,7 @@ export default function SequencesMonitor({ embed }) {
 
   if (loading) return <div style={{ fontFamily: FONT, padding: 48, color: C.muted, textAlign: "center" }}>Chargement du monitoring…</div>;
   if (error) return <div style={{ fontFamily: FONT, padding: 48, color: "#b5675f", textAlign: "center" }}>Erreur : {error}</div>;
-  if (!data || (!seq && !isConf)) return <div style={{ fontFamily: FONT, padding: 48, color: C.muted, textAlign: "center" }}>Aucune séquence.</div>;
+  if (!data || (!seq && !isConf && !isNoshow)) return <div style={{ fontFamily: FONT, padding: 48, color: C.muted, textAlign: "center" }}>Aucune séquence.</div>;
 
   const st = seq ? seq.stats : null;
   const anyEnabled = data.sequences.some((s) => s.enabled);
@@ -182,6 +184,11 @@ export default function SequencesMonitor({ embed }) {
             Mail de confirmation
             <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.04em", padding: "2px 7px", borderRadius: 6, textTransform: "uppercase", background: C.ok + "22", color: C.ok }}>Actif</span>
           </button>
+          <button className="seq-pill" onClick={() => setActive(NOSHOW_KEY)}
+            style={{ padding: "8px 15px", borderRadius: 10, border: "1px solid " + (isNoshow ? C.text : C.border), background: isNoshow ? C.text : C.bg, color: isNoshow ? C.bg : C.text2, fontSize: 13, fontWeight: 650, cursor: "pointer", display: "flex", alignItems: "center", gap: 9, fontFamily: FONT }}>
+            Relance no-show
+            <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.04em", padding: "2px 7px", borderRadius: 6, textTransform: "uppercase", background: C.ok + "22", color: C.ok }}>Actif</span>
+          </button>
         </div>
 
         {isConf ? (
@@ -224,7 +231,41 @@ export default function SequencesMonitor({ embed }) {
               </div>
             </>
           )
-        ) : (<>
+        ) : isNoshow ? (() => {
+          const ns = data.noshow_relance;
+          if (!ns) return <div style={{ ...card, padding: 40, textAlign: "center", color: C.muted }}>Monitoring no-show indisponible.</div>;
+          const rows = [
+            { key: "r1", label: "No-show R1", d: ns.r1 },
+            { key: "r2", label: "No-show R2", d: ns.r2 },
+          ];
+          return (
+            <>
+              {rows.map((r) => (
+                <div key={r.key} style={{ ...card, padding: "16px 18px", marginBottom: 16 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 12, letterSpacing: "-0.01em" }}>{r.label}</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 11 }}>
+                    {[
+                      { l: "Emails envoyés", v: r.d.email_sent, s: "relance automatique", color: C.accent },
+                      { l: "SMS envoyés", v: r.d.sms_sent, s: "Brevo · 1 max par lead", color: "#4b8fb0" },
+                      { l: "RDV repris", v: r.d.recovered_total, s: "nouvelle date après relance", color: C.ok },
+                      { l: "dont via le lien", v: r.d.recovered_link, s: "réservé via le lien de reprise", color: C.ok },
+                    ].map((k) => (
+                      <div key={k.l} style={{ border: "1px solid " + C.border, borderRadius: 11, padding: "12px 13px" }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: C.muted, marginBottom: 8 }}>{k.l}</div>
+                        <div style={{ fontSize: 25, fontWeight: 780, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", lineHeight: 1, color: k.color }}>{k.v ?? 0}</div>
+                        <div style={{ fontSize: 10.5, color: C.muted, marginTop: 3 }}>{k.s}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <div style={{ fontSize: 10.5, color: C.muted }}>
+                Email + SMS partent automatiquement à la qualification Lapin (R1) et à la classification auto des R2 sans suite depuis 14 jours (cron 11h).
+                Anti-spam : un seul SMS no-show par type de RDV et par lead, à vie. « RDV repris » = une nouvelle date postérieure au RDV manqué existe après la relance.
+              </div>
+            </>
+          );
+        })() : (<>
 
         {/* Bandeau OFF */}
         {!seq.enabled && (
