@@ -1310,6 +1310,75 @@ export default function TrackingSheet() {
   const [ndaError, setNdaError] = useState('');
   const [ndaSuccess, setNdaSuccess] = useState(false);
   const [ndaGenerating, setNdaGenerating] = useState(false); // PDF generation in progress
+  // ── Nouveau flux NDA (convention v2, 2026-08-20) : le prefill n'est plus
+  // optionnel — étapes guidées : 'siren' (saisie/flag création) → 'dirigeants'
+  // (choix de la/des personnes en face) → 'form' (infos préremplies, éditables).
+  const [ndaStep, setNdaStep] = useState('form'); // 'siren' | 'dirigeants' | 'form'
+  const [ndaSirenInput, setNdaSirenInput] = useState('');
+  const [ndaDirigeants, setNdaDirigeants] = useState([]); // [{fullName, role}] renvoyés par Pappers
+  const [ndaSelectedDirs, setNdaSelectedDirs] = useState([]); // indices des dirigeants retenus
+  // ── Onglet « Options » de la page Détails (sociétés couvertes — Annexe 1
+  // de la convention Opti'Lex, décochables ; flag société en création).
+  const [detailOptionsOpen, setDetailOptionsOpen] = useState(false);
+  const [coveredCompanies, setCoveredCompanies] = useState(null); // null = pas encore chargé
+  const [coveredLoading, setCoveredLoading] = useState(false);
+  const [manualCompany, setManualCompany] = useState({ denomination: '', siren: '' });
+
+  const loadCoveredCompanies = async (leadId) => {
+    setCoveredLoading(true);
+    try {
+      const d = await apiClient.get(`/api/v1/tracking/leads/${leadId}/covered-companies`);
+      setCoveredCompanies(d.companies || []);
+    } catch (e) {
+      console.warn('Chargement sociétés couvertes échoué:', e);
+      setCoveredCompanies([]);
+    } finally {
+      setCoveredLoading(false);
+    }
+  };
+
+  const toggleCoveredCompany = async (leadId, cc) => {
+    // Optimiste + rollback : décocher = la société sort de l'Annexe 1.
+    setCoveredCompanies(prev => prev.map(c => c.id === cc.id ? { ...c, selected: !cc.selected } : c));
+    try {
+      await apiClient.patch(`/api/v1/tracking/leads/${leadId}/covered-companies/${cc.id}`, { selected: !cc.selected });
+    } catch (e) {
+      setCoveredCompanies(prev => prev.map(c => c.id === cc.id ? { ...c, selected: cc.selected } : c));
+      console.error('Toggle société couverte échoué:', e);
+    }
+  };
+
+  const addManualCoveredCompany = async (leadId) => {
+    const deno = manualCompany.denomination.trim();
+    if (!deno) return;
+    try {
+      const d = await apiClient.post(`/api/v1/tracking/leads/${leadId}/covered-companies`, {
+        denomination: deno,
+        siren: manualCompany.siren.trim() || null,
+      });
+      setCoveredCompanies(d.companies || []);
+      setManualCompany({ denomination: '', siren: '' });
+    } catch (e) {
+      console.error('Ajout société manuel échoué:', e);
+    }
+  };
+
+  const toggleLeadInCreation = async (lead) => {
+    const next = !lead.company_in_creation;
+    try {
+      await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { company_in_creation: next });
+      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, company_in_creation: next } : l));
+    } catch (e) {
+      console.error('Flag société en création échoué:', e);
+    }
+  };
+
+  // Reset de l'onglet Options quand on change de lead sélectionné.
+  useEffect(() => {
+    setDetailOptionsOpen(false);
+    setCoveredCompanies(null);
+    setManualCompany({ denomination: '', siren: '' });
+  }, [selectedLead]);
 
   // ── CAMPAIGN STATE ──────────────────────────────────────────────────────
   const [openCampaign, setOpenCampaign] = useState(null); // campaign object or null
@@ -2150,30 +2219,37 @@ export default function TrackingSheet() {
       headOffice: { line1: '', postalCode: '', city: '', country: 'France' },
       representatives: [{ fullName: lead.full_name || '', role: 'Gérant' }],
       businessType: 'Générales',
-      isInRegistration: false,
+      isInRegistration: !!lead.company_in_creation,
     });
     setNdaError('');
     setNdaSuccess(false);
     setNdaLoading(false);
     setNdaGenerating(false);
+    // Aiguillage du nouveau flux (2026-08-20) : SIREN connu → prefill AUTO ;
+    // société en création → form manuel ; sinon → étape saisie du SIREN.
+    setNdaDirigeants([]);
+    setNdaSelectedDirs([]);
+    setNdaSirenInput(lead.siren || '');
+    const sirenDigits = normalizeSiren(lead.siren || '');
+    if (lead.company_in_creation) {
+      setNdaStep('form');
+    } else if (sirenDigits.length === 9 && isValidSiren(sirenDigits)) {
+      setNdaStep('form');
+      runAutoPrefill(sirenDigits);
+    } else {
+      setNdaStep('siren');
+    }
   };
 
-  const handleNdaPrefill = async () => {
-    if (!ndaData || !ndaPopup) return;
-    const lead = leads.find(l => l.id === ndaPopup.leadId);
-    // Routing: if a valid SIREN is present, use Pappers (vérité absolue).
-    // Otherwise fall back to the existing name-based AI prefill.
-    const sirenDigits = normalizeSiren(ndaData.siren);
-    const useSirenMode = sirenDigits.length === 9 && isValidSiren(sirenDigits);
-    const query = `${ndaData.legalName || lead?.company_name || ''} - ${lead?.full_name || ''}`.trim();
-    if (!useSirenMode && (!query || query === '-')) { setNdaError('Renseignez le nom de la société'); return; }
+  // Prefill automatique via SIREN (le bouton manuel n'existe plus). En cas de
+  // plusieurs dirigeants, on passe par l'étape de sélection ; sinon direct au
+  // formulaire prérempli. En échec (SIREN inconnu, Pappers down) → formulaire
+  // manuel, avec le message d'erreur affiché.
+  const runAutoPrefill = async (sirenDigits) => {
     setNdaLoading(true);
     setNdaError('');
-    setNdaSuccess(false);
     try {
-      const data = useSirenMode
-        ? await apiClient.post('/api/v1/contracts/ai-prefill-by-siren', { siren: sirenDigits })
-        : await apiClient.post('/api/v1/contracts/ai-prefill', { query });
+      const data = await apiClient.post('/api/v1/contracts/ai-prefill-by-siren', { siren: sirenDigits });
       const updates = {};
       if (data.legal_name) updates.legalName = data.legal_name;
       if (data.legal_form) {
@@ -2190,30 +2266,70 @@ export default function TrackingSheet() {
           country: data.address.country || 'France',
         };
       }
-      if (data.representatives?.length) {
-        updates.representatives = data.representatives.map(r => ({
-          fullName: r.full_name || '',
-          role: (r.role || 'Gérant').replace(/\s+d[eu']\s+\S+$/i, ''),
-        }));
-      }
       if (data.business_type && NDA_BUSINESS_TYPES.includes(data.business_type)) {
         updates.businessType = data.business_type;
       }
+      const reps = (data.representatives || []).map(r => ({
+        fullName: r.full_name || '',
+        role: (r.role || 'Gérant').replace(/\s+d[eu']\s+\S+$/i, ''),
+      })).filter(r => r.fullName);
       setNdaData(prev => ({ ...prev, ...updates }));
       if (data.pappers_url) setNdaPappersUrl(data.pappers_url);
-      setNdaSuccess(true);
-      setTimeout(() => setNdaSuccess(false), 4000);
-    } catch (err) {
-      // Pappers SIREN mode: 404 = unknown SIREN → clear user-facing message
-      if (useSirenMode && err?.status === 404) {
-        setNdaError("Aucune entreprise trouvée pour ce SIREN. Vérifiez le numéro ou utilisez la recherche par nom (laissez le SIREN vide).");
+      if (reps.length > 1) {
+        // Plusieurs dirigeants → le sales choisit qui il a en face de lui.
+        setNdaDirigeants(reps);
+        setNdaSelectedDirs([]);
+        setNdaStep('dirigeants');
       } else {
-        setNdaError(err?.data?.detail || err?.message || 'Erreur lors de la recherche IA');
+        if (reps.length === 1) setNdaData(prev => ({ ...prev, representatives: reps }));
+        setNdaStep('form');
       }
+    } catch (err) {
+      if (err?.status === 404) {
+        setNdaError("Aucune entreprise trouvée pour ce SIREN. Vérifiez le numéro, ou cochez \"En cours d'immatriculation\" et remplissez manuellement.");
+      } else {
+        setNdaError(err?.data?.detail || err?.message || 'Recherche Pappers indisponible — remplissez manuellement.');
+      }
+      setNdaStep('form');
     } finally {
       setNdaLoading(false);
     }
   };
+
+  // Étape SIREN : saisie dans le pop-up → enregistrée sur le lead (page
+  // Détails) puis prefill auto. Ou flag « société en création » → form manuel.
+  const handleNdaSirenContinue = async () => {
+    if (!ndaPopup) return;
+    const digits = normalizeSiren(ndaSirenInput);
+    if (digits.length !== 9 || !isValidSiren(digits)) { setNdaError('SIREN invalide — 9 chiffres attendus.'); return; }
+    setNdaError('');
+    try {
+      await apiClient.patch(`/api/v1/tracking/leads/${ndaPopup.leadId}`, { siren: digits });
+      setLeads(prev => prev.map(l => l.id === ndaPopup.leadId ? { ...l, siren: digits } : l));
+    } catch (err) {
+      if (err?.status === 409 && err?.data?.detail?.code === 'duplicate_lead') { setDuplicateLeadModal(true); return; }
+      console.warn('Enregistrement SIREN sur le lead échoué (non bloquant):', err);
+    }
+    setNdaData(prev => ({ ...prev, siren: digits }));
+    setNdaStep('form');
+    runAutoPrefill(digits);
+  };
+
+  const handleNdaInCreation = async () => {
+    if (!ndaPopup) return;
+    try {
+      await apiClient.patch(`/api/v1/tracking/leads/${ndaPopup.leadId}`, { company_in_creation: true });
+      setLeads(prev => prev.map(l => l.id === ndaPopup.leadId ? { ...l, company_in_creation: true } : l));
+    } catch (err) {
+      console.warn('Flag société en création non enregistré (non bloquant):', err);
+    }
+    setNdaData(prev => ({ ...prev, isInRegistration: true, siren: '' }));
+    setNdaError('');
+    setNdaStep('form');
+  };
+
+  // (handleNdaPrefill supprimé le 2026-08-20 : le prefill est désormais
+  //  automatique — voir runAutoPrefill / nouveau flux NDA.)
 
   const handleNdaGenerate = async () => {
     if (!ndaData || !ndaPopup) return;
@@ -2269,6 +2385,17 @@ export default function TrackingSheet() {
           lead_id: lead.id,
         });
       } catch (e) { console.warn('Backend client-data sync failed (non-blocking):', e); }
+      // Convention v2 : récupère via Pappers TOUTES les sociétés des dirigeants
+      // retenus (Annexe 1, tout coché par défaut) — fire-and-forget, décochable
+      // ensuite dans l'onglet Options de la page Détails. Pas de fetch pour une
+      // société en création (pas de SIREN).
+      if (!ndaData.isInRegistration) {
+        const dirs = ndaData.representatives.map(r => (r.fullName || '').trim()).filter(Boolean);
+        if (dirs.length) {
+          apiClient.post(`/api/v1/tracking/leads/${lead.id}/covered-companies/fetch`, { dirigeants: dirs })
+            .catch(e => console.warn('Sociétés couvertes (annexe) non récupérées:', e));
+        }
+      }
       // Success → close popup
       setNdaPopup(null);
       setNdaData(null);
@@ -7776,6 +7903,77 @@ export default function TrackingSheet() {
                 </div>
               )}
 
+              {/* ─── OPTIONS (convention v2 : sociétés couvertes / société en création) ─── */}
+              <div style={{ marginTop: 18, borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>
+                <button
+                  onClick={() => {
+                    const next = !detailOptionsOpen;
+                    setDetailOptionsOpen(next);
+                    if (next && coveredCompanies === null) loadCoveredCompanies(lead.id);
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px',
+                    border: 'none', background: 'transparent', color: C.muted,
+                    fontSize: 11.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                    letterSpacing: '0.02em',
+                  }}
+                >
+                  <span style={{ fontSize: 10, transition: 'transform 0.15s', transform: detailOptionsOpen ? 'rotate(90deg)' : 'none', display: 'inline-block' }}>▸</span>
+                  Options
+                </button>
+
+                {detailOptionsOpen && (
+                  <div style={{ padding: '8px 4px 4px' }}>
+                    {/* Société en création */}
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: C.secondary, cursor: 'pointer', marginBottom: 12 }}>
+                      <input type="checkbox" checked={!!lead.company_in_creation} onChange={() => toggleLeadInCreation(lead)} style={{ cursor: 'pointer' }} />
+                      Société en cours de création (pas encore de SIREN)
+                    </label>
+
+                    {/* Sociétés couvertes (Annexe 1 de la convention Opti'Lex) */}
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                      Sociétés couvertes par la convention
+                    </div>
+                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, lineHeight: 1.5 }}>
+                      Toutes cochées par défaut — décochez celles sur lesquelles le client ne souhaite pas être suivi. Seules les cochées figurent dans l'annexe de la convention Opti'Lex.
+                    </div>
+                    {coveredLoading && <div style={{ fontSize: 12, color: C.muted, padding: '6px 0' }}>Chargement…</div>}
+                    {!coveredLoading && coveredCompanies && coveredCompanies.length === 0 && (
+                      <div style={{ fontSize: 12, color: C.muted, padding: '6px 0' }}>
+                        Aucune société référencée — elles seront récupérées automatiquement à la génération du NDA.
+                      </div>
+                    )}
+                    {!coveredLoading && coveredCompanies && coveredCompanies.map((cc) => (
+                      <label key={cc.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px', borderRadius: 8,
+                        cursor: 'pointer', marginBottom: 4,
+                        background: cc.selected ? (darkMode ? 'rgba(52,211,153,0.06)' : 'rgba(52,211,153,0.05)') : 'transparent',
+                        border: `1px solid ${cc.selected ? (darkMode ? 'rgba(52,211,153,0.25)' : 'rgba(52,211,153,0.2)') : C.border}`,
+                        opacity: cc.selected ? 1 : 0.6, transition: 'all 0.15s',
+                      }}>
+                        <input type="checkbox" checked={cc.selected} onChange={() => toggleCoveredCompany(lead.id, cc)} style={{ cursor: 'pointer' }} />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 12.5, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cc.denomination}</div>
+                          <div style={{ fontSize: 10.5, color: C.muted }}>{cc.siren ? `SIREN ${cc.siren}` : 'SIREN inconnu'}{cc.source === 'manual' ? ' · ajout manuel' : ''}</div>
+                        </div>
+                      </label>
+                    ))}
+
+                    {/* Ajout manuel */}
+                    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                      <input value={manualCompany.denomination} placeholder="Ajouter une société…"
+                        onChange={(e) => setManualCompany(prev => ({ ...prev, denomination: e.target.value }))}
+                        style={{ flex: 2, padding: '6px 9px', borderRadius: 8, border: `1px solid ${C.border}`, background: darkMode ? '#16171e' : '#fff', color: C.text, fontSize: 12, fontFamily: 'inherit', outline: 'none', minWidth: 0 }} />
+                      <input value={manualCompany.siren} placeholder="SIREN"
+                        onChange={(e) => setManualCompany(prev => ({ ...prev, siren: e.target.value.replace(/[^\d\s]/g, '') }))}
+                        style={{ flex: 1, padding: '6px 9px', borderRadius: 8, border: `1px solid ${C.border}`, background: darkMode ? '#16171e' : '#fff', color: C.text, fontSize: 12, fontFamily: 'inherit', outline: 'none', minWidth: 0 }} />
+                      <button onClick={() => addManualCoveredCompany(lead.id)} disabled={!manualCompany.denomination.trim()}
+                        style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: manualCompany.denomination.trim() ? C.accent : C.muted, color: '#fff', fontSize: 12, fontWeight: 700, cursor: manualCompany.denomination.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>+</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
             </div>{/* end detail padding */}
           </div>,
           detailContainerRef.current
@@ -7978,6 +8176,110 @@ export default function TrackingSheet() {
           backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='${encodeURIComponent(C.muted)}' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
           backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', paddingRight: 30,
         };
+        // ── Coquille commune (overlay + carte + header) des étapes du flux ──
+        const stepShell = (children) => (
+          <div
+            style={{
+              position: 'fixed', inset: 0, zIndex: 9999,
+              background: 'rgba(0,0,0,0.45)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              animation: 'modalOverlayIn 0.25s ease both',
+            }}
+            onClick={(e) => { if (e.target === e.currentTarget) { setNdaPopup(null); setNdaData(null); } }}
+          >
+            <div style={{
+              width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto',
+              background: C.bg, borderRadius: 16, border: `1px solid ${C.border}`,
+              boxShadow: '0 20px 60px rgba(0,0,0,0.25)', padding: '24px 28px',
+              animation: 'modalCardInFlex 0.35s cubic-bezier(0.34,1.56,0.64,1) both',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>Générer le NDA</h3>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: C.muted }}>{lead.full_name} {lead.company_name ? `— ${lead.company_name}` : ''}</p>
+                </div>
+                <button onClick={() => { setNdaPopup(null); setNdaData(null); }}
+                  style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted, fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >✕</button>
+              </div>
+              {children}
+            </div>
+          </div>
+        );
+
+        // ── ÉTAPE 1 : SIREN manquant — saisie directe ou société en création ──
+        if (ndaStep === 'siren') {
+          return stepShell(
+            <>
+              <div style={{
+                padding: '12px 14px', borderRadius: 12, marginBottom: 16, fontSize: 12.5, lineHeight: 1.55,
+                background: darkMode ? 'rgba(251,146,60,0.10)' : 'rgba(251,146,60,0.08)',
+                border: `1px solid ${darkMode ? 'rgba(251,146,60,0.25)' : 'rgba(251,146,60,0.2)'}`, color: C.secondary,
+              }}>
+                <b style={{ color: C.text }}>Aucun SIREN renseigné pour ce lead.</b><br />
+                Renseignez-le ici (il sera enregistré dans la fiche du lead) — ou indiquez que la société est en cours de création.
+              </div>
+              <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: C.muted, marginBottom: 5 }}>SIREN (9 chiffres)</label>
+              <input
+                value={ndaSirenInput}
+                onChange={(e) => setNdaSirenInput(e.target.value.replace(/[^\d\s]/g, ''))}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleNdaSirenContinue(); }}
+                placeholder="123 456 789" autoFocus
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.surface, color: C.text, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+              />
+              {ndaError && <div style={{ marginTop: 10, fontSize: 12, color: '#ef4444' }}>{ndaError}</div>}
+              <button onClick={handleNdaSirenContinue} disabled={ndaLoading}
+                style={{ width: '100%', marginTop: 14, padding: '11px 0', borderRadius: 10, border: 'none', background: C.accent, color: '#fff', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+              >{ndaLoading ? 'Recherche…' : 'Continuer'}</button>
+              <button onClick={handleNdaInCreation}
+                style={{ width: '100%', marginTop: 8, padding: '10px 0', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+              >La société est en cours de création (pas encore de SIREN)</button>
+            </>
+          );
+        }
+
+        // ── ÉTAPE 2 : plusieurs dirigeants — qui a-t-il en face de lui ? ──
+        if (ndaStep === 'dirigeants') {
+          return stepShell(
+            <>
+              <div style={{ fontSize: 12.5, color: C.secondary, marginBottom: 12, lineHeight: 1.55 }}>
+                Cette société a <b style={{ color: C.text }}>{ndaDirigeants.length} dirigeants</b>.
+                Sélectionnez la ou les personnes avec qui vous êtes en contact — elles figureront sur le NDA et la convention.
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+                {ndaDirigeants.map((d, i) => {
+                  const checked = ndaSelectedDirs.includes(i);
+                  return (
+                    <label key={i} style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
+                      border: `1px solid ${checked ? C.accent : C.border}`,
+                      background: checked ? (darkMode ? 'rgba(99,102,241,0.10)' : 'rgba(91,106,191,0.06)') : 'transparent',
+                      transition: 'all 0.15s',
+                    }}>
+                      <input type="checkbox" checked={checked} style={{ cursor: 'pointer' }}
+                        onChange={() => setNdaSelectedDirs(prev => checked ? prev.filter(x => x !== i) : [...prev, i])} />
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{d.fullName}</div>
+                        <div style={{ fontSize: 11, color: C.muted }}>{d.role}</div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => {
+                  const sel = ndaSelectedDirs.map(i => ndaDirigeants[i]);
+                  if (!sel.length) return;
+                  setNdaData(prev => ({ ...prev, representatives: sel }));
+                  setNdaStep('form');
+                }}
+                disabled={!ndaSelectedDirs.length}
+                style={{ width: '100%', padding: '11px 0', borderRadius: 10, border: 'none', background: ndaSelectedDirs.length ? C.accent : C.muted, color: '#fff', fontSize: 13.5, fontWeight: 700, cursor: ndaSelectedDirs.length ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}
+              >Continuer</button>
+            </>
+          );
+        }
+
         return (
           <div
             style={{
@@ -8005,23 +8307,21 @@ export default function TrackingSheet() {
                 >✕</button>
               </div>
 
-              {/* Prefill bar */}
+              {/* Statut du prefill automatique (plus de bouton manuel — 2026-08-20) */}
               <div style={{
                 display: 'flex', gap: 8, marginBottom: 16, padding: '12px 14px', borderRadius: 12,
                 background: darkMode ? 'rgba(99,102,241,0.08)' : 'rgba(91,106,191,0.06)',
                 border: `1px solid ${darkMode ? 'rgba(99,102,241,0.2)' : 'rgba(91,106,191,0.12)'}`,
               }}>
                 <div style={{ flex: 1, fontSize: 12, color: C.secondary }}>
-                  <span style={{ fontWeight: 600, color: C.accent }}>Pré-remplir</span> — Recherche automatique via SIREN
+                  {ndaLoading
+                    ? <span><span style={{ fontWeight: 600, color: C.accent }}>Recherche Pappers en cours…</span> les informations vont se préremplir.</span>
+                    : ndaData.isInRegistration
+                      ? <span><span style={{ fontWeight: 600, color: C.accent }}>Société en création</span> — pas de SIREN, remplissez les informations manuellement.</span>
+                      : ndaPappersUrl
+                        ? <span><span style={{ fontWeight: 600, color: '#34d399' }}>✓ Informations préremplies via Pappers</span> — vérifiez et ajustez si besoin avant de générer.</span>
+                        : <span><span style={{ fontWeight: 600, color: C.accent }}>Saisie manuelle</span> — le préremplissage automatique n'a pas abouti.</span>}
                 </div>
-                <button onClick={handleNdaPrefill} disabled={ndaLoading}
-                  style={{
-                    padding: '6px 16px', borderRadius: 50, border: 'none',
-                    background: ndaLoading ? C.muted : C.accent, color: '#fff',
-                    fontSize: 11.5, fontWeight: 700, cursor: ndaLoading ? 'wait' : 'pointer',
-                    fontFamily: 'inherit', transition: 'all 0.15s', whiteSpace: 'nowrap',
-                  }}
-                >{ndaLoading ? 'Recherche...' : 'Pré-remplir'}</button>
               </div>
 
               {/* Pappers link */}
@@ -8092,7 +8392,15 @@ export default function TrackingSheet() {
 
                 {/* En cours d'immatriculation */}
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: C.secondary, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={ndaData.isInRegistration} onChange={(e) => setNdaData(prev => ({ ...prev, isInRegistration: e.target.checked }))} style={{ cursor: 'pointer' }} />
+                  <input type="checkbox" checked={ndaData.isInRegistration} onChange={(e) => {
+                    const v = e.target.checked;
+                    setNdaData(prev => ({ ...prev, isInRegistration: v }));
+                    // Persiste le flag « société en création » sur le lead (visible
+                    // aussi dans l'onglet Options de la page Détails).
+                    apiClient.patch(`/api/v1/tracking/leads/${ndaPopup.leadId}`, { company_in_creation: v })
+                      .then(() => setLeads(prev => prev.map(l => l.id === ndaPopup.leadId ? { ...l, company_in_creation: v } : l)))
+                      .catch(err => console.warn('Flag en création non persisté:', err));
+                  }} style={{ cursor: 'pointer' }} />
                   En cours d'immatriculation
                 </label>
 
