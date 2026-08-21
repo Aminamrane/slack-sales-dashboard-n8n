@@ -10,30 +10,40 @@
 //     Retard cumul, Récupéré créances passées, Check PSP, Date paiement).
 //   - Same PATCH endpoint as the table (/api/v1/finance-periods/{row_id}).
 //
-// Sections (ordre vertical) :
-//   1. Header                  (existant : breadcrumb + 4 icônes + X)
-//   2. TitleBlock              (société 28px bold + représentant + meta pills)
-//   3. Identité client         (Numéro, Société, Représentant, État [board
-//                               Owner/Opti'Lex depuis 2026-08-18],
-//                               RDV lancement, RDV onboarding)
-//   4. Modalités               (Modalité de paiement, Prélèvement automatisé,
-//                               Effectif, Fin contrat)
-//   5. Owner | Opti'lex split  (Attendu, Récupéré, Retard mois courant,
-//                               Retard cumul, Récupéré créances passées,
-//                               Check PSP, Date paiement)
-//   6. Audit                   (10 dernières modifs)
-//   7. Timeline mensuelle      (périodes du client)
+// Refonte phase 3 (2026-08-19, maquette dev + principe Ismahane « hyper
+// synthétique, mais accès au détail via un dérouler ») :
 //
-// Endpoints :
+// Sections (ordre vertical) :
+//   1. Header barre            (existant : breadcrumb + icônes + X)
+//   2. ClientHeader            (avatar initiales pastel + nom + « Client n°X ·
+//                               Dossier ouvert le … » + badge statut paiement
+//                               scope-aware + bouton Modifier → ouvre le
+//                               détail. État board juste dessous : action
+//                               fréquente, jamais dans l'accordéon)
+//   3. KpiTiles                (Total contrat / Encaissé / Restant dû —
+//                               dérivés de la timeline, scope-aware)
+//   4. Informations contractuelles (liste compacte icône + libellé / valeur)
+//   5. État de compte          (échéancier ligne par ligne : Encaissée /
+//                               Partielle / En retard / À venir, 6 dernières
+//                               + « Tout afficher »)
+//   6. Timeline mensuelle      (EXISTANTE, telle quelle)
+//   7. « Voir le détail complet » (accordéon fermé par défaut : TOUT le
+//                               contenu historique du panneau — TitleBlock,
+//                               MetaRow, Identité, Modalités, Owner|Opti'lex,
+//                               Historique — déplacé tel quel, rien supprimé)
+//
+// Endpoints (inchangés — aucun nouvel appel) :
 //   GET   /api/v1/finance-periods/client/{id}/timeline
+//   GET   /api/v1/finance-periods/client/{id}/profile
 //   GET   /api/v1/finance-periods/{row_id}/audit
 //   PATCH /api/v1/finance-periods/{row_id}  (via onPatchRow prop)
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, ChevronRight, Maximize2, Minimize2, MoreHorizontal, ChevronsRight,
   Calendar, Briefcase, History, Lock, Landmark, PenLine, FileSignature,
+  Hash, User, Box, CreditCard, Pencil, Download,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
@@ -48,6 +58,13 @@ import {
   PROFILE_CHANGE_LABELS,
   ALLOWED_ROLES,
   toNumber,
+  currentPeriod,
+  parseDateFR,
+  parsePaymentSpecCount,
+  paymentModeLabel,
+  scopedOverdueCurrent,
+  scopedOverdueCum,
+  scopedPeriodAmounts,
 } from './constants.js';
 import {
   EditableNumber, EditableDate, EditableSelect, EditableText, CopyButton,
@@ -87,16 +104,28 @@ export default function DetailPanel({
   onBoardEtatChange, // (numero_client, payload) → POST /optilex/etat-change
   onShowToast,     // (msg, type?) → reuses page-level toast
   rows,            // current period rows (so we can find focused row immediately)
+  scope = 'global', // vision active du tableau : 'owner' | 'optilex' | 'global'
 }) {
   const [timeline, setTimeline] = useState(null);
   const [loadingTimeline, setLoadingTimeline] = useState(false);
-  const [audit, setAudit] = useState(null);
-  const [loadingAudit, setLoadingAudit] = useState(false);
+  // 2026-08-21 : l'audit PAR ROW (states audit/loadingAudit + GET
+  // /finance-periods/{row_id}/audit) est retiré — doublon strict de l'audit
+  // client-level (`clientAudit`, toutes périodes avec badge période) qui
+  // alimente désormais la ligne « Dernière action » ET l'historique de
+  // l'accordéon. Une requête de moins par changement de row.
   const [error, setError] = useState(null);
   const [fullscreen, setFullscreen] = useState(false);
   // Fiche client (profil) : SIREN, contacts typés, effectif courant, état
   // hérité du board, fin de contrat, journal des changements de la fiche.
   const [profile, setProfile] = useState(null);
+  // Accordéon « Voir le détail complet » (phase 3) — fermé par défaut.
+  // Le bouton Modifier du header l'ouvre et scrolle dessus.
+  const [detailOpen, setDetailOpen] = useState(false);
+  const detailRef = useRef(null);
+  // Historique des actions client (vue synthétique, demande Ismahane) —
+  // endpoint en cours de déploiement côté backend : toute erreur (404…)
+  // masque simplement la section, jamais de crash.
+  const [clientAudit, setClientAudit] = useState(null);
   // Écriture réservée à l'équipe finance + admin (le CEO lit).
   const canEdit = ALLOWED_ROLES.includes(apiClient.getUser()?.role);
 
@@ -104,12 +133,31 @@ export default function DetailPanel({
   useEffect(() => {
     if (!open) {
       setTimeline(null);
-      setAudit(null);
       setError(null);
       setFullscreen(false);
       setProfile(null);
+      setDetailOpen(false);
+      setClientAudit(null);
     }
   }, [open]);
+
+  // Audit client (toutes périodes confondues) pour la « Dernière action » de
+  // la vue synthétique. Défensif sur la forme de la réponse ({entries} ou
+  // tableau nu) — le contrat backend est en cours de validation.
+  useEffect(() => {
+    if (!open || !clientId) return;
+    let cancelled = false;
+    setClientAudit(null);
+    apiClient.get(`/api/v1/finance-periods/client/${clientId}/audit`)
+      .then((data) => {
+        if (cancelled) return;
+        const entries = Array.isArray(data?.entries) ? data.entries
+          : Array.isArray(data) ? data : [];
+        setClientAudit(entries);
+      })
+      .catch(() => { if (!cancelled) setClientAudit(null); });
+    return () => { cancelled = true; };
+  }, [open, clientId]);
 
   // Profil client — rechargeable après chaque édition (SIREN, contacts,
   // effectif) pour que la fiche et son journal restent d'accord.
@@ -138,21 +186,6 @@ export default function DetailPanel({
     return () => { cancelled = true; };
   }, [open, clientId]);
 
-  // Fetch audit whenever rowId changes
-  useEffect(() => {
-    if (!open || !rowId) {
-      setAudit(null);
-      return;
-    }
-    let cancelled = false;
-    setLoadingAudit(true);
-    apiClient.get(`/api/v1/finance-periods/${rowId}/audit`)
-      .then((data) => { if (!cancelled) setAudit(data); })
-      .catch((e) => { if (!cancelled) console.error('[DetailPanel audit]', e); })
-      .finally(() => { if (!cancelled) setLoadingAudit(false); });
-    return () => { cancelled = true; };
-  }, [open, rowId]);
-
   // ESC handler
   useEffect(() => {
     if (!open) return;
@@ -172,18 +205,248 @@ export default function DetailPanel({
     return (timeline?.periods || []).find((p) => p.id === rowId) || null;
   }, [rowId, rows, timeline]);
 
-  const periods = timeline?.periods || [];
+  // Mémoïsé : référence stable pour les useMemo dérivés (kpis, échéancier).
+  const periods = useMemo(() => timeline?.periods || [], [timeline]);
+
+  // Mois de signature 'YYYY-MM' — MÊME source/parsing que le header
+  // (« Dossier ouvert le … ») : profile.date_signature via parseDateFR,
+  // qui gère les formats mixtes ISO et DD/MM/YYYY. Null si absente ou
+  // illisible → aucun filtrage (comportement historique, pas de crash).
+  const signatureMonth = useMemo(() => {
+    const d = parseDateFR(profile?.date_signature);
+    if (!d) return null;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }, [profile]);
+
+  // Règle Ismahane 2026-08-19 : la timeline (et l'échéancier) COMMENCE au
+  // mois de signature — les mois à 0,00 € antérieurs n'existent pas pour le
+  // client. Signature antérieure au premier mois de données → le filtre ne
+  // retire rien (comparaison lexicale 'YYYY-MM'). Les KPIs restent calculés
+  // sur `periods` complet (les mois pré-signature sont à 0 de toute façon).
+  const visiblePeriods = useMemo(() => {
+    if (!signatureMonth) return periods;
+    return periods.filter((p) => String(p.period).slice(0, 7) >= signatureMonth);
+  }, [periods, signatureMonth]);
+
+  // Marqueur « Signature » de la timeline (2026-08-21, vérifié en base) :
+  // l'antériorité `client_finance_period` commence au 2025-10 pour TOUTE la
+  // base — un client signé avant (ex. n°5 : 04/02/2024) n'a AUCUNE ligne de
+  // période portant son mois de signature. Quand la signature est antérieure
+  // à la première période affichée, on l'affiche via une ligne-marqueur
+  // dédiée (badge + date longue FR) pour qu'elle soit TOUJOURS visible.
+  const signatureMarker = useMemo(() => {
+    if (!signatureMonth || !visiblePeriods.length) return null;
+    const firstMonth = visiblePeriods
+      .map((p) => String(p.period).slice(0, 7))
+      .reduce((a, b) => (a < b ? a : b));
+    if (signatureMonth >= firstMonth) return null; // porté par sa ligne de période
+    return formatDateLongFR(profile?.date_signature);
+  }, [signatureMonth, visiblePeriods, profile]);
   const client = focusedRow?.client || periods[0]?.client || null;
   // État du client = celui du board Owner/Opti'Lex (source de vérité depuis
   // 2026-08-18). Fallbacks conservés pour les clients hors board : état
   // hérité (résiliation/rétractation actée) puis `clients.etat` legacy.
   const boardRow = (client?.numero_client && boardMap?.get(client.numero_client)) || null;
   const boardEtat = boardRow ? displayEtat(boardRow) : null;
+
+  // ── Agenda client (RDV + juriste de référence) — retour dev 2026-08-21 ──
+  // Même endpoint que la modale agenda du board (GET /optilex/client-agenda,
+  // accessible aux rôles finance). Fetch seulement si le client est au board
+  // (numero_client résolu) ; toute erreur → section masquée, jamais de crash.
+  const numeroClient = client?.numero_client || null;
+  const [clientAgenda, setClientAgenda] = useState(null);
+  useEffect(() => {
+    if (!open || !numeroClient) { setClientAgenda(null); return undefined; }
+    let alive = true;
+    apiClient.get(`/api/v1/optilex/client-agenda?numero_client=${encodeURIComponent(numeroClient)}`)
+      .then((r) => { if (alive) setClientAgenda(r); })
+      .catch(() => { if (alive) setClientAgenda(null); });
+    return () => { alive = false; };
+  }, [open, numeroClient]);
   const inheritedEtat = profile?.etat_inherited || null;
   const effectiveEtat = inheritedEtat || client?.etat;
   const etatMeta = (boardEtat && ETAT_STYLE[boardEtat])
     || (effectiveEtat && ETAT_COLORS[effectiveEtat])
     || ETAT_FALLBACK;
+
+  // ── Dérivés phase 3 (synthèse scope-aware) ─────────────────────────────
+
+  // Badge statut paiement du header — priorité retard courant > créances
+  // antérieures > à jour, dans la vision active (même sémantique que les
+  // vues-filtres du tableau).
+  const paymentStatus = useMemo(() => {
+    if (!focusedRow) return null;
+    if (scopedOverdueCurrent(focusedRow, scope) > 0) {
+      return { label: 'En retard', bg: '#fdecec', fg: '#b42318' };
+    }
+    if (scopedOverdueCum(focusedRow, scope) > 0) {
+      return { label: 'Créances antérieures', bg: '#fff3e3', fg: '#b45309' };
+    }
+    return { label: 'À jour', bg: '#e9f9f0', fg: '#15794a' };
+  }, [focusedRow, scope]);
+
+  // KPIs contrat — dérivés de la timeline déjà chargée (aucun nouvel appel).
+  // Total contrat = Σ attendus ; Encaissé = Σ reçus + reçus sur créances ;
+  // Restant dû = différence (négatif = trop-perçu, restitué proprement).
+  const kpis = useMemo(() => {
+    let total = 0;
+    let encaisse = 0;
+    for (const p of periods) {
+      const a = scopedPeriodAmounts(p, scope);
+      total += a.expected;
+      encaisse += a.received + a.receivedOverdue;
+    }
+    return { total, encaisse, restant: total - encaisse };
+  }, [periods, scope]);
+
+  // Échéancier « État de compte » — une entrée par période à montant
+  // (attendu ou reçu), triée chronologiquement et numérotée. Statuts :
+  //   reçu ≥ attendu            → Encaissée
+  //   0 < reçu < attendu        → Partielle
+  //   mois futur                → À venir
+  //   mois courant              → En retard si retard courant calculé, sinon À venir
+  //   mois passé sans paiement  → En retard
+  const installments = useMemo(() => {
+    const nowMonth = currentPeriod();
+    // `visiblePeriods` : une échéance ne peut pas précéder la signature.
+    const sorted = [...visiblePeriods].sort((a, b) => String(a.period).localeCompare(String(b.period)));
+    const list = [];
+    for (const p of sorted) {
+      const a = scopedPeriodAmounts(p, scope);
+      if (a.expected <= 0 && a.received <= 0) continue;
+      const month = String(p.period).slice(0, 7);
+      let status;
+      if (a.received >= a.expected && a.received > 0) status = 'paid';
+      else if (a.received > 0) status = 'partial';
+      else if (month > nowMonth) status = 'upcoming';
+      else if (month === nowMonth) status = scopedOverdueCurrent(p, scope) > 0 ? 'late' : 'upcoming';
+      else status = 'late';
+      list.push({ id: p.id, n: list.length + 1, month, status, ...a });
+    }
+    return list;
+  }, [visiblePeriods, scope]);
+
+  // Forfait mensuel courant (vision active) : attendu de la période à
+  // montant la plus récente — alimente « Formule » et la modalité formatée.
+  const monthlyExpected = useMemo(() => {
+    for (let i = installments.length - 1; i >= 0; i--) {
+      if (installments[i].expected > 0) return installments[i].expected;
+    }
+    return null;
+  }, [installments]);
+
+  // ── État de compte PDF (phase 4) ───────────────────────────────────────
+  // Document EXCLUSIVEMENT OWNER (décision dev 2026-08-21) : Opti'lex émet
+  // ses propres états de compte. Les montants sont TOUJOURS les montants
+  // Owner, quelle que soit la vision active du panneau. Génération 100 %
+  // frontend depuis les données déjà chargées, module PDF chargé en lazy
+  // (dynamic import → chunk séparé pour @react-pdf/renderer).
+
+  // Visibilité du bouton : au moins un mois ÉCHU (≤ mois d'émission) avec
+  // facturé ou payé Owner (les mois futurs ne sont pas facturés — hors doc).
+  const hasOwnerStatement = useMemo(() => {
+    const nowMonth = currentPeriod();
+    return visiblePeriods.some((p) => {
+      if (String(p.period).slice(0, 7) > nowMonth) return false;
+      const a = scopedPeriodAmounts(p, 'owner');
+      return a.expected > 0 || a.received > 0;
+    });
+  }, [visiblePeriods]);
+
+  const [pdfGenerating, setPdfGenerating] = useState(false);
+  const downloadStatement = useCallback(async () => {
+    if (!hasOwnerStatement || pdfGenerating) return;
+    setPdfGenerating(true);
+    try {
+      const { generateEtatDeCompte } = await import('./pdf/EtatDeComptePdf.jsx');
+
+      // Société découpée + personne(s) (source unique splitSocieteRep) ;
+      // numero_client arrive préfixé « n° » en base → strip (le PDF pose
+      // son propre « n° »).
+      const { societeName, representant: repFromSociete } = splitSocieteRep(client?.societe);
+      const personne = client?.representative_name || repFromSociete;
+
+      // Lignes Owner-only (indépendantes de la vision active). Périmètre
+      // comptable (retour dev ZILWA n°637, 2026-08-21) : de la signature au
+      // mois de la date d'émission INCLUS — les mois futurs ne sont pas
+      // facturés, ils sortent du document ET du total. Les mois vides
+      // (ni facturé ni payé) restent sautés.
+      const nowMonth = currentPeriod();
+      const sorted = [...visiblePeriods]
+        .sort((a, b) => String(a.period).localeCompare(String(b.period)));
+      const ownerRows = [];
+      let latestExpected = null;
+      for (const p of sorted) {
+        const month = String(p.period).slice(0, 7);
+        if (month > nowMonth) continue; // mois futur — hors périmètre
+        const a = scopedPeriodAmounts(p, 'owner');
+        if (a.expected <= 0 && a.received <= 0) continue;
+        if (a.expected > 0) latestExpected = a.expected;
+        // « Payé » inclut le récupéré sur créances passées du mois : le
+        // solde cumulé (calculé dans le PDF) régularise ainsi les mois
+        // précédents au fil des lignes.
+        ownerRows.push({
+          month,
+          billed: a.expected,
+          paid: a.received + a.receivedOverdue,
+        });
+      }
+
+      // Offre = libellé de la Formule : tranche, sinon forfait (tarif client
+      // prioritaire, sinon dernier attendu Owner à montant).
+      const range = profile?.employee_range || focusedRow?.employee_range || client?.employee_range;
+      const tarif = toNumber(client?.tarif);
+      const price = (tarif && tarif > 0) ? tarif : latestExpected;
+      const offre = range ? `${range} salariés` : (price ? formatEUR(price) : '—');
+
+      const rows = ownerRows.map((r) => ({
+        periodLabel: formatMonthLabel(r.month),
+        offre,
+        billed: r.billed,
+        paid: r.paid,
+      }));
+
+      const blob = await generateEtatDeCompte({
+        recipient: {
+          company: societeName,
+          person: personne || '',
+          clientNumber: client?.numero_client
+            ? String(client.numero_client).replace(/^n°\s*/i, '')
+            : '',
+          // Trade licence côté client = SIREN quand la fiche le connaît
+          // (le label reste affiché vide sinon, comme la référence).
+          siren: profile?.siren || '',
+        },
+        rows,
+        // Date courte DD/MM/YY — format de la référence.
+        issueDate: new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }),
+      });
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safeName = (societeName || 'Client').replace(/[\\/:*?"<>|]/g, '-').trim();
+      a.href = url;
+      a.download = `Etat de compte - ${safeName} - ${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      console.error('[DetailPanel pdf]', e);
+      onShowToast?.('Erreur lors de la génération du PDF', 'error');
+    } finally {
+      setPdfGenerating(false);
+    }
+  }, [hasOwnerStatement, pdfGenerating, visiblePeriods, profile, focusedRow, client, onShowToast]);
+
+  // Bouton Modifier : déplie le détail complet puis scrolle dessus (léger
+  // délai pour laisser l'accordéon commencer son expansion).
+  const openDetail = useCallback(() => {
+    setDetailOpen(true);
+    setTimeout(() => {
+      detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+  }, []);
 
   // Patch helper bound to current rowId — reuses table's onPatchRow flow.
   // Falls back to a direct PATCH if the parent didn't wire onPatchRow.
@@ -238,11 +501,19 @@ export default function DetailPanel({
             flex: 1, overflowY: 'auto',
             padding: '24px 32px 64px',
           }}>
-            {/* Title block */}
-            <TitleBlock client={client} etatMeta={etatMeta} focusedRow={focusedRow} inheritedEtat={inheritedEtat} onCopied={onCopied} />
-
-            {/* Meta row */}
-            <MetaRow client={client} focusedRow={focusedRow} profile={profile} boardEtat={boardEtat} />
+            {/* Header client synthétique (phase 3) : avatar + nom + statut
+                paiement + Modifier. L'État board reste ici — action
+                fréquente, jamais dans l'accordéon. */}
+            <ClientHeader
+              client={client}
+              profile={profile}
+              paymentStatus={paymentStatus}
+              onModify={openDetail}
+              boardRow={boardRow}
+              canEdit={canEdit}
+              onBoardEtatChange={onBoardEtatChange}
+              inheritedEtat={inheritedEtat}
+            />
 
             {/* Error state */}
             {error && (
@@ -254,66 +525,172 @@ export default function DetailPanel({
               </div>
             )}
 
-            {/* Section : Identité client */}
-            <Section title="Identité client" delay={0.05}>
-              <IdentitySection
+            {/* 3 tuiles KPI contrat (scope-aware, dérivées de la timeline).
+                Le cumul de créances antérieures (calcul backend, vision
+                active) est signalé en alerte rouge sous « Restant dû ». */}
+            <KpiTiles
+              kpis={kpis}
+              overdueCum={focusedRow ? scopedOverdueCum(focusedRow, scope) : 0}
+              loading={loadingTimeline}
+            />
+
+            {/* Section : Informations contractuelles */}
+            <Section title="Informations contractuelles" delay={0.08}>
+              <ContractInfoList
                 client={client}
-                clientId={clientId}
-                focusedRow={focusedRow}
                 profile={profile}
-                canEdit={canEdit}
-                refreshProfile={refreshProfile}
+                focusedRow={focusedRow}
                 boardRow={boardRow}
-                onBoardEtatChange={onBoardEtatChange}
-                onCopied={onCopied}
-                onShowToast={onShowToast}
-              />
-            </Section>
-
-            {/* Section : Modalités */}
-            <Section title="Modalités" delay={0.08}>
-              <ModalitesSection
-                client={client}
-                clientId={clientId}
-                focusedRow={focusedRow}
-                profile={profile}
+                monthlyExpected={monthlyExpected}
+                patch={patch}
                 canEdit={canEdit}
-                refreshProfile={refreshProfile}
-                patch={patch}
-                onCopied={onCopied}
-                onShowToast={onShowToast}
-              />
-            </Section>
-
-            {/* Section : Owner | Opti'lex (split 2 cols) */}
-            <Section title="Owner | Opti'lex" delay={0.11}>
-              <OwnerOptilexSection
-                focusedRow={focusedRow}
-                patch={patch}
                 onCopied={onCopied}
               />
             </Section>
 
-            {/* Section : Audit — replié par défaut, la fiche reste lisible */}
-            <CollapsibleSection
-              title="Historique des modifications"
-              count={(audit?.entries?.length || 0) + (profile?.changes?.length || 0)}
-              delay={0.14}
+            {/* Section : État de compte (échéancier) — bouton PDF à côté
+                du titre. Le PDF est toujours OWNER-only : visible dans
+                toutes les visions dès qu'une période a du facturé ou du
+                payé Owner. */}
+            <Section
+              title="État de compte"
+              delay={0.11}
+              action={hasOwnerStatement ? (
+                <button
+                  type="button"
+                  onClick={downloadStatement}
+                  disabled={pdfGenerating}
+                  title="Télécharger l'état de compte (PDF)"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    height: 26, padding: '0 10px',
+                    background: '#fff', color: N.text,
+                    border: `1px solid ${N.border}`, borderRadius: 6,
+                    fontSize: 12, fontWeight: 600,
+                    cursor: pdfGenerating ? 'wait' : 'pointer',
+                    fontFamily: 'inherit', whiteSpace: 'nowrap',
+                    boxShadow: '0 1px 2px rgba(15,15,15,0.04)',
+                    opacity: pdfGenerating ? 0.7 : 1,
+                    transition: 'background 0.12s, opacity 0.15s',
+                  }}
+                  onMouseEnter={(e) => { if (!pdfGenerating) e.currentTarget.style.background = N.sideBg; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
+                >
+                  <motion.span
+                    animate={pdfGenerating ? { y: [0, 2, 0] } : { y: 0 }}
+                    transition={pdfGenerating ? { duration: 0.7, repeat: Infinity, ease: 'easeInOut' } : { duration: 0 }}
+                    style={{ display: 'inline-flex' }}
+                  >
+                    <Download size={12} strokeWidth={2} />
+                  </motion.span>
+                  {pdfGenerating ? 'Génération…' : "Télécharger l'état de compte"}
+                </button>
+              ) : null}
             >
-              <AuditList loading={loadingAudit} entries={audit?.entries} />
-              <ProfileChangesList changes={profile?.changes} />
-            </CollapsibleSection>
+              <InstallmentsList
+                installments={installments}
+                loading={loadingTimeline}
+                focusedRowId={rowId}
+                onSelectRow={onSelectRow}
+              />
+            </Section>
 
-            {/* Section : Timeline périodes */}
-            <Section title="Timeline mensuelle" delay={0.17}>
+            {/* Dernière action + historique des actions (vue synthétique) —
+                masqué si l'endpoint audit client est absent ou vide. */}
+            <ActionsHistory entries={clientAudit} />
+
+            {/* Section : Timeline périodes — EXISTANTE ; démarre au mois de
+                signature (visiblePeriods, règle Ismahane 2026-08-19) */}
+            <Section title="Timeline mensuelle" delay={0.14}>
               <TimelineList
-                periods={periods}
+                periods={visiblePeriods}
                 loading={loadingTimeline}
                 focusedRowId={rowId}
                 onSelectRow={onSelectRow}
                 dateSignature={profile?.date_signature}
+                signatureMarker={signatureMarker}
               />
             </Section>
+
+            {/* « Voir le détail complet » — accordéon fermé par défaut.
+                TOUT le contenu historique du panneau vit ici, déplacé tel
+                quel (rien supprimé). Le bouton Modifier du header l'ouvre. */}
+            <DetailAccordion
+              open={detailOpen}
+              onToggle={() => setDetailOpen((v) => !v)}
+              innerRef={detailRef}
+              delay={0.17}
+            >
+              {/* Title block */}
+              <TitleBlock client={client} etatMeta={etatMeta} focusedRow={focusedRow} inheritedEtat={inheritedEtat} onCopied={onCopied} />
+
+              {/* Meta row */}
+              <MetaRow client={client} focusedRow={focusedRow} profile={profile} boardEtat={boardEtat} />
+
+              {/* Section : Identité client */}
+              <Section title="Identité client" delay={0.03}>
+                <IdentitySection
+                  client={client}
+                  clientId={clientId}
+                  focusedRow={focusedRow}
+                  profile={profile}
+                  canEdit={canEdit}
+                  refreshProfile={refreshProfile}
+                  boardRow={boardRow}
+                  onBoardEtatChange={onBoardEtatChange}
+                  onCopied={onCopied}
+                  onShowToast={onShowToast}
+                />
+              </Section>
+
+              {/* Section : Modalités */}
+              <Section title="Modalités" delay={0.06}>
+                <ModalitesSection
+                  client={client}
+                  clientId={clientId}
+                  focusedRow={focusedRow}
+                  profile={profile}
+                  canEdit={canEdit}
+                  refreshProfile={refreshProfile}
+                  patch={patch}
+                  onCopied={onCopied}
+                  onShowToast={onShowToast}
+                />
+              </Section>
+
+              {/* Section : Owner | Opti'lex (split 2 cols) */}
+              <Section title="Owner | Opti'lex" delay={0.09}>
+                <OwnerOptilexSection
+                  focusedRow={focusedRow}
+                  patch={patch}
+                  onCopied={onCopied}
+                />
+              </Section>
+
+              {/* Section : Rendez-vous & juriste référent (comme le board).
+                  Masquée si client hors board / aucune donnée agenda. */}
+              {boardRow && (clientAgenda?.reference_jurist || (clientAgenda?.rdv?.length || 0) > 0
+                || boardRow.rdv_onboarding_date || boardRow.rdv_lancement_date
+                || boardRow.rdv_fiscal_date || boardRow.rdv_social_date) && (
+                <Section title="Rendez-vous & juriste référent" delay={0.1}>
+                  <RdvJuristeSection boardRow={boardRow} agenda={clientAgenda} />
+                </Section>
+              )}
+
+              {/* Section : Historique des actions — repliée par défaut.
+                  Fusion 2026-08-21 : l'audit client-level (toutes périodes,
+                  badge période) remplace l'ancien audit par-row (doublon
+                  strict de la même donnée) ; le journal de la fiche client
+                  (ProfileChangesList) reste, c'est une donnée distincte. */}
+              <CollapsibleSection
+                title="Historique des actions"
+                count={(clientAudit?.length || 0) + (profile?.changes?.length || 0)}
+                delay={0.12}
+              >
+                <ClientAuditList entries={clientAudit} />
+                <ProfileChangesList changes={profile?.changes} />
+              </CollapsibleSection>
+            </DetailAccordion>
           </div>
         </motion.aside>
       )}
@@ -395,6 +772,871 @@ const iconBtnStyle = {
   borderRadius: 4, color: N.textMuted,
   transition: 'background 0.12s',
 };
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 3 — vue synthétique (maquette 2026-08-19)
+// ════════════════════════════════════════════════════════════════════════════
+
+// Avatar initiales : pastel déterministe dérivé du nom (mêmes familles de
+// couleurs que ETAT_STYLE du board — finition homogène avec EtatBadge).
+const AVATAR_PASTELS = [
+  { bg: '#e9f9f0', fg: '#15794a' },
+  { bg: '#eaf1fd', fg: '#1e40af' },
+  { bg: '#fff3e3', fg: '#b45309' },
+  { bg: '#f3e8ff', fg: '#6940a5' },
+  { bg: '#e0f2fe', fg: '#0e7490' },
+  { bg: '#fdf2f8', fg: '#ad1a72' },
+];
+
+function avatarMeta(name) {
+  const str = String(name || '?').trim();
+  const words = str.split(/\s+/).filter(Boolean);
+  const initials = words.length >= 2
+    ? (words[0][0] + words[1][0]).toUpperCase()
+    : str.slice(0, 2).toUpperCase();
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+  return { initials, ...AVATAR_PASTELS[hash % AVATAR_PASTELS.length] };
+}
+
+// « Dossier ouvert le 12 mars 2026 » — date de signature en format long FR.
+function formatDateLongFR(iso) {
+  const d = parseDateFR(iso);
+  if (!d) return null;
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+// ── Header client synthétique ───────────────────────────────────────────────
+function ClientHeader({
+  client, profile, paymentStatus, onModify,
+  boardRow, canEdit, onBoardEtatChange, inheritedEtat,
+}) {
+  // Séparation nom du client / société (2026-08-21) : la ligne principale
+  // porte la/les personne(s), la société passe en sous-ligne. Pas de
+  // personne détectée (181 cas en base) → société seule, pas de ligne vide.
+  // L'avatar reste sur la SOCIÉTÉ (identité visuelle stable).
+  const { societeName, representant: repFromSociete } = splitSocieteRep(client?.societe);
+  const personne = client?.representative_name || repFromSociete;
+  const av = avatarMeta(societeName);
+  const openedOn = formatDateLongFR(profile?.date_signature);
+  const subtitle = [
+    // numero_client contient déjà le préfixe « n° » en base (ex. « n°691 »)
+    client?.numero_client ? `Client n°${String(client.numero_client).replace(/^n°\s*/i, '')}` : null,
+    openedOn ? `Dossier ouvert le ${openedOn}` : null,
+  ].filter(Boolean).join(' · ');
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+        {/* Avatar initiales */}
+        <div style={{
+          width: 52, height: 52,
+          borderRadius: '50%',
+          background: av.bg, color: av.fg,
+          flexShrink: 0,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 18, fontWeight: 700, letterSpacing: '0.02em',
+          userSelect: 'none',
+        }}>
+          {av.initials}
+        </div>
+
+        {/* Nom du client (personne) + société + sous-titre */}
+        <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
+          <h1 style={{
+            fontSize: 22, fontWeight: 700, color: N.text,
+            margin: 0, letterSpacing: '-0.02em', lineHeight: 1.25,
+            overflow: 'hidden', textOverflow: 'ellipsis',
+            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+          }}>
+            {personne || societeName || '—'}
+          </h1>
+          {personne && societeName && (
+            <div style={{
+              marginTop: 2, fontSize: 13.5, fontWeight: 500, color: N.textMuted,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {societeName}
+            </div>
+          )}
+          {subtitle && (
+            <div style={{ marginTop: 3, fontSize: 12.5, color: N.textMuted }}>
+              {subtitle}
+            </div>
+          )}
+        </div>
+
+        {/* Modifier (ouvre le détail complet) + badge statut paiement */}
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'flex-end',
+          gap: 8, flexShrink: 0,
+        }}>
+          <button
+            type="button"
+            onClick={onModify}
+            title="Ouvrir le détail complet pour modifier"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              height: 28, padding: '0 11px',
+              background: '#fff', color: N.text,
+              border: `1px solid ${N.border}`, borderRadius: 6,
+              fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+              fontFamily: 'inherit',
+              boxShadow: '0 1px 2px rgba(15,15,15,0.04)',
+              transition: 'background 0.12s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = N.sideBg; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
+          >
+            <Pencil size={12} strokeWidth={2} />
+            Modifier
+          </button>
+          {paymentStatus && (
+            <AnimatePresence mode="popLayout" initial={false}>
+              <motion.span
+                key={paymentStatus.label}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '3px 10px', borderRadius: 999,
+                  background: paymentStatus.bg, color: paymentStatus.fg,
+                  fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap',
+                }}
+              >
+                <span style={{
+                  width: 6, height: 6, borderRadius: '50%',
+                  background: paymentStatus.fg,
+                }} />
+                {paymentStatus.label}
+              </motion.span>
+            </AnimatePresence>
+          )}
+        </div>
+      </div>
+
+      {/* État board — action fréquente, toujours visible (jamais dans
+          l'accordéon). Mêmes fallbacks que le Field État du détail. */}
+      <div style={{
+        marginTop: 12,
+        display: 'flex', alignItems: 'center', gap: 10,
+        paddingLeft: 66, // aligné sous le texte (avatar 52 + gap 14)
+        minHeight: 24,
+      }}>
+        <span style={{
+          fontSize: 11, fontWeight: 600, color: N.textFaint,
+          textTransform: 'uppercase', letterSpacing: '0.04em',
+        }}>
+          État
+        </span>
+        {boardRow ? (
+          <BoardEtatCell
+            boardRow={boardRow}
+            disabled={!canEdit}
+            onEtatChange={(payload) => onBoardEtatChange?.(client?.numero_client, payload)}
+          />
+        ) : inheritedEtat ? (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '2px 10px', borderRadius: 4,
+            background: (ETAT_COLORS[inheritedEtat] || ETAT_FALLBACK).bg,
+            color: (ETAT_COLORS[inheritedEtat] || ETAT_FALLBACK).fg,
+            fontSize: 12.5, fontWeight: 600,
+          }}>
+            <Lock size={11} />
+            {(ETAT_COLORS[inheritedEtat] || ETAT_FALLBACK).label || inheritedEtat}
+          </span>
+        ) : client?.etat ? (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '2px 10px', borderRadius: 4,
+            background: (ETAT_COLORS[client.etat] || ETAT_FALLBACK).bg,
+            color: (ETAT_COLORS[client.etat] || ETAT_FALLBACK).fg,
+            fontSize: 12.5, fontWeight: 600,
+          }}>
+            {(ETAT_COLORS[client.etat] || ETAT_FALLBACK).label || client.etat}
+          </span>
+        ) : (
+          <span style={{ color: '#c8cdd7', fontSize: 13 }}>—</span>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+// ── 3 tuiles KPI (Total contrat / Encaissé / Restant dû) ────────────────────
+// `overdueCum` : créances des mois précédents (calcul backend, vision
+// active) — alerte rouge sous « Restant dû », visible sans ouvrir le détail.
+function KpiTiles({ kpis, overdueCum = 0, loading }) {
+  const surplus = kpis.restant < 0 ? -kpis.restant : 0;
+  const tiles = [
+    { label: 'Total contrat', value: kpis.total, color: N.text },
+    { label: 'Encaissé', value: kpis.encaisse, color: N.green },
+    {
+      label: 'Restant dû',
+      value: Math.max(0, kpis.restant), // plancher 0 — le trop-perçu est restitué en sous-note
+      color: (kpis.restant > 0 || overdueCum > 0) ? '#b42318' : N.green,
+      notes: [
+        overdueCum > 0 ? { text: `dont ${formatEUR(overdueCum)} de créances antérieures`, color: '#b42318' } : null,
+        surplus > 0 ? { text: `+${formatEUR(surplus)} trop-perçu`, color: N.green } : null,
+      ].filter(Boolean),
+    },
+  ];
+  return (
+    <div style={{
+      display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10,
+      marginTop: 22,
+    }}>
+      {tiles.map((t, i) => (
+        <motion.div
+          key={t.label}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.28, delay: 0.04 + i * 0.05, ease: [0.4, 0, 0.2, 1] }}
+          style={{
+            border: `1px solid ${N.borderSft}`,
+            borderRadius: 10,
+            padding: '12px 14px',
+            background: '#fff',
+            display: 'flex', flexDirection: 'column', gap: 4,
+            minWidth: 0,
+          }}
+        >
+          <span style={{
+            fontSize: 10.5, fontWeight: 600, color: N.textMuted,
+            textTransform: 'uppercase', letterSpacing: '0.04em',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            {t.label}
+          </span>
+          {loading ? (
+            <div style={{
+              height: 20, width: '70%', background: '#f3f4f6', borderRadius: 4,
+              animation: 'tsfPulse 1.4s ease-in-out infinite',
+            }} />
+          ) : (
+            <>
+              <span style={{
+                fontSize: 19, fontWeight: 700, color: t.color,
+                fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
+                {formatEUR(t.value)}
+              </span>
+              {(t.notes || []).map((note, j) => (
+                <span key={j} style={{
+                  fontSize: 10.5, fontWeight: 600, color: note.color,
+                  fontVariantNumeric: 'tabular-nums',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
+                  {note.text}
+                </span>
+              ))}
+            </>
+          )}
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+// ── Informations contractuelles (liste compacte icône + libellé / valeur) ───
+function ContractInfoList({ client, profile, focusedRow, boardRow, monthlyExpected, patch, canEdit, onCopied }) {
+  // Séparation nom du client / société (2026-08-21) : « Nom du client » =
+  // la/les personne(s), la société a sa propre ligne. Pas de personne
+  // détectée → « Nom du client » = société, pas de ligne Société en doublon.
+  const { societeName, representant: repFromSociete } = splitSocieteRep(client?.societe);
+  const personne = client?.representative_name || repFromSociete;
+  // numero_client contient déjà le préfixe « n° » en base (ex. « n°691 »).
+  const numeroValue = client?.numero_client
+    ? String(client.numero_client).replace(/^n°\s*/i, '')
+    : null;
+
+  // Formule = TRANCHE SEULE, éditable (retour dev 2026-08-21) — plus de
+  // montant accolé (le prix vit dans les tuiles KPI et le PDF). Snapshot de
+  // la period focus prioritaire : l'édition PATCHe `employee_range` sur la
+  // period (champ accepté par le backend, historisé automatiquement dans
+  // l'audit → visible dans l'historique des actions).
+  const range = focusedRow?.employee_range || profile?.employee_range || client?.employee_range;
+  const rangeLabels = EMPLOYEE_RANGES.reduce((acc, v) => { acc[v] = `${v} salariés`; return acc; }, {});
+
+  // Modalité : « N × {montant} € mensuels » quand payment_specificity + montant
+  // dispo ; sinon le libellé brut ; sinon Mensuel / Annuel via payment_mode.
+  const specCount = parsePaymentSpecCount(focusedRow?.payment_specificity);
+  let modalite = null;
+  if (specCount !== null && monthlyExpected) {
+    modalite = `${specCount} × ${formatEUR(monthlyExpected)} mensuels`;
+  } else if (focusedRow?.payment_specificity) {
+    modalite = focusedRow.payment_specificity;
+  } else {
+    // Chaîne de fallback (2026-08-21) : mode de la period → mode normalisé
+    // du client (backend, MONTHLY/YEARLY/QUARTERLY) → `periodicite` du board
+    // (libellés FR, ~27 % des clients — ex. client n°1 Shake'N OUT :
+    // « Annuel »). paymentModeLabel canonicalise les deux formats.
+    modalite = paymentModeLabel(focusedRow?.payment_mode)
+      || paymentModeLabel(client?.payment_mode)
+      || paymentModeLabel(boardRow?.periodicite);
+  }
+
+  const rows = [
+    { Icon: Hash,       label: 'Client n°',            value: numeroValue, mono: true },
+    ...(personne ? [
+      { Icon: Briefcase, label: 'Société',             value: societeName },
+    ] : []),
+    { Icon: User,       label: 'Nom du client',        value: personne || societeName },
+    { Icon: PenLine,    label: 'Date de signature',    value: formatDateLongFR(profile?.date_signature) },
+    // Formule = tranche seule, éditable (PATCH employee_range sur la period
+    // focus — optimiste + rollback + toast via le flow onPatchRow standard).
+    {
+      Icon: Box,
+      label: 'Formule',
+      copyValue: range ? `${range} salariés` : null,
+      node: (
+        <EditableSelect
+          value={range}
+          options={EMPLOYEE_RANGES}
+          optionLabels={rangeLabels}
+          onCommit={patch('employee_range')}
+          disabled={!canEdit}
+          placeholderItalic
+          width="auto"
+        />
+      ),
+    },
+    { Icon: CreditCard, label: 'Modalité de paiement', value: modalite },
+  ];
+
+  return (
+    <div style={{
+      border: `1px solid ${N.borderSft}`,
+      borderRadius: 10,
+      overflow: 'hidden',
+    }}>
+      {rows.map((r, i) => (
+        <motion.div
+          key={r.label}
+          initial={{ opacity: 0, x: -6 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.22, delay: i * 0.03, ease: [0.4, 0, 0.2, 1] }}
+          className="tsf-copy-wrap"
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            gap: 12,
+            padding: '9px 14px',
+            borderTop: i === 0 ? 'none' : `1px solid ${N.borderSft}`,
+            fontSize: 13,
+            minWidth: 0,
+          }}
+        >
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            color: N.textMuted, fontSize: 12.5,
+            whiteSpace: 'nowrap', flexShrink: 0,
+          }}>
+            <r.Icon size={13} strokeWidth={1.9} style={{ color: N.textFaint }} />
+            {r.label}
+          </span>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            minWidth: 0, justifyContent: 'flex-end',
+          }}>
+            {r.node ? (
+              r.node
+            ) : r.value ? (
+              <span style={{
+                fontSize: 13, fontWeight: 500, color: N.text,
+                fontFamily: r.mono ? 'ui-monospace, SFMono-Regular, Menlo, monospace' : 'inherit',
+                fontVariantNumeric: 'tabular-nums',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {r.value}
+              </span>
+            ) : (
+              <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }}>Vide</span>
+            )}
+            {(r.value || r.copyValue) && (
+              <CopyButton value={r.copyValue || r.value} onCopied={onCopied} size={12} />
+            )}
+          </span>
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+// ── État de compte (échéancier) ─────────────────────────────────────────────
+const INSTALLMENT_BADGES = {
+  paid:     { label: 'Encaissée', bg: '#e9f9f0', fg: '#15794a' },
+  partial:  { label: 'Partielle', bg: '#fff3e3', fg: '#b45309' },
+  late:     { label: 'En retard', bg: '#fdecec', fg: '#b42318' },
+  upcoming: { label: 'À venir',   bg: '#faf3dd', fg: '#9f6b00' },
+};
+
+const INSTALLMENTS_PREVIEW = 6;
+
+function installmentSubline(inst) {
+  // Format long FR (« 12 mars 2026 ») — demande dev 2026-08-19.
+  const date = inst.payDate ? formatDateLongFR(inst.payDate) : null;
+  const monthLabel = formatMonthLabel(inst.month);
+  switch (inst.status) {
+    case 'paid':
+      return date ? `Prélevée le ${date}` : monthLabel;
+    case 'partial':
+      return `${formatEUR(inst.received)} / ${formatEUR(inst.expected)}${date ? ` · Prélevée le ${date}` : ` · ${monthLabel}`}`;
+    case 'upcoming':
+      return date ? `Prévue le ${date}` : `Prévue · ${monthLabel}`;
+    default: // late
+      return date ? `Prévue le ${date}` : monthLabel;
+  }
+}
+
+function InstallmentsList({ installments, loading, focusedRowId, onSelectRow }) {
+  const [showAll, setShowAll] = useState(false);
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} style={{
+            height: 40, background: '#f3f4f6', borderRadius: 6,
+            animation: 'tsfPulse 1.4s ease-in-out infinite', opacity: 1 - i * 0.12,
+          }} />
+        ))}
+      </div>
+    );
+  }
+  if (!installments.length) return <Empty text="Aucune échéance sur la période." />;
+
+  const hiddenCount = Math.max(0, installments.length - INSTALLMENTS_PREVIEW);
+  const older = hiddenCount > 0 ? installments.slice(0, hiddenCount) : [];
+  const visible = hiddenCount > 0 ? installments.slice(hiddenCount) : installments;
+
+  const renderRow = (inst, i, first = false) => {
+    const badge = INSTALLMENT_BADGES[inst.status];
+    const isActive = focusedRowId === inst.id;
+    return (
+      <motion.button
+        key={inst.id}
+        type="button"
+        onClick={() => onSelectRow?.(inst.id)}
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.22, delay: i * 0.025, ease: [0.4, 0, 0.2, 1] }}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: 12, width: '100%',
+          padding: '9px 14px',
+          border: 'none',
+          borderTop: first ? 'none' : `1px solid ${N.borderSft}`,
+          background: isActive ? N.sideHover : 'transparent',
+          cursor: 'pointer',
+          fontFamily: 'inherit', textAlign: 'left',
+          transition: 'background 0.12s',
+          minWidth: 0,
+        }}
+        onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = N.sideBg; }}
+        onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+      >
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+          <span style={{
+            fontSize: 13, fontWeight: 600, color: N.text,
+            fontVariantNumeric: 'tabular-nums',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            Échéance {inst.n} · {formatEUR(inst.expected > 0 ? inst.expected : inst.received)}
+          </span>
+          <span style={{
+            fontSize: 11.5, color: N.textMuted,
+            fontVariantNumeric: 'tabular-nums',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            {installmentSubline(inst)}
+          </span>
+        </span>
+        <span style={{
+          padding: '2px 9px', borderRadius: 999,
+          background: badge.bg, color: badge.fg,
+          fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0,
+        }}>
+          {badge.label}
+        </span>
+      </motion.button>
+    );
+  };
+
+  return (
+    <div style={{
+      border: `1px solid ${N.borderSft}`,
+      borderRadius: 10,
+      overflow: 'hidden',
+    }}>
+      {hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            width: '100%', padding: '8px 14px',
+            border: 'none', background: N.sideBg,
+            cursor: 'pointer', fontFamily: 'inherit',
+            fontSize: 12, fontWeight: 600, color: N.textMuted,
+            transition: 'background 0.12s',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = N.sideHover; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = N.sideBg; }}
+        >
+          <motion.span
+            animate={{ rotate: showAll ? 90 : 0 }}
+            transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
+            style={{ display: 'inline-flex', color: N.textFaint }}
+          >
+            <ChevronRight size={12} />
+          </motion.span>
+          {showAll ? 'Réduire' : `Tout afficher (${hiddenCount} échéance${hiddenCount > 1 ? 's' : ''} de plus)`}
+        </button>
+      )}
+      <AnimatePresence initial={false}>
+        {showAll && older.length > 0 && (
+          <motion.div
+            key="older"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+            style={{ overflow: 'hidden' }}
+          >
+            {older.map((inst, i) => renderRow(inst, i))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {visible.map((inst, i) => renderRow(inst, i, hiddenCount === 0 && i === 0))}
+    </div>
+  );
+}
+
+// ── Dernière action + historique des actions (vue synthétique) ──────────────
+// Demande Ismahane 2026-08-19 : la traçabilité (ex. effectif modifié → les
+// attendus changent) doit être visible SANS ouvrir l'accordéon détail.
+// Source : GET /finance-periods/client/{id}/audit (toutes périodes). La
+// section est absente si l'endpoint ne répond pas ou n'a rien.
+
+// « il y a 2 h », « hier », « il y a 3 j », sinon date longue FR.
+function formatRelativeFR(iso) {
+  const d = parseDateFR(iso) || (iso ? new Date(iso) : null);
+  if (!d || Number.isNaN(d.getTime())) return '—';
+  const diffMin = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (diffMin < 1) return 'à l\'instant';
+  if (diffMin < 60) return `il y a ${diffMin} min`;
+  const h = Math.floor(diffMin / 60);
+  if (h < 24) return `il y a ${h} h`;
+  const days = Math.floor(h / 24);
+  if (days === 1) return 'hier';
+  if (days < 7) return `il y a ${days} j`;
+  return formatDateLongFR(iso) || '—';
+}
+
+const auditEntryDate = (e) => e.changed_at || e.created_at || null;
+
+// Ligne « Dernière action » SEULE dans la vue synthétique (demande Ismahane) ;
+// la liste complète vit dans l'accordéon Détails (ClientAuditList) depuis le
+// retour dev 2026-08-21.
+function ActionsHistory({ entries }) {
+  if (!entries?.length) return null;
+
+  const sorted = [...entries].sort((a, b) =>
+    String(auditEntryDate(b) || '').localeCompare(String(auditEntryDate(a) || ''))
+  );
+  const last = sorted[0];
+  const lastLabel = AUDIT_FIELD_LABELS[last.field_name] || last.field_name;
+  const lastAuthor = last.changed_by_name || null;
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: 0.13, ease: [0.4, 0, 0.2, 1] }}
+      style={{ marginTop: 24 }}
+    >
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '10px 14px',
+        border: `1px solid ${N.borderSft}`,
+        borderRadius: 10,
+        fontSize: 12.5, color: N.textMuted,
+        flexWrap: 'wrap', minWidth: 0,
+      }}>
+        <History size={13} style={{ color: N.textFaint, flexShrink: 0 }} />
+        <span style={{ fontWeight: 600, color: N.text, whiteSpace: 'nowrap' }}>
+          Dernière action :
+        </span>
+        <span style={{ whiteSpace: 'nowrap' }}>{lastLabel} modifié</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <AuditValue v={last.old_value} muted />
+          <ChevronRight size={11} style={{ color: N.textFaint }} />
+          <AuditValue v={last.new_value} />
+        </span>
+        <span style={{ whiteSpace: 'nowrap', color: N.textFaint }}>
+          {lastAuthor ? `· ${lastAuthor} ` : ''}· {formatRelativeFR(auditEntryDate(last))}
+        </span>
+      </div>
+    </motion.section>
+  );
+}
+
+// Liste complète de l'audit client (toutes périodes, badge période) — rendue
+// dans la section « Historique des actions » de l'accordéon Détails.
+function ClientAuditList({ entries }) {
+  if (!entries?.length) {
+    return <Empty text="Aucune action enregistrée pour ce client." />;
+  }
+  const sorted = [...entries].sort((a, b) =>
+    String(auditEntryDate(b) || '').localeCompare(String(auditEntryDate(a) || ''))
+  );
+  return (
+    <div style={{
+      border: `1px solid ${N.borderSft}`,
+      borderRadius: 10,
+      overflow: 'hidden',
+    }}>
+      {sorted.slice(0, 30).map((e, i) => (
+        <div key={i} style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: 10,
+          padding: '8px 14px',
+          borderTop: i === 0 ? 'none' : `1px solid ${N.borderSft}`,
+          fontSize: 12, minWidth: 0,
+        }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            minWidth: 0, flexWrap: 'wrap',
+          }}>
+            <span style={{ fontWeight: 600, color: N.text, whiteSpace: 'nowrap' }}>
+              {AUDIT_FIELD_LABELS[e.field_name] || e.field_name}
+            </span>
+            <AuditValue v={e.old_value} muted />
+            <ChevronRight size={10} style={{ color: N.textFaint }} />
+            <AuditValue v={e.new_value} />
+            {e.period && (
+              <span style={{
+                fontSize: 10, fontWeight: 600, color: N.textMuted,
+                background: N.sideBg, borderRadius: 3, padding: '1px 6px',
+                whiteSpace: 'nowrap',
+              }}>
+                {formatMonthLabel(periodFromDate(e.period))}
+              </span>
+            )}
+          </span>
+          <span style={{
+            fontSize: 10.5, color: N.textFaint, whiteSpace: 'nowrap', flexShrink: 0,
+          }}>
+            {formatAuditDate(auditEntryDate(e))}{e.changed_by_name ? ` · ${e.changed_by_name}` : ''}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Rendez-vous & juriste référent (accordéon Détails) ──────────────────────
+// Réplique inline de la modale « Agenda du client » du board Owner/Opti'Lex
+// (OptilexBoard.jsx → ClientAgendaModal — non réutilisable telle quelle :
+// c'est une modale portalisée plein écran). Mêmes données : RDV standards de
+// la row board + RDV juristes et juriste de référence de client-agenda.
+// Styles repris du board (carte juriste verte, rows heure|label|badge).
+const AGENDA_GREEN = '#15794a';
+const AGENDA_NAVY = '#1e2330';
+const AGENDA_MUTED = '#8a93a4';
+const AGENDA_BORDER = '#e9ebf0';
+
+function RdvJuristeSection({ boardRow, agenda }) {
+  // Consolidation identique à ClientAgendaModal (board) : 4 RDV standards de
+  // la fiche + RDV juristes, triés du plus récent au plus ancien.
+  const items = useMemo(() => {
+    if (!boardRow) return [];
+    const std = [
+      { key: 'onb', label: 'Onboarding Owner', type: 'Owner', date: boardRow.rdv_onboarding_date_manual || boardRow.rdv_onboarding_date, done: boardRow.rdv_onboarding_done },
+      { key: 'int', label: "Intégration Opti'Lex", type: "Opti'Lex", date: boardRow.rdv_lancement_date, done: boardRow.rdv_lancement_done },
+      { key: 'fis', label: 'Lancement fiscal', type: "Opti'Lex", date: boardRow.rdv_fiscal_date_manual || boardRow.rdv_fiscal_date, done: boardRow.rdv_fiscal_done },
+      { key: 'soc', label: 'Lancement social', type: "Opti'Lex", date: boardRow.rdv_social_date_manual || boardRow.rdv_social_date, done: boardRow.rdv_social_done },
+    ].filter((x) => x.date).map((x) => ({ ...x, kind: 'standard', when: String(x.date) }));
+    const jur = ((agenda && agenda.rdv) || []).map((b, i) => ({
+      key: `jur-${b.juriste_email || ''}-${b.slot_start || i}`,
+      label: b.summary || `RDV juriste ${b.team || ''}`.trim(),
+      juriste: `${b.juriste_name || 'Juriste'}${b.team ? ' · ' + b.team : ''}`,
+      cancelled: b.status === 'cancelled',
+      kind: 'jurist',
+      when: String(b.slot_start),
+    }));
+    return [...std, ...jur].sort((a, b) => (b.when || '').localeCompare(a.when || ''));
+  }, [boardRow, agenda]);
+
+  const ref = agenda?.reference_jurist || null;
+
+  // Client absent du board ET rien à montrer → section masquée proprement.
+  if (!boardRow || (!ref && items.length === 0)) return null;
+
+  // Date + heure Paris ; date seule pour les RDV standards sans heure.
+  const whenLabel = (iso) => {
+    const s = String(iso || '');
+    try {
+      const d = new Date(iso);
+      const day = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Paris' });
+      if (!/T\d\d:\d\d/.test(s)) return day;
+      const time = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
+      return `${day} · ${time}`;
+    } catch {
+      return s.slice(0, 10);
+    }
+  };
+
+  return (
+    <div>
+      {/* Juriste de référence — carte du board reprise à l'identique */}
+      <div style={{
+        padding: '11px 14px', borderRadius: 10,
+        border: `1px solid ${ref ? AGENDA_GREEN + '55' : AGENDA_BORDER}`,
+        background: ref ? '#f0f7f3' : '#fafbfc',
+        display: 'flex', alignItems: 'center', gap: 11, marginBottom: 12,
+      }}>
+        <span style={{
+          width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          background: ref ? AGENDA_GREEN : '#e5e8ee', color: '#fff',
+          fontSize: 12, fontWeight: 800,
+        }}>
+          {ref ? (ref.name || '?').trim().charAt(0).toUpperCase() : '?'}
+        </span>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 10.5, color: AGENDA_MUTED, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Juriste de référence
+          </div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: ref ? AGENDA_NAVY : AGENDA_MUTED }}>
+            {ref ? `${ref.name}${ref.team ? ' · ' + ref.team : ''}` : "Aucun RDV juriste pour l'instant"}
+          </div>
+        </div>
+      </div>
+
+      {/* Liste des RDV (date, type, juriste) */}
+      {items.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {items.map((it, i) => (
+            <motion.div
+              key={it.key}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22, delay: i * 0.03, ease: [0.4, 0, 0.2, 1] }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '9px 12px', borderRadius: 10,
+                border: `1px solid ${AGENDA_BORDER}`, background: '#fff',
+                opacity: it.cancelled ? 0.5 : 1,
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: 13, fontWeight: 600, color: AGENDA_NAVY,
+                  textDecoration: it.cancelled ? 'line-through' : 'none',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {it.label}
+                </div>
+                <div style={{
+                  fontSize: 11.5, color: AGENDA_MUTED,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {whenLabel(it.when)}
+                  {' · '}
+                  {it.kind === 'jurist' ? (it.juriste || 'Juriste') + (it.cancelled ? ' · annulé' : '') : it.type}
+                </div>
+              </div>
+              {it.kind === 'standard' && (
+                <span style={{
+                  flexShrink: 0, fontSize: 11, fontWeight: 700,
+                  padding: '3px 9px', borderRadius: 20,
+                  color: it.done ? AGENDA_GREEN : AGENDA_MUTED,
+                  background: it.done ? '#e7f3ec' : '#eef1f6',
+                }}>
+                  {it.done ? 'Effectué' : 'À venir'}
+                </span>
+              )}
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Accordéon « Voir le détail complet » ────────────────────────────────────
+// Contient TOUT le contenu historique du panneau (rien supprimé). Contrôlé
+// par le parent : le bouton Modifier du header l'ouvre et scrolle dessus.
+function DetailAccordion({ open, onToggle, innerRef, delay = 0, children }) {
+  return (
+    <motion.section
+      ref={innerRef}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay, ease: [0.4, 0, 0.2, 1] }}
+      style={{
+        marginTop: 32,
+        borderTop: `1px solid ${N.border}`,
+        paddingTop: 14,
+        // scroll-margin : le scrollIntoView du bouton Modifier laisse un peu
+        // d'air au-dessus au lieu de coller le bord.
+        scrollMarginTop: 12,
+      }}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          width: '100%', border: `1px solid ${N.borderSft}`,
+          background: open ? N.sideBg : '#fff',
+          cursor: 'pointer', padding: '9px 14px',
+          borderRadius: 8,
+          fontFamily: 'inherit', textAlign: 'left',
+          transition: 'background 0.15s',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = N.sideBg; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = open ? N.sideBg : '#fff'; }}
+      >
+        <motion.span
+          animate={{ rotate: open ? 90 : 0 }}
+          transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+          style={{ display: 'inline-flex', color: N.textFaint }}
+        >
+          <ChevronRight size={14} />
+        </motion.span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: N.text }}>
+          Voir le détail complet
+        </span>
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="detail-body"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            style={{ overflow: 'hidden' }}
+          >
+            <div style={{ paddingTop: 20 }}>
+              {children}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.section>
+  );
+}
 
 // ── Title Block ─────────────────────────────────────────────────────────────
 // `focusedRow` reserved for future use (e.g. period badge in the title).
@@ -572,7 +1814,9 @@ function MetaRow({ client, focusedRow, profile, boardEtat }) {
 }
 
 // ── Section wrapper ─────────────────────────────────────────────────────────
-function Section({ title, children, delay = 0 }) {
+// `action` (optionnel, phase 4) : nœud rendu à droite du titre — ex. le
+// bouton de téléchargement de l'état de compte. Rétro-compatible.
+function Section({ title, children, delay = 0, action = null }) {
   return (
     <motion.section
       initial={{ opacity: 0, y: 8 }}
@@ -580,13 +1824,19 @@ function Section({ title, children, delay = 0 }) {
       transition={{ duration: 0.3, delay, ease: [0.4, 0, 0.2, 1] }}
       style={{ marginTop: 28 }}
     >
-      <h2 style={{
-        fontSize: 11, fontWeight: 600, color: N.textMuted,
-        margin: '0 0 12px',
-        textTransform: 'uppercase', letterSpacing: '0.04em',
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: 10, margin: '0 0 12px',
       }}>
-        {title}
-      </h2>
+        <h2 style={{
+          fontSize: 11, fontWeight: 600, color: N.textMuted,
+          margin: 0,
+          textTransform: 'uppercase', letterSpacing: '0.04em',
+        }}>
+          {title}
+        </h2>
+        {action}
+      </div>
       {children}
     </motion.section>
   );
@@ -1274,71 +2524,9 @@ function ProfileChangesList({ changes }) {
   );
 }
 
-// ── Section : Audit ─────────────────────────────────────────────────────────
-function AuditList({ loading, entries }) {
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} style={{
-            height: 52, background: '#f3f4f6', borderRadius: 6,
-            animation: 'tsfPulse 1.4s ease-in-out infinite', opacity: 1 - i * 0.1,
-          }} />
-        ))}
-      </div>
-    );
-  }
-  if (!entries?.length) {
-    return <Empty text="Aucune modification enregistrée pour cette période." />;
-  }
-  // Show only the last 10
-  const slice = entries.slice(0, 10);
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {slice.map((e) => (
-        <AuditRow key={e.id} entry={e} />
-      ))}
-    </div>
-  );
-}
-
-function AuditRow({ entry }) {
-  const label = AUDIT_FIELD_LABELS[entry.field_name] || entry.field_name;
-  return (
-    <div style={{
-      padding: '10px 12px',
-      background: N.sideBg,
-      borderRadius: 6,
-      display: 'flex', flexDirection: 'column', gap: 4,
-      fontSize: 12.5,
-    }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        gap: 8,
-      }}>
-        <span style={{
-          fontSize: 12.5, fontWeight: 600, color: N.text,
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-        }}>
-          <History size={11} style={{ color: N.textFaint }} />
-          {label}
-        </span>
-        <span style={{ fontSize: 11, color: N.textFaint, whiteSpace: 'nowrap' }}>
-          {formatAuditDate(entry.changed_at)} · {entry.changed_by_name || '—'}
-        </span>
-      </div>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 6,
-        fontSize: 12, color: N.textMuted, flexWrap: 'wrap',
-      }}>
-        <AuditValue v={entry.old_value} muted />
-        <ChevronRight size={11} style={{ color: N.textFaint }} />
-        <AuditValue v={entry.new_value} />
-      </div>
-    </div>
-  );
-}
-
+// ── Audit : helpers d'affichage ─────────────────────────────────────────────
+// 2026-08-21 : AuditList/AuditRow (audit PAR ROW) supprimés — doublon strict
+// de l'audit client-level rendu par ClientAuditList dans l'accordéon.
 function AuditValue({ v, muted = false }) {
   const display = v === null || v === undefined || v === '' ? '∅' : String(v);
   return (
@@ -1367,9 +2555,19 @@ function formatAuditDate(iso) {
 }
 
 // ── Section : Timeline ──────────────────────────────────────────────────────
-function TimelineList({ periods, loading, focusedRowId, onSelectRow, dateSignature }) {
+// `signatureMarker` : date longue FR à afficher en ligne-marqueur quand la
+// signature précède la première période de données (antériorité importée
+// depuis 2025-10) — sinon null, le badge inline sur la ligne de période suffit.
+function TimelineList({ periods, loading, focusedRowId, onSelectRow, dateSignature, signatureMarker }) {
   // Mois de la signature (YYYY-MM) : point de départ de l'histoire du client.
-  const signatureMonth = dateSignature ? String(dateSignature).slice(0, 7) : null;
+  // parseDateFR gère les formats mixtes en base (ISO ET DD/MM/YYYY) — un
+  // slice brut ne matchait que l'ISO, d'où un badge absent sur une partie
+  // des clients.
+  const signatureMonth = useMemo(() => {
+    const d = parseDateFR(dateSignature);
+    if (!d) return null;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }, [dateSignature]);
   if (loading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1405,6 +2603,32 @@ function TimelineList({ periods, loading, focusedRowId, onSelectRow, dateSignatu
         <div style={{ textAlign: 'right' }}>Reçu</div>
         <div style={{ textAlign: 'right' }}>Retard mois</div>
       </div>
+      {/* Ligne-marqueur signature : pas une période (aucun montant), style
+          discret distinct des lignes de données. Rend le mois de signature
+          TOUJOURS visible même quand il précède l'antériorité importée. */}
+      {signatureMarker && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '7px 10px',
+          borderTop: `1px solid ${N.borderSft}`,
+          fontSize: 12, color: N.textMuted,
+        }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 3,
+            padding: '1px 6px', borderRadius: 3,
+            background: '#e7f0fb', color: '#1e40af',
+            fontSize: 10, fontWeight: 700,
+            textTransform: 'uppercase', letterSpacing: '0.03em',
+            flexShrink: 0,
+          }}>
+            Signature
+          </span>
+          <span style={{ fontStyle: 'italic' }}>{signatureMarker}</span>
+          <span style={{ marginLeft: 'auto', fontSize: 10.5, color: N.textFaint, whiteSpace: 'nowrap' }}>
+            antérieure aux données
+          </span>
+        </div>
+      )}
       {periods.map((p) => {
         const isActive = focusedRowId === p.id;
         const overdue = (Number(p.overdue_owner_current_month) || 0) +

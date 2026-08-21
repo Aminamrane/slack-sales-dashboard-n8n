@@ -22,6 +22,16 @@ export const COMMENTABLE_FIELDS = {
   overdueOptilexCum: 'overdue_optilex_cumulative',
 };
 
+// Depuis la refonte "vision" (2026-08-18), les colonnes de retard cumulé sont
+// scope-dépendantes : la colonne `overdueCum` pointe vers le champ Owner OU
+// Opti'lex selon la vision active. En vision Globale la colonne est une somme
+// → pas de fil de commentaires (le backend n'a pas de field_name "somme").
+export const SCOPED_COMMENT_FIELDS = {
+  owner:   { etat: 'etat', overdueCum: 'overdue_owner_cumulative' },
+  optilex: { etat: 'etat', overdueCum: 'overdue_optilex_cumulative' },
+  global:  { etat: 'etat' },
+};
+
 // ── Column labels (SACRED — finance team vocabulary, verbatim) ───────────
 //
 // CES LABELS SONT FIGÉS PAR LE DEV. Aucune reformulation autorisée.
@@ -49,7 +59,18 @@ export const COLUMN_LABELS = {
   pspOptilex:           'Check Opti\'lex',
   payDateOwner:         'Date paiement Owner',
   payDateOptilex:       'Date paiement Opti\'lex',
+  // 2026-08-18 (phase 2 condensation) : colonne compacte fusionnant
+  // Mode + Modalité + Prélèvement. Nouveau libellé validé par le brief
+  // finance — les libellés historiques ci-dessus restent intacts.
+  modalites:            'Modalités',
 };
+
+// Libellé scope-dépendant : reprend le libellé sacré et retire UNIQUEMENT le
+// suffixe d'entité (« Montant Récupéré Owner » → « Montant Récupéré »).
+// Aucune autre reformulation — l'entité active est portée par le sélecteur de
+// vision + le header de groupe (brief phase 2, 2026-08-18).
+export const stripEntitySuffix = (label) =>
+  String(label || '').replace(/\s+(Owner|Opti'lex)$/i, '');
 
 // ── Editable enums (backend Pydantic strict) ─────────────────────────────
 export const PSP_OPTIONS = ['Learnypay', 'IFX', 'whop', 'Quonto'];
@@ -81,6 +102,128 @@ export const AUTO_DEBIT_OPTIONS = [
 ];
 
 export const PAYMENT_MODES = ['MONTHLY', 'YEARLY'];
+
+// Libellés FR du mode de paiement. QUARTERLY : exposé par le backend via
+// `client.payment_mode` normalisé (fallback quand la period n'a rien).
+export const PAYMENT_MODE_LABELS = {
+  MONTHLY:   'Mensuel',
+  YEARLY:    'Annuel',
+  QUARTERLY: 'Trimestriel',
+};
+
+// Canonicalise un mode de paiement vers l'enum MONTHLY/YEARLY/QUARTERLY.
+// Accepte l'enum backend ET les libellés FR du board (`periodicite` :
+// « Mensuel » / « Annuel » / « Trimestriel », casse variable) — source du
+// 4e fallback de la chaîne modalité (2026-08-21). Null si inconnu/absent.
+const PAYMENT_MODE_CANON = {
+  MONTHLY: 'MONTHLY', YEARLY: 'YEARLY', QUARTERLY: 'QUARTERLY',
+  MENSUEL: 'MONTHLY', ANNUEL: 'YEARLY', TRIMESTRIEL: 'QUARTERLY',
+};
+export const normalizePaymentMode = (m) =>
+  PAYMENT_MODE_CANON[String(m || '').trim().toUpperCase()] || null;
+
+export const paymentModeLabel = (m) =>
+  PAYMENT_MODE_LABELS[normalizePaymentMode(m)] || null;
+
+// ── Modalités compactes (colonne fusionnée, phase 2 2026-08-18) ──────────
+
+// « Paye / N sct » → N (chip « N× »). Null si le format ne matche pas.
+export const parsePaymentSpecCount = (spec) => {
+  const m = String(spec || '').match(/Paye\s*\/\s*(\d+)\s*sct/i);
+  return m ? parseInt(m[1], 10) : null;
+};
+
+// Dérive l'état des deux pastilles prélèvement O (Owner) / X (Opti'lex)
+// depuis l'enum `auto_debit`. States : 'green' | 'red' | 'wait' | 'none'.
+// Match case-insensitive : la DB contient des variantes de casse ('Non').
+// Source unique — utilisée par la cellule Modalités ET le filtre
+// « Non automatisé » (index.jsx). Ne pas dupliquer cette table.
+export const autoDebitPastilles = (value) => {
+  if (value === null || value === undefined || String(value).trim() === '') {
+    return { owner: 'none', optilex: 'none' };
+  }
+  const canon = AUTO_DEBIT_OPTIONS.find(
+    (o) => o.toUpperCase() === String(value).trim().toUpperCase()
+  ) || null;
+  switch (canon) {
+    case 'OUI':                                      return { owner: 'green', optilex: 'green' };
+    case 'NON':
+    case 'Non souhaitais':                           return { owner: 'red',   optilex: 'red' };
+    case 'Partiellement Owner':                      return { owner: 'green', optilex: 'red' };
+    case 'Partiellement Optilex':
+    case 'Partiellement Optilex Non souhaité Owner': return { owner: 'red',   optilex: 'green' };
+    case 'En attend':                                return { owner: 'wait',  optilex: 'wait' };
+    default:                                         return { owner: 'none',  optilex: 'none' };
+  }
+};
+
+// ── Vision Owner / Opti'lex / Global (phase 2-3) ─────────────────────────
+//
+// Champs backend par entité — source UNIQUE du mapping vision → colonnes.
+// Consommée par TableView (rendu + PATCH), index.jsx (filtres) et
+// DetailPanel (KPIs / état de compte). Ne pas dupliquer cette table.
+export const SCOPE_FIELDS = {
+  owner: {
+    expected:        'expected_owner',
+    received:        'received_owner',
+    overdueCum:      'overdue_owner_cumulative',
+    receivedOverdue: 'received_overdue_owner',
+    psp:             'psp_owner',
+    payDate:         'payment_date_owner',
+  },
+  optilex: {
+    expected:        'expected_optilex_ttc',
+    received:        'received_optilex_ttc',
+    overdueCum:      'overdue_optilex_cumulative',
+    receivedOverdue: 'received_overdue_optilex_ttc',
+    psp:             'psp_optilex',
+    payDate:         'payment_date_optilex',
+  },
+};
+
+// Retard courant / cumulé d'une row selon la vision active ('global' = somme).
+export const scopedOverdueCurrent = (r, scope) =>
+  (scope === 'optilex' ? 0 : (toNumber(r.overdue_owner_current_month) || 0)) +
+  (scope === 'owner' ? 0 : (toNumber(r.overdue_optilex_current_month) || 0));
+
+export const scopedOverdueCum = (r, scope) =>
+  (scope === 'optilex' ? 0 : (toNumber(r.overdue_owner_cumulative) || 0)) +
+  (scope === 'owner' ? 0 : (toNumber(r.overdue_optilex_cumulative) || 0));
+
+// Montants d'une period (row timeline) dans la vision active. `payDate` :
+// par entité en vision entité ; en Globale, Owner en priorité (une somme de
+// dates n'existe pas, on montre la première date connue).
+export const scopedPeriodAmounts = (p, scope) => {
+  if (scope === 'global') {
+    return {
+      expected:        (toNumber(p.expected_owner) || 0) + (toNumber(p.expected_optilex_ttc) || 0),
+      received:        (toNumber(p.received_owner) || 0) + (toNumber(p.received_optilex_ttc) || 0),
+      receivedOverdue: (toNumber(p.received_overdue_owner) || 0) + (toNumber(p.received_overdue_optilex_ttc) || 0),
+      payDate:         p.payment_date_owner || p.payment_date_optilex || null,
+    };
+  }
+  const f = SCOPE_FIELDS[scope];
+  return {
+    expected:        toNumber(p[f.expected]) || 0,
+    received:        toNumber(p[f.received]) || 0,
+    receivedOverdue: toNumber(p[f.receivedOverdue]) || 0,
+    payDate:         p[f.payDate] || null,
+  };
+};
+
+// ── Vues-filtres (chips, phase 2 2026-08-18) ─────────────────────────────
+
+// États board « fin de vie » pour la vue « Résiliés / Rétractés ».
+// Comparés à `displayEtat(boardRow)` (OptilexBoard.jsx — source de vérité).
+export const TERMINATED_BOARD_ETATS = new Set([
+  'Résiliation',
+  'Self-Résiliation',
+  'Rétractation',
+  'En cours de résiliation',
+  'En cours de rétractation',
+  'Liquidation',
+  'En cours de liquidation',
+]);
 
 export const EMPLOYEE_RANGES = [
   '1-2',
@@ -273,14 +416,45 @@ export const formatDateFR = (iso) => {
 export const splitSocieteRep = (societe) => {
   if (!societe) return { societeName: null, representant: null };
   const str = String(societe).trim();
-  const idx = str.lastIndexOf(' - ');
-  if (idx === -1) {
-    return { societeName: str, representant: null };
-  }
-  return {
-    societeName: str.slice(0, idx).trim() || str,
-    representant: str.slice(idx + 3).trim() || null,
+
+  // Normalise le représentant : multi-personnes séparées par « / » avec
+  // espacement irrégulier en base (« Gaetan CEROUTER /Patrice FERRET ») →
+  // « A / B » homogène. 41 cas en base (2026-08-21).
+  const cleanRep = (s) => {
+    const r = s.trim().replace(/\s*\/\s*/g, ' / ');
+    return r || null;
   };
+
+  // 1. Séparateur canonique « - » entouré d'espaces (539/722 cas). Le
+  //    DERNIER l'emporte : les noms de société contenant eux-mêmes « - »
+  //    ou « + » restent entiers (« SM Technologies + E.Solutions - X »).
+  const idx = str.lastIndexOf(' - ');
+  if (idx !== -1) {
+    return {
+      societeName: str.slice(0, idx).trim() || str,
+      representant: cleanRep(str.slice(idx + 3)),
+    };
+  }
+
+  // 2. Tiret collé d'UN côté (« …Ambulance- Hamou AMRANE », « X -Y ») :
+  //    dernier tiret avec un espace d'au moins un côté. Les tirets collés
+  //    des deux côtés (« Jean-Claude », « E-commerce ») ne matchent pas.
+  const looseSep = /(\s-|-\s)/g;
+  let m;
+  let lastLoose = -1;
+  let lastLen = 0;
+  while ((m = looseSep.exec(str)) !== null) {
+    lastLoose = m.index;
+    lastLen = m[0].length;
+  }
+  if (lastLoose > 0) {
+    const left = str.slice(0, lastLoose).trim();
+    const right = cleanRep(str.slice(lastLoose + lastLen));
+    if (left && right) return { societeName: left, representant: right };
+  }
+
+  // 3. Société seule (181 cas), aucune personne détectée.
+  return { societeName: str, representant: null };
 };
 
 // ── Month nav helpers ────────────────────────────────────────────────────

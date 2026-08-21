@@ -6,32 +6,33 @@
 // constants.js, qui est la source de vérité. Toute modification = casser le
 // workflow de l'équipe finance.
 //
+// 2026-08-18 (phase 2 condensation) : le tableau est piloté par une VISION
+// (`scope` : 'owner' | 'optilex' | 'global') choisie dans la top bar.
+// Un seul bloc de colonnes montants, dont les champs sous-jacents dépendent
+// de l'entité active (cf. SCOPE_FIELDS). En vision Globale les montants sont
+// des sommes Owner+Opti'lex, lecture seule (on n'édite pas une somme).
+//
 // Layout (gauche → droite, ordre figé) :
-//   1.  Numéro client                              (read-only, mono)
-//   2.  Nom client + entreprise                    (read-only, hover → OUVRIR)
-//   3.  État                                       (état du board Owner/Opti'Lex,
-//                                                   picker profil optilex — cf.
-//                                                   components/BoardEtatCell.jsx.
-//                                                   Depuis 2026-08-18 ; l'ancien
-//                                                   dropdown `clients.etat` et la
-//                                                   colonne « État détail » sont
-//                                                   supprimés — PATCH etat mort
-//                                                   côté backend, vérité = board)
-//   4.  RDV lancement                              (read-only date)
-//   5.  RDV onboarding                             (read-only date)
-//   6.  Modalité de paiement                       (dropdown 4 valeurs)
-//   7.  Prélèvement automatisé                     (dropdown 7 valeurs)
-//   8.  Montant Attendu Owner                      (read-only EUR)
-//   9.  Montant Attendu Opti'lex                   (read-only EUR)
-//  10.  Montant Récupéré Owner                     (modifiable EUR)
-//  11.  Montant Récupéré Opti'lex                  (modifiable EUR)
-//  12.  Retard de paiement                         (pill rouge, somme courant)
-//  13.  Retard ... mois précédents Owner           (pill rouge cumul)
-//  14.  Retard ... mois précédents Opti'lex        (pill rouge cumul)
-//  15.  Montant récupéré sur créances ... Owner    (modifiable EUR)
-//  16.  Montant récupéré sur créances ... Opti'lex (modifiable EUR)
-//  17.  Check Owner                                (dropdown PSP, pill verte)
-//  18.  Check Opti'lex                             (dropdown PSP, pill verte)
+//   1.  Numéro client                    (read-only, mono, sticky)
+//   2.  Nom client + entreprise          (read-only, hover → OUVRIR, sticky)
+//   3.  État                             (état du board Owner/Opti'Lex, sticky,
+//                                         picker profil optilex — cf.
+//                                         components/BoardEtatCell.jsx.
+//                                         Depuis 2026-08-18 ; vérité = board)
+//   4.  Modalités                        (chip N×/M/A + pastilles O/X — cf.
+//                                         components/ModalitesCell.jsx, fusion
+//                                         des ex-colonnes Mode + Modalité +
+//                                         Prélèvement)
+//   5.  Montant Attendu                  (read-only EUR, entité active)
+//   6.  Montant Récupéré                 (modifiable EUR sauf vision Globale)
+//   7.  Retard ... mois précédents       (pill rouge cumul, entité active)
+//   8.  Montant récupéré sur créances    (modifiable EUR sauf vision Globale)
+//   9.  Check                            (dropdown PSP — absent en Globale)
+//  10.  Date paiement                    (date — absente en Globale)
+//
+// Colonnes retirées phase 2 : « Retard global » (somme courante Owner+Opti —
+// la donnée reste calculée pour les vues-filtres d'index.jsx) et « Mode »
+// (absorbée par la chip Modalités).
 //
 // Notion styling :
 //   - Row height 44px (aéré, lisibilité finance team)
@@ -54,22 +55,18 @@ import { Virtuoso } from 'react-virtuoso';
 import { motion } from 'framer-motion';
 import {
   GripVertical, Plus, Type, Hash, Calendar, Tag, CircleDot, AlignLeft,
-  Square, Repeat, Edit3, MessageSquare, Check,
+  Square, Edit3, MessageSquare, Check,
   EyeOff, Eye, Columns3, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 
 import {
   PSP_OPTIONS,
-  PAYMENT_SPECIFICITIES,
-  AUTO_DEBIT_OPTIONS,
   PSP_COLORS,
   PSP_FALLBACK,
-  AUTO_DEBIT_COLORS,
-  AUTO_DEBIT_FALLBACK,
-  PAYMENT_SPECIFICITY_COLORS,
-  PAYMENT_SPECIFICITY_FALLBACK,
   COLUMN_LABELS,
-  COMMENTABLE_FIELDS,
+  SCOPED_COMMENT_FIELDS,
+  SCOPE_FIELDS,
+  stripEntitySuffix,
   formatEUR,
   formatDateFR,
   parseDateFR,
@@ -78,6 +75,7 @@ import {
 } from './constants.js';
 import { EditableNumber, EditableSelect, EditableDate } from './EditableCell.jsx';
 import BoardEtatCell from './components/BoardEtatCell.jsx';
+import ModalitesCell from './components/ModalitesCell.jsx';
 import CommentPopup from './CommentPopup.jsx';
 import apiClient from '../../services/apiClient.js';
 
@@ -108,60 +106,65 @@ const CELL_PAD_X = 12;
 
 // ── Column layout ─────────────────────────────────────────────────────────
 //
-// Format : { w, labelKey, kind, sticky?, splitVisible?, align, heavyRight? }
-//   - labelKey : clé dans COLUMN_LABELS (source de vérité du vocabulaire)
+// Format : { w, fullLabel, kind, sticky?, splitVisible?, align, heavyRight? }
+//   - fullLabel : libellé métier complet (tooltip + liste colonnes masquées).
+//     Colonnes scope-dépendantes : libellé sacré SANS le suffixe d'entité
+//     (stripEntitySuffix) — l'entité active est portée par le header de groupe.
 //   - kind     : 'text' | 'amount' | 'date' | 'select' | 'state'
 //   - sticky   : col épinglée à gauche (ne scrolle pas horizontalement)
 //   - splitVisible : visible quand DetailPanel ouvert
-//   - heavyRight : borderRight 2px #c7c7c2 (séparateur Owner|Opti'lex)
+//   - heavyRight : borderRight 3px (séparateur de blocs)
 //
-// Colonnes réorganisées 2026-05-11 par blocs Owner / Opti'lex pour group headers
-// (avant : ordre alterné Owner/Opti — pas lisible quand on voit "Montant Attendu" 2x).
-// `group` : identité | statut | modalites | retard | owner | optilex
-// `shortLabel` : label compact affiché dans le sub-header (le label complet du
-// vocabulaire métier reste dans COLUMN_LABELS, accessible via tooltip + DetailPanel)
-const COLS_FULL = {
-  numero:               { w: 85,  group: 'identite',  shortLabel: 'N° client',    labelKey: 'numero',               kind: 'text',   sticky: true,  splitVisible: true,  align: 'center', editable: false, hideKindIcon: true },
-  societe:              { w: 240, group: 'identite',  shortLabel: 'Nom + entreprise', labelKey: 'societe',          kind: 'text',   sticky: true,  splitVisible: true,  align: 'left',  editable: false },
-  // w 190 (au lieu de 130) : les badges board (« En cours de résiliation »…)
-  // sont plus longs que les anciens labels snake_case.
-  etat:                 { w: 190, group: 'statut',    shortLabel: 'État',          labelKey: 'etat',                 kind: 'state',  sticky: true,  splitVisible: true,  align: 'left',  editable: true,  heavyRight: true },
-  paymentMode:          { w: 50,  group: 'modalites', shortLabel: 'Mode',          labelKey: 'paymentMode',          kind: 'recurrence', sticky: false, splitVisible: false, align: 'center', editable: false, headerIconOnly: true },
-  paymentSpec:          { w: 130, group: 'modalites', shortLabel: 'Modalité',      labelKey: 'paymentSpec',          kind: 'select', sticky: false, splitVisible: false, align: 'left',  editable: true  },
-  autoDebit:            { w: 160, group: 'modalites', shortLabel: 'Prélèvement',   labelKey: 'autoDebit',            kind: 'select', sticky: false, splitVisible: false, align: 'center', editable: true  },
-  overdueCurrent:       { w: 145, group: 'retard',    shortLabel: 'Retard global', labelKey: 'overdueCurrent', kind: 'amount', sticky: false, splitVisible: true,  align: 'right', editable: false, heavyRight: true },
-  // ── OWNER block ─────────────────────────────────────────────────────────
-  expectedOwner:        { w: 115, group: 'owner',     shortLabel: 'Attendu',          labelKey: 'expectedOwner',        kind: 'amount', sticky: false, splitVisible: true,  align: 'right', editable: false },
-  receivedOwner:        { w: 185, group: 'owner',     shortLabel: 'Récupéré',         labelKey: 'receivedOwner',        kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: true  },
-  overdueOwnerCum:      { w: 130, group: 'owner',     shortLabel: 'Retard antérieur', labelKey: 'overdueOwnerCum',      kind: 'amount', sticky: false, splitVisible: false, align: 'right', editable: false },
-  receivedOverdueOwner: { w: 185, group: 'owner',     shortLabel: 'Récupéré antérieur', labelKey: 'receivedOverdueOwner', kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: true  },
-  pspOwner:             { w: 110, group: 'owner',     shortLabel: 'Check',            labelKey: 'pspOwner',             kind: 'select', sticky: false, splitVisible: false, align: 'left',  editable: true  },
-  payDateOwner:         { w: 115, group: 'owner',     shortLabel: 'Date paie.',       labelKey: 'payDateOwner',         kind: 'date',   sticky: false, splitVisible: false, align: 'center', editable: true, heavyRight: true },
-  // ── OPTI'LEX block ──────────────────────────────────────────────────────
-  expectedOptilex:      { w: 115, group: 'optilex',   shortLabel: 'Attendu',          labelKey: 'expectedOptilex',      kind: 'amount', sticky: false, splitVisible: true,  align: 'right', editable: false },
-  receivedOptilex:      { w: 185, group: 'optilex',   shortLabel: 'Récupéré',         labelKey: 'receivedOptilex',      kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: true  },
-  overdueOptilexCum:    { w: 130, group: 'optilex',   shortLabel: 'Retard antérieur', labelKey: 'overdueOptilexCum',    kind: 'amount', sticky: false, splitVisible: false, align: 'right', editable: false },
-  receivedOverdueOpti:  { w: 185, group: 'optilex',   shortLabel: 'Récupéré antérieur', labelKey: 'receivedOverdueOpti', kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: true  },
-  pspOptilex:           { w: 110, group: 'optilex',   shortLabel: 'Check',            labelKey: 'pspOptilex',           kind: 'select', sticky: false, splitVisible: false, align: 'left',  editable: true  },
-  payDateOptilex:       { w: 115, group: 'optilex',   shortLabel: 'Date paie.',       labelKey: 'payDateOptilex',       kind: 'date',   sticky: false, splitVisible: false, align: 'center', editable: true },
-};
+// Phase 2 (2026-08-18) : les colonnes sont construites par VISION (`scope`).
+// Un seul bloc entité (champs Owner OU Opti'lex OU sommes en Globale) au lieu
+// des deux blocs historiques. Largeurs resserrées (brief : largeur utile).
+//
+// Champs backend par vision : `SCOPE_FIELDS` importé de constants.js
+// (source unique partagée avec index.jsx et DetailPanel depuis la phase 3).
+
+function buildCols(scope) {
+  const isGlobal = scope === 'global';
+  const entityGroup = `entity_${scope}`;
+  return {
+    numero:   { w: 85,  group: 'identite',  shortLabel: 'N° client',        fullLabel: COLUMN_LABELS.numero,  kind: 'text',   sticky: true,  splitVisible: true,  align: 'center', editable: false, hideKindIcon: true },
+    societe:  { w: 230, group: 'identite',  shortLabel: 'Nom + entreprise', fullLabel: COLUMN_LABELS.societe, kind: 'text',   sticky: true,  splitVisible: true,  align: 'left',   editable: false },
+    // w 190 : les badges board (« En cours de résiliation »…) sont longs.
+    etat:     { w: 190, group: 'statut',    shortLabel: 'État',             fullLabel: COLUMN_LABELS.etat,    kind: 'state',  sticky: true,  splitVisible: true,  align: 'left',   editable: true,  heavyRight: true },
+    // Colonne compacte fusionnant Mode + Modalité + Prélèvement (chip icône
+    // + mini-pills OW/OL — w 160 pour loger chip 3× + 2 pills à glyphe).
+    modalites:       { w: 160, group: 'modalites',   shortLabel: 'Modalités',          fullLabel: COLUMN_LABELS.modalites,                                kind: 'select', sticky: false, splitVisible: false, align: 'left',   editable: true, heavyRight: true },
+    // ── Bloc entité (Owner / Opti'lex / Global selon la vision) ───────────
+    expected:        { w: 110, group: entityGroup,   shortLabel: 'Attendu',            fullLabel: stripEntitySuffix(COLUMN_LABELS.expectedOwner),         kind: 'amount', sticky: false, splitVisible: true,  align: 'right',  editable: false },
+    received:        { w: 150, group: entityGroup,   shortLabel: 'Récupéré',           fullLabel: stripEntitySuffix(COLUMN_LABELS.receivedOwner),         kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: !isGlobal },
+    overdueCum:      { w: 125, group: entityGroup,   shortLabel: 'Retard antérieur',   fullLabel: stripEntitySuffix(COLUMN_LABELS.overdueOwnerCum),       kind: 'amount', sticky: false, splitVisible: false, align: 'right',  editable: false },
+    receivedOverdue: { w: 150, group: entityGroup,   shortLabel: 'Récupéré antérieur', fullLabel: stripEntitySuffix(COLUMN_LABELS.receivedOverdueOwner),  kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: !isGlobal },
+    // Check / Date paiement : par entité uniquement — pas de somme possible,
+    // absentes en vision Globale.
+    ...(isGlobal ? {} : {
+      psp:           { w: 100, group: entityGroup,   shortLabel: 'Check',              fullLabel: stripEntitySuffix(COLUMN_LABELS.pspOwner),              kind: 'select', sticky: false, splitVisible: false, align: 'left',   editable: true },
+      payDate:       { w: 110, group: entityGroup,   shortLabel: 'Date paie.',         fullLabel: stripEntitySuffix(COLUMN_LABELS.payDateOwner),          kind: 'date',   sticky: false, splitVisible: false, align: 'center', editable: true },
+    }),
+  };
+}
 
 // Group headers metadata — palette Notion light mode authentique
 // Option A 2026-05-11 : pas de color band sur cells (cellBg = null partout),
 // seul le group header est coloré. Cells restent blanches sauf status overdue.
 const GROUPS = {
-  identite:  { label: '',           cellBg: null, headerBg: '#ffffff' },
-  statut:    { label: '',           cellBg: null, headerBg: '#ffffff' },
-  modalites: { label: 'Modalités',  cellBg: null, headerBg: '#F1F1EF' }, // Notion gray
-  retard:    { label: 'Retard',     cellBg: null, headerBg: '#F1F1EF' }, // Notion gray
-  owner:     { label: 'Owner',      cellBg: null, headerBg: '#E9F3F7' }, // Notion blue light
-  optilex:   { label: "Opti'lex",   cellBg: null, headerBg: '#F8ECDF' }, // Notion orange light
+  identite:       { label: '',           cellBg: null, headerBg: '#ffffff' },
+  statut:         { label: '',           cellBg: null, headerBg: '#ffffff' },
+  modalites:      { label: 'Modalités',  cellBg: null, headerBg: '#F1F1EF' }, // Notion gray
+  entity_owner:   { label: 'Owner',      cellBg: null, headerBg: '#E9F3F7' }, // Notion blue light
+  entity_optilex: { label: "Opti'lex",   cellBg: null, headerBg: '#F8ECDF' }, // Notion orange light
+  entity_global:  { label: 'Global',     cellBg: null, headerBg: '#EEF3ED' }, // Notion green light
 };
 
-const COL_KEYS_FULL = Object.keys(COLS_FULL);
+// Référence statique (vision owner = jeu de clés complet) pour les lookups
+// hors rendu : sticky keys, labels des colonnes masquées, filtrage localStorage.
+const COLS_BASE = buildCols('owner');
 
 // Sticky columns can never be hidden (N° client, Nom + entreprise, Etat).
-const STICKY_KEYS = new Set(COL_KEYS_FULL.filter((k) => COLS_FULL[k].sticky));
+const STICKY_KEYS = new Set(Object.keys(COLS_BASE).filter((k) => COLS_BASE[k].sticky));
 
 // localStorage key for hidden columns persistence.
 const HIDDEN_COLS_LS_KEY = 'tsf-hidden-cols';
@@ -175,20 +178,21 @@ function HeaderTypeIcon({ kind }) {
     case 'date':       return <Calendar {...props} />;
     case 'select':     return <Tag {...props} />;
     case 'state':      return <CircleDot {...props} />;
-    case 'recurrence': return <Repeat {...props} />;
     default:           return <AlignLeft {...props} />;
   }
 }
 
 const GUTTER = 0; // Retiré 2026-05-11 : drag handle pas branché, créait un espace inutile à gauche de N°
 
-// ── Util : compute derived col config based on splitActive ─────────────────
-function useColumnConfig(splitActive) {
+// ── Util : compute derived col config based on splitActive + scope ─────────
+function useColumnConfig(splitActive, scope) {
   return useMemo(() => {
+    const colsForScope = buildCols(scope);
+    const allScopeKeys = Object.keys(colsForScope);
     const keys = splitActive
-      ? COL_KEYS_FULL.filter((k) => COLS_FULL[k].splitVisible)
-      : COL_KEYS_FULL;
-    const cols = keys.reduce((acc, k) => { acc[k] = COLS_FULL[k]; return acc; }, {});
+      ? allScopeKeys.filter((k) => colsForScope[k].splitVisible)
+      : allScopeKeys;
+    const cols = keys.reduce((acc, k) => { acc[k] = colsForScope[k]; return acc; }, {});
     const stickyKeys = keys.filter((k) => cols[k].sticky);
     const stickyLefts = stickyKeys.reduce((acc, k, i) => {
       acc[k] = i === 0 ? 0 : acc[stickyKeys[i - 1]] + cols[stickyKeys[i - 1]].w;
@@ -196,7 +200,7 @@ function useColumnConfig(splitActive) {
     }, {});
     const totalWidth = keys.reduce((acc, k) => acc + cols[k].w, 0);
     return { keys, cols, stickyKeys, stickyLefts, totalWidth };
-  }, [splitActive]);
+  }, [splitActive, scope]);
 }
 
 // ── Header (Notion-style label band) ──────────────────────────────────────
@@ -325,7 +329,7 @@ function Header({ keys, cols, stickyLefts, hiddenCols, onHideCol, onShowCol, all
             <div
               key={k}
               className="tsf-subheader-cell"
-              title={COLUMN_LABELS[c.labelKey]}
+              title={c.fullLabel}
               style={{
                 width: isCollapsing ? 0 : c.w,
                 flex: isCollapsing ? '0 0 0px' : `0 0 ${c.w}px`,
@@ -367,7 +371,7 @@ function Header({ keys, cols, stickyLefts, hiddenCols, onHideCol, onShowCol, all
                   WebkitLineClamp: 2,
                   WebkitBoxOrient: 'vertical',
                 }}>
-                  {c.shortLabel || COLUMN_LABELS[c.labelKey]}
+                  {c.shortLabel || c.fullLabel}
                 </span>
               )}
               {/* Hide column button — invisible by default, appears on hover */}
@@ -375,7 +379,7 @@ function Header({ keys, cols, stickyLefts, hiddenCols, onHideCol, onShowCol, all
                 <button
                   type="button"
                   className="tsf-hide-col-btn"
-                  title={`Masquer "${c.shortLabel || COLUMN_LABELS[c.labelKey]}"`}
+                  title={`Masquer "${c.shortLabel || c.fullLabel}"`}
                   onClick={(e) => {
                     e.stopPropagation();
                     onHideCol?.(k);
@@ -477,9 +481,9 @@ function HiddenColsBar({ hiddenCols, onShowCol, onShowAll }) {
             Colonnes masquées
           </div>
           {[...hiddenCols].map((colKey) => {
-            const colDef = COLS_FULL[colKey];
+            const colDef = COLS_BASE[colKey];
             if (!colDef) return null;
-            const label = colDef.shortLabel || COLUMN_LABELS[colDef.labelKey] || colKey;
+            const label = colDef.shortLabel || colDef.fullLabel || colKey;
             const groupLabel = GROUPS[colDef.group]?.label;
             return (
               <button
@@ -517,15 +521,19 @@ const OVERDUE_STATUS_COLORS = {
   yellow: { bg: '#FAF3DD', hover: '#F2E6C2' }, // Notion yellow (retard courant seul)
 };
 
-function getOverdueStatus(row) {
+// Scope-aware depuis la phase 2 : le signal couleur de la row suit la vision
+// active (en vision Owner, un retard purement Opti'lex ne teinte pas la row —
+// cohérent avec « le tableau doit être visuel et simple » du brief).
+function getOverdueStatus(row, scope = 'global') {
   const overdueCurrent =
-    toNumber(row.overdue_owner_current_month) +
-    toNumber(row.overdue_optilex_current_month);
+    (scope === 'optilex' ? 0 : toNumber(row.overdue_owner_current_month)) +
+    (scope === 'owner' ? 0 : toNumber(row.overdue_optilex_current_month));
   const overdueCumul =
-    toNumber(row.overdue_owner_cumulative) +
-    toNumber(row.overdue_optilex_cumulative);
+    (scope === 'optilex' ? 0 : toNumber(row.overdue_owner_cumulative)) +
+    (scope === 'owner' ? 0 : toNumber(row.overdue_optilex_cumulative));
   const received =
-    toNumber(row.received_owner) + toNumber(row.received_optilex_ttc);
+    (scope === 'optilex' ? 0 : toNumber(row.received_owner)) +
+    (scope === 'owner' ? 0 : toNumber(row.received_optilex_ttc));
 
   // ORANGE (priorité haute) : rdv_onboarding > +1 jour ET aucun paiement reçu cette period
   const onboardingDate = parseDateFR(row.client?.rdv_onboarding);
@@ -711,34 +719,32 @@ const RowRenderer = React.memo(function RowRenderer({
   rowCommentCounts,   // { [colKey]: number } — counts pour cette row, MVP option C
   onOpenCommentPopup, // (colKey, rect) — ouverture popup au niveau TableView
   collapsingCol,
+  scope,              // vision active : 'owner' | 'optilex' | 'global'
 }) {
   const [hover, setHover] = useState(false);
 
   const patch = useCallback((field) => (value) => onPatchRow(row.id, { [field]: value }), [row.id, onPatchRow]);
 
-  // Numerical values
-  const expectedOwner    = toNumber(row.expected_owner);
-  const expectedOptilex  = toNumber(row.expected_optilex_ttc);
-  const receivedOwner    = toNumber(row.received_owner);
-  const receivedOptilex  = toNumber(row.received_optilex_ttc);
-  const overdueOwnerCM   = toNumber(row.overdue_owner_current_month) || 0;
-  const overdueOptilexCM = toNumber(row.overdue_optilex_current_month) || 0;
-  const overdueOwnerCum  = toNumber(row.overdue_owner_cumulative) || 0;
-  const overdueOptilexCum = toNumber(row.overdue_optilex_cumulative) || 0;
-  const recoveredOverdueOwner    = toNumber(row.received_overdue_owner);
-  const recoveredOverdueOptilex  = toNumber(row.received_overdue_optilex_ttc);
-  const overdueCurrentTotal = overdueOwnerCM + overdueOptilexCM;
+  // Valeurs numériques de l'entité active (sommes Owner+Opti'lex en Globale).
+  const isGlobal = scope === 'global';
+  const fields = isGlobal ? null : SCOPE_FIELDS[scope];
+  const sumOrField = (ownerField, optilexField, scopedField) => (
+    isGlobal
+      ? (toNumber(row[ownerField]) || 0) + (toNumber(row[optilexField]) || 0)
+      : toNumber(row[scopedField])
+  );
+  const expected         = sumOrField('expected_owner', 'expected_optilex_ttc', fields?.expected);
+  const received         = sumOrField('received_owner', 'received_optilex_ttc', fields?.received);
+  const overdueCum       = sumOrField('overdue_owner_cumulative', 'overdue_optilex_cumulative', fields?.overdueCum) || 0;
+  const recoveredOverdue = sumOrField('received_overdue_owner', 'received_overdue_optilex_ttc', fields?.receivedOverdue);
 
   // Delta Récupéré vs Attendu — pill verte si surplus, pill orange si manquement.
-  // Brief dev 2026-05-12 : orange (pas rouge) pour différencier des vrais retards
-  // de la colonne Retard mois courant. Pill cachée si reçu=0 (cell vide).
-  const deltaOwner          = receivedOwner > 0          ? receivedOwner - expectedOwner            : 0;
-  const deltaOptilex        = receivedOptilex > 0        ? receivedOptilex - expectedOptilex        : 0;
-  const deltaOverdueOwner   = recoveredOverdueOwner > 0  ? recoveredOverdueOwner - overdueOwnerCum  : 0;
-  const deltaOverdueOptilex = recoveredOverdueOptilex > 0 ? recoveredOverdueOptilex - overdueOptilexCum : 0;
+  // Brief dev 2026-05-12 : orange (pas rouge) pour différencier des vrais retards.
+  // Pill cachée si reçu=0 (cell vide).
+  const deltaOverdue = recoveredOverdue > 0 ? recoveredOverdue - overdueCum : 0;
 
-  // Overdue status (color coding Notion-soft, cf. brief 2026-05-11)
-  const overdueStatus = getOverdueStatus(row);
+  // Overdue status (color coding Notion-soft, cf. brief 2026-05-11) — suit la vision.
+  const overdueStatus = getOverdueStatus(row, scope);
   const statusColors = overdueStatus ? OVERDUE_STATUS_COLORS[overdueStatus] : null;
 
   const rowBg = isActive
@@ -749,7 +755,7 @@ const RowRenderer = React.memo(function RowRenderer({
 
   // Cell wrapper bound to current row state (click → select cell, pas ouvrir row)
   const C = useCallback((k, children, extraStyle) => {
-    const commentable = !!COMMENTABLE_FIELDS[k];
+    const commentable = !!SCOPED_COMMENT_FIELDS[scope]?.[k];
     const commentCount = commentable ? (rowCommentCounts?.[k] || 0) : 0;
     return (
       <Cell
@@ -771,7 +777,7 @@ const RowRenderer = React.memo(function RowRenderer({
         {children}
       </Cell>
     );
-  }, [cols, stickyLefts, hover, isActive, rowBg, overdueStatus, selectedColKey, onSelectCell, row.id, rowCommentCounts, onOpenCommentPopup, collapsingCol]);
+  }, [cols, stickyLefts, hover, isActive, rowBg, overdueStatus, selectedColKey, onSelectCell, row.id, rowCommentCounts, onOpenCommentPopup, collapsingCol, scope]);
 
   return (
     <div
@@ -854,111 +860,87 @@ const RowRenderer = React.memo(function RowRenderer({
         />
       ))}
 
-      {/* Modalités — Mode de paiement (badge A = Annuel / M = Mensuel, read-only) */}
-      {keys.includes('paymentMode') && C('paymentMode', (
-        row.payment_mode === 'YEARLY' ? (
-          <span title="Annuel" style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            minWidth: 22, height: 18, padding: '0 6px',
-            borderRadius: 4,
-            background: '#EEF3ED', // Notion green light
-            color: '#448361',       // Notion green text
-            fontSize: 11, fontWeight: 600,
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-          }}>A</span>
-        ) : row.payment_mode === 'MONTHLY' ? (
-          <span title="Mensuel" style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            minWidth: 22, height: 18, padding: '0 6px',
-            borderRadius: 4,
-            background: '#E9F3F7', // Notion blue light
-            color: '#337EA9',       // Notion blue text
-            fontSize: 11, fontWeight: 600,
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-          }}>M</span>
-        ) : <EmptyCell />
-      ))}
-
-      {/* Modalités — Modalité de paiement */}
-      {keys.includes('paymentSpec') && C('paymentSpec', (
-        <EditableSelect
-          value={row.payment_specificity}
-          options={PAYMENT_SPECIFICITIES}
-          onCommit={patch('payment_specificity')}
-          pillColors={PAYMENT_SPECIFICITY_COLORS}
-          pillFallback={PAYMENT_SPECIFICITY_FALLBACK}
-          notionSolid
-          placeholderItalic
-          placeholder="Modalité"
+      {/* Modalités — chip N×/M/A + pastilles prélèvement O/X (colonne fusionnée) */}
+      {keys.includes('modalites') && C('modalites', (
+        <ModalitesCell
+          paymentSpecificity={row.payment_specificity}
+          // Chaîne de fallback (2026-08-21) : mode de la period → mode
+          // normalisé du client (backend) → `periodicite` du board (libellés
+          // FR « Mensuel/Annuel/Trimestriel », ~27 % des clients) —
+          // ModalitesCell canonicalise via normalizePaymentMode.
+          paymentMode={row.payment_mode || row.client?.payment_mode || boardRow?.periodicite}
+          autoDebit={row.auto_debit}
+          onCommitSpec={patch('payment_specificity')}
+          onCommitAutoDebit={patch('auto_debit')}
         />
       ))}
 
-      {/* Modalités — Prélèvement automatisé */}
-      {keys.includes('autoDebit') && C('autoDebit', (
-        <EditableSelect
-          value={row.auto_debit}
-          options={AUTO_DEBIT_OPTIONS}
-          onCommit={patch('auto_debit')}
-          pillColors={AUTO_DEBIT_COLORS}
-          pillFallback={AUTO_DEBIT_FALLBACK}
-          notionSolid
-          placeholderItalic
-          truncate
-          placeholder="Prélèvement"
-        />
+      {/* ── Bloc entité (Owner / Opti'lex / sommes en Globale) ──────────── */}
+
+      {/* Montant Attendu (dynamique : reste à percevoir) */}
+      {keys.includes('expected') && C('expected', (
+        <RemainingAmount expected={expected} received={received} />
       ))}
 
-      {/* Retard — Retard de paiement mois courant (somme owner+optilex) */}
-      {keys.includes('overdueCurrent') && C('overdueCurrent', (
-        <OverduePill amount={overdueCurrentTotal} />
-      ))}
-
-      {/* ── OWNER block ───────────────────────────────────────────────── */}
-
-      {/* Owner — Montant Attendu (dynamique : reste à percevoir) */}
-      {keys.includes('expectedOwner') && C('expectedOwner', (
-        <RemainingAmount expected={expectedOwner} received={receivedOwner} />
-      ))}
-
-      {/* Owner — Montant Récupéré (simple vert + pill verte si surplus) */}
-      {keys.includes('receivedOwner') && C('receivedOwner', (
-        <AmountWithDelta delta={Math.max(0, receivedOwner - expectedOwner)}>
-          <EditableNumber
-            value={receivedOwner}
-            onCommit={patch('received_owner')}
-            align="center"
-            placeholderItalic
-            valueColor='#0f7b6c'
-            valueBold
-          />
+      {/* Montant Récupéré (vert + pill verte si surplus). Vision entité =
+          éditable (écrit le champ de l'entité active) ; Globale = somme
+          lecture seule. */}
+      {keys.includes('received') && C('received', (
+        <AmountWithDelta delta={Math.max(0, received - expected)}>
+          {isGlobal ? (
+            <RecoveredAmount value={received} />
+          ) : (
+            <EditableNumber
+              value={received}
+              onCommit={patch(fields.received)}
+              align="center"
+              placeholderItalic
+              valueColor='#0f7b6c'
+              valueBold
+            />
+          )}
         </AmountWithDelta>
       ))}
 
-      {/* Owner — Retard sur les mois précédents (cumul) */}
-      {keys.includes('overdueOwnerCum') && C('overdueOwnerCum', (
-        <OverduePill amount={overdueOwnerCum} />
+      {/* Retard sur les mois précédents (cumul, entité active) */}
+      {keys.includes('overdueCum') && C('overdueCum', (
+        <OverduePill amount={overdueCum} />
       ))}
 
-      {/* Owner — Récupéré sur créances passées */}
-      {keys.includes('receivedOverdueOwner') && C('receivedOverdueOwner', (
-        <AmountWithDelta delta={deltaOverdueOwner}>
-          <EditableNumber
-            value={recoveredOverdueOwner}
-            onCommit={patch('received_overdue_owner')}
-            align="center"
-            placeholderItalic
-            valueColor={getReceivedColor(recoveredOverdueOwner, overdueOwnerCum)}
-            valueBold
-          />
+      {/* Récupéré sur créances passées */}
+      {keys.includes('receivedOverdue') && C('receivedOverdue', (
+        <AmountWithDelta delta={deltaOverdue}>
+          {isGlobal ? (
+            (recoveredOverdue === null || recoveredOverdue === 0) ? <EmptyCell /> : (
+              <AnimatedAmount
+                value={recoveredOverdue}
+                style={{
+                  fontSize: CELL_FONT_SIZE,
+                  fontWeight: 700,
+                  color: getReceivedColor(recoveredOverdue, overdueCum) || N.text,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              />
+            )
+          ) : (
+            <EditableNumber
+              value={recoveredOverdue}
+              onCommit={patch(fields.receivedOverdue)}
+              align="center"
+              placeholderItalic
+              valueColor={getReceivedColor(recoveredOverdue, overdueCum)}
+              valueBold
+            />
+          )}
         </AmountWithDelta>
       ))}
 
-      {/* Owner — Check PSP */}
-      {keys.includes('pspOwner') && C('pspOwner', (
+      {/* Check PSP (entité active — absent en vision Globale) */}
+      {keys.includes('psp') && !isGlobal && C('psp', (
         <EditableSelect
-          value={row.psp_owner}
+          value={row[fields.psp]}
           options={PSP_OPTIONS}
-          onCommit={patch('psp_owner')}
+          onCommit={patch(fields.psp)}
           pillColors={PSP_COLORS}
           pillFallback={PSP_FALLBACK}
           notionSolid
@@ -967,73 +949,11 @@ const RowRenderer = React.memo(function RowRenderer({
         />
       ))}
 
-      {/* Owner — Date paiement */}
-      {keys.includes('payDateOwner') && C('payDateOwner', (
+      {/* Date paiement (entité active — absente en vision Globale) */}
+      {keys.includes('payDate') && !isGlobal && C('payDate', (
         <EditableDate
-          value={row.payment_date_owner}
-          onCommit={patch('payment_date_owner')}
-        />
-      ))}
-
-      {/* ── OPTI'LEX block ─────────────────────────────────────────────── */}
-
-      {/* Opti'lex — Montant Attendu (dynamique : reste à percevoir) */}
-      {keys.includes('expectedOptilex') && C('expectedOptilex', (
-        <RemainingAmount expected={expectedOptilex} received={receivedOptilex} />
-      ))}
-
-      {/* Opti'lex — Montant Récupéré (simple vert + pill verte si surplus) */}
-      {keys.includes('receivedOptilex') && C('receivedOptilex', (
-        <AmountWithDelta delta={Math.max(0, receivedOptilex - expectedOptilex)}>
-          <EditableNumber
-            value={receivedOptilex}
-            onCommit={patch('received_optilex_ttc')}
-            align="center"
-            placeholderItalic
-            valueColor='#0f7b6c'
-            valueBold
-          />
-        </AmountWithDelta>
-      ))}
-
-      {/* Opti'lex — Retard sur les mois précédents (cumul) */}
-      {keys.includes('overdueOptilexCum') && C('overdueOptilexCum', (
-        <OverduePill amount={overdueOptilexCum} />
-      ))}
-
-      {/* Opti'lex — Récupéré sur créances passées */}
-      {keys.includes('receivedOverdueOpti') && C('receivedOverdueOpti', (
-        <AmountWithDelta delta={deltaOverdueOptilex}>
-          <EditableNumber
-            value={recoveredOverdueOptilex}
-            onCommit={patch('received_overdue_optilex_ttc')}
-            align="center"
-            placeholderItalic
-            valueColor={getReceivedColor(recoveredOverdueOptilex, overdueOptilexCum)}
-            valueBold
-          />
-        </AmountWithDelta>
-      ))}
-
-      {/* Opti'lex — Check PSP */}
-      {keys.includes('pspOptilex') && C('pspOptilex', (
-        <EditableSelect
-          value={row.psp_optilex}
-          options={PSP_OPTIONS}
-          onCommit={patch('psp_optilex')}
-          pillColors={PSP_COLORS}
-          pillFallback={PSP_FALLBACK}
-          notionSolid
-          placeholderItalic
-          placeholder="Check"
-        />
-      ))}
-
-      {/* Opti'lex — Date paiement */}
-      {keys.includes('payDateOptilex') && C('payDateOptilex', (
-        <EditableDate
-          value={row.payment_date_optilex}
-          onCommit={patch('payment_date_optilex')}
+          value={row[fields.payDate]}
+          onCommit={patch(fields.payDate)}
         />
       ))}
     </div>
@@ -1353,13 +1273,14 @@ export default function TableView({
   loading,
   searchQuery,
   splitActive = false,
+  scope = 'global',    // vision active : 'owner' | 'optilex' | 'global'
   onShowToast,         // (msg, type) → for comment errors (optional)
   onHiddenColsChange,  // (hiddenCols: Set, labels: {}) → notify parent of hidden cols state
   showAllColsRef,      // ref whose .current = () => show all cols (called from parent)
   showColRef,          // ref whose .current = (key) => show one col (called from parent)
 }) {
   const [scrollParent, setScrollParent] = useState(null);
-  const { keys: allKeys, cols: allCols } = useColumnConfig(splitActive);
+  const { keys: allKeys, cols: allCols } = useColumnConfig(splitActive, scope);
 
   // ── Hidden columns state ─────────────────────────────────────────────────
   // Persisted in localStorage so the user's column visibility survives page
@@ -1369,8 +1290,9 @@ export default function TableView({
       const stored = localStorage.getItem(HIDDEN_COLS_LS_KEY);
       if (stored) {
         const arr = JSON.parse(stored);
-        // Filter out any stale keys or sticky keys that shouldn't be hidden.
-        return new Set(arr.filter((k) => COLS_FULL[k] && !STICKY_KEYS.has(k)));
+        // Filter out any stale keys (dont les anciennes clés par entité
+        // d'avant la phase 2) or sticky keys that shouldn't be hidden.
+        return new Set(arr.filter((k) => COLS_BASE[k] && !STICKY_KEYS.has(k)));
       }
     } catch { /* ignore corrupted localStorage */ }
     return new Set();
@@ -1409,8 +1331,8 @@ export default function TableView({
   useEffect(() => {
     const labels = {};
     hiddenCols.forEach((k) => {
-      const def = COLS_FULL[k];
-      if (def) labels[k] = def.shortLabel || COLUMN_LABELS[def.labelKey] || k;
+      const def = COLS_BASE[k];
+      if (def) labels[k] = def.shortLabel || def.fullLabel || k;
     });
     onHiddenColsChange?.(hiddenCols, labels);
   }, [hiddenCols, onHiddenColsChange]);
@@ -1545,12 +1467,23 @@ export default function TableView({
         minHeight: 0,
         border: `1px solid ${N.borderSft}`,
         borderRadius: 14,
+        // Le wrapper s'arrête à la dernière colonne au lieu de continuer sur
+        // toute la largeur du viewport (retour dev 2026-08-18 : gouttière
+        // vide + scrollbar détachée du contenu en vision Globale sur écran
+        // large). +12 = 2px de borders + 10px de scrollbar verticale stylée
+        // (webkit classique, réserve de l'espace) pour éviter un overflow
+        // horizontal parasite de 10px quand la liste scrolle verticalement.
+        maxWidth: totalWidth + GUTTER + 12,
       }}
     >
       <div style={{
         width: totalWidth + GUTTER,
         minWidth: totalWidth + GUTTER,
         position: 'relative',
+        // Respiration sous le footer « + Nouvelle ligne » : la dernière row
+        // ne colle plus à la scrollbar horizontale (retour dev : élément gris
+        // chevauchant la dernière ligne près de la scrollbar).
+        paddingBottom: 8,
       }}>
         {/* Sticky header */}
         <div style={{ position: 'sticky', top: 0, zIndex: 20, background: N.pageBg }}>
@@ -1588,6 +1521,7 @@ export default function TableView({
                 onSelectCell={(rowId, colKey) => setSelectedCell({ rowId, colKey })}
                 rowCommentCounts={commentCounts[row.id]}
                 onOpenCommentPopup={handleOpenCommentPopup}
+                scope={scope}
               />
             )}
           />
@@ -1621,7 +1555,7 @@ export default function TableView({
     <CommentPopup
       open={!!commentPopup}
       periodRowId={commentPopup?.rowId || null}
-      fieldName={commentPopup ? COMMENTABLE_FIELDS[commentPopup.colKey] : null}
+      fieldName={commentPopup ? (SCOPED_COMMENT_FIELDS[scope]?.[commentPopup.colKey] || null) : null}
       anchorRect={commentPopup?.anchorRect || null}
       onClose={handleCloseCommentPopup}
       currentUser={currentUser}

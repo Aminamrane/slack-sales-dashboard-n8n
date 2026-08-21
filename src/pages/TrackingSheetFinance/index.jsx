@@ -42,6 +42,9 @@ import '../../index.css';
 
 import TableView, { AnimatedAmount } from './TableView.jsx';
 import DetailPanel from './DetailPanel.jsx';
+// `displayEtat` : règle métier unique de l'état affiché sur le board
+// Owner/Opti'Lex (import read-only — OptilexBoard n'est pas modifié).
+import { displayEtat } from '../OptilexBoard.jsx';
 import {
   ALLOWED_ROLES,
   formatEUR,
@@ -50,6 +53,10 @@ import {
   currentPeriod,
   parseDateFR,
   toNumber,
+  autoDebitPastilles,
+  TERMINATED_BOARD_ETATS,
+  scopedOverdueCurrent,
+  scopedOverdueCum,
 } from './constants.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -95,6 +102,9 @@ const STYLE_BLOCK = `
   .tsf-scroll:hover::-webkit-scrollbar-thumb { background: rgba(55,53,47,0.16); background-clip: padding-box; }
   .tsf-scroll::-webkit-scrollbar-thumb:hover { background: rgba(55,53,47,0.32); background-clip: padding-box; }
   .tsf-scroll::-webkit-scrollbar-track { background: transparent; }
+  /* Coin scrollbar H+V : gris opaque par défaut → carré fantôme qui semble
+     recouvrir la dernière cellule (retour dev 2026-08-18). */
+  .tsf-scroll::-webkit-scrollbar-corner { background: transparent; }
 
   .tsf-side { transition: width 0.22s cubic-bezier(0.4,0,0.2,1); }
   .tsf-side-item { transition: background 0.12s ease; }
@@ -188,6 +198,26 @@ const SIDEBAR_SECTIONS = [
   },
 ];
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Vision (scope) + vues-filtres — phase 2 condensation (2026-08-18).
+// ─────────────────────────────────────────────────────────────────────────────
+const SCOPE_LS_KEY = 'tsf-finance-scope';
+
+// Retard courant / cumulé selon la vision active : helpers factorisés dans
+// constants.js depuis la phase 3 (partagés avec le DetailPanel). Les sommes
+// restent calculées même si la colonne « Retard global » a été retirée du
+// tableau : les vues-filtres en dépendent.
+
+// Vues-filtres (chips au-dessus du tableau). Single-select, « Tous » = défaut.
+const VIEW_FILTERS = [
+  { key: 'all',         label: 'Tous' },
+  { key: 'a_jour',      label: 'À jour' },
+  { key: 'retard_mois', label: 'Retard du mois' },
+  { key: 'creances',    label: 'Créances antérieures' },
+  { key: 'non_auto',    label: 'Non automatisé' },
+  { key: 'resilies',    label: 'Résiliés / Rétractés' },
+];
+
 // Tiny colored "page emblem" — Notion's signature visual cue per item.
 function PageEmblem({ kind, size = 18 }) {
   const map = {
@@ -253,12 +283,82 @@ export default function TrackingSheetFinance() {
   const showColRef = useRef(null);
   const onHiddenColsChange = useCallback((cols, colLabels) => setHiddenColsInfo({ count: cols.size, keys: [...cols], labels: colLabels || {} }), []);
 
-  // Apply business filters to rows (union des filtres : un lead matche s'il
-  // satisfait AU MOINS UN filtre actif).
+  // ── Vision Owner / Opti'lex / Global (phase 2, 2026-08-18) ───────────
+  // finance_team n'a pas accès à la vision Globale ; admin, finance_director
+  // (et ceo en mode embed) ont les trois. Choix persisté en localStorage.
+  const canGlobalScope = useMemo(
+    () => (apiClient.getUser()?.role || null) !== 'finance_team',
+    []
+  );
+  const [scope, setScope] = useState(() => {
+    const canGlobal = (apiClient.getUser()?.role || null) !== 'finance_team';
+    const stored = localStorage.getItem(SCOPE_LS_KEY);
+    if (stored === 'owner' || stored === 'optilex') return stored;
+    if (stored === 'global' && canGlobal) return 'global';
+    return canGlobal ? 'global' : 'owner';
+  });
+  useEffect(() => {
+    try { localStorage.setItem(SCOPE_LS_KEY, scope); } catch { /* quota — silent */ }
+  }, [scope]);
+
+  // ── Board Owner/Opti'Lex : source de vérité des ÉTATS clients ─────────
+  // Déclaré ici (avant les vues-filtres qui en dépendent pour « Résiliés /
+  // Rétractés ») ; le fetch vit plus bas. Map numero_client → row board,
+  // null = pas encore chargé.
+  const [boardMap, setBoardMap] = useState(null);
+
+  // ── Vue-filtre active (chips) — single-select, « Tous » par défaut ────
+  const [viewFilter, setViewFilter] = useState('all');
+
+  // Prédicat d'une vue-filtre pour une row, dans la vision active.
+  const matchesView = useCallback((r, filterKey) => {
+    switch (filterKey) {
+      case 'a_jour':
+        return scopedOverdueCurrent(r, scope) === 0 && scopedOverdueCum(r, scope) === 0;
+      case 'retard_mois':
+        return scopedOverdueCurrent(r, scope) > 0;
+      case 'creances':
+        return scopedOverdueCum(r, scope) > 0;
+      case 'non_auto': {
+        // Pastille rouge du scope actif (les deux rouges en Globale).
+        const p = autoDebitPastilles(r.auto_debit);
+        if (scope === 'owner') return p.owner === 'red';
+        if (scope === 'optilex') return p.optilex === 'red';
+        return p.owner === 'red' && p.optilex === 'red';
+      }
+      case 'resilies': {
+        const numero = r.client?.numero_client;
+        const br = (numero && boardMap) ? boardMap.get(numero) : null;
+        return !!br && TERMINATED_BOARD_ETATS.has(displayEtat(br));
+      }
+      default:
+        return true; // 'all'
+    }
+  }, [scope, boardMap]);
+
+  // Compteur par chip (nb de clients) — sur les rows brutes de la période,
+  // indépendant de la recherche et des autres filtres (le compteur décrit la
+  // vue, pas l'intersection).
+  const viewCounts = useMemo(() => {
+    const counts = {};
+    for (const v of VIEW_FILTERS) {
+      counts[v.key] = v.key === 'all'
+        ? rows.length
+        : rows.filter((r) => matchesView(r, v.key)).length;
+    }
+    return counts;
+  }, [rows, matchesView]);
+
+  // Apply business filters to rows : vue-filtre active (chips) PUIS filtres
+  // dropdown historiques (union : un lead matche s'il satisfait AU MOINS UN
+  // filtre actif). La recherche s'applique en aval dans TableView.
   const filteredRows = useMemo(() => {
-    if (tableFilters.size === 0) return rows;
+    const viewed = viewFilter === 'all'
+      ? rows
+      : rows.filter((r) => matchesView(r, viewFilter));
+    if (tableFilters.size === 0) return viewed;
     // Parser FR/ISO factorisé dans constants.js (`parseDateFR`).
-    return rows.filter((r) => {
+    return viewed.filter((r) => {
       const overdueCurrent = toNumber(r.overdue_owner_current_month) + toNumber(r.overdue_optilex_current_month);
       const overdueCumul = toNumber(r.overdue_owner_cumulative) + toNumber(r.overdue_optilex_cumulative);
       const matchOnboarding = () => {
@@ -272,7 +372,7 @@ export default function TrackingSheetFinance() {
       if (tableFilters.has('overdue_past_only') && overdueCurrent === 0 && overdueCumul > 0) return true;
       return false;
     });
-  }, [rows, tableFilters]);
+  }, [rows, tableFilters, viewFilter, matchesView]);
 
   // Toggle d'un filtre : ajoute si absent, retire si présent
   const toggleTableFilter = useCallback((filterValue) => {
@@ -341,12 +441,11 @@ export default function TrackingSheetFinance() {
     fetchPeriod(period);
   }, [authChecked, period, fetchPeriod]);
 
-  // ── Board Owner/Opti'Lex : source de vérité des ÉTATS clients ─────────
+  // Fetch du board Owner/Opti'Lex (state `boardMap` déclaré plus haut).
   // La colonne « État » du tableau n'édite plus `clients.etat` (champ retiré
   // du PATCH backend) : elle affiche et pose l'état du board via
   // GET /optilex/board + POST /optilex/etat-change. Fetch UNE fois au
   // chargement (pas de polling : la page finance n'est pas un board temps réel).
-  const [boardMap, setBoardMap] = useState(null); // Map numero_client → row board (null = pas encore chargé)
   useEffect(() => {
     if (!authChecked) return;
     let alive = true;
@@ -564,6 +663,17 @@ export default function TrackingSheetFinance() {
             hiddenColsInfo={hiddenColsInfo}
             onShowAllCols={() => showAllColsRef.current?.()}
             onShowCol={(key) => showColRef.current?.(key)}
+            scope={scope}
+            setScope={setScope}
+            canGlobalScope={canGlobalScope}
+          />
+
+          {/* Vues-filtres (chips) — combinables avec la recherche ; les
+              compteurs et calculs de retard suivent la vision active. */}
+          <ViewChips
+            active={viewFilter}
+            onChange={setViewFilter}
+            counts={viewCounts}
           />
 
           {error && (
@@ -585,7 +695,9 @@ export default function TrackingSheetFinance() {
           {/* Table — flex: 1 pour prendre toute la hauteur restante */}
           <AnimatePresence mode="wait">
             <motion.div
-              key={period}
+              // Keyed par période ET vision : changer de vision rejoue le
+              // fade doux (les colonnes changent de champs sous-jacents).
+              key={`${period}:${scope}`}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
@@ -600,6 +712,7 @@ export default function TrackingSheetFinance() {
                 onOpenRow={onOpenRow}
                 activeRowId={panelOpen ? panelRowId : null}
                 splitActive={false}
+                scope={scope}
                 loading={loading}
                 searchQuery={searchQuery}
                 onShowToast={showToast}
@@ -623,6 +736,7 @@ export default function TrackingSheetFinance() {
         onBoardEtatChange={onBoardEtatChange}
         onShowToast={showToast}
         rows={rows}
+        scope={scope}
       />
 
       {/* Toast */}
@@ -1142,6 +1256,138 @@ function KpiInline({ label, value, tone = 'neutral' }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// VIEW CHIPS (vues-filtres au-dessus du tableau — phase 2 2026-08-18)
+// ════════════════════════════════════════════════════════════════════════════
+// Single-select : « Tous » par défaut. Le pill actif glisse d'un chip à
+// l'autre (layoutId framer-motion) — même langage de mouvement que le reste
+// de la page (spring doux, pas de teleport).
+function ViewChips({ active, onChange, counts }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 6,
+      padding: '10px 0 2px',
+      flexWrap: 'wrap',
+    }}>
+      {VIEW_FILTERS.map((v) => {
+        const isActive = active === v.key;
+        const count = counts?.[v.key];
+        return (
+          <button
+            key={v.key}
+            type="button"
+            onClick={() => onChange(v.key)}
+            style={{
+              position: 'relative',
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              height: 28, padding: '0 12px',
+              border: `1px solid ${isActive ? 'transparent' : N.border}`,
+              borderRadius: 999,
+              background: 'transparent',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontSize: 12.5,
+              fontWeight: isActive ? 600 : 500,
+              color: isActive ? '#ffffff' : N.textMuted,
+              transition: 'color 0.18s ease, border-color 0.18s ease',
+              whiteSpace: 'nowrap',
+            }}
+            onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = N.sideHover; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+          >
+            {isActive && (
+              <motion.span
+                layoutId="tsf-view-chip-pill"
+                transition={{ type: 'spring', stiffness: 480, damping: 38 }}
+                style={{
+                  position: 'absolute', inset: -1,
+                  background: N.text,
+                  borderRadius: 999,
+                }}
+              />
+            )}
+            <span style={{ position: 'relative', zIndex: 1 }}>{v.label}</span>
+            {count !== undefined && (
+              <span style={{
+                position: 'relative', zIndex: 1,
+                fontSize: 11, fontWeight: 600,
+                fontVariantNumeric: 'tabular-nums',
+                color: isActive ? 'rgba(255,255,255,0.72)' : N.textFaint,
+              }}>
+                {count}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SCOPE SELECTOR (segmented control Owner / Opti'lex / Global)
+// ════════════════════════════════════════════════════════════════════════════
+// Le thumb blanc glisse entre les segments (layoutId). L'option « Global »
+// n'existe pas pour finance_team (droits gérés dans index — `canGlobal`).
+function ScopeSelector({ scope, setScope, canGlobal }) {
+  const options = [
+    { key: 'owner',   label: 'Owner' },
+    { key: 'optilex', label: "Opti'lex" },
+    ...(canGlobal ? [{ key: 'global', label: 'Global' }] : []),
+  ];
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center',
+      background: '#f1f1ef',
+      border: `1px solid ${N.border}`,
+      borderRadius: 8,
+      padding: 2,
+      gap: 2,
+      marginRight: 8,
+    }}>
+      {options.map((opt) => {
+        const isActive = scope === opt.key;
+        return (
+          <button
+            key={opt.key}
+            type="button"
+            onClick={() => setScope(opt.key)}
+            title={`Vision ${opt.label}`}
+            style={{
+              position: 'relative',
+              height: 24, padding: '0 12px',
+              border: 'none',
+              borderRadius: 6,
+              background: 'transparent',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontSize: 12.5,
+              fontWeight: isActive ? 600 : 500,
+              color: isActive ? N.text : N.textMuted,
+              transition: 'color 0.18s ease',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {isActive && (
+              <motion.span
+                layoutId="tsf-scope-thumb"
+                transition={{ type: 'spring', stiffness: 520, damping: 40 }}
+                style={{
+                  position: 'absolute', inset: 0,
+                  background: '#ffffff',
+                  borderRadius: 6,
+                  boxShadow: '0 1px 3px rgba(15,15,15,0.12), 0 0 0 1px rgba(15,15,15,0.04)',
+                }}
+              />
+            )}
+            <span style={{ position: 'relative', zIndex: 1 }}>{opt.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // TAB ROW (period nav + tabs + actions + new)
 // ════════════════════════════════════════════════════════════════════════════
 const FILTER_OPTIONS = [
@@ -1413,6 +1659,7 @@ function TabRow({
   onRefresh, refreshing,
   hiddenColsInfo = { count: 0, keys: [] }, onShowAllCols, onShowCol,
   tableFilters, onToggleFilter,
+  scope, setScope, canGlobalScope,
 }) {
   const tabs = [
     { key: 'all',     label: 'Toutes les périodes' },
@@ -1472,6 +1719,9 @@ function TabRow({
       </div>
 
       <div style={{ flex: 1 }} />
+
+      {/* Vision Owner / Opti'lex / Global (segmented control) */}
+      <ScopeSelector scope={scope} setScope={setScope} canGlobal={canGlobalScope} />
 
       {/* Hidden columns dropdown — left of month nav */}
       {hiddenColsInfo.count > 0 && (
