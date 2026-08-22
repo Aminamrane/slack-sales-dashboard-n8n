@@ -44,6 +44,7 @@ import {
   X, ChevronRight, Maximize2, Minimize2, MoreHorizontal, ChevronsRight,
   Calendar, Briefcase, History, Lock, Landmark, PenLine, FileSignature,
   Hash, User, Box, CreditCard, Pencil, Download,
+  Scale, CalendarClock, CalendarCheck2,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
@@ -612,6 +613,17 @@ export default function DetailPanel({
               />
             </Section>
 
+            {/* Section : Rendez-vous & juriste référent — vue synthétique
+                depuis le retour dev 2026-08-21 (sortie de l'accordéon).
+                Masquée si client hors board / aucune donnée agenda. */}
+            {boardRow && (clientAgenda?.reference_jurist || (clientAgenda?.rdv?.length || 0) > 0
+              || boardRow.rdv_onboarding_date || boardRow.rdv_lancement_date
+              || boardRow.rdv_fiscal_date || boardRow.rdv_social_date) && (
+              <Section title="Rendez-vous & juriste référent" delay={0.16}>
+                <RdvJuristeSection boardRow={boardRow} agenda={clientAgenda} onCopied={onCopied} />
+              </Section>
+            )}
+
             {/* « Voir le détail complet » — accordéon fermé par défaut.
                 TOUT le contenu historique du panneau vit ici, déplacé tel
                 quel (rien supprimé). Le bouton Modifier du header l'ouvre. */}
@@ -666,16 +678,6 @@ export default function DetailPanel({
                   onCopied={onCopied}
                 />
               </Section>
-
-              {/* Section : Rendez-vous & juriste référent (comme le board).
-                  Masquée si client hors board / aucune donnée agenda. */}
-              {boardRow && (clientAgenda?.reference_jurist || (clientAgenda?.rdv?.length || 0) > 0
-                || boardRow.rdv_onboarding_date || boardRow.rdv_lancement_date
-                || boardRow.rdv_fiscal_date || boardRow.rdv_social_date) && (
-                <Section title="Rendez-vous & juriste référent" delay={0.1}>
-                  <RdvJuristeSection boardRow={boardRow} agenda={clientAgenda} />
-                </Section>
-              )}
 
               {/* Section : Historique des actions — repliée par défaut.
                   Fusion 2026-08-21 : l'audit client-level (toutes périodes,
@@ -1443,18 +1445,22 @@ function ClientAuditList({ entries }) {
   );
 }
 
-// ── Rendez-vous & juriste référent (accordéon Détails) ──────────────────────
+// ── Rendez-vous & juriste référent (vue synthétique) ────────────────────────
 // Réplique inline de la modale « Agenda du client » du board Owner/Opti'Lex
 // (OptilexBoard.jsx → ClientAgendaModal — non réutilisable telle quelle :
 // c'est une modale portalisée plein écran). Mêmes données : RDV standards de
 // la row board + RDV juristes et juriste de référence de client-agenda.
-// Styles repris du board (carte juriste verte, rows heure|label|badge).
+// Styles repris du board (carte juriste verte, rows label|date|badge).
+// Retouches dev 2026-08-21 : icône balance (Scale) dans la carte juriste,
+// email du juriste cliquable (mailto + copy), icône calendrier teintée
+// passé/à venir sur chaque ligne RDV.
 const AGENDA_GREEN = '#15794a';
 const AGENDA_NAVY = '#1e2330';
 const AGENDA_MUTED = '#8a93a4';
 const AGENDA_BORDER = '#e9ebf0';
+const AGENDA_AMBER = '#b45309';
 
-function RdvJuristeSection({ boardRow, agenda }) {
+function RdvJuristeSection({ boardRow, agenda, onCopied }) {
   // Consolidation identique à ClientAgendaModal (board) : 4 RDV standards de
   // la fiche + RDV juristes, triés du plus récent au plus ancien.
   const items = useMemo(() => {
@@ -1477,6 +1483,10 @@ function RdvJuristeSection({ boardRow, agenda }) {
   }, [boardRow, agenda]);
 
   const ref = agenda?.reference_jurist || null;
+  // Email du juriste de référence — nom de champ défensif : la réponse
+  // client-agenda expose `juriste_email` sur les RDV ; sur reference_jurist
+  // on tolère les deux variantes plausibles.
+  const refEmail = ref ? (ref.juriste_email || ref.email || null) : null;
 
   // Client absent du board ET rien à montrer → section masquée proprement.
   if (!boardRow || (!ref && items.length === 0)) return null;
@@ -1495,78 +1505,123 @@ function RdvJuristeSection({ boardRow, agenda }) {
     }
   };
 
+  // RDV « à venir » : non annulé, non effectué, jour (Paris) >= aujourd'hui.
+  const todayParis = new Date().toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' });
+  const isUpcoming = (it) => {
+    if (it.cancelled) return false;
+    if (it.kind === 'standard' && it.done) return false;
+    try {
+      return new Date(it.when).toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' }) >= todayParis;
+    } catch {
+      return String(it.when).slice(0, 10) >= todayParis;
+    }
+  };
+
   return (
     <div>
-      {/* Juriste de référence — carte du board reprise à l'identique */}
+      {/* Juriste de référence — carte du board, badge balance (Scale) +
+          email cliquable avec copy au hover */}
       <div style={{
         padding: '11px 14px', borderRadius: 10,
         border: `1px solid ${ref ? AGENDA_GREEN + '55' : AGENDA_BORDER}`,
         background: ref ? '#f0f7f3' : '#fafbfc',
-        display: 'flex', alignItems: 'center', gap: 11, marginBottom: 12,
+        display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12,
       }}>
         <span style={{
-          width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+          width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           background: ref ? AGENDA_GREEN : '#e5e8ee', color: '#fff',
-          fontSize: 12, fontWeight: 800,
         }}>
-          {ref ? (ref.name || '?').trim().charAt(0).toUpperCase() : '?'}
+          <Scale size={16} strokeWidth={2} />
         </span>
-        <div style={{ minWidth: 0 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 10.5, color: AGENDA_MUTED, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Juriste de référence
           </div>
           <div style={{ fontSize: 13.5, fontWeight: 700, color: ref ? AGENDA_NAVY : AGENDA_MUTED }}>
             {ref ? `${ref.name}${ref.team ? ' · ' + ref.team : ''}` : "Aucun RDV juriste pour l'instant"}
           </div>
+          {refEmail && (
+            <span className="tsf-copy-wrap" style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              marginTop: 2, minWidth: 0, maxWidth: '100%',
+            }}>
+              <a
+                href={`mailto:${refEmail}`}
+                style={{
+                  fontSize: 11.5, color: AGENDA_GREEN, textDecoration: 'none',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none'; }}
+              >
+                {refEmail}
+              </a>
+              <CopyButton value={refEmail} onCopied={onCopied} size={11} />
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Liste des RDV (date, type, juriste) */}
+      {/* Liste des RDV — icône calendrier teintée (ambre = à venir,
+          gris = passé/effectué), puis titre + date · heure · juriste/pôle */}
       {items.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {items.map((it, i) => (
-            <motion.div
-              key={it.key}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22, delay: i * 0.03, ease: [0.4, 0, 0.2, 1] }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '9px 12px', borderRadius: 10,
-                border: `1px solid ${AGENDA_BORDER}`, background: '#fff',
-                opacity: it.cancelled ? 0.5 : 1,
-              }}
-            >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
-                  fontSize: 13, fontWeight: 600, color: AGENDA_NAVY,
-                  textDecoration: it.cancelled ? 'line-through' : 'none',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
-                  {it.label}
-                </div>
-                <div style={{
-                  fontSize: 11.5, color: AGENDA_MUTED,
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
-                  {whenLabel(it.when)}
-                  {' · '}
-                  {it.kind === 'jurist' ? (it.juriste || 'Juriste') + (it.cancelled ? ' · annulé' : '') : it.type}
-                </div>
-              </div>
-              {it.kind === 'standard' && (
+          {items.map((it, i) => {
+            const upcoming = isUpcoming(it);
+            return (
+              <motion.div
+                key={it.key}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.22, delay: i * 0.03, ease: [0.4, 0, 0.2, 1] }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '9px 12px', borderRadius: 10,
+                  border: `1px solid ${AGENDA_BORDER}`, background: '#fff',
+                  opacity: it.cancelled ? 0.5 : 1,
+                }}
+              >
                 <span style={{
-                  flexShrink: 0, fontSize: 11, fontWeight: 700,
-                  padding: '3px 9px', borderRadius: 20,
-                  color: it.done ? AGENDA_GREEN : AGENDA_MUTED,
-                  background: it.done ? '#e7f3ec' : '#eef1f6',
+                  width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  background: upcoming ? '#fff3e3' : '#eef1f6',
+                  color: upcoming ? AGENDA_AMBER : '#5b6472',
                 }}>
-                  {it.done ? 'Effectué' : 'À venir'}
+                  {upcoming
+                    ? <CalendarClock size={14} strokeWidth={2} />
+                    : <CalendarCheck2 size={14} strokeWidth={2} />}
                 </span>
-              )}
-            </motion.div>
-          ))}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: 13, fontWeight: 600, color: AGENDA_NAVY,
+                    textDecoration: it.cancelled ? 'line-through' : 'none',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {it.label}
+                  </div>
+                  <div style={{
+                    fontSize: 11.5, color: AGENDA_MUTED,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {whenLabel(it.when)}
+                    {' · '}
+                    {it.kind === 'jurist' ? (it.juriste || 'Juriste') + (it.cancelled ? ' · annulé' : '') : it.type}
+                  </div>
+                </div>
+                {it.kind === 'standard' && (
+                  <span style={{
+                    flexShrink: 0, fontSize: 11, fontWeight: 700,
+                    padding: '3px 9px', borderRadius: 20,
+                    color: it.done ? AGENDA_GREEN : AGENDA_MUTED,
+                    background: it.done ? '#e7f3ec' : '#eef1f6',
+                  }}>
+                    {it.done ? 'Effectué' : 'À venir'}
+                  </span>
+                )}
+              </motion.div>
+            );
+          })}
         </div>
       )}
     </div>

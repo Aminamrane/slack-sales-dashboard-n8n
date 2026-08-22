@@ -211,6 +211,25 @@ export const scopedPeriodAmounts = (p, scope) => {
   };
 };
 
+// ── Recherche client (2026-08-21) ────────────────────────────────────────
+
+// Normalisation insensible casse/accents (NFD + strip diacritiques).
+export const normalizeSearch = (s) => String(s || '')
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '');
+
+// Prédicat de recherche d'une row finance-period — source UNIQUE partagée
+// entre le filtre de TableView et le compteur de résultats d'index.jsx.
+// Champs : numéro client, société (contient aussi le représentant),
+// representative_name et email quand le backend les expose.
+export const matchesClientSearch = (r, normalizedQuery) => {
+  if (!normalizedQuery) return true;
+  const c = r.client || {};
+  return [c.numero_client, c.societe, c.representative_name, c.email]
+    .some((v) => v && normalizeSearch(v).includes(normalizedQuery));
+};
+
 // ── Vues-filtres (chips, phase 2 2026-08-18) ─────────────────────────────
 
 // États board « fin de vie » pour la vue « Résiliés / Rétractés ».

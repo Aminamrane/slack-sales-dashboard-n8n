@@ -57,6 +57,8 @@ import {
   TERMINATED_BOARD_ETATS,
   scopedOverdueCurrent,
   scopedOverdueCum,
+  normalizeSearch,
+  matchesClientSearch,
 } from './constants.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -374,6 +376,15 @@ export default function TrackingSheetFinance() {
     });
   }, [rows, tableFilters, viewFilter, matchesView]);
 
+  // Compteur de résultats de recherche — même prédicat que le filtre de
+  // TableView (matchesClientSearch), appliqué APRÈS vues-filtres + filtres
+  // dropdown : le compteur dit exactement ce que la table affiche.
+  const searchResultCount = useMemo(() => {
+    if (!searchQuery?.trim()) return null;
+    const q = normalizeSearch(searchQuery.trim());
+    return filteredRows.filter((r) => matchesClientSearch(r, q)).length;
+  }, [filteredRows, searchQuery]);
+
   // Toggle d'un filtre : ajoute si absent, retire si présent
   const toggleTableFilter = useCallback((filterValue) => {
     setTableFilters((prev) => {
@@ -656,6 +667,7 @@ export default function TrackingSheetFinance() {
             setPeriod={setPeriod}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
+            searchResultCount={searchResultCount}
             onRefresh={onRefresh}
             refreshing={refreshing}
             tableFilters={tableFilters}
@@ -708,7 +720,6 @@ export default function TrackingSheetFinance() {
                 rows={filteredRows}
                 onPatchRow={onPatchRow}
                 boardMap={boardMap}
-                onBoardEtatChange={onBoardEtatChange}
                 onOpenRow={onOpenRow}
                 activeRowId={panelOpen ? panelRowId : null}
                 splitActive={false}
@@ -1655,7 +1666,7 @@ function HiddenColsPill({ hiddenKeys, labels, onShowCol, onShowAll }) {
 function TabRow({
   activeTab, setActiveTab,
   period, setPeriod,
-  searchQuery, setSearchQuery,
+  searchQuery, setSearchQuery, searchResultCount,
   onRefresh, refreshing,
   hiddenColsInfo = { count: 0, keys: [] }, onShowAllCols, onShowCol,
   tableFilters, onToggleFilter,
@@ -1738,7 +1749,7 @@ function TabRow({
 
       {/* Action icons row */}
       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2, marginLeft: 4 }}>
-        <SearchInline value={searchQuery} onChange={setSearchQuery} />
+        <SearchInline value={searchQuery} onChange={setSearchQuery} resultCount={searchResultCount} />
         <FilterDropdown values={tableFilters} onToggle={onToggleFilter} />
         <button
           className="tsf-icon-btn"
@@ -1793,8 +1804,12 @@ function TabRow({
   );
 }
 
-// ── Search inline (collapses to icon, expands on focus) ──────────────────────
-function SearchInline({ value, onChange }) {
+// ── Search inline (loupe → champ animé) ──────────────────────────────────────
+// Recherche client 2026-08-21 : numéro, société, représentant, email —
+// insensible casse/accents (normalizeSearch/matchesClientSearch, source
+// unique avec le filtre de TableView). Échap : vide le texte, puis ferme ;
+// croix pour vider/fermer ; compteur de résultats discret dans le champ.
+function SearchInline({ value, onChange, resultCount = null }) {
   const [open, setOpen] = useState(false);
   const inputRef = useRef(null);
 
@@ -1802,11 +1817,13 @@ function SearchInline({ value, onChange }) {
     if (open && inputRef.current) inputRef.current.focus();
   }, [open]);
 
+  const close = () => { onChange(''); setOpen(false); };
+
   if (!open && !value) {
     return (
       <button
         className="tsf-icon-btn"
-        title="Rechercher"
+        title="Rechercher un client"
         onClick={() => setOpen(true)}
         style={iconBtnStyle}
       >
@@ -1816,14 +1833,19 @@ function SearchInline({ value, onChange }) {
   }
 
   return (
-    <div style={{
-      display: 'inline-flex', alignItems: 'center', gap: 4,
-      background: '#fff',
-      border: `1px solid ${N.border}`,
-      borderRadius: 4,
-      padding: '3px 6px',
-      width: 180,
-    }}>
+    <motion.div
+      initial={{ width: 34, opacity: 0.6 }}
+      animate={{ width: 230, opacity: 1 }}
+      transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        background: '#fff',
+        border: `1px solid ${N.border}`,
+        borderRadius: 4,
+        padding: '3px 6px',
+        overflow: 'hidden',
+      }}
+    >
       <Search size={13} style={{ color: N.textMuted, flexShrink: 0 }} />
       <input
         ref={inputRef}
@@ -1831,7 +1853,14 @@ function SearchInline({ value, onChange }) {
         value={value}
         onChange={(e) => onChange(e.currentTarget.value)}
         onBlur={() => { if (!value) setOpen(false); }}
-        placeholder="Rechercher société..."
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            if (value) onChange('');
+            else { setOpen(false); e.currentTarget.blur(); }
+          }
+        }}
+        placeholder="N°, société, nom, email…"
         style={{
           border: 'none', outline: 'none', background: 'transparent',
           fontSize: 13, fontFamily: 'inherit',
@@ -1839,7 +1868,39 @@ function SearchInline({ value, onChange }) {
           flex: 1, minWidth: 0,
         }}
       />
-    </div>
+      {/* Compteur de résultats discret (aligné sur ce que la table affiche) */}
+      {value && resultCount !== null && (
+        <span style={{
+          flexShrink: 0,
+          fontSize: 11, fontWeight: 600,
+          fontVariantNumeric: 'tabular-nums',
+          color: resultCount === 0 ? N.red : N.textFaint,
+          whiteSpace: 'nowrap',
+        }}>
+          {resultCount}
+        </span>
+      )}
+      {/* Croix : vide et ferme */}
+      <button
+        type="button"
+        title="Effacer et fermer (Échap)"
+        onMouseDown={(e) => e.preventDefault() /* garde le focus input jusqu'au click */}
+        onClick={close}
+        style={{
+          flexShrink: 0,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: 18, height: 18, padding: 0,
+          border: 'none', background: 'transparent',
+          color: N.textFaint, cursor: 'pointer',
+          borderRadius: 3,
+          transition: 'color 0.12s',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = N.text; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = N.textFaint; }}
+      >
+        <XCircle size={13} strokeWidth={2} />
+      </button>
+    </motion.div>
   );
 }
 

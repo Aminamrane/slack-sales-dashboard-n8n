@@ -13,26 +13,26 @@
 // des sommes Owner+Opti'lex, lecture seule (on n'édite pas une somme).
 //
 // Layout (gauche → droite, ordre figé) :
-//   1.  Numéro client                    (read-only, mono, sticky)
+//   1.  Numéro client                    (read-only, sticky — pill colorée
+//                                         par l'état board `displayEtat` +
+//                                         palette ETAT_STYLE, tooltip =
+//                                         libellé complet ; neutre si client
+//                                         hors board. Depuis 2026-08-21.)
 //   2.  Nom client + entreprise          (read-only, hover → OUVRIR, sticky)
-//   3.  État                             (état du board Owner/Opti'Lex, sticky,
-//                                         picker profil optilex — cf.
-//                                         components/BoardEtatCell.jsx.
-//                                         Depuis 2026-08-18 ; vérité = board)
-//   4.  Modalités                        (chip N×/M/A + pastilles O/X — cf.
+//   3.  Modalités                        (chip N×/M/A + pastilles O/X — cf.
 //                                         components/ModalitesCell.jsx, fusion
 //                                         des ex-colonnes Mode + Modalité +
 //                                         Prélèvement)
-//   5.  Montant Attendu                  (read-only EUR, entité active)
-//   6.  Montant Récupéré                 (modifiable EUR sauf vision Globale)
-//   7.  Retard ... mois précédents       (pill rouge cumul, entité active)
-//   8.  Montant récupéré sur créances    (modifiable EUR sauf vision Globale)
-//   9.  Check                            (dropdown PSP — absent en Globale)
-//  10.  Date paiement                    (date — absente en Globale)
+//   4.  Montant Attendu                  (read-only EUR, entité active)
+//   5.  Montant Récupéré                 (modifiable EUR sauf vision Globale)
+//   6.  Retard ... mois précédents       (pill rouge cumul, entité active)
+//   7.  Montant récupéré sur créances    (modifiable EUR sauf vision Globale)
+//   8.  Check                            (dropdown PSP — absent en Globale)
+//   9.  Date paiement                    (date — absente en Globale)
 //
-// Colonnes retirées phase 2 : « Retard global » (somme courante Owner+Opti —
-// la donnée reste calculée pour les vues-filtres d'index.jsx) et « Mode »
-// (absorbée par la chip Modalités).
+// Colonnes retirées : « Retard global » et « Mode » (phase 2) ; « État »
+// (2026-08-21 — l'état se consulte/édite dans le DetailPanel uniquement,
+// le code couleur du N° client garde le signal visuel dans le tableau).
 //
 // Notion styling :
 //   - Row height 44px (aéré, lisibilité finance team)
@@ -67,6 +67,8 @@ import {
   SCOPED_COMMENT_FIELDS,
   SCOPE_FIELDS,
   stripEntitySuffix,
+  normalizeSearch,
+  matchesClientSearch,
   formatEUR,
   formatDateFR,
   parseDateFR,
@@ -74,8 +76,12 @@ import {
   toNumber,
 } from './constants.js';
 import { EditableNumber, EditableSelect, EditableDate } from './EditableCell.jsx';
-import BoardEtatCell from './components/BoardEtatCell.jsx';
 import ModalitesCell from './components/ModalitesCell.jsx';
+// Palette + règles du board Owner/Opti'Lex (imports read-only) : l'état
+// teinte en pastel les cellules sticky N°/société (la colonne État dédiée a
+// été retirée 2026-08-21, l'édition vit dans le DetailPanel), et la météo
+// client s'affiche à côté du nom (MeteoIcon + bandes rouge/orange/vert).
+import { ETAT_STYLE, displayEtat, MeteoIcon, METEO_BANDS, meteoBandOf } from '../OptilexBoard.jsx';
 import CommentPopup from './CommentPopup.jsx';
 import apiClient from '../../services/apiClient.js';
 
@@ -127,9 +133,9 @@ function buildCols(scope) {
   const entityGroup = `entity_${scope}`;
   return {
     numero:   { w: 85,  group: 'identite',  shortLabel: 'N° client',        fullLabel: COLUMN_LABELS.numero,  kind: 'text',   sticky: true,  splitVisible: true,  align: 'center', editable: false, hideKindIcon: true },
-    societe:  { w: 230, group: 'identite',  shortLabel: 'Nom + entreprise', fullLabel: COLUMN_LABELS.societe, kind: 'text',   sticky: true,  splitVisible: true,  align: 'left',   editable: false },
-    // w 190 : les badges board (« En cours de résiliation »…) sont longs.
-    etat:     { w: 190, group: 'statut',    shortLabel: 'État',             fullLabel: COLUMN_LABELS.etat,    kind: 'state',  sticky: true,  splitVisible: true,  align: 'left',   editable: true,  heavyRight: true },
+    // heavyRight : séparateur du bloc sticky (repris de l'ex-colonne État,
+    // retirée 2026-08-21 — état = pill couleur sur le N° + DetailPanel).
+    societe:  { w: 230, group: 'identite',  shortLabel: 'Nom + entreprise', fullLabel: COLUMN_LABELS.societe, kind: 'text',   sticky: true,  splitVisible: true,  align: 'left',   editable: false, heavyRight: true },
     // Colonne compacte fusionnant Mode + Modalité + Prélèvement (chip icône
     // + mini-pills OW/OL — w 160 pour loger chip 3× + 2 pills à glyphe).
     modalites:       { w: 160, group: 'modalites',   shortLabel: 'Modalités',          fullLabel: COLUMN_LABELS.modalites,                                kind: 'select', sticky: false, splitVisible: false, align: 'left',   editable: true, heavyRight: true },
@@ -152,7 +158,6 @@ function buildCols(scope) {
 // seul le group header est coloré. Cells restent blanches sauf status overdue.
 const GROUPS = {
   identite:       { label: '',           cellBg: null, headerBg: '#ffffff' },
-  statut:         { label: '',           cellBg: null, headerBg: '#ffffff' },
   modalites:      { label: 'Modalités',  cellBg: null, headerBg: '#F1F1EF' }, // Notion gray
   entity_owner:   { label: 'Owner',      cellBg: null, headerBg: '#E9F3F7' }, // Notion blue light
   entity_optilex: { label: "Opti'lex",   cellBg: null, headerBg: '#F8ECDF' }, // Notion orange light
@@ -708,7 +713,6 @@ const RowRenderer = React.memo(function RowRenderer({
   row,
   onPatchRow,
   boardRow,           // row du board Owner/Opti'Lex pour ce client (ou null)
-  onBoardEtatChange,  // (numero_client, payload) → POST /optilex/etat-change
   onOpenRow,
   isActive,
   cols,
@@ -746,6 +750,10 @@ const RowRenderer = React.memo(function RowRenderer({
   // Overdue status (color coding Notion-soft, cf. brief 2026-05-11) — suit la vision.
   const overdueStatus = getOverdueStatus(row, scope);
   const statusColors = overdueStatus ? OVERDUE_STATUS_COLORS[overdueStatus] : null;
+
+  // État board du client → teinte pastel des cellules sticky N°/société.
+  const rowEtat = boardRow ? displayEtat(boardRow) : null;
+  const rowEtatStyle = (rowEtat && ETAT_STYLE[rowEtat]) || null;
 
   const rowBg = isActive
     ? N.rowActive
@@ -819,22 +827,19 @@ const RowRenderer = React.memo(function RowRenderer({
         </span>
       </div>
 
-      {/* Identité — Numéro client (font plus petite + centré, demande dev) */}
+      {/* Identité — N° client + Nom : fond PASTEL teinté par l'état board
+          (bg d'ETAT_STYLE — Signé vert, En cours de résiliation rouge,
+          En cours de rétractation ambre…) sur ces DEUX cellules sticky
+          uniquement (pas la ligne entière). Tooltip = libellé complet.
+          Client hors board / sans état → fond neutre historique. */}
       {keys.includes('numero') && C('numero', (
-        <span style={{
-          fontSize: 12, color: N.textMuted,
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-          letterSpacing: '-0.01em',
-          fontVariantNumeric: 'tabular-nums',
-        }}>
-          {row.client?.numero_client || <EmptyCell />}
-        </span>
-      ))}
+        <NumeroCell numero={row.client?.numero_client} etat={rowEtat} etatStyle={rowEtatStyle} />
+      ), rowEtatStyle ? { background: rowEtatStyle.bg, transition: 'background 0.25s ease' } : undefined)}
 
-      {/* Identité — Nom client + entreprise + bouton OUVRIR au hover */}
+      {/* Identité — Nom client + entreprise + météo + bouton OUVRIR au hover */}
       {keys.includes('societe') && C('societe', (
         <>
-          <SocieteCell row={row} />
+          <SocieteCell row={row} boardRow={boardRow} etat={rowEtat} />
           <button
             type="button"
             className="tsf-open-btn"
@@ -848,17 +853,7 @@ const RowRenderer = React.memo(function RowRenderer({
             <span>OUVRIR</span>
           </button>
         </>
-      ))}
-
-      {/* Statut — État : celui du board Owner/Opti'Lex (source de vérité).
-          Pose via POST /optilex/etat-change ; client absent du board → tiret
-          read-only (rien à piloter). */}
-      {keys.includes('etat') && C('etat', (
-        <BoardEtatCell
-          boardRow={boardRow}
-          onEtatChange={(payload) => onBoardEtatChange?.(row.client?.numero_client, payload)}
-        />
-      ))}
+      ), rowEtatStyle ? { background: rowEtatStyle.bg, transition: 'background 0.25s ease' } : undefined)}
 
       {/* Modalités — chip N×/M/A + pastilles prélèvement O/X (colonne fusionnée) */}
       {keys.includes('modalites') && C('modalites', (
@@ -967,13 +962,45 @@ function EmptyCell() {
   return null;
 }
 
-function SocieteCell({ row }) {
+// NumeroCell — numéro client sur fond pastel d'état (le bg est porté par la
+// CELLULE via extraStyle, pas de pill : pas de double cadre). Le numéro se
+// teinte du fg de l'état ; le tooltip porte le libellé complet (la couleur
+// seule est illisible pour un nouveau venu). Sans état → rendu neutre.
+function NumeroCell({ numero, etat, etatStyle }) {
+  if (!numero) return <EmptyCell />;
+  return (
+    <span
+      title={etat || undefined}
+      style={{
+        fontSize: 12,
+        color: etatStyle ? etatStyle.fg : N.textMuted,
+        fontWeight: etatStyle ? 700 : 400,
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        letterSpacing: '-0.01em',
+        fontVariantNumeric: 'tabular-nums',
+        whiteSpace: 'nowrap',
+        maxWidth: '100%',
+        overflow: 'hidden', textOverflow: 'ellipsis',
+        transition: 'color 0.25s ease',
+      }}
+    >
+      {numero}
+    </span>
+  );
+}
+
+function SocieteCell({ row, boardRow, etat }) {
   // Pattern "Société - Nom Prénom" présent sur ~89% des clients ; pour les
   // ~11% restants (clients récents généralement), `representant` sera null
   // et seul le nom de société est affiché. La logique est centralisée dans
   // `splitSocieteRep` (constants.js).
   const { societeName, representant: repFromSociete } = splitSocieteRep(row.client?.societe);
   const representant = row.client?.representative_name || repFromSociete;
+
+  // Météo client (board) : icône MeteoIcon teintée par la bande
+  // rouge/orange/vert, en fin de ligne du nom. Pas de score → pas d'icône.
+  const meteoScore = boardRow?.meteo_score ?? null;
+  const meteoBand = meteoScore != null ? METEO_BANDS[meteoBandOf(meteoScore)] : null;
 
   return (
     <div style={{
@@ -982,12 +1009,26 @@ function SocieteCell({ row }) {
       flex: 1,
     }}>
       <span style={{
-        fontSize: CELL_FONT_SIZE, fontWeight: 500, color: N.text,
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-      }}
-        title={societeName || ''}
-      >
-        {societeName || <EmptyCell />}
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        minWidth: 0, maxWidth: '100%',
+      }}>
+        <span style={{
+          fontSize: CELL_FONT_SIZE, fontWeight: 500, color: N.text,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          minWidth: 0,
+        }}
+          title={etat ? `${societeName || ''} — ${etat}` : (societeName || '')}
+        >
+          {societeName || <EmptyCell />}
+        </span>
+        {meteoBand && (
+          <span
+            title={`Météo ${meteoScore}/5 · ${meteoBand.label}`}
+            style={{ display: 'inline-flex', flexShrink: 0, color: meteoBand.color }}
+          >
+            <MeteoIcon score={meteoScore} size={15} color={meteoBand.color} />
+          </span>
+        )}
       </span>
       {representant && (
         <span style={{
@@ -1266,7 +1307,6 @@ export default function TableView({
   rows,
   onPatchRow,
   boardMap,            // Map numero_client → row board (états Owner/Opti'Lex)
-  onBoardEtatChange,   // (numero_client, payload) → POST /optilex/etat-change
   onOpenClient,        // legacy (kept for back-compat)
   onOpenRow,           // (row) → opens the DetailPanel (only via OUVRIR button)
   activeRowId,         // currently focused row in the DetailPanel
@@ -1418,14 +1458,13 @@ export default function TableView({
     }));
   }, []);
 
-  // Local filter — search by société or numéro client (case-insensitive).
+  // Local filter — recherche client (numéro, société, représentant, email),
+  // insensible casse/accents. Prédicat partagé avec le compteur de résultats
+  // d'index.jsx (matchesClientSearch, constants.js).
   const filtered = useMemo(() => {
     if (!searchQuery?.trim()) return rows;
-    const q = searchQuery.trim().toLowerCase();
-    return rows.filter((r) =>
-      (r.client?.societe || '').toLowerCase().includes(q) ||
-      (r.client?.numero_client || '').toLowerCase().includes(q)
-    );
+    const q = normalizeSearch(searchQuery.trim());
+    return rows.filter((r) => matchesClientSearch(r, q));
   }, [rows, searchQuery]);
 
   if (loading) {
@@ -1510,7 +1549,6 @@ export default function TableView({
                 row={row}
                 onPatchRow={onPatchRow}
                 boardRow={(row.client?.numero_client && boardMap?.get(row.client.numero_client)) || null}
-                onBoardEtatChange={onBoardEtatChange}
                 onOpenRow={handleOpenRow}
                 isActive={activeRowId === row.id}
                 cols={cols}
