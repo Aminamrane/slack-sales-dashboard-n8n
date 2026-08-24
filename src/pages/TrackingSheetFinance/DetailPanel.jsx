@@ -556,22 +556,24 @@ export default function DetailPanel({
             <Section
               title="État de compte"
               delay={0.11}
-              action={hasOwnerStatement ? (
+              action={(
                 <button
                   type="button"
                   onClick={downloadStatement}
-                  disabled={pdfGenerating}
-                  title="Télécharger l'état de compte (PDF)"
+                  disabled={pdfGenerating || !hasOwnerStatement}
+                  title={hasOwnerStatement
+                    ? "Télécharger l'état de compte (PDF)"
+                    : 'Aucun montant Owner facturé ou payé sur les mois échus — rien à éditer'}
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 5,
                     height: 26, padding: '0 10px',
                     background: '#fff', color: N.text,
                     border: `1px solid ${N.border}`, borderRadius: 6,
                     fontSize: 12, fontWeight: 600,
-                    cursor: pdfGenerating ? 'wait' : 'pointer',
+                    cursor: pdfGenerating ? 'wait' : (hasOwnerStatement ? 'pointer' : 'not-allowed'),
                     fontFamily: 'inherit', whiteSpace: 'nowrap',
                     boxShadow: '0 1px 2px rgba(15,15,15,0.04)',
-                    opacity: pdfGenerating ? 0.7 : 1,
+                    opacity: (pdfGenerating || !hasOwnerStatement) ? 0.55 : 1,
                     transition: 'background 0.12s, opacity 0.15s',
                   }}
                   onMouseEnter={(e) => { if (!pdfGenerating) e.currentTarget.style.background = N.sideBg; }}
@@ -586,7 +588,7 @@ export default function DetailPanel({
                   </motion.span>
                   {pdfGenerating ? 'Génération…' : "Télécharger l'état de compte"}
                 </button>
-              ) : null}
+              )}
             >
               <InstallmentsList
                 installments={installments}
