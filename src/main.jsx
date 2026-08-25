@@ -55,6 +55,7 @@ import LeadAssignmentLive from "./pages/LeadAssignmentLive.jsx";
 import TeamAbsences from "./pages/TeamAbsences.jsx";
 import Variables from "./pages/Variables.jsx";
 import OptilexRdvMonitoring from "./pages/OptilexRdvMonitoring.jsx";
+import WorkHours from "./pages/WorkHours.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import MouseDot from "./components/MouseDot.jsx";
@@ -215,6 +216,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['admin', 'ceo', 'hr']}>
               <HrDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/work-hours"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'hr']}>
+              <WorkHours />
             </ProtectedRoute>
           }
         />
