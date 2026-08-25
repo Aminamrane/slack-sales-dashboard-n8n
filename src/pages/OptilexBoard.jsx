@@ -367,6 +367,15 @@ const fmt = (iso) => {
   return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
 };
 const toDateInput = (v) => (v ? String(v).slice(0, 10) : "");
+// Date + heure (les rdv_*_date stockent l'heure-mur Paris labellisée UTC -> parties UTC).
+// Heure masquée si minuit pile (dates saisies sans heure : fiche, overrides manuels).
+const fmtDT = (iso) => {
+  const base = fmt(iso);
+  if (!base) return "";
+  const d = new Date(iso);
+  const h = d.getUTCHours(), m = d.getUTCMinutes();
+  return (h || m) ? `${base} · ${String(h).padStart(2, "0")}h${String(m).padStart(2, "0")}` : base;
+};
 const timeAgo = (iso) => {
   if (!iso) return "";
   const d = new Date(iso);
@@ -1454,7 +1463,7 @@ export default function OptilexBoard({ embed = false }) {
                         onSave={(d) => patch(r.numero_client, { rdv_onboarding_date_manual: d })} />
                     </td>
                     <td style={{ ...td, color: r.rdv_lancement_date ? TEXT : "#cbd2e0" }}>
-                      {fmt(r.rdv_lancement_date) || "—"}
+                      {fmtDT(r.rdv_lancement_date) || "—"}
                       {isIntegrationOverdue(r) && <div><IntegrationOverdueBadge /></div>}
                       {integrationAlert(r) && <div><OptilexAlertBadge compact /></div>}
                     </td>
@@ -1759,7 +1768,7 @@ function StatusToggle({ value, onChange, labels = ["Non", "Oui"] }) {
 function TableDateEdit({ value, onSave, disabled }) {
   const [editing, setEditing] = useState(false);
   const cancelRef = useRef(false);
-  if (disabled) return <span style={{ color: value ? TEXT : "#cbd2e0" }}>{fmt(value) || "—"}</span>;
+  if (disabled) return <span style={{ color: value ? TEXT : "#cbd2e0" }}>{fmtDT(value) || "—"}</span>;
   if (editing) {
     return (
       <input type="date" autoFocus defaultValue={toDateInput(value)}
@@ -1774,7 +1783,7 @@ function TableDateEdit({ value, onSave, disabled }) {
       onClick={(e) => { e.stopPropagation(); setEditing(true); }}
       style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", fontFamily: "inherit", fontSize: "inherit",
         display: "inline-flex", alignItems: "center", gap: 6, color: value ? TEXT : "#cbd2e0" }}>
-      {fmt(value) || "—"}
+      {fmtDT(value) || "—"}
       <span style={{ opacity: 0.4, display: "inline-flex", lineHeight: 0 }}><PencilIcon /></span>
     </button>
   );
@@ -1782,7 +1791,7 @@ function TableDateEdit({ value, onSave, disabled }) {
 
 // Ligne RDV : date (planifiée ou saisie manuellement) + toggle "effectué" + lien (optionnel).
 // onDate présent -> crayon pour saisir/modifier la date à la main (antériorité).
-function RdvRow({ label, date, done, editable, onToggle, link, onDate }) {
+function RdvRow({ label, date, done, editable, onToggle, link, onDate, meetLink }) {
   const [editing, setEditing] = useState(false);
   const cancelRef = useRef(false);
   return (
@@ -1796,7 +1805,7 @@ function RdvRow({ label, date, done, editable, onToggle, link, onDate }) {
             style={{ ...inputStyle, width: 156, padding: "6px 9px", fontSize: 13, marginTop: 2 }} />
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: date ? TEXT : "#cbd2e0" }}>{fmt(date) || "—"}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: date ? TEXT : "#cbd2e0" }}>{fmtDT(date) || "—"}</div>
             {onDate && (
               <button type="button" onClick={() => setEditing(true)} title="Saisir/modifier la date"
                 style={{ border: "none", background: "transparent", padding: 2, cursor: "pointer", color: MUTED, display: "inline-flex", lineHeight: 0 }}>
@@ -1806,6 +1815,13 @@ function RdvRow({ label, date, done, editable, onToggle, link, onDate }) {
           </div>
         )}
         {link && <RdvLink url={link} />}
+        {meetLink && (
+          <a href={meetLink} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 6, padding: "4px 10px", borderRadius: 8, background: GREEN + "14", border: `1px solid ${GREEN}44`, color: GREEN, fontSize: 11.5, fontWeight: 700, textDecoration: "none" }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 8-6 4 6 4V8Z" /><rect width="14" height="12" x="2" y="6" rx="2" /></svg>
+            Rejoindre le Meet
+          </a>
+        )}
       </div>
       {editable && <StatusToggle value={!!done} onChange={onToggle} labels={["À venir", "Effectué"]} />}
     </div>
@@ -2554,7 +2570,7 @@ function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion,
             )}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
-            <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date_manual || row.rdv_onboarding_date} done={row.rdv_onboarding_done} editable={!!num}
+            <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date_manual || row.rdv_onboarding_date} done={row.rdv_onboarding_done} editable={!!num} meetLink={row.onboarding_meet_link}
               onDate={num && !isFinanceTeam() ? (d) => patch(num, { rdv_onboarding_date_manual: d }) : undefined}
               onToggle={(v) => patch(num, { rdv_onboarding_done: v })} />
             {/* Recalage direct du RDV onboarding (Vincent / facturation / admin) : déplace la
@@ -2569,7 +2585,7 @@ function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion,
                 Recaler le RDV onboarding
               </motion.button>
             )}
-            <RdvRow label="Rendez-vous Intégration Opti'Lex" date={row.rdv_lancement_date} done={row.rdv_lancement_done} editable={!!num && !isFinanceTeam()}
+            <RdvRow label="Rendez-vous Intégration Opti'Lex" date={row.rdv_lancement_date} done={row.rdv_lancement_done} editable={!!num && !isFinanceTeam()} meetLink={row.lancement_meet_link}
               onToggle={(v) => patch(num, { rdv_lancement_done: v })} />
             <RdvRow label="Rendez-vous lancement fiscal" date={row.rdv_fiscal_date_manual || row.rdv_fiscal_date} done={row.rdv_fiscal_done} editable={!!num && !isFinanceTeam() && !!(row.rdv_fiscal_date_manual || row.rdv_fiscal_date)}
               link={row.fiscal_url || null}
