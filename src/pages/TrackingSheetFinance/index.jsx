@@ -563,6 +563,10 @@ export default function TrackingSheetFinance() {
       expectedGlobal: expected,
       receivedTotal: received,
       overdueTotal: overdue,
+      // « Retard de paiement » du classeur = dette totale à date : retard du
+      // mois + créances antérieures. C'est ce montant que la finance compare.
+      overdueTotalWithCum: overdue + overdueCum,
+      overdueCumTotal: overdueCum,
       // Taux du classeur finance (null si dénominateur 0 → rien affiché).
       receivedPct: formatPercent(received, expected),
       overdueRecoveredPct: formatPercent(receivedOverdue, overdueCum),
@@ -1223,7 +1227,7 @@ function TitleBlock({ kpis, loading }) {
       {/* KPI mini-table */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(4, auto)',
+        gridTemplateColumns: 'repeat(5, auto)',
         marginLeft: 12,
         border: `1px solid ${N.border}`,
         borderRadius: 10,
@@ -1243,10 +1247,19 @@ function TitleBlock({ kpis, loading }) {
             subTitle: 'Montant reçu ÷ montant attendu',
           },
           {
+            // Dette totale à date (mois + antérieur) — la colonne « Retard de
+            // paiement » du classeur, celle que la finance lit en premier.
             label: 'Retard',
-            value: loading ? '…' : <AnimatedAmount value={kpis.overdueTotal} style={{ fontWeight: 700, color: kpis.overdueTotal > 0 ? N.red : N.text }} />,
-            color: kpis.overdueTotal > 0 ? N.red : N.text,
-            dot: kpis.overdueTotal > 0 ? N.red : N.textFaint,
+            value: loading ? '…' : <AnimatedAmount value={kpis.overdueTotalWithCum} style={{ fontWeight: 700, color: kpis.overdueTotalWithCum > 0 ? N.red : N.text }} />,
+            color: kpis.overdueTotalWithCum > 0 ? N.red : N.text,
+            dot: kpis.overdueTotalWithCum > 0 ? N.red : N.textFaint,
+          },
+          {
+            // « Retard de paiement sur les mois précédents » du classeur.
+            label: 'Créances ant.',
+            value: loading ? '…' : <AnimatedAmount value={kpis.overdueCumTotal} style={{ fontWeight: 700, color: kpis.overdueCumTotal > 0 ? N.red : N.text }} />,
+            color: kpis.overdueCumTotal > 0 ? N.red : N.text,
+            dot: kpis.overdueCumTotal > 0 ? N.red : N.textFaint,
             // Récupération sur les créances des mois précédents.
             sub: loading ? null : kpis.overdueRecoveredPct,
             subColor: N.textMuted,
@@ -1255,7 +1268,7 @@ function TitleBlock({ kpis, loading }) {
         ].map((kpi, i) => (
           <div key={i} style={{
             padding: '8px 16px',
-            borderRight: i < 3 ? `1px solid ${N.borderSft}` : 'none',
+            borderRight: i < 4 ? `1px solid ${N.borderSft}` : 'none',
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
             minWidth: 90,
           }}>
