@@ -242,16 +242,17 @@ export const matchesClientSearch = (r, normalizedQuery) => {
 
 // ── Vues-filtres (chips, phase 2 2026-08-18) ─────────────────────────────
 
-// États board « fin de vie » pour la vue « Résiliés / Rétractés ».
+// États board de la vue « Résiliés / Rétractés ».
 // Comparés à `displayEtat(boardRow)` (OptilexBoard.jsx — source de vérité).
+//
+// Uniquement les états ACTÉS. Un « En cours de résiliation » n'est pas un
+// client résilié : la procédure est ouverte, il reste facturé, et la finance
+// doit continuer à le suivre. Les compter ici faisait annoncer 132 clients
+// sortis là où le board en montre 99 (correction 2026-08-25).
 export const TERMINATED_BOARD_ETATS = new Set([
   'Résiliation',
   'Self-Résiliation',
   'Rétractation',
-  'En cours de résiliation',
-  'En cours de rétractation',
-  'Liquidation',
-  'En cours de liquidation',
 ]);
 
 export const EMPLOYEE_RANGES = [
