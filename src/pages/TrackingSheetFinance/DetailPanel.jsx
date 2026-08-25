@@ -66,7 +66,7 @@ import {
   toNumber,
   currentPeriod,
   parseDateFR,
-  parsePaymentSpecCount,
+
   paymentModeLabel,
   scopedOverdueCurrent,
   scopedCredit,
@@ -323,14 +323,8 @@ export default function DetailPanel({
     return list;
   }, [visiblePeriods, scope]);
 
-  // Forfait mensuel courant (vision active) : attendu de la période à
-  // montant la plus récente — alimente « Formule » et la modalité formatée.
-  const monthlyExpected = useMemo(() => {
-    for (let i = installments.length - 1; i >= 0; i--) {
-      if (installments[i].expected > 0) return installments[i].expected;
-    }
-    return null;
-  }, [installments]);
+  // (Le forfait mensuel dérivé des échéances a été retiré avec le « N × … »
+  // de la modalité — 2026-08-25. La Formule affiche la tranche seule.)
 
   // ── État de compte PDF (phase 4) ───────────────────────────────────────
   // L'état de compte suit la VISION active (dev 2026-08-25) : Owner et
@@ -545,7 +539,7 @@ export default function DetailPanel({
                 profile={profile}
                 focusedRow={focusedRow}
                 boardRow={boardRow}
-                monthlyExpected={monthlyExpected}
+
                 patch={patch}
                 canEdit={canEdit}
                 onCopied={onCopied}
@@ -1116,7 +1110,7 @@ function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loadin
 }
 
 // ── Informations contractuelles (liste compacte icône + libellé / valeur) ───
-function ContractInfoList({ client, profile, focusedRow, boardRow, monthlyExpected, patch, canEdit, onCopied }) {
+function ContractInfoList({ client, profile, focusedRow, boardRow, patch, canEdit, onCopied }) {
   // Séparation nom du client / société (2026-08-21) : « Nom du client » =
   // la/les personne(s), la société a sa propre ligne. Pas de personne
   // détectée → « Nom du client » = société, pas de ligne Société en doublon.
@@ -1135,15 +1129,12 @@ function ContractInfoList({ client, profile, focusedRow, boardRow, monthlyExpect
   const range = focusedRow?.employee_range || profile?.employee_range || client?.employee_range;
   const rangeLabels = EMPLOYEE_RANGES.reduce((acc, v) => { acc[v] = `${v} salariés`; return acc; }, {});
 
-  // Modalité : « N × {montant} € mensuels » quand payment_specificity + montant
-  // dispo ; sinon le libellé brut ; sinon Mensuel / Annuel via payment_mode.
-  const specCount = parsePaymentSpecCount(focusedRow?.payment_specificity);
+  // Modalité : le rythme de paiement, rien d'autre — Mensuel / Annuel /
+  // Trimestriel. Le « N × {montant} » dérivé de `payment_specificity` a été
+  // retiré (demande dev 2026-08-25) : cette colonne du classeur est souvent
+  // périmée et annonçait des échéanciers que le client n'a jamais eus.
   let modalite = null;
-  if (specCount !== null && monthlyExpected) {
-    modalite = `${specCount} × ${formatEUR(monthlyExpected)} mensuels`;
-  } else if (focusedRow?.payment_specificity) {
-    modalite = focusedRow.payment_specificity;
-  } else {
+  {
     // Chaîne de fallback (2026-08-21) : mode de la period → mode normalisé
     // du client (backend, MONTHLY/YEARLY/QUARTERLY) → `periodicite` du board
     // (libellés FR, ~27 % des clients — ex. client n°1 Shake'N OUT :
