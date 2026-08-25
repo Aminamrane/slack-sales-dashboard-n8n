@@ -48,6 +48,7 @@ import { displayEtat } from '../OptilexBoard.jsx';
 import {
   ALLOWED_ROLES,
   formatEUR,
+  formatPercent,
   formatMonthLabel,
   shiftMonth,
   currentPeriod,
@@ -57,6 +58,8 @@ import {
   TERMINATED_BOARD_ETATS,
   scopedOverdueCurrent,
   scopedOverdueCum,
+  scopedCredit,
+  scopedPeriodAmounts,
   normalizeSearch,
   matchesClientSearch,
 } from './constants.js';
@@ -216,6 +219,9 @@ const VIEW_FILTERS = [
   { key: 'a_jour',      label: 'À jour' },
   { key: 'retard_mois', label: 'Retard du mois' },
   { key: 'creances',    label: 'Créances antérieures' },
+  // Trop-perçu reporté (backend `credit_*`) : action finance à faire —
+  // déduire de la prochaine échéance ou rembourser.
+  { key: 'trop_percu',  label: 'Trop-perçu' },
   { key: 'non_auto',    label: 'Non automatisé' },
   { key: 'resilies',    label: 'Résiliés / Rétractés' },
 ];
@@ -321,6 +327,8 @@ export default function TrackingSheetFinance() {
         return scopedOverdueCurrent(r, scope) > 0;
       case 'creances':
         return scopedOverdueCum(r, scope) > 0;
+      case 'trop_percu':
+        return scopedCredit(r, scope) > 0;
       case 'non_auto': {
         // Pastille rouge du scope actif (les deux rouges en Globale).
         const p = autoDebitPastilles(r.auto_debit);
@@ -528,28 +536,38 @@ export default function TrackingSheetFinance() {
   }, [rows, showToast]);
 
   // ── KPI summary ─────────────────────────────────────────────────────
+  // Brief dev 2026-08-24 : les totaux du bandeau suivent la vision active,
+  // comme les colonnes et les tuiles du panneau — en vision Owner on ne veut
+  // pas voir l'argent Opti'lex dans le total. En Globale, l'attendu est la
+  // somme des deux entités (identique à expected_global_ttc côté backend).
   const kpis = useMemo(() => {
-    let expectedGlobal = 0;
-    let receivedOwner = 0;
-    let receivedOptilex = 0;
-    let overdueOwner = 0;
-    let overdueOptilex = 0;
+    let expected = 0;
+    let received = 0;
+    let overdue = 0;
+    // Créances antérieures : cumul dû (dénominateur) et récupéré dessus
+    // (numérateur) — le « % récupéré sur créances antérieures » du classeur.
+    let overdueCum = 0;
+    let receivedOverdue = 0;
 
     rows.forEach((r) => {
-      expectedGlobal   += toNumber(r.expected_global_ttc) || 0;
-      receivedOwner    += toNumber(r.received_owner) || 0;
-      receivedOptilex  += toNumber(r.received_optilex_ttc) || 0;
-      overdueOwner     += toNumber(r.overdue_owner_current_month) || 0;
-      overdueOptilex   += toNumber(r.overdue_optilex_current_month) || 0;
+      const a = scopedPeriodAmounts(r, scope);
+      expected += a.expected;
+      received += a.received;
+      overdue  += scopedOverdueCurrent(r, scope);
+      overdueCum += scopedOverdueCum(r, scope);
+      receivedOverdue += a.receivedOverdue;
     });
 
     return {
       total: rows.length,
-      expectedGlobal,
-      receivedTotal: receivedOwner + receivedOptilex,
-      overdueTotal: overdueOwner + overdueOptilex,
+      expectedGlobal: expected,
+      receivedTotal: received,
+      overdueTotal: overdue,
+      // Taux du classeur finance (null si dénominateur 0 → rien affiché).
+      receivedPct: formatPercent(received, expected),
+      overdueRecoveredPct: formatPercent(receivedOverdue, overdueCum),
     };
-  }, [rows]);
+  }, [rows, scope]);
 
   // ── DetailPanel handlers ──────────────────────────────────────────────
   // The panel is opened *only* via the explicit "OUVRIR" button on the
@@ -1215,8 +1233,25 @@ function TitleBlock({ kpis, loading }) {
         {[
           { label: 'Clients', value: loading ? '…' : kpis.total, color: N.text, dot: N.textFaint },
           { label: 'Attendu', value: loading ? '…' : formatEUR(kpis.expectedGlobal), color: N.text, dot: N.textFaint },
-          { label: 'Reçu', value: loading ? '…' : <AnimatedAmount value={kpis.receivedTotal} style={{ fontWeight: 700, color: N.green }} />, color: N.green, dot: N.green },
-          { label: 'Retard', value: loading ? '…' : <AnimatedAmount value={kpis.overdueTotal} style={{ fontWeight: 700, color: kpis.overdueTotal > 0 ? N.red : N.text }} />, color: kpis.overdueTotal > 0 ? N.red : N.text, dot: kpis.overdueTotal > 0 ? N.red : N.textFaint },
+          {
+            label: 'Reçu',
+            value: loading ? '…' : <AnimatedAmount value={kpis.receivedTotal} style={{ fontWeight: 700, color: N.green }} />,
+            color: N.green, dot: N.green,
+            // Taux de récupération du classeur finance : reçu ÷ attendu.
+            sub: loading ? null : kpis.receivedPct,
+            subColor: N.green,
+            subTitle: 'Montant reçu ÷ montant attendu',
+          },
+          {
+            label: 'Retard',
+            value: loading ? '…' : <AnimatedAmount value={kpis.overdueTotal} style={{ fontWeight: 700, color: kpis.overdueTotal > 0 ? N.red : N.text }} />,
+            color: kpis.overdueTotal > 0 ? N.red : N.text,
+            dot: kpis.overdueTotal > 0 ? N.red : N.textFaint,
+            // Récupération sur les créances des mois précédents.
+            sub: loading ? null : kpis.overdueRecoveredPct,
+            subColor: N.textMuted,
+            subTitle: 'Montant récupéré ÷ créances des mois précédents',
+          },
         ].map((kpi, i) => (
           <div key={i} style={{
             padding: '8px 16px',
@@ -1230,6 +1265,18 @@ function TitleBlock({ kpis, loading }) {
             <span style={{ fontSize: 15, fontWeight: 700, color: kpi.color, fontVariantNumeric: 'tabular-nums' }}>
               {kpi.value}
             </span>
+            {/* Ratio discret sous le montant — masqué si dénominateur 0 */}
+            {kpi.sub && (
+              <span
+                title={kpi.subTitle}
+                style={{
+                  fontSize: 10.5, fontWeight: 600, color: kpi.subColor,
+                  fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+                }}
+              >
+                {kpi.sub}
+              </span>
+            )}
           </div>
         ))}
       </div>

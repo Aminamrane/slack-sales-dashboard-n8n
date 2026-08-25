@@ -32,11 +32,15 @@
 //                               MetaRow, Identité, Modalités, Owner|Opti'lex,
 //                               Historique — déplacé tel quel, rien supprimé)
 //
-// Endpoints (inchangés — aucun nouvel appel) :
-//   GET   /api/v1/finance-periods/client/{id}/timeline
-//   GET   /api/v1/finance-periods/client/{id}/profile
-//   GET   /api/v1/finance-periods/{row_id}/audit
-//   PATCH /api/v1/finance-periods/{row_id}  (via onPatchRow prop)
+// Endpoints :
+//   GET    /api/v1/finance-periods/client/{id}/timeline
+//   GET    /api/v1/finance-periods/client/{id}/profile
+//   GET    /api/v1/finance-periods/client/{id}/audit
+//   GET    /api/v1/optilex/client-agenda?numero_client=…
+//   PATCH  /api/v1/finance-periods/{row_id}  (via onPatchRow prop)
+//   GET/POST/PATCH/DELETE  /api/v1/finance-periods/client/{id}/comments
+//     (fil interne Owner — cf. ClientComments, 2026-08-25 ; remplace la
+//      section « Timeline mensuelle » supprimée le même jour)
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -44,6 +48,7 @@ import {
   X, ChevronRight, Maximize2, Minimize2, MoreHorizontal, ChevronsRight,
   Calendar, Briefcase, History, Lock, Landmark, PenLine, FileSignature,
   Hash, User, Box, CreditCard, Pencil, Download,
+  Pin, Trash2, MessageSquarePlus,
   Scale, CalendarClock, CalendarCheck2,
 } from 'lucide-react';
 
@@ -64,6 +69,7 @@ import {
   parsePaymentSpecCount,
   paymentModeLabel,
   scopedOverdueCurrent,
+  scopedCredit,
   scopedOverdueCum,
   scopedPeriodAmounts,
 } from './constants.js';
@@ -229,20 +235,10 @@ export default function DetailPanel({
     return periods.filter((p) => String(p.period).slice(0, 7) >= signatureMonth);
   }, [periods, signatureMonth]);
 
-  // Marqueur « Signature » de la timeline (2026-08-21, vérifié en base) :
-  // l'antériorité `client_finance_period` commence au 2025-10 pour TOUTE la
-  // base — un client signé avant (ex. n°5 : 04/02/2024) n'a AUCUNE ligne de
-  // période portant son mois de signature. Quand la signature est antérieure
-  // à la première période affichée, on l'affiche via une ligne-marqueur
-  // dédiée (badge + date longue FR) pour qu'elle soit TOUJOURS visible.
-  const signatureMarker = useMemo(() => {
-    if (!signatureMonth || !visiblePeriods.length) return null;
-    const firstMonth = visiblePeriods
-      .map((p) => String(p.period).slice(0, 7))
-      .reduce((a, b) => (a < b ? a : b));
-    if (signatureMonth >= firstMonth) return null; // porté par sa ligne de période
-    return formatDateLongFR(profile?.date_signature);
-  }, [signatureMonth, visiblePeriods, profile]);
+  // 2026-08-25 : le marqueur « Signature » vivait dans la timeline mensuelle,
+  // supprimée depuis. L'information reste portée par le header du panneau
+  // (« Dossier ouvert le {date longue} ») — rien de perdu.
+
   const client = focusedRow?.client || periods[0]?.client || null;
   // État du client = celui du board Owner/Opti'Lex (source de vérité depuis
   // 2026-08-18). Fallbacks conservés pour les clients hors board : état
@@ -337,27 +333,19 @@ export default function DetailPanel({
   }, [installments]);
 
   // ── État de compte PDF (phase 4) ───────────────────────────────────────
-  // Document EXCLUSIVEMENT OWNER (décision dev 2026-08-21) : Opti'lex émet
-  // ses propres états de compte. Les montants sont TOUJOURS les montants
-  // Owner, quelle que soit la vision active du panneau. Génération 100 %
-  // frontend depuis les données déjà chargées, module PDF chargé en lazy
-  // (dynamic import → chunk séparé pour @react-pdf/renderer).
+  // L'état de compte suit la VISION active (dev 2026-08-25) : Owner et
+  // Opti'lex sont deux entités juridiques → deux documents distincts (jamais
+  // de fusion). En vision Globale, les deux sont proposés séparément.
+  // Le bouton est TOUJOURS actif : un client sans échéance facturée obtient
+  // quand même son document (en-tête + bloc client + tableau vide).
+  // Génération 100 % frontend depuis les données déjà chargées, module PDF
+  // chargé en lazy (dynamic import → chunk séparé pour @react-pdf/renderer).
 
-  // Visibilité du bouton : au moins un mois ÉCHU (≤ mois d'émission) avec
-  // facturé ou payé Owner (les mois futurs ne sont pas facturés — hors doc).
-  const hasOwnerStatement = useMemo(() => {
-    const nowMonth = currentPeriod();
-    return visiblePeriods.some((p) => {
-      if (String(p.period).slice(0, 7) > nowMonth) return false;
-      const a = scopedPeriodAmounts(p, 'owner');
-      return a.expected > 0 || a.received > 0;
-    });
-  }, [visiblePeriods]);
-
-  const [pdfGenerating, setPdfGenerating] = useState(false);
-  const downloadStatement = useCallback(async () => {
-    if (!hasOwnerStatement || pdfGenerating) return;
-    setPdfGenerating(true);
+  // `entity` : 'owner' | 'optilex' — pilote émetteur ET champs de montants.
+  const [pdfGenerating, setPdfGenerating] = useState(null); // null | 'owner' | 'optilex'
+  const downloadStatement = useCallback(async (entity = 'owner') => {
+    if (pdfGenerating) return;
+    setPdfGenerating(entity);
     try {
       const { generateEtatDeCompte } = await import('./pdf/EtatDeComptePdf.jsx');
 
@@ -367,26 +355,25 @@ export default function DetailPanel({
       const { societeName, representant: repFromSociete } = splitSocieteRep(client?.societe);
       const personne = client?.representative_name || repFromSociete;
 
-      // Lignes Owner-only (indépendantes de la vision active). Périmètre
-      // comptable (retour dev ZILWA n°637, 2026-08-21) : de la signature au
-      // mois de la date d'émission INCLUS — les mois futurs ne sont pas
-      // facturés, ils sortent du document ET du total. Les mois vides
-      // (ni facturé ni payé) restent sautés.
+      // Lignes de l'entité demandée. Périmètre comptable (retour dev ZILWA
+      // n°637, 2026-08-21) : de la signature au mois de la date d'émission
+      // INCLUS — les mois futurs ne sont pas facturés, ils sortent du
+      // document ET du total. Les mois vides (ni facturé ni payé) sautés.
       const nowMonth = currentPeriod();
       const sorted = [...visiblePeriods]
         .sort((a, b) => String(a.period).localeCompare(String(b.period)));
-      const ownerRows = [];
+      const entityRows = [];
       let latestExpected = null;
       for (const p of sorted) {
         const month = String(p.period).slice(0, 7);
         if (month > nowMonth) continue; // mois futur — hors périmètre
-        const a = scopedPeriodAmounts(p, 'owner');
+        const a = scopedPeriodAmounts(p, entity);
         if (a.expected <= 0 && a.received <= 0) continue;
         if (a.expected > 0) latestExpected = a.expected;
         // « Payé » inclut le récupéré sur créances passées du mois : le
         // solde cumulé (calculé dans le PDF) régularise ainsi les mois
         // précédents au fil des lignes.
-        ownerRows.push({
+        entityRows.push({
           month,
           billed: a.expected,
           paid: a.received + a.receivedOverdue,
@@ -394,29 +381,40 @@ export default function DetailPanel({
       }
 
       // Offre = libellé de la Formule : tranche, sinon forfait (tarif client
-      // prioritaire, sinon dernier attendu Owner à montant).
+      // prioritaire côté Owner, sinon dernier attendu de l'entité).
       const range = profile?.employee_range || focusedRow?.employee_range || client?.employee_range;
-      const tarif = toNumber(client?.tarif);
+      const tarif = entity === 'owner' ? toNumber(client?.tarif) : null;
       const price = (tarif && tarif > 0) ? tarif : latestExpected;
       const offre = range ? `${range} salariés` : (price ? formatEUR(price) : '—');
 
-      const rows = ownerRows.map((r) => ({
+      const rows = entityRows.map((r) => ({
         periodLabel: formatMonthLabel(r.month),
         offre,
         billed: r.billed,
         paid: r.paid,
       }));
 
+      // Adresse client : exposée par le profil (backend 2026-08-25) —
+      // code défensif, les champs peuvent ne pas encore être présents.
+      const addressLine = [
+        profile?.address_line1 || null,
+        [profile?.postal_code, profile?.city].filter(Boolean).join(' ') || null,
+      ].filter(Boolean).join(', ');
+
       const blob = await generateEtatDeCompte({
+        entity,
         recipient: {
           company: societeName,
           person: personne || '',
           clientNumber: client?.numero_client
             ? String(client.numero_client).replace(/^n°\s*/i, '')
             : '',
-          // Trade licence côté client = SIREN quand la fiche le connaît
-          // (le label reste affiché vide sinon, comme la référence).
-          siren: profile?.siren || '',
+          address: addressLine,
+          email: client?.email || '',
+          // Siret du modèle : `profile.siret` (14 chiffres, backend
+          // 2026-08-25) → repli sur le SIREN connu → vide (libellé
+          // conservé, comme le modèle).
+          siret: profile?.siret || profile?.siren || '',
         },
         rows,
         // Date courte DD/MM/YY — format de la référence.
@@ -426,8 +424,9 @@ export default function DetailPanel({
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       const safeName = (societeName || 'Client').replace(/[\\/:*?"<>|]/g, '-').trim();
+      const entityLabel = entity === 'optilex' ? "Opti'lex" : 'Owner';
       a.href = url;
-      a.download = `Etat de compte - ${safeName} - ${new Date().toISOString().slice(0, 10)}.pdf`;
+      a.download = `Etat de compte ${entityLabel} - ${safeName} - ${new Date().toISOString().slice(0, 10)}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -436,9 +435,9 @@ export default function DetailPanel({
       console.error('[DetailPanel pdf]', e);
       onShowToast?.('Erreur lors de la génération du PDF', 'error');
     } finally {
-      setPdfGenerating(false);
+      setPdfGenerating(null);
     }
-  }, [hasOwnerStatement, pdfGenerating, visiblePeriods, profile, focusedRow, client, onShowToast]);
+  }, [pdfGenerating, visiblePeriods, profile, focusedRow, client, onShowToast]);
 
   // Bouton Modifier : déplie le détail complet puis scrolle dessus (léger
   // délai pour laisser l'accordéon commencer son expansion).
@@ -526,12 +525,16 @@ export default function DetailPanel({
               </div>
             )}
 
-            {/* 3 tuiles KPI contrat (scope-aware, dérivées de la timeline).
-                Le cumul de créances antérieures (calcul backend, vision
-                active) est signalé en alerte rouge sous « Restant dû ». */}
+            {/* 4 tuiles KPI contrat (scope-aware, dérivées de la timeline).
+                « Restant dû » = tout ce que le contrat doit encore
+                rapporter (mois à venir inclus) ; « Retard à date » = ce qui
+                est réellement en retard aujourd'hui (mois courant + créances
+                antérieures) — deux notions distinctes, à ne pas confondre. */}
             <KpiTiles
               kpis={kpis}
+              overdueCurrent={focusedRow ? scopedOverdueCurrent(focusedRow, scope) : 0}
               overdueCum={focusedRow ? scopedOverdueCum(focusedRow, scope) : 0}
+              credit={focusedRow ? scopedCredit(focusedRow, scope) : 0}
               loading={loadingTimeline}
             />
 
@@ -549,45 +552,28 @@ export default function DetailPanel({
               />
             </Section>
 
-            {/* Section : État de compte (échéancier) — bouton PDF à côté
-                du titre. Le PDF est toujours OWNER-only : visible dans
-                toutes les visions dès qu'une période a du facturé ou du
-                payé Owner. */}
+            {/* Section : État de compte (échéancier) — bouton(s) PDF à côté
+                du titre. Le document suit la vision active ; en Globale les
+                deux entités sont proposées séparément (jamais fusionnées).
+                Toujours actif, même sans échéance facturée. */}
             <Section
               title="État de compte"
               delay={0.11}
               action={(
-                <button
-                  type="button"
-                  onClick={downloadStatement}
-                  disabled={pdfGenerating || !hasOwnerStatement}
-                  title={hasOwnerStatement
-                    ? "Télécharger l'état de compte (PDF)"
-                    : 'Aucun montant Owner facturé ou payé sur les mois échus — rien à éditer'}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                    height: 26, padding: '0 10px',
-                    background: '#fff', color: N.text,
-                    border: `1px solid ${N.border}`, borderRadius: 6,
-                    fontSize: 12, fontWeight: 600,
-                    cursor: pdfGenerating ? 'wait' : (hasOwnerStatement ? 'pointer' : 'not-allowed'),
-                    fontFamily: 'inherit', whiteSpace: 'nowrap',
-                    boxShadow: '0 1px 2px rgba(15,15,15,0.04)',
-                    opacity: (pdfGenerating || !hasOwnerStatement) ? 0.55 : 1,
-                    transition: 'background 0.12s, opacity 0.15s',
-                  }}
-                  onMouseEnter={(e) => { if (!pdfGenerating) e.currentTarget.style.background = N.sideBg; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
-                >
-                  <motion.span
-                    animate={pdfGenerating ? { y: [0, 2, 0] } : { y: 0 }}
-                    transition={pdfGenerating ? { duration: 0.7, repeat: Infinity, ease: 'easeInOut' } : { duration: 0 }}
-                    style={{ display: 'inline-flex' }}
-                  >
-                    <Download size={12} strokeWidth={2} />
-                  </motion.span>
-                  {pdfGenerating ? 'Génération…' : "Télécharger l'état de compte"}
-                </button>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  {(scope === 'global' ? ['owner', 'optilex'] : [scope]).map((entity) => (
+                    <StatementButton
+                      key={entity}
+                      entity={entity}
+                      label={scope === 'global'
+                        ? (entity === 'optilex' ? "État de compte Opti'lex" : 'État de compte Owner')
+                        : "Télécharger l'état de compte"}
+                      busy={pdfGenerating === entity}
+                      disabled={!!pdfGenerating}
+                      onClick={() => downloadStatement(entity)}
+                    />
+                  ))}
+                </span>
               )}
             >
               <InstallmentsList
@@ -602,18 +588,14 @@ export default function DetailPanel({
                 masqué si l'endpoint audit client est absent ou vide. */}
             <ActionsHistory entries={clientAudit} />
 
-            {/* Section : Timeline périodes — EXISTANTE ; démarre au mois de
-                signature (visiblePeriods, règle Ismahane 2026-08-19) */}
-            <Section title="Timeline mensuelle" delay={0.14}>
-              <TimelineList
-                periods={visiblePeriods}
-                loading={loadingTimeline}
-                focusedRowId={rowId}
-                onSelectRow={onSelectRow}
-                dateSignature={profile?.date_signature}
-                signatureMarker={signatureMarker}
-              />
-            </Section>
+            {/* Section : Commentaires — remplace la timeline mensuelle
+                (2026-08-25) : celle-ci faisait doublon avec l'échéancier
+                « État de compte » et ne servait pas le travail réel de la
+                finance (recouvrement). Ici vit le contexte que seul un
+                humain écrit : « promesse de règlement au 15 », « en attente
+                retour cabinet ». Fil INTERNE Owner — le cabinet Opti'Lex
+                n'y a pas accès (aucun lien vers le fil du board). */}
+            <ClientComments clientId={clientId} onShowToast={onShowToast} />
 
             {/* Section : Rendez-vous & juriste référent — vue synthétique
                 depuis le retour dev 2026-08-21 (sortie de l'accordéon).
@@ -974,27 +956,100 @@ function ClientHeader({
   );
 }
 
-// ── 3 tuiles KPI (Total contrat / Encaissé / Restant dû) ────────────────────
-// `overdueCum` : créances des mois précédents (calcul backend, vision
-// active) — alerte rouge sous « Restant dû », visible sans ouvrir le détail.
-function KpiTiles({ kpis, overdueCum = 0, loading }) {
+// ── Bouton de téléchargement d'un état de compte ────────────────────────────
+// Un bouton par entité juridique (Owner / Opti'lex). Toujours cliquable :
+// un client sans échéance facturée obtient un document au tableau vide.
+function StatementButton({ entity, label, busy, disabled, onClick }) {
+  const entityLabel = entity === 'optilex' ? "Opti'lex" : 'Owner';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={`Télécharger l'état de compte ${entityLabel} (PDF)`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        height: 26, padding: '0 10px',
+        background: '#fff', color: N.text,
+        border: `1px solid ${N.border}`, borderRadius: 6,
+        fontSize: 12, fontWeight: 600,
+        cursor: disabled ? 'wait' : 'pointer',
+        fontFamily: 'inherit', whiteSpace: 'nowrap',
+        boxShadow: '0 1px 2px rgba(15,15,15,0.04)',
+        opacity: disabled ? 0.6 : 1,
+        transition: 'background 0.12s, opacity 0.15s',
+      }}
+      onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = N.sideBg; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
+    >
+      <motion.span
+        animate={busy ? { y: [0, 2, 0] } : { y: 0 }}
+        transition={busy ? { duration: 0.7, repeat: Infinity, ease: 'easeInOut' } : { duration: 0 }}
+        style={{ display: 'inline-flex' }}
+      >
+        <Download size={12} strokeWidth={2} />
+      </motion.span>
+      {busy ? 'Génération…' : label}
+    </button>
+  );
+}
+
+// ── 4 tuiles KPI (Total contrat / Encaissé / Restant dû / Retard à date) ────
+// Distinction métier à respecter (dev 2026-08-25) :
+//   « Restant dû »   = tout ce que le contrat doit encore rapporter, mois à
+//                      VENIR inclus (total − encaissé).
+//   « Retard à date » = ce qui est en retard AUJOURD'HUI, soit le retard du
+//                      mois courant + les créances antérieures.
+// `overdueCurrent` / `overdueCum` arrivent scope-aware du parent.
+function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loading }) {
   const surplus = kpis.restant < 0 ? -kpis.restant : 0;
+  const overdueToDate = overdueCurrent + overdueCum;
+  // Trop-perçu reporté (backend `credit_*`) : un solde créditeur n'est pas
+  // un retard. Sans retard, il PREND LA PLACE de la valeur de la tuile (en
+  // vert) pour rendre l'action visible ; avec un retard (possible entre
+  // entités en vision Globale), le retard reste la valeur principale et le
+  // crédit passe en sous-ligne.
+  const creditOnly = credit > 0 && overdueToDate === 0;
   const tiles = [
     { label: 'Total contrat', value: kpis.total, color: N.text },
     { label: 'Encaissé', value: kpis.encaisse, color: N.green },
     {
       label: 'Restant dû',
       value: Math.max(0, kpis.restant), // plancher 0 — le trop-perçu est restitué en sous-note
-      color: (kpis.restant > 0 || overdueCum > 0) ? '#b42318' : N.green,
+      color: kpis.restant > 0 ? '#b42318' : N.green,
       notes: [
-        overdueCum > 0 ? { text: `dont ${formatEUR(overdueCum)} de créances antérieures`, color: '#b42318' } : null,
         surplus > 0 ? { text: `+${formatEUR(surplus)} trop-perçu`, color: N.green } : null,
+      ].filter(Boolean),
+    },
+    {
+      label: 'Retard à date',
+      value: overdueToDate,
+      display: creditOnly ? `Trop-perçu · ${formatEUR(credit)}` : null,
+      color: creditOnly ? N.green : (overdueToDate > 0 ? '#b42318' : N.text),
+      notes: [
+        creditOnly
+          ? { text: 'à déduire ou à rembourser', color: N.green }
+          : null,
+        // La ventilation des créances antérieures a davantage de sens ici
+        // que sous « Restant dû » (déplacée le 2026-08-25).
+        !creditOnly && overdueCum > 0
+          ? { text: `dont ${formatEUR(overdueCum)} de créances antérieures`, color: '#b42318' }
+          : null,
+        // Retard ET crédit coexistent (entités différentes en Globale).
+        !creditOnly && credit > 0
+          ? { text: `+${formatEUR(credit)} de trop-perçu`, color: N.green }
+          : null,
       ].filter(Boolean),
     },
   ];
   return (
     <div style={{
-      display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10,
+      display: 'grid',
+      // 4 tuiles : `auto-fit` + minmax(160px) → 4 colonnes sur panneau large
+      // ou plein écran, bascule automatiquement en 2×2 sur panneau étroit
+      // (520 px) plutôt que d'écraser les montants.
+      gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+      gap: 10,
       marginTop: 22,
     }}>
       {tiles.map((t, i) => (
@@ -1006,7 +1061,9 @@ function KpiTiles({ kpis, overdueCum = 0, loading }) {
           style={{
             border: `1px solid ${N.borderSft}`,
             borderRadius: 10,
-            padding: '12px 14px',
+            // padding resserré depuis la 4e tuile : garde ~130px utiles pour
+            // les montants à 6 chiffres sans troncature.
+            padding: '12px 12px',
             background: '#fff',
             display: 'flex', flexDirection: 'column', gap: 4,
             minWidth: 0,
@@ -1027,11 +1084,19 @@ function KpiTiles({ kpis, overdueCum = 0, loading }) {
           ) : (
             <>
               <span style={{
-                fontSize: 19, fontWeight: 700, color: t.color,
+                // 19 → 17 px avec la 4e tuile : un montant à 6 chiffres
+                // (« 264 770,18 € ») tient sans ellipse en colonne étroite.
+                // `display` (libellé + montant, ex. trop-perçu) est plus long
+                // qu'un montant seul : légèrement réduit et autorisé à passer
+                // sur 2 lignes plutôt que d'être tronqué.
+                fontSize: t.display ? 13.5 : 17,
+                fontWeight: 700, color: t.color,
                 fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em',
-                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                lineHeight: t.display ? 1.25 : undefined,
+                whiteSpace: t.display ? 'normal' : 'nowrap',
+                overflow: 'hidden', textOverflow: 'ellipsis',
               }}>
-                {formatEUR(t.value)}
+                {t.display || formatEUR(t.value)}
               </span>
               {(t.notes || []).map((note, j) => (
                 <span key={j} style={{
@@ -2611,179 +2676,376 @@ function formatAuditDate(iso) {
   });
 }
 
-// ── Section : Timeline ──────────────────────────────────────────────────────
-// `signatureMarker` : date longue FR à afficher en ligne-marqueur quand la
-// signature précède la première période de données (antériorité importée
-// depuis 2025-10) — sinon null, le badge inline sur la ligne de période suffit.
-function TimelineList({ periods, loading, focusedRowId, onSelectRow, dateSignature, signatureMarker }) {
-  // Mois de la signature (YYYY-MM) : point de départ de l'histoire du client.
-  // parseDateFR gère les formats mixtes en base (ISO ET DD/MM/YYYY) — un
-  // slice brut ne matchait que l'ISO, d'où un badge absent sur une partie
-  // des clients.
-  const signatureMonth = useMemo(() => {
-    const d = parseDateFR(dateSignature);
-    if (!d) return null;
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  }, [dateSignature]);
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} style={{
-            height: 32, background: '#f3f4f6', borderRadius: 4,
-            animation: 'tsfPulse 1.4s ease-in-out infinite', opacity: 1 - i * 0.12,
-          }} />
-        ))}
-      </div>
-    );
-  }
-  if (!periods.length) return <Empty text="Aucune période disponible." />;
+// ── Section : Commentaires (fil interne Owner) ──────────────────────────────
+// Remplace la timeline mensuelle (2026-08-25). Porte le contexte humain du
+// recouvrement — « promesse de règlement au 15 », « en attente retour
+// cabinet » — que ni l'échéancier ni l'audit ne capturent.
+//
+// Endpoints (backend en cours de déploiement → code défensif) :
+//   GET    /finance-periods/client/{id}/comments        (trié serveur)
+//   POST   /finance-periods/client/{id}/comments        {body}
+//   PATCH  /finance-periods/client/{id}/comments/{cid}  {pinned}
+//   DELETE /finance-periods/client/{id}/comments/{cid}
+//
+// Toutes les mutations sont optimistes + rollback + toast, comme le reste de
+// la page. Les actions (épingler / supprimer) ne s'affichent que si le
+// backend a calculé `can_moderate` sur l'entrée.
+//
+// Fil INTERNE Owner : aucun lien vers le fil du board (le cabinet Opti'Lex
+// ne doit pas le voir).
+
+// Tri local appliqué après chaque mutation optimiste — même ordre que le
+// serveur : épinglés d'abord, puis du plus récent au plus ancien.
+const sortComments = (list) => [...list].sort((a, b) => {
+  if (!!b.pinned !== !!a.pinned) return b.pinned ? 1 : -1;
+  return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+});
+
+function ClientComments({ clientId, onShowToast }) {
+  const [comments, setComments] = useState(null);   // null = en cours / indispo
+  const [available, setAvailable] = useState(true); // false = endpoint absent
+  const [draft, setDraft] = useState('');
+  const [posting, setPosting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null); // id en attente
+  const taRef = useRef(null);
+
+  const base = clientId ? `/api/v1/finance-periods/client/${clientId}/comments` : null;
+
+  useEffect(() => {
+    if (!clientId) return undefined;
+    let cancelled = false;
+    setComments(null);
+    setAvailable(true);
+    setDraft('');
+    setConfirmDelete(null);
+    apiClient.get(base)
+      .then((data) => {
+        if (cancelled) return;
+        const list = Array.isArray(data?.comments) ? data.comments
+          : Array.isArray(data) ? data : [];
+        setComments(sortComments(list));
+      })
+      .catch(() => {
+        // Endpoint pas encore déployé / erreur : section masquée, pas de
+        // composer inutilisable ni de crash.
+        if (!cancelled) { setAvailable(false); setComments([]); }
+      });
+    return () => { cancelled = true; };
+  }, [clientId, base]);
+
+  // Textarea auto-grow (pas de scrollbar interne, la fiche scrolle déjà).
+  const autoGrow = useCallback(() => {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
+  }, []);
+
+  const submit = useCallback(async () => {
+    const body = draft.trim();
+    if (!body || posting || !base) return;
+    setPosting(true);
+    // Optimiste : entrée temporaire en tête, remplacée par la réponse.
+    const tempId = `temp-${Date.now()}`;
+    const optimistic = {
+      id: tempId,
+      body,
+      // Même convention que CommentPopup.jsx : full_name > name > email.
+      author_name: (() => {
+        const u = apiClient.getUser();
+        return u?.full_name || u?.name || u?.email || 'Moi';
+      })(),
+      pinned: false,
+      created_at: new Date().toISOString(),
+      can_moderate: true,
+      _pending: true,
+    };
+    setComments((prev) => sortComments([...(prev || []), optimistic]));
+    setDraft('');
+    if (taRef.current) taRef.current.style.height = 'auto';
+    try {
+      const created = await apiClient.post(base, { body });
+      setComments((prev) => sortComments(
+        (prev || []).map((c) => (c.id === tempId ? { ...optimistic, ...created, _pending: false } : c))
+      ));
+    } catch (e) {
+      setComments((prev) => (prev || []).filter((c) => c.id !== tempId));
+      setDraft(body); // le texte n'est pas perdu
+      onShowToast?.(e?.data?.detail || 'Erreur lors de la publication du commentaire', 'error');
+    } finally {
+      setPosting(false);
+    }
+  }, [draft, posting, base, onShowToast]);
+
+  const togglePin = useCallback(async (comment) => {
+    if (!base) return;
+    const next = !comment.pinned;
+    const snapshot = comments;
+    setComments((prev) => sortComments(
+      (prev || []).map((c) => (c.id === comment.id ? { ...c, pinned: next } : c))
+    ));
+    try {
+      await apiClient.patch(`${base}/${comment.id}`, { pinned: next });
+    } catch (e) {
+      setComments(snapshot);
+      onShowToast?.(e?.data?.detail || "Erreur lors de l'épinglage", 'error');
+    }
+  }, [base, comments, onShowToast]);
+
+  const remove = useCallback(async (comment) => {
+    if (!base) return;
+    const snapshot = comments;
+    setConfirmDelete(null);
+    setComments((prev) => (prev || []).filter((c) => c.id !== comment.id));
+    try {
+      await apiClient.delete(`${base}/${comment.id}`);
+    } catch (e) {
+      setComments(snapshot);
+      onShowToast?.(e?.data?.detail || 'Erreur lors de la suppression', 'error');
+    }
+  }, [base, comments, onShowToast]);
+
+  if (!available) return null;
 
   return (
-    <div style={{
-      border: `1px solid ${N.borderSft}`,
-      borderRadius: 6,
-      overflow: 'hidden',
-    }}>
+    <Section title="Commentaires" delay={0.14}>
+      {/* Composer */}
       <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr 1fr 1fr',
-        gap: 8,
-        padding: '6px 10px',
-        background: N.sideBg,
-        fontSize: 11, fontWeight: 600,
-        color: N.textMuted,
-        textTransform: 'uppercase', letterSpacing: '0.04em',
+        border: `1px solid ${N.borderSft}`,
+        borderRadius: 10,
+        padding: '10px 12px',
+        marginBottom: comments?.length ? 10 : 0,
       }}>
-        <div>Période</div>
-        <div style={{ textAlign: 'right' }}>Att. global</div>
-        <div style={{ textAlign: 'right' }}>Reçu</div>
-        <div style={{ textAlign: 'right' }}>Retard mois</div>
-      </div>
-      {/* Ligne-marqueur signature : pas une période (aucun montant), style
-          discret distinct des lignes de données. Rend le mois de signature
-          TOUJOURS visible même quand il précède l'antériorité importée. */}
-      {signatureMarker && (
+        <textarea
+          ref={taRef}
+          value={draft}
+          onChange={(e) => { setDraft(e.currentTarget.value); autoGrow(); }}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); submit(); }
+          }}
+          rows={2}
+          placeholder="Ajouter un commentaire… (promesse de règlement, retour cabinet…)"
+          style={{
+            width: '100%', border: 'none', outline: 'none', resize: 'none',
+            background: 'transparent',
+            fontSize: 13, lineHeight: 1.5, fontFamily: 'inherit', color: N.text,
+            minHeight: 38, maxHeight: 220, boxSizing: 'border-box',
+          }}
+        />
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '7px 10px',
-          borderTop: `1px solid ${N.borderSft}`,
-          fontSize: 12, color: N.textMuted,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: 10, marginTop: 4,
         }}>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 3,
-            padding: '1px 6px', borderRadius: 3,
-            background: '#e7f0fb', color: '#1e40af',
-            fontSize: 10, fontWeight: 700,
-            textTransform: 'uppercase', letterSpacing: '0.03em',
-            flexShrink: 0,
-          }}>
-            Signature
+          <span style={{ fontSize: 10.5, color: N.textFaint }}>
+            ⌘ + Entrée pour publier
           </span>
-          <span style={{ fontStyle: 'italic' }}>{signatureMarker}</span>
-          <span style={{ marginLeft: 'auto', fontSize: 10.5, color: N.textFaint, whiteSpace: 'nowrap' }}>
-            antérieure aux données
-          </span>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!draft.trim() || posting}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              height: 26, padding: '0 12px',
+              border: 'none', borderRadius: 6,
+              background: draft.trim() ? '#2383e2' : '#e9e9e7',
+              color: draft.trim() ? '#fff' : N.textFaint,
+              fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+              cursor: draft.trim() && !posting ? 'pointer' : 'default',
+              transition: 'background 0.15s, color 0.15s',
+            }}
+          >
+            <MessageSquarePlus size={12} strokeWidth={2} />
+            {posting ? 'Envoi…' : 'Commenter'}
+          </button>
+        </div>
+      </div>
+
+      {/* Fil */}
+      {comments === null ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} style={{
+              height: 52, background: '#f3f4f6', borderRadius: 10,
+              animation: 'tsfPulse 1.4s ease-in-out infinite', opacity: 1 - i * 0.15,
+            }} />
+          ))}
+        </div>
+      ) : comments.length === 0 ? (
+        <div style={{
+          padding: '10px 12px', fontSize: 12.5, color: N.textFaint,
+          fontStyle: 'italic',
+        }}>
+          Aucun commentaire pour ce client.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <AnimatePresence initial={false}>
+            {comments.map((c, i) => (
+              <CommentRow
+                key={c.id}
+                comment={c}
+                index={i}
+                confirming={confirmDelete === c.id}
+                onAskDelete={() => setConfirmDelete(c.id)}
+                onCancelDelete={() => setConfirmDelete(null)}
+                onConfirmDelete={() => remove(c)}
+                onTogglePin={() => togglePin(c)}
+              />
+            ))}
+          </AnimatePresence>
         </div>
       )}
-      {periods.map((p) => {
-        const isActive = focusedRowId === p.id;
-        const overdue = (Number(p.overdue_owner_current_month) || 0) +
-                        (Number(p.overdue_optilex_current_month) || 0);
-        const received = (Number(p.received_owner) || 0) +
-                         (Number(p.received_optilex_ttc) || 0);
-        // Régularisation : du cash récupéré ce mois-ci SUR LES CRÉANCES des
-        // mois précédents. C'est la réponse à « ses retards ont-ils été
-        // réglés ? » — on la montre là où l'œil cherche le retard.
-        const regularised = (Number(p.received_overdue_owner) || 0) +
-                            (Number(p.received_overdue_optilex_ttc) || 0);
-        const isSignature = signatureMonth &&
-          String(p.period).slice(0, 7) === signatureMonth;
-        return (
-          <button
-            key={p.id}
-            onClick={() => onSelectRow?.(p.id)}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr 1fr 1fr',
-              gap: 8,
-              padding: '8px 10px',
-              border: 'none',
-              background: isActive ? N.sideHover : 'transparent',
-              cursor: 'pointer',
-              borderTop: `1px solid ${N.borderSft}`,
-              textAlign: 'left',
-              fontSize: 13,
-              fontFamily: 'inherit',
-              color: N.text,
-              transition: 'background 0.12s',
-              alignItems: 'center',
-              width: '100%',
-            }}
-            onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = N.sideBg; }}
-            onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
-          >
-            <div style={{
-              fontWeight: isActive ? 600 : 500,
-              display: 'flex', alignItems: 'center', gap: 6, minWidth: 0,
-            }}>
-              <span style={{ whiteSpace: 'nowrap' }}>
-                {formatMonthLabel(periodFromDate(p.period))}
-              </span>
-              {isSignature && (
-                <span title="Mois de signature du contrat" style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 3,
-                  padding: '1px 6px', borderRadius: 3,
-                  background: '#e7f0fb', color: '#1e40af',
-                  fontSize: 10, fontWeight: 700,
-                  textTransform: 'uppercase', letterSpacing: '0.03em',
-                  flexShrink: 0,
-                }}>
-                  Signature
-                </span>
-              )}
-            </div>
-            <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-              {formatEUR(p.expected_global_ttc)}
-            </div>
-            <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: N.textMuted }}>
-              {formatEUR(received)}
-            </div>
-            <div style={{
-              textAlign: 'right',
-              display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
-              gap: 4, flexWrap: 'wrap',
-            }}>
-              {overdue > 0 && (
-                <span style={{
-                  background: N.redBg, color: N.red,
-                  padding: '2px 8px', borderRadius: 4,
-                  fontSize: 12, fontWeight: 600,
-                  fontVariantNumeric: 'tabular-nums',
-                }}>
-                  {formatEUR(overdue)}
-                </span>
-              )}
-              {regularised > 0 && (
-                <span title="Récupéré sur les créances des mois précédents" style={{
-                  background: N.greenBg, color: N.green,
-                  padding: '2px 8px', borderRadius: 4,
-                  fontSize: 12, fontWeight: 600,
-                  fontVariantNumeric: 'tabular-nums',
-                }}>
-                  +{formatEUR(regularised)}
-                </span>
-              )}
-              {overdue <= 0 && regularised <= 0 && (
-                <span style={{ color: N.textFaint }}>—</span>
-              )}
-            </div>
-          </button>
-        );
-      })}
-    </div>
+    </Section>
   );
 }
+
+const COMMENT_AMBER = '#b45309';
+
+function CommentRow({
+  comment, index, confirming,
+  onAskDelete, onCancelDelete, onConfirmDelete, onTogglePin,
+}) {
+  const [hover, setHover] = useState(false);
+  const av = avatarMeta(comment.author_name || comment.author_email || '?');
+  const edited = comment.updated_at && comment.updated_at !== comment.created_at;
+  const showActions = comment.can_moderate && (hover || confirming);
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: comment._pending ? 0.6 : 1, y: 0 }}
+      exit={{ opacity: 0, height: 0, marginTop: 0 }}
+      transition={{ duration: 0.22, delay: Math.min(index, 6) * 0.025, ease: [0.4, 0, 0.2, 1] }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        position: 'relative',
+        display: 'flex', alignItems: 'flex-start', gap: 10,
+        padding: '10px 12px',
+        border: `1px solid ${N.borderSft}`,
+        borderLeft: comment.pinned ? `2px solid ${COMMENT_AMBER}` : `1px solid ${N.borderSft}`,
+        borderRadius: 10,
+        background: comment.pinned ? '#fffdf8' : '#fff',
+        overflow: 'hidden',
+        transition: 'background 0.2s ease',
+      }}
+    >
+      {/* Avatar initiales de l'auteur */}
+      <span style={{
+        width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        background: av.bg, color: av.fg,
+        fontSize: 10.5, fontWeight: 700, userSelect: 'none',
+      }}>
+        {av.initials}
+      </span>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          flexWrap: 'wrap', minWidth: 0,
+        }}>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: N.text }}>
+            {comment.author_name || comment.author_email || 'Inconnu'}
+          </span>
+          <span style={{ fontSize: 11, color: N.textFaint, whiteSpace: 'nowrap' }}>
+            {formatRelativeFR(comment.created_at)}
+          </span>
+          {edited && (
+            <span style={{ fontSize: 10.5, color: N.textFaint, fontStyle: 'italic' }}>
+              modifié
+            </span>
+          )}
+          {comment.pinned && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 3,
+              padding: '1px 7px', borderRadius: 999,
+              background: '#fff3e3', color: COMMENT_AMBER,
+              fontSize: 10, fontWeight: 700,
+              textTransform: 'uppercase', letterSpacing: '0.03em',
+            }}>
+              <Pin size={9} strokeWidth={2.4} />
+              Épinglé
+            </span>
+          )}
+        </div>
+        {/* Texte : les retours à la ligne saisis sont préservés */}
+        <div style={{
+          marginTop: 3,
+          fontSize: 13, lineHeight: 1.5, color: N.text,
+          whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+        }}>
+          {comment.body}
+        </div>
+      </div>
+
+      {/* Actions — réservées à `can_moderate` (direction financière ou
+          auteur du message), révélées au survol. Suppression confirmée
+          INLINE : un window.confirm bloquerait l'UI. */}
+      {showActions && (
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          flexShrink: 0, alignSelf: 'flex-start',
+        }}>
+          {confirming ? (
+            <>
+              <span style={{ fontSize: 11, color: N.textMuted, whiteSpace: 'nowrap' }}>
+                Supprimer ?
+              </span>
+              <button
+                type="button"
+                onClick={onConfirmDelete}
+                style={{ ...commentActionStyle, color: '#b42318', fontWeight: 700, width: 'auto', padding: '0 7px' }}
+              >
+                Oui
+              </button>
+              <button
+                type="button"
+                onClick={onCancelDelete}
+                style={{ ...commentActionStyle, color: N.textMuted, width: 'auto', padding: '0 7px' }}
+              >
+                Annuler
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                title={comment.pinned ? 'Désépingler' : 'Épingler en tête'}
+                onClick={onTogglePin}
+                style={{ ...commentActionStyle, color: comment.pinned ? COMMENT_AMBER : N.textFaint }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = N.sideBg; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <Pin size={12} strokeWidth={2} />
+              </button>
+              <button
+                type="button"
+                title="Supprimer"
+                onClick={onAskDelete}
+                style={{ ...commentActionStyle, color: N.textFaint }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#fdecec'; e.currentTarget.style.color = '#b42318'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = N.textFaint; }}
+              >
+                <Trash2 size={12} strokeWidth={2} />
+              </button>
+            </>
+          )}
+        </span>
+      )}
+    </motion.div>
+  );
+}
+
+const commentActionStyle = {
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  height: 22, width: 22, padding: 0,
+  border: 'none', background: 'transparent',
+  borderRadius: 5, cursor: 'pointer',
+  fontFamily: 'inherit', fontSize: 11,
+  transition: 'background 0.12s, color 0.12s',
+};
 
 // ── Empty state ─────────────────────────────────────────────────────────────
 function Empty({ text = 'Aucune donnée disponible.' }) {

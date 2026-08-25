@@ -31,15 +31,38 @@ import React from 'react';
 import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer';
 import { formatEUR } from '../constants.js';
 
-// ── Émetteur ─────────────────────────────────────────────────────────────
-// Valeurs du template officiel. Owner uniquement : il n'y aura pas de
-// template Opti'lex chez nous (le cabinet émet les siens).
+// ── Émetteurs ────────────────────────────────────────────────────────────
+// Deux entités juridiques distinctes → deux états de compte séparés (jamais
+// de document « fusionné »), sélectionnés par la vision active du tableau.
+//
+// `name`  : texte du bandeau navy.
+// `block` : lignes du bloc émetteur, dans l'ordre du modèle officiel de
+//           chaque entité. Une entrée = { label?, value } — sans `label`
+//           la ligne est brute (gabarit Opti'lex), avec `label` elle est
+//           rendue « Label : valeur » (gabarit Owner).
 export const ISSUER_OWNER = {
   name: 'Owner Technology',
-  company: 'Owner Technology FZCO',
-  addressLines: ['Building A1, Digital Park,', 'D.S.O, U.A.E'],
-  tradeLicence: '55092',
+  block: [
+    { label: 'Company', value: 'Owner Technology FZCO' },
+    { label: 'Address', value: 'Building A1, Digital Park,' },
+    { value: 'D.S.O, U.A.E' },
+    { label: 'Trade licence', value: '55092' },
+  ],
 };
+
+// Valeurs recopiées du modèle officiel du cabinet (optilex.xlsx, 2026-08-25).
+export const ISSUER_OPTILEX = {
+  name: 'Optilex',
+  block: [
+    { value: "OPTI'LEX", bold: true },
+    { value: '11 Boulevard De Sébastopol' },
+    { value: '75001 Paris, FR' },
+    { value: 'cabinetoptilex@gmail.com' },
+    { label: 'SIRET', value: '94029967000015' },
+  ],
+};
+
+export const ISSUER_BY_ENTITY = { owner: ISSUER_OWNER, optilex: ISSUER_OPTILEX };
 
 // Sanitize pour l'encodage WinAnsi des fonts standard (cf. en-tête).
 const pdfSafe = (s) => String(s ?? '').replace(/[\u202F\u00A0]/g, ' ');
@@ -178,9 +201,19 @@ const COLW = { period: '18%', offre: '30%', billed: '14%', paid: '14%', remainin
 // Largeur de la barre navy du Total = toutes les colonnes sauf Restant dû.
 const TOTAL_BAR_W = '76%';
 
-// Ligne « Label : valeur » — le label gras reste affiché même à valeur
-// vide (fidèle à la référence : « Address : », « Trade licence : »).
-function PartyLine({ label, value }) {
+// Ligne d'un bloc partie :
+//   - avec `label` → « Label : valeur », le label gras restant affiché même
+//     à valeur vide (fidèle aux modèles : « Adresse postale : », « Siret : »)
+//   - sans `label` → ligne brute (gabarit émetteur Opti'lex, nom de société
+//     en tête du bloc Entreprise), `bold` pour la ligne de tête.
+function PartyLine({ label, value, bold = false }) {
+  if (!label) {
+    return (
+      <View style={styles.partyLine}>
+        <Text style={bold ? styles.partyLabel : styles.partyValue}>{pdfSafe(value || '')}</Text>
+      </View>
+    );
+  }
   return (
     <View style={styles.partyLine}>
       <Text style={styles.partyLabel}>{`${pdfSafe(label)} : `}</Text>
@@ -230,23 +263,23 @@ function EtatDeComptePdf({ issuer, recipient, rows, issueDate }) {
 
         {/* 4-5. Issuer | Recipient */}
         <View style={styles.partiesRow}>
+          {/* Émetteur — bloc propre à l'entité (gabarit de son modèle) */}
           <View style={styles.partyBlockLeft}>
             <Text style={styles.partyTitle}>Issuer</Text>
-            <PartyLine label="Company" value={issuer.company} />
-            <PartyLine label="Address" value={issuer.addressLines[0]} />
-            {issuer.addressLines.slice(1).map((l, i) => (
-              <View key={i} style={styles.partyLine}>
-                <Text style={styles.partyValue}>{pdfSafe(l)}</Text>
-              </View>
+            {issuer.block.map((l, i) => (
+              <PartyLine key={i} label={l.label} value={l.value} bold={l.bold} />
             ))}
-            <PartyLine label="Trade licence" value={issuer.tradeLicence} />
           </View>
+
+          {/* Destinataire — présentation UNIQUE aux deux entités (modèle
+              Opti'lex retenu par le dev) : titre « Entreprise », nom de
+              société en tête, puis Adresse postale / Adresse mail / Siret.
+              Libellés du modèle avec ses coquilles corrigées
+              (« Adresse postable » → « Adresse postale », « Addresse mail »
+              → « Adresse mail »), comme « Compagny » → « Company ». */}
           <View style={styles.partyBlockRight}>
-            <Text style={styles.partyTitle}>Recipient</Text>
-            {/* « Company » : coquille « Compagny » de la référence corrigée.
-                Company = société seule (splitSocieteRep) ; Client = la/les
-                personne(s) découpée(s) + numéro. */}
-            <PartyLine label="Company" value={recipient.company} />
+            <Text style={styles.partyTitle}>Entreprise</Text>
+            <PartyLine value={recipient.company} bold />
             <PartyLine
               label="Client"
               value={[
@@ -254,9 +287,10 @@ function EtatDeComptePdf({ issuer, recipient, rows, issueDate }) {
                 recipient.clientNumber ? `n°${recipient.clientNumber}` : null,
               ].filter(Boolean).join(' · ')}
             />
-            <PartyLine label="Address" value="" />
-            {/* Trade licence côté client = SIREN quand il est connu */}
-            <PartyLine label="Trade licence" value={recipient.siren} />
+            {/* Valeurs vides tolérées : le libellé reste affiché (modèle). */}
+            <PartyLine label="Adresse postale" value={recipient.address} />
+            <PartyLine label="Adresse mail" value={recipient.email} />
+            <PartyLine label="Siret" value={recipient.siret} />
           </View>
         </View>
 
@@ -270,6 +304,18 @@ function EtatDeComptePdf({ issuer, recipient, rows, issueDate }) {
             <Text style={[styles.th, { width: COLW.paid }]}>Montant payé</Text>
             <Text style={[styles.th, styles.thLast, { width: COLW.remaining }]}>Restant dû</Text>
           </View>
+
+          {/* Aucune échéance facturée sur le périmètre : le document sort
+              quand même (en-tête + bloc client), avec une ligne explicite
+              et un Total à 0,00 € — l'état de compte doit être
+              téléchargeable pour TOUS les clients (dev 2026-08-25). */}
+          {computed.length === 0 && (
+            <View style={styles.tr} wrap={false}>
+              <Text style={[styles.td, styles.tdFirst, { width: '100%', color: MUTED }]}>
+                Aucune échéance sur la période
+              </Text>
+            </View>
+          )}
 
           {computed.map((r, i) => (
             <View key={i} style={styles.tr} wrap={false}>
@@ -316,8 +362,11 @@ function EtatDeComptePdf({ issuer, recipient, rows, issueDate }) {
 
 // Point d'entrée consommé par le DetailPanel (lazy import) : rend le
 // document et retourne un Blob prêt pour le download.
+// `entity` : 'owner' | 'optilex' → sélectionne l'émetteur (deux entités
+// juridiques distinctes, jamais de document fusionné). `issuer` explicite
+// reste possible (tests / futur template).
 export async function generateEtatDeCompte(props) {
-  const issuer = props.issuer || ISSUER_OWNER;
+  const issuer = props.issuer || ISSUER_BY_ENTITY[props.entity] || ISSUER_OWNER;
   return pdf(<EtatDeComptePdf {...props} issuer={issuer} />).toBlob();
 }
 

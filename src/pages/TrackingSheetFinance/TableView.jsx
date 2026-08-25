@@ -13,11 +13,10 @@
 // des sommes Owner+Opti'lex, lecture seule (on n'édite pas une somme).
 //
 // Layout (gauche → droite, ordre figé) :
-//   1.  Numéro client                    (read-only, sticky — pill colorée
-//                                         par l'état board `displayEtat` +
-//                                         palette ETAT_STYLE, tooltip =
-//                                         libellé complet ; neutre si client
-//                                         hors board. Depuis 2026-08-21.)
+//   1.  Numéro client                    (read-only, sticky — fond rouge doux
+//                                         avec le nom si le client porte des
+//                                         créances antérieures ; seul code
+//                                         couleur du tableau. Depuis 2026-08-24.)
 //   2.  Nom client + entreprise          (read-only, hover → OUVRIR, sticky)
 //   3.  Modalités                        (chip N×/M/A + pastilles O/X — cf.
 //                                         components/ModalitesCell.jsx, fusion
@@ -69,9 +68,9 @@ import {
   stripEntitySuffix,
   normalizeSearch,
   matchesClientSearch,
+  scopedCredit,
   formatEUR,
   formatDateFR,
-  parseDateFR,
   splitSocieteRep,
   toNumber,
 } from './constants.js';
@@ -81,7 +80,7 @@ import ModalitesCell from './components/ModalitesCell.jsx';
 // teinte en pastel les cellules sticky N°/société (la colonne État dédiée a
 // été retirée 2026-08-21, l'édition vit dans le DetailPanel), et la météo
 // client s'affiche à côté du nom (MeteoIcon + bandes rouge/orange/vert).
-import { ETAT_STYLE, displayEtat, MeteoIcon, METEO_BANDS, meteoBandOf } from '../OptilexBoard.jsx';
+import { MeteoIcon, METEO_BANDS, meteoBandOf } from '../OptilexBoard.jsx';
 import CommentPopup from './CommentPopup.jsx';
 import apiClient from '../../services/apiClient.js';
 
@@ -516,45 +515,17 @@ function HiddenColsBar({ hiddenCols, onShowCol, onShowAll }) {
   );
 }
 
-// ── Overdue status (palette Notion light mode authentique) ──────────────────
-// Priorité ORANGE > ROUGE > JAUNE (cf. brief dev 2026-05-11).
-// Refonte 2026-05-11 avec hex officiels Notion (désaturation extrême + même
-// luminance → harmonie auto). Hovers = -3% luminance.
-const OVERDUE_STATUS_COLORS = {
-  orange: { bg: '#F8ECDF', hover: '#F1DEC6' }, // Notion orange (1er paiement raté)
-  red:    { bg: '#FAECEC', hover: '#F2D6D6' }, // Notion red (retard courant + cumul)
-  yellow: { bg: '#FAF3DD', hover: '#F2E6C2' }, // Notion yellow (retard courant seul)
-};
-
-// Scope-aware depuis la phase 2 : le signal couleur de la row suit la vision
-// active (en vision Owner, un retard purement Opti'lex ne teinte pas la row —
-// cohérent avec « le tableau doit être visuel et simple » du brief).
-function getOverdueStatus(row, scope = 'global') {
-  const overdueCurrent =
-    (scope === 'optilex' ? 0 : toNumber(row.overdue_owner_current_month)) +
-    (scope === 'owner' ? 0 : toNumber(row.overdue_optilex_current_month));
-  const overdueCumul =
-    (scope === 'optilex' ? 0 : toNumber(row.overdue_owner_cumulative)) +
-    (scope === 'owner' ? 0 : toNumber(row.overdue_optilex_cumulative));
-  const received =
-    (scope === 'optilex' ? 0 : toNumber(row.received_owner)) +
-    (scope === 'owner' ? 0 : toNumber(row.received_optilex_ttc));
-
-  // ORANGE (priorité haute) : rdv_onboarding > +1 jour ET aucun paiement reçu cette period
-  const onboardingDate = parseDateFR(row.client?.rdv_onboarding);
-  if (onboardingDate && received === 0) {
-    const oneDayAfter = onboardingDate.getTime() + 86400000;
-    if (oneDayAfter < Date.now()) return 'orange';
-  }
-
-  if (overdueCurrent > 0 && overdueCumul > 0) return 'red';
-  if (overdueCurrent > 0) return 'yellow';
-  return null;
-}
+// ── Créances antérieures : seul signal couleur de la zone finances ──────────
+// Brief dev 2026-08-24 : plus de teinte de ligne (retard du mois, 1er paiement
+// raté) ni de vert sur les montants récupérés. Seules les créances antérieures
+// ressortent, en rouge — c'est ce que la finance doit repérer d'un œil, et le
+// rouge ne vaut que s'il est seul. L'état client garde sa teinte pastel sur les
+// deux cellules d'identité (N° + nom), zone distincte.
+const PRIOR_DEBT_RED = { bg: '#FAECEC', fg: '#b74133' }; // rouge Notion désaturé
 
 // ── Cell wrapper helper ─────────────────────────────────────────────────────
 function Cell({
-  k, cols, stickyLefts, hover, isActive, children, extraStyle, rowBg, rowStatus,
+  k, cols, stickyLefts, hover, isActive, children, extraStyle,
   selected, onSelect, commentable, commentCount, onOpenCommentPopup, collapsingCol,
 }) {
   const c = cols[k];
@@ -564,9 +535,7 @@ function Cell({
   // marqué qui apparaît derrière la cell éditable au hover). Le row hover
   // bg subtle suffit comme affordance ; la sélection (outline + point cyan)
   // fait le reste.
-  const baseBg = rowStatus
-    ? rowBg
-    : (isActive ? N.rowActive : (hover ? N.rowHover : (group?.cellBg ?? N.pageBg)));
+  const baseBg = isActive ? N.rowActive : (hover ? N.rowHover : (group?.cellBg ?? N.pageBg));
   return (
     <div
       style={{
@@ -740,6 +709,8 @@ const RowRenderer = React.memo(function RowRenderer({
   const expected         = sumOrField('expected_owner', 'expected_optilex_ttc', fields?.expected);
   const received         = sumOrField('received_owner', 'received_optilex_ttc', fields?.received);
   const overdueCum       = sumOrField('overdue_owner_cumulative', 'overdue_optilex_cumulative', fields?.overdueCum) || 0;
+  // Trop-perçu reporté de l'entité active (0 si le backend ne l'expose pas).
+  const rowCredit        = scopedCredit(row, scope);
   const recoveredOverdue = sumOrField('received_overdue_owner', 'received_overdue_optilex_ttc', fields?.receivedOverdue);
 
   // Delta Récupéré vs Attendu — pill verte si surplus, pill orange si manquement.
@@ -747,19 +718,13 @@ const RowRenderer = React.memo(function RowRenderer({
   // Pill cachée si reçu=0 (cell vide).
   const deltaOverdue = recoveredOverdue > 0 ? recoveredOverdue - overdueCum : 0;
 
-  // Overdue status (color coding Notion-soft, cf. brief 2026-05-11) — suit la vision.
-  const overdueStatus = getOverdueStatus(row, scope);
-  const statusColors = overdueStatus ? OVERDUE_STATUS_COLORS[overdueStatus] : null;
+  // Brief dev 2026-08-24 : le tableau ne porte plus qu'UN signal couleur — le
+  // client qui traîne des créances antérieures, en rouge sur ses deux cellules
+  // d'identité. L'état client (Signé, résiliation…) n'est plus teinté ici : il
+  // se consulte et s'édite dans le panneau détail.
+  const hasPriorDebt = overdueCum > 0;
 
-  // État board du client → teinte pastel des cellules sticky N°/société.
-  const rowEtat = boardRow ? displayEtat(boardRow) : null;
-  const rowEtatStyle = (rowEtat && ETAT_STYLE[rowEtat]) || null;
-
-  const rowBg = isActive
-    ? N.rowActive
-    : hover
-      ? (statusColors?.hover ?? N.rowHover)
-      : (statusColors?.bg ?? N.pageBg);
+  const rowBg = isActive ? N.rowActive : (hover ? N.rowHover : N.pageBg);
 
   // Cell wrapper bound to current row state (click → select cell, pas ouvrir row)
   const C = useCallback((k, children, extraStyle) => {
@@ -772,8 +737,6 @@ const RowRenderer = React.memo(function RowRenderer({
         stickyLefts={stickyLefts}
         hover={hover}
         isActive={isActive}
-        rowBg={rowBg}
-        rowStatus={overdueStatus}
         selected={selectedColKey === k}
         onSelect={(colKey) => onSelectCell?.(row.id, colKey)}
         commentable={commentable}
@@ -785,7 +748,7 @@ const RowRenderer = React.memo(function RowRenderer({
         {children}
       </Cell>
     );
-  }, [cols, stickyLefts, hover, isActive, rowBg, overdueStatus, selectedColKey, onSelectCell, row.id, rowCommentCounts, onOpenCommentPopup, collapsingCol, scope]);
+  }, [cols, stickyLefts, hover, isActive, selectedColKey, onSelectCell, row.id, rowCommentCounts, onOpenCommentPopup, collapsingCol, scope]);
 
   return (
     <div
@@ -827,19 +790,17 @@ const RowRenderer = React.memo(function RowRenderer({
         </span>
       </div>
 
-      {/* Identité — N° client + Nom : fond PASTEL teinté par l'état board
-          (bg d'ETAT_STYLE — Signé vert, En cours de résiliation rouge,
-          En cours de rétractation ambre…) sur ces DEUX cellules sticky
-          uniquement (pas la ligne entière). Tooltip = libellé complet.
-          Client hors board / sans état → fond neutre historique. */}
+      {/* Identité — N° client + Nom : fond rouge doux UNIQUEMENT si le client
+          porte des créances antérieures (vision active). Aucun autre code
+          couleur ici : c'est le seul repère du tableau. */}
       {keys.includes('numero') && C('numero', (
-        <NumeroCell numero={row.client?.numero_client} etat={rowEtat} etatStyle={rowEtatStyle} />
-      ), rowEtatStyle ? { background: rowEtatStyle.bg, transition: 'background 0.25s ease' } : undefined)}
+        <NumeroCell numero={row.client?.numero_client} priorDebt={hasPriorDebt} />
+      ), hasPriorDebt ? { background: PRIOR_DEBT_RED.bg, transition: 'background 0.25s ease' } : undefined)}
 
       {/* Identité — Nom client + entreprise + météo + bouton OUVRIR au hover */}
       {keys.includes('societe') && C('societe', (
         <>
-          <SocieteCell row={row} boardRow={boardRow} etat={rowEtat} />
+          <SocieteCell row={row} boardRow={boardRow} />
           <button
             type="button"
             className="tsf-open-btn"
@@ -853,7 +814,7 @@ const RowRenderer = React.memo(function RowRenderer({
             <span>OUVRIR</span>
           </button>
         </>
-      ), rowEtatStyle ? { background: rowEtatStyle.bg, transition: 'background 0.25s ease' } : undefined)}
+      ), hasPriorDebt ? { background: PRIOR_DEBT_RED.bg, transition: 'background 0.25s ease' } : undefined)}
 
       {/* Modalités — chip N×/M/A + pastilles prélèvement O/X (colonne fusionnée) */}
       {keys.includes('modalites') && C('modalites', (
@@ -890,16 +851,16 @@ const RowRenderer = React.memo(function RowRenderer({
               onCommit={patch(fields.received)}
               align="center"
               placeholderItalic
-              valueColor='#0f7b6c'
               valueBold
             />
           )}
         </AmountWithDelta>
       ))}
 
-      {/* Retard sur les mois précédents (cumul, entité active) */}
+      {/* Retard sur les mois précédents (cumul, entité active). Sans
+          créance mais avec un trop-perçu reporté : montant vert négatif. */}
       {keys.includes('overdueCum') && C('overdueCum', (
-        <OverduePill amount={overdueCum} />
+        <OverduePill amount={overdueCum} credit={rowCredit} />
       ))}
 
       {/* Récupéré sur créances passées */}
@@ -912,7 +873,7 @@ const RowRenderer = React.memo(function RowRenderer({
                 style={{
                   fontSize: CELL_FONT_SIZE,
                   fontWeight: 700,
-                  color: getReceivedColor(recoveredOverdue, overdueCum) || N.text,
+                  color: N.text,
                   fontVariantNumeric: 'tabular-nums',
                 }}
               />
@@ -923,7 +884,6 @@ const RowRenderer = React.memo(function RowRenderer({
               onCommit={patch(fields.receivedOverdue)}
               align="center"
               placeholderItalic
-              valueColor={getReceivedColor(recoveredOverdue, overdueCum)}
               valueBold
             />
           )}
@@ -962,19 +922,19 @@ function EmptyCell() {
   return null;
 }
 
-// NumeroCell — numéro client sur fond pastel d'état (le bg est porté par la
-// CELLULE via extraStyle, pas de pill : pas de double cadre). Le numéro se
-// teinte du fg de l'état ; le tooltip porte le libellé complet (la couleur
-// seule est illisible pour un nouveau venu). Sans état → rendu neutre.
-function NumeroCell({ numero, etat, etatStyle }) {
+// NumeroCell — le fond rouge doux est porté par la CELLULE (extraStyle) quand
+// le client traîne des créances antérieures ; ici on teinte le numéro et on
+// pose le tooltip qui explique la couleur (seule, elle serait illisible pour
+// quelqu'un qui découvre la page). Sans créance → rendu neutre.
+function NumeroCell({ numero, priorDebt }) {
   if (!numero) return <EmptyCell />;
   return (
     <span
-      title={etat || undefined}
+      title={priorDebt ? 'Créances antérieures à recouvrer' : undefined}
       style={{
         fontSize: 12,
-        color: etatStyle ? etatStyle.fg : N.textMuted,
-        fontWeight: etatStyle ? 700 : 400,
+        color: priorDebt ? PRIOR_DEBT_RED.fg : N.textMuted,
+        fontWeight: priorDebt ? 700 : 400,
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
         letterSpacing: '-0.01em',
         fontVariantNumeric: 'tabular-nums',
@@ -989,7 +949,7 @@ function NumeroCell({ numero, etat, etatStyle }) {
   );
 }
 
-function SocieteCell({ row, boardRow, etat }) {
+function SocieteCell({ row, boardRow }) {
   // Pattern "Société - Nom Prénom" présent sur ~89% des clients ; pour les
   // ~11% restants (clients récents généralement), `representant` sera null
   // et seul le nom de société est affiché. La logique est centralisée dans
@@ -1017,7 +977,7 @@ function SocieteCell({ row, boardRow, etat }) {
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           minWidth: 0,
         }}
-          title={etat ? `${societeName || ''} — ${etat}` : (societeName || '')}
+          title={societeName || ''}
         >
           {societeName || <EmptyCell />}
         </span>
@@ -1152,7 +1112,7 @@ function RecoveredAmount({ value, previous }) {
       style={{
         fontSize: CELL_FONT_SIZE,
         fontWeight: 700,
-        color: '#0f7b6c', // Notion green dark
+        color: N.text, // neutre depuis 2026-08-24 : seul le retard antérieur est coloré
         fontVariantNumeric: 'tabular-nums',
       }}
     />
@@ -1163,22 +1123,55 @@ function RecoveredAmount({ value, previous }) {
 // Animation décompte quand la valeur diminue (dev capture #33 : "voir descendre
 // les chiffres tac tac tac"). MVP : interpole l'ancienne → nouvelle valeur en
 // 700ms avec ease-out.
-function OverduePill({ amount, previous }) {
+function OverduePill({ amount, previous, credit = 0 }) {
+  // Pas de créance mais un trop-perçu reporté (backend `credit_*`) : la
+  // cellule ne reste plus vide — montant VERT préfixé d'un moins, l'action
+  // finance (déduire ou rembourser) devient visible. Un crédit n'étant pas
+  // un retard, aucun signal rouge n'est déclenché (ici comme sur les
+  // cellules d'identité).
+  if ((!amount || amount === 0) && credit > 0) {
+    return (
+      <span
+        title="Trop-perçu à déduire ou rembourser"
+        style={{
+          fontSize: CELL_FONT_SIZE,
+          fontWeight: 700,
+          color: '#0f7b6c',
+          fontVariantNumeric: 'tabular-nums',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        −{formatEUR(credit)}
+      </span>
+    );
+  }
   if (!amount || amount === 0) {
     return <EmptyCell />;
   }
   const isPositive = amount > 0;
+  // Créance antérieure = pastille rouge pleine (seul signal couleur des
+  // colonnes financières depuis 2026-08-24). Un montant négatif est un
+  // trop-perçu : pas une créance, donc pas de pastille rouge.
   return (
-    <AnimatedAmount
-      value={Number(amount)}
-      previous={previous}
-      style={{
-        fontSize: CELL_FONT_SIZE,
-        fontWeight: 700,
-        color: isPositive ? '#b74133' : '#0f7b6c', // rouge si retard, vert si trop perçu
-        fontVariantNumeric: 'tabular-nums',
-      }}
-    />
+    <span style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      padding: isPositive ? '2px 8px' : 0,
+      borderRadius: 5,
+      background: isPositive ? PRIOR_DEBT_RED.bg : 'transparent',
+      transition: 'background 0.2s ease',
+    }}>
+      <AnimatedAmount
+        value={Number(amount)}
+        previous={previous}
+        style={{
+          fontSize: CELL_FONT_SIZE,
+          fontWeight: 700,
+          color: isPositive ? PRIOR_DEBT_RED.fg : '#0f7b6c',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      />
+    </span>
   );
 }
 
@@ -1254,14 +1247,9 @@ function AmountWithDelta({ children, delta }) {
   );
 }
 
-// Helper : couleur du montant Récupéré selon comparaison à l'Attendu.
-//   reçu = 0          → undefined (placeholder gris géré par EditableNumber)
-//   reçu ≥ attendu    → vert (#0f7b6c)
-//   reçu < attendu    → orange (#a4581d) — manquement
-function getReceivedColor(received, expected) {
-  if (!received || received === 0) return undefined;
-  return received >= expected ? '#0f7b6c' : '#a4581d';
-}
+// (Retiré 2026-08-24 : la couleur des montants Récupérés — vert si soldé,
+// orange si partiel — brouillait le seul signal voulu, le retard antérieur
+// en rouge. Les montants récupérés sont désormais neutres.)
 
 // Animation décompte / re-count entre ancienne et nouvelle valeur.
 // Mémorise la dernière valeur affichée, et interpole vers la nouvelle au

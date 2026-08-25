@@ -190,6 +190,16 @@ export const scopedOverdueCum = (r, scope) =>
   (scope === 'optilex' ? 0 : (toNumber(r.overdue_owner_cumulative) || 0)) +
   (scope === 'owner' ? 0 : (toNumber(r.overdue_optilex_cumulative) || 0));
 
+// Trop-perçu reporté des mois antérieurs (backend 2026-08-25 : `credit_owner`
+// / `credit_optilex_ttc`, toujours >= 0). Un solde créditeur N'EST PAS un
+// retard : quand il existe, la créance de l'entité reste à 0. Deux suites
+// possibles côté finance — déduire de la prochaine échéance ou rembourser —
+// d'où sa mise en visibilité dans la page.
+// Défensif : champs absents tant que le backend n'est pas déployé → 0.
+export const scopedCredit = (r, scope) =>
+  (scope === 'optilex' ? 0 : (toNumber(r.credit_owner) || 0)) +
+  (scope === 'owner' ? 0 : (toNumber(r.credit_optilex_ttc) || 0));
+
 // Montants d'une period (row timeline) dans la vision active. `payDate` :
 // par entité en vision entité ; en Globale, Owner en priorité (une somme de
 // dates n'existe pas, on montre la première date connue).
@@ -375,6 +385,24 @@ export const formatEUR = (v, { withSymbol = true } = {}) => {
     maximumFractionDigits: 2,
   });
   return withSymbol ? `${formatted} €` : formatted;
+};
+
+/**
+ * Ratio → « 57,38 % ». Retourne null si le dénominateur est nul/absent :
+ * l'appelant n'affiche alors RIEN (pas de « 0 % » ni de NaN trompeur).
+ * Utilisé par les KPI du bandeau (taux de récupération, taux de
+ * récupération sur créances antérieures) — vocabulaire du classeur finance.
+ */
+export const formatPercent = (numerator, denominator) => {
+  const d = toNumber(denominator);
+  const n = toNumber(numerator);
+  if (!d || d === 0) return null;
+  const pct = ((n || 0) / d) * 100;
+  if (!Number.isFinite(pct)) return null;
+  return `${pct.toLocaleString('fr-FR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} %`;
 };
 
 /**
