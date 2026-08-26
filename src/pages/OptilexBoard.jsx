@@ -968,13 +968,22 @@ export default function OptilexBoard({ embed = false }) {
       if (parrainageFilter && !r.parrainage_eligible) return false;
       // Filtre onboarding : réalisé = bouton "effectué" coché (rdv_onboarding_done).
       if (onboardingFilter === "done" && !r.rdv_onboarding_done) return false;
-      if (onboardingFilter === "todo" && (r.rdv_onboarding_done || !r.numero_client)) return false;
+      // « À faire » exclut les clients partis (résiliés / rétractés / liquidés) :
+      // leur onboarding n'a plus lieu d'être.
+      if (onboardingFilter === "todo"
+        && (r.rdv_onboarding_done || !r.numero_client || TERMINATED_ETATS.includes(displayEtat(r)))) return false;
       // Sous-filtre contextuel "En retard" de l'onglet Intégration à venir.
       if (etatFilter === "Intégration à venir" && multiFilter.length === 0 && integrationView === "overdue" && !isIntegrationOverdue(r)) return false;
       // Filtre date de signature Owner (mois ou période). Une ligne sans date de
       // signature est exclue dès qu'un filtre date est actif.
       if (sigRange.from || sigRange.to) {
-        const d = sigDateOf(r);
+        // Filtre onboarding actif -> la plage porte sur la date d'ONBOARDING
+        // (« les onboarding à effectuer sur cette période »), sinon sur la date
+        // de signature Owner (comportement historique).
+        const onbRaw = r.rdv_onboarding_date_manual || r.rdv_onboarding_date;
+        const d = onboardingFilter !== "all"
+          ? (onbRaw ? String(onbRaw).slice(0, 10) : null)
+          : sigDateOf(r);
         if (!d) return false;
         if (sigRange.from && d < sigRange.from) return false;
         if (sigRange.to && d > sigRange.to) return false;
@@ -1282,7 +1291,9 @@ export default function OptilexBoard({ embed = false }) {
         {["done", "todo"].map((k) => {
           const on = onboardingFilter === k;
           const label = k === "done" ? "Onboarding réalisé" : "Onboarding à faire";
-          const cnt = rows.filter((r) => (k === "done" ? r.rdv_onboarding_done : (r.numero_client && !r.rdv_onboarding_done))).length;
+          const cnt = rows.filter((r) => (k === "done"
+            ? r.rdv_onboarding_done
+            : (r.numero_client && !r.rdv_onboarding_done && !TERMINATED_ETATS.includes(displayEtat(r))))).length;
           return (
             <motion.button key={k} type="button" whileTap={{ scale: 0.96 }}
               title={k === "done" ? "Clients ayant réalisé leur onboarding Owner" : "Clients n'ayant pas encore réalisé leur onboarding Owner"}
@@ -2464,7 +2475,7 @@ function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion,
                       </span>
                       <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
                         <span style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>Éligible au programme de parrainage</span>
-                        <span style={{ fontSize: 11.5, color: MUTED, lineHeight: 1.4 }}>Le programme vise à encourager les parrains à générer régulièrement de nouvelles opportunités commerciales qualifiées et à suivre l'onboarding.</span>
+                        <span style={{ fontSize: 11.5, color: MUTED, lineHeight: 1.4 }}>Le programme vise à encourager les parrains à générer régulièrement de nouvelles opportunités commerciales qualifiées.</span>
                       </span>
                     </motion.button>
                   </div>
@@ -2570,7 +2581,9 @@ function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion,
             )}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
-            <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date_manual || row.rdv_onboarding_date} done={row.rdv_onboarding_done} editable={!!num} meetLink={row.onboarding_meet_link}
+            <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date_manual || row.rdv_onboarding_date} done={row.rdv_onboarding_done}
+              editable={!!num && ["customer_success_manager", "admin", "ceo"].includes((apiClient.getUser() || {}).role)}
+              meetLink={row.onboarding_meet_link}
               onDate={num && !isFinanceTeam() ? (d) => patch(num, { rdv_onboarding_date_manual: d }) : undefined}
               onToggle={(v) => patch(num, { rdv_onboarding_done: v })} />
             {/* Recalage direct du RDV onboarding (Vincent / facturation / admin) : déplace la

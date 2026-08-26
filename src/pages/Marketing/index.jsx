@@ -562,7 +562,7 @@ export default function Marketing() {
             webinar={webinar}
             summary={summary}
             realtimeLeads={realtimeLeads}
-            rankingPanel={<SalesWebinarRankingCompact data={realtimeLeads} C={C} />}
+            rankingPanel={<SalesWebinarRankingCompact data={realtimeLeads} C={C} webinarId={webinarId} />}
             donutPanel={<RdvBySourceDonut data={realtimeLeads} C={C} />}
             C={C}
             loading={overviewLoading && !summary}
