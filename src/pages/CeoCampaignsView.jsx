@@ -70,6 +70,7 @@ export default function CeoCampaignsView() {
     if (tabId === "sequences") { navigate("/ceo/sequences"); return; }
     if (tabId === "campaigns") return;
     if (tabId === "conges") { navigate("/ceo/conges"); return; }
+    if (tabId === "work_hours") { navigate("/ceo/work-hours"); return; }
     if (tabId === "variables") { navigate("/ceo/variables"); return; }
     if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }
     if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }

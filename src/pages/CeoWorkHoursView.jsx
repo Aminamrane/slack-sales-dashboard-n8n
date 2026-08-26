@@ -1,36 +1,29 @@
-// src/pages/AcquisitionDirectorDashboard.jsx
+// src/pages/CeoWorkHoursView.jsx
 //
-// Route /acquisition-director — dashboard du Directeur Acquisition.
+// Route /ceo/work-hours — embed <WorkHours embed /> dans le shell CEO/RH
+// (sidebar shared + SharedNavbar conservés). Calque de CeoVariablesView.
 //
-// Le dashboard AFFICHE le Leaderboard de la section Acquisition (la même vue
-// que /ceo/leaderboard), embarqué dans la coquille : sidebar adaptée au rôle
-// + SharedNavbar. On garde l'onglet "Dashboard" actif -> leur dashboard EST
-// le leaderboard. Calque de CeoLeaderboardView, avec activeTab="dashboard".
+// Objectif : que "Heures de travail" reste DANS le dashboard (la sidebar ne
+// disparaît jamais), comme Absence / Variables. La page standalone
+// /work-hours (menu déroulant) reste disponible et inchangée.
 //
-// - Sidebar filtrée : Acquisition Director ne voit que {recent, acquisition}
-//   (sidebarPermissions). Admin / CEO voient tout.
-// - Leaderboard lit ?embed=true (injecté ici via replaceState) pour masquer
-//   sa SharedNavbar interne et son paddingTop dédié.
-//
-// Gate : admin | ceo | head_of_acquisition | acquisition_director | marketing.
+// Données RH (heures depuis les agendas Google) -> accès admin / ceo / hr,
+// strictement aligné sur GET /api/v1/hr/work-hours.
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
-import Leaderboard from "./Leaderboard.jsx";
+import { navigateBackToDashboard } from "../utils/dashboardNavigation";
+import WorkHours from "./WorkHours.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
-import { getVisibleSections, setNavScope } from "../utils/sidebarPermissions";
+import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
-const ALLOWED_ROLES = ["admin", "ceo", "head_of_acquisition", "acquisition_director", "marketing"];
+const ALLOWED_ROLES = new Set(["admin", "ceo", "hr"]);
 
-export default function AcquisitionDirectorDashboard() {
+export default function CeoWorkHoursView() {
   const navigate = useNavigate();
-  // Le navScope (scope Acquisition) est posé dans le gate auth ci-dessous selon le VRAI
-  // rôle : un rôle acquisition (acquisition_director / head_of_acquisition) garde son rôle
-  // pour un gating d'onglet FIN (ex: Gestion des leads réservé à head_of_acquisition) ;
-  // un admin/ceo qui consulte est scopé "acquisition_director" (vue Acquisition standard).
 
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
   useEffect(() => {
@@ -60,57 +53,40 @@ export default function AcquisitionDirectorDashboard() {
   const [userRole, setUserRole] = useState(null);
   useEffect(() => {
     const u = apiClient.getUser();
-    if (!u || !ALLOWED_ROLES.includes(u.role)) {
-      navigate("/login");
+    if (!u || !ALLOWED_ROLES.has(u.role)) {
+      navigate("/");
       return;
     }
-    // Rôle acquisition -> garde son rôle (gating fin) ; admin/ceo/marketing -> scope Acquisition.
-    setNavScope((u.role === "head_of_acquisition" || u.role === "acquisition_director") ? u.role : "acquisition_director");
     setUserRole(u.role);
     setAuthChecked(true);
   }, [navigate]);
 
-  // Le dashboard Acquisition Director = le Leaderboard. On injecte ?embed=true
-  // AVANT le mount du Leaderboard (il lit ce flag au mount pour masquer sa navbar
-  // interne), comme CeoLeaderboardView. On préserve le path /acquisition-director.
-  const [paramsInjected, setParamsInjected] = useState(false);
-  useEffect(() => {
-    if (!authChecked) return;
-    const incoming = new URLSearchParams(window.location.search);
-    if (incoming.get("embed") !== "true") {
-      incoming.set("embed", "true");
-      window.history.replaceState(null, "", `${window.location.pathname}?${incoming.toString()}`);
-    }
-    setParamsInjected(true);
-  }, [authChecked]);
-
   const C = useMemo(() => getColors(darkMode), [darkMode]);
   const visibleSections = useMemo(() => getVisibleSections(SIDEBAR_SECTIONS, userRole), [userRole]);
 
-  // Cliquer "Dashboard" = no-op (on est déjà dessus, il affiche le leaderboard).
-  // Les autres onglets-route rejoignent leur route dédiée (sinon page blanche).
+  // Cliquer "Congés" depuis cette vue = no-op (déjà dessus).
+  // Les autres onglets-route renvoient vers leur route dédiée (sinon page blanche).
   const handleSidebarTabClick = (tabId) => {
-    if (tabId === "dashboard") return;
+    if (tabId === "sequences") { navigate("/ceo/sequences"); return; }
+    if (tabId === "conges") { navigate("/ceo/conges"); return; }
+    if (tabId === "work_hours") return;
+    if (tabId === "variables") { navigate("/ceo/variables"); return; }
+    if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }
+    if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }
     if (tabId === "dispatch") { navigate("/ceo/dispatch"); return; }
     if (tabId === "leaderboard") { navigate("/ceo/leaderboard"); return; }
-    if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }
-    if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }
-    if (tabId === "variables") { navigate("/ceo/variables"); return; }
-    if (tabId === "conges") { navigate("/ceo/conges"); return; }
-    if (tabId === "work_hours") { navigate("/ceo/work-hours"); return; }
     if (tabId === "lead_quality") { navigate("/ceo/lead-quality"); return; }
     if (tabId === "sales_team") { navigate("/ceo/sales-team"); return; }
     if (tabId === "sales_recordings") { navigate("/ceo/sales-recordings"); return; }
     if (tabId === "webinar") { navigate("/ceo/webinar"); return; }
     if (tabId === "campaigns") { navigate("/ceo/campaigns"); return; }
     if (tabId === "funnel_leads") { navigate("/ceo/funnel-leads"); return; }
+    if (tabId === 'optilex_board') { navigate('/ceo/optilex-board'); return; }
     if (tabId === "leads_management") { navigate("/ceo/leads-management"); return; }
-    if (tabId === "sequences") { navigate("/ceo/sequences"); return; }
-    try { localStorage.setItem("ceoActiveTab", tabId); } catch { /* noop */ }
-    navigate("/ceo");
+    navigateBackToDashboard(navigate, userRole, tabId);
   };
 
-  if (!authChecked || !paramsInjected) {
+  if (!authChecked) {
     return (
       <div style={{
         minHeight: "100vh",
@@ -130,9 +106,7 @@ export default function AcquisitionDirectorDashboard() {
       style={{
         display: "flex",
         minHeight: "100vh",
-        // Aligné sur CARD.surface du Leaderboard (#edf0f8 light / #13141b dark)
-        // pour éviter une coupure de couleur avec la zone droite embarquée.
-        background: darkMode ? "#13141b" : "#edf0f8",
+        background: darkMode ? "#13141b" : "#f7f8fa",
         fontFamily: "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
         WebkitFontSmoothing: "antialiased",
         MozOsxFontSmoothing: "grayscale",
@@ -163,17 +137,16 @@ export default function AcquisitionDirectorDashboard() {
           collapsed={sideCollapsed}
           onToggle={() => setSideCollapsed((v) => !v)}
           sections={visibleSections}
-          activeTab="dashboard"
+          activeTab="work_hours"
           setActiveTab={handleSidebarTabClick}
           C={C}
           darkMode={darkMode}
         />
       </div>
 
-      {/* Dashboard Acquisition Director = Leaderboard embarqué (?embed=true injecté). */}
-      <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
+      <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 64 }}>
         <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
-        <Leaderboard />
+        <WorkHours embed />
       </div>
     </div>
   );

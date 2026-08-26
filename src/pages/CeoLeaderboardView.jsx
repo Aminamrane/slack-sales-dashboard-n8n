@@ -105,6 +105,7 @@ export default function CeoLeaderboardView() {
     if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }
     if (tabId === "variables") { navigate("/ceo/variables"); return; }
     if (tabId === "conges") { navigate("/ceo/conges"); return; }
+    if (tabId === "work_hours") { navigate("/ceo/work-hours"); return; }
     if (tabId === "lead_quality") { navigate("/ceo/lead-quality"); return; }
     if (tabId === "sales_team") { navigate("/ceo/sales-team"); return; }
     if (tabId === "sales_recordings") { navigate("/ceo/sales-recordings"); return; }

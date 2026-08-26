@@ -198,6 +198,7 @@ export default function CeoSalesRecordingsView() {
     if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }
     if (tabId === "variables") { navigate("/ceo/variables"); return; }
     if (tabId === "conges") { navigate("/ceo/conges"); return; }
+    if (tabId === "work_hours") { navigate("/ceo/work-hours"); return; }
     if (tabId === "lead_quality") { navigate("/ceo/lead-quality"); return; }
     if (tabId === "webinar") { navigate("/ceo/webinar"); return; }
     if (tabId === "campaigns") { navigate("/ceo/campaigns"); return; }

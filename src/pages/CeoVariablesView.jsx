@@ -66,6 +66,7 @@ export default function CeoVariablesView() {
     if (tabId === "sequences") { navigate("/ceo/sequences"); return; }
     if (tabId === "variables") return;
     if (tabId === "conges") { navigate("/ceo/conges"); return; }
+    if (tabId === "work_hours") { navigate("/ceo/work-hours"); return; }
     if (tabId === "autoassign") { navigate("/ceo/auto-affectation"); return; }
     if (tabId === "perf_sales") { navigate("/ceo/perf-sales"); return; }
     if (tabId === "dispatch") { navigate("/ceo/dispatch"); return; }

@@ -91,6 +91,7 @@ export default function HrDashboard() {
   const handleSidebarTabClick = (tabId) => {
     if (tabId === "dashboard") return;
     if (tabId === "conges") { navigate("/ceo/conges"); return; }
+    if (tabId === "work_hours") { navigate("/ceo/work-hours"); return; }
     if (tabId === "variables") { navigate("/ceo/variables"); return; }
     if (tabId === "dispatch") { navigate("/ceo/dispatch"); return; }
     if (tabId === "leaderboard") { navigate("/ceo/leaderboard"); return; }

@@ -121,6 +121,41 @@ export default function TeamAbsences({ embed = false }) {
     } catch (e) { window.alert("Échec de la validation : " + (e?.message || e)); }
     setBusyId(null);
   };
+  // MODIFIER une absence (dates / demi-journée), y compris PASSÉE : cas « la
+  // personne avait déclaré une absence mais a finalement travaillé ».
+  const [editAbs, setEditAbs] = useState(null); // { id, user_id, start_date, end_date, period }
+  const saveEdit = async () => {
+    if (!editAbs) return;
+    setBusyId(editAbs.id);
+    try {
+      const body = {
+        start_date: editAbs.start_date,
+        end_date: editAbs.end_date,
+        period: editAbs.period || "full",
+      };
+      await apiClient.patch(`/api/v1/users/${editAbs.user_id}/unavailability/${editAbs.id}`, body);
+      const data = await apiClient.get("/api/v1/team-unavailability");
+      setAbsences(data?.absences || data || []);
+      setEditAbs(null);
+    } catch (e) {
+      const d = e?.data?.detail;
+      alert(typeof d === "string" ? d : "Modification impossible");
+    } finally { setBusyId(null); }
+  };
+
+  // SUPPRIMER définitivement une absence (passée ou à venir).
+  const deleteAbs = async (a) => {
+    if (!window.confirm(`Supprimer l'absence de ${a.full_name} (${rangeLabel(a)}) ?`)) return;
+    setBusyId(a.id);
+    try {
+      await apiClient.delete(`/api/v1/users/${a.user_id}/unavailability/${a.id}`);
+      setAbsences((list) => (list || []).filter((x) => x.id !== a.id));
+    } catch (e) {
+      const d = e?.data?.detail;
+      alert(typeof d === "string" ? d : "Suppression impossible");
+    } finally { setBusyId(null); }
+  };
+
   const refuseAbs = async (a) => {
     if (!window.confirm(`Refuser l'absence de ${a.full_name} (${rangeLabel(a)}) ?\nElle sera annulée et la personne recevra de nouveau des leads sur ces dates.`)) return;
     setBusyId(a.id);
@@ -169,7 +204,7 @@ export default function TeamAbsences({ embed = false }) {
 
   // Une ligne d'absence. `past` = grisée + lecture seule (validable/refusable n'a plus de sens).
   const absenceRow = (a, i, arr, past) => (
-    <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: i < arr.length - 1 ? "1px dashed " + C.border : "none", animation: "rowIn 0.3s ease both", opacity: past ? 0.6 : 1 }}>
+    <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: i < arr.length - 1 ? "1px dashed " + C.border : "none", animation: "rowIn 0.3s ease both", opacity: past ? 0.6 : 1, flexWrap: editAbs && editAbs.id === a.id ? "wrap" : "nowrap" }}>
       {a.avatar_url
         ? <img src={a.avatar_url} alt="" style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
         : <div style={{ width: 34, height: 34, borderRadius: "50%", background: COLORS.primary, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 600, fontSize: 13, flexShrink: 0 }}>{(a.full_name || "?").charAt(0)}</div>}
@@ -184,12 +219,33 @@ export default function TeamAbsences({ embed = false }) {
           <div style={{ fontSize: 11.5, color: C.muted, marginTop: 4, fontStyle: "italic", paddingLeft: 9, borderLeft: "2px solid " + C.border, lineHeight: 1.45 }}>{a.description.trim()}</div>
         )}
       </div>
+      {editAbs && editAbs.id === a.id && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "8px 10px", borderRadius: 10, border: "1px solid " + C.border, background: C.subtle }}>
+          <input type="date" value={editAbs.start_date} onChange={(e) => setEditAbs((s) => ({ ...s, start_date: e.target.value }))}
+            style={{ ...declInput, width: 148, padding: "6px 9px", fontSize: 12 }} />
+          <span style={{ fontSize: 12, color: C.muted }}>au</span>
+          <input type="date" value={editAbs.end_date} min={editAbs.start_date} onChange={(e) => setEditAbs((s) => ({ ...s, end_date: e.target.value }))}
+            style={{ ...declInput, width: 148, padding: "6px 9px", fontSize: 12 }} />
+          <select value={editAbs.period} onChange={(e) => setEditAbs((s) => ({ ...s, period: e.target.value }))}
+            style={{ ...declInput, width: 132, padding: "6px 9px", fontSize: 12, cursor: "pointer" }}>
+            <option value="full">Journée entière</option>
+            <option value="am">Matin</option>
+            <option value="pm">Après-midi</option>
+          </select>
+          <button onClick={saveEdit} disabled={busyId === a.id}
+            style={{ padding: "6px 13px", borderRadius: 8, border: "none", background: COLORS.tertiary, color: "#fff", fontSize: 12, fontWeight: 600, cursor: busyId === a.id ? "wait" : "pointer", fontFamily: "inherit" }}>Enregistrer</button>
+          <button onClick={() => setEditAbs(null)}
+            style={{ padding: "6px 11px", borderRadius: 8, border: "1px solid " + C.border, background: "transparent", color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Annuler</button>
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
         {a.validated_at
           ? <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 600, color: COLORS.tertiary }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>Validé</span>
           : past
             ? <span style={{ fontSize: 11.5, fontWeight: 600, color: C.muted }}>Passé</span>
             : <button onClick={() => validateAbs(a)} disabled={busyId === a.id} style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 8, border: "none", background: COLORS.tertiary, color: "#fff", fontSize: 12, fontWeight: 600, cursor: busyId === a.id ? "wait" : "pointer", fontFamily: "inherit", opacity: busyId === a.id ? 0.6 : 1 }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>Valider</button>}
+        <button onClick={() => setEditAbs({ id: a.id, user_id: a.user_id, start_date: String(a.start_date).slice(0, 10), end_date: String(a.end_date).slice(0, 10), period: a.period || "full" })} disabled={busyId === a.id} title="Modifier les dates de cette absence" style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 8, border: "1px solid " + C.border, background: "transparent", color: C.text, fontSize: 12, fontWeight: 600, cursor: busyId === a.id ? "wait" : "pointer", fontFamily: "inherit" }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>Modifier</button>
+        <button onClick={() => deleteAbs(a)} disabled={busyId === a.id} title="Supprime définitivement cette absence" style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 8, border: "1px solid " + C.border, background: "transparent", color: "#ef4444", fontSize: 12, fontWeight: 600, cursor: busyId === a.id ? "wait" : "pointer", fontFamily: "inherit" }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /></svg>Supprimer</button>
         {!past && <button onClick={() => refuseAbs(a)} disabled={busyId === a.id} title="Annule l'absence : la personne reçoit de nouveau des leads à ces dates" style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 8, border: "1px solid " + C.border, background: "transparent", color: "#ef4444", fontSize: 12, fontWeight: 600, cursor: busyId === a.id ? "wait" : "pointer", fontFamily: "inherit", opacity: busyId === a.id ? 0.6 : 1 }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>Refuser</button>}
       </div>
     </div>

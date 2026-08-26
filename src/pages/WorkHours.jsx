@@ -53,7 +53,7 @@ const fmtH = (h) => {
   return mm ? `${hh}h${String(mm).padStart(2, "0")}` : `${hh}h`;
 };
 
-export default function WorkHours() {
+export default function WorkHours({ embed = false }) {
   const navigate = useNavigate();
   const user = apiClient.getUser();
   useEffect(() => {
@@ -145,8 +145,8 @@ export default function WorkHours() {
   const card = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, boxShadow: "0 1px 3px rgba(17,24,39,0.05)" };
 
   return (
-    <div style={{ fontFamily: FONT, minHeight: "100vh", background: "#f4f5f7", color: TEXT }}>
-      <SharedNavbar />
+    <div style={{ fontFamily: FONT, minHeight: embed ? "auto" : "100vh", background: embed ? "transparent" : "#f4f5f7", color: TEXT }}>
+      {!embed && <SharedNavbar />}
       <style>{`@keyframes whUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}`}</style>
       <div style={{ maxWidth: 1180, margin: "0 auto", padding: "28px 24px 60px", animation: "whUp 0.4s cubic-bezier(0.16,1,0.3,1) both" }}>
 
@@ -315,13 +315,6 @@ export default function WorkHours() {
                 })}
               </AnimatePresence>
 
-              {/* Agendas inaccessibles */}
-              {people.some((p) => !p.accessible) && (
-                <div style={{ marginTop: 14, padding: "10px 12px", borderRadius: 10, background: "#fff8ec", border: "1px solid #f5deba", fontSize: 11.5, color: "#b45309" }}>
-                  Agendas non partagés avec le compte de service (non comptés) :{" "}
-                  {people.filter((p) => !p.accessible).map((p) => p.name).join(", ")}
-                </div>
-              )}
             </div>
           </>
         )}
