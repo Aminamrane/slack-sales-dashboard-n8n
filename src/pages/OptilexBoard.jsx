@@ -746,7 +746,8 @@ function MeteoMenu({ selected, counts, onToggle, onClear }) {
   );
 }
 
-function SigDateFilter({ from, to, onChange, months = [] }) {
+function SigDateFilter({ from, to, onChange, months = [], mode = "signature" }) {
+  const isOnb = mode === "onboarding";
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const btnRef = useRef(null);
@@ -771,12 +772,13 @@ function SigDateFilter({ from, to, onChange, months = [] }) {
   const fieldStyle = { padding: "8px 10px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: TEXT, fontSize: 12.5, fontFamily: "inherit", outline: "none", boxSizing: "border-box", width: "100%" };
   return (
     <span onClick={(e) => e.stopPropagation()}>
-      <button ref={btnRef} type="button" onClick={toggle} title="Filtrer par date de signature Owner"
+      <button ref={btnRef} type="button" onClick={toggle}
+        title={isOnb ? "Filtrer par date d'onboarding Owner" : "Filtrer par date de signature Owner"}
         style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${active || open ? NAVY : BORDER}`, background: active ? NAVY : CARD, color: active ? "#fff" : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 7 }}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={active ? "#fff" : MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
         </svg>
-        {active ? label : "Date signature"}
+        {active ? label : (isOnb ? "Date onboarding" : "Date signature")}
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={active ? "rgba(255,255,255,0.75)" : MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
           style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.16s ease", flexShrink: 0 }}>
           <polyline points="6 9 12 15 18 9" />
@@ -787,7 +789,7 @@ function SigDateFilter({ from, to, onChange, months = [] }) {
           <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 10050 }} />
           <div style={{ position: "fixed", ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }), left: pos.left, zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 8px 28px rgba(17,24,39,0.14)", padding: 12, width: 250, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", animation: "obMenuIn 0.15s cubic-bezier(0.16,1,0.3,1) both", transformOrigin: pos.up ? "bottom left" : "top left" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em" }}>Signé le</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em" }}>{isOnb ? "Onboarding entre" : "Signé le"}</span>
               {active && <button type="button" onClick={() => onChange({ from: "", to: "" })} style={{ border: "none", background: "transparent", color: "#2563eb", fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Effacer</button>}
             </div>
             <label style={{ fontSize: 11, color: MUTED, display: "block", marginBottom: 4 }}>Mois</label>
@@ -956,12 +958,9 @@ export default function OptilexBoard({ embed = false }) {
   const preMeteoRows = useMemo(() => {
     const ql = q.trim().toLowerCase();
     return rows.filter((r) => {
-      // Multi-filtre (catégories cochées) prioritaire = union ; sinon onglet primaire unique.
-      if (multiFilter.length > 0) {
-        if (!multiFilter.some((cat) => matchesCat(r, cat))) return false;
-      } else if (etatFilter !== "Tous" && !matchesCat(r, etatFilter)) {
-        return false;
-      }
+      // Union de l'onglet actif ET des catégories cochées (sélection multiple).
+      const activeCats = etatFilter !== "Tous" ? [etatFilter, ...multiFilter] : multiFilter;
+      if (activeCats.length > 0 && !activeCats.some((cat) => matchesCat(r, cat))) return false;
       // Filtre "Programme ambassadeur" : ne garde que les clients cochés éligibles.
       if (ambassadorFilter && !r.ambassador_eligible) return false;
       // Filtre "Programme de parrainage" : ne garde que les clients cochés éligibles.
@@ -973,7 +972,7 @@ export default function OptilexBoard({ embed = false }) {
       if (onboardingFilter === "todo"
         && (r.rdv_onboarding_done || !r.numero_client || TERMINATED_ETATS.includes(displayEtat(r)))) return false;
       // Sous-filtre contextuel "En retard" de l'onglet Intégration à venir.
-      if (etatFilter === "Intégration à venir" && multiFilter.length === 0 && integrationView === "overdue" && !isIntegrationOverdue(r)) return false;
+      if (etatFilter === "Intégration à venir" && integrationView === "overdue" && !isIntegrationOverdue(r)) return false;
       // Filtre date de signature Owner (mois ou période). Une ligne sans date de
       // signature est exclue dès qu'un filtre date est actif.
       if (sigRange.from || sigRange.to) {
@@ -1147,10 +1146,13 @@ export default function OptilexBoard({ embed = false }) {
   useEffect(() => { for (const r of filtered) seenRows.current.add(rowKey(r)); }, [filtered]);
 
   // Onglet primaire -> vide le multi-filtre ; cocher une catégorie -> vide l'onglet primaire.
-  const pickTab = (t) => { setSortCol(null); setEtatFilter(t); setMultiFilter([]); };
+  // Sélection MULTIPLE (demande Vincent 2026-08-26) : l'onglet actif et les
+  // catégories cochées se CUMULENT (union des états). « Tous » = pas de
+  // restriction d'onglet ; les autres familles de filtres (météo, programmes,
+  // onboarding, date, recherche) restent en ET par-dessus.
+  const pickTab = (t) => { setSortCol(null); setEtatFilter(t); };
   const toggleCat = (cat) => {
     setSortCol(null);
-    setEtatFilter("Tous");
     setMultiFilter((prev) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]));
   };
   // Export CSV de la vue filtrée courante (onglet + filtres + date + recherche).
@@ -1248,7 +1250,8 @@ export default function OptilexBoard({ embed = false }) {
         })}
         <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
         <FilterMenu cats={SECONDARY_CATS} counts={counts} selected={multiFilter} onToggle={toggleCat} onClear={() => setMultiFilter([])} />
-        <SigDateFilter from={sigRange.from} to={sigRange.to} onChange={setSigRange} months={sigMonths} />
+        <SigDateFilter from={sigRange.from} to={sigRange.to} onChange={setSigRange} months={sigMonths}
+          mode={onboardingFilter !== "all" ? "onboarding" : "signature"} />
         {/* Météo client : regroupée dans UN menu (décision dev 2026-08-25, barre trop chargée). */}
         <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
         <MeteoMenu selected={meteoFilter} counts={meteoCounts}
@@ -1372,8 +1375,8 @@ export default function OptilexBoard({ embed = false }) {
               <col style={{ width: 232 }} />{/* état (large pour "En cours de rétractation", le libellé le plus long) */}
               <col style={{ width: 150 }} />{/* owner */}
               <col style={{ width: 170 }} />{/* opti'lex */}
-              <col style={{ width: 108 }} />{/* onboarding */}
-              <col style={{ width: 108 }} />{/* lancement */}
+              <col style={{ width: 162 }} />{/* onboarding — date + heure */}
+              <col style={{ width: 162 }} />{/* lancement — date + heure (+ badge alerte) */}
               <col style={{ width: 120 }} />{/* facturation */}
               <col style={{ width: 44 }} />{/* chevron */}
             </colgroup>
@@ -1563,7 +1566,7 @@ function InfoField({ label, value, full }) {
 // Sélecteur d'email de destination Opti'Lex : dropdown Owner / Opti'Lex (par SIREN) / historique.
 // Pose email_ovr (via patch /board-tracking). Les 5 emails Opti'Lex + la relance contrat Yousign
 // partent sur l'email sélectionné (backend). Réservé admin + ceo + optilex.
-const EMAIL_SELECT_ROLES = ["admin", "ceo", "optilex"];
+const EMAIL_SELECT_ROLES = ["admin", "ceo", "optilex", "customer_success_manager"];
 const canSelectEmail = () => { try { return EMAIL_SELECT_ROLES.includes((apiClient.getUser() || {}).role); } catch { return false; } };
 function EmailSelect({ row, patch, onSaved }) {
   const [open, setOpen] = useState(false);
@@ -1595,7 +1598,7 @@ function EmailSelect({ row, patch, onSaved }) {
     for (const e of extra) add(e, "Owner");
     return list;
   }, [owner, row.email_optilex_options, row.email_optilex, row.email_history, extra]);
-  const canOpen = canSelectEmail(); // autorisé à choisir/ajouter (admin/ceo/optilex)
+  const canOpen = canSelectEmail(); // autorisé à choisir/ajouter (admin/ceo/optilex/client success)
   const choose = async (email) => {
     setSaving(true);
     const ovr = email.toLowerCase() === owner.toLowerCase() ? null : email; // Owner = efface l'override
@@ -1674,7 +1677,7 @@ const INFO_FIELDS = [
   { ovr: "contact_name_ovr", orig: "contact_name", label: "Nom du client" },
   { ovr: "tranche_ovr", orig: "contact_tranche", label: "Tranche salariale" },
   // email_ovr retiré du crayon libre : l'email de destination Opti'Lex se change UNIQUEMENT via
-  // le dropdown EmailSelect (gaté admin+ceo+optilex + enforce backend). Voir EmailSelect.
+  // le dropdown EmailSelect (gaté admin+ceo+optilex+client success, enforce backend). Voir EmailSelect.
   { ovr: "phone_ovr", orig: "contact_phone", label: "Téléphone" },
   { ovr: "siren_ovr", orig: "siren", label: "SIREN" },
 ];
