@@ -69,6 +69,8 @@ import {
   normalizeSearch,
   matchesClientSearch,
   scopedCredit,
+  scopedOverdueCurrent,
+  scopedOverdueCum,
   formatEUR,
   formatDateFR,
   splitSocieteRep,
@@ -143,6 +145,12 @@ function buildCols(scope) {
     received:        { w: 150, group: entityGroup,   shortLabel: 'Récupéré',           fullLabel: stripEntitySuffix(COLUMN_LABELS.receivedOwner),         kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: !isGlobal },
     overdueCum:      { w: 125, group: entityGroup,   shortLabel: 'Retard antérieur',   fullLabel: stripEntitySuffix(COLUMN_LABELS.overdueOwnerCum),       kind: 'amount', sticky: false, splitVisible: false, align: 'right',  editable: false },
     receivedOverdue: { w: 150, group: entityGroup,   shortLabel: 'Récupéré antérieur', fullLabel: stripEntitySuffix(COLUMN_LABELS.receivedOverdueOwner),  kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: !isGlobal },
+    // Ce que le client doit VRAIMENT à cet instant : retard du mois +
+    // créances antérieures, encaissements du mois déduits. C'est la colonne
+    // « Retard de paiement » du classeur, et la seule qui baisse quand on
+    // enregistre un paiement (remise en place 2026-08-26 — le « retard
+    // global » que le dev avait demandé de déplacer le 2026-08-18).
+    overdueToDate:   { w: 125, group: entityGroup,   shortLabel: 'Retard à date',      fullLabel: COLUMN_LABELS.overdueCurrent,                           kind: 'amount', sticky: false, splitVisible: false, align: 'right',  editable: false },
     // Check / Date paiement : par entité uniquement — pas de somme possible,
     // absentes en vision Globale.
     ...(isGlobal ? {} : {
@@ -711,12 +719,11 @@ const RowRenderer = React.memo(function RowRenderer({
   const overdueCum       = sumOrField('overdue_owner_cumulative', 'overdue_optilex_cumulative', fields?.overdueCum) || 0;
   // Trop-perçu reporté de l'entité active (0 si le backend ne l'expose pas).
   const rowCredit        = scopedCredit(row, scope);
+  // Dette réelle à cet instant : retard du mois + créances antérieures. Les
+  // deux composantes sont déjà nettes des encaissements du mois, donc ce
+  // montant baisse dès qu'un paiement est enregistré.
+  const overdueToDate    = scopedOverdueCurrent(row, scope) + scopedOverdueCum(row, scope);
   const recoveredOverdue = sumOrField('received_overdue_owner', 'received_overdue_optilex_ttc', fields?.receivedOverdue);
-
-  // Delta Récupéré vs Attendu — pill verte si surplus, pill orange si manquement.
-  // Brief dev 2026-05-12 : orange (pas rouge) pour différencier des vrais retards.
-  // Pill cachée si reçu=0 (cell vide).
-  const deltaOverdue = recoveredOverdue > 0 ? recoveredOverdue - overdueCum : 0;
 
   // Brief dev 2026-08-24 : le tableau ne porte plus qu'UN signal couleur — le
   // client qui traîne des créances antérieures, en rouge sur ses deux cellules
@@ -852,7 +859,14 @@ const RowRenderer = React.memo(function RowRenderer({
               align="center"
               placeholderItalic
               valueBold
+              // La cellule porte le TOTAL reçu du mois : proposer l'attendu
+              // vaut aussi bien pour un règlement complet que pour le solde
+              // d'un paiement partiel (demande dev 2026-08-26).
+              suggestion={expected}
+              suggestionTitle="Attendu du mois — cliquer pour l'inscrire"
             />
+
+
           )}
         </AmountWithDelta>
       ))}
@@ -863,31 +877,42 @@ const RowRenderer = React.memo(function RowRenderer({
         <OverduePill amount={overdueCum} credit={rowCredit} />
       ))}
 
-      {/* Récupéré sur créances passées */}
+      {/* Récupéré sur créances passées — montant seul : le reste dû se lit
+          dans « Retard antérieur », juste à gauche (demande dev 2026-08-26). */}
       {keys.includes('receivedOverdue') && C('receivedOverdue', (
-        <AmountWithDelta delta={deltaOverdue}>
-          {isGlobal ? (
-            (recoveredOverdue === null || recoveredOverdue === 0) ? <EmptyCell /> : (
-              <AnimatedAmount
-                value={recoveredOverdue}
-                style={{
-                  fontSize: CELL_FONT_SIZE,
-                  fontWeight: 700,
-                  color: N.text,
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              />
-            )
-          ) : (
-            <EditableNumber
+        isGlobal ? (
+          (recoveredOverdue === null || recoveredOverdue === 0) ? <EmptyCell /> : (
+            <AnimatedAmount
               value={recoveredOverdue}
-              onCommit={patch(fields.receivedOverdue)}
-              align="center"
-              placeholderItalic
-              valueBold
+              style={{
+                fontSize: CELL_FONT_SIZE,
+                fontWeight: 700,
+                color: N.text,
+                fontVariantNumeric: 'tabular-nums',
+              }}
             />
-          )}
-        </AmountWithDelta>
+          )
+        ) : (
+          <EditableNumber
+            value={recoveredOverdue}
+            onCommit={patch(fields.receivedOverdue)}
+            align="center"
+            placeholderItalic
+            valueBold
+            // Même logique sur les arriérés : on propose la créance à solder.
+            suggestion={overdueCum}
+            suggestionTitle="Créances antérieures — cliquer pour solder"
+          />
+        )
+      ))}
+
+      {/* Retard à date — le solde réellement dû, paiements du mois déduits.
+          Les deux colonnes qui précèdent sont des colonnes de DÛ (attendu du
+          mois, créances passées) : elles ne bougent pas quand un règlement
+          arrive, comme « Attendu » ne bouge pas quand « Récupéré » se
+          remplit. C'est ici que l'encaissement se voit. */}
+      {keys.includes('overdueToDate') && C('overdueToDate', (
+        <OverduePill amount={overdueToDate} credit={rowCredit} />
       ))}
 
       {/* Check PSP (entité active — absent en vision Globale) */}

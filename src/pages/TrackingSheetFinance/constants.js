@@ -255,18 +255,49 @@ export const TERMINATED_BOARD_ETATS = new Set([
   'Rétractation',
 ]);
 
+// Tranches de la GRILLE TARIFAIRE (table `tarifs` du backend), et rien
+// d'autre : c'est sur elles que le prix est calculé. La liste précédente
+// (11-20, 21-50, 51-100, 101-200, 201-300, 301-400, +400) datait d'avant la
+// grille actuelle — elle n'affichait aucun libellé au-delà de 6-10 et, plus
+// grave, proposait à l'édition des tranches sans tarif : les choisir mettait
+// l'attendu du client à zéro (corrigé 2026-08-26).
 export const EMPLOYEE_RANGES = [
   '1-2',
   '3-5',
   '6-10',
-  '11-20',
-  '21-50',
-  '51-100',
-  '101-200',
-  '201-300',
-  '301-400',
-  '+400',
+  '11-19',
+  '20-29',
+  '30-39',
+  '40-49',
+  '50-74',
+  '75-99',
+  '100-149',
+  '150-199',
+  '200-249',
+  '250-299',
+  '300-349',
+  '350-400',
 ];
+
+// Les valeurs en base sont sales : « 6_-_10 », « 3-5salariés », « 11 - 19 »
+// cohabitent avec la forme canonique. On nettoie le bruit de saisie sans
+// jamais réinterpréter la tranche elle-même (un « 3-4 » reste « 3-4 »).
+export const normalizeEmployeeRange = (v) => {
+  if (!v) return null;
+  const cleaned = String(v)
+    .replace(/salari[ée]s?/gi, '')
+    .replace(/[\s_]+/g, '')
+    .trim();
+  return cleaned || null;
+};
+
+// Libellé affiché : la tranche suivie de « salariés ». Vaut pour toutes les
+// valeurs, y compris celles hors grille, sinon la fiche affichait « 11-19 »
+// nu à côté d'un « 3-5 salariés » (retour dev 2026-08-26).
+export const employeeRangeLabel = (v) => {
+  const r = normalizeEmployeeRange(v);
+  return r ? `${r} salariés` : null;
+};
 
 
 // ── Contacts typés (fiche client) ────────────────────────────────────────

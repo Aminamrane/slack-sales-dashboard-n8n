@@ -59,7 +59,7 @@ import {
   PAYMENT_SPECIFICITIES, PAYMENT_SPECIFICITY_COLORS, PAYMENT_SPECIFICITY_FALLBACK,
   AUTO_DEBIT_OPTIONS, AUTO_DEBIT_COLORS, AUTO_DEBIT_FALLBACK,
   PSP_OPTIONS, PSP_COLORS, PSP_FALLBACK,
-  EMPLOYEE_RANGES,
+  EMPLOYEE_RANGES, normalizeEmployeeRange, employeeRangeLabel,
   AUDIT_FIELD_LABELS,
   PROFILE_CHANGE_LABELS,
   ALLOWED_ROLES,
@@ -68,6 +68,8 @@ import {
   parseDateFR,
 
   paymentModeLabel,
+  normalizePaymentMode,
+  shiftMonth,
   scopedOverdueCurrent,
   scopedCredit,
   scopedOverdueCum,
@@ -283,18 +285,59 @@ export default function DetailPanel({
   }, [focusedRow, scope]);
 
   // KPIs contrat — dérivés de la timeline déjà chargée (aucun nouvel appel).
-  // Total contrat = Σ attendus ; Encaissé = Σ reçus + reçus sur créances ;
-  // Restant dû = différence (négatif = trop-perçu, restitué proprement).
+  //
+  // Total contrat = engagement de 12 mois, décompté depuis le début de la
+  // facturation, c'est-à-dire le RDV d'onboarding Owner (règle dev
+  // 2026-08-26). Sommer les lignes présentes ne marchait pas : notre
+  // historique s'arrête en janvier 2027, donc l'engagement d'un client
+  // récent était tronqué (L'EMAN n°722 : 1 695 € sur cinq mois au lieu de
+  // 4 068 €) et celui d'un ancien gonflé, cumulé sur seize mois.
+  //
+  // Encaissé et Restant dû portent sur la MÊME fenêtre : sinon un client
+  // entré dans sa deuxième année afficherait un faux trop-perçu, son
+  // encaissé cumulé dépassant l'engagement d'une seule année.
   const kpis = useMemo(() => {
+    const byMonth = new Map();
+    for (const p of periods) {
+      const key = periodFromDate(p.period);
+      if (key) byMonth.set(key, scopedPeriodAmounts(p, scope));
+    }
+
+    // Départ : mois de l'onboarding Owner, avec repli sur le premier mois
+    // facturé — deux tiers des fiches n'ont pas de date d'onboarding.
+    const onboarding = parseDateFR(client?.rdv_onboarding);
+    const firstBilled = periods.find((p) => scopedPeriodAmounts(p, scope).expected > 0);
+    let start = onboarding
+      ? `${onboarding.getFullYear()}-${String(onboarding.getMonth() + 1).padStart(2, '0')}`
+      : periodFromDate(firstBilled?.period || periods[0]?.period || '');
+    if (!start) return { total: 0, encaisse: 0, restant: 0 };
+
+    // Année d'engagement en cours : la fenêtre avance d'un an à chaque
+    // anniversaire, sans quoi elle resterait figée sur la première année.
+    const [sy, sm] = start.split('-').map(Number);
+    const [cy, cm] = currentPeriod().split('-').map(Number);
+    const elapsed = (cy - sy) * 12 + (cm - sm);
+    if (elapsed >= 12) start = shiftMonth(start, Math.floor(elapsed / 12) * 12);
+
+    const yearly = normalizePaymentMode(
+      focusedRow?.payment_mode || client?.payment_mode,
+    ) === 'YEARLY';
+
     let total = 0;
     let encaisse = 0;
-    for (const p of periods) {
-      const a = scopedPeriodAmounts(p, scope);
-      total += a.expected;
-      encaisse += a.received + a.receivedOverdue;
+    let monthly = 0;  // mensualité de référence pour les mois hors horizon
+    for (let i = 0; i < 12; i += 1) {
+      const a = byMonth.get(shiftMonth(start, i));
+      if (a) {
+        total += a.expected;
+        encaisse += a.received + a.receivedOverdue;
+        if (!yearly && a.expected > 0) monthly = a.expected;
+      } else if (!yearly) {
+        total += monthly;
+      }
     }
     return { total, encaisse, restant: total - encaisse };
-  }, [periods, scope]);
+  }, [periods, scope, client, focusedRow]);
 
   // Échéancier « État de compte » — une entrée par période à montant
   // (attendu ou reçu), triée chronologiquement et numérotée. Statuts :
@@ -1126,8 +1169,15 @@ function ContractInfoList({ client, profile, focusedRow, boardRow, patch, canEdi
   // la period focus prioritaire : l'édition PATCHe `employee_range` sur la
   // period (champ accepté par le backend, historisé automatiquement dans
   // l'audit → visible dans l'historique des actions).
-  const range = focusedRow?.employee_range || profile?.employee_range || client?.employee_range;
-  const rangeLabels = EMPLOYEE_RANGES.reduce((acc, v) => { acc[v] = `${v} salariés`; return acc; }, {});
+  const range = normalizeEmployeeRange(
+    focusedRow?.employee_range || profile?.employee_range || client?.employee_range,
+  );
+  const rangeLabels = EMPLOYEE_RANGES.reduce((acc, v) => {
+    acc[v] = employeeRangeLabel(v); return acc;
+  }, {});
+  // Une tranche hors grille (saisie ancienne : « 3-4 », « 20+ ») garde son
+  // libellé, sinon elle s'affichait nue à côté des autres.
+  if (range && !rangeLabels[range]) rangeLabels[range] = employeeRangeLabel(range);
 
   // Modalité : le rythme de paiement, rien d'autre — Mensuel / Annuel /
   // Trimestriel. Le « N × {montant} » dérivé de `payment_specificity` a été
@@ -1151,12 +1201,22 @@ function ContractInfoList({ client, profile, focusedRow, boardRow, patch, canEdi
     ] : []),
     { Icon: User,       label: 'Nom du client',        value: personne || societeName },
     { Icon: PenLine,    label: 'Date de signature',    value: formatDateLongFR(profile?.date_signature) },
+    // RDV d'onboarding : c'est lui qui déclenche la facturation — premier
+    // mois facturé, départ de l'engagement 12 mois, et bascule en retard
+    // (demande dev 2026-08-26). Servi par /profile, qui prend la date du
+    // classeur puis celle de la fiche CRM ; le payload de liste ne la porte
+    // pas, d'où la lecture sur `profile` uniquement.
+    {
+      Icon: CalendarCheck2,
+      label: "RDV d'onboarding",
+      value: formatDateLongFR(profile?.rdv_onboarding),
+    },
     // Formule = tranche seule, éditable (PATCH employee_range sur la period
     // focus — optimiste + rollback + toast via le flow onPatchRow standard).
     {
       Icon: Box,
       label: 'Formule',
-      copyValue: range ? `${range} salariés` : null,
+      copyValue: employeeRangeLabel(range),
       node: (
         <EditableSelect
           value={range}
@@ -2160,6 +2220,14 @@ function ModalitesSection({
     }
   };
   const lastRangeChange = (profile?.changes || []).find((c) => c.field === 'employee_range');
+  // Même libellé « X salariés » que la Formule, tranche hors grille comprise.
+  const effectifRange = normalizeEmployeeRange(profile?.employee_range);
+  const effectifLabels = EMPLOYEE_RANGES.reduce((acc, v) => {
+    acc[v] = employeeRangeLabel(v); return acc;
+  }, {});
+  if (effectifRange && !effectifLabels[effectifRange]) {
+    effectifLabels[effectifRange] = employeeRangeLabel(effectifRange);
+  }
 
   // Fin de contrat = anniversaire de la signature (contrats d'un an) —
   // calculée par le backend avec la même règle que le renouvellement du board.
@@ -2197,10 +2265,11 @@ function ModalitesSection({
         />
       </Field>
 
-      <Field label="Effectif" copyValue={profile?.employee_range} onCopied={onCopied}>
+      <Field label="Effectif" copyValue={employeeRangeLabel(profile?.employee_range)} onCopied={onCopied}>
         <EditableSelect
-          value={profile?.employee_range}
+          value={normalizeEmployeeRange(profile?.employee_range)}
           options={EMPLOYEE_RANGES}
+          optionLabels={effectifLabels}
           onCommit={commitEffectif}
           disabled={!canEdit}
           placeholderItalic

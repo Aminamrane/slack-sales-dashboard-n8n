@@ -276,6 +276,11 @@ export const EditableNumber = React.memo(function EditableNumber({
   placeholderItalic = false,
   valueColor,      // override couleur (ex: vert pour Récupéré, rouge pour retard)
   valueBold,       // bool : valeur en gras
+  // Montant proposé pendant l'édition (attendu du mois, créance à solder…).
+  // Une pastille cliquable l'inscrit et enregistre : rien n'est pré-rempli,
+  // la saisie manuelle reste le cas normal (demande dev 2026-08-26).
+  suggestion = null,
+  suggestionTitle = 'Cliquer pour inscrire ce montant',
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -326,7 +331,13 @@ export const EditableNumber = React.memo(function EditableNumber({
   }, [editing]);
 
   if (editing) {
-    return (
+    const suggested = (suggestion !== null && suggestion !== undefined
+      && Number(suggestion) > 0
+      && Number(suggestion).toFixed(2) !== (value == null ? null : Number(value).toFixed(2)))
+      ? Number(suggestion)
+      : null;
+
+    const input = (
       <input
         ref={inputRef}
         type="text"
@@ -341,6 +352,9 @@ export const EditableNumber = React.memo(function EditableNumber({
           width,
           textAlign: align,
           padding: '2px 6px',
+          // Réserve la place de la pastille : la saisie ne passe jamais
+          // dessous, même sur un montant à quatre chiffres.
+          paddingLeft: suggested ? 62 : 6,
           fontSize: 13,
           fontFamily: 'inherit',
           border: 'none',
@@ -350,6 +364,34 @@ export const EditableNumber = React.memo(function EditableNumber({
           color: '#111827',
         }}
       />
+    );
+    if (!suggested) return input;
+
+    // La pastille se pose à GAUCHE, dans le vide laissé par un montant
+    // aligné à droite : elle reste dans la cellule, sans rien recouvrir.
+    // `onMouseDown` + preventDefault : sans ça le clic ferait blurrer
+    // l'input, qui enregistrerait la case vide avant l'arrivée du clic.
+    return (
+      <span style={{
+        position: 'relative', display: 'flex', alignItems: 'center',
+        width: '100%', height: '100%',
+      }}>
+        <span
+          title={suggestionTitle}
+          onMouseDown={(e) => { e.preventDefault(); commit(suggested.toFixed(2)); }}
+          style={{
+            position: 'absolute', left: 4, top: '50%', transform: 'translateY(-50%)',
+            background: '#eef2ff', color: '#4338ca',
+            borderRadius: 4, padding: '0 5px',
+            fontSize: 10, fontWeight: 600, lineHeight: 1.6,
+            fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+            cursor: 'pointer', userSelect: 'none',
+          }}
+        >
+          {formatEUR(suggested)}
+        </span>
+        {input}
+      </span>
     );
   }
 
