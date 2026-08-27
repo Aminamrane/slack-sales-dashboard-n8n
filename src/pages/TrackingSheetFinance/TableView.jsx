@@ -49,7 +49,7 @@
 //   - 5 colonnes essentielles : Numéro / Nom / État / Att. Owner / Att. Opti'lex
 //   - + Retard mois courant pour signal rouge
 
-import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import { motion } from 'framer-motion';
 import {
@@ -1335,6 +1335,33 @@ export default function TableView({
   const [scrollParent, setScrollParent] = useState(null);
   const { keys: allKeys, cols: allCols } = useColumnConfig(splitActive, scope);
 
+  // ── Bascule de vision : fondu SANS démontage ─────────────────────────────
+  // La page ne reconstruit plus la table quand on change d'entité (elle le
+  // faisait via sa clé d'animation, ce qui recréait le conteneur de
+  // défilement et renvoyait la liste tout en haut). Le fondu est donc rejoué
+  // ici, sur le contenu : le conteneur qui porte le scroll n'est jamais
+  // touché, la position est conservée au pixel.
+  //
+  // Deux frames : la première pose l'état sorti sans transition, la seconde
+  // relance le retour animé — sinon React regroupe les deux et rien ne bouge.
+  // `useLayoutEffect` et non `useEffect` : l'état sorti doit être posé AVANT
+  // le premier affichage de la nouvelle entité, sinon on verrait ses montants
+  // en clair une frame, puis s'assombrir — un clignotement au lieu d'un fondu.
+  const [scopeFading, setScopeFading] = useState(false);
+  const skipFirstScopeFade = useRef(true);
+  useLayoutEffect(() => {
+    if (skipFirstScopeFade.current) {
+      skipFirstScopeFade.current = false;
+      return undefined;
+    }
+    setScopeFading(true);
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setScopeFading(false));
+    });
+    return () => { cancelAnimationFrame(outer); cancelAnimationFrame(inner); };
+  }, [scope]);
+
   // ── Hidden columns state ─────────────────────────────────────────────────
   // Persisted in localStorage so the user's column visibility survives page
   // reloads. Sticky columns (numero, societe, etat) can never be hidden.
@@ -1409,6 +1436,14 @@ export default function TableView({
   // Selected cell (style Google Sheets / Notion) : border bleue + point cyan bas-droite.
   // {rowId, colKey} ou null. Click sur une cell → la sélectionne. Click ailleurs / ESC → désélection.
   const [selectedCell, setSelectedCell] = useState(null);
+
+  // La table n'étant plus reconstruite à la bascule de vision, la cellule
+  // sélectionnée survit — or « Check » et « Date paie. » n'existent pas en
+  // vision Globale. On ne relâche la sélection que dans ce cas : la ligne
+  // active, elle, reste surlignée pour retrouver son client d'un coup d'œil.
+  useEffect(() => {
+    setSelectedCell((cur) => (cur && !allKeys.includes(cur.colKey) ? null : cur));
+  }, [allKeys]);
 
   // Comment popup state — {rowId, colKey, anchorRect} or null.
   // anchorRect is the DOMRect of the trigger button (bulle) so the popup can
@@ -1532,6 +1567,11 @@ export default function TableView({
         width: totalWidth + GUTTER,
         minWidth: totalWidth + GUTTER,
         position: 'relative',
+        // Fondu de bascule d'entité. Opacité seule, volontairement : une
+        // transformation sur cet élément casserait le `position: sticky` de
+        // l'en-tête, qui est son enfant.
+        opacity: scopeFading ? 0.15 : 1,
+        transition: scopeFading ? 'none' : 'opacity 260ms cubic-bezier(0.4, 0, 0.2, 1)',
         // Respiration sous le footer « + Nouvelle ligne » : la dernière row
         // ne colle plus à la scrollbar horizontale (retour dev : élément gris
         // chevauchant la dernière ligne près de la scrollbar).

@@ -200,6 +200,13 @@ export const scopedCredit = (r, scope) =>
   (scope === 'optilex' ? 0 : (toNumber(r.credit_owner) || 0)) +
   (scope === 'owner' ? 0 : (toNumber(r.credit_optilex_ttc) || 0));
 
+// Total encaissé par le client DEPUIS LE DÉBUT (échéances + arriérés),
+// servi par le backend sur chaque ligne. Un total nul = aucune échéance
+// jamais réglée, ce que la ligne mensuelle seule ne peut pas dire.
+export const scopedReceivedTotal = (r, scope) =>
+  (scope === 'optilex' ? 0 : (toNumber(r.received_total_owner) || 0)) +
+  (scope === 'owner' ? 0 : (toNumber(r.received_total_optilex_ttc) || 0));
+
 // Montants d'une period (row timeline) dans la vision active. `payDate` :
 // par entité en vision entité ; en Globale, Owner en priorité (une somme de
 // dates n'existe pas, on montre la première date connue).

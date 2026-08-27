@@ -55,7 +55,7 @@ import {
 import apiClient from '../../services/apiClient.js';
 import {
   formatEUR, formatDateFR, formatMonthLabel, periodFromDate, splitSocieteRep,
-  ETAT_COLORS, ETAT_FALLBACK,
+  ETAT_COLORS, ETAT_FALLBACK, TERMINATED_BOARD_ETATS,
   PAYMENT_SPECIFICITIES, PAYMENT_SPECIFICITY_COLORS, PAYMENT_SPECIFICITY_FALLBACK,
   AUTO_DEBIT_OPTIONS, AUTO_DEBIT_COLORS, AUTO_DEBIT_FALLBACK,
   PSP_OPTIONS, PSP_COLORS, PSP_FALLBACK,
@@ -69,6 +69,7 @@ import {
 
   paymentModeLabel,
   normalizePaymentMode,
+  PAYMENT_MODES, PAYMENT_MODE_LABELS,
   shiftMonth,
   scopedOverdueCurrent,
   scopedCredit,
@@ -130,6 +131,8 @@ export default function DetailPanel({
   // Accordéon « Voir le détail complet » (phase 3) — fermé par défaut.
   // Le bouton Modifier du header l'ouvre et scrolle dessus.
   const [detailOpen, setDetailOpen] = useState(false);
+  // Édition en place des informations contractuelles (crayon de section).
+  const [contractEditing, setContractEditing] = useState(false);
   const detailRef = useRef(null);
   // Historique des actions client (vue synthétique, demande Ismahane) —
   // endpoint en cours de déploiement côté backend : toute erreur (404…)
@@ -487,12 +490,16 @@ export default function DetailPanel({
 
   // Patch helper bound to current rowId — reuses table's onPatchRow flow.
   // Falls back to a direct PATCH if the parent didn't wire onPatchRow.
-  const patch = useCallback((field) => async (value) => {
+  // `extra` : champs accompagnant la saisie sans être eux-mêmes édités —
+  // aujourd'hui `change_effective`, le mois d'effet d'un changement de
+  // formule ou de modalité.
+  const patch = useCallback((field, extra = null) => async (value) => {
     if (!rowId) return;
+    const body = { [field]: value, ...(extra || {}) };
     if (onPatchRow) {
-      await onPatchRow(rowId, { [field]: value });
+      await onPatchRow(rowId, body);
     } else {
-      await apiClient.patch(`/api/v1/finance-periods/${rowId}`, { [field]: value });
+      await apiClient.patch(`/api/v1/finance-periods/${rowId}`, body);
     }
   }, [rowId, onPatchRow]);
 
@@ -562,6 +569,13 @@ export default function DetailPanel({
               </div>
             )}
 
+            {/* Bandeau de contexte : État, Période, Effectif, SIREN, et
+                l'échéance du contrat. Il vivait dans l'accordéon « Voir le
+                détail complet » — donc invisible en pratique. Sorti au
+                premier plan le 2026-08-27 : le SIREN et l'échéance sont
+                justement les deux informations qu'on allait y chercher. */}
+            <MetaRow profile={profile} boardRow={boardRow} />
+
             {/* 4 tuiles KPI contrat (scope-aware, dérivées de la timeline).
                 « Restant dû » = tout ce que le contrat doit encore
                 rapporter (mois à venir inclus) ; « Retard à date » = ce qui
@@ -575,8 +589,32 @@ export default function DetailPanel({
               loading={loadingTimeline}
             />
 
-            {/* Section : Informations contractuelles */}
-            <Section title="Informations contractuelles" delay={0.08}>
+            {/* Section : Informations contractuelles.
+                Le crayon ouvre l'édition sur place (demande dev 2026-08-27) :
+                c'est ici qu'on corrige la fiche, plus dans l'accordéon. */}
+            <Section
+              title="Informations contractuelles"
+              delay={0.08}
+              action={canEdit ? (
+                <button
+                  type="button"
+                  onClick={() => setContractEditing((v) => !v)}
+                  title={contractEditing ? 'Terminer l’édition' : 'Modifier la fiche'}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    border: 'none', cursor: 'pointer',
+                    background: contractEditing ? N.sideHover : 'transparent',
+                    color: contractEditing ? N.text : N.textMuted,
+                    borderRadius: 5, padding: '3px 7px',
+                    fontSize: 11, fontWeight: 600,
+                    transition: 'background 0.12s, color 0.12s',
+                  }}
+                >
+                  <Pencil size={12} />
+                  {contractEditing ? 'Terminer' : 'Modifier'}
+                </button>
+              ) : null}
+            >
               <ContractInfoList
                 client={client}
                 profile={profile}
@@ -585,6 +623,10 @@ export default function DetailPanel({
 
                 patch={patch}
                 canEdit={canEdit}
+                editing={contractEditing}
+                clientId={clientId}
+                onProfileChanged={refreshProfile}
+                onShowToast={onShowToast}
                 onCopied={onCopied}
               />
             </Section>
@@ -656,9 +698,6 @@ export default function DetailPanel({
             >
               {/* Title block */}
               <TitleBlock client={client} etatMeta={etatMeta} focusedRow={focusedRow} inheritedEtat={inheritedEtat} onCopied={onCopied} />
-
-              {/* Meta row */}
-              <MetaRow client={client} focusedRow={focusedRow} profile={profile} boardEtat={boardEtat} />
 
               {/* Section : Identité client */}
               <Section title="Identité client" delay={0.03}>
@@ -949,7 +988,10 @@ function ClientHeader({
       <div style={{
         marginTop: 12,
         display: 'flex', alignItems: 'center', gap: 10,
-        paddingLeft: 66, // aligné sous le texte (avatar 52 + gap 14)
+        // Aligné à gauche avec le bandeau SIREN / Renouvellement qui suit
+        // (demande dev 2026-08-27). L'ancien décalage de 66 px le calait
+        // sous le nom du client, ce qui créait un décrochage avec les
+        // badges désormais posés juste en dessous.
         minHeight: 24,
       }}>
         <span style={{
@@ -1153,7 +1195,10 @@ function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loadin
 }
 
 // ── Informations contractuelles (liste compacte icône + libellé / valeur) ───
-function ContractInfoList({ client, profile, focusedRow, boardRow, patch, canEdit, onCopied }) {
+function ContractInfoList({
+  client, profile, focusedRow, boardRow, patch, canEdit, onCopied,
+  editing = false, clientId, onProfileChanged, onShowToast,
+}) {
   // Séparation nom du client / société (2026-08-21) : « Nom du client » =
   // la/les personne(s), la société a sa propre ligne. Pas de personne
   // détectée → « Nom du client » = société, pas de ligne Société en doublon.
@@ -1194,12 +1239,60 @@ function ContractInfoList({ client, profile, focusedRow, boardRow, patch, canEdi
       || paymentModeLabel(boardRow?.periodicite);
   }
 
+  // Formule et modalité commandent toutes deux l'attendu : on demande à
+  // quel mois le changement s'applique avant d'écrire (demande dev
+  // 2026-08-27). `pending` porte la saisie en attente de ce choix.
+  const [pending, setPending] = useState(null);
+  const askEffective = useCallback((field, value, label) => {
+    setPending({ field, value, label });
+  }, []);
+  const applyPending = useCallback(async (effective) => {
+    if (!pending) return;
+    const { field, value } = pending;
+    setPending(null);
+    await patch(field, { change_effective: effective })(value);
+  }, [pending, patch]);
+
   const rows = [
     { Icon: Hash,       label: 'Client n°',            value: numeroValue, mono: true },
     ...(personne ? [
-      { Icon: Briefcase, label: 'Société',             value: societeName },
+      {
+        Icon: Briefcase,
+        label: 'Société',
+        copyValue: societeName,
+        node: (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+            <span>{societeName}</span>
+            <RelatedEntityList
+              items={profile?.companies || []}
+              kind="societe"
+              clientId={clientId}
+              editing={editing}
+              onChanged={onProfileChanged}
+              onShowToast={onShowToast}
+            />
+          </div>
+        ),
+      },
     ] : []),
-    { Icon: User,       label: 'Nom du client',        value: personne || societeName },
+    {
+      Icon: User,
+      label: 'Nom du client',
+      copyValue: personne || societeName,
+      node: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+          <span>{personne || societeName}</span>
+          <RelatedEntityList
+            items={profile?.partners || []}
+            kind="associe"
+            clientId={clientId}
+            editing={editing}
+            onChanged={onProfileChanged}
+            onShowToast={onShowToast}
+          />
+        </div>
+      ),
+    },
     { Icon: PenLine,    label: 'Date de signature',    value: formatDateLongFR(profile?.date_signature) },
     // RDV d'onboarding : c'est lui qui déclenche la facturation — premier
     // mois facturé, départ de l'engagement 12 mois, et bascule en retard
@@ -1209,6 +1302,10 @@ function ContractInfoList({ client, profile, focusedRow, boardRow, patch, canEdi
     {
       Icon: CalendarCheck2,
       label: "RDV d'onboarding",
+      // LECTURE SEULE, volontairement (arbitrage dev 2026-08-27) : la date
+      // vient de la déclaration de vente. La finance la consulte, elle ne
+      // la saisit pas — sinon deux vérités pour la date qui déclenche la
+      // facturation.
       value: formatDateLongFR(profile?.rdv_onboarding),
     },
     // Formule = tranche seule, éditable (PATCH employee_range sur la period
@@ -1222,14 +1319,32 @@ function ContractInfoList({ client, profile, focusedRow, boardRow, patch, canEdi
           value={range}
           options={EMPLOYEE_RANGES}
           optionLabels={rangeLabels}
-          onCommit={patch('employee_range')}
+          onCommit={(v) => askEffective('employee_range', v, employeeRangeLabel(v))}
           disabled={!canEdit}
           placeholderItalic
           width="auto"
         />
       ),
     },
-    { Icon: CreditCard, label: 'Modalité de paiement', value: modalite },
+    // Modalité éditable (demande dev 2026-08-27) : passer d'annuel à mensuel
+    // change le rythme de facturation, donc l'attendu — même traitement que
+    // la formule, mois d'effet demandé avant écriture.
+    {
+      Icon: CreditCard,
+      label: 'Modalité de paiement',
+      copyValue: modalite,
+      node: (
+        <EditableSelect
+          value={normalizePaymentMode(focusedRow?.payment_mode || client?.payment_mode)}
+          options={PAYMENT_MODES}
+          optionLabels={PAYMENT_MODE_LABELS}
+          onCommit={(v) => askEffective('payment_mode', v, paymentModeLabel(v))}
+          disabled={!canEdit}
+          placeholderItalic
+          width="auto"
+        />
+      ),
+    },
   ];
 
   return (
@@ -1237,7 +1352,15 @@ function ContractInfoList({ client, profile, focusedRow, boardRow, patch, canEdi
       border: `1px solid ${N.borderSft}`,
       borderRadius: 10,
       overflow: 'hidden',
+      position: 'relative',
     }}>
+      {pending && (
+        <EffectiveMonthPrompt
+          label={pending.label}
+          onPick={applyPending}
+          onCancel={() => setPending(null)}
+        />
+      )}
       {rows.map((r, i) => (
         <motion.div
           key={r.label}
@@ -1286,6 +1409,38 @@ function ContractInfoList({ client, profile, focusedRow, boardRow, patch, canEdi
           </span>
         </motion.div>
       ))}
+
+      {/* Emails et téléphones, en bas de la fiche (demande dev 2026-08-27) :
+          copiables en un clic à tout moment, typés (pro, perso, comptable…)
+          et enrichissables — le bouton d'ajout n'apparaît qu'en mode
+          édition. Composant partagé avec le board, donc une seule vérité. */}
+      {clientId && (
+        <div style={{
+          padding: '4px 14px 8px',
+          borderTop: `1px solid ${N.borderSft}`,
+          background: N.sideBg,
+        }}>
+          <ContactList
+            clientId={clientId}
+            kind="email"
+            contacts={profile?.contacts}
+            canEdit={canEdit && editing}
+            onChanged={onProfileChanged}
+            onShowToast={onShowToast}
+            onCopied={onCopied}
+          />
+          <ContactList
+            clientId={clientId}
+            kind="phone"
+            contacts={profile?.contacts}
+            inheritedValue={client?.phone}
+            canEdit={canEdit && editing}
+            onChanged={onProfileChanged}
+            onShowToast={onShowToast}
+            onCopied={onCopied}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -1890,45 +2045,191 @@ function TitleBlock({ client, etatMeta, focusedRow, inheritedEtat, onCopied }) {
 }
 
 // ── Meta row (pills) ────────────────────────────────────────────────────────
-function MetaRow({ client, focusedRow, profile, boardEtat }) {
+// ── Sociétés couvertes / associés ──────────────────────────────────────────
+// Un client couvre parfois plusieurs sociétés, et son dossier porte plusieurs
+// associés (demande dev 2026-08-27). Rien ne pouvait les stocker : la table
+// des sociétés de convention est rattachée au lead, celle des contacts ne
+// gère que des emails. Backend : `client_related_entity`, archivage logique.
+function RelatedEntityList({ items, kind, clientId, editing, onChanged, onShowToast }) {
+  const [name, setName] = useState('');
+  const [extra, setExtra] = useState('');
+  const [busy, setBusy] = useState(false);
+  const societe = kind === 'societe';
+
+  const add = useCallback(async () => {
+    const trimmed = name.trim();
+    if (trimmed.length < 2 || busy) return;
+    setBusy(true);
+    try {
+      await apiClient.post(`/api/v1/finance-periods/client/${clientId}/entities`, {
+        kind,
+        name: trimmed,
+        ...(societe ? { siren: extra.trim() || null } : { role: extra.trim() || null }),
+      });
+      setName(''); setExtra('');
+      onChanged?.();
+    } catch (e) {
+      onShowToast?.(e?.data?.detail || "Ajout impossible", 'error');
+    } finally {
+      setBusy(false);
+    }
+  }, [name, extra, busy, clientId, kind, societe, onChanged, onShowToast]);
+
+  const remove = useCallback(async (id) => {
+    try {
+      await apiClient.delete(`/api/v1/finance-periods/client/${clientId}/entities/${id}`);
+      onChanged?.();
+    } catch (e) {
+      onShowToast?.(e?.data?.detail || 'Retrait impossible', 'error');
+    }
+  }, [clientId, onChanged, onShowToast]);
+
+  if (!items.length && !editing) return null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+      {items.map((it) => (
+        <span key={it.id} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          background: N.sideBg, borderRadius: 5, padding: '2px 6px 2px 8px',
+          fontSize: 12.5, color: N.text,
+        }}>
+          {it.name}
+          {(it.siren || it.role) && (
+            <span style={{ color: N.textFaint }}>· {it.siren || it.role}</span>
+          )}
+          {editing && (
+            <button
+              type="button"
+              onClick={() => remove(it.id)}
+              title="Retirer"
+              style={{
+                border: 'none', background: 'transparent', cursor: 'pointer',
+                color: N.textFaint, display: 'inline-flex', padding: 0,
+              }}
+            >
+              <X size={12} />
+            </button>
+          )}
+        </span>
+      ))}
+      {editing && (
+        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') add(); }}
+            placeholder={societe ? 'Autre société' : 'Nom de l’associé'}
+            style={{
+              border: `1px solid ${N.border}`, borderRadius: 5,
+              padding: '3px 7px', fontSize: 12.5, width: 140,
+              fontFamily: 'inherit', outline: 'none',
+            }}
+          />
+          <input
+            value={extra}
+            onChange={(e) => setExtra(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') add(); }}
+            placeholder={societe ? 'SIREN' : 'Rôle'}
+            style={{
+              border: `1px solid ${N.border}`, borderRadius: 5,
+              padding: '3px 7px', fontSize: 12.5, width: 90,
+              fontFamily: 'inherit', outline: 'none',
+            }}
+          />
+          <button
+            type="button"
+            onClick={add}
+            disabled={busy || name.trim().length < 2}
+            style={{
+              border: 'none', borderRadius: 5, padding: '3px 9px',
+              fontSize: 12.5, fontWeight: 600,
+              cursor: name.trim().length < 2 ? 'default' : 'pointer',
+              background: name.trim().length < 2 ? N.sideBg : N.text,
+              color: name.trim().length < 2 ? N.textFaint : '#fff',
+            }}
+          >
+            Ajouter
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Mois d'effet d'un changement de formule ou de modalité ─────────────────
+// Les deux commandent l'attendu : appliqués au mois en cours, ils réécrivent
+// la ligne que la finance est peut-être en train de rapprocher ; appliqués au
+// mois suivant, l'historique reste intact. Personne ne peut trancher à notre
+// place — d'où la question, posée une fois, au moment de la saisie.
+function EffectiveMonthPrompt({ label, onPick, onCancel }) {
+  const moisProchain = formatMonthLabel(shiftMonth(currentPeriod(), 1));
+  const moisCourant = formatMonthLabel(currentPeriod());
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.15 }}
+      style={{
+        position: 'absolute', inset: 0, zIndex: 30,
+        background: 'rgba(255,255,255,0.96)',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 12,
+        padding: 20, textAlign: 'center',
+      }}
+    >
+      <div style={{ fontSize: 13, color: N.text, fontWeight: 600 }}>
+        Passer à « {label} » à partir de quand ?
+      </div>
+      <div style={{ fontSize: 12, color: N.textMuted, maxWidth: 320, lineHeight: 1.5 }}>
+        Le montant attendu est recalculé à partir du mois choisi, jusqu’au
+        dernier mois de la fiche.
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <button
+          type="button"
+          onClick={() => onPick('current')}
+          style={{
+            border: 'none', cursor: 'pointer', borderRadius: 6,
+            padding: '7px 14px', fontSize: 12.5, fontWeight: 600,
+            background: N.text, color: '#fff',
+          }}
+        >
+          Dès {moisCourant}
+        </button>
+        <button
+          type="button"
+          onClick={() => onPick('next')}
+          style={{
+            border: `1px solid ${N.border}`, cursor: 'pointer', borderRadius: 6,
+            padding: '7px 14px', fontSize: 12.5, fontWeight: 600,
+            background: '#fff', color: N.text,
+          }}
+        >
+          À partir de {moisProchain}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          style={{
+            border: 'none', cursor: 'pointer', borderRadius: 6,
+            padding: '7px 10px', fontSize: 12.5,
+            background: 'transparent', color: N.textMuted,
+          }}
+        >
+          Annuler
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
+// Bandeau réduit à ce qui n'est écrit nulle part ailleurs (arbitrage dev
+// 2026-08-27) : le SIREN, et l'échéance du contrat. L'État était en double
+// avec l'en-tête juste au-dessus, l'Effectif avec la Formule des
+// informations contractuelles, et la Période est déjà celle du tableau.
+function MetaRow({ profile, boardRow }) {
   const items = [];
-  // État board Owner/Opti'Lex en priorité ; fallback legacy `clients.etat`
-  // pour les clients hors board.
-  if (boardEtat) {
-    const meta = ETAT_STYLE[boardEtat] || ETAT_FALLBACK;
-    items.push({
-      icon: <span style={{
-        width: 8, height: 8, borderRadius: '50%', background: meta.dot || meta.fg,
-      }} />,
-      label: 'État',
-      value: boardEtat,
-      pillBg: meta.bg, pillFg: meta.fg,
-    });
-  } else if (client?.etat) {
-    const meta = ETAT_COLORS[client.etat] || ETAT_FALLBACK;
-    items.push({
-      icon: <span style={{
-        width: 8, height: 8, borderRadius: '50%', background: meta.fg,
-      }} />,
-      label: 'État',
-      value: meta.label,
-      pillBg: meta.bg, pillFg: meta.fg,
-    });
-  }
-  if (focusedRow?.period) {
-    items.push({
-      icon: <Calendar size={12} />,
-      label: 'Période',
-      value: formatMonthLabel(periodFromDate(focusedRow.period)),
-    });
-  }
-  if (profile?.employee_range || focusedRow?.employee_range || client?.employee_range) {
-    items.push({
-      icon: <Briefcase size={12} />,
-      label: 'Effectif',
-      value: profile?.employee_range || focusedRow?.employee_range || client?.employee_range,
-    });
-  }
   if (profile?.siren) {
     items.push({
       icon: <Landmark size={12} />,
@@ -1936,18 +2237,44 @@ function MetaRow({ client, focusedRow, profile, boardEtat }) {
       value: profile.siren,
     });
   }
-  // Échéance annuelle : visible en un coup d'œil quand elle approche —
-  // rouge à un mois, orange dans la fenêtre de renouvellement (90 j),
-  // même seuils que le board.
-  if (profile?.contract_days_left != null && profile.contract_days_left <= 90) {
-    const d = profile.contract_days_left;
-    const urgent = d <= 30;
+  // Sortie de contrat posée au board : elle prime sur le renouvellement —
+  // un contrat qui s'arrête ne se renouvelle pas. La date vient de l'état
+  // daté du board (`etat_date`), seul endroit où la résiliation est datée.
+  // Correction du libellé 2026-08-27 : ce badge annonçait « Fin contrat »
+  // alors qu'il compte les jours jusqu'à l'échéance ANNUELLE, c'est-à-dire
+  // le renouvellement.
+  const exitEtat = TERMINATED_BOARD_ETATS.has(boardRow?.etat_manuel)
+    ? boardRow.etat_manuel
+    : null;
+  const exitDate = exitEtat ? parseDateFR(boardRow?.etat_date) : null;
+  if (exitEtat && exitDate) {
+    const meta = ETAT_STYLE[exitEtat] || ETAT_FALLBACK;
+    const aVenir = exitDate > new Date();
     items.push({
       icon: <FileSignature size={12} />,
-      label: 'Fin contrat',
-      value: `J-${d}`,
-      pillBg: urgent ? N.redBg : '#fdecc8',
-      pillFg: urgent ? N.red : '#9f6b00',
+      label: exitEtat,
+      value: `${aVenir ? 'le' : 'depuis le'} ${formatDateLongFR(boardRow.etat_date)}`,
+      pillBg: meta.bg, pillFg: meta.fg,
+    });
+  } else if (!exitEtat && profile?.contract_end) {
+    // Le renouvellement est annuel et tombe à la date anniversaire : tout
+    // client signé en a un. Il ne s'affichait qu'à moins de 90 jours, donc
+    // presque jamais (retour dev 2026-08-27) — on montre désormais la date,
+    // et la couleur ne s'allume qu'à l'approche : orange dans la fenêtre de
+    // renouvellement (90 j), rouge à un mois, mêmes seuils que le board.
+    const d = profile.contract_days_left;
+    const proche = d != null && d <= 90;
+    const urgent = d != null && d <= 30;
+    items.push({
+      icon: <FileSignature size={12} />,
+      label: 'Renouvellement',
+      // Le compte à rebours seul : c'est l'information utile d'un coup
+      // d'œil, la date exacte encombrait la pastille (dev 2026-08-27).
+      // Elle reste lisible en survol.
+      value: d != null ? `J-${d}` : formatDateLongFR(profile.contract_end),
+      title: formatDateLongFR(profile.contract_end),
+      pillBg: urgent ? N.redBg : (proche ? '#fdecc8' : undefined),
+      pillFg: urgent ? N.red : (proche ? '#9f6b00' : undefined),
     });
   }
 
@@ -1959,7 +2286,7 @@ function MetaRow({ client, focusedRow, profile, boardEtat }) {
       marginBottom: 28,
     }}>
       {items.map((it, idx) => (
-        <div key={idx} style={{
+        <div key={idx} title={it.title || undefined} style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
           padding: '4px 10px',
           borderRadius: 4,
@@ -2119,26 +2446,11 @@ function IdentitySection({
         )}
       </Field>
 
-      {/* Contacts typés — partagés avec le board Owner/Opti'Lex. */}
-      <ContactList
-        clientId={clientId}
-        kind="email"
-        contacts={profile?.contacts}
-        canEdit={canEdit}
-        onChanged={refreshProfile}
-        onShowToast={onShowToast}
-        onCopied={onCopied}
-      />
-      <ContactList
-        clientId={clientId}
-        kind="phone"
-        contacts={profile?.contacts}
-        inheritedValue={client?.phone}
-        canEdit={canEdit}
-        onChanged={refreshProfile}
-        onShowToast={onShowToast}
-        onCopied={onCopied}
-      />
+      {/* Contacts typés : DÉPLACÉS dans « Informations contractuelles »
+          (demande dev 2026-08-27) — la finance a besoin du mail et du
+          téléphone sous les yeux, pas au fond d'un accordéon. Ils ne sont
+          pas dupliqués ici pour éviter deux endroits où éditer la même
+          donnée. */}
 
       {/* État = celui du board Owner/Opti'Lex (source de vérité, même picker
           que la colonne État du tableau). Fallbacks pour les clients hors

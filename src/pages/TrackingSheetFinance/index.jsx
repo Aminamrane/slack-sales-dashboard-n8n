@@ -32,11 +32,12 @@ import {
   AlertCircle, CheckCircle2, Home, MessageSquare, Mail, PanelLeft,
   Edit3, Plus, Filter, ArrowUpDown, MoreHorizontal, Share2,
   CheckCircle, Sparkles, FileText, Users, Settings, Clock,
-  XCircle, CircleDot, FilterX, Eye,
+  XCircle, CircleDot, FilterX, Eye, Check,
   DollarSign, BarChart3, Trophy, Wallet, ShoppingBag, UserCircle, Megaphone, StickyNote, ListChecks,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
+import PortalDropdown from './components/PortalDropdown.jsx';
 import companyLogo from '../../assets/my_image.png';
 import '../../index.css';
 
@@ -60,6 +61,7 @@ import {
   scopedOverdueCum,
   scopedCredit,
   scopedPeriodAmounts,
+  scopedReceivedTotal,
   normalizeSearch,
   matchesClientSearch,
 } from './constants.js';
@@ -222,6 +224,11 @@ const VIEW_FILTERS = [
   // Trop-perçu reporté (backend `credit_*`) : action finance à faire —
   // déduire de la prochaine échéance ou rembourser.
   { key: 'trop_percu',  label: 'Trop-perçu' },
+  // La liste de relance : onboarding Owner passé (le paiement est réellement
+  // exigible), une dette à date, et rien d'encaissé ce mois-ci. Demande dev
+  // 2026-08-27 — on ne relance pas un client qui n'a pas encore démarré, ni
+  // celui qui a déjà payé une partie.
+  { key: 'onboarding_passe', label: 'Onboarding passé' },
   { key: 'non_auto',    label: 'Non automatisé' },
   { key: 'resilies',    label: 'Résiliés / Rétractés' },
 ];
@@ -317,6 +324,9 @@ export default function TrackingSheetFinance() {
 
   // ── Vue-filtre active (chips) — single-select, « Tous » par défaut ────
   const [viewFilter, setViewFilter] = useState('all');
+  // Périmètre du filtre « Onboarding passé » : tous les onboardings, ceux
+  // du mois courant, ceux du mois précédent, ou les deux derniers mois.
+  const [relanceMonths, setRelanceMonths] = useState(() => new Set());
 
   // Prédicat d'une vue-filtre pour une row, dans la vision active.
   const matchesView = useCallback((r, filterKey) => {
@@ -329,6 +339,29 @@ export default function TrackingSheetFinance() {
         return scopedOverdueCum(r, scope) > 0;
       case 'trop_percu':
         return scopedCredit(r, scope) > 0;
+      case 'onboarding_passe': {
+        // 1. L'onboarding Owner doit être passé : avant lui rien n'est
+        //    exigible. Sans date connue, on s'en remet au calcul, qui
+        //    applique déjà la règle côté serveur.
+        const onboarding = parseDateFR(r.client?.rdv_onboarding);
+        if (onboarding && onboarding > new Date()) return false;
+        // 1 bis. Mois d'onboarding cochés (aucun = tous). Un client sans
+        //    date connue sort du lot dès qu'on coche un mois : on ne peut
+        //    pas affirmer qu'il en fait partie.
+        if (relanceMonths.size > 0) {
+          if (!onboarding) return false;
+          const m = `${onboarding.getFullYear()}-${String(onboarding.getMonth() + 1).padStart(2, '0')}`;
+          if (!relanceMonths.has(m)) return false;
+        }
+        // 2. Une dette à cette date — mois courant ou créances passées.
+        const due = scopedOverdueCurrent(r, scope) + scopedOverdueCum(r, scope);
+        if (due <= 0) return false;
+        // 3. JAMAIS payé, depuis le premier mois de son historique — pas
+        //    même la première échéance (précision dev 2026-08-27). Le total
+        //    encaissé vient du backend : la ligne mensuelle ne connaît que
+        //    son propre mois et ne pouvait pas répondre à la question.
+        return scopedReceivedTotal(r, scope) === 0;
+      }
       case 'non_auto': {
         // Pastille rouge du scope actif (les deux rouges en Globale).
         const p = autoDebitPastilles(r.auto_debit);
@@ -344,7 +377,7 @@ export default function TrackingSheetFinance() {
       default:
         return true; // 'all'
     }
-  }, [scope, boardMap]);
+  }, [scope, boardMap, relanceMonths]);
 
   // Compteur par chip (nb de clients) — sur les rows brutes de la période,
   // indépendant de la recherche et des autres filtres (le compteur décrit la
@@ -708,6 +741,8 @@ export default function TrackingSheetFinance() {
             active={viewFilter}
             onChange={setViewFilter}
             counts={viewCounts}
+            relanceMonths={relanceMonths}
+            onRelanceMonthsChange={setRelanceMonths}
           />
 
           {error && (
@@ -729,9 +764,14 @@ export default function TrackingSheetFinance() {
           {/* Table — flex: 1 pour prendre toute la hauteur restante */}
           <AnimatePresence mode="wait">
             <motion.div
-              // Keyed par période ET vision : changer de vision rejoue le
-              // fade doux (les colonnes changent de champs sous-jacents).
-              key={`${period}:${scope}`}
+              // Keyed par PÉRIODE seule. La vision en faisait partie jusqu'au
+              // 2026-08-27 : changer d'entité reconstruisait toute la table,
+              // donc un nouveau conteneur de défilement, donc un retour en
+              // haut de liste. La finance saisit client par client et perdait
+              // sa place à chaque bascule Owner ↔ Opti'lex. Le fondu de
+              // bascule n'a pas disparu pour autant : TableView le rejoue sur
+              // son contenu, sans se démonter (cf. `scopeFading`).
+              key={period}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
@@ -1332,7 +1372,115 @@ function KpiInline({ label, value, tone = 'neutral' }) {
 // Single-select : « Tous » par défaut. Le pill actif glisse d'un chip à
 // l'autre (layoutId framer-motion) — même langage de mouvement que le reste
 // de la page (spring doux, pas de teleport).
-function ViewChips({ active, onChange, counts }) {
+// Sous-filtre du lot « Onboarding passé » : sur quels mois d'onboarding.
+// N'apparaît que quand le filtre est actif — un réglage sans objet le reste
+// du temps encombrerait la barre.
+//
+// Menu à cocher plutôt que segments exclusifs (demande dev 2026-08-27) : les
+// mois s'additionnent, on peut demander « août + juillet + juin ». Aucun mois
+// coché = tous les onboardings passés.
+const RELANCE_MONTH_COUNT = 12;
+
+function RelanceMonthPicker({ selected, onChange }) {
+  const [open, setOpen] = useState(false);
+  const anchorRef = useRef(null);
+  const months = useMemo(() => {
+    const base = currentPeriod();
+    return Array.from({ length: RELANCE_MONTH_COUNT }, (_, i) => shiftMonth(base, -i));
+  }, []);
+
+  const toggle = useCallback((m) => {
+    const next = new Set(selected);
+    if (next.has(m)) next.delete(m); else next.add(m);
+    onChange(next);
+  }, [selected, onChange]);
+
+  const resume = selected.size === 0
+    ? 'Tous'
+    : [...selected].sort().reverse().map((m) => formatMonthLabel(m)).join(', ');
+
+  return (
+    <>
+      <button
+        ref={anchorRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title="Choisir les mois d’onboarding"
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          height: 28, padding: '0 12px', marginLeft: 4,
+          border: `1px solid ${N.border}`, borderRadius: 999,
+          background: selected.size ? N.sideBg : 'transparent',
+          color: N.textMuted, cursor: 'pointer',
+          fontFamily: 'inherit', fontSize: 12.5, fontWeight: 500,
+          maxWidth: 320, whiteSpace: 'nowrap',
+        }}
+      >
+        <Calendar size={13} />
+        <span style={{
+          overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 230,
+          color: selected.size ? N.text : N.textMuted,
+          fontWeight: selected.size ? 600 : 500,
+        }}>
+          Mois : {resume}
+        </span>
+        <ChevronDown size={13} />
+      </button>
+      <PortalDropdown
+        open={open}
+        anchorRef={anchorRef}
+        onClose={() => setOpen(false)}
+        minWidth={190}
+        maxHeight={300}
+      >
+        <button
+          type="button"
+          onClick={() => { onChange(new Set()); setOpen(false); }}
+          style={{
+            display: 'block', width: '100%', textAlign: 'left',
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            padding: '7px 12px', fontSize: 12.5, fontFamily: 'inherit',
+            color: selected.size ? N.textMuted : N.text,
+            fontWeight: selected.size ? 500 : 600,
+            borderBottom: `1px solid ${N.borderSft}`,
+          }}
+        >
+          Tous les onboardings passés
+        </button>
+        {months.map((m) => {
+          const on = selected.has(m);
+          return (
+            <button
+              key={m}
+              type="button"
+              onClick={() => toggle(m)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                border: 'none', background: 'transparent', cursor: 'pointer',
+                padding: '6px 12px', fontSize: 12.5, fontFamily: 'inherit',
+                color: N.text, textAlign: 'left',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = N.sideHover; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              <span style={{
+                width: 14, height: 14, borderRadius: 3, flexShrink: 0,
+                border: `1.5px solid ${on ? N.text : N.border}`,
+                background: on ? N.text : '#fff',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {on && <Check size={10} color="#fff" strokeWidth={3} />}
+              </span>
+              {formatMonthLabel(m)}
+            </button>
+          );
+        })}
+      </PortalDropdown>
+    </>
+  );
+}
+
+function ViewChips({ active, onChange, counts, relanceMonths, onRelanceMonthsChange }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 6,
@@ -1390,6 +1538,9 @@ function ViewChips({ active, onChange, counts }) {
           </button>
         );
       })}
+      {active === 'onboarding_passe' && (
+        <RelanceMonthPicker selected={relanceMonths} onChange={onRelanceMonthsChange} />
+      )}
     </div>
   );
 }
