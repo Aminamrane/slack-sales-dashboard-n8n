@@ -69,6 +69,8 @@ import {
   normalizeSearch,
   matchesClientSearch,
   scopedCredit,
+  canEditAmounts,
+  canEditContract,
   scopedOverdueCurrent,
   scopedOverdueCum,
   formatEUR,
@@ -131,6 +133,12 @@ const CELL_PAD_X = 12;
 
 function buildCols(scope) {
   const isGlobal = scope === 'global';
+  // L'équipe finance ne saisit pas les encaissements : ses cellules de
+  // montants, dates et PSP restent en lecture (dev 2026-08-27). Les
+  // modalités, elles, lui sont ouvertes. Le serveur applique la même règle.
+  const role = apiClient.getUser()?.role;
+  const amounts = canEditAmounts(role);
+  const contract = canEditContract(role);
   const entityGroup = `entity_${scope}`;
   return {
     numero:   { w: 85,  group: 'identite',  shortLabel: 'N° client',        fullLabel: COLUMN_LABELS.numero,  kind: 'text',   sticky: true,  splitVisible: true,  align: 'center', editable: false, hideKindIcon: true },
@@ -139,12 +147,12 @@ function buildCols(scope) {
     societe:  { w: 230, group: 'identite',  shortLabel: 'Nom + entreprise', fullLabel: COLUMN_LABELS.societe, kind: 'text',   sticky: true,  splitVisible: true,  align: 'left',   editable: false, heavyRight: true },
     // Colonne compacte fusionnant Mode + Modalité + Prélèvement (chip icône
     // + mini-pills OW/OL — w 160 pour loger chip 3× + 2 pills à glyphe).
-    modalites:       { w: 160, group: 'modalites',   shortLabel: 'Modalités',          fullLabel: COLUMN_LABELS.modalites,                                kind: 'select', sticky: false, splitVisible: false, align: 'left',   editable: true, heavyRight: true },
+    modalites:       { w: 160, group: 'modalites',   shortLabel: 'Modalités',          fullLabel: COLUMN_LABELS.modalites,                                kind: 'select', sticky: false, splitVisible: false, align: 'left',   editable: contract, heavyRight: true },
     // ── Bloc entité (Owner / Opti'lex / Global selon la vision) ───────────
     expected:        { w: 110, group: entityGroup,   shortLabel: 'Attendu',            fullLabel: stripEntitySuffix(COLUMN_LABELS.expectedOwner),         kind: 'amount', sticky: false, splitVisible: true,  align: 'right',  editable: false },
-    received:        { w: 150, group: entityGroup,   shortLabel: 'Récupéré',           fullLabel: stripEntitySuffix(COLUMN_LABELS.receivedOwner),         kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: !isGlobal },
+    received:        { w: 150, group: entityGroup,   shortLabel: 'Récupéré',           fullLabel: stripEntitySuffix(COLUMN_LABELS.receivedOwner),         kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: !isGlobal && amounts },
     overdueCum:      { w: 125, group: entityGroup,   shortLabel: 'Retard antérieur',   fullLabel: stripEntitySuffix(COLUMN_LABELS.overdueOwnerCum),       kind: 'amount', sticky: false, splitVisible: false, align: 'right',  editable: false },
-    receivedOverdue: { w: 150, group: entityGroup,   shortLabel: 'Récupéré antérieur', fullLabel: stripEntitySuffix(COLUMN_LABELS.receivedOverdueOwner),  kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: !isGlobal },
+    receivedOverdue: { w: 150, group: entityGroup,   shortLabel: 'Récupéré antérieur', fullLabel: stripEntitySuffix(COLUMN_LABELS.receivedOverdueOwner),  kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: !isGlobal && amounts },
     // Ce que le client doit VRAIMENT à cet instant : retard du mois +
     // créances antérieures, encaissements du mois déduits. C'est la colonne
     // « Retard de paiement » du classeur, et la seule qui baisse quand on
@@ -154,8 +162,8 @@ function buildCols(scope) {
     // Check / Date paiement : par entité uniquement — pas de somme possible,
     // absentes en vision Globale.
     ...(isGlobal ? {} : {
-      psp:           { w: 100, group: entityGroup,   shortLabel: 'Check',              fullLabel: stripEntitySuffix(COLUMN_LABELS.pspOwner),              kind: 'select', sticky: false, splitVisible: false, align: 'left',   editable: true },
-      payDate:       { w: 110, group: entityGroup,   shortLabel: 'Date paie.',         fullLabel: stripEntitySuffix(COLUMN_LABELS.payDateOwner),          kind: 'date',   sticky: false, splitVisible: false, align: 'center', editable: true },
+      psp:           { w: 100, group: entityGroup,   shortLabel: 'Check',              fullLabel: stripEntitySuffix(COLUMN_LABELS.pspOwner),              kind: 'select', sticky: false, splitVisible: false, align: 'left',   editable: amounts },
+      payDate:       { w: 110, group: entityGroup,   shortLabel: 'Date paie.',         fullLabel: stripEntitySuffix(COLUMN_LABELS.payDateOwner),          kind: 'date',   sticky: false, splitVisible: false, align: 'center', editable: amounts },
     }),
   };
 }

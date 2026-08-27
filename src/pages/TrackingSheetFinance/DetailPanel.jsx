@@ -63,6 +63,8 @@ import {
   AUDIT_FIELD_LABELS,
   PROFILE_CHANGE_LABELS,
   ALLOWED_ROLES,
+  canEditAmounts,
+  canEditContract,
   toNumber,
   currentPeriod,
   parseDateFR,
@@ -139,7 +141,12 @@ export default function DetailPanel({
   // masque simplement la section, jamais de crash.
   const [clientAudit, setClientAudit] = useState(null);
   // Écriture réservée à l'équipe finance + admin (le CEO lit).
-  const canEdit = ALLOWED_ROLES.includes(apiClient.getUser()?.role);
+  // Deux niveaux de droits (dev 2026-08-27) : l'équipe finance entretient la
+  // fiche (modalités, sociétés, associés, contacts) mais ne touche ni aux
+  // encaissements, ni à la formule, ni au SIREN, ni à l'état board.
+  const role = apiClient.getUser()?.role;
+  const canEdit = canEditContract(role);
+  const canEditMoney = canEditAmounts(role);
 
   // Reset on close
   useEffect(() => {
@@ -554,7 +561,9 @@ export default function DetailPanel({
               paymentStatus={paymentStatus}
               onModify={openDetail}
               boardRow={boardRow}
-              canEdit={canEdit}
+              // L'état du client (Signé, résiliation…) est une décision
+              // engageante : direction financière et direction seulement.
+              canEdit={canEditMoney}
               onBoardEtatChange={onBoardEtatChange}
               inheritedEtat={inheritedEtat}
             />
@@ -1320,7 +1329,9 @@ function ContractInfoList({
           options={EMPLOYEE_RANGES}
           optionLabels={rangeLabels}
           onCommit={(v) => askEffective('employee_range', v, employeeRangeLabel(v))}
-          disabled={!canEdit}
+          // La formule commande le montant facturé : direction financière
+          // seulement. La modalité, elle, reste ouverte à l'équipe.
+          disabled={!canEditMoney}
           placeholderItalic
           width="auto"
         />
@@ -2408,7 +2419,7 @@ function IdentitySection({
 
   // SIREN : le backfill est une donnée sourcée (lecture) ; sans lui, la
   // saisie alimente l'override du board (siren_ovr) et le journal.
-  const sirenEditable = canEdit && profile && profile.siren_source !== 'backfill';
+  const sirenEditable = canEditMoney && profile && profile.siren_source !== 'backfill';
   const commitSiren = async (value) => {
     await apiClient.patch(`/api/v1/finance-periods/client/${clientId}/profile`, { siren: value || '' });
     refreshProfile();

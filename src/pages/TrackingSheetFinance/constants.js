@@ -7,6 +7,24 @@
 // ── Roles allowed on this page ───────────────────────────────────────────
 export const ALLOWED_ROLES = ['admin', 'finance_director', 'finance_team'];
 
+// ── Qui peut écrire quoi (décision dev 2026-08-27) ───────────────────────
+//
+// L'équipe finance (Aurélie B, Lény Perron) consulte tout, filtre, télécharge
+// les états de compte et commente — mais ne SAISIT PAS les encaissements.
+// Elle peut en revanche entretenir la fiche : modalités, sociétés, associés,
+// emails et téléphones.
+//
+// Ces listes ne font que refléter l'écran : le serveur refuse de son côté
+// (`_FINANCE_TEAM_WRITABLE` dans client_finance.py). Une cellule grisée n'est
+// pas une permission.
+const AMOUNT_EDIT_ROLES = ['admin', 'finance_director'];
+
+// Encaissements, dates de paiement, PSP, formule, état board.
+export const canEditAmounts = (role) => AMOUNT_EDIT_ROLES.includes(role);
+
+// Modalités, sociétés, associés, contacts.
+export const canEditContract = (role) => ALLOWED_ROLES.includes(role);
+
 // ── Commentable cells ────────────────────────────────────────────────────
 //
 // Maps `colKey` (frontend column key from `COLS_FULL` in TableView.jsx) to
