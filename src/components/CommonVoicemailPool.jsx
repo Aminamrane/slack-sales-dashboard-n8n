@@ -51,10 +51,11 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
         const age = fmtAge(lead.last_call_at || lead.created_at);
         return (
           <div key={lead.id} style={{
-            display: "flex", alignItems: "center", gap: 10, padding: "11px 16px",
+            padding: "11px 16px",
             borderRadius: 14, border: `1px solid ${C.border}`,
             background: darkMode ? "rgba(255,255,255,0.03)" : "#fff",
           }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#64748b", flexShrink: 0 }} />
             <span style={{ fontSize: 14, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 60, flexShrink: 1 }}>
               {lead.full_name || lead.company_name || lead.company || "Sans nom"}
@@ -105,6 +106,33 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                 {claiming ? "…" : "Prendre"}
               </button>
             )}
+            </div>
+            {(() => {
+              // Infos qualifiantes : le sales doit pouvoir juger le lead sans
+              // avoir à le prendre d'abord (demande dev 2026-08-27).
+              const fmtDate = (v) => { const m = String(v || "").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : null; };
+              // Selon le canal d'acquisition, effectif/CA arrivent slugifiés
+              // (« 3_-_5 », « entre_100_000_€_et_500_000_€ ») : on les rend lisibles.
+              const clean = (v) => (v ? String(v).replace(/_/g, " ").replace(/\s+/g, " ").trim() : null);
+              const bits = [
+                lead.email || null,
+                clean(lead.headcount || lead.employee_range) ? `${clean(lead.headcount || lead.employee_range)} salariés` : null,
+                clean(lead.revenue) ? `CA ${clean(lead.revenue)}` : null,
+                clean(lead.sector) || null,
+                lead.siren ? `SIREN ${lead.siren}` : null,
+                fmtDate(lead.created_at) ? `entré le ${fmtDate(lead.created_at)}` : null,
+              ].filter(Boolean);
+              if (!bits.length) return null;
+              return (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 10px", marginTop: 6, paddingLeft: 18, fontSize: 11.5, color: C.muted }}>
+                  {bits.map((b, i) => (
+                    <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                      {i > 0 && <span style={{ opacity: 0.4 }}>·</span>}{b}
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         );
       })}
