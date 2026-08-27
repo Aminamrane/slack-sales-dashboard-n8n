@@ -1,17 +1,21 @@
 // src/pages/WorkHours.jsx
 //
 // Heures de travail hebdomadaires (menu Humain). Accès : admin, ceo, hr.
-// Source : agendas Google de l'équipe (compte de service), calcul backend :
-// jours ouvrés uniquement, vacances déclarées exclues, événements non-travail
-// (pause, sport, déjeuner...) exclus, chevauchements fusionnés.
-// Interactif : classement, filtre par semaine, totaux par pôle recalculés en
-// direct quand on coche/décoche des personnes.
+// Source : agendas Google de l'équipe, servis depuis un snapshot en base
+// rafraîchi par cron toutes les 15 min (arrivée instantanée sur la page) ;
+// calcul backend : jours ouvrés uniquement, vacances déclarées exclues,
+// événements non-travail (pause, sport, déjeuner...) exclus, chevauchements
+// fusionnés.
+// Interactif : podium, classement avec photos, évolution vs semaine
+// précédente (à portion comparable de semaine), filtre par semaine, totaux
+// par pôle recalculés en direct quand on coche/décoche des personnes.
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import apiClient from "../services/apiClient";
 import SharedNavbar from "../components/SharedNavbar";
+import crownIcon from "../assets/crown.png";
 
 const NAVY = "#121b35";
 const GREEN = "#3e7d5a";
@@ -24,6 +28,12 @@ const FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui,
 const POLE_COLORS = {
   Devs: "#6366f1", Sales: "#2563eb", Setters: "#0ea5e9", Finance: "#d97706",
   Marketing: "#db2777", Direction: NAVY, RH: "#7c3aed", "Client Success": GREEN, Autre: MUTED,
+};
+// Or / argent / bronze : ring autour de l'avatar + badge de rang.
+const MEDALS = {
+  1: { ring: "#e3b53e", badge: "#d9a514", soft: "#fbf3dd" },
+  2: { ring: "#b9c2cf", badge: "#7e8a9a", soft: "#eef1f5" },
+  3: { ring: "#d8a976", badge: "#b0763b", soft: "#f7ede2" },
 };
 const DAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven"];
 // Moyennes : plancher mai 2026 (agendas peu tenus avant). La plage est
@@ -52,6 +62,50 @@ const fmtH = (h) => {
   const mm = Math.round((h - hh) * 60);
   return mm ? `${hh}h${String(mm).padStart(2, "0")}` : `${hh}h`;
 };
+// Ancienneté d'un VRAI instant (refreshed_at, timestamptz) : conversion normale.
+const minsAgo = (isoTs) => Math.max(0, Math.round((Date.now() - new Date(isoTs).getTime()) / 60000));
+
+// Photo de profil (Slack) avec repli initiales teintées couleur du pôle.
+function Avatar({ p, size = 30, ring = null }) {
+  const [err, setErr] = useState(false);
+  const pc = POLE_COLORS[p.pole] || MUTED;
+  const initials = (p.name || p.email).split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0].toUpperCase()).join("");
+  const base = {
+    width: size, height: size, borderRadius: "50%", flexShrink: 0, boxSizing: "border-box",
+    border: ring ? `2.5px solid ${ring}` : "none",
+  };
+  if (p.avatar_url && !err) {
+    return <img src={p.avatar_url} alt="" onError={() => setErr(true)} style={{ ...base, objectFit: "cover", display: "block" }} />;
+  }
+  return (
+    <span style={{ ...base, background: pc + "1a", color: pc, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: Math.round(size * 0.36), fontWeight: 800, letterSpacing: "0.02em" }}>
+      {initials}
+    </span>
+  );
+}
+
+// Évolution vs la MÊME portion de la semaine précédente (lun→jour courant) :
+// comparer une semaine entamée à une semaine pleine n'aurait aucun sens.
+function DeltaChip({ delta, daysCounted, compact = false }) {
+  if (delta == null) return <span style={{ fontSize: 11, color: "#d5dae4" }}>·</span>;
+  const flat = Math.abs(delta) < 0.25;
+  const up = delta > 0;
+  const color = flat ? MUTED : up ? GREEN : "#b45309";
+  const bg = flat ? "#f3f4f6" : up ? GREEN + "16" : "#fff3e3";
+  const label = flat ? "=" : `${up ? "+" : "−"}${fmtH(Math.abs(delta))}`;
+  const portion = daysCounted === 5 ? "semaine précédente" : `même portion (lun-${DAY_LABELS[daysCounted - 1].toLowerCase()}) de la semaine précédente`;
+  return (
+    <span title={`vs ${portion}`}
+      style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: compact ? "1px 7px" : "2px 8px", borderRadius: 10, background: bg, color, fontSize: compact ? 10.5 : 11, fontWeight: 750, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+      {!flat && (
+        <svg width="8" height="8" viewBox="0 0 10 10" style={{ transform: up ? "none" : "rotate(180deg)" }}>
+          <path d="M5 1 L9 8 L1 8 Z" fill={color} />
+        </svg>
+      )}
+      {label}
+    </span>
+  );
+}
 
 export default function WorkHours({ embed = false }) {
   const navigate = useNavigate();
@@ -62,10 +116,11 @@ export default function WorkHours({ embed = false }) {
 
   const [week, setWeek] = useState(() => iso(mondayOf(new Date())));
   const [data, setData] = useState(null);
+  const [prevData, setPrevData] = useState(null); // semaine précédente (pour l'évolution)
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [unchecked, setUnchecked] = useState(() => new Set());
-  // Période de moyenne : par défaut le mois courant (août au lancement).
+  // Période de moyenne : par défaut le mois courant.
   const [avgRange, setAvgRange] = useState(() => {
     const now = new Date();
     return monthRange(now.getFullYear(), now.getMonth());
@@ -102,10 +157,16 @@ export default function WorkHours({ embed = false }) {
 
   useEffect(() => {
     let alive = true;
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setPrevData(null);
     apiClient.get(`/api/v1/hr/work-hours?week=${week}`)
       .then((r) => { if (alive) { setData(r); setLoading(false); } })
       .catch((e) => { if (alive) { setError(e.message || "Erreur"); setLoading(false); } });
+    // Semaine précédente (figée en base -> instantané) : nourrit l'évolution.
+    const d = new Date(week + "T00:00:00");
+    d.setDate(d.getDate() - 7);
+    apiClient.get(`/api/v1/hr/work-hours?week=${iso(d)}`)
+      .then((r) => { if (alive) setPrevData(r); })
+      .catch(() => {});
     return () => { alive = false; };
   }, [week]);
 
@@ -119,6 +180,26 @@ export default function WorkHours({ embed = false }) {
   const accessible = useMemo(() => people.filter((p) => p.accessible), [people]);
   const checked = useMemo(() => accessible.filter((p) => !unchecked.has(p.email)), [accessible, unchecked]);
   const maxTotal = useMemo(() => Math.max(1, ...checked.map((p) => p.total)), [checked]);
+
+  // Jours comptés cette semaine (semaine en cours : lun→aujourd'hui) et
+  // évolution par personne vs la même portion de la semaine précédente.
+  const daysCounted = useMemo(() => {
+    if (!data) return 5;
+    return data.days.filter((d) => !data.counted_until || d <= data.counted_until).length;
+  }, [data]);
+  const deltaByEmail = useMemo(() => {
+    const m = {};
+    if (!prevData) return m;
+    const prev = {};
+    for (const p of prevData.people || []) if (p.accessible) prev[p.email] = p.daily || [];
+    for (const p of accessible) {
+      const pd = prev[p.email];
+      if (!pd) continue;
+      const comparable = pd.slice(0, daysCounted).reduce((a, h) => a + h, 0);
+      m[p.email] = p.total - comparable;
+    }
+    return m;
+  }, [prevData, accessible, daysCounted]);
 
   const globalTotal = useMemo(() => checked.reduce((a, p) => a + p.total, 0), [checked]);
   const poles = useMemo(() => {
@@ -141,16 +222,21 @@ export default function WorkHours({ embed = false }) {
     ? `${fmtDay(data.days[0])} au ${fmtDay(data.days[4])}`
     : "";
   const isCurrentWeek = week === iso(mondayOf(new Date()));
+  const podium = accessible.slice(0, 3);
 
   const card = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, boxShadow: "0 1px 3px rgba(17,24,39,0.05)" };
 
   return (
     <div style={{ fontFamily: FONT, minHeight: embed ? "auto" : "100vh", background: embed ? "transparent" : "#f4f5f7", color: TEXT }}>
       {!embed && <SharedNavbar />}
-      <style>{`@keyframes whUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}`}</style>
+      <style>{`
+        @keyframes whUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+        @keyframes whPulse{0%,100%{opacity:1}50%{opacity:0.35}}
+        @keyframes whShimmer{from{background-position:-400px 0}to{background-position:400px 0}}
+      `}</style>
       <div style={{ maxWidth: 1180, margin: "0 auto", padding: "28px 24px 60px", animation: "whUp 0.4s cubic-bezier(0.16,1,0.3,1) both" }}>
 
-        {/* En-tête + navigation semaine */}
+        {/* En-tête + navigation semaine + fraîcheur du snapshot */}
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
           <div>
             <div style={{ fontSize: 23, fontWeight: 750, color: NAVY, letterSpacing: "-0.02em" }}>Heures de travail</div>
@@ -158,7 +244,19 @@ export default function WorkHours({ embed = false }) {
               Agendas Google · jours ouvrés (lun-ven) jusqu'au jour courant · vacances et événements non-travail exclus
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            {data && isCurrentWeek && data.refreshed_at && (
+              <span title={`Dernier relevé des agendas : ${new Date(data.refreshed_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 10, background: GREEN + "12", color: GREEN, fontSize: 11.5, fontWeight: 650 }}>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: GREEN, animation: "whPulse 2.2s ease-in-out infinite" }} />
+                {minsAgo(data.refreshed_at) === 0 ? "à l'instant" : `relevé il y a ${minsAgo(data.refreshed_at)} min`}
+              </span>
+            )}
+            {data && !isCurrentWeek && (
+              <span style={{ padding: "7px 12px", borderRadius: 10, background: "#f0f2f5", color: MUTED, fontSize: 11.5, fontWeight: 650 }}>
+                Semaine figée
+              </span>
+            )}
             <motion.button type="button" whileTap={{ scale: 0.95 }} onClick={() => shiftWeek(-1)}
               style={{ padding: "8px 13px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>←</motion.button>
             <div style={{ padding: "8px 16px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 170, textAlign: "center" }}>
@@ -170,8 +268,10 @@ export default function WorkHours({ embed = false }) {
         </div>
 
         {loading ? (
-          <div style={{ ...card, padding: 48, textAlign: "center", color: MUTED, fontSize: 13.5 }}>
-            Lecture des agendas de l'équipe…
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {[64, 150, 380].map((h, i) => (
+              <div key={i} style={{ ...card, height: h, border: "none", background: "linear-gradient(90deg, #eceef2 0%, #f5f6f8 40%, #eceef2 80%)", backgroundSize: "800px 100%", animation: "whShimmer 1.3s linear infinite" }} />
+            ))}
           </div>
         ) : error ? (
           <div style={{ ...card, padding: 48, textAlign: "center", color: "#b42318", fontSize: 13.5 }}>{error}</div>
@@ -196,6 +296,49 @@ export default function WorkHours({ embed = false }) {
               ))}
             </div>
 
+            {/* Podium de la semaine : les 3 plus gros volumes, photos en avant */}
+            {podium.length === 3 && (
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "flex-end", gap: 14, marginBottom: 22 }}>
+                {[podium[1], podium[0], podium[2]].map((p, slot) => {
+                  const rank = slot === 1 ? 1 : slot === 0 ? 2 : 3;
+                  const first = rank === 1;
+                  const medal = MEDALS[rank];
+                  const a = avgByEmail[p.email];
+                  return (
+                    <motion.div key={p.email}
+                      initial={{ opacity: 0, y: 18, scale: 0.94 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{ type: "spring", stiffness: 380, damping: 30, delay: 0.08 + slot * 0.07 }}
+                      style={{ ...card, position: "relative", width: first ? 236 : 208, padding: first ? "22px 18px 16px" : "18px 16px 14px",
+                        textAlign: "center", borderColor: first ? medal.ring + "66" : BORDER,
+                        boxShadow: first ? `0 10px 30px ${medal.ring}2e` : card.boxShadow,
+                        marginBottom: first ? 10 : 0 }}>
+                      {first && (
+                        <img src={crownIcon} alt="" style={{ position: "absolute", top: -17, left: "50%", transform: "translateX(-50%) rotate(-8deg)", width: 34, height: 34, objectFit: "contain", filter: "drop-shadow(0 2px 4px rgba(17,24,39,0.18))" }} />
+                      )}
+                      <div style={{ position: "relative", display: "inline-block", marginBottom: 8 }}>
+                        <Avatar p={p} size={first ? 62 : 50} ring={medal.ring} />
+                        <span style={{ position: "absolute", bottom: -4, right: -4, width: 20, height: 20, borderRadius: "50%", background: medal.badge, color: "#fff", fontSize: 10.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>{rank}</span>
+                      </div>
+                      <div style={{ fontSize: first ? 14 : 13, fontWeight: 750, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
+                      <div style={{ marginTop: 3 }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "1px 8px", borderRadius: 10, background: (POLE_COLORS[p.pole] || MUTED) + "14", color: POLE_COLORS[p.pole] || MUTED, fontSize: 10, fontWeight: 700 }}>
+                          <span style={{ width: 5, height: 5, borderRadius: "50%", background: POLE_COLORS[p.pole] || MUTED }} />{p.pole}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: first ? 27 : 22, fontWeight: 800, color: NAVY, marginTop: 8, lineHeight: 1, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{fmtH(p.total)}</div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, marginTop: 7 }}>
+                        <DeltaChip delta={deltaByEmail[p.email] ?? null} daysCounted={daysCounted} compact />
+                        <span title="Moyenne hebdomadaire sur la période sélectionnée" style={{ fontSize: 10.5, color: MUTED, fontVariantNumeric: "tabular-nums" }}>
+                          {a ? `moy. ${fmtH(a.avg)}` : ""}
+                        </span>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Classement */}
             <div style={{ ...card, padding: "18px 20px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
@@ -206,7 +349,7 @@ export default function WorkHours({ embed = false }) {
                 </button>
               </div>
               <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 12 }}>
-                Décoche une personne pour voir son impact sur les totaux.
+                Décoche une personne pour voir son impact sur les totaux. Évolution : vs la même portion de la semaine précédente.
               </div>
 
               {/* Période de la colonne « Moyenne » : mois entiers ou plage libre de semaines. */}
@@ -239,16 +382,16 @@ export default function WorkHours({ embed = false }) {
                 </span>
               </div>
 
-              {/* En-têtes jours */}
-              <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 90px 250px 64px 70px", gap: 10, padding: "0 10px 8px", alignItems: "center" }}>
-                <span /><span />
-                <span />
+              {/* En-têtes colonnes */}
+              <div style={{ display: "grid", gridTemplateColumns: "28px minmax(0, 1fr) 92px 240px 60px 64px 74px", gap: 10, padding: "0 10px 8px", alignItems: "center" }}>
+                <span /><span /><span />
                 <span style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4 }}>
                   {DAY_LABELS.map((d) => <span key={d} style={{ fontSize: 9.5, fontWeight: 700, color: MUTED, textAlign: "center", textTransform: "uppercase" }}>{d}</span>)}
                 </span>
                 <span style={{ fontSize: 9.5, fontWeight: 700, color: MUTED, textAlign: "right", textTransform: "uppercase" }}>
                   Moy. {activeMonth ? activeMonth.label.slice(0, 4) : "période"}
                 </span>
+                <span style={{ fontSize: 9.5, fontWeight: 700, color: MUTED, textAlign: "center", textTransform: "uppercase" }}>Évol.</span>
                 <span style={{ fontSize: 9.5, fontWeight: 700, color: MUTED, textAlign: "right", textTransform: "uppercase" }}>Total</span>
               </div>
 
@@ -256,12 +399,13 @@ export default function WorkHours({ embed = false }) {
                 {accessible.map((p, i) => {
                   const off = unchecked.has(p.email);
                   const pc = POLE_COLORS[p.pole] || MUTED;
+                  const medal = MEDALS[i + 1];
                   return (
                     <motion.div key={p.email} layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1], delay: Math.min(i, 12) * 0.02 }}
                       onClick={() => toggle(p.email)}
-                      style={{ display: "grid", gridTemplateColumns: "28px 1fr 90px 250px 64px 70px", gap: 10, alignItems: "center",
-                        padding: "9px 10px", borderRadius: 10, cursor: "pointer", opacity: off ? 0.38 : 1,
+                      style={{ display: "grid", gridTemplateColumns: "28px minmax(0, 1fr) 92px 240px 60px 64px 74px", gap: 10, alignItems: "center",
+                        padding: "8px 10px", borderRadius: 10, cursor: "pointer", opacity: off ? 0.38 : 1,
                         background: "transparent", transition: "opacity 0.18s ease" }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = "#f7f8fa"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
@@ -269,7 +413,12 @@ export default function WorkHours({ embed = false }) {
                         {!off && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
                       </span>
                       <span style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
-                        <span style={{ fontSize: 11.5, fontWeight: 800, color: MUTED, width: 18, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{i + 1}</span>
+                        {medal ? (
+                          <span style={{ width: 19, height: 19, borderRadius: "50%", background: medal.badge, color: "#fff", fontSize: 10, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i + 1}</span>
+                        ) : (
+                          <span style={{ fontSize: 11.5, fontWeight: 800, color: MUTED, width: 19, textAlign: "center", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{i + 1}</span>
+                        )}
+                        <Avatar p={p} size={28} />
                         <span style={{ minWidth: 0 }}>
                           <span style={{ display: "block", fontSize: 13.5, fontWeight: 650, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
                           {p.vacation_days.length > 0 && (
@@ -304,6 +453,9 @@ export default function WorkHours({ embed = false }) {
                           </span>
                         );
                       })()}
+                      <span style={{ textAlign: "center" }}>
+                        <DeltaChip delta={deltaByEmail[p.email] ?? null} daysCounted={daysCounted} />
+                      </span>
                       <span style={{ textAlign: "right" }}>
                         <span style={{ fontSize: 14.5, fontWeight: 780, color: NAVY, fontVariantNumeric: "tabular-nums" }}>{fmtH(p.total)}</span>
                         <span style={{ display: "block", height: 3, borderRadius: 2, background: "#eef1f6", marginTop: 4, overflow: "hidden" }}>
