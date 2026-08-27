@@ -162,7 +162,7 @@ function buildCols(scope) {
     // Check / Date paiement : par entité uniquement — pas de somme possible,
     // absentes en vision Globale.
     ...(isGlobal ? {} : {
-      psp:           { w: 100, group: entityGroup,   shortLabel: 'Check',              fullLabel: stripEntitySuffix(COLUMN_LABELS.pspOwner),              kind: 'select', sticky: false, splitVisible: false, align: 'left',   editable: amounts },
+      psp:           { w: 100, group: entityGroup,   shortLabel: 'Check',              fullLabel: stripEntitySuffix(COLUMN_LABELS.pspOwner),              kind: 'select', sticky: false, splitVisible: false, align: 'left',   editable: contract },
       payDate:       { w: 110, group: entityGroup,   shortLabel: 'Date paie.',         fullLabel: stripEntitySuffix(COLUMN_LABELS.payDateOwner),          kind: 'date',   sticky: false, splitVisible: false, align: 'center', editable: amounts },
     }),
   };
