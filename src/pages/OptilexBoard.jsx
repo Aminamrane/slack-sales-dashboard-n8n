@@ -176,6 +176,11 @@ const isInactif = (r) => r.is_inactive_60d === true && (r.mission_count_total ||
 // qui va renouveler / partir. La notif email J-90 (backend) est indépendante.
 const RENEWAL_WINDOW_DAYS = 90;
 const TERMINATED_ETATS = ["Résiliation", "Self-Résiliation", "Rétractation", "Liquidation", "Sans suite"];
+// Catégories qui ne sont PAS des états mais des CRITÈRES (un client peut en
+// cumuler plusieurs) : elles se combinent en ET avec les états, pour permettre
+// des croisements du type « en cours de résiliation ET contrat qui arrive à
+// échéance ET onboarding encore à faire » (besoin Vincent, 2026-08-26).
+const CRITERIA_CATS = ["Onboarding à venir", "Intégration à venir", "Renouvellement client", "Inactifs"];
 const anniversaryDaysLeft = (r) => {
   const d = sigDateOf(r);
   if (!d) return null;
@@ -362,6 +367,8 @@ const sigRangeLabel = (from, to) => {
 
 const fmt = (iso) => {
   if (!iso) return "";
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
   const d = new Date(iso);
   if (isNaN(d)) return "";
   return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
@@ -372,9 +379,9 @@ const toDateInput = (v) => (v ? String(v).slice(0, 10) : "");
 const fmtDT = (iso) => {
   const base = fmt(iso);
   if (!base) return "";
-  const d = new Date(iso);
-  const h = d.getUTCHours(), m = d.getUTCMinutes();
-  return (h || m) ? `${base} · ${String(h).padStart(2, "0")}h${String(m).padStart(2, "0")}` : base;
+  const t = String(iso).match(/T(\d{2}):(\d{2})/);
+  if (!t) return base;                    // date seule
+  return (+t[1] || +t[2]) ? `${base} · ${t[1]}h${t[2]}` : base;   // minuit = pas d'heure
 };
 const timeAgo = (iso) => {
   if (!iso) return "";
@@ -958,9 +965,13 @@ export default function OptilexBoard({ embed = false }) {
   const preMeteoRows = useMemo(() => {
     const ql = q.trim().toLowerCase();
     return rows.filter((r) => {
-      // Union de l'onglet actif ET des catégories cochées (sélection multiple).
-      const activeCats = etatFilter !== "Tous" ? [etatFilter, ...multiFilter] : multiFilter;
-      if (activeCats.length > 0 && !activeCats.some((cat) => matchesCat(r, cat))) return false;
+      // Sélection multiple : les ÉTATS se combinent en OU (un client n'a qu'un
+      // état), les CRITÈRES en ET (ils se cumulent sur un même client).
+      const activeCats = [...new Set(etatFilter !== "Tous" ? [etatFilter, ...multiFilter] : multiFilter)];
+      const etatsSel = activeCats.filter((c) => !CRITERIA_CATS.includes(c));
+      const critsSel = activeCats.filter((c) => CRITERIA_CATS.includes(c));
+      if (etatsSel.length > 0 && !etatsSel.some((cat) => matchesCat(r, cat))) return false;
+      if (critsSel.length > 0 && !critsSel.every((cat) => matchesCat(r, cat))) return false;
       // Filtre "Programme ambassadeur" : ne garde que les clients cochés éligibles.
       if (ambassadorFilter && !r.ambassador_eligible) return false;
       // Filtre "Programme de parrainage" : ne garde que les clients cochés éligibles.
@@ -980,7 +991,9 @@ export default function OptilexBoard({ embed = false }) {
         // (« les onboarding à effectuer sur cette période »), sinon sur la date
         // de signature Owner (comportement historique).
         const onbRaw = r.rdv_onboarding_date_manual || r.rdv_onboarding_date;
-        const d = onboardingFilter !== "all"
+        const onbMode = onboardingFilter !== "all"
+          || etatFilter === "Onboarding à venir" || multiFilter.includes("Onboarding à venir");
+        const d = onbMode
           ? (onbRaw ? String(onbRaw).slice(0, 10) : null)
           : sigDateOf(r);
         if (!d) return false;
@@ -1054,6 +1067,17 @@ export default function OptilexBoard({ embed = false }) {
   const sigMonths = useMemo(() => {
     const set = new Set();
     for (const r of rows) { const d = sigDateOf(r); if (d) set.add(d.slice(0, 7)); }
+    return [...set].sort().reverse();
+  }, [rows]);
+  // Mois d'ONBOARDING (passés ET à venir) : raccourcis du filtre date quand on
+  // travaille sur l'onboarding — Vincent raisonne « quels onboarding me
+  // restent sur tel mois », y compris des dates déjà passées jamais traitées.
+  const onbMonths = useMemo(() => {
+    const set = new Set();
+    for (const r of rows) {
+      const d = r.rdv_onboarding_date_manual || r.rdv_onboarding_date;
+      if (d) set.add(String(d).slice(0, 7));
+    }
     return [...set].sort().reverse();
   }, [rows]);
 
@@ -1150,7 +1174,17 @@ export default function OptilexBoard({ embed = false }) {
   // catégories cochées se CUMULENT (union des états). « Tous » = pas de
   // restriction d'onglet ; les autres familles de filtres (météo, programmes,
   // onboarding, date, recherche) restent en ET par-dessus.
-  const pickTab = (t) => { setSortCol(null); setEtatFilter(t); };
+  const pickTab = (t) => {
+    setSortCol(null);
+    // « Tous » réinitialise ; sinon l'onglet se COCHE/DÉCOCHE et se cumule avec
+    // les autres (Vincent doit pouvoir voir résiliation + rétractation +
+    // liquidation ensemble). `etatFilter` ne sert plus qu'au tri par défaut :
+    // il ne vaut un onglet que si la sélection est unique.
+    if (t === "Tous") { setMultiFilter([]); setEtatFilter("Tous"); return; }
+    const next = multiFilter.includes(t) ? multiFilter.filter((c) => c !== t) : [...multiFilter, t];
+    setMultiFilter(next);
+    setEtatFilter(next.length === 1 ? next[0] : "Tous");
+  };
   const toggleCat = (cat) => {
     setSortCol(null);
     setMultiFilter((prev) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]));
@@ -1211,7 +1245,12 @@ export default function OptilexBoard({ embed = false }) {
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         {PRIMARY_TABS.map((t) => {
-          const active = multiFilter.length === 0 && etatFilter === t;
+          const active = t === "Tous"
+            ? (multiFilter.length === 0 && etatFilter === "Tous")
+            : (multiFilter.includes(t) || (multiFilter.length === 0 && etatFilter === t));
+          // Pilule animée uniquement en sélection unique : plusieurs éléments
+          // partageant un layoutId feraient sauter l'animation Framer Motion.
+          const soloPill = active && multiFilter.length <= 1;
           const n = t === "Tous" ? rows.length : (counts[t] || 0);
           return (
             <motion.button key={t} onClick={() => pickTab(t)} whileTap={{ scale: 0.96 }}
@@ -1219,10 +1258,12 @@ export default function OptilexBoard({ embed = false }) {
               onMouseLeave={(e) => { e.currentTarget.style.background = active ? "transparent" : CARD; }}
               style={{ position: "relative", padding: "7px 14px", borderRadius: 20, border: `1px solid ${active ? "transparent" : BORDER}`, background: active ? "transparent" : CARD, color: active ? "#fff" : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 7, transition: "color 0.18s, border-color 0.18s" }}>
               {/* Pilule active : GLISSE d'un onglet à l'autre (layoutId partagé, ressort sobre). */}
-              {active && (
+              {active && (soloPill ? (
                 <motion.span layoutId="obActiveTab" transition={{ type: "spring", stiffness: 560, damping: 42 }}
                   style={{ position: "absolute", inset: -1, background: NAVY, borderRadius: 20, zIndex: 0 }} />
-              )}
+              ) : (
+                <span style={{ position: "absolute", inset: -1, background: NAVY, borderRadius: 20, zIndex: 0 }} />
+              ))}
               <span style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 7 }}>
                 {tabLabel(t)}<span style={{ fontSize: 11, fontWeight: 700, color: active ? "rgba(255,255,255,0.7)" : MUTED, transition: "color 0.18s" }}>{n}</span>
               </span>
@@ -1250,8 +1291,16 @@ export default function OptilexBoard({ embed = false }) {
         })}
         <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
         <FilterMenu cats={SECONDARY_CATS} counts={counts} selected={multiFilter} onToggle={toggleCat} onClear={() => setMultiFilter([])} />
-        <SigDateFilter from={sigRange.from} to={sigRange.to} onChange={setSigRange} months={sigMonths}
-          mode={onboardingFilter !== "all" ? "onboarding" : "signature"} />
+        {(() => {
+          // Le filtre date porte sur l'onboarding dès qu'une vignette onboarding
+          // est active OU qu'on est sur l'onglet « Onboarding à venir ».
+          const onbMode = onboardingFilter !== "all"
+            || etatFilter === "Onboarding à venir" || multiFilter.includes("Onboarding à venir");
+          return (
+            <SigDateFilter from={sigRange.from} to={sigRange.to} onChange={setSigRange}
+              months={onbMode ? onbMonths : sigMonths} mode={onbMode ? "onboarding" : "signature"} />
+          );
+        })()}
         {/* Météo client : regroupée dans UN menu (décision dev 2026-08-25, barre trop chargée). */}
         <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
         <MeteoMenu selected={meteoFilter} counts={meteoCounts}
@@ -2237,21 +2286,34 @@ function ClientAgendaModal({ row, num, onClose }) {
     return [...std, ...jur].sort((a, b) => (b.when || "").localeCompare(a.when || ""));
   }, [row, data]);
 
-  // Heure (Europe/Paris) d'un RDV ; "·" si date seule (RDV standard sans heure).
-  const timeOf = (iso) => {
-    const s = String(iso || "");
+  // Heure d'un RDV. DEUX conventions cohabitent ici, ne jamais les confondre :
+  //  - RDV CRM (kind 'standard') : heure-MUR déjà en heure de Paris -> on lit la
+  //    chaîne telle quelle (une conversion la décalerait de 1 à 2 h) ;
+  //  - RDV juristes (kind 'jurist', venus du SaaS) : vrais instants UTC -> on
+  //    convertit vers Europe/Paris.
+  const wallTime = (s) => { const m = String(s).match(/T(\d{2}):(\d{2})/); return m ? `${m[1]}:${m[2]}` : null; };
+  const timeOf = (it) => {
+    const s = String(it?.when || "");
     if (!/T\d\d:\d\d/.test(s)) return "·";
-    try { return new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" }); }
+    if (it.kind === "standard") return wallTime(s) || "·";
+    try { return new Date(s).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" }); }
     catch { return "·"; }
   };
-  // Groupe les RDV par JOUR (Paris), jour le plus récent d'abord -> vue agenda.
+  // Groupe les RDV par JOUR, jour le plus récent d'abord -> vue agenda.
   const days = useMemo(() => {
-    const dayKey = (iso) => { try { return new Date(iso).toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" }); } catch { return String(iso).slice(0, 10); } };
-    const dayLabel = (iso) => { try { return new Date(iso).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Paris" }); } catch { return String(iso).slice(0, 10); } };
+    const dayKey = (it) => {
+      if (it.kind === "standard") return String(it.when).slice(0, 10);
+      try { return new Date(it.when).toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" }); }
+      catch { return String(it.when).slice(0, 10); }
+    };
+    const dayLabel = (key) => {
+      try { return new Date(`${key}T00:00:00`).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" }); }
+      catch { return key; }
+    };
     const map = new Map();
     for (const it of items) {
-      const k = dayKey(it.when);
-      if (!map.has(k)) map.set(k, { key: k, label: dayLabel(it.when), items: [] });
+      const k = dayKey(it);
+      if (!map.has(k)) map.set(k, { key: k, label: dayLabel(k), items: [] });
       map.get(k).items.push(it);
     }
     return [...map.values()].sort((a, b) => b.key.localeCompare(a.key));
@@ -2296,7 +2358,7 @@ function ClientAgendaModal({ row, num, onClose }) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {d.items.map((it) => (
                       <div key={it.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 12px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, opacity: it.cancelled ? 0.5 : 1 }}>
-                        <span style={{ width: 46, flexShrink: 0, fontSize: 12.5, fontWeight: 700, color: it.cancelled ? MUTED : NAVY, textAlign: "center" }}>{timeOf(it.when)}</span>
+                        <span style={{ width: 46, flexShrink: 0, fontSize: 12.5, fontWeight: 700, color: it.cancelled ? MUTED : NAVY, textAlign: "center" }}>{timeOf(it)}</span>
                         <span style={{ width: 1, alignSelf: "stretch", background: BORDER, flexShrink: 0 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 600, color: NAVY, textDecoration: it.cancelled ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.label}</div>
