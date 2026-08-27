@@ -632,6 +632,7 @@ export default function DetailPanel({
 
                 patch={patch}
                 canEdit={canEdit}
+                canEditMoney={canEditMoney}
                 editing={contractEditing}
                 clientId={clientId}
                 onProfileChanged={refreshProfile}
@@ -716,6 +717,7 @@ export default function DetailPanel({
                   focusedRow={focusedRow}
                   profile={profile}
                   canEdit={canEdit}
+                  canEditMoney={canEditMoney}
                   refreshProfile={refreshProfile}
                   boardRow={boardRow}
                   onBoardEtatChange={onBoardEtatChange}
@@ -1205,7 +1207,7 @@ function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loadin
 
 // ── Informations contractuelles (liste compacte icône + libellé / valeur) ───
 function ContractInfoList({
-  client, profile, focusedRow, boardRow, patch, canEdit, onCopied,
+  client, profile, focusedRow, boardRow, patch, canEdit, canEditMoney, onCopied,
   editing = false, clientId, onProfileChanged, onShowToast,
 }) {
   // Séparation nom du client / société (2026-08-21) : « Nom du client » =
@@ -2405,7 +2407,7 @@ function Field({ label, children, copyValue, onCopied, align = 'right' }) {
 
 // ── Section : Identité client ───────────────────────────────────────────────
 function IdentitySection({
-  client, clientId, focusedRow, profile, canEdit, refreshProfile,
+  client, clientId, focusedRow, profile, canEdit, canEditMoney, refreshProfile,
   boardRow, onBoardEtatChange, onCopied, onShowToast,
 }) {
   if (!focusedRow) return <Empty />;
