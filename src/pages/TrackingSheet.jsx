@@ -5334,14 +5334,14 @@ export default function TrackingSheet() {
             const r2Webinaire  = isR2Tab ? r2ScheduledAll.filter(isWebinaireLead) : [];
             const r2Landing    = isR2Tab ? r2ScheduledAll.filter(isLandingLead) : [];
             const r2Scheduled  = isR2Tab ? r2ScheduledAll.filter(l => !isWebinaireLead(l) && !isLandingLead(l)) : [];
-            const r2Pending    = isR2Tab ? filteredLeads.filter(l => R2_PENDING_STATES.includes(l.r2_result) || ((!l.r2_result || l.r2_result === 'reporte') && isDatePast(l.r2))) : [];
+            const r2Pending    = isR2Tab ? filteredLeads.filter(l => l.r2_result === 'no_show' || R2_PENDING_STATES.includes(l.r2_result) || ((!l.r2_result || l.r2_result === 'reporte') && isDatePast(l.r2))) : [];
             const r2Cancelled  = isR2Tab ? filteredLeads.filter(l => l.r2_result === 'pas_interesse' || l.r2_result === 'annule') : [];
             const r2Completed  = isR2Tab ? filteredLeads.filter(l => l.r2_result === 'done') : [];
 
             // R3 groups (same logic as R2)
             const R3_PENDING_STATES = ['comptable', 'associe', 'reflexion', 'relire_contrat', 'pas_decision_jour', 'tresorerie'];
             const r3Scheduled  = isR3Tab ? filteredLeads.filter(l => (!l.r3_result || l.r3_result === 'reporte') && !isDatePast(l.r3)) : [];
-            const r3Pending    = isR3Tab ? filteredLeads.filter(l => R3_PENDING_STATES.includes(l.r3_result) || ((!l.r3_result || l.r3_result === 'reporte') && isDatePast(l.r3))) : [];
+            const r3Pending    = isR3Tab ? filteredLeads.filter(l => l.r3_result === 'no_show' || R3_PENDING_STATES.includes(l.r3_result) || ((!l.r3_result || l.r3_result === 'reporte') && isDatePast(l.r3))) : [];
             const r3Cancelled  = isR3Tab ? filteredLeads.filter(l => l.r3_result === 'pas_interesse' || l.r3_result === 'annule') : [];
             const r3Completed  = isR3Tab ? filteredLeads.filter(l => l.r3_result === 'done') : [];
 
