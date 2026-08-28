@@ -31,7 +31,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   EtatBadge, ETAT_STYLE, ETAT_DATE_CONFIG, displayEtat, isEtatPending,
 } from '../../OptilexBoard.jsx';
-import { formatDateFR } from '../constants.js';
+import { formatDateFR, canEditAmounts } from '../constants.js';
+import apiClient from '../../../services/apiClient.js';
 
 // Palette locale minimale (sync avec la charte du board — Attio/Linear sobre).
 const MUTED = '#8a93a4';
@@ -40,8 +41,14 @@ const BORDER = '#e9ebf0';
 const GREEN = '#15794a';
 const AMBER = '#b45309';
 
-// Options posables depuis la page finance = picker du PROFIL OPTILEX du board
-// (« Résiliation » / « Rétractation » sont des états ACTÉS réservés à Owner).
+// Options posables depuis la page finance.
+//
+// « Résiliation » et « Rétractation » sont des états ACTÉS : ils engagent
+// l'entreprise et coupent la facturation. Ouverts à la DIRECTION seulement
+// (admin, direction financière) le 2026-08-28, à la demande du dev — Ismahane
+// acte désormais les sorties depuis la finance, sans passer par le board. Le
+// serveur applique la même règle (403 pour les autres rôles) : cette liste ne
+// fait que refléter l'écran.
 const FINANCE_ETAT_OPTIONS = [
   'Signé',
   'En cours de résiliation',
@@ -51,6 +58,23 @@ const FINANCE_ETAT_OPTIONS = [
   'Liquidation',
   'En cours de liquidation',
 ];
+
+const ACTED_ETAT_OPTIONS = ['Résiliation', 'Rétractation'];
+
+// L'ordre suit celui du board : les états actés juste après les « en cours »,
+// pour qu'on lise la progression d'un dossier de haut en bas.
+const etatOptionsFor = (canActe) => (canActe
+  ? [
+    'Signé',
+    'En cours de résiliation',
+    'En cours de rétractation',
+    ...ACTED_ETAT_OPTIONS,
+    'Self-Résiliation',
+    'Pause',
+    'Liquidation',
+    'En cours de liquidation',
+  ]
+  : FINANCE_ETAT_OPTIONS);
 
 const MENU_MAX_H = 380;
 
@@ -91,6 +115,8 @@ export default function BoardEtatCell({ boardRow, onEtatChange, disabled = false
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const btnRef = useRef(null);
+  // Acter une résiliation ou une rétractation : direction seulement.
+  const canActe = canEditAmounts(apiClient.getUser()?.role);
 
   // Même hygiène que le board : le menu (position: fixed) se ferme dès que la
   // table scrolle ou que la fenêtre est resize, sinon il "flotte" détaché.
@@ -152,7 +178,7 @@ export default function BoardEtatCell({ boardRow, onEtatChange, disabled = false
   // depuis cette page.
   const items = [
     { opt: null, label: 'Automatique' },
-    ...FINANCE_ETAT_OPTIONS.map((o) => ({ opt: o, label: o })),
+    ...etatOptionsFor(canActe).map((o) => ({ opt: o, label: o })),
   ];
 
   return (

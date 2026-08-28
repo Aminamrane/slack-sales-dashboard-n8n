@@ -89,16 +89,6 @@ function CardIcon({ size = 11 }) {
   );
 }
 
-function CalendarIcon({ size = 11 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-      <rect width="18" height="18" x="3" y="4" rx="2" />
-      <path d="M16 2v4M8 2v4M3 10h18" />
-    </svg>
-  );
-}
-
 // Indicateur d'état intégré aux mini-pills. Trait épais (2.5→3) pour rester
 // lisible à 10 px — même logique que MeteoIcon (strokeWidth réglable).
 function StatusGlyph({ state, size = 10 }) {
@@ -188,20 +178,24 @@ export default function ModalitesCell({
   // client payait pour plusieurs sociétés. La pastille porte désormais les
   // deux — la lettre du rythme et, à sa droite, le bâtiment avec le nombre
   // de structures (retour dev 2026-08-28).
+  //
+  // L'icône devant la lettre est un BÂTIMENT, pas un calendrier (retour dev
+  // 2026-08-28) : cette colonne parle de l'entreprise facturée, pas d'une
+  // échéance. Le calendrier suggérait une date, ce que la lettre ne dit pas.
   if (mode === 'MONTHLY') {
     chipText = 'M';
     chipStyle = CHIP_STYLES.monthly;
-    ChipIcon = CalendarIcon;
+    ChipIcon = CardIcon;
     chipTitle = 'Mensuel';
   } else if (mode === 'YEARLY') {
     chipText = 'A';
     chipStyle = CHIP_STYLES.yearly;
-    ChipIcon = CalendarIcon;
+    ChipIcon = CardIcon;
     chipTitle = 'Annuel';
   } else if (mode === 'QUARTERLY') {
     chipText = 'T';
     chipStyle = CHIP_STYLES.quarterly;
-    ChipIcon = CalendarIcon;
+    ChipIcon = CardIcon;
     chipTitle = 'Trimestriel';
   }
 

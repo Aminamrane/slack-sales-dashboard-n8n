@@ -49,7 +49,7 @@ import {
   Calendar, Briefcase, History, Lock, Landmark, PenLine, FileSignature,
   Hash, User, Box, CreditCard, Pencil, Download,
   Pin, Trash2, MessageSquarePlus,
-  Scale, CalendarClock, CalendarCheck2, Handshake,
+  Scale, CalendarClock, CalendarCheck2, Handshake, TriangleAlert, LogOut,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
@@ -86,6 +86,7 @@ import ContactList from './ContactList.jsx';
 // vérité des états) + cellule picker partagée avec la TableView.
 import { ETAT_STYLE, displayEtat } from '../OptilexBoard.jsx';
 import BoardEtatCell from './components/BoardEtatCell.jsx';
+import ExitClientDialog from './components/ExitClientDialog.jsx';
 
 // Notion palette (sync with index.jsx N).
 const N = {
@@ -141,6 +142,10 @@ export default function DetailPanel({
   // endpoint en cours de déploiement côté backend : toute erreur (404…)
   // masque simplement la section, jamais de crash.
   const [clientAudit, setClientAudit] = useState(null);
+  // Historique des états du board (résiliations, pauses…) : fondu dans la
+  // frise des actions, pour qu'acter une résiliation se relise ici.
+  const [etatHistory, setEtatHistory] = useState(null);
+  const [exitOpen, setExitOpen] = useState(false);
   // Écriture réservée à l'équipe finance + admin (le CEO lit).
   // Deux niveaux de droits (dev 2026-08-27) : l'équipe finance entretient la
   // fiche (modalités, sociétés, associés, contacts) mais ne touche ni aux
@@ -158,6 +163,8 @@ export default function DetailPanel({
       setProfile(null);
       setDetailOpen(false);
       setClientAudit(null);
+      setEtatHistory(null);
+      setExitOpen(false);
     }
   }, [open]);
 
@@ -178,6 +185,25 @@ export default function DetailPanel({
       .catch(() => { if (!cancelled) setClientAudit(null); });
     return () => { cancelled = true; };
   }, [open, clientId]);
+
+  // Historique des états posés sur le board — même client, même fil d'actions.
+  // Sans ça, acter une résiliation depuis la finance n'aurait laissé aucune
+  // trace visible ici, alors que c'est l'action la plus engageante de la page.
+  // La clé vient du PROFIL (chargé plus haut) et non de `client`, qui n'est
+  // dérivé qu'après : lire une variable avant sa déclaration rend la page
+  // blanche, sans que le build ni ESLint ne le voient.
+  const refreshEtatHistory = useCallback(() => {
+    const num = profile?.numero_client;
+    if (!num) { setEtatHistory(null); return; }
+    apiClient.get(`/api/v1/optilex/etat-history?numero_client=${encodeURIComponent(num)}`)
+      .then((d) => setEtatHistory(d?.history || []))
+      .catch(() => setEtatHistory(null));
+  }, [profile?.numero_client]);
+
+  useEffect(() => {
+    if (!open) return;
+    refreshEtatHistory();
+  }, [open, refreshEtatHistory]);
 
   // Profil client — rechargeable après chaque édition (SIREN, contacts,
   // effectif) pour que la fiche et son journal restent d'accord.
@@ -527,6 +553,45 @@ export default function DetailPanel({
     }
   }, [clientId, focusedRow, onShowToast, onPromiseChanged]);
 
+  // ── Sortie client (état acté, perte) ────────────────────────────────────
+  // Après une perte, tout bouge d'un coup : l'attendu de la fiche, les tuiles,
+  // et la ligne du tableau derrière. On recharge les trois — la page n'a pas
+  // à deviner ce qui a changé.
+  const reloadAfterExit = useCallback(() => {
+    refreshProfile();
+    refreshEtatHistory();
+    if (clientId) {
+      apiClient.get(`/api/v1/finance-periods/client/${clientId}/timeline`)
+        .then(setTimeline)
+        .catch(() => {});
+    }
+    onPromiseChanged?.();
+  }, [clientId, refreshProfile, refreshEtatHistory, onPromiseChanged]);
+
+  // `payload` porte le motif ET le périmètre choisi (créances antérieures /
+  // mois en cours / reste du contrat) — la finance décide de chaque bloc.
+  const declareLoss = useCallback(async (payload) => {
+    if (!clientId) return;
+    try {
+      await apiClient.post(`/api/v1/finance-periods/client/${clientId}/loss`, payload);
+      onShowToast?.('Perte enregistrée', 'success');
+      reloadAfterExit();
+    } catch (e) {
+      onShowToast?.(e?.data?.detail || 'Déclaration impossible', 'error');
+    }
+  }, [clientId, onShowToast, reloadAfterExit]);
+
+  const revertLoss = useCallback(async () => {
+    if (!clientId) return;
+    try {
+      await apiClient.delete(`/api/v1/finance-periods/client/${clientId}/loss`);
+      onShowToast?.('Perte annulée — attendu restauré', 'success');
+      reloadAfterExit();
+    } catch (e) {
+      onShowToast?.(e?.data?.detail || 'Annulation impossible', 'error');
+    }
+  }, [clientId, onShowToast, reloadAfterExit]);
+
   const onCopied = useCallback(() => {
     onShowToast?.('Copié dans le presse-papiers', 'info');
   }, [onShowToast]);
@@ -606,6 +671,9 @@ export default function DetailPanel({
               promise={!!focusedRow?.client?.payment_promise}
               canEdit={canEdit}
               onTogglePromise={togglePromise}
+              loss={profile?.loss || null}
+              canManageExit={canEditMoney}
+              onOpenExit={() => setExitOpen(true)}
             />
 
             {/* 4 tuiles KPI contrat (scope-aware, dérivées de la timeline).
@@ -715,6 +783,7 @@ export default function DetailPanel({
             <ActionsTimeline
               audit={clientAudit}
               changes={profile?.changes}
+              etatHistory={etatHistory}
             />
 
             <ClientComments clientId={clientId} onShowToast={onShowToast} />
@@ -790,6 +859,31 @@ export default function DetailPanel({
                   (ProfileChangesList) reste, c'est une donnée distincte. */}
             </DetailAccordion>
           </div>
+
+          {/* Sortie client — acter un état daté, ou déclarer une perte.
+              Direction financière et direction seulement (demande dev
+              2026-08-28). Le dialogue est portalisé : il passe au-dessus du
+              panneau, pas dedans. */}
+          <ExitClientDialog
+            open={exitOpen && canEditMoney}
+            onClose={() => setExitOpen(false)}
+            client={client}
+            boardRow={boardRow}
+            // La timeline BRUTE, pas `installments` : celle-ci est déjà
+            // agrégée selon la vision active (Owner / Opti'lex) et a perdu
+            // les colonnes par entité. Or une perte porte sur les DEUX
+            // entités, exactement comme le fait le serveur.
+            periods={periods}
+            loss={profile?.loss || null}
+            onEtatChange={async (chg) => {
+              // Signature du parent : (numero_client, payload) — la même que
+              // celle du badge d'état de la fiche.
+              await onBoardEtatChange?.(client?.numero_client, chg);
+              reloadAfterExit();
+            }}
+            onDeclareLoss={declareLoss}
+            onRevertLoss={revertLoss}
+          />
         </motion.aside>
       )}
     </AnimatePresence>
@@ -1710,7 +1804,7 @@ function ActionsHistory({ entries }) {
 // (retour dev 2026-08-28). Les deux sources (audit des lignes, journal de la
 // fiche) sont fondues en une seule frise chronologique : pour l'utilisateur
 // il n'y a qu'une histoire, pas deux tables.
-function ActionsTimeline({ audit, changes }) {
+function ActionsTimeline({ audit, changes, etatHistory }) {
   const [open, setOpen] = useState(false);
 
   const entries = useMemo(() => {
@@ -1730,9 +1824,23 @@ function ActionsTimeline({ audit, changes }) {
       who: c.changed_by || null,
       period: null,
     }));
-    return [...fromAudit, ...fromChanges].sort((a, b) =>
+    // États posés au board (résiliation, rétractation, pause…). La date
+    // d'effet est portée par la valeur, pas par l'horodatage : « posé le 12,
+    // effectif le 30 » sont deux dates différentes, et c'est la seconde qui
+    // fait basculer le client.
+    const fromEtats = (etatHistory || []).map((h) => ({
+      when: h.created_at,
+      label: 'État',
+      from: null,
+      to: h.etat_date
+        ? `${h.etat} · effet ${formatDateFR(h.etat_date)}`
+        : h.etat,
+      who: h.created_by_name || h.created_by || null,
+      period: null,
+    }));
+    return [...fromAudit, ...fromChanges, ...fromEtats].sort((a, b) =>
       String(b.when || '').localeCompare(String(a.when || '')));
-  }, [audit, changes]);
+  }, [audit, changes, etatHistory]);
 
   const shown = open ? entries.slice(0, 40) : entries.slice(0, 1);
 
@@ -2356,7 +2464,10 @@ function EffectiveMonthPrompt({ label, onPick, onCancel }) {
 // 2026-08-27) : le SIREN, et l'échéance du contrat. L'État était en double
 // avec l'en-tête juste au-dessus, l'Effectif avec la Formule des
 // informations contractuelles, et la Période est déjà celle du tableau.
-function MetaRow({ profile, boardRow, promise, onTogglePromise, canEdit }) {
+function MetaRow({
+  profile, boardRow, promise, onTogglePromise, canEdit,
+  loss = null, canManageExit = false, onOpenExit,
+}) {
   const items = [];
   if (profile?.siren) {
     items.push({
@@ -2406,13 +2517,40 @@ function MetaRow({ profile, boardRow, promise, onTogglePromise, canEdit }) {
     });
   }
 
-  if (!items.length && !canEdit) return null;
+  if (!items.length && !canEdit && !canManageExit && !loss) return null;
 
   return (
     <div style={{
       display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center',
       marginBottom: 28,
     }}>
+      {/* Perte : le client est là, mais il n'attend plus rien. La pastille
+          est visible de TOUS — sans elle, un attendu à zéro passerait pour
+          une donnée manquante. */}
+      {loss && (
+        <div
+          title={[
+            `Créance abandonnée ${formatEUR(loss.amount_owner + loss.amount_optilex_ttc)}`,
+            (loss.future_owner + loss.future_optilex_ttc) > 0
+              ? `attendu futur annulé ${formatEUR(loss.future_owner + loss.future_optilex_ttc)}`
+              : null,
+            loss.declared_by_name ? `déclarée par ${loss.declared_by_name}` : null,
+            loss.reason || null,
+          ].filter(Boolean).join(' · ')}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '4px 10px', borderRadius: 4,
+            background: N.redBg, color: N.red,
+            fontSize: 12.5, fontWeight: 600,
+          }}
+        >
+          <TriangleAlert size={12} />
+          Perte
+          <span style={{ fontWeight: 700 }}>
+            {formatEUR(loss.amount_owner + loss.amount_optilex_ttc)}
+          </span>
+        </div>
+      )}
       {/* Promesse de règlement : le client s'est engagé à payer. Posée ici
           d'un clic, retirée d'un clic, et retirée toute seule dès qu'il a
           soldé (demande dev 2026-08-28). Chaque geste laisse un commentaire
@@ -2463,6 +2601,28 @@ function MetaRow({ profile, boardRow, promise, onTogglePromise, canEdit }) {
           </span>
         </div>
       ))}
+
+      {/* Point d'entrée unique des décisions de sortie : acter une
+          résiliation datée, ou déclarer une perte. Discret par défaut —
+          c'est une action rare et lourde, pas un bouton du quotidien. */}
+      {canManageExit && (
+        <button
+          type="button"
+          onClick={onOpenExit}
+          title="Acter une résiliation ou une rétractation, ou déclarer une perte"
+          style={{
+            marginLeft: 'auto',
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '4px 10px', borderRadius: 4,
+            border: `1px solid ${N.borderSft}`, background: 'transparent',
+            color: N.textMuted, fontSize: 12.5, fontWeight: 500,
+            fontFamily: 'inherit', cursor: 'pointer',
+          }}
+        >
+          <LogOut size={12} />
+          Sortie client
+        </button>
+      )}
     </div>
   );
 }
@@ -3234,7 +3394,14 @@ function ClientComments({ clientId, onShowToast }) {
   // 2026-08-28). Les épinglés remontent déjà en tête côté backend, ils
   // restent donc visibles.
   const [allCommentsShown, setAllCommentsShown] = useState(false);
-  const COMMENTS_PREVIEW = 4;
+  // Un seul commentaire visible, le plus récent, et les autres se déplient —
+  // exactement comme l'historique des actions (demande dev 2026-08-28). On
+  // voit d'un coup d'œil la dernière action ET le dernier commentaire, qui
+  // sont les deux choses qu'on vient chercher sur une fiche.
+  //
+  // Un commentaire épinglé prime : le backend le remonte en tête, et c'est
+  // volontairement lui qu'on garde à l'écran s'il existe.
+  const COMMENTS_PREVIEW = 1;
   const visibleComments = (comments && !allCommentsShown)
     ? comments.slice(0, COMMENTS_PREVIEW)
     : (comments || []);
@@ -3441,7 +3608,9 @@ function ClientComments({ clientId, onShowToast }) {
             >
               {allCommentsShown
                 ? 'Réduire'
-                : `Voir les ${comments.length - COMMENTS_PREVIEW} commentaires plus anciens`}
+                : (comments.length - COMMENTS_PREVIEW === 1
+                  ? 'Voir le commentaire précédent'
+                  : `Voir les ${comments.length - COMMENTS_PREVIEW} commentaires précédents`)}
             </button>
           )}
         </div>

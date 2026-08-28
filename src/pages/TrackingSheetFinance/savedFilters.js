@@ -59,6 +59,10 @@ export const FILTER_FIELDS = [
     get: (r) => (r.client?.payment_promise ? 'Oui' : 'Non'),
   },
   {
+    key: 'loss', label: 'Perte actée', type: 'enum',
+    get: (r) => (r.client?.is_loss ? 'Oui' : 'Non'),
+  },
+  {
     key: 'societe', label: 'Nom / entreprise', type: 'text',
     get: (r) => r.client?.societe || '',
   },

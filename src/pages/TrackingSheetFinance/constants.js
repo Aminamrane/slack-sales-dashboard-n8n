@@ -350,6 +350,7 @@ export const PROFILE_CHANGE_LABELS = {
   prelevement_automatise: 'Prélèvement automatisé',
   date_signature: 'Date de signature',
   payment_promise: 'Promesse de règlement',
+  loss:           'Perte client',
   societe_couverte: 'Société couverte',
   associe: 'Associé',
   rdv_onboarding: "RDV d'onboarding",
