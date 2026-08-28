@@ -641,20 +641,6 @@ export default function DetailPanel({
               />
             </Section>
 
-            {/* Historique des actions — SORTI de l'accordéon le 2026-08-28 :
-                il y vivait, donc personne ne le voyait, et le dev a cru
-                qu'un ajout d'email n'était pas tracé alors qu'il l'était.
-                Toute modification de la fiche doit se lire ici, avec son
-                auteur et sa date. */}
-            <CollapsibleSection
-              title="Historique des actions"
-              count={(clientAudit?.length || 0) + (profile?.changes?.length || 0)}
-              delay={0.14}
-            >
-              <ClientAuditList entries={clientAudit} />
-              <ProfileChangesList changes={profile?.changes} />
-            </CollapsibleSection>
-
             {/* Section : État de compte (échéancier) — bouton(s) PDF à côté
                 du titre. Le document suit la vision active ; en Globale les
                 deux entités sont proposées séparément (jamais fusionnées).
@@ -698,6 +684,20 @@ export default function DetailPanel({
                 humain écrit : « promesse de règlement au 15 », « en attente
                 retour cabinet ». Fil INTERNE Owner — le cabinet Opti'Lex
                 n'y a pas accès (aucun lien vers le fil du board). */}
+            {/* Historique des actions — SORTI de l'accordéon le 2026-08-28 :
+                il y vivait, donc personne ne le voyait, et le dev a cru
+                qu'un ajout d'email n'était pas tracé alors qu'il l'était.
+                Toute modification de la fiche doit se lire ici, avec son
+                auteur et sa date. */}
+            <CollapsibleSection
+              title="Historique des actions"
+              count={(clientAudit?.length || 0) + (profile?.changes?.length || 0)}
+              delay={0.14}
+            >
+              <ClientAuditList entries={clientAudit} />
+              <ProfileChangesList changes={profile?.changes} />
+            </CollapsibleSection>
+
             <ClientComments clientId={clientId} onShowToast={onShowToast} />
 
             {/* Section : Rendez-vous & juriste référent — vue synthétique
