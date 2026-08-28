@@ -1462,6 +1462,7 @@ function ContractInfoList({
             clientId={clientId}
             kind="email"
             contacts={profile?.contacts}
+            inheritedValue={client?.email}
             canEdit={canEdit && editing}
             onChanged={onProfileChanged}
             onShowToast={onShowToast}

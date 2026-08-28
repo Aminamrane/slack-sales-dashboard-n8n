@@ -99,7 +99,11 @@ export default function ContactList({
     'Contact retiré',
   ), [call, clientId]);
 
-  const showInherited = kind === 'phone' && list.length === 0 && inheritedValue;
+  // L'email et le téléphone de la fiche CRM s'affichent tant qu'aucun contact
+  // typé n'existe. Restreint au téléphone jusqu'ici : 36 clients avaient donc
+  // un email en base et « Aucun » à l'écran — dont les derniers signés, alors
+  // qu'aucun contrat ne part sans email (constat dev 2026-08-28).
+  const showInherited = list.length === 0 && !!inheritedValue;
 
   return (
     <div style={{ padding: '6px 0', borderBottom: `1px solid ${N.borderSft}` }}>
