@@ -641,6 +641,20 @@ export default function DetailPanel({
               />
             </Section>
 
+            {/* Historique des actions — SORTI de l'accordéon le 2026-08-28 :
+                il y vivait, donc personne ne le voyait, et le dev a cru
+                qu'un ajout d'email n'était pas tracé alors qu'il l'était.
+                Toute modification de la fiche doit se lire ici, avec son
+                auteur et sa date. */}
+            <CollapsibleSection
+              title="Historique des actions"
+              count={(clientAudit?.length || 0) + (profile?.changes?.length || 0)}
+              delay={0.14}
+            >
+              <ClientAuditList entries={clientAudit} />
+              <ProfileChangesList changes={profile?.changes} />
+            </CollapsibleSection>
+
             {/* Section : État de compte (échéancier) — bouton(s) PDF à côté
                 du titre. Le document suit la vision active ; en Globale les
                 deux entités sont proposées séparément (jamais fusionnées).
@@ -755,14 +769,6 @@ export default function DetailPanel({
                   badge période) remplace l'ancien audit par-row (doublon
                   strict de la même donnée) ; le journal de la fiche client
                   (ProfileChangesList) reste, c'est une donnée distincte. */}
-              <CollapsibleSection
-                title="Historique des actions"
-                count={(clientAudit?.length || 0) + (profile?.changes?.length || 0)}
-                delay={0.12}
-              >
-                <ClientAuditList entries={clientAudit} />
-                <ProfileChangesList changes={profile?.changes} />
-              </CollapsibleSection>
             </DetailAccordion>
           </div>
         </motion.aside>
@@ -3088,6 +3094,15 @@ const sortComments = (list) => [...list].sort((a, b) => {
 
 function ClientComments({ clientId, onShowToast }) {
   const [comments, setComments] = useState(null);   // null = en cours / indispo
+  // Au-delà de quatre commentaires le fil noyait le reste de la fiche : on
+  // n'affiche que les plus récents, le reste se déplie (demande dev
+  // 2026-08-28). Les épinglés remontent déjà en tête côté backend, ils
+  // restent donc visibles.
+  const [allCommentsShown, setAllCommentsShown] = useState(false);
+  const COMMENTS_PREVIEW = 4;
+  const visibleComments = (comments && !allCommentsShown)
+    ? comments.slice(0, COMMENTS_PREVIEW)
+    : (comments || []);
   const [available, setAvailable] = useState(true); // false = endpoint absent
   const [draft, setDraft] = useState('');
   const [posting, setPosting] = useState(false);
@@ -3265,7 +3280,7 @@ function ClientComments({ clientId, onShowToast }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <AnimatePresence initial={false}>
-            {comments.map((c, i) => (
+            {visibleComments.map((c, i) => (
               <CommentRow
                 key={c.id}
                 comment={c}
@@ -3278,6 +3293,22 @@ function ClientComments({ clientId, onShowToast }) {
               />
             ))}
           </AnimatePresence>
+          {comments.length > COMMENTS_PREVIEW && (
+            <button
+              type="button"
+              onClick={() => setAllCommentsShown((v) => !v)}
+              style={{
+                alignSelf: 'flex-start',
+                border: 'none', background: 'transparent', cursor: 'pointer',
+                padding: '4px 2px', fontFamily: 'inherit',
+                fontSize: 12, fontWeight: 600, color: N.textMuted,
+              }}
+            >
+              {allCommentsShown
+                ? 'Réduire'
+                : `Voir les ${comments.length - COMMENTS_PREVIEW} commentaires plus anciens`}
+            </button>
+          )}
         </div>
       )}
     </Section>
