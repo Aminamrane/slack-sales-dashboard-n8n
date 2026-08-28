@@ -49,7 +49,7 @@ import {
   Calendar, Briefcase, History, Lock, Landmark, PenLine, FileSignature,
   Hash, User, Box, CreditCard, Pencil, Download,
   Pin, Trash2, MessageSquarePlus,
-  Scale, CalendarClock, CalendarCheck2,
+  Scale, CalendarClock, CalendarCheck2, Handshake,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
@@ -115,6 +115,7 @@ export default function DetailPanel({
   boardMap,        // Map numero_client → row board Owner/Opti'Lex (états)
   onBoardEtatChange, // (numero_client, payload) → POST /optilex/etat-change
   onShowToast,     // (msg, type?) → reuses page-level toast
+  onPromiseChanged, // () → le parent recharge la ligne (promesse de règlement)
   rows,            // current period rows (so we can find focused row immediately)
   scope = 'global', // vision active du tableau : 'owner' | 'optilex' | 'global'
 }) {
@@ -510,6 +511,22 @@ export default function DetailPanel({
     }
   }, [rowId, onPatchRow]);
 
+  // Promesse de règlement : bascule + rafraîchissement de la ligne et du fil
+  // de commentaires, où l'action vient de s'écrire.
+  const togglePromise = useCallback(async () => {
+    if (!clientId) return;
+    const on = !!focusedRow?.client?.payment_promise;
+    const url = `/api/v1/finance-periods/client/${clientId}/payment-promise`;
+    try {
+      if (on) await apiClient.delete(url);
+      else await apiClient.post(url, {});
+      onShowToast?.(on ? 'Promesse retirée' : 'Promesse de règlement notée', 'success');
+      onPromiseChanged?.();
+    } catch (e) {
+      onShowToast?.(e?.data?.detail || 'Action impossible', 'error');
+    }
+  }, [clientId, focusedRow, onShowToast, onPromiseChanged]);
+
   const onCopied = useCallback(() => {
     onShowToast?.('Copié dans le presse-papiers', 'info');
   }, [onShowToast]);
@@ -583,7 +600,13 @@ export default function DetailPanel({
                 détail complet » — donc invisible en pratique. Sorti au
                 premier plan le 2026-08-27 : le SIREN et l'échéance sont
                 justement les deux informations qu'on allait y chercher. */}
-            <MetaRow profile={profile} boardRow={boardRow} />
+            <MetaRow
+              profile={profile}
+              boardRow={boardRow}
+              promise={!!focusedRow?.client?.payment_promise}
+              canEdit={canEdit}
+              onTogglePromise={togglePromise}
+            />
 
             {/* 4 tuiles KPI contrat (scope-aware, dérivées de la timeline).
                 « Restant dû » = tout ce que le contrat doit encore
@@ -689,14 +712,10 @@ export default function DetailPanel({
                 qu'un ajout d'email n'était pas tracé alors qu'il l'était.
                 Toute modification de la fiche doit se lire ici, avec son
                 auteur et sa date. */}
-            <CollapsibleSection
-              title="Historique des actions"
-              count={(clientAudit?.length || 0) + (profile?.changes?.length || 0)}
-              delay={0.14}
-            >
-              <ClientAuditList entries={clientAudit} />
-              <ProfileChangesList changes={profile?.changes} />
-            </CollapsibleSection>
+            <ActionsTimeline
+              audit={clientAudit}
+              changes={profile?.changes}
+            />
 
             <ClientComments clientId={clientId} onShowToast={onShowToast} />
 
@@ -1685,6 +1704,95 @@ function ActionsHistory({ entries }) {
 
 // Liste complète de l'audit client (toutes périodes, badge période) — rendue
 // dans la section « Historique des actions » de l'accordéon Détails.
+// Historique des actions : la plus récente est TOUJOURS visible — c'est
+// celle qu'on vient chercher — et les précédentes se déplient d'un bouton
+// (retour dev 2026-08-28). Les deux sources (audit des lignes, journal de la
+// fiche) sont fondues en une seule frise chronologique : pour l'utilisateur
+// il n'y a qu'une histoire, pas deux tables.
+function ActionsTimeline({ audit, changes }) {
+  const [open, setOpen] = useState(false);
+
+  const entries = useMemo(() => {
+    const fromAudit = (audit || []).map((e) => ({
+      when: auditEntryDate(e),
+      label: AUDIT_FIELD_LABELS[e.field_name] || e.field_name,
+      from: e.old_value,
+      to: e.new_value,
+      who: e.changed_by_name || null,
+      period: e.period || null,
+    }));
+    const fromChanges = (changes || []).map((c) => ({
+      when: c.changed_at,
+      label: PROFILE_CHANGE_LABELS[c.field] || c.field,
+      from: c.old_value,
+      to: c.new_value,
+      who: c.changed_by || null,
+      period: null,
+    }));
+    return [...fromAudit, ...fromChanges].sort((a, b) =>
+      String(b.when || '').localeCompare(String(a.when || '')));
+  }, [audit, changes]);
+
+  const shown = open ? entries.slice(0, 40) : entries.slice(0, 1);
+
+  return (
+    <Section title="Historique des actions" delay={0.14}>
+      {entries.length === 0 ? (
+        <Empty text="Aucune action enregistrée pour ce client." />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{
+            border: `1px solid ${N.borderSft}`, borderRadius: 10, overflow: 'hidden',
+          }}>
+            {shown.map((e, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                gap: 10, padding: '9px 14px', fontSize: 12, minWidth: 0,
+                borderTop: i === 0 ? 'none' : `1px solid ${N.borderSft}`,
+              }}>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  minWidth: 0, flexWrap: 'wrap',
+                }}>
+                  <span style={{ fontWeight: 600, color: N.text, whiteSpace: 'nowrap' }}>
+                    {e.label}
+                  </span>
+                  <AuditValue v={e.from} muted />
+                  <ChevronRight size={11} style={{ color: N.textFaint, flexShrink: 0 }} />
+                  <AuditValue v={e.to} />
+                  {e.period && (
+                    <span style={{ color: N.textFaint }}>
+                      · {formatMonthLabel(periodFromDate(e.period))}
+                    </span>
+                  )}
+                </span>
+                <span style={{
+                  color: N.textFaint, fontSize: 11, whiteSpace: 'nowrap', flexShrink: 0,
+                }}>
+                  {formatAuditDate(e.when)}{e.who ? ` · ${e.who}` : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+          {entries.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              style={{
+                alignSelf: 'flex-start', border: 'none', background: 'transparent',
+                cursor: 'pointer', padding: '2px 0', fontFamily: 'inherit',
+                fontSize: 12, fontWeight: 600, color: N.textMuted,
+              }}
+            >
+              {open ? 'Réduire' : `Voir les ${entries.length - 1} actions précédentes`}
+            </button>
+          )}
+        </div>
+      )}
+    </Section>
+  );
+}
+
 function ClientAuditList({ entries }) {
   if (!entries?.length) {
     return <Empty text="Aucune action enregistrée pour ce client." />;
@@ -2247,7 +2355,7 @@ function EffectiveMonthPrompt({ label, onPick, onCancel }) {
 // 2026-08-27) : le SIREN, et l'échéance du contrat. L'État était en double
 // avec l'en-tête juste au-dessus, l'Effectif avec la Formule des
 // informations contractuelles, et la Période est déjà celle du tableau.
-function MetaRow({ profile, boardRow }) {
+function MetaRow({ profile, boardRow, promise, onTogglePromise, canEdit }) {
   const items = [];
   if (profile?.siren) {
     items.push({
@@ -2297,13 +2405,39 @@ function MetaRow({ profile, boardRow }) {
     });
   }
 
-  if (!items.length) return null;
+  if (!items.length && !canEdit) return null;
 
   return (
     <div style={{
-      display: 'flex', flexWrap: 'wrap', gap: 6,
+      display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center',
       marginBottom: 28,
     }}>
+      {/* Promesse de règlement : le client s'est engagé à payer. Posée ici
+          d'un clic, retirée d'un clic, et retirée toute seule dès qu'il a
+          soldé (demande dev 2026-08-28). Chaque geste laisse un commentaire
+          daté dans son fil. */}
+      {(promise || canEdit) && (
+        <button
+          type="button"
+          onClick={canEdit ? onTogglePromise : undefined}
+          title={promise
+            ? 'Retirer la promesse de règlement'
+            : 'Marquer une promesse de règlement'}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '4px 10px', borderRadius: 4,
+            border: promise ? 'none' : `1px dashed ${N.border}`,
+            background: promise ? '#fff3e3' : 'transparent',
+            color: promise ? '#b45309' : N.textFaint,
+            fontSize: 12.5, fontWeight: promise ? 600 : 500,
+            cursor: canEdit ? 'pointer' : 'default',
+            fontFamily: 'inherit',
+          }}
+        >
+          <Handshake size={12} />
+          {promise ? 'Promesse de règlement' : 'Noter une promesse'}
+        </button>
+      )}
       {items.map((it, idx) => (
         <div key={idx} title={it.title || undefined} style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,

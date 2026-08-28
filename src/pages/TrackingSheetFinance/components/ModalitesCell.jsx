@@ -74,12 +74,17 @@ const pickerItemStyle = (active) => ({
 
 // ── SVG inline (style lucide : viewBox 24, stroke currentColor, arrondi) ──
 
+// « Paye / N sct » dit sur combien de STRUCTURES le client paie : l'icône est
+// donc un bâtiment, pas une carte bancaire — celle-ci laissait croire à un
+// moyen de paiement (retour dev 2026-08-28).
 function CardIcon({ size = 11 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-      <rect width="20" height="14" x="2" y="5" rx="2" />
-      <line x1="2" x2="22" y1="10" y2="10" />
+      <path d="M3 21h18" />
+      <path d="M5 21V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v16" />
+      <path d="M13 9h4a2 2 0 0 1 2 2v10" />
+      <path d="M8 7h1M8 11h1M8 15h1M16 13h1M16 17h1" />
     </svg>
   );
 }

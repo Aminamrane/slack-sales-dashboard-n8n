@@ -1014,12 +1014,21 @@ function SocieteCell({ row, boardRow }) {
         >
           {societeName || <EmptyCell />}
         </span>
+        {/* Météo client : l'icône seule demandait de connaître le code
+            couleur — le mot dit l'état sans effort (demande dev
+            2026-08-28). Pastille discrète pour ne pas concurrencer le nom. */}
         {meteoBand && (
           <span
             title={`Météo ${meteoScore}/5 · ${meteoBand.label}`}
-            style={{ display: 'inline-flex', flexShrink: 0, color: meteoBand.color }}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+              color: meteoBand.color, background: meteoBand.bg,
+              borderRadius: 4, padding: '1px 6px 1px 4px',
+              fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
+            }}
           >
-            <MeteoIcon score={meteoScore} size={15} color={meteoBand.color} />
+            <MeteoIcon score={meteoScore} size={13} color={meteoBand.color} />
+            {meteoBand.label}
           </span>
         )}
       </span>
@@ -1287,9 +1296,14 @@ function AmountWithDelta({ children, delta }) {
 // Animation décompte / re-count entre ancienne et nouvelle valeur.
 // Mémorise la dernière valeur affichée, et interpole vers la nouvelle au
 // changement. Si pas de changement → affiche directement (pas de re-render).
-export function AnimatedAmount({ value, previous, style }) {
-  const [display, setDisplay] = useState(value);
-  const prevRef = useRef(value);
+// `countFromZero` : le montant grimpe depuis zéro à l'apparition. Réservé au
+// bandeau de totaux (demande dev 2026-08-28) — c'est le moment où l'on voit
+// que les chiffres ont été calculés, pas seulement affichés. Surtout PAS dans
+// les cellules du tableau : avec la virtualisation, chaque défilement
+// relancerait des centaines de compteurs.
+export function AnimatedAmount({ value, previous, style, countFromZero = false }) {
+  const [display, setDisplay] = useState(countFromZero ? 0 : value);
+  const prevRef = useRef(countFromZero ? 0 : value);
 
   useEffect(() => {
     const from = prevRef.current;

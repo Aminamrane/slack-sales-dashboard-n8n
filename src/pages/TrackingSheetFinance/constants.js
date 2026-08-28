@@ -349,6 +349,10 @@ export const PROFILE_CHANGE_LABELS = {
   modalite:       'Modalité',
   prelevement_automatise: 'Prélèvement automatisé',
   date_signature: 'Date de signature',
+  payment_promise: 'Promesse de règlement',
+  societe_couverte: 'Société couverte',
+  associe: 'Associé',
+  rdv_onboarding: "RDV d'onboarding",
 };
 
 // ── Visual hints for cells ───────────────────────────────────────────────

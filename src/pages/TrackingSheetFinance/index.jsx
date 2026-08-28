@@ -32,12 +32,14 @@ import {
   AlertCircle, CheckCircle2, Home, MessageSquare, Mail, PanelLeft,
   Edit3, Plus, Filter, ArrowUpDown, MoreHorizontal, Share2,
   CheckCircle, Sparkles, FileText, Users, Settings, Clock,
-  XCircle, CircleDot, FilterX, Eye, Check,
+  XCircle, CircleDot, FilterX, Eye, Check, Star, Handshake,
   DollarSign, BarChart3, Trophy, Wallet, ShoppingBag, UserCircle, Megaphone, StickyNote, ListChecks,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
 import PortalDropdown from './components/PortalDropdown.jsx';
+import FilterBuilder from './components/FilterBuilder.jsx';
+import { matchesSavedFilter, describeFilter } from './savedFilters.js';
 import companyLogo from '../../assets/my_image.png';
 import '../../index.css';
 
@@ -102,6 +104,60 @@ const STYLE_BLOCK = `
   @keyframes tsfPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
   .tsf-page { animation: tsfPageIn 0.45s cubic-bezier(0.4,0,0.2,1) both; }
+
+  /* ── Arrivée sur la page ────────────────────────────────────────────
+     La page se composait d'un bloc : tout apparaissait au même instant,
+     ce qui donne une impression de brutalité même quand c'est rapide
+     (demande dev 2026-08-28). Les éléments se posent maintenant dans
+     l'ordre où on les lit — titre, chiffres, onglets, filtres, tableau.
+
+     Fait en CSS et non en JS : une animation CSS ne se rejoue pas quand
+     l'état change, donc rafraîchir les données ne fait pas re-danser la
+     page. Courbe expo-out : départ franc, arrivée posée. */
+  @keyframes tsfRise {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: none; }
+  }
+  @keyframes tsfSlideLeft {
+    from { opacity: 0; transform: translateX(-12px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  /* Seulement les trois premiers blocs (titre, onglets, filtres) : le
+     tableau a déjà sa propre animation pilotée par framer-motion, et deux
+     systèmes sur le même élément se marchent dessus. */
+  .tsf-stage > *:nth-child(-n+3) { animation: tsfRise 0.55s cubic-bezier(0.16,1,0.3,1) both; }
+  .tsf-stage > *:nth-child(1) { animation-delay: 0.04s; }
+  .tsf-stage > *:nth-child(2) { animation-delay: 0.10s; }
+  .tsf-stage > *:nth-child(3) { animation-delay: 0.16s; }
+
+  /* Une animation qui translate crée un CONTEXTE D'EMPILEMENT : sans les
+     rangs ci-dessous, les menus déroulants de la barre d'outils (Filtre,
+     Trier, Colonnes) se retrouvaient piégés dedans et passaient DERRIÈRE le
+     tableau — régression introduite avec l'animation d'arrivée, corrigée le
+     2026-08-28. Les blocs du haut gardent la main sur ceux du bas. */
+  .tsf-stage > *:nth-child(-n+3) { position: relative; }
+  .tsf-stage > *:nth-child(1) { z-index: 30; }
+  .tsf-stage > *:nth-child(2) { z-index: 25; }
+  .tsf-stage > *:nth-child(3) { z-index: 20; }
+
+  /* Les compteurs du bandeau se posent un à un : c'est le moment où
+     l'utilisateur voit que les chiffres ont bien été calculés. */
+  .tsf-kpis > * { animation: tsfRise 0.5s cubic-bezier(0.16,1,0.3,1) both; }
+  .tsf-kpis > *:nth-child(1) { animation-delay: 0.14s; }
+  .tsf-kpis > *:nth-child(2) { animation-delay: 0.20s; }
+  .tsf-kpis > *:nth-child(3) { animation-delay: 0.26s; }
+  .tsf-kpis > *:nth-child(4) { animation-delay: 0.32s; }
+  .tsf-kpis > *:nth-child(5) { animation-delay: 0.38s; }
+
+  .tsf-sidebar-in { animation: tsfSlideLeft 0.5s cubic-bezier(0.16,1,0.3,1) both; }
+
+  /* Respect du réglage système : personne ne doit subir le mouvement. */
+  @media (prefers-reduced-motion: reduce) {
+    .tsf-page, .tsf-stage > *:nth-child(-n+3), .tsf-kpis > *, .tsf-sidebar-in {
+      animation: none !important;
+    }
+  }
 
   /* Notion-style thin scrollbar (hidden until hover for a cleaner canvas). */
   .tsf-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -293,6 +349,11 @@ export default function TrackingSheetFinance() {
   // Multi-select : Set des filtres actifs (vide = aucun filtre, row visible).
   // Toggle : re-click sur un filtre actif le désélectionne (demande dev 2026-05-11).
   const [tableFilters, setTableFilters] = useState(() => new Set());
+  // Filtres personnels : l'état est déclaré ici car `filteredRows` le lit
+  // plus bas ; les fonctions qui les créent vivent après `showToast`, dont
+  // elles dépendent. Les tableaux de dépendances sont évalués au rendu :
+  // une référence placée avant sa déclaration blanchit la page.
+  const [savedFilters, setSavedFilters] = useState([]);
   const [hiddenColsInfo, setHiddenColsInfo] = useState({ count: 0, keys: [] });
   const showAllColsRef = useRef(null);
   const showColRef = useRef(null);
@@ -433,14 +494,22 @@ export default function TrackingSheetFinance() {
       if (tableFilters.has('overdue_current') && overdueCurrent > 0 && overdueCumul === 0) return true;
       if (tableFilters.has('overdue_current_and_past') && overdueCurrent > 0 && overdueCumul > 0) return true;
       if (tableFilters.has('overdue_past_only') && overdueCurrent === 0 && overdueCumul > 0) return true;
+      if (tableFilters.has('payment_promise') && r.client?.payment_promise) return true;
       // Filtres par état (clés « etat:Signé », « etat:Résiliation »…).
       const br = (r.client?.numero_client && boardMap)
         ? boardMap.get(r.client.numero_client) : null;
       const etat = br ? displayEtat(br) : null;
       if (etat && tableFilters.has(`etat:${etat}`)) return true;
+      // Filtres personnels : chacun est une définition à évaluer.
+      for (const f of savedFilters) {
+        if (tableFilters.has(`saved:${f.id}`)
+            && matchesSavedFilter(r, f.definition, { scope, etatOf: () => etat })) {
+          return true;
+        }
+      }
       return false;
     });
-  }, [rows, tableFilters, viewFilter, matchesView, boardMap]);
+  }, [rows, tableFilters, viewFilter, matchesView, boardMap, savedFilters, scope]);
 
   // Compteur de résultats de recherche — même prédicat que le filtre de
   // TableView (matchesClientSearch), appliqué APRÈS vues-filtres + filtres
@@ -495,6 +564,39 @@ export default function TrackingSheetFinance() {
     toastTimerRef.current = setTimeout(() => setToast(null), 3500);
   }, []);
   useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
+
+  // ── Filtres personnels (« Mes filtres ») ────────────────────────────
+  // Composés par l'utilisateur, rangés côté serveur pour le suivre d'un
+  // poste à l'autre (demande dev 2026-08-28).
+  const reloadSavedFilters = useCallback(() => {
+    apiClient.get('/api/v1/finance-periods/saved-filters')
+      .then((d) => setSavedFilters(Array.isArray(d) ? d : []))
+      .catch(() => setSavedFilters([]));
+  }, []);
+  useEffect(() => { reloadSavedFilters(); }, [reloadSavedFilters]);
+
+  const createSavedFilter = useCallback(async (payload) => {
+    try {
+      await apiClient.post('/api/v1/finance-periods/saved-filters', payload);
+      reloadSavedFilters();
+      showToast('Filtre enregistré', 'success');
+    } catch (e) {
+      showToast(e?.data?.detail || 'Filtre non enregistré', 'error');
+      throw e;
+    }
+  }, [reloadSavedFilters, showToast]);
+
+  const removeSavedFilter = useCallback(async (id) => {
+    try {
+      await apiClient.delete(`/api/v1/finance-periods/saved-filters/${id}`);
+      setTableFilters((prev) => {
+        const next = new Set(prev); next.delete(`saved:${id}`); return next;
+      });
+      reloadSavedFilters();
+    } catch (e) {
+      showToast(e?.data?.detail || 'Suppression impossible', 'error');
+    }
+  }, [reloadSavedFilters, showToast]);
 
   // ── Fetch period rows ───────────────────────────────────────────────
   const fetchPeriod = useCallback(async (p, { soft = false } = {}) => {
@@ -656,6 +758,80 @@ export default function TrackingSheetFinance() {
     fetchPeriod(period, { soft: true });
   }, [period, fetchPeriod]);
 
+  // ── Synchronisation vivante ─────────────────────────────────────────
+  // Plusieurs personnes travaillent sur la page en même temps : ce qu'une
+  // saisit doit apparaître chez les autres sans qu'ils rechargent (demande
+  // dev 2026-08-28).
+  //
+  // On interroge un endpoint de DELTA — « qu'est-ce qui a bougé depuis ce
+  // jeton d'horloge » — et non la liste complète : la réponse est vide la
+  // plupart du temps, donc le coût est proche de zéro et la page ne
+  // clignote jamais. Le jeton vient du SERVEUR, ce qui évite tout décalage
+  // d'horloge entre les postes.
+  const syncTokenRef = useRef(null);
+  const [lastSync, setLastSync] = useState(null);
+  const [syncTick, setSyncTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setSyncTick((t) => t + 1), 30000);
+    return () => clearInterval(id);
+  }, []);
+  const syncedLabel = useMemo(() => {
+    if (!lastSync) return null;
+    const s = Math.max(0, Math.round((Date.now() - lastSync.getTime()) / 1000));
+    if (s < 45) return 'à jour';
+    const m = Math.round(s / 60);
+    return m < 60 ? `à jour il y a ${m} min` : 'à jour';
+  }, [lastSync, syncTick]);
+
+  const syncNow = useCallback(async () => {
+    // Onglet en arrière-plan : inutile de sonder, on rattrapera au retour.
+    if (document.visibilityState === 'hidden') return;
+    try {
+      const params = new URLSearchParams({ period });
+      if (syncTokenRef.current) params.set('since', syncTokenRef.current);
+      const d = await apiClient.get(`/api/v1/finance-periods/updates?${params}`);
+      const first = !syncTokenRef.current;
+      syncTokenRef.current = d?.now || syncTokenRef.current;
+      if (first) return;                 // premier passage : on amorce l'horloge
+
+      const changed = Array.isArray(d?.rows) ? d.rows : [];
+      if (changed.length) {
+        setRows((rs) => {
+          const byId = new Map(changed.map((r) => [r.id, r]));
+          const merged = rs.map((r) => byId.get(r.id) || r);
+          // Une ligne inconnue (client ajouté au périmètre) : on ne bricole
+          // pas l'ordre de tri à la main, on recharge proprement.
+          const unknown = changed.some((r) => !rs.some((x) => x.id === r.id));
+          if (unknown) fetchPeriod(period, { soft: true });
+          return merged;
+        });
+        setLastSync(new Date());
+      } else if (d?.client_changed) {
+        // Promesse, contact, société, commentaire : ça ne touche pas les
+        // lignes du mois, mais bien ce qu'on affiche dessus.
+        fetchPeriod(period, { soft: true });
+        setLastSync(new Date());
+      }
+    } catch {
+      /* réseau instable : on retentera au tour suivant, sans bruit */
+    }
+  }, [period, fetchPeriod]);
+
+  useEffect(() => {
+    syncTokenRef.current = null;         // changement de mois : nouvelle horloge
+    syncNow();
+    const id = setInterval(syncNow, 12000);
+    // Retour sur l'onglet : on rattrape immédiatement plutôt que d'attendre.
+    const onVisible = () => { if (document.visibilityState === 'visible') syncNow(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [syncNow]);
+
   // Last-modif label : derived from rows (max updated_at). Falls back to "—".
   const lastModif = useMemo(() => {
     if (!rows.length) return null;
@@ -718,6 +894,7 @@ export default function TrackingSheetFinance() {
         <TopBar
           period={period}
           lastModif={lastModif}
+          syncedLabel={syncedLabel}
           onShowSidebar={() => setSideCollapsed(false)}
           showSidebarToggle={!embedMode && sideCollapsed}
         />
@@ -725,7 +902,7 @@ export default function TrackingSheetFinance() {
         {/* Main content area — flex column pour que le tableau prenne tout
             l'espace vertical restant (refonte 2026-05-11 : tableau pleine
             hauteur comme Google Sheets, scrollbar horizontale en bas écran). */}
-        <div className="tsf-scroll" style={{
+        <div className="tsf-scroll tsf-stage" style={{
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
@@ -753,6 +930,9 @@ export default function TrackingSheetFinance() {
             tableFilters={tableFilters}
             onToggleFilter={toggleTableFilter}
             etatFilterOptions={etatFilterOptions}
+            savedFilters={savedFilters}
+            onCreateSavedFilter={createSavedFilter}
+            onRemoveSavedFilter={removeSavedFilter}
             hiddenColsInfo={hiddenColsInfo}
             onShowAllCols={() => showAllColsRef.current?.()}
             onShowCol={(key) => showColRef.current?.(key)}
@@ -801,7 +981,8 @@ export default function TrackingSheetFinance() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+              // Dernier à se poser : le regard descend du titre au tableau.
+              transition={{ duration: 0.4, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
               style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
             >
               <TableView
@@ -836,6 +1017,7 @@ export default function TrackingSheetFinance() {
         onShowToast={showToast}
         rows={rows}
         scope={scope}
+        onPromiseChanged={onRefresh}
       />
 
       {/* Toast */}
@@ -873,7 +1055,7 @@ export default function TrackingSheetFinance() {
 function Sidebar({ width, collapsed, onToggle, sections }) {
   return (
     <motion.aside
-      className="tsf-side"
+      className="tsf-side tsf-sidebar-in"
       animate={{ width }}
       initial={false}
       transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
@@ -1157,7 +1339,7 @@ function SidebarFooter({ collapsed, onToggle }) {
 // ════════════════════════════════════════════════════════════════════════════
 // TOP BAR (breadcrumb + last-modif + share)
 // ════════════════════════════════════════════════════════════════════════════
-function TopBar({ period, lastModif, onShowSidebar, showSidebarToggle }) {
+function TopBar({ period, lastModif, syncedLabel, onShowSidebar, showSidebarToggle }) {
   return (
     <div style={{
       height: 44,
@@ -1211,6 +1393,23 @@ function TopBar({ period, lastModif, onShowSidebar, showSidebarToggle }) {
       }}>
         <Clock size={12} />
         <span>Dernière modif{lastModif ? ` : ${lastModif}` : ''}</span>
+        {/* Preuve visible que la page se tient à jour toute seule : sans ça,
+            l'utilisateur ne sait pas si ce qu'il voit est frais. */}
+        {syncedLabel && (
+          <span
+            title="La page se met à jour automatiquement"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              marginLeft: 10, color: N.textFaint, fontSize: 11.5,
+            }}
+          >
+            <span style={{
+              width: 6, height: 6, borderRadius: '50%',
+              background: '#15a34a', display: 'inline-block',
+            }} />
+            {syncedLabel}
+          </span>
+        )}
       </div>
 
       {/* Share button */}
@@ -1291,7 +1490,7 @@ function TitleBlock({ kpis, loading }) {
       </h1>
 
       {/* KPI mini-table */}
-      <div style={{
+      <div className="tsf-kpis" style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(5, auto)',
         marginLeft: 12,
@@ -1305,7 +1504,7 @@ function TitleBlock({ kpis, loading }) {
           { label: 'Attendu', value: loading ? '…' : formatEUR(kpis.expectedGlobal), color: N.text, dot: N.textFaint },
           {
             label: 'Reçu',
-            value: loading ? '…' : <AnimatedAmount value={kpis.receivedTotal} style={{ fontWeight: 700, color: N.green }} />,
+            value: loading ? '…' : <AnimatedAmount countFromZero value={kpis.receivedTotal} style={{ fontWeight: 700, color: N.green }} />,
             color: N.green, dot: N.green,
             // Taux de récupération du classeur finance : reçu ÷ attendu.
             sub: loading ? null : kpis.receivedPct,
@@ -1316,14 +1515,14 @@ function TitleBlock({ kpis, loading }) {
             // Dette totale à date (mois + antérieur) — la colonne « Retard de
             // paiement » du classeur, celle que la finance lit en premier.
             label: 'Retard',
-            value: loading ? '…' : <AnimatedAmount value={kpis.overdueTotalWithCum} style={{ fontWeight: 700, color: kpis.overdueTotalWithCum > 0 ? N.red : N.text }} />,
+            value: loading ? '…' : <AnimatedAmount countFromZero value={kpis.overdueTotalWithCum} style={{ fontWeight: 700, color: kpis.overdueTotalWithCum > 0 ? N.red : N.text }} />,
             color: kpis.overdueTotalWithCum > 0 ? N.red : N.text,
             dot: kpis.overdueTotalWithCum > 0 ? N.red : N.textFaint,
           },
           {
             // « Retard de paiement sur les mois précédents » du classeur.
             label: 'Créances ant.',
-            value: loading ? '…' : <AnimatedAmount value={kpis.overdueCumTotal} style={{ fontWeight: 700, color: kpis.overdueCumTotal > 0 ? N.red : N.text }} />,
+            value: loading ? '…' : <AnimatedAmount countFromZero value={kpis.overdueCumTotal} style={{ fontWeight: 700, color: kpis.overdueCumTotal > 0 ? N.red : N.text }} />,
             color: kpis.overdueCumTotal > 0 ? N.red : N.text,
             dot: kpis.overdueCumTotal > 0 ? N.red : N.textFaint,
             // Récupération sur les créances des mois précédents.
@@ -1644,9 +1843,16 @@ const FILTER_OPTIONS = [
   { value: 'overdue_current',          label: 'Retard mois courant',              Icon: CircleDot   },
   { value: 'overdue_current_and_past', label: 'Retard mois courant + précédents', Icon: AlertCircle },
   { value: 'overdue_past_only',        label: 'Retard mois précédents seulement', Icon: Clock       },
+  // Clients qui se sont engagés à régler : la liste qu'on rappelle en
+  // priorité, et qu'on n'a pas besoin de relancer comme les autres.
+  { value: 'payment_promise',          label: 'Promesse de règlement',            Icon: Handshake   },
 ];
 
-function FilterDropdown({ values, onToggle, etatOptions = [] }) {
+function FilterDropdown({
+  values, onToggle, etatOptions = [],
+  savedFilters = [], onCreateSavedFilter, onRemoveSavedFilter,
+}) {
+  const [building, setBuilding] = useState(false);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const ref = useRef(null);
@@ -1721,6 +1927,11 @@ function FilterDropdown({ values, onToggle, etatOptions = [] }) {
             boxShadow: '0 6px 24px rgba(15,15,15,0.12), 0 1px 3px rgba(15,15,15,0.06)',
             zIndex: 100,
             padding: '8px 6px',
+            // La liste s'est allongée (états, mes filtres) et repoussait
+            // « Créer un filtre » hors de l'écran : on borne la hauteur et
+            // on épingle l'action en bas (retour dev 2026-08-28).
+            display: 'flex', flexDirection: 'column',
+            maxHeight: 'min(70vh, 520px)',
             fontFamily: 'inherit',
           }}
         >
@@ -1748,6 +1959,7 @@ function FilterDropdown({ values, onToggle, etatOptions = [] }) {
           </div>
 
           {/* Liste options */}
+          <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
           {filtered.length === 0 && (
             <div style={{ padding: '12px 14px', fontSize: 13, color: N.textMuted, textAlign: 'center' }}>
               Aucun filtre trouvé
@@ -1792,32 +2004,101 @@ function FilterDropdown({ values, onToggle, etatOptions = [] }) {
           })}
 
           {/* Footer : filtre avancé (placeholder MVP) */}
+          {/* Mes filtres — ceux que l'utilisateur a composés lui-même
+              (demande dev 2026-08-28). Séparés des filtres fournis pour
+              qu'on voie tout de suite ce qui vient de soi. */}
+          {savedFilters.length > 0 && (
+            <div style={{ marginTop: 4, paddingTop: 4, borderTop: `1px solid ${N.borderSoft}` }}>
+              <div style={{
+                padding: '6px 14px 2px', fontSize: 10.5, fontWeight: 600,
+                color: N.textFaint, textTransform: 'uppercase', letterSpacing: '0.04em',
+              }}>
+                Mes filtres
+              </div>
+              {savedFilters.map((f) => {
+                const on = values?.has(`saved:${f.id}`);
+                return (
+                  <div
+                    key={f.id}
+                    style={{ display: 'flex', alignItems: 'center' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = N.sideHover; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onToggle(`saved:${f.id}`)}
+                      title={describeFilter(f.definition)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 12, flex: 1,
+                        padding: '9px 4px 9px 14px', border: 'none', background: 'transparent',
+                        borderRadius: 6, fontSize: 14, textAlign: 'left', cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        color: on ? N.text : N.textMuted, fontWeight: on ? 600 : 400,
+                      }}
+                    >
+                      <Star size={16} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {f.name}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveSavedFilter?.(f.id)}
+                      title="Supprimer ce filtre"
+                      style={{
+                        border: 'none', background: 'transparent', cursor: 'pointer',
+                        color: N.textFaint, padding: '0 12px 0 4px',
+                        display: 'inline-flex', alignItems: 'center',
+                      }}
+                    >
+                      <XCircle size={14} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          </div>
+
           <div style={{
             marginTop: 4,
             paddingTop: 4,
             borderTop: `1px solid ${N.borderSoft}`,
+            flexShrink: 0,
           }}>
-            <button
-              type="button"
-              disabled
-              title="Bientôt"
-              style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                width: '100%', padding: '10px 14px',
-                border: 'none',
-                background: 'transparent',
-                borderRadius: 6,
-                fontSize: 14,
-                color: N.textMuted,
-                textAlign: 'left',
-                cursor: 'not-allowed',
-                fontFamily: 'inherit',
-                opacity: 0.7,
-              }}
-            >
-              <Plus size={18} strokeWidth={1.8} style={{ flexShrink: 0 }} />
-              <span style={{ flex: 1 }}>Ajouter un filtre avancé</span>
-            </button>
+            {building ? (
+              <FilterBuilder
+                etatValues={etatOptions.map((o) => String(o.value).replace(/^etat:/, ''))}
+                onCancel={() => setBuilding(false)}
+                onSave={async (payload) => {
+                  await onCreateSavedFilter?.(payload);
+                  setBuilding(false);
+                }}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setBuilding(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  width: '100%', padding: '10px 14px',
+                  border: 'none',
+                  background: 'transparent',
+                  borderRadius: 6,
+                  fontSize: 14,
+                  color: N.textMuted,
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = N.sideHover; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <Plus size={18} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+                <span style={{ flex: 1 }}>Créer un filtre</span>
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1915,6 +2196,7 @@ function TabRow({
   onRefresh, refreshing,
   hiddenColsInfo = { count: 0, keys: [] }, onShowAllCols, onShowCol,
   tableFilters, onToggleFilter, etatFilterOptions = [],
+  savedFilters = [], onCreateSavedFilter, onRemoveSavedFilter,
   scope, setScope, canGlobalScope,
 }) {
   const tabs = [
@@ -1995,7 +2277,14 @@ function TabRow({
       {/* Action icons row */}
       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2, marginLeft: 4 }}>
         <SearchInline value={searchQuery} onChange={setSearchQuery} resultCount={searchResultCount} />
-        <FilterDropdown values={tableFilters} onToggle={onToggleFilter} etatOptions={etatFilterOptions} />
+        <FilterDropdown
+          values={tableFilters}
+          onToggle={onToggleFilter}
+          etatOptions={etatFilterOptions}
+          savedFilters={savedFilters}
+          onCreateSavedFilter={onCreateSavedFilter}
+          onRemoveSavedFilter={onRemoveSavedFilter}
+        />
         <button
           className="tsf-icon-btn"
           title="Trier"
