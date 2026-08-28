@@ -99,46 +99,111 @@ function useLossPreview(periods) {
   }, [periods]);
 }
 
-// Une ligne à cocher : le périmètre, son montant, et ce qu'il représente.
-function ScopeRow({ checked, onToggle, label, hint, amount, months, disabled }) {
+// Une ligne de périmètre : la case, le montant total, et — si la finance
+// n'abandonne qu'une partie — le montant abandonné et le restant à recouvrer.
+//
+// Demande Ismahane 2026-08-28 : « il faudrait qu'on puisse mettre un passage
+// en perte partiel et rentrer un restant à récupérer. » Les deux champs sont
+// complémentaires et se calculent l'un l'autre : on saisit celui qu'on a en
+// tête, l'autre suit.
+function ScopeRow({
+  checked, onToggle, label, hint, amount, months, disabled,
+  partial, onPartialChange,
+}) {
+  const abandoned = partial == null ? amount : partial;
+  const residual = Math.max(round2(amount - abandoned), 0);
   return (
-    <label
+    <div
       style={{
-        display: 'flex', alignItems: 'flex-start', gap: 10,
         padding: '10px 11px', borderRadius: 9,
         border: `1px solid ${checked && !disabled ? '#f0c8c4' : N.borderSft}`,
         background: checked && !disabled ? '#fffafa' : '#fff',
-        cursor: disabled ? 'default' : 'pointer',
         opacity: disabled ? 0.5 : 1,
         transition: 'background 0.14s, border-color 0.14s',
       }}
     >
-      <input
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        onChange={(e) => onToggle(e.target.checked)}
-        style={{ marginTop: 2, accentColor: N.red, cursor: disabled ? 'default' : 'pointer' }}
-      />
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{
-          display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10,
-        }}>
-          <span style={{ fontSize: 12.5, fontWeight: 600, color: N.text }}>{label}</span>
+      <label style={{
+        display: 'flex', alignItems: 'flex-start', gap: 10,
+        cursor: disabled ? 'default' : 'pointer',
+      }}>
+        <input
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          onChange={(e) => onToggle(e.target.checked)}
+          style={{ marginTop: 2, accentColor: N.red, cursor: disabled ? 'default' : 'pointer' }}
+        />
+        <span style={{ flex: 1, minWidth: 0 }}>
           <span style={{
-            fontSize: 12.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
-            color: checked && !disabled && amount > 0 ? N.red : N.textMuted,
+            display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10,
           }}>
-            {formatEUR(amount)}
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: N.text }}>{label}</span>
+            <span style={{
+              fontSize: 12.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+              color: checked && !disabled && abandoned > 0 ? N.red : N.textMuted,
+            }}>
+              {formatEUR(amount)}
+            </span>
+          </span>
+          <span style={{ display: 'block', fontSize: 11, color: N.textFaint, marginTop: 2 }}>
+            {disabled ? 'Rien sur ce périmètre' : `${hint} · ${months} mois`}
           </span>
         </span>
-        <span style={{ display: 'block', fontSize: 11, color: N.textFaint, marginTop: 2 }}>
-          {disabled ? 'Rien sur ce périmètre' : `${hint} · ${months} mois`}
-        </span>
-      </span>
+      </label>
+
+      {checked && !disabled && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+          marginTop: 9, paddingTop: 9, borderTop: `1px solid ${N.borderSft}`,
+        }}>
+          <AmountField
+            label="Abandonné"
+            value={abandoned}
+            max={amount}
+            onChange={(v) => onPartialChange(v >= amount ? null : v)}
+            danger
+          />
+          <span style={{ color: N.textFaint, fontSize: 12 }}>+</span>
+          <AmountField
+            label="Restant à recouvrer"
+            value={residual}
+            max={amount}
+            onChange={(v) => onPartialChange(v <= 0 ? null : round2(amount - v))}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Saisie d'un montant en euros, bornée à [0, max].
+function AmountField({ label, value, max, onChange, danger = false }) {
+  return (
+    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+      <span style={{ color: N.textMuted }}>{label}</span>
+      <input
+        type="number"
+        min={0}
+        max={max}
+        step="0.01"
+        value={Number.isFinite(value) ? round2(value) : 0}
+        onChange={(e) => {
+          const v = Math.min(Math.max(Number(e.target.value) || 0, 0), max);
+          onChange(round2(v));
+        }}
+        style={{
+          width: 92, border: `1px solid ${N.border}`, borderRadius: 6,
+          padding: '4px 6px', fontSize: 12, fontFamily: 'inherit',
+          fontWeight: 600, textAlign: 'right', outline: 'none',
+          color: danger ? N.red : N.text,
+        }}
+      />
+      <span style={{ color: N.textFaint }}>€</span>
     </label>
   );
 }
+
+const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 export default function ExitClientDialog({
   open, onClose, client, boardRow, periods,
@@ -153,10 +218,13 @@ export default function ExitClientDialog({
   // Périmètre de la perte. Tout coché par défaut — c'est le cas courant —
   // mais chaque bloc se décoche indépendamment.
   const [scope, setScope] = useState({ past: true, current: true, future: true });
+  // Montant abandonné par périmètre. `null` = tout le périmètre (cas courant).
+  const [partial, setPartial] = useState({ past: null, current: null, future: null });
 
   const preview = useLossPreview(periods);
+  const amountFor = (k) => (partial[k] == null ? preview[k].amount : partial[k]);
   const selectedTotal = ['past', 'current', 'future']
-    .reduce((sum, k) => sum + (scope[k] ? preview[k].amount : 0), 0);
+    .reduce((sum, k) => sum + (scope[k] ? amountFor(k) : 0), 0);
   const selectedMonths = ['past', 'current', 'future']
     .reduce((sum, k) => sum + (scope[k] ? preview[k].months : 0), 0);
   const nothingSelected = selectedMonths === 0;
@@ -184,6 +252,9 @@ export default function ExitClientDialog({
       clear_past: scope.past,
       clear_current: scope.current,
       clear_future: scope.future,
+      amount_past: scope.past ? partial.past : null,
+      amount_current: scope.current ? partial.current : null,
+      amount_future: scope.future ? partial.future : null,
     });
     setReason('');
     setConfirming(false);
@@ -390,6 +461,8 @@ export default function ExitClientDialog({
                     amount={preview.past.amount}
                     months={preview.past.months}
                     disabled={preview.past.months === 0}
+                    partial={partial.past}
+                    onPartialChange={(v) => setPartial((p) => ({ ...p, past: v }))}
                   />
                   <ScopeRow
                     checked={scope.current}
@@ -399,6 +472,8 @@ export default function ExitClientDialog({
                     amount={preview.current.amount}
                     months={preview.current.months}
                     disabled={preview.current.months === 0}
+                    partial={partial.current}
+                    onPartialChange={(v) => setPartial((p) => ({ ...p, current: v }))}
                   />
                   <ScopeRow
                     checked={scope.future}
@@ -408,6 +483,8 @@ export default function ExitClientDialog({
                     amount={preview.future.amount}
                     months={preview.future.months}
                     disabled={preview.future.months === 0}
+                    partial={partial.future}
+                    onPartialChange={(v) => setPartial((p) => ({ ...p, future: v }))}
                   />
                 </div>
 

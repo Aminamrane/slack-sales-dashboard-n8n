@@ -146,6 +146,8 @@ export default function DetailPanel({
   // frise des actions, pour qu'acter une résiliation se relise ici.
   const [etatHistory, setEtatHistory] = useState(null);
   const [exitOpen, setExitOpen] = useState(false);
+  // Remboursement d'un trop-perçu : null = fermé, sinon { entity, amount }.
+  const [refund, setRefund] = useState(null);
   // Écriture réservée à l'équipe finance + admin (le CEO lit).
   // Deux niveaux de droits (dev 2026-08-27) : l'équipe finance entretient la
   // fiche (modalités, sociétés, associés, contacts) mais ne touche ni aux
@@ -165,6 +167,7 @@ export default function DetailPanel({
       setClientAudit(null);
       setEtatHistory(null);
       setExitOpen(false);
+      setRefund(null);
     }
   }, [open]);
 
@@ -570,6 +573,30 @@ export default function DetailPanel({
 
   // `payload` porte le motif ET le périmètre choisi (créances antérieures /
   // mois en cours / reste du contrat) — la finance décide de chaque bloc.
+  // Le trop-perçu vit sur UNE entité : en vision Owner ou Opti'lex on la
+  // connaît, en Globale on prend celle qui porte réellement le crédit.
+  const openRefund = useCallback(() => {
+    const co = toNumber(focusedRow?.credit_owner) || 0;
+    const cp = toNumber(focusedRow?.credit_optilex_ttc) || 0;
+    let entity = scope;
+    if (scope === 'global') entity = co >= cp ? 'owner' : 'optilex';
+    setRefund({ entity, amount: entity === 'owner' ? co : cp, reason: '' });
+  }, [focusedRow, scope]);
+
+  const submitRefund = useCallback(async ({ entity, amount, reason }) => {
+    if (!clientId) return;
+    try {
+      await apiClient.post(`/api/v1/finance-periods/client/${clientId}/refund`, {
+        entity, amount, reason,
+      });
+      onShowToast?.('Remboursement enregistré — trop-perçu soldé', 'success');
+      setRefund(null);
+      reloadAfterExit();
+    } catch (e) {
+      onShowToast?.(e?.data?.detail || "Enregistrement impossible", 'error');
+    }
+  }, [clientId, onShowToast, reloadAfterExit]);
+
   const declareLoss = useCallback(async (payload) => {
     if (!clientId) return;
     try {
@@ -687,7 +714,19 @@ export default function DetailPanel({
               overdueCum={focusedRow ? scopedOverdueCum(focusedRow, scope) : 0}
               credit={focusedRow ? scopedCredit(focusedRow, scope) : 0}
               loading={loadingTimeline}
+              onRefund={canEditMoney ? openRefund : null}
             />
+
+            {/* Remboursement d'un trop-perçu — l'encaissement reste intact,
+                un ajustement daté vient l'éteindre. Direction seulement. */}
+            {refund && (
+              <RefundPrompt
+                value={refund}
+                onChange={setRefund}
+                onCancel={() => setRefund(null)}
+                onSubmit={submitRefund}
+              />
+            )}
 
             {/* Section : Informations contractuelles.
                 Le crayon ouvre l'édition sur place (demande dev 2026-08-27) :
@@ -1210,7 +1249,7 @@ function StatementButton({ entity, label, busy, disabled, onClick }) {
 //   « Retard à date » = ce qui est en retard AUJOURD'HUI, soit le retard du
 //                      mois courant + les créances antérieures.
 // `overdueCurrent` / `overdueCum` arrivent scope-aware du parent.
-function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loading }) {
+function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loading, onRefund }) {
   const surplus = kpis.restant < 0 ? -kpis.restant : 0;
   const overdueToDate = overdueCurrent + overdueCum;
   // Trop-perçu reporté (backend `credit_*`) : un solde créditeur n'est pas
@@ -1237,7 +1276,7 @@ function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loadin
       color: creditOnly ? N.green : (overdueToDate > 0 ? '#b42318' : N.text),
       notes: [
         creditOnly
-          ? { text: 'à déduire ou à rembourser', color: N.green }
+          ? { text: 'à déduire ou à rembourser', color: N.green, action: onRefund }
           : null,
         // La ventilation des créances antérieures a davantage de sens ici
         // que sous « Restant dû » (déplacée le 2026-08-25).
@@ -1246,7 +1285,7 @@ function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loadin
           : null,
         // Retard ET crédit coexistent (entités différentes en Globale).
         !creditOnly && credit > 0
-          ? { text: `+${formatEUR(credit)} de trop-perçu`, color: N.green }
+          ? { text: `+${formatEUR(credit)} de trop-perçu`, color: N.green, action: onRefund }
           : null,
       ].filter(Boolean),
     },
@@ -1307,7 +1346,28 @@ function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loadin
               }}>
                 {t.display || formatEUR(t.value)}
               </span>
-              {(t.notes || []).map((note, j) => (
+              {(t.notes || []).map((note, j) => (note.action ? (
+                // Le trop-perçu appelle un geste : une fois l'argent rendu, il
+                // faut pouvoir l'éteindre. La note devient donc le bouton
+                // (retour Ismahane 2026-08-28 : « je n'ai pas la possibilité
+                // d'annuler le trop-perçu une fois remboursé »).
+                <button
+                  key={j}
+                  type="button"
+                  onClick={note.action}
+                  title="Enregistrer le remboursement et solder le trop-perçu"
+                  style={{
+                    alignSelf: 'flex-start', border: 'none', background: 'transparent',
+                    padding: 0, cursor: 'pointer', fontFamily: 'inherit',
+                    fontSize: 10.5, fontWeight: 600, color: note.color,
+                    textDecoration: 'underline', textUnderlineOffset: 2,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    maxWidth: '100%',
+                  }}
+                >
+                  {note.text}
+                </button>
+              ) : (
                 <span key={j} style={{
                   fontSize: 10.5, fontWeight: 600, color: note.color,
                   fontVariantNumeric: 'tabular-nums',
@@ -1315,12 +1375,97 @@ function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loadin
                 }}>
                   {note.text}
                 </span>
-              ))}
+              )))}
             </>
           )}
         </motion.div>
       ))}
     </div>
+  );
+}
+
+// ── Remboursement d'un trop-perçu ───────────────────────────────────────────
+// Un trop-perçu est de l'argent réellement encaissé. Le rendre ne s'écrit donc
+// pas en diminuant l'encaissement — ce serait effacer un mouvement qui a eu
+// lieu — mais en enregistrant un ajustement daté qui ramène le solde à zéro.
+// L'historique des encaissements reste intact, et le geste est traçable.
+function RefundPrompt({ value, onChange, onCancel, onSubmit }) {
+  const [busy, setBusy] = useState(false);
+  const ok = Number(value.amount) > 0;
+  const label = value.entity === 'optilex' ? "Opti'lex" : 'Owner';
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+      style={{
+        marginTop: 12, padding: '12px 14px', borderRadius: 10,
+        border: `1px solid ${N.borderSft}`, background: '#f6fbf8',
+        display: 'flex', flexDirection: 'column', gap: 10,
+      }}
+    >
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: N.text }}>
+        Enregistrer un remboursement {label}
+      </div>
+      <div style={{ fontSize: 11.5, color: N.textMuted, lineHeight: 1.5 }}>
+        Le solde repart à zéro. Les encaissements déjà saisis ne bougent pas :
+        l’argent a bien été reçu, puis rendu — ce sont deux mouvements.
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <input
+          type="number"
+          min={0}
+          step="0.01"
+          value={value.amount}
+          onChange={(e) => onChange({ ...value, amount: Number(e.target.value) || 0 })}
+          style={{
+            width: 110, border: `1px solid ${N.border}`, borderRadius: 6,
+            padding: '6px 8px', fontSize: 12.5, fontFamily: 'inherit',
+            fontWeight: 600, textAlign: 'right', outline: 'none', color: N.text,
+          }}
+        />
+        <span style={{ color: N.textMuted, fontSize: 12 }}>€</span>
+        <input
+          value={value.reason}
+          onChange={(e) => onChange({ ...value, reason: e.target.value })}
+          placeholder="Motif (virement du 28/08, geste commercial…)"
+          style={{
+            flex: '1 1 180px', border: `1px solid ${N.border}`, borderRadius: 6,
+            padding: '6px 8px', fontSize: 12.5, fontFamily: 'inherit',
+            outline: 'none', color: N.text, minWidth: 0,
+          }}
+        />
+      </div>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button
+          type="button"
+          onClick={onCancel}
+          style={{
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            color: N.textMuted, fontSize: 12.5, fontFamily: 'inherit', padding: '6px 8px',
+          }}
+        >
+          Annuler
+        </button>
+        <button
+          type="button"
+          disabled={!ok || busy}
+          onClick={async () => {
+            setBusy(true);
+            try { await onSubmit(value); } finally { setBusy(false); }
+          }}
+          style={{
+            border: 'none', borderRadius: 6, padding: '6px 12px',
+            fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit',
+            cursor: ok && !busy ? 'pointer' : 'default',
+            background: ok && !busy ? N.green : N.sideBg,
+            color: ok && !busy ? '#fff' : N.textFaint,
+          }}
+        >
+          {busy ? 'Enregistrement…' : 'Solder le trop-perçu'}
+        </button>
+      </div>
+    </motion.div>
   );
 }
 
