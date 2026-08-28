@@ -379,6 +379,26 @@ export default function TrackingSheetFinance() {
     }
   }, [scope, boardMap, relanceMonths]);
 
+  // États présents dans le board pour les clients affichés : le menu Filtre
+  // ne propose que ce qui existe, avec son volume — un état vide n'apparaît
+  // pas (demande dev 2026-08-28).
+  const etatFilterOptions = useMemo(() => {
+    const counts = new Map();
+    for (const r of rows) {
+      const br = (r.client?.numero_client && boardMap)
+        ? boardMap.get(r.client.numero_client) : null;
+      const etat = br ? displayEtat(br) : null;
+      if (etat) counts.set(etat, (counts.get(etat) || 0) + 1);
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([etat, n]) => ({
+        value: `etat:${etat}`,
+        label: `${etat} (${n})`,
+        Icon: CircleDot,
+      }));
+  }, [rows, boardMap]);
+
   // Compteur par chip (nb de clients) — sur les rows brutes de la période,
   // indépendant de la recherche et des autres filtres (le compteur décrit la
   // vue, pas l'intersection).
@@ -413,9 +433,14 @@ export default function TrackingSheetFinance() {
       if (tableFilters.has('overdue_current') && overdueCurrent > 0 && overdueCumul === 0) return true;
       if (tableFilters.has('overdue_current_and_past') && overdueCurrent > 0 && overdueCumul > 0) return true;
       if (tableFilters.has('overdue_past_only') && overdueCurrent === 0 && overdueCumul > 0) return true;
+      // Filtres par état (clés « etat:Signé », « etat:Résiliation »…).
+      const br = (r.client?.numero_client && boardMap)
+        ? boardMap.get(r.client.numero_client) : null;
+      const etat = br ? displayEtat(br) : null;
+      if (etat && tableFilters.has(`etat:${etat}`)) return true;
       return false;
     });
-  }, [rows, tableFilters, viewFilter, matchesView]);
+  }, [rows, tableFilters, viewFilter, matchesView, boardMap]);
 
   // Compteur de résultats de recherche — même prédicat que le filtre de
   // TableView (matchesClientSearch), appliqué APRÈS vues-filtres + filtres
@@ -727,6 +752,7 @@ export default function TrackingSheetFinance() {
             refreshing={refreshing}
             tableFilters={tableFilters}
             onToggleFilter={toggleTableFilter}
+            etatFilterOptions={etatFilterOptions}
             hiddenColsInfo={hiddenColsInfo}
             onShowAllCols={() => showAllColsRef.current?.()}
             onShowCol={(key) => showColRef.current?.(key)}
@@ -1620,7 +1646,7 @@ const FILTER_OPTIONS = [
   { value: 'overdue_past_only',        label: 'Retard mois précédents seulement', Icon: Clock       },
 ];
 
-function FilterDropdown({ values, onToggle }) {
+function FilterDropdown({ values, onToggle, etatOptions = [] }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const ref = useRef(null);
@@ -1640,11 +1666,19 @@ function FilterDropdown({ values, onToggle }) {
   const active = values && values.size > 0;
   const activeCount = values ? values.size : 0;
 
+  // Les états viennent du board et changent avec lui : on les ajoute à la
+  // volée plutôt que de figer une liste qui finirait par diverger
+  // (demande dev 2026-08-28). Ils se croisent avec les autres filtres,
+  // comme eux en union.
+  const allOptions = useMemo(
+    () => [...FILTER_OPTIONS, ...etatOptions],
+    [etatOptions],
+  );
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return FILTER_OPTIONS;
-    return FILTER_OPTIONS.filter((o) => o.label.toLowerCase().includes(q));
-  }, [search]);
+    if (!q) return allOptions;
+    return allOptions.filter((o) => o.label.toLowerCase().includes(q));
+  }, [search, allOptions]);
 
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-flex' }}>
@@ -1880,7 +1914,7 @@ function TabRow({
   searchQuery, setSearchQuery, searchResultCount,
   onRefresh, refreshing,
   hiddenColsInfo = { count: 0, keys: [] }, onShowAllCols, onShowCol,
-  tableFilters, onToggleFilter,
+  tableFilters, onToggleFilter, etatFilterOptions = [],
   scope, setScope, canGlobalScope,
 }) {
   const tabs = [
@@ -1961,7 +1995,7 @@ function TabRow({
       {/* Action icons row */}
       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2, marginLeft: 4 }}>
         <SearchInline value={searchQuery} onChange={setSearchQuery} resultCount={searchResultCount} />
-        <FilterDropdown values={tableFilters} onToggle={onToggleFilter} />
+        <FilterDropdown values={tableFilters} onToggle={onToggleFilter} etatOptions={etatFilterOptions} />
         <button
           className="tsf-icon-btn"
           title="Trier"
