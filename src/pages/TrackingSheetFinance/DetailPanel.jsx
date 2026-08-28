@@ -576,11 +576,24 @@ export default function DetailPanel({
   // Le trop-perçu vit sur UNE entité : en vision Owner ou Opti'lex on la
   // connaît, en Globale on prend celle qui porte réellement le crédit.
   const openRefund = useCallback(() => {
-    const co = toNumber(focusedRow?.credit_owner) || 0;
-    const cp = toNumber(focusedRow?.credit_optilex_ttc) || 0;
+    // Ce qu'on doit RÉELLEMENT au client, par entité : le solde du mois en
+    // cours ET le cumul des mois antérieurs. `credit_*` seul ne reprend que
+    // le cumul — sur un changement de formule rétroactif, il manquerait le
+    // mois courant, et le montant proposé au remboursement serait faux.
+    const owed = (ent) => {
+      const cur = toNumber(focusedRow?.[`overdue_${ent}_current_month`]) || 0;
+      const cum = toNumber(focusedRow?.[`overdue_${ent}_cumulative`]) || 0;
+      return Math.max(-(cur + cum), 0);
+    };
+    const co = owed('owner');
+    const cp = owed('optilex');
     let entity = scope;
     if (scope === 'global') entity = co >= cp ? 'owner' : 'optilex';
-    setRefund({ entity, amount: entity === 'owner' ? co : cp, reason: '' });
+    setRefund({
+      entity,
+      amount: Math.round((entity === 'owner' ? co : cp) * 100) / 100,
+      reason: '',
+    });
   }, [focusedRow, scope]);
 
   const submitRefund = useCallback(async ({ entity, amount, reason }) => {
@@ -759,6 +772,7 @@ export default function DetailPanel({
                 profile={profile}
                 focusedRow={focusedRow}
                 boardRow={boardRow}
+                periods={periods}
 
                 patch={patch}
                 canEdit={canEdit}
@@ -1257,7 +1271,15 @@ function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loadin
   // vert) pour rendre l'action visible ; avec un retard (possible entre
   // entités en vision Globale), le retard reste la valeur principale et le
   // crédit passe en sous-ligne.
-  const creditOnly = credit > 0 && overdueToDate === 0;
+  // Le trop-perçu du MOIS EN COURS ne passe pas par `credit_*`, qui ne
+  // reprend que le cumul des mois antérieurs. Sur un changement de formule
+  // rétroactif, la différence du mois courant s'ajoute pourtant à ce qu'on
+  // doit au client : la tuile affichait « retard −610,20 » d'un côté et
+  // « +406,80 de trop-perçu » de l'autre, deux chiffres pour une seule
+  // réalité (vérifié 2026-08-28). On retient le solde réellement dû.
+  const owedBack = overdueToDate < 0 ? -overdueToDate : 0;
+  const creditShown = Math.max(credit, owedBack);
+  const creditOnly = creditShown > 0 && overdueToDate <= 0;
   const tiles = [
     { label: 'Total contrat', value: kpis.total, color: N.text },
     { label: 'Encaissé', value: kpis.encaisse, color: N.green },
@@ -1272,7 +1294,7 @@ function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loadin
     {
       label: 'Retard à date',
       value: overdueToDate,
-      display: creditOnly ? `Trop-perçu · ${formatEUR(credit)}` : null,
+      display: creditOnly ? `Trop-perçu · ${formatEUR(creditShown)}` : null,
       color: creditOnly ? N.green : (overdueToDate > 0 ? '#b42318' : N.text),
       notes: [
         creditOnly
@@ -1284,8 +1306,8 @@ function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loadin
           ? { text: `dont ${formatEUR(overdueCum)} de créances antérieures`, color: '#b42318' }
           : null,
         // Retard ET crédit coexistent (entités différentes en Globale).
-        !creditOnly && credit > 0
-          ? { text: `+${formatEUR(credit)} de trop-perçu`, color: N.green, action: onRefund }
+        !creditOnly && creditShown > 0
+          ? { text: `+${formatEUR(creditShown)} de trop-perçu`, color: N.green, action: onRefund }
           : null,
       ].filter(Boolean),
     },
@@ -1472,7 +1494,7 @@ function RefundPrompt({ value, onChange, onCancel, onSubmit }) {
 // ── Informations contractuelles (liste compacte icône + libellé / valeur) ───
 function ContractInfoList({
   client, profile, focusedRow, boardRow, patch, canEdit, canEditMoney, onCopied,
-  editing = false, clientId, onProfileChanged, onShowToast,
+  editing = false, clientId, onProfileChanged, onShowToast, periods = [],
 }) {
   // Séparation nom du client / société (2026-08-21) : « Nom du client » =
   // la/les personne(s), la société a sa propre ligne. Pas de personne
@@ -1636,6 +1658,7 @@ function ContractInfoList({
           label={pending.label}
           onPick={applyPending}
           onCancel={() => setPending(null)}
+          periods={periods}
         />
       )}
       {rows.map((r, i) => (
@@ -2543,9 +2566,31 @@ function RelatedEntityList({ items, kind, clientId, editing, onChanged, onShowTo
 // la ligne que la finance est peut-être en train de rapprocher ; appliqués au
 // mois suivant, l'historique reste intact. Personne ne peut trancher à notre
 // place — d'où la question, posée une fois, au moment de la saisie.
-function EffectiveMonthPrompt({ label, onPick, onCancel }) {
+// Choix du mois d'effet d'un changement de formule ou de modalité.
+//
+// Demande dev 2026-08-28 : « si on change la formule au rabais d'un client il
+// faut que ça fasse un trop-perçu par rapport à la date, donc qu'elle puisse
+// sélectionner le mois où ça avait pris effet. »
+//
+// Un effet RÉTROACTIF recalcule l'attendu depuis ce mois-là. Les
+// encaissements, eux, ne bougent pas : si le client payait l'ancien tarif, la
+// différence devient mécaniquement un trop-perçu, mois par mois. C'est le
+// résultat voulu, pas un effet de bord.
+function EffectiveMonthPrompt({ label, onPick, onCancel, periods = [] }) {
+  const [retro, setRetro] = useState('');
   const moisProchain = formatMonthLabel(shiftMonth(currentPeriod(), 1));
   const moisCourant = formatMonthLabel(currentPeriod());
+  // Mois réellement facturés au client, du plus récent au plus ancien, et
+  // strictement antérieurs au mois courant : on ne propose pas un mois qui
+  // n'existe pas sur sa fiche.
+  const pastMonths = useMemo(() => {
+    const cur = currentPeriod();
+    return [...new Set((periods || [])
+      .map((p) => String(p.period || '').slice(0, 7))
+      .filter((m) => m && m < cur))]
+      .sort()
+      .reverse();
+  }, [periods]);
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -2601,6 +2646,52 @@ function EffectiveMonthPrompt({ label, onPick, onCancel }) {
           Annuler
         </button>
       </div>
+
+      {/* Effet rétroactif — le cas d'une formule revue à la baisse dont on
+          s'aperçoit après coup. L'attendu des mois concernés est recalculé ;
+          ce que le client a payé en trop devient un trop-perçu. */}
+      {pastMonths.length > 0 && (
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7,
+          marginTop: 4, paddingTop: 12, borderTop: `1px solid ${N.borderSft}`,
+          width: '100%', maxWidth: 360,
+        }}>
+          <div style={{ fontSize: 11.5, color: N.textMuted, lineHeight: 1.5 }}>
+            Effet rétroactif : l’attendu est recalculé depuis le mois choisi.
+            Ce que le client a payé en trop devient un trop-perçu.
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <select
+              value={retro}
+              onChange={(e) => setRetro(e.target.value)}
+              style={{
+                border: `1px solid ${N.border}`, borderRadius: 6,
+                padding: '6px 8px', fontSize: 12.5, fontFamily: 'inherit',
+                background: '#fff', color: N.text, outline: 'none',
+              }}
+            >
+              <option value="">Choisir un mois passé…</option>
+              {pastMonths.map((m) => (
+                <option key={m} value={m}>{formatMonthLabel(m)}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              disabled={!retro}
+              onClick={() => onPick(retro)}
+              style={{
+                border: 'none', borderRadius: 6, padding: '7px 12px',
+                fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit',
+                cursor: retro ? 'pointer' : 'default',
+                background: retro ? '#b45309' : N.sideBg,
+                color: retro ? '#fff' : N.textFaint,
+              }}
+            >
+              Appliquer rétroactivement
+            </button>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }
