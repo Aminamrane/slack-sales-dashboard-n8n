@@ -753,8 +753,8 @@ function MeteoMenu({ selected, counts, onToggle, onClear }) {
   );
 }
 
-function SigDateFilter({ from, to, onChange, months = [], mode = "signature" }) {
-  const isOnb = mode === "onboarding";
+function SigDateFilter({ from, to, onChange, months = [], target = "signature", onTarget }) {
+  const isOnb = target === "onboarding";
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const btnRef = useRef(null);
@@ -798,6 +798,18 @@ function SigDateFilter({ from, to, onChange, months = [], mode = "signature" }) 
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em" }}>{isOnb ? "Onboarding entre" : "Signé le"}</span>
               {active && <button type="button" onClick={() => onChange({ from: "", to: "" })} style={{ border: "none", background: "transparent", color: "#2563eb", fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Effacer</button>}
+            </div>
+            {/* Cible du filtre : période de SIGNATURE (défaut) ou d'ONBOARDING. */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 10, padding: 3, background: "#f3f4f6", borderRadius: 8 }}>
+              {[["signature", "Signature"], ["onboarding", "Onboarding"]].map(([val, lbl]) => (
+                <button key={val} type="button" onClick={() => onTarget?.(val)}
+                  style={{ flex: 1, padding: "5px 0", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit",
+                    fontSize: 11.5, fontWeight: 700, transition: "background 0.15s, color 0.15s",
+                    background: target === val ? CARD : "transparent", color: target === val ? NAVY : MUTED,
+                    boxShadow: target === val ? "0 1px 2px rgba(17,24,39,0.10)" : "none" }}>
+                  {lbl}
+                </button>
+              ))}
             </div>
             <label style={{ fontSize: 11, color: MUTED, display: "block", marginBottom: 4 }}>Mois</label>
             <select value={monthValue} onChange={(e) => onChange(e.target.value ? monthToRange(e.target.value) : { from: "", to: "" })}
@@ -894,7 +906,10 @@ export default function OptilexBoard({ embed = false }) {
   const [loading, setLoading] = useState(true);
   const [etatFilter, setEtatFilter] = useState("Signé");   // onglet primaire actif (défaut Signé, décision dev 2026-08-25)
   const [multiFilter, setMultiFilter] = useState([]);      // catégories secondaires cochées (union)
-  const [sigRange, setSigRange] = useState({ from: "", to: "" }); // filtre date signature Owner
+  const [sigRange, setSigRange] = useState({ from: "", to: "" });
+  // Cible du filtre de dates : "signature" (défaut) ou "onboarding" — choix
+  // explicite dans le menu, jamais déduit des vignettes actives.
+  const [dateTarget, setDateTarget] = useState("signature"); // filtre date signature Owner
   const [meteoFilter, setMeteoFilter] = useState([]);      // bandes météo cochées (rouge/orange/vert)
   const [ambassadorFilter, setAmbassadorFilter] = useState(false); // filtre "Programme ambassadeur" : clients cochés éligibles
   const [parrainageFilter, setParrainageFilter] = useState(false); // filtre "Programme de parrainage" : clients cochés éligibles
@@ -978,10 +993,16 @@ export default function OptilexBoard({ embed = false }) {
       if (parrainageFilter && !r.parrainage_eligible) return false;
       // Filtre onboarding : réalisé = bouton "effectué" coché (rdv_onboarding_done).
       if (onboardingFilter === "done" && !r.rdv_onboarding_done) return false;
-      // « À faire » exclut les clients partis (résiliés / rétractés / liquidés) :
-      // leur onboarding n'a plus lieu d'être.
-      if (onboardingFilter === "todo"
-        && (r.rdv_onboarding_done || !r.numero_client || TERMINATED_ETATS.includes(displayEtat(r)))) return false;
+      // « À faire » exclut les clients partis (résiliés / rétractés / liquidés)…
+      // SAUF si leur état est explicitement sélectionné : Vincent croise
+      // résiliés/rétractés × « à faire » pour tenter de les récupérer via la
+      // plateforme (retour dev 2026-08-28). Un client parti qui arrive ici avec
+      // une sélection d'états active a forcément été demandé (il a passé le
+      // filtre d'états au-dessus).
+      if (onboardingFilter === "todo") {
+        if (r.rdv_onboarding_done || !r.numero_client) return false;
+        if (etatsSel.length === 0 && TERMINATED_ETATS.includes(displayEtat(r))) return false;
+      }
       // Sous-filtre contextuel "En retard" de l'onglet Intégration à venir.
       if (etatFilter === "Intégration à venir" && integrationView === "overdue" && !isIntegrationOverdue(r)) return false;
       // Filtre date de signature Owner (mois ou période). Une ligne sans date de
@@ -991,9 +1012,7 @@ export default function OptilexBoard({ embed = false }) {
         // (« les onboarding à effectuer sur cette période »), sinon sur la date
         // de signature Owner (comportement historique).
         const onbRaw = r.rdv_onboarding_date_manual || r.rdv_onboarding_date;
-        const onbMode = onboardingFilter !== "all"
-          || etatFilter === "Onboarding à venir" || multiFilter.includes("Onboarding à venir");
-        const d = onbMode
+        const d = dateTarget === "onboarding"
           ? (onbRaw ? String(onbRaw).slice(0, 10) : null)
           : sigDateOf(r);
         if (!d) return false;
@@ -1291,16 +1310,9 @@ export default function OptilexBoard({ embed = false }) {
         })}
         <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
         <FilterMenu cats={SECONDARY_CATS} counts={counts} selected={multiFilter} onToggle={toggleCat} onClear={() => setMultiFilter([])} />
-        {(() => {
-          // Le filtre date porte sur l'onboarding dès qu'une vignette onboarding
-          // est active OU qu'on est sur l'onglet « Onboarding à venir ».
-          const onbMode = onboardingFilter !== "all"
-            || etatFilter === "Onboarding à venir" || multiFilter.includes("Onboarding à venir");
-          return (
-            <SigDateFilter from={sigRange.from} to={sigRange.to} onChange={setSigRange}
-              months={onbMode ? onbMonths : sigMonths} mode={onbMode ? "onboarding" : "signature"} />
-          );
-        })()}
+        <SigDateFilter from={sigRange.from} to={sigRange.to} onChange={setSigRange}
+          months={dateTarget === "onboarding" ? onbMonths : sigMonths}
+          target={dateTarget} onTarget={setDateTarget} />
         {/* Météo client : regroupée dans UN menu (décision dev 2026-08-25, barre trop chargée). */}
         <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
         <MeteoMenu selected={meteoFilter} counts={meteoCounts}
