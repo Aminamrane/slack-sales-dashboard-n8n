@@ -183,12 +183,12 @@ export default function ModalitesCell({
   let chipStyle = null;
   let ChipIcon = null;
   let chipTitle = COLUMN_LABELS.paymentSpec; // fallback tooltip (chip vide)
-  if (specCount !== null) {
-    chipText = `${specCount}×`;
-    chipStyle = CHIP_STYLES.spec;
-    ChipIcon = CardIcon;
-    chipTitle = paymentSpecificity;
-  } else if (mode === 'MONTHLY') {
+  // Le rythme (M/A/T) et le nombre de STRUCTURES sont deux faits distincts :
+  // la particularité masquait le rythme, on perdait « annuel » dès qu'un
+  // client payait pour plusieurs sociétés. La pastille porte désormais les
+  // deux — la lettre du rythme et, à sa droite, le bâtiment avec le nombre
+  // de structures (retour dev 2026-08-28).
+  if (mode === 'MONTHLY') {
     chipText = 'M';
     chipStyle = CHIP_STYLES.monthly;
     ChipIcon = CalendarIcon;
@@ -203,6 +203,12 @@ export default function ModalitesCell({
     chipStyle = CHIP_STYLES.quarterly;
     ChipIcon = CalendarIcon;
     chipTitle = 'Trimestriel';
+  }
+
+  if (specCount !== null) {
+    chipTitle = chipText
+      ? `${chipTitle} · ${paymentSpecificity}`
+      : paymentSpecificity;
   }
 
   // ── Pastilles prélèvement ──────────────────────────────────────────────
@@ -269,6 +275,27 @@ export default function ModalitesCell({
               <>
                 <ChipIcon size={11} />
                 {chipText}
+                {specCount !== null && (
+                  <span
+                    title={paymentSpecificity}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                      marginLeft: 5, paddingLeft: 5,
+                      borderLeft: `1px solid ${chipStyle.fg}33`,
+                      color: CHIP_STYLES.spec.fg,
+                    }}
+                  >
+                    <CardIcon size={11} />
+                    {specCount}
+                  </span>
+                )}
+              </>
+            ) : specCount !== null ? (
+              // Structures connues mais rythme inconnu : on montre au moins
+              // ce qu'on sait.
+              <>
+                <CardIcon size={11} />
+                {specCount}
               </>
             ) : (
               chipHover ? <><CardIcon size={11} />définir</> : '—'
