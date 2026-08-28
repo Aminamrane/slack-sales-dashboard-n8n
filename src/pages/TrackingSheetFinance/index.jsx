@@ -32,7 +32,7 @@ import {
   AlertCircle, CheckCircle2, Home, MessageSquare, Mail, PanelLeft,
   Edit3, Plus, Filter, ArrowUpDown, MoreHorizontal, Share2,
   CheckCircle, Sparkles, FileText, Users, Settings, Clock,
-  XCircle, CircleDot, FilterX, Eye, Check, Star, Handshake, TriangleAlert,
+  XCircle, CircleDot, FilterX, Eye, Check, Star, Handshake, TriangleAlert, Download,
   DollarSign, BarChart3, Trophy, Wallet, ShoppingBag, UserCircle, Megaphone, StickyNote, ListChecks,
 } from 'lucide-react';
 
@@ -40,6 +40,7 @@ import apiClient from '../../services/apiClient.js';
 import PortalDropdown from './components/PortalDropdown.jsx';
 import FilterBuilder from './components/FilterBuilder.jsx';
 import { matchesSavedFilter, describeFilter } from './savedFilters.js';
+import { exportFinanceXlsx } from './exportExcel.js';
 import companyLogo from '../../assets/my_image.png';
 import '../../index.css';
 
@@ -521,6 +522,16 @@ export default function TrackingSheetFinance() {
     return filteredRows.filter((r) => matchesClientSearch(r, q)).length;
   }, [filteredRows, searchQuery]);
 
+  // ── Export Excel ────────────────────────────────────────────────────────
+  // Les lignes RÉELLEMENT affichées : filtres de vue, filtres du menu, filtres
+  // personnels ET recherche. La recherche est appliquée dans TableView, donc
+  // on la rejoue ici avec le même prédicat — sinon l'export ne correspondrait
+  // pas à l'écran dès qu'une recherche est active.
+  const exportedRows = useMemo(() => {
+    const q = searchQuery?.trim() ? normalizeSearch(searchQuery.trim()) : null;
+    return q ? filteredRows.filter((r) => matchesClientSearch(r, q)) : filteredRows;
+  }, [filteredRows, searchQuery]);
+
   // Toggle d'un filtre : ajoute si absent, retire si présent
   const toggleTableFilter = useCallback((filterValue) => {
     setTableFilters((prev) => {
@@ -564,6 +575,17 @@ export default function TrackingSheetFinance() {
     setToast({ id: Date.now(), msg, type });
     toastTimerRef.current = setTimeout(() => setToast(null), 3500);
   }, []);
+
+  const exportToExcel = useCallback(() => {
+    if (!exportedRows.length) return;
+    try {
+      const n = exportFinanceXlsx({ rows: exportedRows, scope, period });
+      showToast(`${n} client${n > 1 ? 's' : ''} exporté${n > 1 ? 's' : ''}`, 'success');
+    } catch (e) {
+      console.error('[export xlsx]', e);
+      showToast("L'export a échoué", 'error');
+    }
+  }, [exportedRows, scope, period, showToast]);
   useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
 
   // ── Filtres personnels (« Mes filtres ») ────────────────────────────
@@ -928,6 +950,8 @@ export default function TrackingSheetFinance() {
             searchResultCount={searchResultCount}
             onRefresh={onRefresh}
             refreshing={refreshing}
+            onExport={exportToExcel}
+            exportCount={exportedRows.length}
             tableFilters={tableFilters}
             onToggleFilter={toggleTableFilter}
             etatFilterOptions={etatFilterOptions}
@@ -2197,7 +2221,7 @@ function TabRow({
   activeTab, setActiveTab,
   period, setPeriod,
   searchQuery, setSearchQuery, searchResultCount,
-  onRefresh, refreshing,
+  onRefresh, refreshing, onExport, exportCount = 0,
   hiddenColsInfo = { count: 0, keys: [] }, onShowAllCols, onShowCol,
   tableFilters, onToggleFilter, etatFilterOptions = [],
   savedFilters = [], onCreateSavedFilter, onRemoveSavedFilter,
@@ -2295,6 +2319,19 @@ function TabRow({
           style={iconBtnStyle}
         >
           <ArrowUpDown size={14} />
+        </button>
+        {/* Export Excel — reprend EXACTEMENT les lignes affichées (filtres,
+            filtres personnels et recherche compris) dans la vision active.
+            Demande dev 2026-08-28 : liste de relance prête à l'emploi. */}
+        <button
+          className="tsf-icon-btn"
+          title={`Exporter ${exportCount} client${exportCount > 1 ? 's' : ''} vers Excel`}
+          onClick={onExport}
+          disabled={!exportCount}
+          style={{ ...iconBtnStyle, cursor: exportCount ? 'pointer' : 'default',
+            opacity: exportCount ? 1 : 0.4 }}
+        >
+          <Download size={14} />
         </button>
         <button
           className="tsf-icon-btn"
