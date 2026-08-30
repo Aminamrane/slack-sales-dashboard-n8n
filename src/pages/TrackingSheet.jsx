@@ -1380,6 +1380,14 @@ export default function TrackingSheet() {
     setManualCompany({ denomination: '', siren: '' });
   }, [selectedLead]);
 
+  // Chantier réactivité : ouvrir le détail d'un lead = « traité » (stoppe le
+  // SLA 5 min, ouvre la fenêtre de 3 jours). Fire-and-forget, idempotent côté
+  // serveur, silencieux si l'utilisateur n'est pas le sales assigné.
+  useEffect(() => {
+    if (!selectedLead) return;
+    apiClient.post(`/api/v1/tracking/leads/${selectedLead}/treated`).catch(() => {});
+  }, [selectedLead]);
+
   // ── CAMPAIGN STATE ──────────────────────────────────────────────────────
   const [openCampaign, setOpenCampaign] = useState(null); // campaign object or null
   const [campaignRect, setCampaignRect] = useState(null); // source DOMRect for animation
