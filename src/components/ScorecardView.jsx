@@ -224,7 +224,7 @@ export default function ScorecardView({ sc: rawSc }) {
     </ul>
   )});
 
-  if (sc.issue?.length) sections.push({ h: "Issue du rendez-vous", body: <FactsTable rows={sc.issue} /> });
+  // Bloc « Issue du rendez-vous » masqué (dev 2026-08-31) — données conservées dans le payload.
 
   if (sc.qualification) sections.push({ h: "Qualification du prospect", body: (
     <>
@@ -254,52 +254,13 @@ export default function ScorecardView({ sc: rawSc }) {
     </>
   )});
 
-  if (sc.psychologie) sections.push({ h: "Analyse psychologique", body: (
-    <div className="psy">
-      {sc.psychologie.text}
-      {sc.psychologie.confiance && <span className="conf">Conclusion à confiance {sc.psychologie.confiance}.</span>}
-    </div>
-  )});
+  // Bloc « Analyse psychologique » -> renommé « Posture commerciale observée » et
+  // MASQUÉ de l'analyse individuelle (dev 2026-08-31), rétroactif : le payload
+  // reste stocké, seul l'affichage le retire. Réactivable ici si besoin.
 
-  if (sc.r2_prep) sections.push({ h: "Préparation du R2", body: (
-    <>
-      <div className="cols">
-        <div>
-          <p><span className="lbl" style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, letterSpacing: ".12em", textTransform: "uppercase", color: "#4A5259", fontWeight: 600 }}>Informations critiques manquantes</span></p>
-          <ul>{(sc.r2_prep.infos_manquantes || []).map((x, i) => <li key={i}>{x}</li>)}</ul>
-        </div>
-        <div>{sc.r2_prep.rows?.length ? <FactsTable rows={sc.r2_prep.rows} /> : null}
-          {sc.r2_prep.niveau && <p className="after"><b>Niveau de préparation :</b> {sc.r2_prep.niveau}</p>}
-        </div>
-      </div>
-      {sc.r2_prep.decideur && <p className="after"><b>Décideur à sécuriser :</b> {sc.r2_prep.decideur}</p>}
-    </>
-  )});
+  // Bloc « Préparation du R2 » masqué (dev 2026-08-31).
 
-  if (sc.coaching) sections.push({ h: "Priorité de coaching", body: (
-    <div className="coach">
-      {sc.coaching.priorite && <div><span className="lbl">Priorité</span>{sc.coaching.priorite}</div>}
-      {sc.coaching.exercice && <div><span className="lbl">Exercice</span>{sc.coaching.exercice}</div>}
-      {sc.coaching.mesure && <div><span className="lbl">Mesure</span>{sc.coaching.mesure}</div>}
-    </div>
-  )});
-
-  if (sc.glossaire?.length) sections.push({ h: "Nouveaux termes à ajouter au glossaire", body: (
-    <ul className="glossary">
-      {sc.glossaire.map((g, i) => <li key={i}>{g.from} <span className="arrow">→</span> {g.to}{g.confiance ? ` — Confiance : ${g.confiance}` : ""}</li>)}
-    </ul>
-  )});
-
-  if (sc.signature) {
-    const sig = sc.signature;
-    const col = sig.signed === true ? "#2F6B4F" : sig.signed === false ? "#B4740B" : "#4A5259";
-    sections.push({ h: "Résultat commercial (CRM)", body: (
-      <div className="psy" style={{ borderLeft: `3px solid ${col}` }}>
-        <b style={{ color: col, fontSize: 16 }}>{sig.status_label}</b>{sig.date ? ` — ${sig.date}` : ""}
-        {sig.note && <div style={{ marginTop: 8, color: "var(--ink-soft)" }}>{sig.note}</div>}
-      </div>
-    )});
-  }
+  // Bloc « Résultat commercial (CRM) » masqué (dev 2026-08-31).
 
   const kicker = `Owner Technology — Scorecard ${sc.rdv_type || ""}`.trim();
   const title = sc.rdv_type === "R2" ? "Analyse d’un rendez-vous de restitution" : "Analyse d’un rendez-vous de pré-audit";

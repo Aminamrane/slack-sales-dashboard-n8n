@@ -171,29 +171,14 @@ export default function WeeklyBilanView({ bilan, salesName, avatarUrl, team }) {
               </section>
             ) : null}
 
-            {/* 05 — Tes rendez-vous cette semaine */}
-            {(bilan.r1_semaine || bilan.r2_semaine) && (
-              <section>
-                <h2>05 — Tes rendez-vous cette semaine</h2>
-                <div className="cols">
-                  {bilan.r1_semaine && <div className="rdv r1"><p className="rl">Tes R1</p><p>{bilan.r1_semaine}</p></div>}
-                  {bilan.r2_semaine && <div className="rdv r2"><p className="rl">Tes R2</p><p>{bilan.r2_semaine}</p></div>}
-                </div>
-              </section>
-            )}
+            {/* Bloc « Tes rendez-vous cette semaine » supprimé (dev 2026-08-31). */}
 
-            {/* 06 — Ce que ta façon de vendre révèle */}
-            {bilan.comportemental && (
-              <section>
-                <h2>06 — Ce que ta façon de vendre révèle</h2>
-                <div className="psy">{bilan.comportemental}</div>
-              </section>
-            )}
+            {/* Bloc « Ce que ta façon de vendre révèle » déplacé au rapport direction (dev 2026-08-31). */}
 
-            {/* 07 — Ton plan pour la semaine */}
+            {/* 05 — Ton plan pour la semaine */}
             {(a.objectif || hasSteps) && (
               <section>
-                <h2>07 — Ton plan pour la semaine</h2>
+                <h2>05 — Ton plan pour la semaine</h2>
                 <div className="plan">
                   {a.objectif && <p className="obj">{a.objectif}</p>}
                   {a.pourquoi && <p className="why">{a.pourquoi}</p>}

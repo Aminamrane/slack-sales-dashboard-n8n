@@ -13,7 +13,8 @@
 //   stats  = [{ email, name, avatar, nb_r1, nb_r2, avg_r1, avg_r2, whisper }]
 //   period = "AAAA-Www"
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import apiClient from "../services/apiClient";
 
 const FONT_ID = "owner-scorecard-fonts";
 const FONT_HREF = "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap";
@@ -153,6 +154,20 @@ function AlertBlocks({ items, tone }) {
 }
 
 export default function TeamReportView({ report, stats, period }) {
+  // « Ce que leur façon de vendre révèle » : bloc retiré du bilan hebdo de
+  // chaque sales et exposé ICI, replié — un clic par sales pour le révéler.
+  const [comportemental, setComportemental] = useState(null);
+  const [openSales, setOpenSales] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    setComportemental(null); setOpenSales(null);
+    if (!period) return;
+    apiClient.get(`/api/v1/recordings/team-comportemental?period=${period}`)
+      .then((d) => { if (alive && d?.items) setComportemental(d.items); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [period]);
+
   useEffect(() => {
     if (document.getElementById(FONT_ID)) return;
     const l = document.createElement("link");
@@ -314,6 +329,26 @@ export default function TeamReportView({ report, stats, period }) {
                     </div>
                   ))}
                 </div>
+              </section>
+            ) : null}
+
+            {/* Ce que leur façon de vendre révèle — replié par sales */}
+            {comportemental?.length ? (
+              <section>
+                <h2>{num()} — Ce que leur façon de vendre révèle</h2>
+                <p className="lead" style={{ fontSize: 13, opacity: 0.75 }}>Cliquez sur un sales pour révéler l'analyse.</p>
+                {comportemental.map((c) => (
+                  <div key={c.scope} style={{ borderBottom: "1px solid rgba(74,82,89,0.15)" }}>
+                    <button type="button" onClick={() => setOpenSales(openSales === c.scope ? null : c.scope)}
+                      style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "10px 2px", background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 14.5, fontWeight: 600, color: "inherit", textAlign: "left" }}>
+                      <span style={{ display: "inline-block", transform: openSales === c.scope ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>▸</span>
+                      {c.sales || c.scope}
+                    </button>
+                    {openSales === c.scope && (
+                      <div className="psy" style={{ margin: "0 0 12px 20px", whiteSpace: "pre-wrap" }}>{c.comportemental}</div>
+                    )}
+                  </div>
+                ))}
               </section>
             ) : null}
           </div>
