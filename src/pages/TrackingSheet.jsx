@@ -2797,7 +2797,7 @@ export default function TrackingSheet() {
             {/* Nav items */}
             {[
               { key: 'leads', label: 'Mes leads', iconSrc: iconMyLead, accent: C.accent, keepColor: true },
-              { key: 'common_pool', label: 'Barrage répondeur commun', accent: '#06b6d4', iconNode: (active) => (
+              { key: 'common_pool', label: 'Barrage répondeur', accent: '#06b6d4', iconNode: (active) => (
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
               ) },
               { key: 'calendar', label: 'Calendrier', iconSrc: iconCalendrier, accent: '#3b82f6' },
@@ -3081,17 +3081,9 @@ export default function TrackingSheet() {
             : commonVoicemailLeads;
           return (
             <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px 48px', animation: 'tabFadeIn 0.3s ease-out both' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#06b6d4', flexShrink: 0 }} />
                 <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: 0, letterSpacing: '-0.01em' }}>Barrage répondeur commun</h2>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#0e8fa8', background: darkMode ? 'rgba(6,182,212,0.16)' : '#e6f9fc', borderRadius: 20, padding: '2px 10px' }}>{commonPoolTotal}</span>
-              </div>
-              <p style={{ fontSize: 13.5, color: C.muted, margin: '0 0 18px', maxWidth: 660, lineHeight: 1.5 }}>
-                Répondeurs anciens (2 mois+, hors mois en cours et précédent), communs à tous les sales. Clique « Prendre » pour t'en attribuer un : il passe dans tes « Nouveaux leads » avec le badge « issu des répondeurs ».
-              </p>
-              <div style={{ marginBottom: 14, maxWidth: 380 }}>
-                <input type="text" value={commonPoolSearch} onChange={(e) => setCommonPoolSearch(e.target.value)} placeholder="Rechercher (nom, société, téléphone)…"
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: darkMode ? 'rgba(255,255,255,0.04)' : '#fff', color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
               </div>
               <CommonVoicemailPool
                 leads={shown}
