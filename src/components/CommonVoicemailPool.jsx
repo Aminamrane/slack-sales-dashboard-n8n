@@ -1,141 +1,267 @@
 // src/components/CommonVoicemailPool.jsx
 //
-// Onglet "Répondeur commun" du tracking sheet sales : liste le pool COMMUN des
-// répondeurs anciens (statut Répondeur, dernier appel avant le début du mois
-// dernier), récupérés via GET /api/v1/tracking/common-voicemail-pool. Chaque
-// carte a un bouton "Prendre" (POST .../claim-common-voicemail) = prise
-// exclusive → le lead bascule dans "Nouveau lead" du sales, badge "issu des
-// répondeurs". Composant isolé pour ne toucher TrackingSheet.jsx (zone sacrée)
-// qu'au strict minimum.
+// « Barrage répondeur commun » — les DEUX pools du chantier réactivité :
+//   · Pool RÉACTIVITÉ : leads chauds jamais appelés (SLA raté). Premier arrivé,
+//     premier servi : « Je le prends » suffit, puis 3 jours pour poser un RDV.
+//   · Pool TRAITEMENT : leads à J+3 sans RDV + ancien pool 2 mois. VERROUILLÉ :
+//     récupérable uniquement en positionnant un R1 (le barrage anti « je prends
+//     d'abord, j'appelle après »). Compteur d'appels PARTAGÉ + date du dernier
+//     appel pour éviter le gérant harcelé.
+// Auto-alimenté via GET /tracking/pools (les props legacy leads/claimingId/
+// onClaim sont acceptées mais ignorées : TrackingSheet reste intact).
+
+import { useEffect, useMemo, useState } from "react";
+import apiClient from "../services/apiClient";
 
 const ORIGIN_TONE = { bg: "rgba(100,116,139,0.12)", text: "#64748b" };
 
 const fmtAge = (iso) => {
   if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d)) return null;
-  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
-  if (days < 1) return "aujourd'hui";
-  if (days < 30) return `il y a ${days} j`;
-  const months = Math.floor(days / 30);
-  return `il y a ${months} mois`;
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 90) return "à l'instant";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `il y a ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 48) return `il y a ${h} h`;
+  const d = Math.floor(h / 24);
+  if (d < 60) return `il y a ${d} j`;
+  return `il y a ${Math.floor(d / 30)} mois`;
 };
+// Valeurs slugifiées selon le canal (« 3_-_5 », « entre_100_000_€… ») -> lisible.
+const clean = (v) => (v ? String(v).replace(/_/g, " ").replace(/\s+/g, " ").trim() : null);
+const fmtDate = (v) => { const m = String(v || "").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : null; };
+
+// Ligne d'infos qualifiantes (mêmes données que le lead détail).
+function InfoLine({ lead, C }) {
+  const bits = [
+    lead.email || null,
+    clean(lead.headcount || lead.employee_range) ? `${clean(lead.headcount || lead.employee_range)} salariés` : null,
+    clean(lead.revenue) ? `CA ${clean(lead.revenue)}` : null,
+    clean(lead.sector) || null,
+    lead.siren ? `SIREN ${lead.siren}` : null,
+    fmtDate(lead.created_at) ? `entré le ${fmtDate(lead.created_at)}` : null,
+  ].filter(Boolean);
+  if (!bits.length) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 10px", marginTop: 6, paddingLeft: 18, fontSize: 11.5, color: C.muted }}>
+      {bits.map((b, i) => (
+        <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+          {i > 0 && <span style={{ opacity: 0.4 }}>·</span>}{b}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// Compteur d'appels PARTAGÉ du pool (« appelé 5 fois, la dernière il y a 2 h »).
+function PoolCallsBadge({ lead, C, darkMode }) {
+  const n = lead.pool_calls || 0;
+  if (!n) return <span style={{ fontSize: 11, color: C.muted, whiteSpace: "nowrap" }}>jamais appelé depuis le pool</span>;
+  const hot = n >= 6;
+  return (
+    <span title="Appels passés par l'équipe depuis le pool" style={{
+      fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", padding: "2px 9px", borderRadius: 20,
+      color: hot ? "#b42318" : "#b45309",
+      background: hot ? (darkMode ? "rgba(180,35,24,0.16)" : "#fdecea") : (darkMode ? "rgba(180,83,9,0.16)" : "#fff3e3"),
+    }}>
+      {n} appel{n > 1 ? "s" : ""} pool{lead.pool_last_call_at ? ` · ${fmtAge(lead.pool_last_call_at)}` : ""}
+    </span>
+  );
+}
 
 export default function CommonVoicemailPool({ leads = [], loading = false, claimingId = null, onClaim, canClaim = true, C, darkMode }) {
-  if (loading && leads.length === 0) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} style={{ height: 56, borderRadius: 14, background: darkMode ? "rgba(255,255,255,0.04)" : "#f4f5f7", opacity: 1 - i * 0.15 }} />
-        ))}
-      </div>
-    );
-  }
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+  const [busyId, setBusyId] = useState(null);      // claim en cours
+  const [calledFlash, setCalledFlash] = useState({}); // feedback bouton « j'ai appelé »
+  const [rdvFor, setRdvFor] = useState(null);      // lead_id du mini-formulaire RDV ouvert
+  const [rdvDate, setRdvDate] = useState("");
+  const [claimedMsg, setClaimedMsg] = useState(null);
+  const [q, setQ] = useState("");
 
-  if (leads.length === 0) {
-    return (
-      <div style={{ padding: "40px 20px", textAlign: "center", color: C.muted }}>
-        <div style={{ fontSize: 30, marginBottom: 8, opacity: 0.5 }}>📞</div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 4 }}>Aucun répondeur commun disponible</div>
-        <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5, maxWidth: 420, margin: "0 auto" }}>
-          Les répondeurs deviennent communs après 2 mois (hors mois en cours et précédent). Le premier qui clique « Prendre » se l'attribue.
-        </div>
-      </div>
-    );
+  const fetchPools = async () => {
+    try {
+      const d = await apiClient.get("/api/v1/tracking/pools");
+      if (d && d.reactivite) { setData(d); setErr(null); }
+    } catch (e) { setErr("Impossible de charger les pools."); }
+  };
+  useEffect(() => {
+    fetchPools();
+    const t = setInterval(fetchPools, 60000);
+    return () => clearInterval(t);
+  }, []);
+
+  const filter = (list) => {
+    const ql = q.trim().toLowerCase();
+    if (!ql) return list;
+    return list.filter((l) => `${l.full_name || ""} ${l.company_name || ""} ${l.phone || ""}`.toLowerCase().includes(ql));
+  };
+  const rea = useMemo(() => filter(data?.reactivite || []), [data, q]);
+  const trt = useMemo(() => filter(data?.traitement || []), [data, q]);
+
+  const claimRea = async (id) => {
+    setBusyId(id);
+    try {
+      await apiClient.post(`/api/v1/tracking/pools/reactivite/${id}/claim`);
+      setClaimedMsg("Lead récupéré — appelez-le maintenant, il est dans vos leads (3 jours pour poser un RDV).");
+      fetchPools();
+    } catch (e) {
+      setClaimedMsg(e?.message?.includes("409") || e?.status === 409 ? "Trop tard — quelqu'un vient de le prendre." : "Récupération impossible.");
+      fetchPools();
+    } finally { setBusyId(null); setTimeout(() => setClaimedMsg(null), 5000); }
+  };
+
+  const claimTrt = async (id) => {
+    if (!rdvDate) return;
+    setBusyId(id);
+    try {
+      await apiClient.post(`/api/v1/tracking/pools/traitement/${id}/claim`, { r1_date: rdvDate });
+      setClaimedMsg("Lead récupéré avec son RDV — il est dans vos R1 placés.");
+      setRdvFor(null); setRdvDate("");
+      fetchPools();
+    } catch (e) {
+      const detail = e?.detail || e?.message || "";
+      setClaimedMsg(String(detail).includes("futur") ? "Le RDV doit être dans le futur." : "Trop tard — quelqu'un vient de le prendre.");
+      fetchPools();
+    } finally { setBusyId(null); setTimeout(() => setClaimedMsg(null), 5000); }
+  };
+
+  const markCalled = async (id) => {
+    try {
+      const r = await apiClient.post(`/api/v1/tracking/pools/${id}/called`);
+      setCalledFlash((p) => ({ ...p, [id]: true }));
+      setTimeout(() => setCalledFlash((p) => ({ ...p, [id]: false })), 1800);
+      setData((d) => !d ? d : {
+        ...d,
+        traitement: d.traitement.map((l) => l.id === id ? { ...l, pool_calls: r.pool_calls, pool_last_call_at: r.pool_last_call_at } : l),
+        reactivite: d.reactivite.map((l) => l.id === id ? { ...l, pool_calls: r.pool_calls, pool_last_call_at: r.pool_last_call_at } : l),
+      });
+    } catch {}
+  };
+
+  const card = (extra = {}) => ({
+    borderRadius: 14, border: `1px solid ${C.border}`,
+    background: darkMode ? "rgba(255,255,255,0.03)" : "#fff", ...extra,
+  });
+
+  if (!data && !err) {
+    return <div style={{ padding: 32, textAlign: "center", color: C.muted, fontSize: 13 }}>Chargement des pools…</div>;
+  }
+  if (err) {
+    return <div style={{ padding: 32, textAlign: "center", color: "#b42318", fontSize: 13 }}>{err}</div>;
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      {leads.map((lead) => {
-        const claiming = String(claimingId) === String(lead.id);
-        const age = fmtAge(lead.last_call_at || lead.created_at);
-        return (
-          <div key={lead.id} style={{
-            padding: "11px 16px",
-            borderRadius: 14, border: `1px solid ${C.border}`,
-            background: darkMode ? "rgba(255,255,255,0.03)" : "#fff",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#64748b", flexShrink: 0 }} />
-            <span style={{ fontSize: 14, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 60, flexShrink: 1 }}>
-              {lead.full_name || lead.company_name || lead.company || "Sans nom"}
-            </span>
-            {lead.origin && (
-              <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 50, fontSize: 10, fontWeight: 600, background: ORIGIN_TONE.bg, color: ORIGIN_TONE.text, flexShrink: 0 }}>
-                {lead.origin}
-              </span>
-            )}
-            {(lead.company_name || lead.company) && (lead.full_name) && (
-              <span style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 1, minWidth: 0 }}>
-                {lead.company_name || lead.company}
-              </span>
-            )}
-            {lead.phone && (
-              <span style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap", flexShrink: 0 }}>{lead.phone}</span>
-            )}
-            <div style={{ flex: 1 }} />
-            {(() => {
-              // Compteur d'appels ; si une trace d'appel existe mais compteur à 0, au moins 1.
-              const nc = Math.max(
-                lead.call_attempts || 0, lead.sales_call_count || 0, lead.setter_call_count || 0,
-                (lead.last_call_at || lead.first_call_at) ? 1 : 0,
-              );
-              return (
-                <span title="Nombre d'appels déjà passés à ce lead par le sales propriétaire" style={{
-                  fontSize: 11, fontWeight: 700, flexShrink: 0, whiteSpace: "nowrap",
-                  color: nc > 0 ? "#b45309" : C.muted,
-                  background: nc > 0 ? (darkMode ? "rgba(180,83,9,0.16)" : "#fff3e3") : "transparent",
-                  borderRadius: 20, padding: nc > 0 ? "2px 9px" : 0,
-                }}>{nc} appel{nc > 1 ? "s" : ""}</span>
-              );
-            })()}
-            {age && (
-              <span title="Dernier appel" style={{ fontSize: 11, color: C.muted, whiteSpace: "nowrap", flexShrink: 0 }}>répondeur {age}</span>
-            )}
-            {canClaim && (
-              <button
-                onClick={() => onClaim && onClaim(lead.id)}
-                disabled={claiming}
-                style={{
-                  flexShrink: 0, padding: "6px 16px", borderRadius: 9, border: "none",
-                  background: claiming ? C.muted : "#0891b2", color: "#fff",
-                  fontSize: 12.5, fontWeight: 700, cursor: claiming ? "wait" : "pointer",
-                  fontFamily: "inherit", transition: "opacity 0.15s", opacity: claiming ? 0.7 : 1,
-                }}
-              >
-                {claiming ? "…" : "Prendre"}
-              </button>
-            )}
-            </div>
-            {(() => {
-              // Infos qualifiantes : le sales doit pouvoir juger le lead sans
-              // avoir à le prendre d'abord (demande dev 2026-08-27).
-              const fmtDate = (v) => { const m = String(v || "").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : null; };
-              // Selon le canal d'acquisition, effectif/CA arrivent slugifiés
-              // (« 3_-_5 », « entre_100_000_€_et_500_000_€ ») : on les rend lisibles.
-              const clean = (v) => (v ? String(v).replace(/_/g, " ").replace(/\s+/g, " ").trim() : null);
-              const bits = [
-                lead.email || null,
-                clean(lead.headcount || lead.employee_range) ? `${clean(lead.headcount || lead.employee_range)} salariés` : null,
-                clean(lead.revenue) ? `CA ${clean(lead.revenue)}` : null,
-                clean(lead.sector) || null,
-                lead.siren ? `SIREN ${lead.siren}` : null,
-                fmtDate(lead.created_at) ? `entré le ${fmtDate(lead.created_at)}` : null,
-              ].filter(Boolean);
-              if (!bits.length) return null;
-              return (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 10px", marginTop: 6, paddingLeft: 18, fontSize: 11.5, color: C.muted }}>
-                  {bits.map((b, i) => (
-                    <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
-                      {i > 0 && <span style={{ opacity: 0.4 }}>·</span>}{b}
-                    </span>
-                  ))}
-                </div>
-              );
-            })()}
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      {claimedMsg && (
+        <div style={{ padding: "10px 16px", borderRadius: 10, background: darkMode ? "rgba(62,125,90,0.18)" : "#e7f0eb", color: "#3e7d5a", fontSize: 12.5, fontWeight: 650 }}>
+          {claimedMsg}
+        </div>
+      )}
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher (nom, société, téléphone)…"
+        style={{ padding: "10px 14px", borderRadius: 10, border: `1px solid ${C.border}`, background: darkMode ? "rgba(255,255,255,0.04)" : "#fff", color: C.text, fontSize: 13, fontFamily: "inherit", outline: "none", maxWidth: 420 }} />
+
+      {/* ── POOL RÉACTIVITÉ ── */}
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444" }} />
+          <span style={{ fontSize: 14, fontWeight: 750, color: C.text }}>Pool réactivité</span>
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: "#ef4444", background: darkMode ? "rgba(239,68,68,0.14)" : "#fdecea", padding: "1px 8px", borderRadius: 10 }}>{rea.length}</span>
+        </div>
+        <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 10 }}>
+          Leads chauds jamais appelés. Premier arrivé, premier servi : « Je le prends », vous l'appelez tout de suite, il est à vous 3 jours pour poser un RDV.
+        </div>
+        {rea.length === 0 ? (
+          <div style={{ ...card({ padding: "14px 16px" }), color: C.muted, fontSize: 12.5 }}>
+            Aucun lead en attente de premier appel — c'est bon signe.
           </div>
-        );
-      })}
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {rea.map((lead) => (
+              <div key={lead.id} style={card({ padding: "11px 16px", borderColor: darkMode ? "rgba(239,68,68,0.4)" : "#f3c1bd" })}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", flexShrink: 0 }} />
+                  <span style={{ fontSize: 14, fontWeight: 650, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {lead.full_name || lead.company_name || "Sans nom"}
+                  </span>
+                  {lead.origin && <span style={{ padding: "2px 8px", borderRadius: 50, fontSize: 10, fontWeight: 600, background: ORIGIN_TONE.bg, color: ORIGIN_TONE.text, flexShrink: 0 }}>{lead.origin}</span>}
+                  {lead.phone && <span style={{ fontSize: 12.5, fontWeight: 650, color: C.text, whiteSpace: "nowrap" }}>{lead.phone}</span>}
+                  <div style={{ flex: 1 }} />
+                  {lead.pool_entered_at && (
+                    <span style={{ fontSize: 11, color: "#ef4444", fontWeight: 700, whiteSpace: "nowrap" }}>arrivé {fmtAge(lead.pool_entered_at)}</span>
+                  )}
+                  {canClaim && (
+                    <button onClick={() => claimRea(lead.id)} disabled={busyId === lead.id}
+                      style={{ flexShrink: 0, padding: "7px 16px", borderRadius: 9, border: "none", background: busyId === lead.id ? C.muted : "#3e7d5a", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: busyId === lead.id ? "wait" : "pointer", fontFamily: "inherit" }}>
+                      {busyId === lead.id ? "…" : "📞 Je le prends"}
+                    </button>
+                  )}
+                </div>
+                <InfoLine lead={lead} C={C} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── POOL TRAITEMENT ── */}
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#0891b2" }} />
+          <span style={{ fontSize: 14, fontWeight: 750, color: C.text }}>Pool traitement</span>
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: "#0891b2", background: darkMode ? "rgba(8,145,178,0.14)" : "#e0f2f7", padding: "1px 8px", borderRadius: 10 }}>{trt.length}</span>
+        </div>
+        <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 10 }}>
+          Récupérable <b>uniquement en positionnant un R1</b>. Passez un max d'appels (« J'ai appelé » alimente le compteur partagé), et dès que vous avez le gérant : posez le RDV, le lead est à vous.
+        </div>
+        {trt.length === 0 ? (
+          <div style={{ ...card({ padding: "14px 16px" }), color: C.muted, fontSize: 12.5 }}>Pool vide.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {trt.map((lead) => (
+              <div key={lead.id} style={card({ padding: "11px 16px" })}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#64748b", flexShrink: 0 }} />
+                  <span style={{ fontSize: 14, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 60, flexShrink: 1 }}>
+                    {lead.full_name || lead.company_name || "Sans nom"}
+                  </span>
+                  {lead.origin && <span style={{ padding: "2px 8px", borderRadius: 50, fontSize: 10, fontWeight: 600, background: ORIGIN_TONE.bg, color: ORIGIN_TONE.text, flexShrink: 0 }}>{lead.origin}</span>}
+                  {(lead.company_name && lead.full_name) && (
+                    <span style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 1, minWidth: 0 }}>{lead.company_name}</span>
+                  )}
+                  {lead.phone && <span style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap", flexShrink: 0 }}>{lead.phone}</span>}
+                  <div style={{ flex: 1 }} />
+                  <PoolCallsBadge lead={lead} C={C} darkMode={darkMode} />
+                  {canClaim && (
+                    <>
+                      <button onClick={() => markCalled(lead.id)}
+                        style={{ flexShrink: 0, padding: "6px 12px", borderRadius: 9, border: `1px solid ${C.border}`, background: calledFlash[lead.id] ? "#3e7d5a" : "transparent", color: calledFlash[lead.id] ? "#fff" : C.text, fontSize: 12, fontWeight: 650, cursor: "pointer", fontFamily: "inherit", transition: "background 0.2s, color 0.2s" }}>
+                        {calledFlash[lead.id] ? "Noté ✓" : "J'ai appelé"}
+                      </button>
+                      <button onClick={() => { setRdvFor(rdvFor === lead.id ? null : lead.id); setRdvDate(""); }}
+                        style={{ flexShrink: 0, padding: "6px 14px", borderRadius: 9, border: "none", background: "#0891b2", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                        Prendre avec un RDV
+                      </button>
+                    </>
+                  )}
+                </div>
+                {rdvFor === lead.id && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingLeft: 18 }}>
+                    <span style={{ fontSize: 12, color: C.muted }}>R1 le</span>
+                    <input type="datetime-local" value={rdvDate} onChange={(e) => setRdvDate(e.target.value)}
+                      style={{ padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: darkMode ? "rgba(255,255,255,0.04)" : "#fff", color: C.text, fontSize: 12.5, fontFamily: "inherit" }} />
+                    <button onClick={() => claimTrt(lead.id)} disabled={!rdvDate || busyId === lead.id}
+                      style={{ padding: "7px 14px", borderRadius: 8, border: "none", background: !rdvDate ? C.muted : "#3e7d5a", color: "#fff", fontSize: 12, fontWeight: 700, cursor: !rdvDate ? "default" : "pointer", fontFamily: "inherit" }}>
+                      {busyId === lead.id ? "…" : "Confirmer le RDV et récupérer"}
+                    </button>
+                  </div>
+                )}
+                <InfoLine lead={lead} C={C} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
