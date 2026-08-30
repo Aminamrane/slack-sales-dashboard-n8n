@@ -57,6 +57,7 @@ import Variables from "./pages/Variables.jsx";
 import OptilexRdvMonitoring from "./pages/OptilexRdvMonitoring.jsx";
 import WorkHours from "./pages/WorkHours.jsx";
 import CeoWorkHoursView from "./pages/CeoWorkHoursView.jsx";
+import ReactivityMonitor from "./pages/ReactivityMonitor.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import MouseDot from "./components/MouseDot.jsx";
@@ -233,6 +234,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['admin', 'ceo', 'hr']}>
               <CeoWorkHoursView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reactivity-monitor"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <ReactivityMonitor />
             </ProtectedRoute>
           }
         />
