@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import apiClient from "../services/apiClient";
@@ -100,6 +101,91 @@ if (typeof document !== 'undefined' && !document.getElementById(NOTIF_STYLES_ID)
     }
   `;
   document.head.appendChild(style);
+}
+
+// ── Statut dispo/indispo sales (chantier réactivité 2026-08-30) ──────────────
+// Badge type Slack + popup « Êtes-vous disponible ? ». Visible uniquement pour
+// les utilisateurs du pool d'auto-affectation (show). Le retour en disponible
+// est MANUEL (décision réunion) ; un « non » au popup vaut silence 1 h.
+function AvailabilityControl({ darkMode }) {
+  const [st, setSt] = useState(null);
+  const pollRef = useRef(null);
+  useEffect(() => {
+    const fetchSt = async () => {
+      try {
+        if (!apiClient.getToken()) return;
+        const d = await apiClient.get('/api/v1/tracking/availability/me');
+        if (d && typeof d.show !== 'undefined') setSt(d);
+      } catch {}
+    };
+    fetchSt();
+    pollRef.current = setInterval(fetchSt, 30000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
+  const setAvail = async (available) => {
+    try {
+      await apiClient.post('/api/v1/tracking/availability', { available });
+      setSt(s => (s ? { ...s, available, needs_prompt: false } : s));
+    } catch {}
+  };
+  if (!st || !st.show) return null;
+  const on = !!st.available;
+  const green = '#22c55e', red = '#ef4444';
+  return (
+    <>
+      <button
+        onClick={() => setAvail(!on)}
+        title={on ? "Vous recevez des leads — cliquer pour passer indisponible" : "Auto-affectation en pause — cliquer pour repasser disponible"}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 7,
+          padding: '8px 12px', height: 52, marginLeft: 8,
+          borderRadius: 16,
+          border: `1px solid ${darkMode ? 'rgba(42,43,54,0.6)' : 'rgba(226,230,239,0.6)'}`,
+          background: darkMode ? 'rgba(30,31,40,0.45)' : 'rgba(255,255,255,0.40)',
+          backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+          boxShadow: darkMode ? '0 4px 20px rgba(0,0,0,0.3)' : '0 4px 20px rgba(0,0,0,0.06)',
+          cursor: 'pointer', fontFamily: 'inherit', pointerEvents: 'auto',
+          transition: 'background 0.15s',
+        }}
+        onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(30,31,40,0.65)' : 'rgba(255,255,255,0.65)'}
+        onMouseLeave={(e) => e.currentTarget.style.background = darkMode ? 'rgba(30,31,40,0.45)' : 'rgba(255,255,255,0.40)'}
+      >
+        <span style={{ position: 'relative', width: 10, height: 10, flexShrink: 0 }}>
+          <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: on ? green : red }} />
+          {on && <span style={{ position: 'absolute', inset: -3, borderRadius: '50%', border: `1.5px solid ${green}`, opacity: 0.5, animation: 'availPulse 2.2s ease-out infinite' }} />}
+        </span>
+        <span style={{ fontSize: 12.5, fontWeight: 650, color: darkMode ? '#e5e7ef' : '#1e2330', whiteSpace: 'nowrap' }}>
+          {on ? 'Dispo' : 'Indispo'}
+        </span>
+      </button>
+      {st.needs_prompt && createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 12000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(17,24,39,0.45)', backdropFilter: 'blur(3px)', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+          <div style={{ background: darkMode ? '#1e1f28' : '#fff', borderRadius: 18, padding: '28px 30px 24px', width: 380, maxWidth: '90vw', boxShadow: '0 24px 60px rgba(17,24,39,0.35)', textAlign: 'center', animation: 'availPromptIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both' }}>
+            <div style={{ width: 46, height: 46, borderRadius: '50%', background: 'rgba(239,68,68,0.12)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+              <span style={{ width: 14, height: 14, borderRadius: '50%', background: red }} />
+            </div>
+            <div style={{ fontSize: 16.5, fontWeight: 750, color: darkMode ? '#e5e7ef' : '#121b35', marginBottom: 6 }}>Êtes-vous disponible ?</div>
+            <div style={{ fontSize: 13, color: darkMode ? '#9aa2b5' : '#6b7482', lineHeight: 1.55, marginBottom: 18 }}>
+              L'auto-affectation est en pause pour vous : vous ne recevez plus de leads tant que vous êtes indisponible.
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setAvail(true)}
+                style={{ padding: '10px 20px', borderRadius: 12, border: 'none', background: '#3e7d5a', color: '#fff', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Oui, je suis dispo
+              </button>
+              <button onClick={() => setAvail(false)}
+                style={{ padding: '10px 20px', borderRadius: 12, border: `1px solid ${darkMode ? '#2a2b36' : '#e2e6ef'}`, background: 'transparent', color: darkMode ? '#9aa2b5' : '#6b7482', fontSize: 13.5, fontWeight: 650, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Non, pas encore
+              </button>
+            </div>
+          </div>
+          <style>{`@keyframes availPromptIn{from{opacity:0;transform:scale(0.92) translateY(10px)}to{opacity:1;transform:none}}`}</style>
+        </div>,
+        document.body
+      )}
+      <style>{`@keyframes availPulse{0%{transform:scale(0.7);opacity:0.6}80%{transform:scale(1.5);opacity:0}100%{opacity:0}}`}</style>
+    </>
+  );
 }
 
 export default function SharedNavbar({ session, darkMode, setDarkMode, notification, hideDarkToggle, centerShift = 0 }) {
@@ -1102,6 +1188,9 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
           </>
         )}
       </div>
+
+      {/* ── STATUT DISPO/INDISPO (chantier réactivité) ── */}
+      {!collapsed && <AvailabilityControl darkMode={darkMode} />}
 
       {/* ── NOTIFICATION ISLAND (visible only when navbar is expanded) ── */}
       {unreadCount > 0 && !collapsed && (
