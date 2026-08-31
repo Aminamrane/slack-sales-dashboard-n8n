@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import apiClient from "../services/apiClient";
@@ -104,9 +103,10 @@ if (typeof document !== 'undefined' && !document.getElementById(NOTIF_STYLES_ID)
 }
 
 // ── Statut dispo/indispo sales (chantier réactivité 2026-08-30) ──────────────
-// Badge type Slack + popup « Êtes-vous disponible ? ». Visible uniquement pour
-// les utilisateurs du pool d'auto-affectation (show). Le retour en disponible
-// est MANUEL (décision réunion) ; un « non » au popup vaut silence 1 h.
+// Badge type Slack, visible uniquement pour les utilisateurs du pool
+// d'auto-affectation (show). Le retour en disponible est MANUEL : le sales
+// clique son badge, ici ou dans sa tracking sheet. Pas de fenêtre modale — la
+// version popup se rouvrait toute seule à chaque rafraîchissement (31/08).
 function AvailabilityControl({ darkMode }) {
   const [st, setSt] = useState(null);
   const pollRef = useRef(null);
@@ -158,31 +158,6 @@ function AvailabilityControl({ darkMode }) {
           {on ? 'Dispo' : 'Indispo'}
         </span>
       </button>
-      {st.needs_prompt && createPortal(
-        <div style={{ position: 'fixed', inset: 0, zIndex: 12000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(17,24,39,0.45)', backdropFilter: 'blur(3px)', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
-          <div style={{ background: darkMode ? '#1e1f28' : '#fff', borderRadius: 18, padding: '28px 30px 24px', width: 380, maxWidth: '90vw', boxShadow: '0 24px 60px rgba(17,24,39,0.35)', textAlign: 'center', animation: 'availPromptIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both' }}>
-            <div style={{ width: 46, height: 46, borderRadius: '50%', background: 'rgba(239,68,68,0.12)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-              <span style={{ width: 14, height: 14, borderRadius: '50%', background: red }} />
-            </div>
-            <div style={{ fontSize: 16.5, fontWeight: 750, color: darkMode ? '#e5e7ef' : '#121b35', marginBottom: 6 }}>Êtes-vous disponible ?</div>
-            <div style={{ fontSize: 13, color: darkMode ? '#9aa2b5' : '#6b7482', lineHeight: 1.55, marginBottom: 18 }}>
-              L'auto-affectation est en pause pour vous : vous ne recevez plus de leads tant que vous êtes indisponible.
-            </div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-              <button onClick={() => setAvail(true)}
-                style={{ padding: '10px 20px', borderRadius: 12, border: 'none', background: '#3e7d5a', color: '#fff', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                Oui, je suis dispo
-              </button>
-              <button onClick={() => setAvail(false)}
-                style={{ padding: '10px 20px', borderRadius: 12, border: `1px solid ${darkMode ? '#2a2b36' : '#e2e6ef'}`, background: 'transparent', color: darkMode ? '#9aa2b5' : '#6b7482', fontSize: 13.5, fontWeight: 650, cursor: 'pointer', fontFamily: 'inherit' }}>
-                Non, pas encore
-              </button>
-            </div>
-          </div>
-          <style>{`@keyframes availPromptIn{from{opacity:0;transform:scale(0.92) translateY(10px)}to{opacity:1;transform:none}}`}</style>
-        </div>,
-        document.body
-      )}
       <style>{`@keyframes availPulse{0%{transform:scale(0.7);opacity:0.6}80%{transform:scale(1.5);opacity:0}100%{opacity:0}}`}</style>
     </>
   );
