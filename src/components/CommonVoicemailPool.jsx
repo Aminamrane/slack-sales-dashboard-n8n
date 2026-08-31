@@ -128,6 +128,21 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
     } finally { setBusyId(null); setTimeout(() => setClaimedMsg(null), 5000); }
   };
 
+  // Le prospect a demandé à ne plus être contacté : on le sort du pool et on
+  // l'archive, pour qu'aucun autre sales ne le rappelle après son refus.
+  const optOut = async (id, name) => {
+    if (!window.confirm(`Retirer ${name || "ce lead"} du pool commun ?\n\nÀ utiliser quand la personne a dit qu'elle ne souhaite pas être rappelée : le lead est archivé et personne ne le rappellera.`)) return;
+    setBusyId(id);
+    try {
+      await apiClient.post(`/api/v1/tracking/pools/${id}/opt-out`);
+      setClaimedMsg("Lead retiré du pool et archivé — il ne sera plus rappelé.");
+      fetchPools();
+    } catch {
+      setClaimedMsg("Retrait impossible — le lead n'est peut-être plus dans le pool.");
+      fetchPools();
+    } finally { setBusyId(null); setTimeout(() => setClaimedMsg(null), 5000); }
+  };
+
   const markCalled = async (id) => {
     try {
       const r = await apiClient.post(`/api/v1/tracking/pools/${id}/called`);
@@ -211,6 +226,13 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                     <span style={{ fontSize: 11, color: "#ef4444", fontWeight: 700, whiteSpace: "nowrap" }}>arrivé {fmtAge(lead.pool_entered_at)}</span>
                   )}
                   {canClaim && (
+                    <button onClick={() => optOut(lead.id, lead.full_name)} disabled={busyId === lead.id}
+                      title="La personne ne souhaite pas être rappelée : retirer du pool et archiver"
+                      style={{ flexShrink: 0, padding: "6px 11px", borderRadius: 9, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                      Ne pas rappeler
+                    </button>
+                  )}
+                  {canClaim && (
                     <button onClick={() => claimRea(lead.id)} disabled={busyId === lead.id}
                       style={{ flexShrink: 0, padding: "7px 16px", borderRadius: 9, border: "none", background: busyId === lead.id ? C.muted : "#3e7d5a", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: busyId === lead.id ? "wait" : "pointer", fontFamily: "inherit" }}>
                       {busyId === lead.id ? "…" : "📞 Je le prends"}
@@ -252,6 +274,11 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                       <button onClick={() => markCalled(lead.id)}
                         style={{ flexShrink: 0, padding: "6px 12px", borderRadius: 9, border: `1px solid ${C.border}`, background: calledFlash[lead.id] ? "#3e7d5a" : "transparent", color: calledFlash[lead.id] ? "#fff" : C.text, fontSize: 12, fontWeight: 650, cursor: "pointer", fontFamily: "inherit", transition: "background 0.2s, color 0.2s" }}>
                         {calledFlash[lead.id] ? "Noté ✓" : "J'ai appelé"}
+                      </button>
+                      <button onClick={() => optOut(lead.id, lead.full_name)} disabled={busyId === lead.id}
+                        title="La personne ne souhaite pas être rappelée : retirer du pool et archiver"
+                        style={{ flexShrink: 0, padding: "6px 11px", borderRadius: 9, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                        Ne pas rappeler
                       </button>
                       <button onClick={() => { setRdvFor(rdvFor === lead.id ? null : lead.id); setRdvDate(""); }}
                         style={{ flexShrink: 0, padding: "6px 14px", borderRadius: 9, border: "none", background: "#0891b2", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
