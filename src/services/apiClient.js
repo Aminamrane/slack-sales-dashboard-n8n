@@ -12,6 +12,7 @@ async function safeJson(res) {
 class ApiClient {
   constructor() {
     this.baseUrl = API_URL;
+    this._refreshPromise = null;
   }
 
   getToken() {
@@ -51,8 +52,21 @@ class ApiClient {
     localStorage.removeItem('permissions');
   }
 
-  // Tente de rafraîchir l'access token via le refresh token
-  async _refreshAccessToken() {
+  // Un SEUL refresh à la fois. Quand l'access token expire, toutes les requêtes
+  // en cours prennent 401 en même temps : sans ce verrou, chacune lançait sa
+  // propre rotation avec le même refresh token, le serveur révoquait l'ancien au
+  // premier passage et les suivantes tombaient en 401 → déconnexion et ressaisie
+  // du mot de passe (tous les matins, incident du 31/08). Elles attendent
+  // désormais la même promesse.
+  _refreshAccessToken() {
+    if (!this._refreshPromise) {
+      this._refreshPromise = this._doRefreshAccessToken()
+        .finally(() => { this._refreshPromise = null; });
+    }
+    return this._refreshPromise;
+  }
+
+  async _doRefreshAccessToken() {
     const refreshToken = localStorage.getItem(REFRESH_KEY);
     if (!refreshToken) return false;
 
