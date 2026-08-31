@@ -343,7 +343,7 @@ const DEFAULT_ORIGIN = { bg: "rgba(107,114,128,0.12)", text: "#6b7280" };
 // Affiché EN PERMANENCE dans la barre latérale : le sales voit son état et le
 // bascule d'un clic. Passer en indisponible coupe l'auto-affectation (aucun
 // nouveau lead) ; le retour en disponible est toujours manuel.
-function SidebarAvailability({ C, darkMode, collapsed }) {
+function SidebarAvailability({ C, darkMode, collapsed, targetEmail }) {
   const [st, setSt] = useState(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -351,21 +351,22 @@ function SidebarAvailability({ C, darkMode, collapsed }) {
     const fetchSt = async () => {
       try {
         if (!apiClient.getToken()) return;
-        const d = await apiClient.get('/api/v1/tracking/availability/me');
+        const qs = targetEmail ? `?email=${encodeURIComponent(targetEmail)}` : '';
+        const d = await apiClient.get(`/api/v1/tracking/availability/me${qs}`);
         if (alive && d && typeof d.show !== 'undefined') setSt(d);
       } catch {}
     };
     fetchSt();
     const t = setInterval(fetchSt, 30000);
     return () => { alive = false; clearInterval(t); };
-  }, []);
+  }, [targetEmail]);
   const toggle = async () => {
     if (!st || busy) return;
     const next = !st.available;
     if (!next && !window.confirm("Passer en indisponible ? Vous ne recevrez plus de nouveaux leads tant que vous ne serez pas repassé en disponible.")) return;
     setBusy(true);
     try {
-      await apiClient.post('/api/v1/tracking/availability', { available: next });
+      await apiClient.post('/api/v1/tracking/availability', targetEmail ? { available: next, email: targetEmail } : { available: next });
       setSt((s) => ({ ...s, available: next }));
     } catch {}
     setBusy(false);
@@ -395,7 +396,8 @@ function SidebarAvailability({ C, darkMode, collapsed }) {
             {on ? 'Disponible' : 'Indisponible'}
           </span>
           <span style={{ display: 'block', fontSize: 10, color: C.muted, whiteSpace: 'nowrap' }}>
-            {on ? 'je reçois les leads' : 'aucun lead ne m\'est envoyé'}
+            {st.self === false ? (on ? 'reçoit les leads' : 'ne reçoit aucun lead')
+              : (on ? 'je reçois les leads' : 'aucun lead ne m\'est envoyé')}
           </span>
         </span>
       )}
@@ -2857,7 +2859,7 @@ export default function TrackingSheet() {
                 </div>
                 {!sidebarCollapsed && <div style={{ fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>Owner</div>}
               </div>
-              <SidebarAvailability C={C} darkMode={darkMode} collapsed={sidebarCollapsed} />
+              <SidebarAvailability C={C} darkMode={darkMode} collapsed={sidebarCollapsed} targetEmail={viewingSheetId || undefined} />
             </div>
 
             {/* Nav items */}
