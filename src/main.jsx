@@ -16,6 +16,7 @@ import EODReport        from "./pages/EODReportV2.jsx"; // V2 — V1 kept as EOD
 import EODDashboard     from "./pages/EODDashboard.jsx";
 import Login            from "./pages/Login.jsx";
 import ForgotPassword   from "./pages/ForgotPassword.jsx";
+import BookingOnboarding from "./pages/BookingOnboarding.jsx";
 import ResetPassword    from "./pages/ResetPassword.jsx";
 import Profile          from "./pages/Profile.jsx";
 import Campaigns        from "./pages/Campaigns.jsx";
@@ -72,6 +73,8 @@ function App() {
         <Route path="/" element={<Leaderboard />} />
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        {/* Lien dedie (jeton dans l'URL) : reservation d'un onboarding chez Vincent */}
+        <Route path="/rdv-onboarding" element={<BookingOnboarding />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/admin/leads" element={<AdminLeads />} />
         <Route path="/leads-management" element={<LeadsManagement />} />
