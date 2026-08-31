@@ -69,6 +69,42 @@ function PoolCallsBadge({ lead, C, darkMode }) {
   );
 }
 
+// Mes propres appels sur ce lead : le compteur d'équipe ne dit pas si MOI je
+// l'ai déjà eu au téléphone, ni quand. C'est ce qui manquait pour ne pas
+// rappeler deux fois le même la même semaine.
+function MyCallsBadge({ lead, C, darkMode }) {
+  const n = lead.my_calls || 0;
+  if (!n) return null;
+  return (
+    <span title="Vos appels à vous sur ce lead" style={{
+      display: "inline-flex", alignItems: "center", gap: 5,
+      fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", padding: "2px 9px", borderRadius: 20,
+      color: "#1d4ed8",
+      background: darkMode ? "rgba(29,78,216,0.18)" : "#e8effd",
+    }}>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 6L9 17l-5-5" />
+      </svg>
+      vous : {n} appel{n > 1 ? "s" : ""}{lead.my_last_call_at ? ` · ${fmtAge(lead.my_last_call_at)}` : ""}
+    </span>
+  );
+}
+
+const MINE_FILTERS = [
+  {
+    key: "all", label: "Tous",
+    icon: <><path d="M3 6h18" /><path d="M3 12h18" /><path d="M3 18h18" /></>,
+  },
+  {
+    key: "mine", label: "Appelés par moi",
+    icon: <><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.4 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z" /><path d="M17 3.5l1.6 1.6L22 1.8" /></>,
+  },
+  {
+    key: "not_mine", label: "Jamais appelés par moi",
+    icon: <><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.4 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z" /><path d="M2 2l20 20" /></>,
+  },
+];
+
 export default function CommonVoicemailPool({ leads = [], loading = false, claimingId = null, onClaim, canClaim = true, C, darkMode }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
@@ -80,9 +116,13 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
   const [q, setQ] = useState("");
   // Un seul pool affiché à la fois : le sales choisit son mode de travail.
   const [pool, setPool] = useState("traitement");
+  // Filtre « mes appels » : appliqué à l'affichage, le tri global (dernier
+  // appel de l'équipe, du plus récent) reste celui du serveur.
+  const [mine, setMine] = useState("all");
   // Rendu progressif : tout est chargé, on affiche par tranches au scroll.
   const [shownCount, setShownCount] = useState(150);
-  useEffect(() => { setShownCount(150); }, [pool, q]);
+  useEffect(() => { setShownCount(150); }, [pool, q, mine]);
+  useEffect(() => { if (pool !== "traitement") setMine("all"); }, [pool]);
   useEffect(() => {
     const onScroll = () => {
       if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 900) {
@@ -112,8 +152,11 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
     return () => clearTimeout(t);
   }, [q]);
 
-  const reaAll = data?.reactivite || [];
-  const trtAll = data?.traitement || [];
+  const keepMine = (l) => mine === "all" ? true
+    : mine === "mine" ? (l.my_calls || 0) > 0
+    : (l.my_calls || 0) === 0;
+  const reaAll = (data?.reactivite || []).filter(keepMine);
+  const trtAll = (data?.traitement || []).filter(keepMine);
   const rea = reaAll.slice(0, shownCount);
   const trt = trtAll.slice(0, shownCount);
   // Compteurs = totaux RÉELS du pool, pas le nombre de leads chargés.
@@ -170,8 +213,8 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
       setTimeout(() => setCalledFlash((p) => ({ ...p, [id]: false })), 1800);
       setData((d) => !d ? d : {
         ...d,
-        traitement: d.traitement.map((l) => l.id === id ? { ...l, pool_calls: r.pool_calls, pool_last_call_at: r.pool_last_call_at } : l),
-        reactivite: d.reactivite.map((l) => l.id === id ? { ...l, pool_calls: r.pool_calls, pool_last_call_at: r.pool_last_call_at } : l),
+        traitement: d.traitement.map((l) => l.id === id ? { ...l, pool_calls: r.pool_calls, pool_last_call_at: r.pool_last_call_at, my_calls: r.my_calls, my_last_call_at: r.my_last_call_at } : l),
+        reactivite: d.reactivite.map((l) => l.id === id ? { ...l, pool_calls: r.pool_calls, pool_last_call_at: r.pool_last_call_at, my_calls: r.my_calls, my_last_call_at: r.my_last_call_at } : l),
       });
     } catch {}
   };
@@ -213,6 +256,24 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                 <span style={{ width: 7, height: 7, borderRadius: "50%", background: on ? p.color : C.muted, opacity: on ? 1 : 0.5 }} />
                 {p.label}
                 <span style={{ fontSize: 11.5, fontWeight: 700, color: on ? p.color : C.muted }}>{p.n}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ display: pool === "traitement" ? "inline-flex" : "none", gap: 4, padding: 4, borderRadius: 12, background: darkMode ? "rgba(255,255,255,0.05)" : "#f1f3f7" }}>
+          {MINE_FILTERS.map((f) => {
+            const on = mine === f.key;
+            return (
+              <button key={f.key} type="button" onClick={() => setMine(f.key)} title={f.label}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9, border: "none", cursor: "pointer", fontFamily: "inherit",
+                  fontSize: 12.5, fontWeight: 650, transition: "background 0.15s, color 0.15s",
+                  background: on ? (darkMode ? "rgba(255,255,255,0.10)" : "#fff") : "transparent",
+                  color: on ? C.text : C.muted,
+                  boxShadow: on ? "0 1px 3px rgba(17,24,39,0.10)" : "none" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  {f.icon}
+                </svg>
+                {f.label}
               </button>
             );
           })}
@@ -306,6 +367,7 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                   {lead.phone && <span style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap", flexShrink: 0 }}>{lead.phone}</span>}
                   <div style={{ flex: 1 }} />
                   <PoolCallsBadge lead={lead} C={C} darkMode={darkMode} />
+                  <MyCallsBadge lead={lead} C={C} darkMode={darkMode} />
                   {canClaim && (
                     <>
                       <button onClick={() => markCalled(lead.id)}
