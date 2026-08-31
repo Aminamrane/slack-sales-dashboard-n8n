@@ -80,6 +80,18 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
   const [q, setQ] = useState("");
   // Un seul pool affiché à la fois : le sales choisit son mode de travail.
   const [pool, setPool] = useState("traitement");
+  // Rendu progressif : tout est chargé, on affiche par tranches au scroll.
+  const [shownCount, setShownCount] = useState(150);
+  useEffect(() => { setShownCount(150); }, [pool, q]);
+  useEffect(() => {
+    const onScroll = () => {
+      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 900) {
+        setShownCount((n) => n + 150);
+      }
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   const fetchPools = async (search) => {
     try {
@@ -100,11 +112,13 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
     return () => clearTimeout(t);
   }, [q]);
 
-  const rea = data?.reactivite || [];
-  const trt = data?.traitement || [];
+  const reaAll = data?.reactivite || [];
+  const trtAll = data?.traitement || [];
+  const rea = reaAll.slice(0, shownCount);
+  const trt = trtAll.slice(0, shownCount);
   // Compteurs = totaux RÉELS du pool, pas le nombre de leads chargés.
-  const totRea = data?.totals?.reactivite ?? rea.length;
-  const totTrt = data?.totals?.traitement ?? trt.length;
+  const totRea = data?.totals?.reactivite ?? reaAll.length;
+  const totTrt = data?.totals?.traitement ?? trtAll.length;
   const searching = q.trim().length > 0;
 
   const claimRea = async (id) => {
@@ -208,17 +222,18 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
       </div>
 
       {(() => {
-        const shown = pool === "reactivite" ? rea.length : trt.length;
+        const all = pool === "reactivite" ? reaAll.length : trtAll.length;
+        const shown = Math.min(shownCount, all);
         const total = pool === "reactivite" ? totRea : totTrt;
         if (searching) return (
-          <div style={{ fontSize: 11.5, color: C.muted }}>{shown} résultat{shown > 1 ? "s" : ""} sur les {total} leads du pool.</div>
+          <div style={{ fontSize: 11.5, color: C.muted }}>{all} résultat{all > 1 ? "s" : ""} sur les {total} leads du pool.</div>
         );
-        if (shown < total) return (
+        if (shown < all) return (
           <div style={{ fontSize: 11.5, color: C.muted }}>
-            {shown} leads affichés sur {total} — utilisez la recherche pour retrouver n'importe quel lead du pool.
+            {total} leads dans le pool, du plus récent au plus ancien — {shown} affichés, faites défiler pour la suite.
           </div>
         );
-        return null;
+        return <div style={{ fontSize: 11.5, color: C.muted }}>{total} leads dans le pool, du plus récent au plus ancien.</div>;
       })()}
 
       {/* ── POOL RÉACTIVITÉ ── */}
