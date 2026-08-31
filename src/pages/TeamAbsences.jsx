@@ -75,6 +75,9 @@ export default function TeamAbsences({ embed = false }) {
   const [declType, setDeclType] = useState("conge");
   const [declDesc, setDeclDesc] = useState("");
   const [declPeriod, setDeclPeriod] = useState("full"); // full | am (matin) | pm (après-midi)
+  // Absence en cours d'édition : { id, user_id, start_date, end_date, period }.
+  // DOIT rester déclaré avec les autres hooks, avant tout return conditionnel.
+  const [editAbs, setEditAbs] = useState(null);
   const [declError, setDeclError] = useState("");
   const [declSuccess, setDeclSuccess] = useState("");
   const [declBusy, setDeclBusy] = useState(false);
@@ -123,7 +126,6 @@ export default function TeamAbsences({ embed = false }) {
   };
   // MODIFIER une absence (dates / demi-journée), y compris PASSÉE : cas « la
   // personne avait déclaré une absence mais a finalement travaillé ».
-  const [editAbs, setEditAbs] = useState(null); // { id, user_id, start_date, end_date, period }
   const saveEdit = async () => {
     if (!editAbs) return;
     setBusyId(editAbs.id);
