@@ -78,6 +78,8 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
   const [rdvDate, setRdvDate] = useState("");
   const [claimedMsg, setClaimedMsg] = useState(null);
   const [q, setQ] = useState("");
+  // Un seul pool affiché à la fois : le sales choisit son mode de travail.
+  const [pool, setPool] = useState("traitement");
 
   const fetchPools = async () => {
     try {
@@ -158,17 +160,35 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
           {claimedMsg}
         </div>
       )}
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher (nom, société, téléphone)…"
-        style={{ padding: "10px 14px", borderRadius: 10, border: `1px solid ${C.border}`, background: darkMode ? "rgba(255,255,255,0.04)" : "#fff", color: C.text, fontSize: 13, fontFamily: "inherit", outline: "none", maxWidth: 420 }} />
+      {/* Switch entre les deux pools */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "inline-flex", gap: 4, padding: 4, borderRadius: 12, background: darkMode ? "rgba(255,255,255,0.05)" : "#f1f3f7" }}>
+          {[
+            { key: "reactivite", label: "Réactivité", n: (data?.reactivite || []).length, color: "#ef4444" },
+            { key: "traitement", label: "Traitement", n: (data?.traitement || []).length, color: "#0891b2" },
+          ].map((p) => {
+            const on = pool === p.key;
+            return (
+              <button key={p.key} type="button" onClick={() => setPool(p.key)}
+                style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 9, border: "none", cursor: "pointer", fontFamily: "inherit",
+                  fontSize: 13, fontWeight: 700, transition: "background 0.15s, color 0.15s",
+                  background: on ? (darkMode ? "rgba(255,255,255,0.10)" : "#fff") : "transparent",
+                  color: on ? C.text : C.muted,
+                  boxShadow: on ? "0 1px 3px rgba(17,24,39,0.10)" : "none" }}>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: on ? p.color : C.muted, opacity: on ? 1 : 0.5 }} />
+                {p.label}
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: on ? p.color : C.muted }}>{p.n}</span>
+              </button>
+            );
+          })}
+        </div>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher (nom, société, téléphone)…"
+          style={{ flex: 1, minWidth: 240, maxWidth: 420, padding: "10px 14px", borderRadius: 10, border: `1px solid ${C.border}`, background: darkMode ? "rgba(255,255,255,0.04)" : "#fff", color: C.text, fontSize: 13, fontFamily: "inherit", outline: "none" }} />
+      </div>
 
       {/* ── POOL RÉACTIVITÉ ── */}
-      <div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444" }} />
-          <span style={{ fontSize: 14, fontWeight: 750, color: C.text }}>Pool réactivité</span>
-          <span style={{ fontSize: 11.5, fontWeight: 700, color: "#ef4444", background: darkMode ? "rgba(239,68,68,0.14)" : "#fdecea", padding: "1px 8px", borderRadius: 10 }}>{rea.length}</span>
-        </div>
-        <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 10 }}>
+      <div style={{ display: pool === "reactivite" ? "block" : "none" }}>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>
           Leads chauds jamais appelés. Premier arrivé, premier servi : « Je le prends », vous l'appelez tout de suite, il est à vous 3 jours pour poser un RDV.
         </div>
         {rea.length === 0 ? (
@@ -205,13 +225,8 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
       </div>
 
       {/* ── POOL TRAITEMENT ── */}
-      <div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#0891b2" }} />
-          <span style={{ fontSize: 14, fontWeight: 750, color: C.text }}>Pool traitement</span>
-          <span style={{ fontSize: 11.5, fontWeight: 700, color: "#0891b2", background: darkMode ? "rgba(8,145,178,0.14)" : "#e0f2f7", padding: "1px 8px", borderRadius: 10 }}>{trt.length}</span>
-        </div>
-        <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 10 }}>
+      <div style={{ display: pool === "traitement" ? "block" : "none" }}>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>
           Récupérable <b>uniquement en positionnant un R1</b>. Passez un max d'appels (« J'ai appelé » alimente le compteur partagé), et dès que vous avez le gérant : posez le RDV, le lead est à vous.
         </div>
         {trt.length === 0 ? (
