@@ -406,6 +406,22 @@ function SidebarAvailability({ C, darkMode, collapsed, targetEmail }) {
   );
 }
 
+// Signal « traité » : tout geste sur un lead (ouvrir sa fiche, copier son
+// numéro ou son e-mail) vaut traitement. On réessaie, car un envoi perdu en
+// silence coûte au sales le lead qu'il est justement en train de travailler
+// (incident du 31/08 : RDV posé, signal jamais reçu, lead retiré 8 s plus tard).
+async function pingTreated(leadId) {
+  if (!leadId || !apiClient.getToken()) return;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await apiClient.post(`/api/v1/tracking/leads/${leadId}/treated`);
+      return;
+    } catch {
+      await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+    }
+  }
+}
+
 export default function TrackingSheet() {
   const navigate = useNavigate();
 
@@ -1452,7 +1468,7 @@ export default function TrackingSheet() {
   // serveur, silencieux si l'utilisateur n'est pas le sales assigné.
   useEffect(() => {
     if (!selectedLead) return;
-    apiClient.post(`/api/v1/tracking/leads/${selectedLead}/treated`).catch(() => {});
+    pingTreated(selectedLead);
   }, [selectedLead]);
 
   // ── CAMPAIGN STATE ──────────────────────────────────────────────────────
@@ -1865,12 +1881,13 @@ export default function TrackingSheet() {
     }
   };
 
-  const copyToClipboard = (text, fieldKey) => {
+  const copyToClipboard = (text, fieldKey, leadId) => {
     if (!text) return;
     navigator.clipboard.writeText(text).then(() => {
       setCopiedField(fieldKey);
       setTimeout(() => setCopiedField(null), 1500);
     });
+    if (leadId) pingTreated(leadId);
   };
 
   const triggerLeadMovedNotif = (lead, newStatus) => {
@@ -5625,7 +5642,7 @@ export default function TrackingSheet() {
                       {/* Compact info pills */}
                       <span style={{ width: '1px', height: '14px', background: C.border, flexShrink: 0 }} />
                       <span
-                        onClick={(e) => { e.stopPropagation(); copyToClipboard(lead.phone, `phone-card-${lead.id}`); }}
+                        onClick={(e) => { e.stopPropagation(); copyToClipboard(lead.phone, `phone-card-${lead.id}`, lead.id); }}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '12px', color: copiedField === `phone-card-${lead.id}` ? '#10b981' : C.secondary, fontFamily: "'SF Mono', 'Fira Code', monospace", fontWeight: 500, flexShrink: 0, cursor: lead.phone ? 'pointer' : 'default', borderRadius: 6, padding: '1px 5px', margin: '-1px -5px', transition: 'color 0.2s, background 0.15s' }}
                         onMouseEnter={(e) => { if (lead.phone) e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -6451,7 +6468,7 @@ export default function TrackingSheet() {
                       <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
                     </svg>
                   </div>
-                  <div onClick={() => copyToClipboard(lead.phone, `phone-detail-${lead.id}`)} style={{ flex: 1, minWidth: 0, cursor: lead.phone ? 'pointer' : 'default' }}>
+                  <div onClick={() => copyToClipboard(lead.phone, `phone-detail-${lead.id}`, lead.id)} style={{ flex: 1, minWidth: 0, cursor: lead.phone ? 'pointer' : 'default' }}>
                     <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Téléphone</div>
                     <div style={{ fontSize: 12, color: C.text, fontFamily: "'SF Mono', 'Fira Code', monospace", fontWeight: 500 }}>{lead.phone || '—'}</div>
                   </div>
@@ -6460,7 +6477,7 @@ export default function TrackingSheet() {
                   ) : (
                     <>
                       {lead.phone && (
-                        <svg onClick={() => copyToClipboard(lead.phone, `phone-detail-${lead.id}`)} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.5, cursor: 'pointer' }} title="Copier">
+                        <svg onClick={() => copyToClipboard(lead.phone, `phone-detail-${lead.id}`, lead.id)} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.5, cursor: 'pointer' }} title="Copier">
                           <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                         </svg>
                       )}
@@ -6498,7 +6515,7 @@ export default function TrackingSheet() {
                   }}>
                     <img src={iconEmailDetail} alt="" style={{ width: 17, height: 17, objectFit: 'contain' }} />
                   </div>
-                  <div onClick={() => copyToClipboard(lead.email, `email-detail-${lead.id}`)} style={{ flex: 1, minWidth: 0, cursor: lead.email ? 'pointer' : 'default' }}>
+                  <div onClick={() => copyToClipboard(lead.email, `email-detail-${lead.id}`, lead.id)} style={{ flex: 1, minWidth: 0, cursor: lead.email ? 'pointer' : 'default' }}>
                     <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email</div>
                     <div style={{ fontSize: 12, color: C.secondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.email || '—'}</div>
                   </div>
@@ -6507,7 +6524,7 @@ export default function TrackingSheet() {
                   ) : (
                     <>
                       {lead.email && (
-                        <svg onClick={() => copyToClipboard(lead.email, `email-detail-${lead.id}`)} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.5, cursor: 'pointer' }} title="Copier">
+                        <svg onClick={() => copyToClipboard(lead.email, `email-detail-${lead.id}`, lead.id)} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.5, cursor: 'pointer' }} title="Copier">
                           <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                         </svg>
                       )}
