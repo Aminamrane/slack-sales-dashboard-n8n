@@ -81,25 +81,31 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
   // Un seul pool affiché à la fois : le sales choisit son mode de travail.
   const [pool, setPool] = useState("traitement");
 
-  const fetchPools = async () => {
+  const fetchPools = async (search) => {
     try {
-      const d = await apiClient.get("/api/v1/tracking/pools");
+      const term = (search !== undefined ? search : q).trim();
+      const d = await apiClient.get(`/api/v1/tracking/pools${term ? `?q=${encodeURIComponent(term)}` : ""}`);
       if (d && d.reactivite) { setData(d); setErr(null); }
     } catch (e) { setErr("Impossible de charger les pools."); }
   };
   useEffect(() => {
-    fetchPools();
-    const t = setInterval(fetchPools, 60000);
+    fetchPools("");
+    const t = setInterval(() => fetchPools(), 60000);
     return () => clearInterval(t);
   }, []);
+  // La recherche interroge la base (un lead hors des premiers chargés doit
+  // rester trouvable), avec un délai pour ne pas requêter à chaque frappe.
+  useEffect(() => {
+    const t = setTimeout(() => fetchPools(q), 350);
+    return () => clearTimeout(t);
+  }, [q]);
 
-  const filter = (list) => {
-    const ql = q.trim().toLowerCase();
-    if (!ql) return list;
-    return list.filter((l) => `${l.full_name || ""} ${l.company_name || ""} ${l.phone || ""}`.toLowerCase().includes(ql));
-  };
-  const rea = useMemo(() => filter(data?.reactivite || []), [data, q]);
-  const trt = useMemo(() => filter(data?.traitement || []), [data, q]);
+  const rea = data?.reactivite || [];
+  const trt = data?.traitement || [];
+  // Compteurs = totaux RÉELS du pool, pas le nombre de leads chargés.
+  const totRea = data?.totals?.reactivite ?? rea.length;
+  const totTrt = data?.totals?.traitement ?? trt.length;
+  const searching = q.trim().length > 0;
 
   const claimRea = async (id) => {
     setBusyId(id);
@@ -179,8 +185,8 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <div style={{ display: "inline-flex", gap: 4, padding: 4, borderRadius: 12, background: darkMode ? "rgba(255,255,255,0.05)" : "#f1f3f7" }}>
           {[
-            { key: "reactivite", label: "Réactivité", n: (data?.reactivite || []).length, color: "#ef4444" },
-            { key: "traitement", label: "Traitement", n: (data?.traitement || []).length, color: "#0891b2" },
+            { key: "reactivite", label: "Réactivité", n: totRea, color: "#ef4444" },
+            { key: "traitement", label: "Traitement", n: totTrt, color: "#0891b2" },
           ].map((p) => {
             const on = pool === p.key;
             return (
@@ -200,6 +206,20 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher (nom, société, téléphone)…"
           style={{ flex: 1, minWidth: 240, maxWidth: 420, padding: "10px 14px", borderRadius: 10, border: `1px solid ${C.border}`, background: darkMode ? "rgba(255,255,255,0.04)" : "#fff", color: C.text, fontSize: 13, fontFamily: "inherit", outline: "none" }} />
       </div>
+
+      {(() => {
+        const shown = pool === "reactivite" ? rea.length : trt.length;
+        const total = pool === "reactivite" ? totRea : totTrt;
+        if (searching) return (
+          <div style={{ fontSize: 11.5, color: C.muted }}>{shown} résultat{shown > 1 ? "s" : ""} sur les {total} leads du pool.</div>
+        );
+        if (shown < total) return (
+          <div style={{ fontSize: 11.5, color: C.muted }}>
+            {shown} leads affichés sur {total} — utilisez la recherche pour retrouver n'importe quel lead du pool.
+          </div>
+        );
+        return null;
+      })()}
 
       {/* ── POOL RÉACTIVITÉ ── */}
       <div style={{ display: pool === "reactivite" ? "block" : "none" }}>
