@@ -43,6 +43,18 @@ const card = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14
 const th = { fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: MUTED, textAlign: "left", padding: "8px 10px", borderBottom: `1px solid ${BORDER}` };
 const td = { fontSize: 12.5, color: TEXT, padding: "8px 10px", borderBottom: `1px solid #f1f3f7`, verticalAlign: "middle" };
 
+// État vide d'une carte : centré et habillé, pour que les cartes sans données
+// gardent une présence au lieu de s'effondrer en laissant des vides gris.
+function Empty({ icon, text }) {
+  return (
+    <div style={{ flex: 1, minHeight: 110, display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center", gap: 8, color: MUTED }}>
+      <span style={{ fontSize: 22, opacity: 0.45 }}>{icon}</span>
+      <span style={{ fontSize: 12.5 }}>{text}</span>
+    </div>
+  );
+}
+
 function Tile({ label, value, tone, sub }) {
   return (
     <div style={{ ...card, padding: "13px 16px" }}>
@@ -65,6 +77,8 @@ export default function ReactivityMonitor() {
   const [fetchedAt, setFetchedAt] = useState(null);
   const [now, setNow] = useState(Date.now());
   const [toggling, setToggling] = useState(false);
+  const [demoSending, setDemoSending] = useState(false);
+  const [demoResult, setDemoResult] = useState(null);
   const pollRef = useRef(null);
 
   const fetchAll = async () => {
@@ -91,6 +105,22 @@ export default function ReactivityMonitor() {
       await fetchAll();
     } catch {}
     setToggling(false);
+  };
+
+  // Lead de démonstration : envoyé à soi-même par le VRAI pipeline (échéance
+  // réelle, notif différée ~1 min). Non traité : indispo + autodestruction,
+  // jamais réaffecté à un vrai sales.
+  const sendDemo = async () => {
+    if (!window.confirm("S'envoyer un lead de test ? Il suit la vraie règle : notif Slack + mail dans environ 1 min, échéance réelle. Non traité à l'échéance, vous passez indisponible et le lead s'autodétruit, il ne part jamais chez un sales.")) return;
+    setDemoSending(true);
+    try {
+      const r = await apiClient.post("/api/v1/tracking/reactivity/demo-lead", {});
+      setDemoResult(r);
+      fetchAll();
+    } catch (e) {
+      alert(e?.message || "Échec de l'envoi du lead de test");
+    }
+    setDemoSending(false);
   };
 
   // Compte à rebours vivant : seconds_left du payload − temps écoulé depuis le fetch.
@@ -128,7 +158,7 @@ export default function ReactivityMonitor() {
           <div>
             <div style={{ fontSize: 23, fontWeight: 750, color: NAVY, letterSpacing: "-0.02em" }}>Monitoring réactivité</div>
             <div style={{ fontSize: 12.5, color: MUTED, marginTop: 3 }}>
-              SLA 5 min · demi-journées · pools · notation — vue admin, rafraîchie toutes les 10 s
+              SLA 6 min · demi-journées · pools · notation, vue admin rafraîchie toutes les 10 s
               {fetchedAt && <span> · maj {fmtAgo(new Date(fetchedAt).toISOString())}</span>}
             </div>
           </div>
@@ -136,6 +166,15 @@ export default function ReactivityMonitor() {
             <span style={{ fontSize: 11.5, color: MUTED }}>
               Agendas relevés : {data.agenda_snapshot_at ? fmtAgo(data.agenda_snapshot_at) : "jamais"}
             </span>
+            <button onClick={sendDemo} disabled={demoSending}
+              title="S'envoyer un lead de test par le vrai pipeline (notif, échéance, autodestruction)"
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 12,
+                border: `1.5px solid ${NAVY}`, cursor: demoSending ? "wait" : "pointer", fontFamily: "inherit",
+                background: "#fff", color: NAVY, fontSize: 13, fontWeight: 700, transition: "all 0.15s" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = NAVY; e.currentTarget.style.color = "#fff"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.color = NAVY; }}>
+              🎬 {demoSending ? "Envoi…" : "M'envoyer un lead de test"}
+            </button>
             <button onClick={toggle} disabled={toggling}
               style={{ display: "flex", alignItems: "center", gap: 9, padding: "10px 18px", borderRadius: 12, border: "none", cursor: "pointer", fontFamily: "inherit",
                 background: data.enabled ? GREEN : "#6b7482", color: "#fff", fontSize: 13.5, fontWeight: 750 }}>
@@ -144,6 +183,22 @@ export default function ReactivityMonitor() {
             </button>
           </div>
         </div>
+
+        {/* Confirmation du lead de démo */}
+        {demoResult && (
+          <div style={{ ...card, padding: "12px 16px", marginBottom: 16, borderLeft: `3px solid ${GREEN}`,
+            display: "flex", alignItems: "center", gap: 10, fontSize: 12.5 }}>
+            <span style={{ fontSize: 16 }}>🎬</span>
+            <span>
+              Lead de test <b>#{demoResult.lead_id}</b> envoyé dans votre onglet Nouveaux leads.
+              Notif Slack + mail dans ~1 min. Échéance <b>{fmtDT(demoResult.deadline)}</b> :
+              non traité, vous passez indisponible et le lead s'autodétruit, il ne part jamais chez un sales.
+            </span>
+            <button onClick={() => setDemoResult(null)}
+              style={{ marginLeft: "auto", border: "none", background: "transparent", color: MUTED,
+                cursor: "pointer", fontSize: 15, fontFamily: "inherit", padding: 4 }}>✕</button>
+          </div>
+        )}
 
         {/* Tuiles */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10, marginBottom: 20 }}>
@@ -192,14 +247,16 @@ export default function ReactivityMonitor() {
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, alignItems: "start" }}>
+        {/* Cartes étirées à hauteur égale : une carte vide garde sa présence
+            (état vide centré) au lieu de s'effondrer et de trouer la grille. */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 18, alignItems: "stretch" }}>
           {/* SLA en vol */}
-          <div style={{ ...card, padding: "16px 18px" }}>
+          <div style={{ ...card, padding: "16px 18px", display: "flex", flexDirection: "column" }}>
             <div style={{ fontSize: 14, fontWeight: 750, color: NAVY, marginBottom: 10 }}>
               SLA en vol <span style={{ fontSize: 11, color: MUTED, fontWeight: 600 }}>· compte à rebours vivant</span>
             </div>
             {data.sla_inflight.length === 0 ? (
-              <div style={{ fontSize: 12.5, color: MUTED, padding: "6px 0" }}>Aucun lead sous échéance — tout est traité.</div>
+              <Empty icon="⏱" text="Aucun lead sous échéance : tout est traité." />
             ) : (
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead><tr><th style={th}>Lead</th><th style={th}>Chez</th><th style={th}>Esc.</th><th style={th}>Échéance</th><th style={th}>Reste</th></tr></thead>
@@ -225,10 +282,10 @@ export default function ReactivityMonitor() {
           </div>
 
           {/* Fenêtres 3 jours */}
-          <div style={{ ...card, padding: "16px 18px" }}>
+          <div style={{ ...card, padding: "16px 18px", display: "flex", flexDirection: "column" }}>
             <div style={{ fontSize: 14, fontWeight: 750, color: NAVY, marginBottom: 10 }}>Fenêtres de 3 jours (RDV attendu)</div>
             {data.treatment_windows.length === 0 ? (
-              <div style={{ fontSize: 12.5, color: MUTED, padding: "6px 0" }}>Aucune fenêtre ouverte pour l'instant.</div>
+              <Empty icon="🗓" text="Aucune fenêtre ouverte pour l'instant." />
             ) : (
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead><tr><th style={th}>Lead</th><th style={th}>Chez</th><th style={th}>Expire</th></tr></thead>
@@ -248,10 +305,10 @@ export default function ReactivityMonitor() {
           </div>
 
           {/* Derniers arrivés aux pools */}
-          <div style={{ ...card, padding: "16px 18px" }}>
+          <div style={{ ...card, padding: "16px 18px", display: "flex", flexDirection: "column" }}>
             <div style={{ fontSize: 14, fontWeight: 750, color: NAVY, marginBottom: 10 }}>Derniers arrivés aux pools</div>
             {data.pools.recent.length === 0 ? (
-              <div style={{ fontSize: 12.5, color: MUTED }}>Rien pour l'instant.</div>
+              <Empty icon="📥" text="Rien pour l'instant." />
             ) : data.pools.recent.map((l) => (
               <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid #f1f3f7`, fontSize: 12.5 }}>
                 <span style={{ width: 7, height: 7, borderRadius: "50%", background: l.pool === "reactivite" ? "#ef4444" : "#0891b2", flexShrink: 0 }} />
@@ -263,10 +320,10 @@ export default function ReactivityMonitor() {
           </div>
 
           {/* Événements récents */}
-          <div style={{ ...card, padding: "16px 18px" }}>
+          <div style={{ ...card, padding: "16px 18px", display: "flex", flexDirection: "column" }}>
             <div style={{ fontSize: 14, fontWeight: 750, color: NAVY, marginBottom: 10 }}>Événements récents (notation)</div>
             {data.events.length === 0 ? (
-              <div style={{ fontSize: 12.5, color: MUTED }}>Aucun événement encore — le système vient d'être activé.</div>
+              <Empty icon="📊" text="Aucun événement encore : le système vient d'être activé." />
             ) : data.events.map((e, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid #f1f3f7`, fontSize: 12.5 }}>
                 <span style={{ fontSize: 13 }}>{e.event === "sla_missed" ? "🔴" : "🟢"}</span>
