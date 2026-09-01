@@ -845,6 +845,9 @@ export default function TrackingSheet() {
   const [tabKey, setTabKey] = useState(0); // forces re-animation on tab switch
   const prevCountsRef = useRef(null);
   const [sendingContract, setSendingContract] = useState(null); // lead.id or null
+  // Date facultative à imprimer dans le contrat, par lead. Vide = date du jour,
+  // comportement historique inchangé. { [lead_id]: 'YYYY-MM-DD' }
+  const [contractDates, setContractDates] = useState({});
   const [navNotif, setNavNotif] = useState(null); // 'sending' | 'sent' | null
   const [resendingContract, setResendingContract] = useState(null); // lead.id or null
   const [cancelingContract, setCancelingContract] = useState(null); // contract.id or null
@@ -1997,9 +2000,14 @@ export default function TrackingSheet() {
     setSendingContract(lead.id);
     setNavNotif('sending');
     try {
+      // Date choisie : envoyée seulement si le commercial l'a saisie. Sans elle,
+      // la charge utile est strictement celle d'avant et le contrat porte la
+      // date du jour.
+      const chosenDate = contractDates[lead.id];
       await apiClient.post('/api/v1/contracts/send', {
         lead_id: lead.id,
         employee_range: lead.employee_range,
+        ...(chosenDate ? { contract_display_date: chosenDate } : {}),
       });
       await fetchLeadContracts(lead.id);
       setNavNotif('sent'); // triggers check animation → auto-clears after 2.5s in navbar
@@ -7696,6 +7704,51 @@ export default function TrackingSheet() {
                         ); })}
                       </div>
                     )}
+
+                    {/* Date du contrat — facultative, visible seulement quand l'envoi
+                        est possible. Laissée vide, le contrat part daté du jour comme
+                        avant. Remplie, c'est elle qui s'imprime dans le bloc de
+                        signature des deux documents. Elle ne touche que le papier :
+                        la date de signature CRM et les commissions restent réelles. */}
+                    {(!latestContract || status === 'draft') && (() => {
+                      const iso = contractDates[lead.id] || '';
+                      // Date saisie à la main : on découpe la chaîne, jamais de
+                      // new Date() qui décalerait d'un jour selon le fuseau.
+                      const fr = iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '';
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>Date du contrat</span>
+                          <input
+                            type="date"
+                            value={iso}
+                            onChange={(e) => setContractDates(prev => ({ ...prev, [lead.id]: e.target.value }))}
+                            style={{
+                              padding: '4px 8px', borderRadius: 8,
+                              border: `1px solid ${iso ? C.accent : C.border}`,
+                              background: 'transparent', color: C.text,
+                              fontSize: 11, fontFamily: 'inherit', cursor: 'pointer',
+                              transition: 'border-color 0.15s',
+                            }}
+                          />
+                          <span style={{ fontSize: 10.5, color: iso ? C.accent : C.muted, transition: 'color 0.15s' }}>
+                            {iso ? `Le contrat portera la date du ${fr}` : "Facultatif — vide, le contrat porte la date du jour"}
+                          </span>
+                          {iso && (
+                            <button
+                              onClick={() => setContractDates(prev => { const n = { ...prev }; delete n[lead.id]; return n; })}
+                              style={{
+                                padding: '2px 8px', borderRadius: 6, border: `1px solid ${C.border}`,
+                                background: 'transparent', color: C.muted, fontSize: 10,
+                                fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                                transition: 'all 0.15s',
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.color = C.text; e.currentTarget.style.borderColor = C.text; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.color = C.muted; e.currentTarget.style.borderColor = C.border; }}
+                            >Effacer</button>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       {status === 'ongoing' && (
