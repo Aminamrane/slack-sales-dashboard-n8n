@@ -13,15 +13,61 @@
 // celui que la fiche affichait déjà (jointure contrats → leads, volatile) avec
 // un bouton pour l'enregistrer proprement. On n'invente rien, on récupère.
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Mail, Phone, Home, Building2, Users, Calculator, Receipt, Tag,
-  Plus, Star, Trash2, Check, X as XIcon, ChevronDown,
+  Plus, Star, Trash2, Check, X as XIcon, ChevronDown, Copy,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
 import { CONTACT_LABEL_OPTIONS } from './constants.js';
-import { CopyButton } from './EditableCell.jsx';
+// Valeur de contact copiable en un clic, avec son icône VISIBLE.
+//
+// Demande dev 2026-08-28 : copier un email ou un téléphone est le geste de
+// base d'une relance. L'icône de copie du reste de la page n'apparaît qu'au
+// survol — ici elle est permanente : le raccourci doit se voir, sinon il
+// n'existe pas. La cible reste tout le texte, pas seulement l'icône.
+function CopyableValue({ value, muted = false, onCopied }) {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef(null);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  const copy = useCallback(async (e) => {
+    e.stopPropagation();
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(String(value));
+      setCopied(true);
+      onCopied?.(String(value));
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => setCopied(false), 900);
+    } catch (err) {
+      console.warn('[ContactList] copie impossible', err);
+    }
+  }, [value, onCopied]);
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title={`Copier ${value}`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        border: 'none', background: 'transparent', padding: 0, minWidth: 0,
+        font: 'inherit', fontSize: 13, cursor: 'pointer', textAlign: 'left',
+        color: copied ? '#15794a' : (muted ? N.textMuted : N.text),
+        transition: 'color 0.14s ease',
+      }}
+    >
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {value}
+      </span>
+      {copied
+        ? <Check size={12} strokeWidth={2.4} style={{ flexShrink: 0 }} />
+        : <Copy size={12} strokeWidth={1.8} style={{ flexShrink: 0, opacity: 0.45 }} />}
+    </button>
+  );
+}
 
 const N = {
   sideBg:    '#f7f7f5',
@@ -148,16 +194,18 @@ export default function ContactList({
         ))}
 
         {showInherited && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '4px 8px', borderRadius: 4, fontSize: 13,
-          }}>
-            <span style={{ color: N.text }}>{inheritedValue}</span>
+          <div
+            className="tsf-copy-wrap"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '4px 8px', borderRadius: 4, fontSize: 13,
+            }}
+          >
+            <CopyableValue value={inheritedValue} onCopied={onCopied} />
             <span style={{ fontSize: 11, color: N.textFaint, fontStyle: 'italic' }}>
               hérité de la fiche
             </span>
             <span style={{ flex: 1 }} />
-            <CopyButton value={inheritedValue} onCopied={onCopied} size={12} />
             {canEdit && (
               <button
                 type="button"
@@ -243,13 +291,11 @@ function ContactRow({ contact, canEdit, busy, onRetype, onMakePrimary, onArchive
         />
       )}
 
-      {/* Valeur */}
-      <span style={{
-        fontSize: 13, color: N.text, minWidth: 0,
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-      }}>
-        {contact.value}
-      </span>
+      {/* Valeur — cliquable pour copier (demande dev 2026-08-28). Copier un
+          email ou un téléphone est LE geste courant d'une relance : viser une
+          petite icône à chaque fois est une friction inutile, la valeur
+          entière est donc la cible. */}
+      <CopyableValue value={contact.value} onCopied={onCopied} />
 
       {/* Étoile = contact principal */}
       {contact.is_primary ? (
@@ -271,7 +317,6 @@ function ContactRow({ contact, canEdit, busy, onRetype, onMakePrimary, onArchive
       ) : null}
 
       <span style={{ flex: 1 }} />
-      <CopyButton value={contact.value} onCopied={onCopied} size={12} />
 
       {canEdit && (
         <button

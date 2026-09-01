@@ -6,9 +6,12 @@
   "scripts": {
     "vercel-build": "npm install --legacy-peer-deps && npm run build",
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm run verify && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verify": "node src/pages/TrackingSheetFinance/guard.mjs && npm run test",
+    "test": "node --test src/pages/TrackingSheetFinance/finance.test.js",
+    "guard": "node src/pages/TrackingSheetFinance/guard.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

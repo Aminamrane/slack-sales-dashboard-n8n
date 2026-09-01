@@ -214,9 +214,97 @@ export const scopedOverdueCum = (r, scope) =>
 // possibles côté finance — déduire de la prochaine échéance ou rembourser —
 // d'où sa mise en visibilité dans la page.
 // Défensif : champs absents tant que le backend n'est pas déployé → 0.
+// Trop-perçu = ce qu'on DOIT au client, entité par entité.
+//
+// Correction 2026-08-29 (signalée par Ismahane sur n°454) : on lisait
+// `credit_*`, qui ne reprend que le cumul des mois ANTÉRIEURS. Un client qui
+// solde tout son arriéré ET paie trop sur le mois en cours restait donc
+// invisible — n°454 avait versé 4 235 € pour 1 155 € dus, soit 770 € de
+// trop-perçu, et le filtre affichait « Trop-perçu 0 ».
+//
+// On raisonne désormais sur le SOLDE COMPLET du mois affiché : mois en cours
+// + créances antérieures. Négatif = trop-perçu. Par entité, pour que les
+// visions Owner / Opti'lex / Globale restent justes (un crédit d'un côté ne
+// doit pas être masqué par une dette de l'autre).
+const entityBalance = (r, entity) =>
+  (toNumber(r[`overdue_${entity}_current_month`]) || 0)
+  + (toNumber(r[`overdue_${entity}_cumulative`]) || 0);
+
+// Ce qu'on doit au client sur UNE entité (0 s'il nous doit).
+// Exporté : le formulaire de remboursement en a besoin par entité, et il ne
+// doit surtout pas refaire le calcul dans son coin.
+export const entityCredit = (r, entity) => Math.max(-entityBalance(r, entity), 0);
+
 export const scopedCredit = (r, scope) =>
-  (scope === 'optilex' ? 0 : (toNumber(r.credit_owner) || 0)) +
-  (scope === 'owner' ? 0 : (toNumber(r.credit_optilex_ttc) || 0));
+  (scope === 'optilex' ? 0 : entityCredit(r, 'owner')) +
+  (scope === 'owner' ? 0 : entityCredit(r, 'optilex'));
+
+// Ancienneté de la créance, en mois, dans la vision active.
+//
+// Le serveur donne le premier mois d'une dette JAMAIS soldée depuis
+// (`overdue_*_since`) : un mois remis à zéro repart de zéro. On en déduit le
+// nombre de mois écoulés. `null` = pas de dette datée (ou entité sans dette).
+//
+// En vision Globale, on retient la dette la PLUS ANCIENNE des deux entités :
+// c'est celle qui commande la relance.
+export const creanceAgeMonths = (r, scope) => {
+  const dates = [];
+  if (scope !== 'optilex' && r.overdue_owner_since) dates.push(r.overdue_owner_since);
+  if (scope !== 'owner' && r.overdue_optilex_since) dates.push(r.overdue_optilex_since);
+  if (!dates.length) return null;
+  const plusAncienne = dates.sort()[0];
+  const [y, m] = String(plusAncienne).slice(0, 7).split('-').map(Number);
+  const now = new Date();
+  return (now.getFullYear() - y) * 12 + (now.getMonth() + 1 - m);
+};
+
+// Totaux du bandeau, calculés sur les lignes RÉELLEMENT AFFICHÉES.
+//
+// Demande dev 2026-09-01 : « il faut que les totaux changent selon le filtre
+// sélectionné, même un filtre qu'ils créent eux-mêmes. » L'appelant passe donc
+// les lignes après filtrage ; ici on ne fait que sommer.
+//
+// Vit dans ce fichier, avec les autres règles, pour être testable et ne pas
+// pouvoir diverger de ce que le tableau affiche.
+export const computeKpis = (visibleRows, scope, allCount = null) => {
+  let expected = 0;
+  let received = 0;
+  let overdue = 0;
+  let overdueCum = 0;
+  let receivedOverdue = 0;
+
+  (visibleRows || []).forEach((r) => {
+    const a = scopedPeriodAmounts(r, scope);
+    expected += a.expected;
+    received += a.received;
+    overdue += scopedOverdueCurrent(r, scope);
+    overdueCum += scopedOverdueCum(r, scope);
+    receivedOverdue += a.receivedOverdue;
+  });
+
+  const total = (visibleRows || []).length;
+  return {
+    total,
+    totalAll: allCount === null ? total : allCount,
+    filtered: allCount !== null && allCount !== total,
+    expectedGlobal: expected,
+    receivedTotal: received,
+    overdueTotal: overdue,
+    // « Retard de paiement » du classeur = dette totale à date : retard du
+    // mois + créances antérieures. C'est ce montant que la finance compare.
+    overdueTotalWithCum: overdue + overdueCum,
+    overdueCumTotal: overdueCum,
+    // Taux du classeur finance (null si dénominateur 0 → rien affiché).
+    receivedPct: formatPercent(received, expected),
+    overdueRecoveredPct: formatPercent(receivedOverdue, overdueCum),
+  };
+};
+
+// « Retard à date » = mois en cours + créances antérieures. Négatif = crédit.
+// Une seule définition, pour que la tuile de la fiche, la colonne du tableau
+// et les filtres ne puissent pas diverger (incident n°454, 2026-08-29).
+export const scopedOverdueToDate = (r, scope) =>
+  scopedOverdueCurrent(r, scope) + scopedOverdueCum(r, scope);
 
 // Total encaissé par le client DEPUIS LE DÉBUT (échéances + arriérés),
 // servi par le backend sur chaque ligne. Un total nul = aucune échéance

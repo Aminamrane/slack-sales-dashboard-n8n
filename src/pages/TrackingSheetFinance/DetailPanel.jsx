@@ -75,6 +75,7 @@ import {
   shiftMonth,
   scopedOverdueCurrent,
   scopedCredit,
+  entityCredit,
   scopedOverdueCum,
   scopedPeriodAmounts,
 } from './constants.js';
@@ -87,6 +88,7 @@ import ContactList from './ContactList.jsx';
 import { ETAT_STYLE, displayEtat } from '../OptilexBoard.jsx';
 import BoardEtatCell from './components/BoardEtatCell.jsx';
 import ExitClientDialog from './components/ExitClientDialog.jsx';
+import StructureSplits from './components/StructureSplits.jsx';
 
 // Notion palette (sync with index.jsx N).
 const N = {
@@ -148,6 +150,9 @@ export default function DetailPanel({
   const [exitOpen, setExitOpen] = useState(false);
   // Remboursement d'un trop-perçu : null = fermé, sinon { entity, amount }.
   const [refund, setRefund] = useState(null);
+  // Structures payantes et ventilation — servent l'état de compte par société.
+  const [structures, setStructures] = useState([]);
+  const [structureSplits, setStructureSplits] = useState([]);
   // Écriture réservée à l'équipe finance + admin (le CEO lit).
   // Deux niveaux de droits (dev 2026-08-27) : l'équipe finance entretient la
   // fiche (modalités, sociétés, associés, contacts) mais ne touche ni aux
@@ -168,6 +173,8 @@ export default function DetailPanel({
       setEtatHistory(null);
       setExitOpen(false);
       setRefund(null);
+      setStructures([]);
+      setStructureSplits([]);
     }
   }, [open]);
 
@@ -207,6 +214,22 @@ export default function DetailPanel({
     if (!open) return;
     refreshEtatHistory();
   }, [open, refreshEtatHistory]);
+
+  // Structures et ventilation : chargées avec la fiche pour que le bouton
+  // « état de compte » puisse proposer une société sans attendre.
+  useEffect(() => {
+    if (!open || !clientId) return undefined;
+    let cancelled = false;
+    Promise.all([
+      apiClient.get(`/api/v1/finance-periods/client/${clientId}/structures`).catch(() => null),
+      apiClient.get(`/api/v1/finance-periods/client/${clientId}/splits`).catch(() => null),
+    ]).then(([st, sp]) => {
+      if (cancelled) return;
+      setStructures(st?.items || []);
+      setStructureSplits(sp?.items || []);
+    });
+    return () => { cancelled = true; };
+  }, [open, clientId]);
 
   // Profil client — rechargeable après chaque édition (SIREN, contacts,
   // effectif) pour que la fiche et son journal restent d'accord.
@@ -420,9 +443,12 @@ export default function DetailPanel({
 
   // `entity` : 'owner' | 'optilex' — pilote émetteur ET champs de montants.
   const [pdfGenerating, setPdfGenerating] = useState(null); // null | 'owner' | 'optilex'
-  const downloadStatement = useCallback(async (entity = 'owner') => {
+  // `structure` (optionnel) : n'inclut que ce qui a été ventilé sur cette
+  // société, et le dit dans le document. Demande dev 2026-09-01 — un client
+  // qui règle pour cinq structures a besoin d'un état de compte par société.
+  const downloadStatement = useCallback(async (entity = 'owner', structure = null) => {
     if (pdfGenerating) return;
-    setPdfGenerating(entity);
+    setPdfGenerating(structure ? `st-${structure.id}` : entity);
     try {
       const { generateEtatDeCompte } = await import('./pdf/EtatDeComptePdf.jsx');
 
@@ -464,12 +490,52 @@ export default function DetailPanel({
       const price = (tarif && tarif > 0) ? tarif : latestExpected;
       const offre = range ? `${range} salariés` : (price ? formatEUR(price) : '—');
 
-      const rows = entityRows.map((r) => ({
-        periodLabel: formatMonthLabel(r.month),
-        offre,
-        billed: r.billed,
-        paid: r.paid,
-      }));
+      // Ventilation par structure : si une société est demandée, le document
+      // ne retient QUE ce qui lui a été attribué. On ne répartit rien au
+      // prorata — un montant non ventilé n'appartient à personne, et
+      // l'inventer donnerait un document faux.
+      if (structure) {
+        const parMois = new Map();
+        for (const sp of (structureSplits || [])) {
+          if (sp.structure_id !== structure.id || sp.entity !== entity) continue;
+          const k = String(sp.period || '').slice(0, 7);
+          parMois.set(k, (parMois.get(k) || 0) + Number(sp.amount || 0));
+        }
+        for (const r of entityRows) {
+          r.paid = parMois.get(r.month) || 0;
+          r.billed = 0;            // l'attendu n'est pas ventilé par société
+        }
+      }
+
+      // Remboursements de trop-perçu de CETTE entité : ce sont des mouvements
+      // d'argent, ils doivent figurer au document (demande dev 2026-08-28).
+      // Un remboursement s'écrit en « payé » NÉGATIF : l'argent est ressorti.
+      // Le solde cumulé du PDF (`solde += facturé − payé`) le régularise donc
+      // tout seul — un crédit de 192,50 revient exactement à zéro.
+      const refundRows = (profile?.refunds || [])
+        .filter((r) => r.entity === entity && Number(r.amount) > 0)
+        .map((r) => ({
+          month: String(r.period || '').slice(0, 7),
+          billed: 0,
+          paid: -Number(r.amount),
+          refund: true,
+          reason: r.reason || '',
+        }));
+
+      // Fusion chronologique : un remboursement se lit APRÈS le mois qu'il
+      // solde, comme sur un relevé bancaire.
+      const rows = [...entityRows.map((r) => ({ ...r, refund: false })), ...refundRows]
+        .sort((a, b) => (a.month === b.month
+          ? Number(a.refund) - Number(b.refund)
+          : String(a.month).localeCompare(String(b.month))))
+        .map((r) => ({
+          periodLabel: formatMonthLabel(r.month),
+          offre: r.refund
+            ? `Remboursement de trop-perçu${r.reason ? ` — ${r.reason}` : ''}`
+            : offre,
+          billed: r.billed,
+          paid: r.paid,
+        }));
 
       // Adresse client : exposée par le profil (backend 2026-08-25) —
       // code défensif, les champs peuvent ne pas encore être présents.
@@ -481,7 +547,7 @@ export default function DetailPanel({
       const blob = await generateEtatDeCompte({
         entity,
         recipient: {
-          company: societeName,
+          company: structure ? `${societeName} — ${structure.name}` : societeName,
           person: personne || '',
           clientNumber: client?.numero_client
             ? String(client.numero_client).replace(/^n°\s*/i, '')
@@ -501,7 +567,8 @@ export default function DetailPanel({
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       const safeName = (societeName || 'Client').replace(/[\\/:*?"<>|]/g, '-').trim();
-      const entityLabel = entity === 'optilex' ? "Opti'lex" : 'Owner';
+      const entityLabel = (entity === 'optilex' ? "Opti'lex" : 'Owner')
+      + (structure ? ` - ${structure.name}` : '');
       a.href = url;
       a.download = `Etat de compte ${entityLabel} - ${safeName} - ${new Date().toISOString().slice(0, 10)}.pdf`;
       document.body.appendChild(a);
@@ -514,7 +581,7 @@ export default function DetailPanel({
     } finally {
       setPdfGenerating(null);
     }
-  }, [pdfGenerating, visiblePeriods, profile, focusedRow, client, onShowToast]);
+  }, [pdfGenerating, visiblePeriods, profile, focusedRow, client, structureSplits, onShowToast]);
 
   // Bouton Modifier : déplie le détail complet puis scrolle dessus (léger
   // délai pour laisser l'accordéon commencer son expansion).
@@ -580,13 +647,8 @@ export default function DetailPanel({
     // cours ET le cumul des mois antérieurs. `credit_*` seul ne reprend que
     // le cumul — sur un changement de formule rétroactif, il manquerait le
     // mois courant, et le montant proposé au remboursement serait faux.
-    const owed = (ent) => {
-      const cur = toNumber(focusedRow?.[`overdue_${ent}_current_month`]) || 0;
-      const cum = toNumber(focusedRow?.[`overdue_${ent}_cumulative`]) || 0;
-      return Math.max(-(cur + cum), 0);
-    };
-    const co = owed('owner');
-    const cp = owed('optilex');
+    const co = focusedRow ? entityCredit(focusedRow, 'owner') : 0;
+    const cp = focusedRow ? entityCredit(focusedRow, 'optilex') : 0;
     let entity = scope;
     if (scope === 'global') entity = co >= cp ? 'owner' : 'optilex';
     setRefund({
@@ -806,6 +868,19 @@ export default function DetailPanel({
                       onClick={() => downloadStatement(entity)}
                     />
                   ))}
+                  {/* Un document par société pour les clients multi-structures
+                      (demande dev 2026-09-01). Le global reste proposé : c'est
+                      celui qu'on envoie au dirigeant. */}
+                  {structures.length > 1 && scope !== 'global' && structures.map((st) => (
+                    <StatementButton
+                      key={st.id}
+                      entity={scope}
+                      label={st.name}
+                      busy={pdfGenerating === `st-${st.id}`}
+                      disabled={!!pdfGenerating}
+                      onClick={() => downloadStatement(scope, st)}
+                    />
+                  ))}
                 </span>
               )}
             >
@@ -814,6 +889,20 @@ export default function DetailPanel({
                 loading={loadingTimeline}
                 focusedRowId={rowId}
                 onSelectRow={onSelectRow}
+              />
+            </Section>
+
+            {/* Ventilation par structure — n'apparaît que pour les clients
+                qui règlent pour plusieurs sociétés (« Paye / N sct »).
+                Demande dev 2026-09-01 : savoir QUELLE structure a payé. */}
+            <Section title="Structures & ventilation" delay={0.12}>
+              <StructureSplits
+                clientId={clientId}
+                periods={periods}
+                scope={scope}
+                canEdit={canEdit}
+                canEditMoney={canEditMoney}
+                onShowToast={onShowToast}
               />
             </Section>
 
@@ -1277,8 +1366,11 @@ function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loadin
   // doit au client : la tuile affichait « retard −610,20 » d'un côté et
   // « +406,80 de trop-perçu » de l'autre, deux chiffres pour une seule
   // réalité (vérifié 2026-08-28). On retient le solde réellement dû.
-  const owedBack = overdueToDate < 0 ? -overdueToDate : 0;
-  const creditShown = Math.max(credit, owedBack);
+  // `credit` vient du helper partagé (`scopedCredit`) : il porte DÉJÀ le mois
+  // en cours et les créances antérieures. La tuile ne refait aucun calcul —
+  // c'est la duplication de cette règle qui avait fait diverger le tableau et
+  // la fiche (incident n°454, 2026-08-29).
+  const creditShown = credit;
   const creditOnly = creditShown > 0 && overdueToDate <= 0;
   const tiles = [
     { label: 'Total contrat', value: kpis.total, color: N.text },
@@ -3194,6 +3286,8 @@ function ModalitesSection({
 function OwnerOptilexSection({ focusedRow, patch, onCopied }) {
   if (!focusedRow) return <Empty />;
 
+  // guard-ok: restitution BRUTE des 4 champs côte à côte (Owner | Opti'lex),
+  // aucune notion dérivée n'est recalculée ici.
   const overdueOwnerCM   = toNumber(focusedRow.overdue_owner_current_month) || 0;
   const overdueOptilexCM = toNumber(focusedRow.overdue_optilex_current_month) || 0;
   const overdueOwnerCum  = toNumber(focusedRow.overdue_owner_cumulative) || 0;

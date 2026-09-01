@@ -40,6 +40,7 @@ import apiClient from '../../services/apiClient.js';
 import PortalDropdown from './components/PortalDropdown.jsx';
 import FilterBuilder from './components/FilterBuilder.jsx';
 import { matchesSavedFilter, describeFilter } from './savedFilters.js';
+import LossesView from './components/LossesView.jsx';
 import { exportFinanceXlsx } from './exportExcel.js';
 import companyLogo from '../../assets/my_image.png';
 import '../../index.css';
@@ -52,18 +53,17 @@ import { displayEtat } from '../OptilexBoard.jsx';
 import {
   ALLOWED_ROLES,
   formatEUR,
-  formatPercent,
   formatMonthLabel,
   shiftMonth,
   currentPeriod,
   parseDateFR,
-  toNumber,
   autoDebitPastilles,
   TERMINATED_BOARD_ETATS,
   scopedOverdueCurrent,
   scopedOverdueCum,
+  computeKpis,
+  creanceAgeMonths,
   scopedCredit,
-  scopedPeriodAmounts,
   scopedReceivedTotal,
   normalizeSearch,
   matchesClientSearch,
@@ -389,6 +389,11 @@ export default function TrackingSheetFinance() {
   // Périmètre du filtre « Onboarding passé » : tous les onboardings, ceux
   // du mois courant, ceux du mois précédent, ou les deux derniers mois.
   const [relanceMonths, setRelanceMonths] = useState(() => new Set());
+  // Sous-filtre des créances antérieures par ANCIENNETÉ (demande dev
+  // 2026-09-01) : 'all' | 'old' (≥ 2 mois) | 'recent' (< 2 mois).
+  // L'ancienneté vient du serveur (`overdue_*_since`) : c'est le premier mois
+  // d'une dette qui n'a jamais été soldée depuis.
+  const [creanceAge, setCreanceAge] = useState('all');
 
   // Prédicat d'une vue-filtre pour une row, dans la vision active.
   const matchesView = useCallback((r, filterKey) => {
@@ -397,8 +402,13 @@ export default function TrackingSheetFinance() {
         return scopedOverdueCurrent(r, scope) === 0 && scopedOverdueCum(r, scope) === 0;
       case 'retard_mois':
         return scopedOverdueCurrent(r, scope) > 0;
-      case 'creances':
-        return scopedOverdueCum(r, scope) > 0;
+      case 'creances': {
+        if (scopedOverdueCum(r, scope) <= 0) return false;
+        if (creanceAge === 'all') return true;
+        const mois = creanceAgeMonths(r, scope);
+        if (mois === null) return creanceAge === 'recent';
+        return creanceAge === 'old' ? mois >= 2 : mois < 2;
+      }
       case 'trop_percu':
         return scopedCredit(r, scope) > 0;
       case 'onboarding_passe': {
@@ -439,7 +449,7 @@ export default function TrackingSheetFinance() {
       default:
         return true; // 'all'
     }
-  }, [scope, boardMap, relanceMonths]);
+  }, [scope, boardMap, relanceMonths, creanceAge]);
 
   // États présents dans le board pour les clients affichés : le menu Filtre
   // ne propose que ce qui existe, avec son volume — un état vide n'apparaît
@@ -484,8 +494,11 @@ export default function TrackingSheetFinance() {
     if (tableFilters.size === 0) return viewed;
     // Parser FR/ISO factorisé dans constants.js (`parseDateFR`).
     return viewed.filter((r) => {
-      const overdueCurrent = toNumber(r.overdue_owner_current_month) + toNumber(r.overdue_optilex_current_month);
-      const overdueCumul = toNumber(r.overdue_owner_cumulative) + toNumber(r.overdue_optilex_cumulative);
+      // Helpers partagés, et SCOPÉS : ces filtres additionnaient les deux
+      // entités quelle que soit la vision active — un retard Opti'lex
+      // faisait donc matcher un filtre consulté en vision Owner.
+      const overdueCurrent = scopedOverdueCurrent(r, scope);
+      const overdueCumul = scopedOverdueCum(r, scope);
       const matchOnboarding = () => {
         const d = parseDateFR(r.client?.rdv_onboarding);
         return d !== null && d.getTime() > Date.now();
@@ -723,38 +736,14 @@ export default function TrackingSheetFinance() {
   // comme les colonnes et les tuiles du panneau — en vision Owner on ne veut
   // pas voir l'argent Opti'lex dans le total. En Globale, l'attendu est la
   // somme des deux entités (identique à expected_global_ttc côté backend).
-  const kpis = useMemo(() => {
-    let expected = 0;
-    let received = 0;
-    let overdue = 0;
-    // Créances antérieures : cumul dû (dénominateur) et récupéré dessus
-    // (numérateur) — le « % récupéré sur créances antérieures » du classeur.
-    let overdueCum = 0;
-    let receivedOverdue = 0;
-
-    rows.forEach((r) => {
-      const a = scopedPeriodAmounts(r, scope);
-      expected += a.expected;
-      received += a.received;
-      overdue  += scopedOverdueCurrent(r, scope);
-      overdueCum += scopedOverdueCum(r, scope);
-      receivedOverdue += a.receivedOverdue;
-    });
-
-    return {
-      total: rows.length,
-      expectedGlobal: expected,
-      receivedTotal: received,
-      overdueTotal: overdue,
-      // « Retard de paiement » du classeur = dette totale à date : retard du
-      // mois + créances antérieures. C'est ce montant que la finance compare.
-      overdueTotalWithCum: overdue + overdueCum,
-      overdueCumTotal: overdueCum,
-      // Taux du classeur finance (null si dénominateur 0 → rien affiché).
-      receivedPct: formatPercent(received, expected),
-      overdueRecoveredPct: formatPercent(receivedOverdue, overdueCum),
-    };
-  }, [rows, scope]);
+  // 2026-09-01 (demande dev) : les totaux suivent aussi le FILTRE actif. En
+  // sélectionnant « Retard du mois », on veut le poids de ces 129 clients-là,
+  // pas celui des 730. On somme donc les lignes RÉELLEMENT affichées —
+  // vue-filtre, filtres du menu, filtres personnels et recherche compris.
+  const kpis = useMemo(
+    () => computeKpis(exportedRows, scope, rows.length),
+    [exportedRows, rows.length, scope],
+  );
 
   // ── DetailPanel handlers ──────────────────────────────────────────────
   // The panel is opened *only* via the explicit "OUVRIR" button on the
@@ -973,6 +962,8 @@ export default function TrackingSheetFinance() {
             onChange={setViewFilter}
             counts={viewCounts}
             relanceMonths={relanceMonths}
+            creanceAge={creanceAge}
+            onCreanceAgeChange={setCreanceAge}
             onRelanceMonthsChange={setRelanceMonths}
           />
 
@@ -1010,6 +1001,16 @@ export default function TrackingSheetFinance() {
               transition={{ duration: 0.4, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
               style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
             >
+              {activeTab === 'losses' ? (
+                <LossesView
+                  boardMap={boardMap}
+                  scope={scope}
+                  onOpenClient={(cid) => {
+                    const row = rows.find((r) => r.client?.id === cid);
+                    if (row) onOpenRow(row);
+                  }}
+                />
+              ) : (
               <TableView
                 rows={filteredRows}
                 onPatchRow={onPatchRow}
@@ -1025,6 +1026,7 @@ export default function TrackingSheetFinance() {
                 showAllColsRef={showAllColsRef}
                 showColRef={showColRef}
               />
+              )}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -1525,7 +1527,20 @@ function TitleBlock({ kpis, loading }) {
         background: '#fff',
       }}>
         {[
-          { label: 'Clients', value: loading ? '…' : kpis.total, color: N.text, dot: N.textFaint },
+          {
+            label: 'Clients',
+            value: loading ? '…' : kpis.total,
+            color: N.text,
+            dot: kpis.filtered ? N.accent : N.textFaint,
+            // Sélection active : on rappelle sur combien de clients portent
+            // TOUS les montants du bandeau. Sans ça, « 153 956 € de retard »
+            // se lit comme le total du mois alors qu'il ne couvre qu'un
+            // filtre — le genre de malentendu qui coûte cher en finance.
+            sub: loading || !kpis.filtered ? null : `sur ${kpis.totalAll}`,
+            subColor: N.accent,
+            subTitle: `Totaux calculés sur les ${kpis.total} clients affichés, `
+              + `pas sur les ${kpis.totalAll} du mois`,
+          },
           { label: 'Attendu', value: loading ? '…' : formatEUR(kpis.expectedGlobal), color: N.text, dot: N.textFaint },
           {
             label: 'Reçu',
@@ -1631,6 +1646,47 @@ function KpiInline({ label, value, tone = 'neutral' }) {
 // coché = tous les onboardings passés.
 const RELANCE_MONTH_COUNT = 12;
 
+// Sous-filtre d'ancienneté des créances antérieures.
+//
+// Demande dev 2026-09-01 : « quand on clique sur Créances antérieures, on a un
+// petit drop-down : les créances à plus de 2 mois, et celles à moins de
+// 2 mois. » Deux populations qui n'appellent pas la même action — une relance
+// pour les récentes, une escalade pour les anciennes.
+const CREANCE_AGES = [
+  { key: 'all',    label: 'Toutes' },
+  { key: 'old',    label: 'Plus de 2 mois' },
+  { key: 'recent', label: 'Moins de 2 mois' },
+];
+
+function CreanceAgePicker({ value, onChange }) {
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 4 }}>
+      {CREANCE_AGES.map((o) => {
+        const actif = value === o.key;
+        return (
+          <button
+            key={o.key}
+            type="button"
+            onClick={() => onChange(o.key)}
+            style={{
+              border: `1px solid ${actif ? N.text : N.borderSft}`,
+              background: actif ? N.text : '#fff',
+              color: actif ? '#fff' : N.textMuted,
+              borderRadius: 999, padding: '3px 11px',
+              fontSize: 12, fontWeight: actif ? 600 : 500,
+              fontFamily: 'inherit', cursor: 'pointer',
+              transition: 'background 0.12s, color 0.12s, border-color 0.12s',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function RelanceMonthPicker({ selected, onChange }) {
   const [open, setOpen] = useState(false);
   const anchorRef = useRef(null);
@@ -1730,7 +1786,8 @@ function RelanceMonthPicker({ selected, onChange }) {
   );
 }
 
-function ViewChips({ active, onChange, counts, relanceMonths, onRelanceMonthsChange }) {
+function ViewChips({ active, onChange, counts, relanceMonths, onRelanceMonthsChange,
+  creanceAge, onCreanceAgeChange }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 6,
@@ -1790,6 +1847,9 @@ function ViewChips({ active, onChange, counts, relanceMonths, onRelanceMonthsCha
       })}
       {active === 'onboarding_passe' && (
         <RelanceMonthPicker selected={relanceMonths} onChange={onRelanceMonthsChange} />
+      )}
+      {active === 'creances' && (
+        <CreanceAgePicker value={creanceAge} onChange={onCreanceAgeChange} />
       )}
     </div>
   );
@@ -2231,6 +2291,9 @@ function TabRow({
     { key: 'all',     label: 'Toutes les périodes' },
     { key: 'state',   label: 'Par état' },
     { key: 'mine',    label: 'Mes clients' },
+    // Quantifier ce qui a été abandonné (demande dev 2026-09-01). Seul
+    // onglet qui pilote réellement le contenu à ce jour.
+    { key: 'losses',  label: 'Pertes' },
   ];
 
   return (

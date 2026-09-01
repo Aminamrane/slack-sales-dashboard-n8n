@@ -66,6 +66,7 @@ import {
   SCOPED_COMMENT_FIELDS,
   SCOPE_FIELDS,
   stripEntitySuffix,
+  parsePaymentSpecCount,
   normalizeSearch,
   matchesClientSearch,
   scopedCredit,
@@ -80,6 +81,7 @@ import {
 } from './constants.js';
 import { EditableNumber, EditableSelect, EditableDate } from './EditableCell.jsx';
 import ModalitesCell from './components/ModalitesCell.jsx';
+import StructureAmountCell from './components/StructureAmountCell.jsx';
 // Palette + règles du board Owner/Opti'Lex (imports read-only) : l'état
 // teinte en pastel les cellules sticky N°/société (la colonne État dédiée a
 // été retirée 2026-08-21, l'édition vit dans le DetailPanel), et la météo
@@ -709,10 +711,17 @@ const RowRenderer = React.memo(function RowRenderer({
   onOpenCommentPopup, // (colKey, rect) — ouverture popup au niveau TableView
   collapsingCol,
   scope,              // vision active : 'owner' | 'optilex' | 'global'
+  onShowToast,        // (msg, type) — retours de la saisie par structure
 }) {
   const [hover, setHover] = useState(false);
 
   const patch = useCallback((field) => (value) => onPatchRow(row.id, { [field]: value }), [row.id, onPatchRow]);
+
+  // Client qui règle pour plusieurs sociétés (« Paye / N sct ») : le récupéré
+  // se saisit structure par structure. 44 clients sur 730 — pour tous les
+  // autres, la cellule ne change pas d'un pixel.
+  const multiStructure = (parsePaymentSpecCount(row.payment_specificity) || 0) > 1;
+  const amountsEditable = canEditAmounts(apiClient.getUser()?.role);
 
   // Valeurs numériques de l'entité active (sommes Owner+Opti'lex en Globale).
   const isGlobal = scope === 'global';
@@ -724,6 +733,8 @@ const RowRenderer = React.memo(function RowRenderer({
   );
   const expected         = sumOrField('expected_owner', 'expected_optilex_ttc', fields?.expected);
   const received         = sumOrField('received_owner', 'received_optilex_ttc', fields?.received);
+  // guard-ok: noms de champs passés en paramètres à sumOrField, qui applique
+  // la règle de vision — pas d'arithmétique dérivée sur place.
   const overdueCum       = sumOrField('overdue_owner_cumulative', 'overdue_optilex_cumulative', fields?.overdueCum) || 0;
   // Trop-perçu reporté de l'entité active (0 si le backend ne l'expose pas).
   const rowCredit        = scopedCredit(row, scope);
@@ -860,6 +871,23 @@ const RowRenderer = React.memo(function RowRenderer({
         <AmountWithDelta delta={Math.max(0, received - expected)}>
           {isGlobal ? (
             <RecoveredAmount value={received} />
+          ) : multiStructure ? (
+            // Client qui règle pour plusieurs sociétés : la saisie se fait
+            // structure par structure, et le total du mois en découle
+            // (demande dev 2026-09-01). Un clic ouvre aussi le détail.
+            <StructureAmountCell
+              row={row}
+              entity={scope}
+              value={received}
+              expected={expected}
+              canEdit={!!fields && amountsEditable}
+              // Le serveur a déjà écrit le total (sync_received) ; ce PATCH
+              // ne sert qu'au rafraîchissement optimiste de la ligne. Il est
+              // sans effet de bord : une valeur inchangée est ignorée côté
+              // service, donc pas de double écriture ni d'audit en double.
+              onSaved={(t) => onPatchRow(row.id, { [fields.received]: t })}
+              onShowToast={onShowToast}
+            />
           ) : (
             <EditableNumber
               value={received}
@@ -1635,6 +1663,7 @@ export default function TableView({
                 rowCommentCounts={commentCounts[row.id]}
                 onOpenCommentPopup={handleOpenCommentPopup}
                 scope={scope}
+                onShowToast={onShowToast}
               />
             )}
           />
