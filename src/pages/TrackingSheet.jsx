@@ -7705,7 +7705,7 @@ export default function TrackingSheet() {
                       </div>
                     )}
 
-                    {/* Date du contrat — facultative, visible seulement quand l'envoi
+                    {/* Date du contrat, facultative, visible seulement quand l'envoi
                         est possible. Laissée vide, le contrat part daté du jour comme
                         avant. Remplie, c'est elle qui s'imprime dans le bloc de
                         signature des deux documents. Elle ne touche que le papier :
@@ -7731,7 +7731,7 @@ export default function TrackingSheet() {
                             }}
                           />
                           <span style={{ fontSize: 10.5, color: iso ? C.accent : C.muted, transition: 'color 0.15s' }}>
-                            {iso ? `Le contrat portera la date du ${fr}` : "Facultatif — vide, le contrat porte la date du jour"}
+                            {iso ? `Le contrat portera la date du ${fr}` : "Facultatif : vide, le contrat porte la date du jour"}
                           </span>
                           {iso && (
                             <button
