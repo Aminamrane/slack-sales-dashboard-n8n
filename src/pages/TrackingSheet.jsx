@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
+import { leadAvatar } from "../utils/leadAvatar";
 import { supabase } from "../lib/supabaseClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import LeadsManagement from "./LeadsManagement.jsx";
@@ -6293,27 +6294,35 @@ export default function TrackingSheet() {
                 />
               </div>
 
-              {/* ─── PROFILE HEADER ─── */}
+              {/* ─── PROFILE HEADER — avatar à gauche, identité (nom + société + SIREN)
+                   poussée à droite (demande dev 02/09). L'image couvre les 3 lignes. ─── */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <img src={leadAvatar(lead.full_name, lead.id, lead.origin, lead.campaign_name)} alt="" width={64} height={64}
+                style={{ width: 64, height: 64, borderRadius: 16, flexShrink: 0, objectFit: 'cover', marginTop: 4 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '12px' }}>
+                {/* Origin badge above name — rendu aussi pendant l'édition du nom,
+                    sinon le bloc remonte d'une ligne (retour dev 02/09). */}
+                <span style={{
+                  padding: '1px 7px', borderRadius: 50, fontSize: 10, fontWeight: 600,
+                  background: origin.bg, color: origin.text, marginBottom: 3, alignSelf: 'flex-start',
+                }}>
+                  {lead.origin}
+                </span>
                 {/* Name (editable) */}
                 {editingField?.leadId === lead.id && editingField?.field === 'full_name' ? (
-                  <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 3 }}>
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 3, paddingRight: 52 }}>
+                    {/* paddingRight : la coche et la croix s'arrêtent avant le
+                        tampon Meta (position absolue au coin), sinon il les recouvre. */}
                     <input ref={editInputRef} value={editingField.value} onChange={(e) => setEditingField(prev => ({ ...prev, value: e.target.value }))}
                       onKeyDown={(e) => { if (e.key === 'Enter') saveFieldEdit(); if (e.key === 'Escape') cancelFieldEdit(); }}
-                      style={{ flex: 1, fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.02em', border: `1px solid ${C.accent}`, borderRadius: 8, padding: '3px 8px', background: C.bg, fontFamily: 'inherit', outline: 'none' }}
+                      style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.02em', border: `1px solid ${C.accent}`, borderRadius: 8, padding: '3px 8px', background: C.bg, fontFamily: 'inherit', outline: 'none' }}
                     />
                     <button onClick={saveFieldEdit} style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: C.accent, color: '#fff', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✓</button>
                     <button onClick={cancelFieldEdit} style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
                   </div>
                 ) : (
                   <>
-                  {/* Origin badge above name */}
-                  <span style={{
-                    padding: '1px 7px', borderRadius: 50, fontSize: 10, fontWeight: 600,
-                    background: origin.bg, color: origin.text, marginBottom: 3, alignSelf: 'flex-start',
-                  }}>
-                    {lead.origin}
-                  </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
                     <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>
                       {lead.full_name}
@@ -6447,6 +6456,8 @@ export default function TrackingSheet() {
                     </button>
                   </div>
                 )}
+              </div>
+              </div>
               </div>
 
               {/* ─── STATS ROW ─── */}

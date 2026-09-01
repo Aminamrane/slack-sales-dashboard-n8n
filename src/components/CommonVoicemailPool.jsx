@@ -10,8 +10,9 @@
 // Auto-alimenté via GET /tracking/pools (les props legacy leads/claimingId/
 // onClaim sont acceptées mais ignorées : TrackingSheet reste intact).
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import apiClient from "../services/apiClient";
+import { leadAvatar } from "../utils/leadAvatar";
 
 const ORIGIN_TONE = { bg: "rgba(100,116,139,0.12)", text: "#64748b" };
 
@@ -30,11 +31,206 @@ const fmtAge = (iso) => {
 // Valeurs slugifiées selon le canal (« 3_-_5 », « entre_100_000_€… ») -> lisible.
 const clean = (v) => (v ? String(v).replace(/_/g, " ").replace(/\s+/g, " ").trim() : null);
 const fmtDate = (v) => { const m = String(v || "").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : null; };
+// Créneaux RDV en 24h, bornés aux heures d'appel (9h-19h, heure de Paris) :
+// évite le sélecteur natif AM/PM localisé et interdit un RDV hors ouverture.
+const RDV_SLOTS = (() => {
+  const a = [];
+  for (let h = 9; h <= 19; h++) {
+    a.push(`${String(h).padStart(2, "0")}:00`);
+    if (h < 19) a.push(`${String(h).padStart(2, "0")}:30`);
+  }
+  return a;
+})();
+
+// ── Coordonnées « à copier » ────────────────────────────────────────────────
+// Le téléphone et l'email sont les deux infos qu'un sales attrape pour agir :
+// on les sort du texte gris qualifiant pour en faire des puces cliquables, avec
+// une icône qui dit « copie-moi ». Aucune logique métier ici — copie presse-
+// papier + flash « Copié », c'est le même geste que la tracking sheet.
+const IC_PHONE = (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
+  </svg>
+);
+const IC_MAIL = (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 7-10 6L2 7" />
+  </svg>
+);
+const IC_COPY = (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </svg>
+);
+const IC_CHECK = (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
+function CopyChip({ kind, value, C, darkMode }) {
+  const [copied, setCopied] = useState(false);
+  const [hover, setHover] = useState(false);
+  if (!value) return null;
+  const isPhone = kind === "phone";
+  const copy = async (e) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = value; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); } catch { /* noop */ }
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1400);
+  };
+  const accent = "#0891b2"; // teal (cohérent avec « Prendre avec un RDV »)
+  const bg = copied
+    ? (darkMode ? "rgba(62,125,90,0.20)" : "#e7f5ee")
+    : hover ? (darkMode ? "rgba(8,145,178,0.16)" : "#e6f6fa")
+            : (darkMode ? "rgba(255,255,255,0.05)" : "#f4f6f9");
+  const border = copied ? "#3e7d5a" : hover ? accent : (darkMode ? "rgba(255,255,255,0.10)" : "#e2e6ee");
+  return (
+    <button
+      onClick={copy}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      title={copied ? "Copié" : `Copier ${isPhone ? "le numéro" : "l'email"}`}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 6,
+        padding: isPhone ? "4px 9px" : "4px 9px",
+        borderRadius: 8, border: `1px solid ${border}`, background: bg,
+        cursor: "pointer", fontFamily: "inherit", transition: "background 0.15s, border-color 0.15s",
+        maxWidth: isPhone ? 160 : 190,
+      }}
+    >
+      <span style={{ display: "flex", color: copied ? "#3e7d5a" : accent, flexShrink: 0 }}>
+        {isPhone ? IC_PHONE : IC_MAIL}
+      </span>
+      <span style={{
+        fontSize: isPhone ? 12.5 : 12, fontWeight: isPhone ? 700 : 600,
+        color: copied ? "#3e7d5a" : C.text, whiteSpace: "nowrap",
+        overflow: "hidden", textOverflow: "ellipsis", fontVariantNumeric: "tabular-nums",
+      }}>
+        {copied ? "Copié" : value}
+      </span>
+      <span style={{ display: "flex", color: copied ? "#3e7d5a" : (hover ? accent : C.muted), flexShrink: 0 }}>
+        {copied ? IC_CHECK : IC_COPY}
+      </span>
+    </button>
+  );
+}
+
+// Rangée de coordonnées cliquables, posée sous le nom. S'adapte aux proportions
+// existantes (wrap), ne déforme rien autour.
+function ContactRow({ lead, C, darkMode }) {
+  if (!lead.phone && !lead.email) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 8, paddingLeft: 18 }}>
+      <CopyChip kind="phone" value={lead.phone} C={C} darkMode={darkMode} />
+      <CopyChip kind="email" value={lead.email} C={C} darkMode={darkMode} />
+    </div>
+  );
+}
+
+// ── Chip « secteur » pastel ──────────────────────────────────────────────────
+// Une teinte douce par origine, déterministe (même origine => même couleur).
+// PALETTE PLACEHOLDER : à remplacer par les couleurs du dev (un seul endroit).
+const TAG_PALETTES = [
+  { bg: "#f2ecfd", dbg: "rgba(124,77,214,0.20)", fg: "#7c4dd6" },
+  { bg: "#e9f0fe", dbg: "rgba(59,111,212,0.20)", fg: "#3b6fd4" },
+  { bg: "#e3f5f2", dbg: "rgba(44,156,143,0.20)", fg: "#2c9c8f" },
+  { bg: "#fdf2e2", dbg: "rgba(191,122,30,0.20)", fg: "#bf7a1e" },
+  { bg: "#fdeaf2", dbg: "rgba(219,39,119,0.20)", fg: "#db2777" },
+  { bg: "#eaf6e9", dbg: "rgba(47,122,83,0.20)", fg: "#2f7a53" },
+  { bg: "#eef1f5", dbg: "rgba(105,117,136,0.20)", fg: "#697588" },
+];
+function tagPalette(s) {
+  let h = 0; const str = String(s || "");
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return TAG_PALETTES[h % TAG_PALETTES.length];
+}
+function OriginTag({ origin, darkMode }) {
+  if (!origin) return null;
+  const p = tagPalette(origin);
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", padding: "3px 10px", borderRadius: 7, fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap", background: darkMode ? p.dbg : p.bg, color: p.fg }}>
+      {origin}
+    </span>
+  );
+}
+
+// Avatar du lead : visage dessiné selon le genre déduit du prénom, stable par
+// lead. Décoratif — ne porte aucune logique.
+function LeadFace({ lead }) {
+  return (
+    <img src={leadAvatar(lead.full_name, lead.id, lead.origin, lead.campaign_name)} alt="" width={44} height={44}
+      loading="lazy"
+      style={{ width: 44, height: 44, borderRadius: 12, flexShrink: 0, display: "block", objectFit: "cover" }} />
+  );
+}
+
+// Barre de pages : « Précédent · page X / Y · Suivant ». Masquée s'il n'y a
+// qu'une page. Changer de page remonte en haut de la liste.
+function Pager({ page, pages, total, onPage, C, darkMode }) {
+  if (pages <= 1) return null;
+  const chev = (d) => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      {d === "l" ? <polyline points="15 18 9 12 15 6" /> : <polyline points="9 18 15 12 9 6" />}
+    </svg>
+  );
+  const btn = (dis) => ({
+    display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px",
+    borderRadius: 9, border: `1px solid ${C.border}`,
+    background: darkMode ? "rgba(255,255,255,0.04)" : "#fff",
+    color: dis ? C.muted : C.text, fontSize: 12.5, fontWeight: 650,
+    cursor: dis ? "default" : "pointer", fontFamily: "inherit", opacity: dis ? 0.5 : 1,
+    transition: "background 0.15s",
+  });
+  const go = (n) => { onPage(n); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 14 }}>
+      <button disabled={page <= 1} onClick={() => go(page - 1)} style={btn(page <= 1)}>{chev("l")} Précédent</button>
+      <span style={{ fontSize: 12.5, color: C.muted, whiteSpace: "nowrap" }}>
+        page <b style={{ color: C.text }}>{page}</b> / {pages} · {total} leads
+      </span>
+      <button disabled={page >= pages} onClick={() => go(page + 1)} style={btn(page >= pages)}>Suivant {chev("r")}</button>
+    </div>
+  );
+}
+
+// Cellule « taille » : la tranche d'effectif seule (décision dev : pas de CA).
+function SizeCell({ lead, C }) {
+  const head = clean(lead.headcount || lead.employee_range);
+  if (!head) return <span style={{ color: C.muted }}>—</span>;
+  return <b style={{ fontSize: 12, color: C.text, fontWeight: 600, whiteSpace: "nowrap" }}>{head}</b>;
+}
+
+// Bouton « ne souhaite pas être rappelé » — corbeille discrète, rouge au survol.
+function OptOutX({ lead, C, busy, onOptOut }) {
+  const [h, setH] = useState(false);
+  return (
+    <button onClick={() => onOptOut(lead.id, lead.full_name)} disabled={busy}
+      onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)}
+      title="Ne souhaite pas être rappelé : mettre ce lead à la corbeille (archivé, plus jamais rappelé)"
+      style={{ width: 28, height: 28, borderRadius: 7, border: "none",
+        background: h ? (C.muted && C.text ? "rgba(180,35,24,0.10)" : "transparent") : "transparent",
+        color: h ? "#b42318" : C.muted, cursor: "pointer",
+        display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        transition: "background 0.15s, color 0.15s" }}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      </svg>
+    </button>
+  );
+}
 
 // Ligne d'infos qualifiantes (mêmes données que le lead détail).
 function InfoLine({ lead, C }) {
   const bits = [
-    lead.email || null,
     clean(lead.headcount || lead.employee_range) ? `${clean(lead.headcount || lead.employee_range)} salariés` : null,
     clean(lead.revenue) ? `CA ${clean(lead.revenue)}` : null,
     clean(lead.sector) || null,
@@ -115,6 +311,7 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
   const [calledFlash, setCalledFlash] = useState({}); // feedback bouton « j'ai appelé »
   const [rdvFor, setRdvFor] = useState(null);      // lead_id du mini-formulaire RDV ouvert
   const [rdvDate, setRdvDate] = useState("");
+  const [rdvKind, setRdvKind] = useState("r1"); // le sales choisit R1 ou R2 au claim
   const [rdvSales, setRdvSales] = useState("");   // setter : commercial destinataire
   const [claimedMsg, setClaimedMsg] = useState(null);
   const [q, setQ] = useState("");
@@ -123,19 +320,14 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
   // Filtre « mes appels » : appliqué à l'affichage, le tri global (dernier
   // appel de l'équipe, du plus récent) reste celui du serveur.
   const [mine, setMine] = useState("all");
-  // Rendu progressif : tout est chargé, on affiche par tranches au scroll.
-  const [shownCount, setShownCount] = useState(150);
-  useEffect(() => { setShownCount(150); }, [pool, q, mine]);
+  // Pagination : 100 leads par page, les plus récents d'abord (ordre serveur).
+  // Toutes les pages découpent le MÊME instantané chargé en une fois : l'ordre
+  // est figé pendant la navigation, un lead ne change pas de page en cours de
+  // route. Changer de pool, de filtre ou de recherche ramène à la page 1.
+  const PAGE_SIZE = 100;
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [pool, q, mine]);
   useEffect(() => { if (pool !== "traitement") setMine("all"); }, [pool]);
-  useEffect(() => {
-    const onScroll = () => {
-      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 900) {
-        setShownCount((n) => n + 150);
-      }
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
   const fetchPools = async (search) => {
     try {
@@ -161,12 +353,16 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
     : (l.my_calls || 0) === 0;
   const reaAll = (data?.reactivite || []).filter(keepMine);
   const trtAll = (data?.traitement || []).filter(keepMine);
-  const rea = reaAll.slice(0, shownCount);
-  const trt = trtAll.slice(0, shownCount);
+  const activeAll = pool === "reactivite" ? reaAll : trtAll;
+  const pages = Math.max(1, Math.ceil(activeAll.length / PAGE_SIZE));
+  const cur = Math.min(page, pages);
+  const pageSlice = (arr, isActive) =>
+    isActive ? arr.slice((cur - 1) * PAGE_SIZE, cur * PAGE_SIZE) : arr.slice(0, PAGE_SIZE);
+  const rea = pageSlice(reaAll, pool === "reactivite");
+  const trt = pageSlice(trtAll, pool === "traitement");
   // Compteurs = totaux RÉELS du pool, pas le nombre de leads chargés.
   const totRea = data?.totals?.reactivite ?? reaAll.length;
   const totTrt = data?.totals?.traitement ?? trtAll.length;
-  const searching = q.trim().length > 0;
 
   const claimRea = async (id) => {
     setBusyId(id);
@@ -185,8 +381,9 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
     setBusyId(id);
     try {
       await apiClient.post(`/api/v1/tracking/pools/traitement/${id}/claim`,
-        salesOptions ? { r1_date: rdvDate, sales_email: rdvSales } : { r1_date: rdvDate });
-      setClaimedMsg("Lead récupéré avec son RDV — il est dans vos R1 placés.");
+        salesOptions ? { r1_date: rdvDate, rdv_kind: rdvKind, sales_email: rdvSales }
+                     : { r1_date: rdvDate, rdv_kind: rdvKind });
+      setClaimedMsg(`Lead récupéré avec son RDV, il est dans vos ${rdvKind === "r2" ? "R2" : "R1"} placés.`);
       setRdvFor(null); setRdvDate("");
       fetchPools();
     } catch (e) {
@@ -228,6 +425,13 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
     borderRadius: 14, border: `1px solid ${C.border}`,
     background: darkMode ? "rgba(255,255,255,0.03)" : "#fff", ...extra,
   });
+  // Styles de tableau (partagés par les deux pools).
+  const thS = { fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, textAlign: "left", padding: "8px 10px", borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap", background: darkMode ? "rgba(255,255,255,0.02)" : "#fcfcfd" };
+  const tdS = { padding: "7px 10px", borderBottom: `1px solid ${darkMode ? "rgba(255,255,255,0.06)" : "#f2f4f7"}`, verticalAlign: "middle", fontSize: 12.5, color: C.text };
+  // Variante « serrée » : la colonne se réduit à son contenu, tout se rapproche
+  // du bord gauche, l'espace libre s'accumule en fin de ligne (demande dev).
+  const thT = { ...thS };
+  const tdT = { ...tdS, whiteSpace: "nowrap" };
 
   if (!data && !err) {
     return <div style={{ padding: 32, textAlign: "center", color: C.muted, fontSize: 13 }}>Chargement des pools…</div>;
@@ -287,138 +491,189 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
           style={{ flex: 1, minWidth: 240, maxWidth: 420, padding: "10px 14px", borderRadius: 10, border: `1px solid ${C.border}`, background: darkMode ? "rgba(255,255,255,0.04)" : "#fff", color: C.text, fontSize: 13, fontFamily: "inherit", outline: "none" }} />
       </div>
 
-      {(() => {
-        const all = pool === "reactivite" ? reaAll.length : trtAll.length;
-        const shown = Math.min(shownCount, all);
-        const total = pool === "reactivite" ? totRea : totTrt;
-        if (searching) return (
-          <div style={{ fontSize: 11.5, color: C.muted }}>{all} résultat{all > 1 ? "s" : ""} sur les {total} leads du pool.</div>
-        );
-        if (shown < all) return (
-          <div style={{ fontSize: 11.5, color: C.muted }}>
-            {total} leads dans le pool, du plus récent au plus ancien — {shown} affichés, faites défiler pour la suite.
-          </div>
-        );
-        return <div style={{ fontSize: 11.5, color: C.muted }}>{total} leads dans le pool, du plus récent au plus ancien.</div>;
-      })()}
-
       {/* ── POOL RÉACTIVITÉ ── */}
       <div style={{ display: pool === "reactivite" ? "block" : "none" }}>
-        <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>
-          Leads chauds jamais appelés. Premier arrivé, premier servi : « Je le prends », vous l'appelez tout de suite, il est à vous 3 jours pour poser un RDV.
-        </div>
         {rea.length === 0 ? (
           <div style={{ ...card({ padding: "14px 16px" }), color: C.muted, fontSize: 12.5 }}>
             Aucun lead en attente de premier appel — c'est bon signe.
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {rea.map((lead) => (
-              <div key={lead.id} style={card({ padding: "11px 16px", borderColor: darkMode ? "rgba(239,68,68,0.4)" : "#f3c1bd" })}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", flexShrink: 0 }} />
-                  <span style={{ fontSize: 14, fontWeight: 650, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {lead.full_name || lead.company_name || "Sans nom"}
-                  </span>
-                  {lead.origin && <span style={{ padding: "2px 8px", borderRadius: 50, fontSize: 10, fontWeight: 600, background: ORIGIN_TONE.bg, color: ORIGIN_TONE.text, flexShrink: 0 }}>{lead.origin}</span>}
-                  {lead.phone && <span style={{ fontSize: 12.5, fontWeight: 650, color: C.text, whiteSpace: "nowrap" }}>{lead.phone}</span>}
-                  <div style={{ flex: 1 }} />
-                  {lead.pool_entered_at && (
-                    <span style={{ fontSize: 11, color: "#ef4444", fontWeight: 700, whiteSpace: "nowrap" }}>arrivé {fmtAge(lead.pool_entered_at)}</span>
-                  )}
-                  {canClaim && (
-                    <button onClick={() => claimRea(lead.id)} disabled={busyId === lead.id}
-                      style={{ flexShrink: 0, padding: "7px 16px", borderRadius: 9, border: "none", background: busyId === lead.id ? C.muted : "#3e7d5a", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: busyId === lead.id ? "wait" : "pointer", fontFamily: "inherit" }}>
-                      {busyId === lead.id ? "…" : "📞 Je le prends"}
-                    </button>
-                  )}
-                </div>
-                {canClaim && (
-                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
-                    <button onClick={() => optOut(lead.id, lead.full_name)} disabled={busyId === lead.id}
-                      title="Retire le lead du pool et l'archive : plus personne ne le rappellera"
-                      style={{ padding: "5px 11px", borderRadius: 8, border: "none", background: "transparent", color: C.muted, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}>
-                      Ne souhaite pas être rappelé
-                    </button>
-                  </div>
-                )}
-                <InfoLine lead={lead} C={C} />
-              </div>
-            ))}
+          <div style={{ ...card(), overflow: "hidden" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+                <thead><tr>
+                  <th style={thS}>Lead</th>
+                  <th style={thT}>Secteur</th>
+                  <th style={thT}>Téléphone</th>
+                  <th style={thT}>Email</th>
+                  <th style={thT}>Taille</th>
+                  {canClaim && <th style={{ ...thS, textAlign: "right" }} aria-label="Actions" />}
+                </tr></thead>
+                <tbody>
+                  {rea.map((lead) => (
+                    <tr key={lead.id} style={{ transition: "background 0.12s" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? "rgba(255,255,255,0.03)" : "#f8fafc"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                      <td style={tdS}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <LeadFace lead={lead} />
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 650, color: C.text, whiteSpace: "nowrap" }}>{lead.full_name || lead.company_name || "Sans nom"}</div>
+                            {lead.pool_entered_at && <div style={{ fontSize: 10.5, color: "#ef4444", fontWeight: 600 }}>arrivé {fmtAge(lead.pool_entered_at)}</div>}
+                          </div>
+                        </div>
+                      </td>
+                      <td style={tdT}><OriginTag origin={lead.origin} darkMode={darkMode} /></td>
+                      <td style={tdT}><CopyChip kind="phone" value={lead.phone} C={C} darkMode={darkMode} /></td>
+                      <td style={tdT}><CopyChip kind="email" value={lead.email} C={C} darkMode={darkMode} /></td>
+                      <td style={tdT}><SizeCell lead={lead} C={C} /></td>
+                      {canClaim && (
+                        <td style={{ ...tdS, whiteSpace: "nowrap", textAlign: "right" }}>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                            <button onClick={() => claimRea(lead.id)} disabled={busyId === lead.id}
+                              style={{ padding: "5px 12px", borderRadius: 8, border: "none", background: busyId === lead.id ? C.muted : "#3e7d5a", color: "#fff", fontSize: 11.5, fontWeight: 700, cursor: busyId === lead.id ? "wait" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                              {busyId === lead.id ? "…" : "Je le prends"}
+                            </button>
+                            <OptOutX lead={lead} C={C} busy={busyId === lead.id} onOptOut={optOut} />
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
+        )}
+        {pool === "reactivite" && (
+          <Pager page={cur} pages={pages} total={activeAll.length} onPage={setPage} C={C} darkMode={darkMode} />
         )}
       </div>
 
       {/* ── POOL TRAITEMENT ── */}
       <div style={{ display: pool === "traitement" ? "block" : "none" }}>
-        <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>
-          Récupérable <b>uniquement en positionnant un R1</b>. Passez un max d'appels (« J'ai appelé » alimente le compteur partagé), et dès que vous avez le gérant : posez le RDV, le lead est à vous.
-        </div>
         {trt.length === 0 ? (
           <div style={{ ...card({ padding: "14px 16px" }), color: C.muted, fontSize: 12.5 }}>Pool vide.</div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {trt.map((lead) => (
-              <div key={lead.id} style={card({ padding: "11px 16px" })}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#64748b", flexShrink: 0 }} />
-                  <span style={{ fontSize: 14, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 60, flexShrink: 1 }}>
-                    {lead.full_name || lead.company_name || "Sans nom"}
-                  </span>
-                  {lead.origin && <span style={{ padding: "2px 8px", borderRadius: 50, fontSize: 10, fontWeight: 600, background: ORIGIN_TONE.bg, color: ORIGIN_TONE.text, flexShrink: 0 }}>{lead.origin}</span>}
-                  {(lead.company_name && lead.full_name) && (
-                    <span style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flexShrink: 1, minWidth: 0 }}>{lead.company_name}</span>
-                  )}
-                  {lead.phone && <span style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap", flexShrink: 0 }}>{lead.phone}</span>}
-                  <div style={{ flex: 1 }} />
-                  <PoolCallsBadge lead={lead} C={C} darkMode={darkMode} />
-                  <MyCallsBadge lead={lead} C={C} darkMode={darkMode} />
-                  {canClaim && (
-                    <>
-                      <button onClick={() => markCalled(lead.id)}
-                        style={{ flexShrink: 0, padding: "6px 12px", borderRadius: 9, border: `1px solid ${C.border}`, background: calledFlash[lead.id] ? "#3e7d5a" : "transparent", color: calledFlash[lead.id] ? "#fff" : C.text, fontSize: 12, fontWeight: 650, cursor: "pointer", fontFamily: "inherit", transition: "background 0.2s, color 0.2s" }}>
-                        {calledFlash[lead.id] ? "Noté ✓" : "J'ai appelé"}
-                      </button>
-                      <button onClick={() => { setRdvFor(rdvFor === lead.id ? null : lead.id); setRdvDate(""); setRdvSales(""); }}
-                        style={{ flexShrink: 0, padding: "6px 14px", borderRadius: 9, border: "none", background: "#0891b2", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                        Prendre avec un RDV
-                      </button>
-                    </>
-                  )}
-                </div>
-                {canClaim && (
-                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
-                    <button onClick={() => optOut(lead.id, lead.full_name)} disabled={busyId === lead.id}
-                      title="Retire le lead du pool et l'archive : plus personne ne le rappellera"
-                      style={{ padding: "5px 11px", borderRadius: 8, border: "none", background: "transparent", color: C.muted, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}>
-                      Ne souhaite pas être rappelé
-                    </button>
-                  </div>
-                )}
-                {rdvFor === lead.id && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingLeft: 18 }}>
-                    <span style={{ fontSize: 12, color: C.muted }}>R1 le</span>
-                    {salesOptions && (
-                      <select value={rdvSales} onChange={(e) => setRdvSales(e.target.value)}
-                        style={{ padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: darkMode ? "rgba(255,255,255,0.04)" : "#fff", color: C.text, fontSize: 12.5, fontFamily: "inherit", outline: "none" }}>
-                        <option value="">Pour quel commercial ?</option>
-                        {salesOptions.map((s) => (
-                          <option key={s.email} value={s.email}>{s.name || s.email}</option>
-                        ))}
-                      </select>
-                    )}
-                    <input type="datetime-local" value={rdvDate} onChange={(e) => setRdvDate(e.target.value)}
-                      style={{ padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: darkMode ? "rgba(255,255,255,0.04)" : "#fff", color: C.text, fontSize: 12.5, fontFamily: "inherit" }} />
-                    <button onClick={() => claimTrt(lead.id)} disabled={!rdvDate || (salesOptions && !rdvSales) || busyId === lead.id}
-                      style={{ padding: "7px 14px", borderRadius: 8, border: "none", background: (!rdvDate || (salesOptions && !rdvSales)) ? C.muted : "#3e7d5a", color: "#fff", fontSize: 12, fontWeight: 700, cursor: (!rdvDate || (salesOptions && !rdvSales)) ? "default" : "pointer", fontFamily: "inherit" }}>
-                      {busyId === lead.id ? "…" : "Confirmer le RDV et récupérer"}
-                    </button>
-                  </div>
-                )}
-                <InfoLine lead={lead} C={C} />
-              </div>
-            ))}
+          <div style={{ ...card(), overflow: "hidden" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 780 }}>
+                <thead><tr>
+                  <th style={thS}>Lead</th>
+                  <th style={thT}>Secteur</th>
+                  <th style={thT}>Téléphone</th>
+                  <th style={thT}>Email</th>
+                  <th style={thT}>Taille</th>
+                  {canClaim && <th style={{ ...thS, textAlign: "right" }} aria-label="Actions" />}
+                </tr></thead>
+                <tbody>
+                  {trt.map((lead) => (
+                    <Fragment key={lead.id}>
+                      <tr style={{ transition: "background 0.12s" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? "rgba(255,255,255,0.03)" : "#f8fafc"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                        <td style={tdS}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <LeadFace lead={lead} />
+                          <div style={{ minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180 }}>{lead.full_name || lead.company_name || "Sans nom"}</span>
+                            <span title="Appels passés par l'équipe depuis le pool"
+                              style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, whiteSpace: "nowrap", flexShrink: 0,
+                                color: (lead.pool_calls || 0) >= 6 ? "#b42318" : (lead.pool_calls || 0) > 0 ? "#b45309" : C.muted }}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
+                              <b style={{ fontWeight: 700 }}>{lead.pool_calls || 0}</b>
+                              {lead.pool_last_call_at && <span style={{ color: C.muted, fontWeight: 400 }}>· {fmtAge(lead.pool_last_call_at)}</span>}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 10.5, color: C.muted }}>
+                            {lead.company_name && lead.full_name ? lead.company_name : (fmtDate(lead.created_at) ? `entré le ${fmtDate(lead.created_at)}` : "")}
+                          </div>
+                          </div>
+                          </div>
+                        </td>
+                        <td style={tdT}><OriginTag origin={lead.origin} darkMode={darkMode} /></td>
+                        <td style={tdT}><CopyChip kind="phone" value={lead.phone} C={C} darkMode={darkMode} /></td>
+                        <td style={tdT}><CopyChip kind="email" value={lead.email} C={C} darkMode={darkMode} /></td>
+                        <td style={tdT}><SizeCell lead={lead} C={C} /></td>
+                        {canClaim && (
+                          <td style={{ ...tdS, whiteSpace: "nowrap", textAlign: "right" }}>
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                              <button onClick={() => markCalled(lead.id)}
+                                style={{ padding: "5px 9px", borderRadius: 7, border: `1px solid ${C.border}`, background: calledFlash[lead.id] ? "#3e7d5a" : "transparent", color: calledFlash[lead.id] ? "#fff" : C.text, fontSize: 11, fontWeight: 650, cursor: "pointer", fontFamily: "inherit", transition: "background 0.2s, color 0.2s", whiteSpace: "nowrap" }}>
+                                {calledFlash[lead.id] ? "Noté ✓" : "J'ai appelé"}
+                              </button>
+                              <button onClick={() => { setRdvFor(rdvFor === lead.id ? null : lead.id); setRdvDate(""); setRdvSales(""); setRdvKind("r1"); }}
+                                style={{ padding: "5px 10px", borderRadius: 7, border: `1px solid ${rdvFor === lead.id ? "#3e7d5a" : "#cfe8d9"}`, background: rdvFor === lead.id ? "#3e7d5a" : "#e9f5ee", color: rdvFor === lead.id ? "#fff" : "#2f7a53", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                                Prendre avec un RDV
+                              </button>
+                              <OptOutX lead={lead} C={C} busy={busyId === lead.id} onOptOut={optOut} />
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                      {rdvFor === lead.id && (
+                        <tr>
+                          <td colSpan={canClaim ? 6 : 5} style={{ padding: "0 14px 12px", borderBottom: `1px solid ${darkMode ? "rgba(255,255,255,0.06)" : "#f2f4f7"}`, background: darkMode ? "rgba(255,255,255,0.02)" : "#fafbfc" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", paddingTop: 10 }}>
+                              <div style={{ display: "inline-flex", gap: 3, padding: 3, borderRadius: 8, background: darkMode ? "rgba(255,255,255,0.05)" : "#eef1f5" }}>
+                                {["r1", "r2"].map((k) => (
+                                  <button key={k} type="button" onClick={() => setRdvKind(k)}
+                                    style={{ padding: "4px 11px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit",
+                                      fontSize: 11.5, fontWeight: 700, transition: "background 0.15s, color 0.15s",
+                                      background: rdvKind === k ? (darkMode ? "rgba(255,255,255,0.12)" : "#fff") : "transparent",
+                                      color: rdvKind === k ? C.text : C.muted,
+                                      boxShadow: rdvKind === k ? "0 1px 2px rgba(17,24,39,0.10)" : "none" }}>
+                                    {k.toUpperCase()}
+                                  </button>
+                                ))}
+                              </div>
+                              <span style={{ fontSize: 12, color: C.muted }}>le</span>
+                              {salesOptions && (
+                                <select value={rdvSales} onChange={(e) => setRdvSales(e.target.value)}
+                                  style={{ padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: darkMode ? "rgba(255,255,255,0.04)" : "#fff", color: C.text, fontSize: 12.5, fontFamily: "inherit", outline: "none" }}>
+                                  <option value="">Pour quel commercial ?</option>
+                                  {salesOptions.map((s) => (
+                                    <option key={s.email} value={s.email}>{s.name || s.email}</option>
+                                  ))}
+                                </select>
+                              )}
+                              {(() => {
+                                const rdvDay = (rdvDate || "").slice(0, 10);
+                                const rdvTime = (rdvDate || "").length >= 16 ? rdvDate.slice(11, 16) : "";
+                                const inp = { padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: darkMode ? "rgba(255,255,255,0.04)" : "#fff", color: C.text, fontSize: 12.5, fontFamily: "inherit", outline: "none" };
+                                return (
+                                  <>
+                                    <input type="date" value={rdvDay}
+                                      onChange={(e) => setRdvDate(e.target.value ? `${e.target.value}T${rdvTime || "09:00"}` : "")}
+                                      style={inp} />
+                                    <select value={rdvTime} disabled={!rdvDay}
+                                      onChange={(e) => rdvDay && setRdvDate(`${rdvDay}T${e.target.value}`)}
+                                      style={{ ...inp, cursor: rdvDay ? "pointer" : "not-allowed" }}>
+                                      <option value="">Heure…</option>
+                                      {RDV_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
+                                    </select>
+                                    <span style={{ fontSize: 11, color: C.muted, whiteSpace: "nowrap" }}>heure de Paris</span>
+                                  </>
+                                );
+                              })()}
+                              <button onClick={() => claimTrt(lead.id)} disabled={!rdvDate || rdvDate.length < 16 || (salesOptions && !rdvSales) || busyId === lead.id}
+                                style={{ padding: "7px 14px", borderRadius: 8, border: "none", background: (!rdvDate || (salesOptions && !rdvSales)) ? C.muted : "#3e7d5a", color: "#fff", fontSize: 12, fontWeight: 700, cursor: (!rdvDate || (salesOptions && !rdvSales)) ? "default" : "pointer", fontFamily: "inherit" }}>
+                                {busyId === lead.id ? "…" : "Confirmer le RDV et récupérer"}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
+        )}
+        {pool === "traitement" && (
+          <Pager page={cur} pages={pages} total={activeAll.length} onPage={setPage} C={C} darkMode={darkMode} />
         )}
       </div>
     </div>
