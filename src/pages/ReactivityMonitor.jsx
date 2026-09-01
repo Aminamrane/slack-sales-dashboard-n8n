@@ -140,7 +140,6 @@ export default function ReactivityMonitor() {
   // réelle, notif différée ~1 min). Non traité : indispo + autodestruction,
   // jamais réaffecté à un vrai sales.
   const sendDemo = async () => {
-    if (!window.confirm("S'envoyer un lead de test ? Il suit la vraie règle : notif Slack + mail dans environ 1 min, échéance réelle. Non traité à l'échéance, vous passez indisponible et le lead s'autodétruit, il ne part jamais chez un sales.")) return;
     setDemoSending(true);
     try {
       const r = await apiClient.post("/api/v1/tracking/reactivity/demo-lead", {});
