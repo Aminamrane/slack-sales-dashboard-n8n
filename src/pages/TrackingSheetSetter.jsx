@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import { supabase } from "../lib/supabaseClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
+import CommonVoicemailPool from "../components/CommonVoicemailPool.jsx";
 import LeadsManagement from "./LeadsManagement.jsx";
 // ── Setter modales (Option B duplication intégrale TrackingSheet) ──────────
 import DisqualifyModal from "../components/setter/DisqualifyModal.jsx";
@@ -123,6 +124,22 @@ function TimeSelect({ value, onChange, C, darkMode }) {
       </select>
     </div>
   );
+}
+
+// Mois de signature d'un lead : dernier rendez-vous abouti (R3, sinon R2,
+// sinon R1). Les dates du CRM sont des heures-mur, on lit donc la chaîne
+// plutôt que de construire une Date, qui décalerait d'un jour.
+function signedMonthOf(lead) {
+  const d = lead?.r3_completed_at || lead?.r2_completed_at || lead?.r1_completed_at;
+  return typeof d === "string" && d.length >= 7 ? d.slice(0, 7) : null;
+}
+
+const MOIS_FR = ["janvier", "février", "mars", "avril", "mai", "juin",
+  "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+
+function libelleMois(ym) {
+  const [a, m] = ym.split("-");
+  return `${MOIS_FR[Number(m) - 1]} ${a}`;
 }
 
 // ── CATEGORIES (SETTER VERSION) ──────────────────────────────────────────────
@@ -684,6 +701,10 @@ export default function TrackingSheetSetter() {
   const leadsRef = useRef([]);
   useEffect(() => { leadsRef.current = leads; }, [leads]);
   const [activeTab, setActiveTab] = useState(0);
+  // Onglet « Signés » : filtre par mois de signature. « all » = tout l'historique.
+  // Le mois retenu est celui du dernier rendez-vous abouti (R3 sinon R2 sinon R1),
+  // c'est le repère le plus proche de la signature dont on dispose sur le lead.
+  const [signedMonth, setSignedMonth] = useState("all");
   const [selectedLead, setSelectedLead] = useState(null);
   const [creaPopup, setCreaPopup] = useState(null);
   const leadCreative = useLeadCreative(selectedLead);
@@ -1110,6 +1131,19 @@ export default function TrackingSheetSetter() {
     return counts;
   }, [leads]);
 
+  // Mois où le setter a effectivement des signatures, du plus récent au plus
+  // ancien. On ne propose que des mois qui contiennent quelque chose.
+  const moisSignatures = useMemo(() => {
+    const vus = new Set();
+    leads.forEach((l) => {
+      if (l._setter_bucket === 'signed' || l.status === 'signed') {
+        const m = signedMonthOf(l);
+        if (m) vus.add(m);
+      }
+    });
+    return [...vus].sort().reverse();
+  }, [leads]);
+
   const filteredLeads = useMemo(() => {
     const catKey = CATEGORIES[activeTab].key;
     let result;
@@ -1160,6 +1194,10 @@ export default function TrackingSheetSetter() {
         (l.email && l.email.toLowerCase().includes(q)) ||
         (l.phone && l.phone.replace(/\s/g, '').includes(q.replace(/\s/g, '')))
       );
+    }
+    // Onglet Signés : restriction au mois choisi.
+    if (catKey === 'signed' && signedMonth !== 'all') {
+      result = result.filter(l => signedMonthOf(l) === signedMonth);
     }
     // Filter by origin (niche)
     if (filterOrigins.length > 0) {
@@ -1237,7 +1275,7 @@ export default function TrackingSheetSetter() {
       result = [...result].sort((a, b) => (b.assigned_at || '').localeCompare(a.assigned_at || ''));
     }
     return result;
-  }, [leads, activeTab, exitingCards, searchQuery, filterTags, filterStatuses, filterOrigins, filterSalesOwners, filterMyColdCallsOnly, filterHideOtherTreated, filterCallTime, sortOrder]);
+  }, [leads, activeTab, exitingCards, searchQuery, filterTags, filterStatuses, filterOrigins, filterSalesOwners, filterMyColdCallsOnly, filterHideOtherTreated, filterCallTime, sortOrder, signedMonth]);
 
   // Dismiss a notification (optimistic + backend persist)
   const dismissNotif = (key) => {
@@ -2464,6 +2502,10 @@ export default function TrackingSheetSetter() {
                 KPIs) reste accessible — utile pour le setter. */}
             {[
               { key: 'leads', label: 'Mes leads', iconSrc: iconMyLead, accent: C.accent, keepColor: true },
+              // Barrage répondeur commun — pool TRAITEMENT uniquement (la
+              // réactivité reste aux sales). Le setter y récupère un lead en
+              // posant un R1 pour l'un de ses commerciaux.
+              { key: 'barrage', label: 'Barrage', iconSrc: iconMyLead, accent: '#0891b2' },
               { key: 'notifications', label: 'Notifications', iconSrc: iconNotif, accent: '#ef4444', iconSize: 55, badgeCount: (() => {
                 const meetingKeys = [
                   ...leads.filter(l => l.status === 'r1' && toDateOnly(l.r1) === TODAY).map(l => `r1-${l.id}-${TODAY}`),
@@ -2739,6 +2781,26 @@ export default function TrackingSheetSetter() {
 
 
         {/* ════ VIEW: KPIs (mockup) ═══════════════════════════════════════════ */}
+        {sidebarView === 'barrage' && (
+          <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
+              Barrage répondeur commun
+            </h2>
+            <p style={{ fontSize: 13, color: C.muted, margin: '0 0 24px' }}>
+              Passez un maximum d'appels. Dès que vous avez le gérant, posez le rendez-vous
+              en choisissant le commercial : le lead lui est attribué et le RDV se pose dans son agenda.
+            </p>
+            <CommonVoicemailPool
+              C={C}
+              darkMode={darkMode}
+              salesOptions={teamSales.map(s => ({
+                email: s.email || s,
+                name: s.full_name || s.name || s.email || s,
+              }))}
+            />
+          </div>
+        )}
+
         {sidebarView === 'kpis' && (
           <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
             <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
@@ -4486,6 +4548,27 @@ export default function TrackingSheetSetter() {
                 </svg>
                 {showFilters ? 'Masquer filtres' : 'Afficher filtres'}
               </button>
+
+              {/* Onglet Signés : sélecteur de mois. Les mois proposés sont ceux
+                  où il y a réellement une signature, du plus récent au plus ancien. */}
+              {CATEGORIES[activeTab].key === 'signed' && (
+                <select
+                  value={signedMonth}
+                  onChange={(e) => setSignedMonth(e.target.value)}
+                  style={{
+                    flexShrink: 0, padding: '7px 10px', borderRadius: 8,
+                    border: `1px solid ${C.border}`,
+                    background: darkMode ? 'rgba(255,255,255,0.04)' : '#ffffff',
+                    color: C.text, fontSize: 12, fontFamily: 'inherit',
+                    outline: 'none', cursor: 'pointer',
+                  }}
+                >
+                  <option value="all">Tous les mois</option>
+                  {moisSignatures.map((ym) => (
+                    <option key={ym} value={ym}>{libelleMois(ym)}</option>
+                  ))}
+                </select>
+              )}
 
               <div style={{ width: 200, flexShrink: 0, position: 'relative' }}>
                 <input

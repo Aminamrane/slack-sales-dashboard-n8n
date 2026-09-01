@@ -105,13 +105,17 @@ const MINE_FILTERS = [
   },
 ];
 
-export default function CommonVoicemailPool({ leads = [], loading = false, claimingId = null, onClaim, canClaim = true, C, darkMode }) {
+// `salesOptions` : liste [{email, name}] des commerciaux auxquels confier le
+// lead. Fournie pour un setter, qui ne garde pas de leads mais pose un RDV POUR
+// quelqu'un ; absente pour un sales, qui récupère le lead pour lui-même.
+export default function CommonVoicemailPool({ leads = [], loading = false, claimingId = null, onClaim, canClaim = true, salesOptions = null, C, darkMode }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   const [busyId, setBusyId] = useState(null);      // claim en cours
   const [calledFlash, setCalledFlash] = useState({}); // feedback bouton « j'ai appelé »
   const [rdvFor, setRdvFor] = useState(null);      // lead_id du mini-formulaire RDV ouvert
   const [rdvDate, setRdvDate] = useState("");
+  const [rdvSales, setRdvSales] = useState("");   // setter : commercial destinataire
   const [claimedMsg, setClaimedMsg] = useState(null);
   const [q, setQ] = useState("");
   // Un seul pool affiché à la fois : le sales choisit son mode de travail.
@@ -180,7 +184,8 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
     if (!rdvDate) return;
     setBusyId(id);
     try {
-      await apiClient.post(`/api/v1/tracking/pools/traitement/${id}/claim`, { r1_date: rdvDate });
+      await apiClient.post(`/api/v1/tracking/pools/traitement/${id}/claim`,
+        salesOptions ? { r1_date: rdvDate, sales_email: rdvSales } : { r1_date: rdvDate });
       setClaimedMsg("Lead récupéré avec son RDV — il est dans vos R1 placés.");
       setRdvFor(null); setRdvDate("");
       fetchPools();
@@ -374,7 +379,7 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                         style={{ flexShrink: 0, padding: "6px 12px", borderRadius: 9, border: `1px solid ${C.border}`, background: calledFlash[lead.id] ? "#3e7d5a" : "transparent", color: calledFlash[lead.id] ? "#fff" : C.text, fontSize: 12, fontWeight: 650, cursor: "pointer", fontFamily: "inherit", transition: "background 0.2s, color 0.2s" }}>
                         {calledFlash[lead.id] ? "Noté ✓" : "J'ai appelé"}
                       </button>
-                      <button onClick={() => { setRdvFor(rdvFor === lead.id ? null : lead.id); setRdvDate(""); }}
+                      <button onClick={() => { setRdvFor(rdvFor === lead.id ? null : lead.id); setRdvDate(""); setRdvSales(""); }}
                         style={{ flexShrink: 0, padding: "6px 14px", borderRadius: 9, border: "none", background: "#0891b2", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
                         Prendre avec un RDV
                       </button>
@@ -393,10 +398,19 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                 {rdvFor === lead.id && (
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingLeft: 18 }}>
                     <span style={{ fontSize: 12, color: C.muted }}>R1 le</span>
+                    {salesOptions && (
+                      <select value={rdvSales} onChange={(e) => setRdvSales(e.target.value)}
+                        style={{ padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: darkMode ? "rgba(255,255,255,0.04)" : "#fff", color: C.text, fontSize: 12.5, fontFamily: "inherit", outline: "none" }}>
+                        <option value="">Pour quel commercial ?</option>
+                        {salesOptions.map((s) => (
+                          <option key={s.email} value={s.email}>{s.name || s.email}</option>
+                        ))}
+                      </select>
+                    )}
                     <input type="datetime-local" value={rdvDate} onChange={(e) => setRdvDate(e.target.value)}
                       style={{ padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: darkMode ? "rgba(255,255,255,0.04)" : "#fff", color: C.text, fontSize: 12.5, fontFamily: "inherit" }} />
-                    <button onClick={() => claimTrt(lead.id)} disabled={!rdvDate || busyId === lead.id}
-                      style={{ padding: "7px 14px", borderRadius: 8, border: "none", background: !rdvDate ? C.muted : "#3e7d5a", color: "#fff", fontSize: 12, fontWeight: 700, cursor: !rdvDate ? "default" : "pointer", fontFamily: "inherit" }}>
+                    <button onClick={() => claimTrt(lead.id)} disabled={!rdvDate || (salesOptions && !rdvSales) || busyId === lead.id}
+                      style={{ padding: "7px 14px", borderRadius: 8, border: "none", background: (!rdvDate || (salesOptions && !rdvSales)) ? C.muted : "#3e7d5a", color: "#fff", fontSize: 12, fontWeight: 700, cursor: (!rdvDate || (salesOptions && !rdvSales)) ? "default" : "pointer", fontFamily: "inherit" }}>
                       {busyId === lead.id ? "…" : "Confirmer le RDV et récupérer"}
                     </button>
                   </div>
