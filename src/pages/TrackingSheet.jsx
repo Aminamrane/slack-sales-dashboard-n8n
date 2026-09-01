@@ -2039,7 +2039,11 @@ export default function TrackingSheet() {
         setResendingContract(leadId);
         setNavNotif('sending');
         try {
-          await apiClient.post(`/api/v1/contracts/${contractId}/resend`);
+          // Le renvoi crée un nouveau contrat : on lui transmet le choix courant
+          // du commercial. Champ vidé = null = date du jour, choix explicite.
+          await apiClient.post(`/api/v1/contracts/${contractId}/resend`, {
+            contract_display_date: contractDates[leadId] || null,
+          });
           await fetchLeadContracts(leadId);
           setNavNotif('sent');
         } catch (err) {
@@ -7710,7 +7714,7 @@ export default function TrackingSheet() {
                         avant. Remplie, c'est elle qui s'imprime dans le bloc de
                         signature des deux documents. Elle ne touche que le papier :
                         la date de signature CRM et les commissions restent réelles. */}
-                    {(!latestContract || status === 'draft') && (() => {
+                    {(!latestContract || ['draft', 'expired', 'canceled', 'failed'].includes(status)) && (() => {
                       const iso = contractDates[lead.id] || '';
                       // Date saisie à la main : on découpe la chaîne, jamais de
                       // new Date() qui décalerait d'un jour selon le fuseau.
