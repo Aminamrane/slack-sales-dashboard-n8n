@@ -577,6 +577,32 @@ export default function TrackingSheet() {
     return () => clearInterval(interval);
   }, [loading, refreshData]);
 
+  // ── RAFRAÎCHISSEMENT AU RETOUR SUR L'ONGLET ───────────────────────────────
+  // Les navigateurs brident les minuteries des onglets en arrière-plan : la
+  // boucle de 30 s ci-dessus peut ne pas tourner pendant que le sales est
+  // ailleurs, et rien ne la déclenchait à son retour. Résultat vécu : il reçoit
+  // la notification d'un nouveau lead, revient sur le CRM, et lit une sheet
+  // périmée où le lead n'apparaît pas. On recharge donc dès que l'onglet
+  // redevient visible ou reprend le focus.
+  const lastRefreshRef = useRef(0);
+  useEffect(() => {
+    if (loading) return;
+    const onWake = () => {
+      if (document.visibilityState !== 'visible') return;
+      // visibilitychange et focus se déclenchent souvent ensemble : on garde
+      // un seul rechargement.
+      if (Date.now() - lastRefreshRef.current < 2000) return;
+      lastRefreshRef.current = Date.now();
+      refreshData().catch(e => console.warn('Refresh au retour sur l\'onglet échoué:', e));
+    };
+    document.addEventListener('visibilitychange', onWake);
+    window.addEventListener('focus', onWake);
+    return () => {
+      document.removeEventListener('visibilitychange', onWake);
+      window.removeEventListener('focus', onWake);
+    };
+  }, [loading, refreshData]);
+
   // ── WEBSOCKET CONNECTION ──────────────────────────────────────────────────
   useEffect(() => {
     if (loading) return;
