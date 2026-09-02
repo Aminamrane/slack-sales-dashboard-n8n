@@ -20,7 +20,7 @@ import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo", "marketing", "finance_director"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo", "marketing", "finance_director", "head_of_acquisition"]);
 
 export default function CeoCampaignsView() {
   const navigate = useNavigate();
