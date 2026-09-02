@@ -2982,6 +2982,26 @@ function CommentThread({ numero }) {
   const [draft, setDraft] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [posting, setPosting] = useState(false);
+  // Édition en place (demande dev 2026-09-03 : Paul corrige un commentaire au
+  // lieu d'en rempiler). Autorisé : l'AUTEUR sur le sien, admin/ceo sur tous —
+  // même règle que le backend, qui reste le juge.
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const canEdit = (c) => !isFinanceTeam()
+    && (((me.email || "").toLowerCase() === (c.author_email || "").toLowerCase())
+      || ["admin", "ceo"].includes(me.role));
+  const saveEdit = async () => {
+    const body = editDraft.trim();
+    if (!body || savingEdit) return;
+    setSavingEdit(true);
+    try {
+      const updated = await apiClient.patch(`/api/v1/optilex/comments/${editingId}`, { body });
+      setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      setEditingId(null); setEditDraft("");
+    } catch (e) { console.error("comment edit failed", e); }
+    finally { setSavingEdit(false); }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -3038,9 +3058,41 @@ function CommentThread({ numero }) {
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>{c.author_name || c.author_email || "—"}</span>
-                <span style={{ fontSize: 11, color: MUTED }}>{timeAgo(c.created_at)}</span>
+                <span style={{ fontSize: 11, color: MUTED }}>{timeAgo(c.created_at)}{c.updated_at ? " · modifié" : ""}</span>
+                {canEdit(c) && editingId !== c.id && (
+                  <button type="button" title="Modifier ce commentaire"
+                    onClick={() => { setEditingId(c.id); setEditDraft(c.body); }}
+                    style={{ border: "none", background: "transparent", color: MUTED, cursor: "pointer", padding: "0 2px", display: "inline-flex", alignItems: "center" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = NAVY; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = MUTED; }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
+                  </button>
+                )}
               </div>
-              <div style={{ fontSize: 13.5, color: TEXT, lineHeight: 1.45, marginTop: 2, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{c.body}</div>
+              {editingId === c.id ? (
+                <div style={{ marginTop: 6 }}>
+                  <textarea value={editDraft} onChange={(e) => setEditDraft(e.target.value)} rows={2} autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveEdit(); }
+                      if (e.key === "Escape") { setEditingId(null); setEditDraft(""); }
+                    }}
+                    style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.45 }} />
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
+                    <button type="button" onClick={() => { setEditingId(null); setEditDraft(""); }}
+                      style={{ padding: "6px 14px", borderRadius: 8, border: `1px solid ${BORDER}`, background: "transparent", color: MUTED, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                      Annuler
+                    </button>
+                    <button type="button" onClick={saveEdit} disabled={!editDraft.trim() || savingEdit}
+                      style={{ padding: "6px 14px", borderRadius: 8, border: "none", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit",
+                        cursor: editDraft.trim() && !savingEdit ? "pointer" : "default",
+                        background: editDraft.trim() ? NAVY : "#e5e7eb", color: editDraft.trim() ? "#fff" : MUTED }}>
+                      {savingEdit ? "…" : "Enregistrer"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ fontSize: 13.5, color: TEXT, lineHeight: 1.45, marginTop: 2, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{c.body}</div>
+              )}
             </div>
           </motion.div>
         ))}
