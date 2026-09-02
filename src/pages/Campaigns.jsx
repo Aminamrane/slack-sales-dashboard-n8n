@@ -124,7 +124,7 @@ export default function Campaigns({ embed = false }) {
         const user = apiClient.getUser();
         if (!token || !user) { navigate("/login"); return; }
         // En embed, la coquille (CeoCampaignsView) a déjà filtré le rôle -> pas de redirect.
-        if (!embed && user.role !== 'admin' && user.role !== 'marketing') { navigate("/"); return; }
+        if (!embed && user.role !== 'admin' && user.role !== 'marketing' && user.role !== 'head_of_acquisition') { navigate("/"); return; }
         setSession({ user: { email: user.email, user_metadata: { name: user.name, avatar_url: user.avatar_url || null } } });
         await Promise.all([fetchCampaigns(), fetchActiveAds()]);
       } catch {

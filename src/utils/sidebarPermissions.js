@@ -11,7 +11,8 @@
 
 const ROLE_SECTIONS = {
   acquisition_director: new Set(["recent", "acquisition"]),
-  head_of_acquisition: new Set(["recent", "acquisition"]),
+  // Timothy remplit la page Campagnes : section Finance limitée à cet onglet.
+  head_of_acquisition: new Set(["recent", "acquisition", "finance"]),
   hr: new Set(["recent", "human", "acquisition"]),  // RH : coin Humain (Congés + Variables) + tout l'Acquisition
   // CSM (Vincent) : Leaderboard (page d'arrivée) + Funnel Leads + Board Owner/Opti'Lex.
   customer_success_manager: new Set(["acquisition", "produit"]),
@@ -21,6 +22,9 @@ const ROLE_SECTIONS = {
 // onglets d'une section. rôle -> { sectionKey: Set(itemIds) }. Une section
 // autorisée sans entrée ici garde tous ses onglets.
 const ROLE_ITEMS = {
+  head_of_acquisition: {
+    finance: new Set(["campaigns"]),
+  },
   customer_success_manager: {
     acquisition: new Set(["leaderboard", "funnel_leads"]),
     produit: new Set(["optilex_board"]),
