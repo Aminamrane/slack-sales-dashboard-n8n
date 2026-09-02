@@ -12,17 +12,24 @@ import { fmtInt, fmtPct } from '../theme';
 export default function SourceBreakdown({ summary, C }) {
   if (!summary) return null;
   const bySrc = summary.leadsBySource || { landing: 0, meta: 0, broad: 0 };
-  const total = (bySrc.landing || 0) + (bySrc.meta || 0) + (bySrc.broad || 0);
+  // La LP `/v2` (A/B déployé le 02/07) remonte en source `landing-v2`, exposée
+  // par l'API sous `landingV2`. Elle capte aujourd'hui la quasi-totalité du
+  // trafic LP : l'ignorer affichait 1 inscrit au lieu de 15, et faussait aussi
+  // le dénominateur, donc TOUS les pourcentages de la ligne.
+  const landingAll = (bySrc.landing || 0) + (bySrc.landingV2 || 0);
+  const total = landingAll + (bySrc.meta || 0) + (bySrc.broad || 0);
   const share = (n) => total > 0 ? (n / total) * 100 : null;
 
   const cards = [
     {
       key: 'landing',
       title: 'Landing',
-      value: bySrc.landing || 0,
-      pct: share(bySrc.landing || 0),
+      value: landingAll,
+      pct: share(landingAll),
       tag: 'webinaire.ownertechnology.com',
-      sub: `${fmtInt(summary.visitors)} visiteurs uniques`,
+      sub: bySrc.landingV2
+        ? `${fmtInt(summary.visitors)} visiteurs · dont ${fmtInt(bySrc.landingV2)} via /v2`
+        : `${fmtInt(summary.visitors)} visiteurs uniques`,
       tone: C.blue,
     },
     {
