@@ -31,14 +31,15 @@ export const ETAT_STYLE = {
 };
 // Onglets PRIMAIRES = les plus actionnables (toujours visibles). Le reste vit dans un
 // filtre multi-sélection "Filtre" pour désencombrer la barre.
-const PRIMARY_TABS = ["Tous", "Signé", "Attente Opti'Lex", "Onboarding à venir", "Intégration à venir", "En cours de résiliation", "En cours de rétractation", "En cours de liquidation"];
-const SECONDARY_CATS = ["Renouvellement client", "Inactifs", "En cours", "Self-Résiliation", "Pause", "Liquidation", "En attente", "Sans suite"];
+// Barre allégée (demande dev 2026-09-03) : seuls les onglets du quotidien restent
+// en chips directes. Les familles résiliation/rétractation/liquidation (« en
+// cours de » ET actées) vivent dans le menu Filtre ; l'onboarding et les
+// programmes ont chacun leur menu ; la météo repasse en chips directes.
+const PRIMARY_TABS = ["Tous", "Signé", "Attente Opti'Lex", "Intégration à venir"];
+const SECONDARY_CATS = ["En cours de résiliation", "En cours de rétractation", "En cours de liquidation", "Résiliation", "Rétractation", "Self-Résiliation", "Liquidation", "Pause", "Renouvellement client", "Inactifs", "En cours", "En attente", "Sans suite"];
 // Onglets à logique de tri PROPRE (pas le tri "entré le plus récemment dans l'état") : tout le
 // reste = onglet d'état -> tri par date d'entrée dans l'état, le plus récent en haut.
 const NON_ETAT_SORTED_TABS = ["Tous", "Renouvellement client", "Inactifs", "Onboarding à venir", "Intégration à venir"];
-// États actés mis EN AVANT (chips visibles + compteur rouge) : résiliation et rétractation
-// sont l'info critique du board -> surfacés hors du menu déroulant, visibles dès l'arrivée.
-const HIGHLIGHTED_ETATS = ["Résiliation", "Rétractation"];
 const TAB_LABEL = { "Attente Opti'Lex": "En attente Opti'Lex", "Onboarding à venir": "Onboarding Owner à venir", "Intégration à venir": "RDV intégration à venir" };
 const tabLabel = (t) => TAB_LABEL[t] || t;
 // États que le cabinet peut poser manuellement (badge cliquable, table + fiche).
@@ -147,8 +148,23 @@ export const isEtatPending = (r) => !!(r.etat_manuel && ETAT_DATE_CONFIG[r.etat_
 // État affiché : l'état du Sheet en priorité, sinon le statut du contrat en cours.
 // Exporté : les cartes d'états du dashboard CEO comptent avec CETTE fonction, pour
 // afficher exactement les mêmes chiffres que les onglets du board.
+// Où vit un client PENDANT l'attente de sa date d'effet : un état terminal daté
+// posé pour une date FUTURE ne laisse plus le client dans son ancien état — il
+// bascule immédiatement dans le « En cours de … » correspondant (demande dev
+// 2026-09-03), garde son badge « ⏳ prévu le … », puis passe tout seul dans
+// l'état acté à l'échéance (isEtatPending redevient faux ; calcul à la volée,
+// aucun cron). Pause garde l'ancien comportement : une pause future n'est pas
+// « en cours », le client reste actif jusqu'à son début.
+const PENDING_ETAT_DISPLAY = {
+  "Résiliation": "En cours de résiliation",
+  "Self-Résiliation": "En cours de résiliation",
+  "Rétractation": "En cours de rétractation",
+  "Liquidation": "En cours de liquidation",
+  "En cours de liquidation": "En cours de liquidation",
+};
 export const displayEtat = (r) => {
   if (r.etat_manuel && !isEtatPending(r)) return r.etat_manuel;   // override cabinet, une fois EFFECTIF (date d'effet atteinte)
+  if (r.etat_manuel && PENDING_ETAT_DISPLAY[r.etat_manuel]) return PENDING_ETAT_DISPLAY[r.etat_manuel]; // prévu à date future -> déjà « en cours de … »
   if (r.etat) return r.etat;                 // état du Sheet (vérité des ÉTATS)
   // Vérité des DATA = interne : Owner signé -> "Signé" même pas (encore) dans le Sheet.
   // Deux régimes : contrat GROUPÉ (optilex null = Opti'Lex inclus dans l'Owner, signé avec)
@@ -677,14 +693,16 @@ function FilterMenu({ cats, counts, selected, onToggle, onClear }) {
 // Filtre par date de signature Owner : un mois (raccourci) OU une période du/au.
 // Même mécanique de popup portalisé que FilterMenu (ferme au scroll/resize, flip haut).
 const SIG_MENU_H = 300;
-// Menu « Météo client » : regroupe Critique / Mécontent / Satisfait / Non noté
-// (multi-sélection = union, mêmes compteurs que les anciennes chips).
-function MeteoMenu({ selected, counts, onToggle, onClear }) {
+// Menu générique à cases (même mécanique portalisée que FilterMenu : ferme au
+// scroll/resize, flip vers le haut près du bord). Sert les familles « Onboarding »
+// et « Programmes » (demande dev 2026-09-03 : moins de gros blocs dans la barre).
+// Multi-sélection = UNION au sein du menu. `items` : [{ key, label, icon, count }].
+function ChecklistMenu({ label, title, icon, items, selected, onToggle, onClear }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const btnRef = useRef(null);
   useEffect(() => {
-    if (!open) return;
+    if (!open) return undefined;
     const close = () => setOpen(false);
     window.addEventListener("scroll", close, true);
     window.addEventListener("resize", close);
@@ -699,14 +717,12 @@ function MeteoMenu({ selected, counts, onToggle, onClear }) {
     setPos({ top: up ? r.top - 4 : r.bottom + 4, left: r.left, up });
     setOpen(true);
   };
-  const bands = ["rouge", "orange", "vert", "none"];
-  const bandStyle = (b) => (b === "none" ? { label: "Non noté", color: MUTED, bg: "#eef1f6", dot: "#cbd2e0" } : METEO_BANDS[b]);
   return (
     <span onClick={(e) => e.stopPropagation()}>
-      <button ref={btnRef} type="button" onClick={toggle} title="Filtrer par météo client"
+      <button ref={btnRef} type="button" onClick={toggle} title={title}
         style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${active || open ? NAVY : BORDER}`, background: active ? NAVY : CARD, color: active ? "#fff" : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 7 }}>
-        <MeteoIcon score={5} size={15} color={active ? "#fff" : MUTED} />
-        Météo client
+        {icon(active ? "#fff" : MUTED)}
+        {label}
         {active && <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>{selected.length}</span>}
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={active ? "rgba(255,255,255,0.75)" : MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
           style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.16s ease", flexShrink: 0 }}>
@@ -716,17 +732,15 @@ function MeteoMenu({ selected, counts, onToggle, onClear }) {
       {open && pos && createPortal(
         <>
           <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 10050 }} />
-          <div style={{ position: "fixed", ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }), left: pos.left, zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 8px 28px rgba(17,24,39,0.14)", padding: 5, minWidth: 216, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", animation: "obMenuIn 0.15s cubic-bezier(0.16,1,0.3,1) both", transformOrigin: pos.up ? "bottom left" : "top left" }}>
+          <div style={{ position: "fixed", ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }), left: pos.left, zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 8px 28px rgba(17,24,39,0.14)", padding: 5, minWidth: 236, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", animation: "obMenuIn 0.15s cubic-bezier(0.16,1,0.3,1) both", transformOrigin: pos.up ? "bottom left" : "top left" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px 8px" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em" }}>Météo client</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em" }}>{title}</span>
               {active && <button type="button" onClick={onClear} style={{ border: "none", background: "transparent", color: "#2563eb", fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Tout effacer</button>}
             </div>
-            {bands.map((b) => {
-              const on = selected.includes(b);
-              const st = bandStyle(b);
-              const n = counts[b] || 0;
+            {items.map((it) => {
+              const on = selected.includes(it.key);
               return (
-                <button key={b} type="button" onClick={() => onToggle(b)}
+                <button key={it.key} type="button" onClick={() => onToggle(it.key)}
                   style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", border: "none", background: on ? "#f3f4f6" : "transparent", borderRadius: 7, padding: "8px 10px", cursor: "pointer", fontSize: 12.5, fontWeight: 600, color: TEXT, fontFamily: "inherit", whiteSpace: "nowrap" }}
                   onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = "#f7f8fa"; }}
                   onMouseLeave={(e) => { if (!on) e.currentTarget.style.background = "transparent"; }}>
@@ -737,11 +751,9 @@ function MeteoMenu({ selected, counts, onToggle, onClear }) {
                       </svg>
                     )}
                   </span>
-                  {b === "none"
-                    ? <span style={{ width: 13, height: 13, borderRadius: "50%", border: `1.5px dashed ${st.dot}`, display: "inline-block", flexShrink: 0 }} />
-                    : <MeteoIcon score={{ rouge: 1, orange: 3, vert: 5 }[b]} size={15} color={st.dot} />}
-                  <span style={{ flex: 1 }}>{st.label}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: MUTED }}>{n}</span>
+                  {it.icon}
+                  <span style={{ flex: 1 }}>{it.label}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: MUTED }}>{it.count}</span>
                 </button>
               );
             })}
@@ -911,9 +923,10 @@ export default function OptilexBoard({ embed = false }) {
   // explicite dans le menu, jamais déduit des vignettes actives.
   const [dateTarget, setDateTarget] = useState("signature"); // filtre date signature Owner
   const [meteoFilter, setMeteoFilter] = useState([]);      // bandes météo cochées (rouge/orange/vert)
-  const [ambassadorFilter, setAmbassadorFilter] = useState(false); // filtre "Programme ambassadeur" : clients cochés éligibles
-  const [parrainageFilter, setParrainageFilter] = useState(false); // filtre "Programme de parrainage" : clients cochés éligibles
-  const [onboardingFilter, setOnboardingFilter] = useState("all"); // 'all' | 'done' (onboarding réalisé) | 'todo' (pas encore)
+  // Familles regroupées en menus (demande dev 2026-09-03, barre trop chargée) :
+  // multi-sélection = UNION au sein du menu, la famille reste en ET avec le reste.
+  const [programmeSel, setProgrammeSel] = useState([]);    // 'ambassadeur' | 'parrainage'
+  const [onboardingSel, setOnboardingSel] = useState([]);  // 'venir' | 'done' | 'todo'
   const [integrationView, setIntegrationView] = useState("all"); // sous-filtre onglet Intégration : "all" | "overdue"
   const [sortCol, setSortCol] = useState(null);   // tri manuel par en-tête : null | owner_signed | onboarding | integration
   const [sortDir, setSortDir] = useState("asc");  // asc | desc
@@ -987,21 +1000,26 @@ export default function OptilexBoard({ embed = false }) {
       const critsSel = activeCats.filter((c) => CRITERIA_CATS.includes(c));
       if (etatsSel.length > 0 && !etatsSel.some((cat) => matchesCat(r, cat))) return false;
       if (critsSel.length > 0 && !critsSel.every((cat) => matchesCat(r, cat))) return false;
-      // Filtre "Programme ambassadeur" : ne garde que les clients cochés éligibles.
-      if (ambassadorFilter && !r.ambassador_eligible) return false;
-      // Filtre "Programme de parrainage" : ne garde que les clients cochés éligibles.
-      if (parrainageFilter && !r.parrainage_eligible) return false;
-      // Filtre onboarding : réalisé = bouton "effectué" coché (rdv_onboarding_done).
-      if (onboardingFilter === "done" && !r.rdv_onboarding_done) return false;
+      // Menu « Programmes » : UNION des programmes cochés (ambassadeur / parrainage).
+      if (programmeSel.length > 0) {
+        const inProgramme = (programmeSel.includes("ambassadeur") && r.ambassador_eligible)
+          || (programmeSel.includes("parrainage") && r.parrainage_eligible);
+        if (!inProgramme) return false;
+      }
+      // Menu « Onboarding » : UNION des situations cochées (à venir / réalisé / à faire).
       // « À faire » exclut les clients partis (résiliés / rétractés / liquidés)…
       // SAUF si leur état est explicitement sélectionné : Vincent croise
       // résiliés/rétractés × « à faire » pour tenter de les récupérer via la
       // plateforme (retour dev 2026-08-28). Un client parti qui arrive ici avec
       // une sélection d'états active a forcément été demandé (il a passé le
       // filtre d'états au-dessus).
-      if (onboardingFilter === "todo") {
-        if (r.rdv_onboarding_done || !r.numero_client) return false;
-        if (etatsSel.length === 0 && TERMINATED_ETATS.includes(displayEtat(r))) return false;
+      if (onboardingSel.length > 0) {
+        const todoOk = !!r.numero_client && !r.rdv_onboarding_done
+          && (etatsSel.length > 0 || !TERMINATED_ETATS.includes(displayEtat(r)));
+        const inOnboarding = (onboardingSel.includes("venir") && isOnboardingUpcoming(r))
+          || (onboardingSel.includes("done") && r.rdv_onboarding_done)
+          || (onboardingSel.includes("todo") && todoOk);
+        if (!inOnboarding) return false;
       }
       // Sous-filtre contextuel "En retard" de l'onglet Intégration à venir.
       if (etatFilter === "Intégration à venir" && integrationView === "overdue" && !isIntegrationOverdue(r)) return false;
@@ -1025,7 +1043,7 @@ export default function OptilexBoard({ embed = false }) {
       }
       return true;
     });
-  }, [rows, etatFilter, multiFilter, sigRange, q, integrationView, ambassadorFilter, parrainageFilter, onboardingFilter]);
+  }, [rows, etatFilter, multiFilter, sigRange, q, integrationView, programmeSel, onboardingSel]);
 
   // Compteurs par bande météo (rouge 1-2 / orange 3 / vert 4-5 / "none" = non noté), calculés
   // sur la base pré-météo -> le nombre affiché sur chaque chip ne bouge pas quand on coche.
@@ -1289,90 +1307,63 @@ export default function OptilexBoard({ embed = false }) {
             </motion.button>
           );
         })}
-        {/* États ACTÉS mis en avant : résiliations + rétractations, compteur en ROUGE pour
-            que le volume saute aux yeux dès l'arrivée sur le board (hors menu déroulant). */}
-        <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
-        {HIGHLIGHTED_ETATS.map((cat) => {
-          const on = multiFilter.includes(cat);
-          const st = ETAT_STYLE[cat] || {};
-          const n = counts[cat] || 0;
-          return (
-            <motion.button key={cat} type="button" whileTap={{ scale: 0.96 }} title={`Filtrer : ${cat}`}
-              onClick={() => toggleCat(cat)}
-              onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = "#f7f8fa"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = on ? st.bg : CARD; }}
-              style={{ padding: "7px 12px", borderRadius: 20, border: `1px solid ${on ? st.dot : BORDER}`, background: on ? st.bg : CARD, color: on ? st.fg : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 7 }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: st.dot }} />
-              {cat === "Résiliation" ? "Résiliations" : "Rétractations"}
-              <span style={{ fontSize: 12.5, fontWeight: 800, color: "#dc2626" }}>{n}</span>
-            </motion.button>
-          );
-        })}
         <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
         <FilterMenu cats={SECONDARY_CATS} counts={counts} selected={multiFilter} onToggle={toggleCat} onClear={() => setMultiFilter([])} />
         <SigDateFilter from={sigRange.from} to={sigRange.to} onChange={setSigRange}
           months={dateTarget === "onboarding" ? onbMonths : sigMonths}
           target={dateTarget} onTarget={setDateTarget} />
-        {/* Météo client : regroupée dans UN menu (décision dev 2026-08-25, barre trop chargée). */}
+        {/* Météo client : de retour en chips DIRECTES (demande dev 2026-09-03) —
+            Critique / Mécontent / Satisfait / Non noté, multi-sélection = union. */}
         <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
-        <MeteoMenu selected={meteoFilter} counts={meteoCounts}
-          onToggle={(b) => setMeteoFilter((prev) => (prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b]))}
-          onClear={() => setMeteoFilter([])} />
-        {/* Filtre Programme ambassadeur : n'affiche que les clients cochés éligibles. */}
-        <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
-        {(() => {
-          const on = ambassadorFilter;
-          const cnt = rows.filter((r) => r.ambassador_eligible).length;
+        {["rouge", "orange", "vert", "none"].map((b) => {
+          const st = b === "none"
+            ? { label: "Non noté", bg: "#eef1f6", fg: MUTED, dot: "#cbd2e0" }
+            : { label: METEO_BANDS[b].label, bg: METEO_BANDS[b].bg, fg: METEO_BANDS[b].color, dot: METEO_BANDS[b].dot };
+          const on = meteoFilter.includes(b);
+          const n = meteoCounts[b] || 0;
           return (
-            <motion.button type="button" whileTap={{ scale: 0.96 }} title="Programme ambassadeur : clients éligibles"
-              onClick={() => setAmbassadorFilter((v) => !v)}
+            <motion.button key={b} type="button" whileTap={{ scale: 0.96 }} title={`Météo client : ${st.label}`}
+              onClick={() => setMeteoFilter((prev) => (prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b]))}
               onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = "#f7f8fa"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = on ? "#eef1f6" : CARD; }}
-              style={{ padding: "7px 12px", borderRadius: 20, border: `1px solid ${on ? NAVY : BORDER}`, background: on ? "#eef1f6" : CARD, color: on ? NAVY : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={on ? NAVY : MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 11 18-5v12L3 13v-2z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" /></svg>
-              Programme ambassadeur
-              <span style={{ fontSize: 11, fontWeight: 700, color: on ? NAVY : MUTED }}>{cnt}</span>
-            </motion.button>
-          );
-        })()}
-        {/* Filtre Programme de parrainage : n'affiche que les clients cochés éligibles. */}
-        {(() => {
-          const on = parrainageFilter;
-          const cnt = rows.filter((r) => r.parrainage_eligible).length;
-          return (
-            <motion.button type="button" whileTap={{ scale: 0.96 }} title="Programme de parrainage : clients éligibles"
-              onClick={() => setParrainageFilter((v) => !v)}
-              onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = "#f7f8fa"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = on ? "#eef1f6" : CARD; }}
-              style={{ padding: "7px 12px", borderRadius: 20, border: `1px solid ${on ? NAVY : BORDER}`, background: on ? "#eef1f6" : CARD, color: on ? NAVY : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={on ? NAVY : MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M19 8v6" /><path d="M22 11h-6" /></svg>
-              Programme de parrainage
-              <span style={{ fontSize: 11, fontWeight: 700, color: on ? NAVY : MUTED }}>{cnt}</span>
-            </motion.button>
-          );
-        })()}
-        {/* Filtres onboarding : réalisé (bouton "effectué" coché) / pas encore. */}
-        {["done", "todo"].map((k) => {
-          const on = onboardingFilter === k;
-          const label = k === "done" ? "Onboarding réalisé" : "Onboarding à faire";
-          const cnt = rows.filter((r) => (k === "done"
-            ? r.rdv_onboarding_done
-            : (r.numero_client && !r.rdv_onboarding_done && !TERMINATED_ETATS.includes(displayEtat(r))))).length;
-          return (
-            <motion.button key={k} type="button" whileTap={{ scale: 0.96 }}
-              title={k === "done" ? "Clients ayant réalisé leur onboarding Owner" : "Clients n'ayant pas encore réalisé leur onboarding Owner"}
-              onClick={() => setOnboardingFilter((v) => (v === k ? "all" : k))}
-              onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = "#f7f8fa"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = on ? "#eef1f6" : CARD; }}
-              style={{ padding: "7px 12px", borderRadius: 20, border: `1px solid ${on ? NAVY : BORDER}`, background: on ? "#eef1f6" : CARD, color: on ? NAVY : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={on ? NAVY : MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />{k === "done" ? <path d="m9 16 2 2 4-4" /> : <path d="M12 14v4M12 14h.01" />}</svg>
-              {label}
-              <span style={{ fontSize: 11, fontWeight: 700, color: on ? NAVY : MUTED }}>{cnt}</span>
+              onMouseLeave={(e) => { e.currentTarget.style.background = on ? st.bg : CARD; }}
+              style={{ padding: "7px 12px", borderRadius: 20, border: `1px solid ${on ? st.dot : BORDER}`, background: on ? st.bg : CARD, color: on ? st.fg : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
+              {b === "none"
+                ? <span style={{ width: 12, height: 12, borderRadius: "50%", border: `1.5px dashed ${st.dot}`, display: "inline-block", flexShrink: 0 }} />
+                : <MeteoIcon score={{ rouge: 1, orange: 3, vert: 5 }[b]} size={14} color={on ? st.fg : st.dot} />}
+              {st.label}
+              <span style={{ fontSize: 11, fontWeight: 700, color: on ? st.fg : MUTED }}>{n}</span>
             </motion.button>
           );
         })}
+        {/* Onboarding + Programmes : regroupés chacun dans UN menu (demande dev
+            2026-09-03, moins de gros blocs). Multi-sélection = union dans le menu. */}
+        <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
+        <ChecklistMenu label="Onboarding" title="Onboarding Owner"
+          icon={(c) => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>}
+          items={[
+            { key: "venir", label: "Onboarding à venir", count: counts["Onboarding à venir"] || 0,
+              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg> },
+            { key: "done", label: "Onboarding réalisé", count: rows.filter((r) => r.rdv_onboarding_done).length,
+              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></svg> },
+            { key: "todo", label: "Onboarding à faire", count: rows.filter((r) => r.numero_client && !r.rdv_onboarding_done && !TERMINATED_ETATS.includes(displayEtat(r))).length,
+              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="M12 14v4M12 14h.01" /></svg> },
+          ]}
+          selected={onboardingSel}
+          onToggle={(k) => setOnboardingSel((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]))}
+          onClear={() => setOnboardingSel([])} />
+        <ChecklistMenu label="Programmes" title="Programmes clients"
+          icon={(c) => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6" /><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" /></svg>}
+          items={[
+            { key: "ambassadeur", label: "Programme ambassadeur", count: rows.filter((r) => r.ambassador_eligible).length,
+              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 11 18-5v12L3 13v-2z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" /></svg> },
+            { key: "parrainage", label: "Programme de parrainage", count: rows.filter((r) => r.parrainage_eligible).length,
+              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M19 8v6" /><path d="M22 11h-6" /></svg> },
+          ]}
+          selected={programmeSel}
+          onToggle={(k) => setProgrammeSel((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]))}
+          onClear={() => setProgrammeSel([])} />
         <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-          {(sigRange.from || sigRange.to || multiFilter.length || etatFilter !== "Tous" || q) && (
+          {(sigRange.from || sigRange.to || multiFilter.length || etatFilter !== "Tous" || q || meteoFilter.length || onboardingSel.length || programmeSel.length) && (
             <span style={{ fontSize: 11.5, color: MUTED, fontWeight: 600 }}>{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</span>
           )}
           <motion.button type="button" onClick={handleExportCsv} disabled={filtered.length === 0} whileTap={{ scale: 0.96 }}
