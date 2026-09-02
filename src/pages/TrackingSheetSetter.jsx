@@ -5028,9 +5028,6 @@ export default function TrackingSheetSetter() {
                       }} />
 
                       {/* Name */}
-                      <img src={leadAvatar(lead.full_name, lead.id, lead.origin, lead.campaign_name)} alt="" width={30} height={30}
-                        loading="lazy"
-                        style={{ width: 30, height: 30, borderRadius: 9, flexShrink: 0, objectFit: 'cover' }} />
                       <span style={{
                         fontSize: '14px',
                         fontWeight: 600,
