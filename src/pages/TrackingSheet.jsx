@@ -45,6 +45,7 @@ import meetIcon from "../assets/meet.png";
 import mynoteIcon from "../assets/mynote.svg";
 import iconFuse from "../assets/Fuse.svg";
 import LeadAssignmentLive from "./LeadAssignmentLive.jsx";
+import CeoSalesRecordingsView from "./CeoSalesRecordingsView.jsx";
 import iconMessage from "../assets/message.svg";
 import smsRecuIcon from "../assets/smsrecu.svg";
 import iconSiren from "../assets/siren2.svg";
@@ -2941,6 +2942,9 @@ export default function TrackingSheet() {
               ...(['head_of_sales_manager', 'admin'].includes(currentUser?.role) ? [{ key: 'autoassign', label: 'Auto-affectation', accent: '#2563eb', iconNode: (active) => (
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></svg>
               ) }] : []),
+              ...(['head_of_sales_manager', 'admin'].includes(currentUser?.role) ? [{ key: 'recordings', label: 'Enregistrements sales', accent: '#0891b2', iconNode: (active) => (
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 8-6 4 6 4V8z" /><rect x="2" y="6" width="14" height="12" rx="2" ry="2" /></svg>
+              ) }] : []),
               ...(canManageLeads ? [{ key: 'leads_management', label: 'Gestion des leads', iconSrc: iconFuse, accent: '#6366f1', keepColor: true, iconSize: 19 }] : []),
               ...(canManageSheets ? [{ key: 'sheets', label: 'Tracking Sheets', iconSrc: iconSheets, accent: '#8b5cf6' }] : []),
             ].map(item => {
@@ -3190,6 +3194,13 @@ export default function TrackingSheet() {
         {sidebarView === 'autoassign' && ['head_of_sales_manager', 'admin'].includes(currentUser?.role) && (
           <div style={{ flex: 1, overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
             <LeadAssignmentLive embed />
+          </div>
+        )}
+
+        {/* ════ VIEW: ENREGISTREMENTS SALES (embed — manager/admin) ═══════ */}
+        {sidebarView === 'recordings' && ['head_of_sales_manager', 'admin'].includes(currentUser?.role) && (
+          <div style={{ flex: 1, overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
+            <CeoSalesRecordingsView embed />
           </div>
         )}
 

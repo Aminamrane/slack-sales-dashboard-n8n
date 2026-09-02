@@ -32,7 +32,10 @@ const fmtPeriod = (p) => {
   return m ? `Semaine ${parseInt(m[2], 10)} · ${m[1]}` : p;
 };
 
-export default function CeoSalesRecordingsView() {
+// `embed` : rendu SANS le shell CEO (sidebar + navbar + fond de page), pour être
+// inséré tel quel dans un onglet de la tracking sheet, exactement comme
+// LeadAssignmentLive l'est pour l'auto-affectation.
+export default function CeoSalesRecordingsView({ embed = false }) {
   const navigate = useNavigate();
 
   // ── DARK MODE (read-only sync) ──────────────────────────────────────
@@ -59,10 +62,12 @@ export default function CeoSalesRecordingsView() {
   const [userRole, setUserRole] = useState(null);
   useEffect(() => {
     const u = apiClient.getUser();
-    if (!u || !ALLOWED_ROLES.has(u.role)) { navigate("/"); return; }
+    // En embed, le parent (onglet de la tracking sheet) a déjà filtré le rôle :
+    // on ne redirige pas, sinon un rôle non autorisé serait éjecté de sa sheet.
+    if (!u || !ALLOWED_ROLES.has(u.role)) { if (!embed) navigate("/"); return; }
     setUserRole(u.role);
     setAuthChecked(true);
-  }, [navigate]);
+  }, [navigate, embed]);
 
   // ── FETCH OVERVIEW (scan Drive, cache 30 min côté backend) ──────────
   const [data, setData] = useState(null);
@@ -210,14 +215,16 @@ export default function CeoSalesRecordingsView() {
 
   if (!authChecked) {
     return (
-      <div style={{ minHeight: "100vh", background: C.surface, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, fontFamily: "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif", fontSize: 14 }}>
+      <div style={{ minHeight: embed ? 220 : "100vh", background: embed ? "transparent" : C.surface, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, fontFamily: "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif", fontSize: 14 }}>
         Chargement…
       </div>
     );
   }
 
   return (
-    <div className="ceo-page" style={{ display: "flex", minHeight: "100vh", background: darkMode ? "#13141b" : "#f6f7f9", fontFamily: "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif", WebkitFontSmoothing: "antialiased", MozOsxFontSmoothing: "grayscale", textRendering: "optimizeLegibility" }}>
+    <div className="ceo-page" style={embed
+      ? { minWidth: 0, background: "transparent", fontFamily: "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif", WebkitFontSmoothing: "antialiased", MozOsxFontSmoothing: "grayscale", textRendering: "optimizeLegibility" }
+      : { display: "flex", minHeight: "100vh", background: darkMode ? "#13141b" : "#f6f7f9", fontFamily: "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif", WebkitFontSmoothing: "antialiased", MozOsxFontSmoothing: "grayscale", textRendering: "optimizeLegibility" }}>
       <style>{`
         @keyframes ceoFadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
         .ceo-side { transition: width 0.22s cubic-bezier(0.4,0,0.2,1); }
@@ -231,22 +238,24 @@ export default function CeoSalesRecordingsView() {
         .ceo-side-scroll::-webkit-scrollbar-track { background: transparent; }
       `}</style>
 
-      <div style={{ position: "sticky", top: 0, alignSelf: "flex-start", height: "100vh", display: "flex" }}>
-        <Sidebar
-          width={sideCollapsed ? 56 : 260}
-          collapsed={sideCollapsed}
-          onToggle={() => setSideCollapsed((v) => !v)}
-          sections={visibleSections}
-          activeTab="sales_recordings"
-          setActiveTab={handleSidebarTabClick}
-          C={C}
-          darkMode={darkMode}
-        />
-      </div>
+      {!embed && (
+        <div style={{ position: "sticky", top: 0, alignSelf: "flex-start", height: "100vh", display: "flex" }}>
+          <Sidebar
+            width={sideCollapsed ? 56 : 260}
+            collapsed={sideCollapsed}
+            onToggle={() => setSideCollapsed((v) => !v)}
+            sections={visibleSections}
+            activeTab="sales_recordings"
+            setActiveTab={handleSidebarTabClick}
+            C={C}
+            darkMode={darkMode}
+          />
+        </div>
+      )}
 
-      <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 64 }}>
-        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
-        <div style={{ padding: "32px 56px 64px" }}>
+      <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: embed ? 0 : 64 }}>
+        {!embed && <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />}
+        <div style={{ padding: embed ? "4px 4px 40px" : "32px 56px 64px" }}>
           <div style={{ animation: "ceoFadeIn 0.35s ease both" }}>
             {selectedEmail ? (
               <SalesRecordingsDetail

@@ -398,6 +398,11 @@ class ApiClient {
     const p = period ? `&period=${encodeURIComponent(period)}` : '';
     return this.request(`/api/v1/recordings/my-analysis?kind=${encodeURIComponent(kind)}${p}`);
   }
+  // Self-service : enregistrements Meet du sales CONNECTÉ. L'email scanné est forcé
+  // à celui du JWT côté backend, aucun paramètre ne peut élargir le périmètre.
+  async getMyRecordings(refresh = false) {
+    return this.request(`/api/v1/recordings/my-recordings${refresh ? '?refresh=1' : ''}`);
+  }
 
   // ============ TRACKING ============
   async getMyLeads() {
