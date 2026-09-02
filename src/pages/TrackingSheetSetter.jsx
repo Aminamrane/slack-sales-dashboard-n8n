@@ -5,6 +5,7 @@ import apiClient from "../services/apiClient";
 import { supabase } from "../lib/supabaseClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import CommonVoicemailPool from "../components/CommonVoicemailPool.jsx";
+import { leadAvatar } from "../utils/leadAvatar";
 import LeadsManagement from "./LeadsManagement.jsx";
 // ── Setter modales (Option B duplication intégrale TrackingSheet) ──────────
 import DisqualifyModal from "../components/setter/DisqualifyModal.jsx";
@@ -5027,6 +5028,9 @@ export default function TrackingSheetSetter() {
                       }} />
 
                       {/* Name */}
+                      <img src={leadAvatar(lead.full_name, lead.id, lead.origin, lead.campaign_name)} alt="" width={30} height={30}
+                        loading="lazy"
+                        style={{ width: 30, height: 30, borderRadius: 9, flexShrink: 0, objectFit: 'cover' }} />
                       <span style={{
                         fontSize: '14px',
                         fontWeight: 600,
@@ -5801,7 +5805,11 @@ export default function TrackingSheetSetter() {
                 />
               </div>
 
-              {/* ─── PROFILE HEADER ─── */}
+              {/* ─── PROFILE HEADER — avatar à gauche (parité avec la sheet sales) ─── */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <img src={leadAvatar(lead.full_name, lead.id, lead.origin, lead.campaign_name)} alt="" width={56} height={56}
+                style={{ width: 56, height: 56, borderRadius: 14, flexShrink: 0, objectFit: 'cover', marginTop: 4 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '12px' }}>
                 {/* Name (editable) */}
                 {editingField?.leadId === lead.id && editingField?.field === 'full_name' ? (
@@ -5871,7 +5879,7 @@ export default function TrackingSheetSetter() {
                 </div>
                 {(activeCat.key === 'callback' || activeCat.key === 'voicemail') && (lead.call_attempts > 0 || lead.first_call_at || lead.last_call_at) && (
                   <div style={{ fontSize: 12, color: C.muted, fontStyle: 'italic', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    {lead.call_attempts > 0 && <span>Appelé {lead.call_attempts} fois</span>}
+                    {lead.call_attempts > 0 && <span>Appelé {lead.call_attempts} fois par le sales</span>}
                     {lead.first_call_at && (() => {
                       const d = new Date(lead.first_call_at);
                       const dateLabel = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -5890,6 +5898,8 @@ export default function TrackingSheetSetter() {
                     })()}
                   </div>
                 )}
+              </div>
+              </div>
               </div>
 
               {/* ─── STATS ROW ─── */}
