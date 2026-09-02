@@ -90,6 +90,7 @@ import BoardEtatCell from './components/BoardEtatCell.jsx';
 import ExitClientDialog from './components/ExitClientDialog.jsx';
 import StructureSplits from './components/StructureSplits.jsx';
 import ExpectedCorrection from './components/ExpectedCorrection.jsx';
+import OnboardingFacturation from './components/OnboardingFacturation.jsx';
 
 // Notion palette (sync with index.jsx N).
 const N = {
@@ -961,6 +962,10 @@ export default function DetailPanel({
               || boardRow.rdv_fiscal_date || boardRow.rdv_social_date) && (
               <Section title="Rendez-vous & juriste référent" delay={0.16}>
                 <RdvJuristeSection boardRow={boardRow} agenda={clientAgenda} onCopied={onCopied} />
+                {/* Validation FACTURATION du RDV d'onboarding + recalage (finance).
+                    Statut propre à la finance, indépendant de celui de Vincent ;
+                    le recalage, lui, déplace le RDV partagé (agendas liés). */}
+                <OnboardingFacturation numeroClient={numeroClient} boardRow={boardRow} />
               </Section>
             )}
 
