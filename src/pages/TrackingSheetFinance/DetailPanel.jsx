@@ -89,6 +89,7 @@ import { ETAT_STYLE, displayEtat } from '../OptilexBoard.jsx';
 import BoardEtatCell from './components/BoardEtatCell.jsx';
 import ExitClientDialog from './components/ExitClientDialog.jsx';
 import StructureSplits from './components/StructureSplits.jsx';
+import ExpectedCorrection from './components/ExpectedCorrection.jsx';
 
 // Notion palette (sync with index.jsx N).
 const N = {
@@ -150,6 +151,9 @@ export default function DetailPanel({
   const [exitOpen, setExitOpen] = useState(false);
   // Remboursement d'un trop-perçu : null = fermé, sinon { entity, amount }.
   const [refund, setRefund] = useState(null);
+  // Correction de l'attendu (direction) : supprimer ou reporter un montant
+  // facturé à tort. Distinct d'une perte — rien n'est abandonné ici.
+  const [correctionOpen, setCorrectionOpen] = useState(false);
   // Structures payantes et ventilation — servent l'état de compte par société.
   const [structures, setStructures] = useState([]);
   const [structureSplits, setStructureSplits] = useState([]);
@@ -175,6 +179,7 @@ export default function DetailPanel({
       setRefund(null);
       setStructures([]);
       setStructureSplits([]);
+      setCorrectionOpen(false);
     }
   }, [open]);
 
@@ -871,6 +876,24 @@ export default function DetailPanel({
                   {/* Un document par société pour les clients multi-structures
                       (demande dev 2026-09-01). Le global reste proposé : c'est
                       celui qu'on envoie au dirigeant. */}
+                  {canEditMoney && scope !== 'global' && (
+                    <button
+                      type="button"
+                      onClick={() => setCorrectionOpen(true)}
+                      title="Supprimer ou reporter un attendu facturé à tort"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        height: 26, padding: '0 10px', background: '#fff', color: N.text,
+                        border: `1px solid ${N.border}`, borderRadius: 6,
+                        fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                        fontFamily: 'inherit', whiteSpace: 'nowrap',
+                        boxShadow: '0 1px 2px rgba(15,15,15,0.04)',
+                      }}
+                    >
+                      <PenLine size={12} strokeWidth={2} />
+                      Corriger l’attendu
+                    </button>
+                  )}
                   {structures.length > 1 && scope !== 'global' && structures.map((st) => (
                     <StatementButton
                       key={st.id}
@@ -1006,6 +1029,16 @@ export default function DetailPanel({
               Direction financière et direction seulement (demande dev
               2026-08-28). Le dialogue est portalisé : il passe au-dessus du
               panneau, pas dedans. */}
+          <ExpectedCorrection
+            open={correctionOpen && canEditMoney}
+            onClose={() => setCorrectionOpen(false)}
+            clientId={clientId}
+            periods={periods}
+            scope={scope}
+            onDone={reloadAfterExit}
+            onShowToast={onShowToast}
+          />
+
           <ExitClientDialog
             open={exitOpen && canEditMoney}
             onClose={() => setExitOpen(false)}
