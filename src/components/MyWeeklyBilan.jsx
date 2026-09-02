@@ -13,7 +13,7 @@
 // Le composant reste autonome (fetch + état + palette) pour ne rien ajouter à
 // TrackingSheet, qui est une zone sacrée.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import apiClient from "../services/apiClient";
 import WeeklyBilanView from "./WeeklyBilanView.jsx";
 import ScorecardView from "./ScorecardView.jsx";
@@ -72,6 +72,18 @@ export default function MyWeeklyBilan({ name, avatarUrl, team }) {
   const [recsLoading, setRecsLoading] = useState(false);
   const [viewing, setViewing] = useState(null);
 
+  // Les deux volets paresseux ne doivent partir qu'UNE fois. Le drapeau vit dans
+  // un ref, pas dans un state : un state de chargement placé en dépendance
+  // relancerait l'effet dès sa mise à true, et le nettoyage annulerait la requête
+  // en vol — le spinner tournerait alors indéfiniment.
+  const scStarted = useRef(false);
+  const recsStarted = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;                       // remis à true : en StrictMode
+    return () => { mounted.current = false; };    // l'effet est rejoué au montage
+  }, []);
+
   // Polices éditoriales, comme la fiche sales côté direction.
   useEffect(() => {
     const id = "owner-scorecard-fonts";
@@ -94,20 +106,20 @@ export default function MyWeeklyBilan({ name, avatarUrl, team }) {
 
   // Analyses : un seul chargement, à la première ouverture du volet.
   useEffect(() => {
-    if (tab !== "analyses" || scList !== null || scLoading) return;
-    let alive = true; setScLoading(true);
+    if (tab !== "analyses" || scStarted.current) return;
+    scStarted.current = true;
+    setScLoading(true);
     apiClient.getScorecards(myEmail)
       .then((r) => {
-        if (!alive) return;
+        if (!mounted.current) return;
         const list = (r?.scorecards || []).slice()
           .sort((a, b) => (b.rdv_date || "").localeCompare(a.rdv_date || ""));
         setScList(list);
         if (list[0]) setSelId(list[0].id);
       })
-      .catch(() => { if (alive) setScList([]); })
-      .finally(() => { if (alive) setScLoading(false); });
-    return () => { alive = false; };
-  }, [tab, scList, scLoading, myEmail]);
+      .catch(() => { if (mounted.current) setScList([]); })
+      .finally(() => { if (mounted.current) setScLoading(false); });
+  }, [tab, myEmail]);
 
   useEffect(() => {
     if (!selId) { setScData(null); return; }
@@ -121,14 +133,14 @@ export default function MyWeeklyBilan({ name, avatarUrl, team }) {
 
   // Vidéos : le scan Drive prend plusieurs secondes, donc à la demande seulement.
   useEffect(() => {
-    if (tab !== "videos" || recs !== null || recsLoading) return;
-    let alive = true; setRecsLoading(true);
+    if (tab !== "videos" || recsStarted.current) return;
+    recsStarted.current = true;
+    setRecsLoading(true);
     apiClient.getMyRecordings()
-      .then((r) => { if (alive) setRecs(r?.recordings || []); })
-      .catch(() => { if (alive) setRecs([]); })
-      .finally(() => { if (alive) setRecsLoading(false); });
-    return () => { alive = false; };
-  }, [tab, recs, recsLoading]);
+      .then((r) => { if (mounted.current) setRecs(r?.recordings || []); })
+      .catch(() => { if (mounted.current) setRecs([]); })
+      .finally(() => { if (mounted.current) setRecsLoading(false); });
+  }, [tab]);
 
   const videos = useMemo(() => (recs || []).filter((r) => r.kind === "video"), [recs]);
 
