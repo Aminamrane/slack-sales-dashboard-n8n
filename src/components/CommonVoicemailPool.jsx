@@ -213,15 +213,17 @@ function SizeCell({ lead, C }) {
 // Bouton « ne souhaite pas être rappelé » — corbeille discrète, rouge au survol.
 function OptOutX({ lead, C, busy, onOptOut }) {
   const [h, setH] = useState(false);
+  // Pastille VISIBLE en permanence (fond + bordure rouges pâles) : la corbeille
+  // grise sans fond passait inaperçue tout à droite (retour sales 2026-09-03).
   return (
     <button onClick={() => onOptOut(lead.id, lead.full_name)} disabled={busy}
       onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)}
       title="Ne souhaite pas être rappelé : mettre ce lead à la corbeille (archivé, plus jamais rappelé)"
-      style={{ width: 28, height: 28, borderRadius: 7, border: "none",
-        background: h ? (C.muted && C.text ? "rgba(180,35,24,0.10)" : "transparent") : "transparent",
-        color: h ? "#b42318" : C.muted, cursor: "pointer",
+      style={{ width: 30, height: 28, borderRadius: 7, border: `1px solid ${h ? "#b42318" : "#f3c6c0"}`,
+        background: h ? "#fbe3e0" : "#fdf3f1",
+        color: "#b42318", cursor: "pointer",
         display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-        transition: "background 0.15s, color 0.15s" }}>
+        transition: "background 0.15s, border-color 0.15s" }}>
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
       </svg>
