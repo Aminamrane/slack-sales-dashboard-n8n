@@ -300,24 +300,36 @@ function initialsOf(name) {
 function EnvelopeButton({ lead, C, darkMode, onOpen }) {
   const [h, setH] = useState(false);
   const n = lead.pool_comments || 0;
+  // Messages postés par d'AUTRES depuis mon dernier passage sur le fil :
+  // l'enveloppe passe en ROUGE qui pulse pour que ça se voie de loin.
+  const unseen = lead.pool_comments_unseen || 0;
   const accent = "#0891b2";
+  const red = "#dc2626";
+  const tone = unseen ? red : accent;
   return (
     <button onClick={() => onOpen(lead)}
       onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)}
-      title={n ? `${n} message${n > 1 ? "s" : ""} laissé${n > 1 ? "s" : ""} sur ce lead — cliquer pour lire ou répondre` : "Laisser un message sur ce lead pour les autres sales"}
+      title={unseen
+        ? `${unseen} nouveau${unseen > 1 ? "x" : ""} message${unseen > 1 ? "s" : ""} sur ce lead — cliquer pour lire`
+        : n ? `${n} message${n > 1 ? "s" : ""} laissé${n > 1 ? "s" : ""} sur ce lead — cliquer pour lire ou répondre`
+        : "Laisser un message sur ce lead pour les autres sales"}
       style={{ position: "relative", width: 30, height: 28, borderRadius: 7, border: "none",
-        background: h ? (darkMode ? "rgba(8,145,178,0.16)" : "#e6f6fa") : "transparent",
-        color: n ? accent : (h ? accent : C.muted), cursor: "pointer",
+        background: h
+          ? (unseen ? (darkMode ? "rgba(220,38,38,0.16)" : "#fdecec") : (darkMode ? "rgba(8,145,178,0.16)" : "#e6f6fa"))
+          : "transparent",
+        color: unseen ? red : (n ? accent : (h ? accent : C.muted)), cursor: "pointer",
         display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
         transition: "background 0.15s, color 0.15s" }}>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 7-10 6L2 7" />
       </svg>
-      {n > 0 && (
+      {(unseen > 0 || n > 0) && (
         <span style={{ position: "absolute", top: -4, right: -4, minWidth: 15, height: 15, padding: "0 4px",
-          borderRadius: 8, background: accent, color: "#fff", fontSize: 9.5, fontWeight: 800,
-          display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
-          {n > 99 ? "99+" : n}
+          borderRadius: 8, background: tone, color: "#fff", fontSize: 9.5, fontWeight: 800,
+          display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1,
+          animation: unseen ? "cvpPulse 1.6s ease-in-out infinite" : "none",
+          boxShadow: unseen ? "0 0 0 0 rgba(220,38,38,0.45)" : "none" }}>
+          {(unseen || n) > 99 ? "99+" : (unseen || n)}
         </span>
       )}
     </button>
@@ -374,9 +386,13 @@ function PoolCommentsModal({ lead, C, darkMode, onClose, onPosted }) {
         @keyframes cvpFadeIn{from{opacity:0}to{opacity:1}}
         @keyframes cvpMsgIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
         @keyframes cvpSpin{to{transform:rotate(360deg)}}`}</style>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 10070, background: "rgba(15,20,30,0.45)", backdropFilter: "blur(2px)", animation: "cvpFadeIn 0.16s ease both" }} />
-      <div role="dialog" aria-modal="true" style={{ position: "fixed", zIndex: 10071, top: "50%", left: "50%", transform: "translate(-50%, -50%)",
-        width: "min(480px, calc(100vw - 32px))", maxHeight: "min(600px, calc(100vh - 48px))", display: "flex", flexDirection: "column",
+      {/* Le centrage vient du conteneur flex, PAS d'un transform sur la boîte :
+          la frame finale de cvpModalIn (transform:none) écraserait un
+          translate(-50%,-50%) et décentrerait le popup. */}
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 10070, background: "rgba(15,20,30,0.45)", backdropFilter: "blur(2px)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 16, animation: "cvpFadeIn 0.16s ease both" }}>
+      <div role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()} style={{
+        width: "min(480px, 100%)", maxHeight: "min(600px, calc(100vh - 48px))", display: "flex", flexDirection: "column",
         background: darkMode ? "#1c1f26" : "#fff", border: `1px solid ${C.border}`, borderRadius: 16,
         boxShadow: "0 24px 64px rgba(10,14,22,0.35)", animation: "cvpModalIn 0.2s cubic-bezier(0.16,1,0.3,1) both", overflow: "hidden" }}>
 
@@ -405,8 +421,7 @@ function PoolCommentsModal({ lead, C, darkMode, onClose, onPosted }) {
             </div>
           ) : comments.length === 0 ? (
             <div style={{ textAlign: "center", color: C.muted, fontSize: 12.5, padding: "24px 12px", lineHeight: 1.5 }}>
-              Aucun message pour l'instant.<br />
-              Promesse de RDV, « ne veut pas être rappelé avant… » : laissez le contexte aux autres sales.
+              Aucun message pour l'instant.
             </div>
           ) : comments.map((c, i) => (
             <div key={c.id} style={{ display: "flex", gap: 9, animation: `cvpMsgIn 0.22s ease ${Math.min(i * 0.03, 0.3)}s both` }}>
@@ -448,6 +463,7 @@ function PoolCommentsModal({ lead, C, darkMode, onClose, onPosted }) {
             </button>
           </div>
         </div>
+      </div>
       </div>
     </>,
     document.body,
@@ -594,10 +610,21 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
   const onCommentPosted = (leadId, newCount) => {
     setData((d) => !d ? d : {
       ...d,
-      traitement: d.traitement.map((l) => l.id === leadId ? { ...l, pool_comments: newCount } : l),
-      reactivite: d.reactivite.map((l) => l.id === leadId ? { ...l, pool_comments: newCount } : l),
+      traitement: d.traitement.map((l) => l.id === leadId ? { ...l, pool_comments: newCount, pool_comments_unseen: 0 } : l),
+      reactivite: d.reactivite.map((l) => l.id === leadId ? { ...l, pool_comments: newCount, pool_comments_unseen: 0 } : l),
     });
     setCommentsFor((c) => (c && c.id === leadId ? { ...c, pool_comments: newCount } : c));
+  };
+
+  // Ouvrir le fil = l'avoir lu : le backend marque le passage (GET), on éteint
+  // le rouge tout de suite côté UI sans attendre le prochain polling.
+  const openComments = (lead) => {
+    setCommentsFor(lead);
+    setData((d) => !d ? d : {
+      ...d,
+      traitement: d.traitement.map((l) => l.id === lead.id ? { ...l, pool_comments_unseen: 0 } : l),
+      reactivite: d.reactivite.map((l) => l.id === lead.id ? { ...l, pool_comments_unseen: 0 } : l),
+    });
   };
 
   const card = (extra = {}) => ({
@@ -621,6 +648,7 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <style>{`@keyframes cvpPulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(220,38,38,0.45)}50%{transform:scale(1.12);box-shadow:0 0 0 4px rgba(220,38,38,0)}}`}</style>
       {claimedMsg && (
         <div style={{ padding: "10px 16px", borderRadius: 10, background: darkMode ? "rgba(62,125,90,0.18)" : "#e7f0eb", color: "#3e7d5a", fontSize: 12.5, fontWeight: 650 }}>
           {claimedMsg}
@@ -713,7 +741,7 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                               style={{ padding: "5px 12px", borderRadius: 8, border: "none", background: busyId === lead.id ? C.muted : "#3e7d5a", color: "#fff", fontSize: 11.5, fontWeight: 700, cursor: busyId === lead.id ? "wait" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
                               {busyId === lead.id ? "…" : "Je le prends"}
                             </button>
-                            <EnvelopeButton lead={lead} C={C} darkMode={darkMode} onOpen={setCommentsFor} />
+                            <EnvelopeButton lead={lead} C={C} darkMode={darkMode} onOpen={openComments} />
                             <OptOutX lead={lead} C={C} busy={busyId === lead.id} onOptOut={optOut} />
                           </div>
                         </td>
@@ -787,7 +815,7 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                                 style={{ padding: "5px 10px", borderRadius: 7, border: `1px solid ${rdvFor === lead.id ? "#3e7d5a" : "#cfe8d9"}`, background: rdvFor === lead.id ? "#3e7d5a" : "#e9f5ee", color: rdvFor === lead.id ? "#fff" : "#2f7a53", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
                                 Prendre avec un RDV
                               </button>
-                              <EnvelopeButton lead={lead} C={C} darkMode={darkMode} onOpen={setCommentsFor} />
+                              <EnvelopeButton lead={lead} C={C} darkMode={darkMode} onOpen={openComments} />
                               <OptOutX lead={lead} C={C} busy={busyId === lead.id} onOptOut={optOut} />
                             </div>
                           </td>
