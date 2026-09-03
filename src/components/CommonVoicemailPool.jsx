@@ -618,7 +618,13 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
         traitement: d.traitement.map((l) => l.id === id ? { ...l, pool_calls: r.pool_calls, pool_last_call_at: r.pool_last_call_at, my_calls: r.my_calls, my_last_call_at: r.my_last_call_at } : l),
         reactivite: d.reactivite.map((l) => l.id === id ? { ...l, pool_calls: r.pool_calls, pool_last_call_at: r.pool_last_call_at, my_calls: r.my_calls, my_last_call_at: r.my_last_call_at } : l),
       });
-    } catch {}
+    } catch {
+      // Un clic perdu SANS feedback = un appel jamais compté et un sales qui
+      // croit avoir noté (cas Voratovic/Gomis pendant le gel API du 02/09).
+      // On le DIT, et on ne pose pas le flash « Noté ✓ ».
+      setClaimedMsg("« J'ai appelé » n'a PAS été enregistré (connexion ou serveur) — recliquez dans un instant.");
+      setTimeout(() => setClaimedMsg(null), 6000);
+    }
   };
 
   // Un message vient d'être publié : le badge de l'enveloppe suit sans refetch.
