@@ -11,13 +11,14 @@
 //
 // Composition (Notion-like shell, v6 refonte 2026-05-08) :
 //   - Left sidebar (collapsible, ~260px / 56px) with workspace header,
-//     icon row, sections + items, footer composer. Mocks the CeoDashboard
-//     layout for visual reference — content will be wired to real nav later.
+//     icon row, sections + items, footer composer. Depuis le 2026-09-03 les
+//     sections sont la navigation réelle de la page (suivi, encaissements,
+//     pertes, vues du tableau, export) — icônes filaires monochromes.
 //   - Main area :
 //       · top bar : breadcrumb, "Dernière modif", share button, share icons
 //       · title block : circular green icon + page name + subtitle
-//       · tab row : "Toutes les périodes / Par état / Mes clients" + actions
-//       · <TableView /> Notion-styled
+//       · tab row : "Toutes les périodes / Encaissements / Pertes" + actions
+//       · <TableView /> Notion-styled, <ReceiptsView />, <LossesView />
 //   - <ClientDetailModal /> for timeline + audit
 //
 // Optimistic edits :
@@ -33,7 +34,6 @@ import {
   Edit3, Plus, Filter, ArrowUpDown, MoreHorizontal, Share2,
   CheckCircle, Sparkles, FileText, Users, Settings, Clock,
   XCircle, CircleDot, FilterX, Eye, Check, Star, Handshake, TriangleAlert, Download,
-  DollarSign, BarChart3, Trophy, Wallet, ShoppingBag, UserCircle, Megaphone, StickyNote, ListChecks,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
@@ -41,6 +41,15 @@ import PortalDropdown from './components/PortalDropdown.jsx';
 import FilterBuilder from './components/FilterBuilder.jsx';
 import { matchesSavedFilter, describeFilter } from './savedFilters.js';
 import LossesView from './components/LossesView.jsx';
+import ReceiptsView from './components/ReceiptsView.jsx';
+import CreancesExitBanner from './components/CreancesExitBanner.jsx';
+// Icônes de navigation dessinées pour la page (barre latérale, onglets,
+// filtre responsable) : filaires, monochromes, dans l'esprit de la référence
+// donnée par le dev (2026-09-03). Pas de bibliothèque : le trait est le nôtre.
+import {
+  TableIcon, InboxIcon, LossIcon, CheckCircleIcon, ClockIcon, OverdueIcon,
+  RefundIcon, CalendarCheckIcon, BankOffIcon, ExitIcon, ExportIcon, ContactIcon,
+} from './components/FinanceIcons.jsx';
 import { exportFinanceXlsx } from './exportExcel.js';
 import companyLogo from '../../assets/my_image.png';
 import '../../index.css';
@@ -67,6 +76,7 @@ import {
   scopedReceivedTotal,
   normalizeSearch,
   matchesClientSearch,
+  isExitCandidate,
 } from './constants.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -233,34 +243,21 @@ const STYLE_BLOCK = `
 `;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Mock sidebar content (mirrors CeoDashboard layout). Real content TBD with dev.
+// Barre latérale = navigation réelle de la page (2026-09-03). Elle remplace
+// le contenu factice qui mimait le dashboard CEO : chaque entrée pilote un
+// onglet, une vue du tableau ou une action. Les icônes sont filaires et
+// monochromes, une seule couleur d'accent sur l'entrée active — l'esprit des
+// outils de facturation que le dev a montrés en référence.
 // ─────────────────────────────────────────────────────────────────────────────
-const SIDEBAR_SECTIONS = [
-  {
-    key: 'recent', label: 'Récentes',
-    items: [
-      { id: 'finance-tracking', label: 'Tracking Finance', lucideIcon: DollarSign, color: '#0f7b6c', active: true },
-      { id: 'perf-closing',     label: 'Perf. Closing',    lucideIcon: BarChart3,  color: '#2383e2' },
-      { id: 'sales-leaderboard',label: 'Leaderboard',      lucideIcon: Trophy,     color: '#d9730d' },
-    ],
-  },
-  {
-    key: 'workspace', label: 'Espace de travail',
-    items: [
-      { id: 'finance',     label: 'Finance',     lucideIcon: Wallet,     color: '#0f7b6c' },
-      { id: 'acquisition', label: 'Acquisition', lucideIcon: ShoppingBag, color: '#2383e2' },
-      { id: 'human',       label: 'Human',       lucideIcon: UserCircle,  color: '#6940a5' },
-      { id: 'marketing',   label: 'Marketing',   lucideIcon: Megaphone,   color: '#d44c8f' },
-    ],
-  },
-  {
-    key: 'private', label: 'Pages privées',
-    items: [
-      { id: 'notes', label: 'Notes', lucideIcon: StickyNote,  color: '#787774' },
-      { id: 'todo',  label: 'To-do', lucideIcon: ListChecks,  color: '#787774' },
-    ],
-  },
-];
+const VIEW_ICONS = {
+  a_jour:           CheckCircleIcon,
+  retard_mois:      ClockIcon,
+  creances:         OverdueIcon,
+  trop_percu:       RefundIcon,
+  onboarding_passe: CalendarCheckIcon,
+  non_auto:         BankOffIcon,
+  resilies:         ExitIcon,
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Vision (scope) + vues-filtres — phase 2 condensation (2026-08-18).
@@ -394,6 +391,16 @@ export default function TrackingSheetFinance() {
   // L'ancienneté vient du serveur (`overdue_*_since`) : c'est le premier mois
   // d'une dette qui n'a jamais été soldée depuis.
   const [creanceAge, setCreanceAge] = useState('all');
+  // Dans « Créances antérieures », ne voir que les clients en fin de relation
+  // (liquidation, résiliation…) qui gardent des créances : ceux dont la sortie
+  // est à acter (règle dev 2026-09-03). Bascule depuis le bandeau d'alerte.
+  const [creanceExitOnly, setCreanceExitOnly] = useState(false);
+
+  // État board d'une ligne — la règle d'affichage du board, jamais recopiée.
+  const boardEtatOf = useCallback((r) => {
+    const br = (r.client?.numero_client && boardMap) ? boardMap.get(r.client.numero_client) : null;
+    return br ? displayEtat(br) : null;
+  }, [boardMap]);
 
   // Prédicat d'une vue-filtre pour une row, dans la vision active.
   const matchesView = useCallback((r, filterKey) => {
@@ -404,6 +411,7 @@ export default function TrackingSheetFinance() {
         return scopedOverdueCurrent(r, scope) > 0;
       case 'creances': {
         if (scopedOverdueCum(r, scope) <= 0) return false;
+        if (creanceExitOnly && !isExitCandidate(r, boardEtatOf(r), scope)) return false;
         if (creanceAge === 'all') return true;
         const mois = creanceAgeMonths(r, scope);
         if (mois === null) return creanceAge === 'recent';
@@ -449,7 +457,49 @@ export default function TrackingSheetFinance() {
       default:
         return true; // 'all'
     }
-  }, [scope, boardMap, relanceMonths, creanceAge]);
+  }, [scope, boardMap, relanceMonths, creanceAge, creanceExitOnly, boardEtatOf]);
+
+  // Clients en fin de relation qui gardent des créances antérieures : ils
+  // restent dans la vue (on ne les invisibilise pas), et on les compte pour
+  // l'alerte — indépendamment de l'ancienneté choisie.
+  const creanceExitCount = useMemo(() => {
+    if (viewFilter !== 'creances') return 0;
+    let n = 0;
+    for (const r of rows) {
+      if (isExitCandidate(r, boardEtatOf(r), scope)) n += 1;
+    }
+    return n;
+  }, [rows, scope, viewFilter, boardEtatOf]);
+  useEffect(() => {
+    if (viewFilter !== 'creances') setCreanceExitOnly(false);
+  }, [viewFilter]);
+
+  // Filtre « Responsable » : les personnes qui suivent au moins un client du
+  // mois, avec leur volume, et « sans responsable » (demande dev 2026-09-03 :
+  // pas de colonne, mais un filtre et la fiche).
+  const responsibleFilterOptions = useMemo(() => {
+    const counts = new Map();
+    let none = 0;
+    for (const r of rows) {
+      const id = r.client?.responsible_user_id;
+      if (!id) { none += 1; continue; }
+      const cur = counts.get(id) || { name: r.client.responsible_name || 'Sans nom', n: 0 };
+      cur.n += 1;
+      counts.set(id, cur);
+    }
+    const opts = [...counts.entries()]
+      .sort((a, b) => a[1].name.localeCompare(b[1].name))
+      .map(([id, { name, n }]) => ({
+        value: `resp:${id}`,
+        label: `Responsable : ${name} (${n})`,
+        Icon: ContactIcon,
+      }));
+    // « Sans responsable » n'a de sens que lorsque le suivi a commencé.
+    if (opts.length && none) {
+      opts.push({ value: 'resp:none', label: `Sans responsable (${none})`, Icon: ContactIcon });
+    }
+    return opts;
+  }, [rows]);
 
   // États présents dans le board pour les clients affichés : le menu Filtre
   // ne propose que ce qui existe, avec son volume — un état vide n'apparaît
@@ -510,6 +560,10 @@ export default function TrackingSheetFinance() {
       if (tableFilters.has('overdue_past_only') && overdueCurrent === 0 && overdueCumul > 0) return true;
       if (tableFilters.has('payment_promise') && r.client?.payment_promise) return true;
       if (tableFilters.has('loss') && r.client?.is_loss) return true;
+      // Filtres par responsable (clés « resp:<id> », « resp:none »).
+      const respId = r.client?.responsible_user_id || null;
+      if (respId && tableFilters.has(`resp:${respId}`)) return true;
+      if (!respId && tableFilters.has('resp:none')) return true;
       // Filtres par état (clés « etat:Signé », « etat:Résiliation »…).
       const br = (r.client?.numero_client && boardMap)
         ? boardMap.get(r.client.numero_client) : null;
@@ -764,6 +818,12 @@ export default function TrackingSheetFinance() {
   }, [panelRowId]);
   const closePanel = useCallback(() => setPanelOpen(false), []);
   const onSelectPanelRow = useCallback((rowId) => setPanelRowId(rowId), []);
+  // Ouvrir la fiche depuis une vue qui ne connaît que le client (pertes,
+  // encaissements) : on retrouve sa ligne du mois.
+  const openClientById = useCallback((clientId) => {
+    const row = rows.find((r) => r.client?.id === clientId);
+    if (row) onOpenRow(row);
+  }, [rows, onOpenRow]);
 
   // ── Refresh ─────────────────────────────────────────────────────────
   const onRefresh = useCallback(() => {
@@ -856,6 +916,42 @@ export default function TrackingSheetFinance() {
     return new Date(max).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
   }, [rows]);
 
+  // ── Barre latérale : la navigation de la page ───────────────────────────
+  const sidebarSections = useMemo(() => {
+    const onTable = activeTab === 'all';
+    const goTable = (filter) => () => { setActiveTab('all'); setViewFilter(filter); };
+    return [
+      {
+        key: 'suivi', label: 'Suivi',
+        items: [
+          { id: 'table',    label: 'Suivi mensuel', Icon: TableIcon,   active: onTable && viewFilter === 'all', action: goTable('all') },
+          { id: 'receipts', label: 'Encaissements', Icon: InboxIcon,   active: activeTab === 'receipts', action: () => setActiveTab('receipts') },
+          { id: 'losses',   label: 'Pertes',        Icon: LossIcon,    active: activeTab === 'losses',   action: () => setActiveTab('losses') },
+        ],
+      },
+      {
+        key: 'vues', label: 'Vues du tableau',
+        items: VIEW_FILTERS.filter((v) => v.key !== 'all').map((v) => ({
+          id: `view-${v.key}`,
+          label: v.label,
+          Icon: VIEW_ICONS[v.key] || CheckCircleIcon,
+          active: onTable && viewFilter === v.key,
+          action: goTable(v.key),
+          count: viewCounts[v.key],
+        })),
+      },
+      {
+        key: 'outils', label: 'Outils',
+        items: [
+          {
+            id: 'export', label: 'Exporter en Excel', Icon: ExportIcon,
+            action: exportToExcel, disabled: !exportedRows.length,
+          },
+        ],
+      },
+    ];
+  }, [activeTab, viewFilter, viewCounts, exportToExcel, exportedRows.length]);
+
   if (!authChecked) {
     return null;
   }
@@ -883,7 +979,7 @@ export default function TrackingSheetFinance() {
           width={sideWidth}
           collapsed={sideCollapsed}
           onToggle={() => setSideCollapsed((v) => !v)}
-          sections={SIDEBAR_SECTIONS}
+          sections={sidebarSections}
         />
       )}
 
@@ -947,6 +1043,7 @@ export default function TrackingSheetFinance() {
             savedFilters={savedFilters}
             onCreateSavedFilter={createSavedFilter}
             onRemoveSavedFilter={removeSavedFilter}
+            responsibleOptions={responsibleFilterOptions}
             hiddenColsInfo={hiddenColsInfo}
             onShowAllCols={() => showAllColsRef.current?.()}
             onShowCol={(key) => showColRef.current?.(key)}
@@ -956,16 +1053,27 @@ export default function TrackingSheetFinance() {
           />
 
           {/* Vues-filtres (chips) — combinables avec la recherche ; les
-              compteurs et calculs de retard suivent la vision active. */}
-          <ViewChips
-            active={viewFilter}
-            onChange={setViewFilter}
-            counts={viewCounts}
-            relanceMonths={relanceMonths}
-            creanceAge={creanceAge}
-            onCreanceAgeChange={setCreanceAge}
-            onRelanceMonthsChange={setRelanceMonths}
-          />
+              compteurs et calculs de retard suivent la vision active. Elles
+              filtrent le tableau : sur les autres onglets elles n'ont pas
+              d'objet. */}
+          {activeTab === 'all' && (
+            <>
+              <ViewChips
+                active={viewFilter}
+                onChange={setViewFilter}
+                counts={viewCounts}
+                relanceMonths={relanceMonths}
+                creanceAge={creanceAge}
+                onCreanceAgeChange={setCreanceAge}
+                onRelanceMonthsChange={setRelanceMonths}
+              />
+              <CreancesExitBanner
+                count={creanceExitCount}
+                only={creanceExitOnly}
+                onToggle={() => setCreanceExitOnly((v) => !v)}
+              />
+            </>
+          )}
 
           {error && (
             <div style={{
@@ -1005,11 +1113,10 @@ export default function TrackingSheetFinance() {
                 <LossesView
                   boardMap={boardMap}
                   scope={scope}
-                  onOpenClient={(cid) => {
-                    const row = rows.find((r) => r.client?.id === cid);
-                    if (row) onOpenRow(row);
-                  }}
+                  onOpenClient={openClientById}
                 />
+              ) : activeTab === 'receipts' ? (
+                <ReceiptsView scope={scope} onOpenClient={openClientById} />
               ) : (
               <TableView
                 rows={filteredRows}
@@ -1256,46 +1363,62 @@ function SidebarSection({ section, collapsed }) {
 }
 
 function SidebarItem({ item, collapsed }) {
+  const disabled = !!item.disabled;
   return (
     <button
       className="tsf-side-item"
       title={collapsed ? item.label : undefined}
+      onClick={disabled ? undefined : item.action}
+      disabled={disabled}
       style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: collapsed ? '6px 0' : '4px 6px',
+        display: 'flex', alignItems: 'center', gap: 9,
+        padding: collapsed ? '6px 0' : '5px 8px',
         justifyContent: collapsed ? 'center' : 'flex-start',
         border: 'none',
         background: item.active ? N.sideActive : 'transparent',
-        cursor: 'pointer',
-        borderRadius: 4,
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.45 : 1,
+        borderRadius: 6,
         fontFamily: 'inherit',
         color: N.text,
-        fontSize: 14,
+        fontSize: 13.5,
         textAlign: 'left',
         width: '100%',
         minWidth: 0,
+        transition: 'background 0.12s',
       }}
     >
-      {item.lucideIcon ? (
+      {item.Icon ? (
+        // Filaire, monochrome : gris au repos, accent sur l'entrée active.
         <span style={{
-          width: 20, height: 20, flexShrink: 0, borderRadius: 4,
+          width: 20, height: 20, flexShrink: 0,
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          color: item.color || N.textMuted,
+          color: item.active ? N.accent : N.textMuted,
         }}>
-          <item.lucideIcon size={16} strokeWidth={1.8} />
+          <item.Icon size={17} strokeWidth={1.6} />
         </span>
       ) : (
         <PageEmblem kind={item.icon} size={18} />
       )}
       {!collapsed && (
-        <span style={{
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          fontWeight: item.active ? 500 : 400,
-          color: N.text,
-          flex: 1,
-        }}>
-          {item.label}
-        </span>
+        <>
+          <span style={{
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            fontWeight: item.active ? 600 : 450,
+            color: N.text,
+            flex: 1,
+          }}>
+            {item.label}
+          </span>
+          {item.count !== undefined && (
+            <span style={{
+              fontSize: 11, fontWeight: 600, color: N.textFaint,
+              fontVariantNumeric: 'tabular-nums', flexShrink: 0,
+            }}>
+              {item.count}
+            </span>
+          )}
+        </>
       )}
     </button>
   );
@@ -1937,7 +2060,7 @@ const FILTER_OPTIONS = [
 ];
 
 function FilterDropdown({
-  values, onToggle, etatOptions = [],
+  values, onToggle, etatOptions = [], responsibleOptions = [],
   savedFilters = [], onCreateSavedFilter, onRemoveSavedFilter,
 }) {
   const [building, setBuilding] = useState(false);
@@ -1964,9 +2087,10 @@ function FilterDropdown({
   // volée plutôt que de figer une liste qui finirait par diverger
   // (demande dev 2026-08-28). Ils se croisent avec les autres filtres,
   // comme eux en union.
+  // Idem pour les responsables : la liste suit ce qui est réellement posé.
   const allOptions = useMemo(
-    () => [...FILTER_OPTIONS, ...etatOptions],
-    [etatOptions],
+    () => [...FILTER_OPTIONS, ...etatOptions, ...responsibleOptions],
+    [etatOptions, responsibleOptions],
   );
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -2285,15 +2409,17 @@ function TabRow({
   hiddenColsInfo = { count: 0, keys: [] }, onShowAllCols, onShowCol,
   tableFilters, onToggleFilter, etatFilterOptions = [],
   savedFilters = [], onCreateSavedFilter, onRemoveSavedFilter,
+  responsibleOptions = [],
   scope, setScope, canGlobalScope,
 }) {
+  // Trois onglets, trois contenus. « Par état » et « Mes clients » ne
+  // pilotaient rien : retirés (dev 2026-09-03), remplacés par le journal des
+  // encaissements.
   const tabs = [
-    { key: 'all',     label: 'Toutes les périodes' },
-    { key: 'state',   label: 'Par état' },
-    { key: 'mine',    label: 'Mes clients' },
-    // Quantifier ce qui a été abandonné (demande dev 2026-09-01). Seul
-    // onglet qui pilote réellement le contenu à ce jour.
-    { key: 'losses',  label: 'Pertes' },
+    { key: 'all',      label: 'Toutes les périodes', Icon: TableIcon },
+    { key: 'receipts', label: 'Encaissements',       Icon: InboxIcon },
+    // Quantifier ce qui a été abandonné (demande dev 2026-09-01).
+    { key: 'losses',   label: 'Pertes',              Icon: LossIcon },
   ];
 
   return (
@@ -2316,6 +2442,7 @@ function TabRow({
               onClick={() => setActiveTab(t.key)}
               style={{
                 position: 'relative',
+                display: 'inline-flex', alignItems: 'center', gap: 6,
                 padding: '6px 4px 8px',
                 border: 'none',
                 background: 'transparent',
@@ -2324,8 +2451,10 @@ function TabRow({
                 fontSize: 13.5,
                 fontWeight: active ? 600 : 500,
                 color: active ? N.text : N.textMuted,
+                transition: 'color 0.15s',
               }}
             >
+              <t.Icon size={14} strokeWidth={1.75} style={{ color: active ? N.text : N.textFaint }} />
               {t.label}
             </button>
           );
@@ -2372,6 +2501,7 @@ function TabRow({
           values={tableFilters}
           onToggle={onToggleFilter}
           etatOptions={etatFilterOptions}
+          responsibleOptions={responsibleOptions}
           savedFilters={savedFilters}
           onCreateSavedFilter={onCreateSavedFilter}
           onRemoveSavedFilter={onRemoveSavedFilter}

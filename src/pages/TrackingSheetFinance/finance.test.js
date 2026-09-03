@@ -22,6 +22,7 @@ import assert from 'node:assert/strict';
 import {
   scopedCredit, entityCredit, scopedOverdueToDate,
   scopedOverdueCurrent, scopedOverdueCum, computeKpis, creanceAgeMonths,
+  isExitCandidate,
 } from './constants.js';
 
 const row = (o = {}) => ({
@@ -195,4 +196,28 @@ test('ancienneté : ne lit que l’entité de la vision active', () => {
 test('ancienneté : en Globale, c’est la dette la PLUS ANCIENNE qui commande', () => {
   const r = { overdue_owner_since: '2025-10-01', overdue_optilex_since: '2026-08-01' };
   assert.equal(creanceAgeMonths(r, 'global'), creanceAgeMonths(r, 'owner'));
+});
+
+// ── Clients à sortir (créances antérieures) ───────────────────────────────
+// Règle dev 2026-09-03 : un client en liquidation ou en résiliation ne quitte
+// pas le filtre « Créances antérieures » tant que ses créances ne sont ni
+// récupérées ni passées en perte. On ne l'invisibilise pas, on l'alerte.
+test('à sortir : fin de relation + créances antérieures dues + pas de perte', () => {
+  const r = row({ overdue_owner_cumulative: 800, client: { is_loss: false } });
+  assert.equal(isExitCandidate(r, 'Liquidation', 'owner'), true);
+  assert.equal(isExitCandidate(r, 'En cours de résiliation', 'global'), true, 'la procédure ouverte compte déjà');
+  assert.equal(isExitCandidate(r, 'Signé', 'owner'), false, 'un client actif n’est pas à sortir');
+});
+
+test('à sortir : la perte actée ou l’absence de créance le fait sortir', () => {
+  const perdu = row({ overdue_owner_cumulative: 800, client: { is_loss: true } });
+  assert.equal(isExitCandidate(perdu, 'Liquidation', 'owner'), false, 'perte actée = traité');
+  const solde = row({ overdue_owner_cumulative: 0, client: { is_loss: false } });
+  assert.equal(isExitCandidate(solde, 'Liquidation', 'owner'), false, 'rien à récupérer');
+});
+
+test('à sortir : la vision active compte, comme pour les autres filtres', () => {
+  const r = row({ overdue_optilex_cumulative: 120, client: { is_loss: false } });
+  assert.equal(isExitCandidate(r, 'Résiliation', 'owner'), false);
+  assert.equal(isExitCandidate(r, 'Résiliation', 'optilex'), true);
 });

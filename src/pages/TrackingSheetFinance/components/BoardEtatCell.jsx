@@ -31,7 +31,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   EtatBadge, ETAT_STYLE, ETAT_DATE_CONFIG, displayEtat, isEtatPending,
 } from '../../OptilexBoard.jsx';
-import { formatDateFR, canEditAmounts } from '../constants.js';
+import { formatDateFR, canEditAmounts, ACTED_EXIT_ETATS } from '../constants.js';
 import apiClient from '../../../services/apiClient.js';
 
 // Palette locale minimale (sync avec la charte du board — Attio/Linear sobre).
@@ -111,7 +111,12 @@ function DateField({ label, value, onCommit }) {
   );
 }
 
-export default function BoardEtatCell({ boardRow, onEtatChange, disabled = false }) {
+// `onActedEtat` (optionnel) : quand un état ACTÉ est choisi (Résiliation,
+// Rétractation, Self-Résiliation, Liquidation), on ne pose rien ici — on passe
+// la main au dialogue de sortie client, qui demande la date d'effet et règle le
+// sort des créances. Sans cette prop (tableau), le comportement historique
+// reste : POST immédiat.
+export default function BoardEtatCell({ boardRow, onEtatChange, disabled = false, onActedEtat = null }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const btnRef = useRef(null);
@@ -157,6 +162,14 @@ export default function BoardEtatCell({ boardRow, onEtatChange, disabled = false
   };
 
   const pick = (opt) => {
+    // Acter une résiliation depuis la finance, c'est ouvrir une sortie client
+    // (dev 2026-09-03) : la date d'effet et le sort des créances se décident
+    // dans le dialogue, pas dans une liste déroulante.
+    if (onActedEtat && opt && ACTED_EXIT_ETATS.has(opt)) {
+      setOpen(false);
+      onActedEtat(opt);
+      return;
+    }
     onEtatChange({ etat: opt });
     // État daté : le menu reste ouvert et révèle la saisie de date (l'update
     // optimiste de la Map board fait apparaître la section dessous).

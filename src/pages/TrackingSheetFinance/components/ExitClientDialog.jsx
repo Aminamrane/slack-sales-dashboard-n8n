@@ -21,13 +21,13 @@
 // Les deux sont réservés à la direction (admin, direction financière) : ce
 // sont des décisions qui engagent, pas des corrections de saisie.
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, TriangleAlert, RotateCcw, CalendarDays, Check } from 'lucide-react';
 
 import { ETAT_DATE_CONFIG } from '../../OptilexBoard.jsx';
-import { formatEUR, formatDateFR } from '../constants.js';
+import { formatEUR, formatDateFR, ACTED_EXIT_ETATS } from '../constants.js';
 
 const N = {
   text: '#37352f',
@@ -44,7 +44,9 @@ const N = {
 
 // États actés depuis la finance. Les « En cours de … » ne sont pas ici :
 // ce sont des marqueurs de travail, ils se posent depuis le badge d'état.
-const ACTED_ETATS = ['Résiliation', 'Rétractation', 'Self-Résiliation', 'Liquidation'];
+// La liste vit dans constants.js : le badge d'état s'en sert pour savoir quand
+// ouvrir ce dialogue — une seule liste, pas deux qui divergeraient.
+const ACTED_ETATS = [...ACTED_EXIT_ETATS];
 
 const todayISO = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
 
@@ -208,6 +210,9 @@ const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 export default function ExitClientDialog({
   open, onClose, client, boardRow, periods,
   onEtatChange, onDeclareLoss, onRevertLoss, loss,
+  // État choisi depuis le badge d'état de la fiche : le dialogue s'ouvre
+  // dessus, il ne reste qu'à confirmer la date d'effet (dev 2026-09-03).
+  initialEtat = null,
 }) {
   const [etat, setEtat] = useState('');
   const [etatDate, setEtatDate] = useState(todayISO());
@@ -215,6 +220,15 @@ export default function ExitClientDialog({
   const [busy, setBusy] = useState(null);
   const [confirming, setConfirming] = useState(false);
   const [etatDone, setEtatDone] = useState(null);
+
+  // À chaque ouverture : repartir propre, avec l'état pré-choisi s'il y en a un.
+  useEffect(() => {
+    if (!open) return;
+    setEtat(initialEtat && ACTED_EXIT_ETATS.has(initialEtat) ? initialEtat : '');
+    setEtatDate(todayISO());
+    setEtatDone(null);
+    setConfirming(false);
+  }, [open, initialEtat]);
   // Périmètre de la perte. Tout coché par défaut — c'est le cas courant —
   // mais chaque bloc se décoche indépendamment.
   const [scope, setScope] = useState({ past: true, current: true, future: true });

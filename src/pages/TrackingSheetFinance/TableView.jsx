@@ -561,7 +561,6 @@ function Cell({
         flex: isCollapsing ? '0 0 0px' : `0 0 ${c.w}px`,
         padding: isCollapsing ? '4px 0' : `4px ${CELL_PAD_X}px`,
         opacity: isCollapsing ? 0 : 1,
-        overflow: 'hidden',
         transition: isCollapsing ? 'width 0.28s cubic-bezier(0.4, 0, 0.2, 1), flex 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease, padding 0.28s cubic-bezier(0.4, 0, 0.2, 1)' : undefined,
         borderRight: c.heavyRight
           ? `3px solid ${N.borderHeavy}`
@@ -580,7 +579,15 @@ function Cell({
           : c.align === 'center'
             ? 'center'
             : 'flex-start',
-        overflow: 'visible', // pour que le point cyan déborde
+        // Deux besoins opposés, donc une seule déclaration conditionnelle :
+        // pendant le repli d'une colonne, la cellule tombe à 0 px et son
+        // contenu doit être coupé ; le reste du temps il faut laisser
+        // déborder le point cyan de la sélection.
+        //
+        // Les deux étaient déclarés séparément dans le même objet — le second
+        // écrasait le premier en silence, et le repli débordait sans que rien
+        // ne le signale (relevé 2026-09-03).
+        overflow: isCollapsing ? 'hidden' : 'visible',
         fontSize: CELL_FONT_SIZE,
         fontVariantNumeric: c.kind === 'amount' ? 'tabular-nums' : undefined,
         // Outline sélection : appliqué partout (read-only ET éditables).

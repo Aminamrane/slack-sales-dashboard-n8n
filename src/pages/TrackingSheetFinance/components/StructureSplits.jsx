@@ -19,7 +19,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Building2, Check, Pencil } from 'lucide-react';
+import { Building2, Check, Pencil, Sparkles } from 'lucide-react';
 
 import apiClient from '../../../services/apiClient.js';
 import { formatEUR, formatMonthLabel } from '../constants.js';
@@ -128,6 +128,48 @@ export default function StructureSplits({
     }
   }, [current, draft, entity, clientId, saving, onShowToast]);
 
+  // Remplissage assisté par Pappers — même clé que les sales.
+  // Ne remplit QUE les structures encore sans nom : on ne remplace jamais un
+  // nom saisi à la main, il est plus intentionnel qu'une suggestion.
+  const [suggesting, setSuggesting] = useState(false);
+  const suggest = useCallback(async () => {
+    if (suggesting) return;
+    setSuggesting(true);
+    try {
+      const d = await apiClient.post(
+        `/api/v1/finance-periods/client/${clientId}/structures/suggest`, {},
+      );
+      const propositions = d?.items || [];
+      if (!propositions.length) {
+        onShowToast?.('Aucune société trouvée pour ce dirigeant', 'info');
+        return;
+      }
+      const aRemplir = structures.filter((s) => !s.named);
+      if (!aRemplir.length) {
+        onShowToast?.(`${propositions.length} société(s) trouvée(s), toutes les structures sont déjà nommées`, 'info');
+        return;
+      }
+      let n = 0;
+      for (let i = 0; i < aRemplir.length && i < propositions.length; i += 1) {
+        await apiClient.patch(
+          `/api/v1/finance-periods/client/${clientId}/structures/${aRemplir[i].id}`,
+          { name: propositions[i].name, siren: propositions[i].siren || null },
+        );
+        n += 1;
+      }
+      load();
+      onShowToast?.(
+        `${n} structure${n > 1 ? 's' : ''} remplie${n > 1 ? 's' : ''}`
+        + (propositions.length > n ? ` · ${propositions.length - n} société(s) non placée(s)` : ''),
+        'success',
+      );
+    } catch (e) {
+      onShowToast?.(e?.data?.detail || 'Recherche impossible', 'error');
+    } finally {
+      setSuggesting(false);
+    }
+  }, [suggesting, clientId, structures, load, onShowToast]);
+
   const rename = useCallback(async (structureId, name) => {
     try {
       const d = await apiClient.patch(
@@ -144,10 +186,33 @@ export default function StructureSplits({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ fontSize: 11.5, color: N.textMuted, lineHeight: 1.5 }}>
-        Ce client règle pour <strong>{structures.length} structures</strong>.
-        Nommez-les, puis indiquez ce que chacune a versé — sur n’importe quel
-        mois, y compris passé.
+      <div style={{
+        display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap',
+      }}>
+        <div style={{ flex: '1 1 260px', fontSize: 11.5, color: N.textMuted, lineHeight: 1.5 }}>
+          Ce client règle pour <strong>{structures.length} structures</strong>.
+          Nommez-les, puis indiquez ce que chacune a versé — sur n’importe quel
+          mois, y compris passé.
+        </div>
+        {canEdit && structures.some((s) => !s.named) && (
+          <button
+            type="button"
+            onClick={suggest}
+            disabled={suggesting}
+            title="Rechercher toutes les sociétés du dirigeant et remplir les structures encore sans nom"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              border: `1px solid ${N.border}`, background: '#fff',
+              borderRadius: 7, padding: '6px 11px', fontSize: 12,
+              fontWeight: 600, fontFamily: 'inherit',
+              cursor: suggesting ? 'default' : 'pointer',
+              color: suggesting ? N.textFaint : N.text, whiteSpace: 'nowrap',
+            }}
+          >
+            <Sparkles size={12} />
+            {suggesting ? 'Recherche…' : 'Remplir automatiquement'}
+          </button>
+        )}
       </div>
 
       {/* Choix du mois : le plus récent d'abord. */}

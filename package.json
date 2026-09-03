@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "verify": "node src/pages/TrackingSheetFinance/guard.mjs && npm run test",
-    "test": "node --test src/pages/TrackingSheetFinance/finance.test.js",
+    "test": "node --test src/pages/TrackingSheetFinance/finance.test.js src/pages/TrackingSheetFinance/actionLabel.test.js",
     "guard": "node src/pages/TrackingSheetFinance/guard.mjs"
   },
   "dependencies": {

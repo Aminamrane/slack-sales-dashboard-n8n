@@ -46,9 +46,9 @@ const AUTRES = { key: 'autres', label: 'Autres', etats: [] };
 const familleOf = (etat) =>
   FAMILLES.find((f) => f.etats.includes(etat))?.key || AUTRES.key;
 
-const scoped = (l, scope, kind) => {
-  const o = Number(l[`${kind}_owner`] || 0);
-  const p = Number(l[`${kind}_optilex_ttc`] || 0);
+const scoped = (l, scope, champ) => {
+  const o = Number(l[`${champ}_owner`] || 0);
+  const p = Number(l[`${champ}_optilex_ttc`] || 0);
   if (scope === 'owner') return o;
   if (scope === 'optilex') return p;
   return o + p;
@@ -76,6 +76,10 @@ export default function LossesView({ boardMap, scope, onOpenClient }) {
       ...l,
       etat,
       famille: familleOf(etat),
+      // 'declared' = client mis en perte ; 'correction' = attendu supprimé
+      // parce qu'il n'aurait pas dû être facturé. Ce ne sont pas les mêmes
+      // décisions, et on ne les lit pas de la même façon.
+      correction: l.kind === 'correction',
       creance: scoped(l, scope, 'amount'),
       futur: scoped(l, scope, 'future'),
     };
@@ -86,13 +90,25 @@ export default function LossesView({ boardMap, scope, onOpenClient }) {
     for (const f of [...FAMILLES, AUTRES]) acc[f.key] = { creance: 0, futur: 0, n: 0 };
     let creance = 0; let futur = 0;
     for (const l of enriched) {
+      creance += l.creance;
+      futur += l.futur;
+      // La ventilation par état répond à « combien coûtent les résiliations ».
+      // Une correction n'est pas liée à un état — l'y ranger fausserait la
+      // lecture, on la laisse hors de ce découpage.
+      if (l.correction) continue;
       acc[l.famille].creance += l.creance;
       acc[l.famille].futur += l.futur;
       acc[l.famille].n += 1;
-      creance += l.creance;
-      futur += l.futur;
     }
-    return { acc, creance, futur, n: enriched.length };
+    const parNature = { declared: { creance: 0, futur: 0, n: 0 },
+                        correction: { creance: 0, futur: 0, n: 0 } };
+    for (const l of enriched) {
+      const k = l.correction ? 'correction' : 'declared';
+      parNature[k].creance += l.creance;
+      parNature[k].futur += l.futur;
+      parNature[k].n += 1;
+    }
+    return { acc, creance, futur, n: enriched.length, parNature };
   }, [enriched]);
 
   if (error) {
@@ -117,13 +133,29 @@ export default function LossesView({ boardMap, scope, onOpenClient }) {
         <Carte
           label="Créance abandonnée"
           value={totaux.creance}
-          hint={`${totaux.n} client${totaux.n > 1 ? 's' : ''} · facturé et jamais encaissé`}
+          hint={`${totaux.n} dossier${totaux.n > 1 ? 's' : ''} · facturé et jamais encaissé`}
           accent={N.red}
         />
         <Carte
           label="Attendu futur annulé"
           value={totaux.futur}
           hint="Chiffre qui ne rentrera pas · jamais facturé"
+          accent={N.textMuted}
+        />
+        {/* Deux décisions distinctes, donc deux lectures. Un client mis en
+            perte, c'est une relation qui s'arrête ; un attendu supprimé, c'est
+            une facturation corrigée. Les additionner sans le dire donnerait un
+            chiffre que personne ne saurait interpréter. */}
+        <Carte
+          label="Clients mis en perte"
+          value={totaux.parNature.declared.creance}
+          hint={`${totaux.parNature.declared.n} client${totaux.parNature.declared.n > 1 ? 's' : ''} · créance abandonnée`}
+          accent={N.red}
+        />
+        <Carte
+          label="Attendus supprimés"
+          value={totaux.parNature.correction.creance}
+          hint={`${totaux.parNature.correction.n} correction${totaux.parNature.correction.n > 1 ? 's' : ''} · facturé à tort`}
           accent={N.textMuted}
         />
         <button
@@ -234,7 +266,17 @@ export default function LossesView({ boardMap, scope, onOpenClient }) {
             }}>
               {l.societe || '—'}
             </span>
-            <span style={{ color: N.textMuted, fontSize: 12 }}>{l.etat || '—'}</span>
+            <span style={{ color: N.textMuted, fontSize: 12 }}>
+              {l.correction ? (
+                <span style={{
+                  fontSize: 11, fontWeight: 600, color: N.textMuted,
+                  background: N.sideBg, borderRadius: 4, padding: '2px 7px',
+                  whiteSpace: 'nowrap',
+                }}>
+                  Attendu supprimé
+                </span>
+              ) : (l.etat || '—')}
+            </span>
             <span style={{
               textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
               color: l.creance > 0 ? N.red : N.textFaint,

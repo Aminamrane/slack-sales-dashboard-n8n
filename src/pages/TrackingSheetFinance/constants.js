@@ -368,6 +368,42 @@ export const TERMINATED_BOARD_ETATS = new Set([
   'Rétractation',
 ]);
 
+// États qu'on ACTE depuis la finance, et qui engagent une sortie client. Les
+// choisir ouvre le dialogue de sortie (date d'effet, sort des créances) au
+// lieu de poser l'état à la volée — demande dev 2026-09-03 : « quand elle acte
+// une résiliation, ça doit ouvrir le pop-up sortie client ».
+export const ACTED_EXIT_ETATS = new Set([
+  'Résiliation',
+  'Rétractation',
+  'Self-Résiliation',
+  'Liquidation',
+]);
+
+// États de FIN DE RELATION, actés ou en cours : la relation s'arrête (ou va
+// s'arrêter) et la finance doit trancher ce qu'il advient des créances —
+// récupérées, ou passées en perte. Les « en cours de » comptent : la
+// procédure est ouverte, la question se pose déjà.
+export const EXIT_ETATS = new Set([
+  'Liquidation',
+  'En cours de liquidation',
+  'Résiliation',
+  'En cours de résiliation',
+  'Rétractation',
+  'En cours de rétractation',
+  'Self-Résiliation',
+]);
+
+// Un client « à sortir » : dans un état de fin de relation, avec des créances
+// antérieures encore dues dans la vision active, et sans perte actée. Il ne
+// doit surtout pas disparaître du filtre « Créances antérieures » : tant que
+// la sortie n'est pas actée, on ne sait pas ce qu'il reste à récupérer
+// (règle dev 2026-09-03). C'est la sortie client qui le fait sortir, rien
+// d'autre.
+export const isExitCandidate = (r, boardEtat, scope) =>
+  !!boardEtat && EXIT_ETATS.has(boardEtat)
+  && !r?.client?.is_loss
+  && scopedOverdueCum(r, scope) > 0;
+
 // Tranches de la GRILLE TARIFAIRE (table `tarifs` du backend), et rien
 // d'autre : c'est sur elles que le prix est calculé. La liste précédente
 // (11-20, 21-50, 51-100, 101-200, 201-300, 301-400, +400) datait d'avant la
@@ -442,6 +478,7 @@ export const PROFILE_CHANGE_LABELS = {
   societe_couverte: 'Société couverte',
   associe: 'Associé',
   rdv_onboarding: "RDV d'onboarding",
+  responsible: 'Responsable',
 };
 
 // ── Visual hints for cells ───────────────────────────────────────────────
@@ -690,6 +727,8 @@ export const periodFromDate = (dateStr) => {
 
 // ── Friendly labels for audit field names ────────────────────────────────
 export const AUDIT_FIELD_LABELS = {
+  expected_owner:                'Attendu Owner',
+  expected_optilex_ttc:          'Attendu Opti\'Lex',
   received_owner:                'Reçu Owner',
   received_optilex_ttc:          'Reçu Opti\'Lex TTC',
   received_overdue_owner:        'Reçu créance Owner',

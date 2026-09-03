@@ -50,6 +50,7 @@ import {
   Hash, User, Box, CreditCard, Pencil, Download,
   Pin, Trash2, MessageSquarePlus,
   Scale, CalendarClock, CalendarCheck2, Handshake, TriangleAlert, LogOut,
+  SlidersHorizontal, ChevronDown,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
@@ -78,18 +79,22 @@ import {
   entityCredit,
   scopedOverdueCum,
   scopedPeriodAmounts,
+  isExitCandidate,
 } from './constants.js';
+import { describeAction } from './actionLabel.js';
 import {
   EditableNumber, EditableDate, EditableSelect, EditableText, CopyButton,
 } from './EditableCell.jsx';
 import ContactList from './ContactList.jsx';
+import ResponsibleSelect from './components/ResponsibleSelect.jsx';
 // État board Owner/Opti'Lex : briques exportées par le board (source de
 // vérité des états) + cellule picker partagée avec la TableView.
 import { ETAT_STYLE, displayEtat } from '../OptilexBoard.jsx';
 import BoardEtatCell from './components/BoardEtatCell.jsx';
 import ExitClientDialog from './components/ExitClientDialog.jsx';
 import StructureSplits from './components/StructureSplits.jsx';
-import ExpectedCorrection from './components/ExpectedCorrection.jsx';
+import ExpectedManager from './components/ExpectedManager.jsx';
+import PortalDropdown from './components/PortalDropdown.jsx';
 import OnboardingFacturation from './components/OnboardingFacturation.jsx';
 
 // Notion palette (sync with index.jsx N).
@@ -136,12 +141,8 @@ export default function DetailPanel({
   // Fiche client (profil) : SIREN, contacts typés, effectif courant, état
   // hérité du board, fin de contrat, journal des changements de la fiche.
   const [profile, setProfile] = useState(null);
-  // Accordéon « Voir le détail complet » (phase 3) — fermé par défaut.
-  // Le bouton Modifier du header l'ouvre et scrolle dessus.
-  const [detailOpen, setDetailOpen] = useState(false);
   // Édition en place des informations contractuelles (crayon de section).
   const [contractEditing, setContractEditing] = useState(false);
-  const detailRef = useRef(null);
   // Historique des actions client (vue synthétique, demande Ismahane) —
   // endpoint en cours de déploiement côté backend : toute erreur (404…)
   // masque simplement la section, jamais de crash.
@@ -150,11 +151,14 @@ export default function DetailPanel({
   // frise des actions, pour qu'acter une résiliation se relise ici.
   const [etatHistory, setEtatHistory] = useState(null);
   const [exitOpen, setExitOpen] = useState(false);
+  // État choisi depuis le badge (Résiliation, Liquidation…) : le dialogue de
+  // sortie s'ouvre dessus au lieu de poser l'état à la volée.
+  const [exitPreset, setExitPreset] = useState(null);
   // Remboursement d'un trop-perçu : null = fermé, sinon { entity, amount }.
   const [refund, setRefund] = useState(null);
-  // Correction de l'attendu (direction) : supprimer ou reporter un montant
-  // facturé à tort. Distinct d'une perte — rien n'est abandonné ici.
-  const [correctionOpen, setCorrectionOpen] = useState(false);
+  // Poste de pilotage des attendus (direction) : modifier, réduire, reporter,
+  // mettre en pause. Distinct d'une perte — rien n'est abandonné ici.
+  const [expectedOpen, setExpectedOpen] = useState(false);
   // Structures payantes et ventilation — servent l'état de compte par société.
   const [structures, setStructures] = useState([]);
   const [structureSplits, setStructureSplits] = useState([]);
@@ -173,14 +177,14 @@ export default function DetailPanel({
       setError(null);
       setFullscreen(false);
       setProfile(null);
-      setDetailOpen(false);
       setClientAudit(null);
       setEtatHistory(null);
       setExitOpen(false);
+      setExitPreset(null);
       setRefund(null);
       setStructures([]);
       setStructureSplits([]);
-      setCorrectionOpen(false);
+      setExpectedOpen(false);
     }
   }, [open]);
 
@@ -332,26 +336,12 @@ export default function DetailPanel({
     return () => { alive = false; };
   }, [open, numeroClient]);
   const inheritedEtat = profile?.etat_inherited || null;
-  const effectiveEtat = inheritedEtat || client?.etat;
-  const etatMeta = (boardEtat && ETAT_STYLE[boardEtat])
-    || (effectiveEtat && ETAT_COLORS[effectiveEtat])
-    || ETAT_FALLBACK;
 
   // ── Dérivés phase 3 (synthèse scope-aware) ─────────────────────────────
 
-  // Badge statut paiement du header — priorité retard courant > créances
-  // antérieures > à jour, dans la vision active (même sémantique que les
-  // vues-filtres du tableau).
-  const paymentStatus = useMemo(() => {
-    if (!focusedRow) return null;
-    if (scopedOverdueCurrent(focusedRow, scope) > 0) {
-      return { label: 'En retard', bg: '#fdecec', fg: '#b42318' };
-    }
-    if (scopedOverdueCum(focusedRow, scope) > 0) {
-      return { label: 'Créances antérieures', bg: '#fff3e3', fg: '#b45309' };
-    }
-    return { label: 'À jour', bg: '#e9f9f0', fg: '#15794a' };
-  }, [focusedRow, scope]);
+  // Client en fin de relation (liquidation, résiliation…) qui a encore des
+  // créances antérieures dues : la sortie client est à acter, on le dit.
+  const exitDue = !!focusedRow && isExitCandidate(focusedRow, boardEtat, scope);
 
   // KPIs contrat — dérivés de la timeline déjà chargée (aucun nouvel appel).
   //
@@ -422,15 +412,21 @@ export default function DetailPanel({
     const list = [];
     for (const p of sorted) {
       const a = scopedPeriodAmounts(p, scope);
-      if (a.expected <= 0 && a.received <= 0) continue;
+      if (a.expected <= 0 && a.received <= 0 && !p.expected_pause_active) continue;
       const month = String(p.period).slice(0, 7);
       let status;
       if (a.received >= a.expected && a.received > 0) status = 'paid';
       else if (a.received > 0) status = 'partial';
+      // Mois en pause : compté, pas exigible — ni « en retard » ni « à venir ».
+      else if (p.expected_pause_active) status = 'paused';
       else if (month > nowMonth) status = 'upcoming';
       else if (month === nowMonth) status = scopedOverdueCurrent(p, scope) > 0 ? 'late' : 'upcoming';
       else status = 'late';
-      list.push({ id: p.id, n: list.length + 1, month, status, ...a });
+      list.push({
+        id: p.id, n: list.length + 1, month, status, ...a,
+        manual: !!p.expected_manual,
+        pauseUntil: p.expected_paused_until || null,
+      });
     }
     return list;
   }, [visiblePeriods, scope]);
@@ -591,13 +587,6 @@ export default function DetailPanel({
 
   // Bouton Modifier : déplie le détail complet puis scrolle dessus (léger
   // délai pour laisser l'accordéon commencer son expansion).
-  const openDetail = useCallback(() => {
-    setDetailOpen(true);
-    setTimeout(() => {
-      detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 120);
-  }, []);
-
   // Patch helper bound to current rowId — reuses table's onPatchRow flow.
   // Falls back to a direct PATCH if the parent didn't wire onPatchRow.
   // `extra` : champs accompagnant la saisie sans être eux-mêmes édités —
@@ -678,6 +667,20 @@ export default function DetailPanel({
     }
   }, [clientId, onShowToast, reloadAfterExit]);
 
+  // Ouvrir la sortie client — depuis le bouton (sans état pré-choisi) ou
+  // depuis le badge d'état (avec l'état acté à confirmer).
+  const openExit = useCallback((etat = null) => {
+    setExitPreset(etat);
+    setExitOpen(true);
+  }, []);
+
+  // Responsable désigné : la fiche se rafraîchit, et la page recharge ses
+  // lignes pour que le filtre « Responsable » suive.
+  const onResponsibleChanged = useCallback(() => {
+    refreshProfile();
+    onPromiseChanged?.();
+  }, [refreshProfile, onPromiseChanged]);
+
   const declareLoss = useCallback(async (payload) => {
     if (!clientId) return;
     try {
@@ -745,17 +748,28 @@ export default function DetailPanel({
             {/* Header client synthétique (phase 3) : avatar + nom + statut
                 paiement + Modifier. L'État board reste ici — action
                 fréquente, jamais dans l'accordéon. */}
-            <ClientHeader
-              client={client}
-              profile={profile}
-              paymentStatus={paymentStatus}
-              onModify={openDetail}
+            <ClientHeader client={client} />
+
+            {/* Bandeau de situation, deux cases : l'état du client et qui le
+                suit. Rien d'autre — le numéro, la date de signature et le
+                retard à date vivent déjà plus bas (retour dev 2026-09-03 :
+                « pas besoin de répéter »). */}
+            <StatusStrip
               boardRow={boardRow}
+              client={client}
+              inheritedEtat={inheritedEtat}
               // L'état du client (Signé, résiliation…) est une décision
               // engageante : direction financière et direction seulement.
-              canEdit={canEditMoney}
+              canEditEtat={canEditMoney}
               onBoardEtatChange={onBoardEtatChange}
-              inheritedEtat={inheritedEtat}
+              onActedEtat={openExit}
+              clientId={clientId}
+              profile={profile}
+              // Le responsable, lui, est une organisation de travail : toute
+              // l'équipe finance peut se désigner ou reprendre un dossier.
+              canEditTeam={canEdit}
+              onResponsibleChanged={onResponsibleChanged}
+              onShowToast={onShowToast}
             />
 
             {/* Error state */}
@@ -768,20 +782,23 @@ export default function DetailPanel({
               </div>
             )}
 
-            {/* Bandeau de contexte : État, Période, Effectif, SIREN, et
-                l'échéance du contrat. Il vivait dans l'accordéon « Voir le
-                détail complet » — donc invisible en pratique. Sorti au
-                premier plan le 2026-08-27 : le SIREN et l'échéance sont
-                justement les deux informations qu'on allait y chercher. */}
-            <MetaRow
+            {/* Les faits : SIREN, échéance ou sortie de contrat, perte,
+                promesse posée. Puis les actions, toutes au même endroit —
+                plus de bouton isolé à l'autre bout de la fiche. */}
+            <FactsRow
               profile={profile}
               boardRow={boardRow}
-              promise={!!focusedRow?.client?.payment_promise}
-              canEdit={canEdit}
-              onTogglePromise={togglePromise}
               loss={profile?.loss || null}
-              canManageExit={canEditMoney}
-              onOpenExit={() => setExitOpen(true)}
+              promise={!!focusedRow?.client?.payment_promise}
+            />
+            <ActionsBar
+              canManageMoney={canEditMoney}
+              canEdit={canEdit}
+              promise={!!focusedRow?.client?.payment_promise}
+              onTogglePromise={togglePromise}
+              onOpenExpected={() => setExpectedOpen(true)}
+              exitDue={exitDue}
+              onOpenExit={() => openExit(null)}
             />
 
             {/* 4 tuiles KPI contrat (scope-aware, dérivées de la timeline).
@@ -861,51 +878,12 @@ export default function DetailPanel({
               title="État de compte"
               delay={0.11}
               action={(
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  {(scope === 'global' ? ['owner', 'optilex'] : [scope]).map((entity) => (
-                    <StatementButton
-                      key={entity}
-                      entity={entity}
-                      label={scope === 'global'
-                        ? (entity === 'optilex' ? "État de compte Opti'lex" : 'État de compte Owner')
-                        : "Télécharger l'état de compte"}
-                      busy={pdfGenerating === entity}
-                      disabled={!!pdfGenerating}
-                      onClick={() => downloadStatement(entity)}
-                    />
-                  ))}
-                  {/* Un document par société pour les clients multi-structures
-                      (demande dev 2026-09-01). Le global reste proposé : c'est
-                      celui qu'on envoie au dirigeant. */}
-                  {canEditMoney && scope !== 'global' && (
-                    <button
-                      type="button"
-                      onClick={() => setCorrectionOpen(true)}
-                      title="Supprimer ou reporter un attendu facturé à tort"
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 5,
-                        height: 26, padding: '0 10px', background: '#fff', color: N.text,
-                        border: `1px solid ${N.border}`, borderRadius: 6,
-                        fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                        fontFamily: 'inherit', whiteSpace: 'nowrap',
-                        boxShadow: '0 1px 2px rgba(15,15,15,0.04)',
-                      }}
-                    >
-                      <PenLine size={12} strokeWidth={2} />
-                      Corriger l’attendu
-                    </button>
-                  )}
-                  {structures.length > 1 && scope !== 'global' && structures.map((st) => (
-                    <StatementButton
-                      key={st.id}
-                      entity={scope}
-                      label={st.name}
-                      busy={pdfGenerating === `st-${st.id}`}
-                      disabled={!!pdfGenerating}
-                      onClick={() => downloadStatement(scope, st)}
-                    />
-                  ))}
-                </span>
+                <StatementMenu
+                  scope={scope}
+                  structures={structures}
+                  busy={pdfGenerating}
+                  onDownload={downloadStatement}
+                />
               )}
             >
               <InstallmentsList
@@ -930,10 +908,6 @@ export default function DetailPanel({
               />
             </Section>
 
-            {/* Dernière action + historique des actions (vue synthétique) —
-                masqué si l'endpoint audit client est absent ou vide. */}
-            <ActionsHistory entries={clientAudit} />
-
             {/* Section : Commentaires — remplace la timeline mensuelle
                 (2026-08-25) : celle-ci faisait doublon avec l'échéancier
                 « État de compte » et ne servait pas le travail réel de la
@@ -945,7 +919,9 @@ export default function DetailPanel({
                 il y vivait, donc personne ne le voyait, et le dev a cru
                 qu'un ajout d'email n'était pas tracé alors qu'il l'était.
                 Toute modification de la fiche doit se lire ici, avec son
-                auteur et sa date. */}
+                auteur et sa date. La « Dernière action » est sa première
+                ligne, en phrase : il n'y a plus deux endroits qui pouvaient
+                désigner deux actions différentes (retour dev 2026-09-03). */}
             <ActionsTimeline
               audit={clientAudit}
               changes={profile?.changes}
@@ -969,75 +945,17 @@ export default function DetailPanel({
               </Section>
             )}
 
-            {/* « Voir le détail complet » — accordéon fermé par défaut.
-                TOUT le contenu historique du panneau vit ici, déplacé tel
-                quel (rien supprimé). Le bouton Modifier du header l'ouvre. */}
-            <DetailAccordion
-              open={detailOpen}
-              onToggle={() => setDetailOpen((v) => !v)}
-              innerRef={detailRef}
-              delay={0.17}
-            >
-              {/* Title block */}
-              <TitleBlock client={client} etatMeta={etatMeta} focusedRow={focusedRow} inheritedEtat={inheritedEtat} onCopied={onCopied} />
-
-              {/* Section : Identité client */}
-              <Section title="Identité client" delay={0.03}>
-                <IdentitySection
-                  client={client}
-                  clientId={clientId}
-                  focusedRow={focusedRow}
-                  profile={profile}
-                  canEdit={canEdit}
-                  canEditMoney={canEditMoney}
-                  refreshProfile={refreshProfile}
-                  boardRow={boardRow}
-                  onBoardEtatChange={onBoardEtatChange}
-                  onCopied={onCopied}
-                  onShowToast={onShowToast}
-                />
-              </Section>
-
-              {/* Section : Modalités */}
-              <Section title="Modalités" delay={0.06}>
-                <ModalitesSection
-                  client={client}
-                  clientId={clientId}
-                  focusedRow={focusedRow}
-                  profile={profile}
-                  canEdit={canEdit}
-                  refreshProfile={refreshProfile}
-                  patch={patch}
-                  onCopied={onCopied}
-                  onShowToast={onShowToast}
-                />
-              </Section>
-
-              {/* Section : Owner | Opti'lex (split 2 cols) */}
-              <Section title="Owner | Opti'lex" delay={0.09}>
-                <OwnerOptilexSection
-                  focusedRow={focusedRow}
-                  patch={patch}
-                  onCopied={onCopied}
-                />
-              </Section>
-
-              {/* Section : Historique des actions — repliée par défaut.
-                  Fusion 2026-08-21 : l'audit client-level (toutes périodes,
-                  badge période) remplace l'ancien audit par-row (doublon
-                  strict de la même donnée) ; le journal de la fiche client
-                  (ProfileChangesList) reste, c'est une donnée distincte. */}
-            </DetailAccordion>
           </div>
 
           {/* Sortie client — acter un état daté, ou déclarer une perte.
               Direction financière et direction seulement (demande dev
               2026-08-28). Le dialogue est portalisé : il passe au-dessus du
               panneau, pas dedans. */}
-          <ExpectedCorrection
-            open={correctionOpen && canEditMoney}
-            onClose={() => setCorrectionOpen(false)}
+          <ExpectedManager
+            open={expectedOpen && canEditMoney}
+            onClose={() => setExpectedOpen(false)}
             clientId={clientId}
+            client={client}
             periods={periods}
             scope={scope}
             onDone={reloadAfterExit}
@@ -1055,6 +973,7 @@ export default function DetailPanel({
             // entités, exactement comme le fait le serveur.
             periods={periods}
             loss={profile?.loss || null}
+            initialEtat={exitPreset}
             onEtatChange={async (chg) => {
               // Signature du parent : (numero_client, payload) — la même que
               // celle du badge d'état de la fiche.
@@ -1179,207 +1098,232 @@ function formatDateLongFR(iso) {
 }
 
 // ── Header client synthétique ───────────────────────────────────────────────
-function ClientHeader({
-  client, profile, paymentStatus, onModify,
-  boardRow, canEdit, onBoardEtatChange, inheritedEtat,
-}) {
+function ClientHeader({ client }) {
   // Séparation nom du client / société (2026-08-21) : la ligne principale
   // porte la/les personne(s), la société passe en sous-ligne. Pas de
   // personne détectée (181 cas en base) → société seule, pas de ligne vide.
-  // L'avatar reste sur la SOCIÉTÉ (identité visuelle stable).
+  // L'avatar reste sur la SOCIÉTÉ (identité visuelle stable). Le numéro et
+  // la date de signature ne sont pas répétés ici : ils vivent dans
+  // « Informations contractuelles » (retour dev 2026-09-03).
   const { societeName, representant: repFromSociete } = splitSocieteRep(client?.societe);
   const personne = client?.representative_name || repFromSociete;
   const av = avatarMeta(societeName);
-  const openedOn = formatDateLongFR(profile?.date_signature);
-  const subtitle = [
-    // numero_client contient déjà le préfixe « n° » en base (ex. « n°691 »)
-    client?.numero_client ? `Client n°${String(client.numero_client).replace(/^n°\s*/i, '')}` : null,
-    openedOn ? `Dossier ouvert le ${openedOn}` : null,
-  ].filter(Boolean).join(' · ');
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+      style={{ display: 'flex', alignItems: 'center', gap: 14 }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-        {/* Avatar initiales */}
-        <div style={{
-          width: 52, height: 52,
-          borderRadius: '50%',
-          background: av.bg, color: av.fg,
-          flexShrink: 0,
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 18, fontWeight: 700, letterSpacing: '0.02em',
-          userSelect: 'none',
-        }}>
-          {av.initials}
-        </div>
-
-        {/* Nom du client (personne) + société + sous-titre */}
-        <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
-          <h1 style={{
-            fontSize: 22, fontWeight: 700, color: N.text,
-            margin: 0, letterSpacing: '-0.02em', lineHeight: 1.25,
-            overflow: 'hidden', textOverflow: 'ellipsis',
-            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-          }}>
-            {personne || societeName || '—'}
-          </h1>
-          {personne && societeName && (
-            <div style={{
-              marginTop: 2, fontSize: 13.5, fontWeight: 500, color: N.textMuted,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              {societeName}
-            </div>
-          )}
-          {subtitle && (
-            <div style={{ marginTop: 3, fontSize: 12.5, color: N.textMuted }}>
-              {subtitle}
-            </div>
-          )}
-        </div>
-
-        {/* Modifier (ouvre le détail complet) + badge statut paiement */}
-        <div style={{
-          display: 'flex', flexDirection: 'column', alignItems: 'flex-end',
-          gap: 8, flexShrink: 0,
-        }}>
-          <button
-            type="button"
-            onClick={onModify}
-            title="Ouvrir le détail complet pour modifier"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              height: 28, padding: '0 11px',
-              background: '#fff', color: N.text,
-              border: `1px solid ${N.border}`, borderRadius: 6,
-              fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
-              fontFamily: 'inherit',
-              boxShadow: '0 1px 2px rgba(15,15,15,0.04)',
-              transition: 'background 0.12s',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = N.sideBg; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
-          >
-            <Pencil size={12} strokeWidth={2} />
-            Modifier
-          </button>
-          {paymentStatus && (
-            <AnimatePresence mode="popLayout" initial={false}>
-              <motion.span
-                key={paymentStatus.label}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5,
-                  padding: '3px 10px', borderRadius: 999,
-                  background: paymentStatus.bg, color: paymentStatus.fg,
-                  fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap',
-                }}
-              >
-                <span style={{
-                  width: 6, height: 6, borderRadius: '50%',
-                  background: paymentStatus.fg,
-                }} />
-                {paymentStatus.label}
-              </motion.span>
-            </AnimatePresence>
-          )}
-        </div>
+      {/* Avatar initiales */}
+      <div style={{
+        width: 52, height: 52,
+        borderRadius: '50%',
+        background: av.bg, color: av.fg,
+        flexShrink: 0,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 18, fontWeight: 700, letterSpacing: '0.02em',
+        userSelect: 'none',
+      }}>
+        {av.initials}
       </div>
 
-      {/* État board — action fréquente, toujours visible (jamais dans
-          l'accordéon). Mêmes fallbacks que le Field État du détail. */}
-      <div style={{
-        marginTop: 12,
-        display: 'flex', alignItems: 'center', gap: 10,
-        // Aligné à gauche avec le bandeau SIREN / Renouvellement qui suit
-        // (demande dev 2026-08-27). L'ancien décalage de 66 px le calait
-        // sous le nom du client, ce qui créait un décrochage avec les
-        // badges désormais posés juste en dessous.
-        minHeight: 24,
-      }}>
-        <span style={{
-          fontSize: 11, fontWeight: 600, color: N.textFaint,
-          textTransform: 'uppercase', letterSpacing: '0.04em',
+      {/* Nom du client (personne) + société */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <h1 style={{
+          fontSize: 22, fontWeight: 700, color: N.text,
+          margin: 0, letterSpacing: '-0.02em', lineHeight: 1.25,
+          overflow: 'hidden', textOverflow: 'ellipsis',
+          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
         }}>
-          État
-        </span>
-        {boardRow ? (
-          <BoardEtatCell
-            boardRow={boardRow}
-            disabled={!canEdit}
-            onEtatChange={(payload) => onBoardEtatChange?.(client?.numero_client, payload)}
-          />
-        ) : inheritedEtat ? (
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '2px 10px', borderRadius: 4,
-            background: (ETAT_COLORS[inheritedEtat] || ETAT_FALLBACK).bg,
-            color: (ETAT_COLORS[inheritedEtat] || ETAT_FALLBACK).fg,
-            fontSize: 12.5, fontWeight: 600,
+          {personne || societeName || '—'}
+        </h1>
+        {personne && societeName && (
+          <div style={{
+            marginTop: 2, fontSize: 13.5, fontWeight: 500, color: N.textMuted,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
-            <Lock size={11} />
-            {(ETAT_COLORS[inheritedEtat] || ETAT_FALLBACK).label || inheritedEtat}
-          </span>
-        ) : client?.etat ? (
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '2px 10px', borderRadius: 4,
-            background: (ETAT_COLORS[client.etat] || ETAT_FALLBACK).bg,
-            color: (ETAT_COLORS[client.etat] || ETAT_FALLBACK).fg,
-            fontSize: 12.5, fontWeight: 600,
-          }}>
-            {(ETAT_COLORS[client.etat] || ETAT_FALLBACK).label || client.etat}
-          </span>
-        ) : (
-          <span style={{ color: '#c8cdd7', fontSize: 13 }}>—</span>
+            {societeName}
+          </div>
         )}
       </div>
     </motion.div>
   );
 }
 
+// ── Bandeau de situation : État · Responsable ──────────────────────────────
+// Deux cases de même facture, une ligne. L'état est celui du board (source de
+// vérité), le responsable est la personne de l'équipe finance qui suit le
+// client. Le retard à date a sa tuile plus bas, il n'est pas répété ici.
+function StatusStrip({
+  boardRow, client, inheritedEtat, canEditEtat, onBoardEtatChange, onActedEtat,
+  clientId, profile, canEditTeam, onResponsibleChanged, onShowToast,
+}) {
+  const etatFallback = inheritedEtat || client?.etat || null;
+  const etatMeta = etatFallback ? (ETAT_COLORS[etatFallback] || ETAT_FALLBACK) : null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: 0.04, ease: [0.4, 0, 0.2, 1] }}
+      style={{
+        marginTop: 16,
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: 1,
+        background: N.borderSft,
+        border: `1px solid ${N.borderSft}`,
+        borderRadius: 10,
+        overflow: 'hidden',
+      }}
+    >
+      <StripCell label="État">
+        {boardRow ? (
+          <BoardEtatCell
+            boardRow={boardRow}
+            disabled={!canEditEtat}
+            onEtatChange={(payload) => onBoardEtatChange?.(client?.numero_client, payload)}
+            onActedEtat={onActedEtat}
+          />
+        ) : etatMeta ? (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '2px 10px', borderRadius: 4,
+            background: etatMeta.bg, color: etatMeta.fg,
+            fontSize: 12.5, fontWeight: 600,
+          }}>
+            {inheritedEtat && <Lock size={11} />}
+            {etatMeta.label || etatFallback}
+          </span>
+        ) : (
+          <span style={{ color: '#c8cdd7', fontSize: 13 }}>—</span>
+        )}
+      </StripCell>
+
+      <StripCell label="Responsable">
+        <ResponsibleSelect
+          clientId={clientId}
+          value={profile}
+          canEdit={canEditTeam}
+          onChanged={onResponsibleChanged}
+          onShowToast={onShowToast}
+          label={false}
+        />
+      </StripCell>
+    </motion.div>
+  );
+}
+
+function StripCell({ label, children }) {
+  return (
+    <div style={{ background: '#fff', padding: '10px 14px', minWidth: 0 }}>
+      <div style={{
+        fontSize: 10.5, fontWeight: 600, color: N.textFaint,
+        textTransform: 'uppercase', letterSpacing: '0.04em',
+      }}>
+        {label}
+      </div>
+      <div style={{
+        marginTop: 6, minHeight: 26,
+        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+      }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 // ── Bouton de téléchargement d'un état de compte ────────────────────────────
 // Un bouton par entité juridique (Owner / Opti'lex). Toujours cliquable :
 // un client sans échéance facturée obtient un document au tableau vide.
-function StatementButton({ entity, label, busy, disabled, onClick }) {
-  const entityLabel = entity === 'optilex' ? "Opti'lex" : 'Owner';
-  return (
+function StatementMenu({ scope, structures = [], busy = null, onDownload }) {
+  const anchorRef = useRef(null);
+  const [open, setOpen] = useState(false);
+
+  // Un document par entité (jamais fusionnées), et un par société pour les
+  // clients multi-structures (demande dev 2026-09-01). Tout dans UN menu :
+  // aligner cinq boutons sur la ligne du titre débordait et cachait les
+  // structures (retour dev 2026-09-03).
+  const entities = scope === 'global' ? ['owner', 'optilex'] : [scope];
+  const items = [
+    ...entities.map((entity) => ({
+      key: entity,
+      label: entity === 'optilex' ? "État de compte Opti'lex" : 'État de compte Owner',
+      run: () => onDownload(entity),
+    })),
+    ...(scope !== 'global' && structures.length > 1
+      ? structures.map((st) => ({
+        key: `st-${st.id}`,
+        label: `${st.name} seulement`,
+        hint: 'ventilation de cette société',
+        run: () => onDownload(scope, st),
+      }))
+      : []),
+  ];
+  const single = items.length === 1;
+  const generating = !!busy;
+
+  const trigger = (
     <button
+      ref={anchorRef}
       type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={`Télécharger l'état de compte ${entityLabel} (PDF)`}
+      onClick={() => (single ? items[0].run() : setOpen((v) => !v))}
+      disabled={generating}
+      title={single ? `Télécharger l'${items[0].label.toLowerCase()} (PDF)` : "Télécharger un état de compte (PDF)"}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 5,
         height: 26, padding: '0 10px',
         background: '#fff', color: N.text,
         border: `1px solid ${N.border}`, borderRadius: 6,
         fontSize: 12, fontWeight: 600,
-        cursor: disabled ? 'wait' : 'pointer',
+        cursor: generating ? 'wait' : 'pointer',
         fontFamily: 'inherit', whiteSpace: 'nowrap',
         boxShadow: '0 1px 2px rgba(15,15,15,0.04)',
-        opacity: disabled ? 0.6 : 1,
+        opacity: generating ? 0.6 : 1,
         transition: 'background 0.12s, opacity 0.15s',
       }}
-      onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = N.sideBg; }}
+      onMouseEnter={(e) => { if (!generating) e.currentTarget.style.background = N.sideBg; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
     >
       <motion.span
-        animate={busy ? { y: [0, 2, 0] } : { y: 0 }}
-        transition={busy ? { duration: 0.7, repeat: Infinity, ease: 'easeInOut' } : { duration: 0 }}
+        animate={generating ? { y: [0, 2, 0] } : { y: 0 }}
+        transition={generating ? { duration: 0.7, repeat: Infinity, ease: 'easeInOut' } : { duration: 0 }}
         style={{ display: 'inline-flex' }}
       >
         <Download size={12} strokeWidth={2} />
       </motion.span>
-      {busy ? 'Génération…' : label}
+      {generating ? 'Génération…' : (single ? "Télécharger l'état de compte" : 'Télécharger')}
+      {!single && !generating && <ChevronDown size={12} style={{ color: N.textFaint }} />}
     </button>
+  );
+
+  if (single) return trigger;
+  return (
+    <>
+      {trigger}
+      <PortalDropdown open={open} anchorRef={anchorRef} onClose={() => setOpen(false)} align="right" minWidth={240}>
+        <div style={{ padding: 4 }}>
+          {items.map((it) => (
+            <button
+              key={it.key}
+              type="button"
+              onClick={() => { setOpen(false); it.run(); }}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1,
+                width: '100%', textAlign: 'left', border: 'none', background: 'transparent',
+                borderRadius: 6, padding: '7px 10px', cursor: 'pointer', fontFamily: 'inherit',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = N.sideBg; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: N.text }}>{it.label}</span>
+              {it.hint && <span style={{ fontSize: 11, color: N.textFaint }}>{it.hint}</span>}
+            </button>
+          ))}
+        </div>
+      </PortalDropdown>
+    </>
   );
 }
 
@@ -1721,6 +1665,38 @@ function ContractInfoList({
       ),
     },
     { Icon: PenLine,    label: 'Date de signature',    value: formatDateLongFR(profile?.date_signature) },
+    // SIREN : le backfill est une donnée sourcée (lecture) ; sans lui, la
+    // saisie alimente l'override du board (siren_ovr) et le journal. Vivait
+    // dans l'accordéon « détail complet », retiré le 2026-09-03.
+    {
+      Icon: Landmark,
+      label: 'SIREN',
+      copyValue: profile?.siren,
+      node: (editing && canEditMoney && profile && profile.siren_source !== 'backfill') ? (
+        <EditableText
+          value={profile?.siren}
+          placeholder="9 chiffres"
+          onCommit={async (value) => {
+            await apiClient.patch(`/api/v1/finance-periods/client/${clientId}/profile`, { siren: value || '' });
+            onProfileChanged?.();
+          }}
+          width="auto"
+        />
+      ) : (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {profile?.siren ? (
+            <span style={{ fontSize: 13, fontWeight: 500, color: N.text, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+              {profile.siren}
+            </span>
+          ) : (
+            <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }}>Vide</span>
+          )}
+          {profile?.siren_source === 'backfill' && (
+            <span style={{ fontSize: 10.5, color: N.textFaint }}>source interne</span>
+          )}
+        </span>
+      ),
+    },
     // RDV d'onboarding : c'est lui qui déclenche la facturation — premier
     // mois facturé, départ de l'engagement 12 mois, et bascule en retard
     // (demande dev 2026-08-26). Servi par /profile, qui prend la date du
@@ -1848,7 +1824,6 @@ function ContractInfoList({
         <div style={{
           padding: '4px 14px 8px',
           borderTop: `1px solid ${N.borderSft}`,
-          background: N.sideBg,
         }}>
           <ContactList
             clientId={clientId}
@@ -1882,28 +1857,59 @@ const INSTALLMENT_BADGES = {
   partial:  { label: 'Partielle', bg: '#fff3e3', fg: '#b45309' },
   late:     { label: 'En retard', bg: '#fdecec', fg: '#b42318' },
   upcoming: { label: 'À venir',   bg: '#faf3dd', fg: '#9f6b00' },
+  paused:   { label: 'En pause',  bg: '#eef1f6', fg: '#5b6472' },
 };
 
-const INSTALLMENTS_PREVIEW = 6;
+// Échéancier : TOUT l'historique visible d'emblée (retour dev 2026-09-03 —
+// « elle n'a pas accès à toute l'antériorité des clients »). Une directrice
+// financière qui ouvre une fiche veut la voir en entier, pas six mois et un
+// bouton. Le repli ne s'active qu'au-delà de deux ans, là où la liste devient
+// réellement encombrante.
+// Hauteur du volet d'échéances. Toute l'antériorité reste présente — un
+// directeur financier veut pouvoir remonter au premier mois — mais elle défile
+// au lieu de pousser le reste de la fiche vers le bas (retour dev 2026-09-03 :
+// « pas besoin d'en afficher autant, tu peux faire un scroll »). Environ six
+// lignes visibles, la liste s'ouvre sur les mois récents.
+const INSTALLMENTS_VIEWPORT = 268;
 
 function installmentSubline(inst) {
   // Format long FR (« 12 mars 2026 ») — demande dev 2026-08-19.
   const date = inst.payDate ? formatDateLongFR(inst.payDate) : null;
   const monthLabel = formatMonthLabel(inst.month);
+  // Un attendu fixé à la main se signale : la grille ne le réécrira plus.
+  const manuel = inst.manual ? ' · fixé à la main' : '';
   switch (inst.status) {
+    case 'paused':
+      return `${monthLabel} · en pause${inst.pauseUntil ? ` jusqu'au ${formatDateFR(inst.pauseUntil)}` : ', reprise à décider'}${manuel}`;
     case 'paid':
-      return date ? `Prélevée le ${date}` : monthLabel;
+      return (date ? `Prélevée le ${date}` : monthLabel) + manuel;
     case 'partial':
       return `${formatEUR(inst.received)} / ${formatEUR(inst.expected)}${date ? ` · Prélevée le ${date}` : ` · ${monthLabel}`}`;
     case 'upcoming':
-      return date ? `Prévue le ${date}` : `Prévue · ${monthLabel}`;
+      return (date ? `Prévue le ${date}` : `Prévue · ${monthLabel}`) + manuel;
     default: // late
-      return date ? `Prévue le ${date}` : monthLabel;
+      return (date ? `Prévue le ${date}` : monthLabel) + manuel;
   }
 }
 
 function InstallmentsList({ installments, loading, focusedRowId, onSelectRow }) {
-  const [showAll, setShowAll] = useState(false);
+  const scrollRef = React.useRef(null);
+  const total = installments.length;
+
+  // Ouvrir sur le MOIS COURANT, en haut du volet : on lit d'abord l'échéance
+  // du mois, puis ce qui vient ; l'antériorité encaissée se remonte à la
+  // molette (retour dev 2026-09-03). Sans mois courant, sur la première
+  // échéance non encaissée ; sinon en bas.
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const anchor = el.querySelector('[data-anchor="1"]');
+    el.scrollTop = anchor ? Math.max(anchor.offsetTop - el.offsetTop, 0) : el.scrollHeight;
+  }, [total]);
+
+  const nowMonth = currentPeriod();
+  let anchorIdx = installments.findIndex((inst) => inst.month >= nowMonth);
+  if (anchorIdx < 0) anchorIdx = installments.findIndex((inst) => inst.status !== 'paid');
 
   if (loading) {
     return (
@@ -1919,10 +1925,6 @@ function InstallmentsList({ installments, loading, focusedRowId, onSelectRow }) 
   }
   if (!installments.length) return <Empty text="Aucune échéance sur la période." />;
 
-  const hiddenCount = Math.max(0, installments.length - INSTALLMENTS_PREVIEW);
-  const older = hiddenCount > 0 ? installments.slice(0, hiddenCount) : [];
-  const visible = hiddenCount > 0 ? installments.slice(hiddenCount) : installments;
-
   const renderRow = (inst, i, first = false) => {
     const badge = INSTALLMENT_BADGES[inst.status];
     const isActive = focusedRowId === inst.id;
@@ -1930,10 +1932,11 @@ function InstallmentsList({ installments, loading, focusedRowId, onSelectRow }) 
       <motion.button
         key={inst.id}
         type="button"
+        data-anchor={i === anchorIdx ? '1' : undefined}
         onClick={() => onSelectRow?.(inst.id)}
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.22, delay: i * 0.025, ease: [0.4, 0, 0.2, 1] }}
+        transition={{ duration: 0.22, delay: Math.min(i, 6) * 0.025, ease: [0.4, 0, 0.2, 1] }}
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           gap: 12, width: '100%',
@@ -1982,46 +1985,21 @@ function InstallmentsList({ installments, loading, focusedRowId, onSelectRow }) 
       borderRadius: 10,
       overflow: 'hidden',
     }}>
-      {hiddenCount > 0 && (
-        <button
-          type="button"
-          onClick={() => setShowAll((v) => !v)}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            width: '100%', padding: '8px 14px',
-            border: 'none', background: N.sideBg,
-            cursor: 'pointer', fontFamily: 'inherit',
-            fontSize: 12, fontWeight: 600, color: N.textMuted,
-            transition: 'background 0.12s',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = N.sideHover; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = N.sideBg; }}
-        >
-          <motion.span
-            animate={{ rotate: showAll ? 90 : 0 }}
-            transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
-            style={{ display: 'inline-flex', color: N.textFaint }}
-          >
-            <ChevronRight size={12} />
-          </motion.span>
-          {showAll ? 'Réduire' : `Tout afficher (${hiddenCount} échéance${hiddenCount > 1 ? 's' : ''} de plus)`}
-        </button>
+      <div
+        ref={scrollRef}
+        style={{ maxHeight: INSTALLMENTS_VIEWPORT, overflowY: 'auto' }}
+      >
+        {installments.map((inst, i) => renderRow(inst, i, i === 0))}
+      </div>
+      {total > 6 && (
+        <div style={{
+          padding: '6px 14px', borderTop: `1px solid ${N.borderSft}`,
+          background: N.sideBg, fontSize: 11.5, color: N.textMuted,
+          textAlign: 'center',
+        }}>
+          {total} échéances depuis {formatMonthLabel(installments[0].month)}
+        </div>
       )}
-      <AnimatePresence initial={false}>
-        {showAll && older.length > 0 && (
-          <motion.div
-            key="older"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-            style={{ overflow: 'hidden' }}
-          >
-            {older.map((inst, i) => renderRow(inst, i))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-      {visible.map((inst, i) => renderRow(inst, i, hiddenCount === 0 && i === 0))}
     </div>
   );
 }
@@ -2052,75 +2030,31 @@ const auditEntryDate = (e) => e.changed_at || e.created_at || null;
 // Ligne « Dernière action » SEULE dans la vue synthétique (demande Ismahane) ;
 // la liste complète vit dans l'accordéon Détails (ClientAuditList) depuis le
 // retour dev 2026-08-21.
-function ActionsHistory({ entries }) {
-  if (!entries?.length) return null;
-
-  const sorted = [...entries].sort((a, b) =>
-    String(auditEntryDate(b) || '').localeCompare(String(auditEntryDate(a) || ''))
-  );
-  const last = sorted[0];
-  const lastLabel = AUDIT_FIELD_LABELS[last.field_name] || last.field_name;
-  const lastAuthor = last.changed_by_name || null;
-
-  return (
-    <motion.section
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: 0.13, ease: [0.4, 0, 0.2, 1] }}
-      style={{ marginTop: 24 }}
-    >
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '10px 14px',
-        border: `1px solid ${N.borderSft}`,
-        borderRadius: 10,
-        fontSize: 12.5, color: N.textMuted,
-        flexWrap: 'wrap', minWidth: 0,
-      }}>
-        <History size={13} style={{ color: N.textFaint, flexShrink: 0 }} />
-        <span style={{ fontWeight: 600, color: N.text, whiteSpace: 'nowrap' }}>
-          Dernière action :
-        </span>
-        <span style={{ whiteSpace: 'nowrap' }}>{lastLabel} modifié</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <AuditValue v={last.old_value} muted />
-          <ChevronRight size={11} style={{ color: N.textFaint }} />
-          <AuditValue v={last.new_value} />
-        </span>
-        <span style={{ whiteSpace: 'nowrap', color: N.textFaint }}>
-          {lastAuthor ? `· ${lastAuthor} ` : ''}· {formatRelativeFR(auditEntryDate(last))}
-        </span>
-      </div>
-    </motion.section>
-  );
-}
-
-// Liste complète de l'audit client (toutes périodes, badge période) — rendue
-// dans la section « Historique des actions » de l'accordéon Détails.
-// Historique des actions : la plus récente est TOUJOURS visible — c'est
-// celle qu'on vient chercher — et les précédentes se déplient d'un bouton
-// (retour dev 2026-08-28). Les deux sources (audit des lignes, journal de la
-// fiche) sont fondues en une seule frise chronologique : pour l'utilisateur
-// il n'y a qu'une histoire, pas deux tables.
+// Historique des actions : la plus récente est TOUJOURS visible — c'est celle
+// qu'on vient chercher — et les précédentes se déplient d'un bouton (retour
+// dev 2026-08-28). Les trois sources (audit des lignes, journal de la fiche,
+// états posés au board) sont fondues en une seule frise : pour l'utilisateur
+// il n'y a qu'une histoire, pas trois tables.
+//
+// Chaque action est dite en une phrase (« Ismahane a saisi 450,00 € reçus
+// Owner pour août 2026 ») plutôt qu'en « champ : avant → après » — retour dev
+// 2026-09-03 : « on ne comprend pas trop quelle était vraiment la dernière
+// action ». Les phrases vivent dans actionLabel.js, testées.
 function ActionsTimeline({ audit, changes, etatHistory }) {
   const [open, setOpen] = useState(false);
 
   const entries = useMemo(() => {
     const fromAudit = (audit || []).map((e) => ({
       when: auditEntryDate(e),
-      label: AUDIT_FIELD_LABELS[e.field_name] || e.field_name,
-      from: e.old_value,
-      to: e.new_value,
       who: e.changed_by_name || null,
-      period: e.period || null,
+      sentence: describeAction({
+        field: e.field_name, from: e.old_value, to: e.new_value, period: e.period || null,
+      }),
     }));
     const fromChanges = (changes || []).map((c) => ({
       when: c.changed_at,
-      label: PROFILE_CHANGE_LABELS[c.field] || c.field,
-      from: c.old_value,
-      to: c.new_value,
       who: c.changed_by || null,
-      period: null,
+      sentence: describeAction({ field: c.field, from: c.old_value, to: c.new_value }),
     }));
     // États posés au board (résiliation, rétractation, pause…). La date
     // d'effet est portée par la valeur, pas par l'horodatage : « posé le 12,
@@ -2128,19 +2062,17 @@ function ActionsTimeline({ audit, changes, etatHistory }) {
     // fait basculer le client.
     const fromEtats = (etatHistory || []).map((h) => ({
       when: h.created_at,
-      label: 'État',
-      from: null,
-      to: h.etat_date
-        ? `${h.etat} · effet ${formatDateFR(h.etat_date)}`
-        : h.etat,
       who: h.created_by_name || h.created_by || null,
-      period: null,
+      sentence: describeAction({
+        field: 'etat', from: null, to: h.etat, effectiveOn: h.etat_date || null,
+      }),
     }));
     return [...fromAudit, ...fromChanges, ...fromEtats].sort((a, b) =>
       String(b.when || '').localeCompare(String(a.when || '')));
   }, [audit, changes, etatHistory]);
 
-  const shown = open ? entries.slice(0, 40) : entries.slice(0, 1);
+  const [last, ...previous] = entries;
+  const shown = open ? previous.slice(0, 40) : [];
 
   return (
     <Section title="Historique des actions" delay={0.14}>
@@ -2148,40 +2080,54 @@ function ActionsTimeline({ audit, changes, etatHistory }) {
         <Empty text="Aucune action enregistrée pour ce client." />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* La dernière action, en clair : qui, quoi, quand. */}
           <div style={{
-            border: `1px solid ${N.borderSft}`, borderRadius: 10, overflow: 'hidden',
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+            padding: '11px 14px', borderRadius: 10,
+            border: `1px solid ${N.borderSft}`, background: N.sideBg,
           }}>
-            {shown.map((e, i) => (
-              <div key={i} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                gap: 10, padding: '9px 14px', fontSize: 12, minWidth: 0,
-                borderTop: i === 0 ? 'none' : `1px solid ${N.borderSft}`,
+            <History size={14} style={{ color: N.textFaint, flexShrink: 0, marginTop: 2 }} />
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{
+                fontSize: 10.5, fontWeight: 700, color: N.textFaint,
+                textTransform: 'uppercase', letterSpacing: '0.04em',
               }}>
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  minWidth: 0, flexWrap: 'wrap',
-                }}>
-                  <span style={{ fontWeight: 600, color: N.text, whiteSpace: 'nowrap' }}>
-                    {e.label}
-                  </span>
-                  <AuditValue v={e.from} muted />
-                  <ChevronRight size={11} style={{ color: N.textFaint, flexShrink: 0 }} />
-                  <AuditValue v={e.to} />
-                  {e.period && (
-                    <span style={{ color: N.textFaint }}>
-                      · {formatMonthLabel(periodFromDate(e.period))}
-                    </span>
-                  )}
-                </span>
-                <span style={{
-                  color: N.textFaint, fontSize: 11, whiteSpace: 'nowrap', flexShrink: 0,
-                }}>
-                  {formatAuditDate(e.when)}{e.who ? ` · ${e.who}` : ''}
-                </span>
+                Dernière action · {formatRelativeFR(last.when)}
               </div>
-            ))}
+              <div style={{ fontSize: 13, color: N.text, marginTop: 3, lineHeight: 1.5 }}>
+                <strong>{last.who || 'Quelqu’un'}</strong> {last.sentence}.
+              </div>
+              <div style={{ fontSize: 11, color: N.textFaint, marginTop: 2 }}>
+                {formatAuditDate(last.when)}
+              </div>
+            </div>
           </div>
-          {entries.length > 1 && (
+
+          {shown.length > 0 && (
+            <div style={{
+              border: `1px solid ${N.borderSft}`, borderRadius: 10, overflow: 'hidden',
+            }}>
+              {shown.map((e, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+                  gap: 12, padding: '9px 14px', fontSize: 12, minWidth: 0,
+                  borderTop: i === 0 ? 'none' : `1px solid ${N.borderSft}`,
+                }}>
+                  <span style={{ minWidth: 0, color: N.text, lineHeight: 1.45 }}>
+                    <strong>{e.who || 'Quelqu’un'}</strong> {e.sentence}.
+                  </span>
+                  <span style={{
+                    color: N.textFaint, fontSize: 11, whiteSpace: 'nowrap', flexShrink: 0,
+                    marginTop: 1,
+                  }}>
+                    {formatAuditDate(e.when)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {previous.length > 0 && (
             <button
               type="button"
               onClick={() => setOpen((v) => !v)}
@@ -2191,7 +2137,7 @@ function ActionsTimeline({ audit, changes, etatHistory }) {
                 fontSize: 12, fontWeight: 600, color: N.textMuted,
               }}
             >
-              {open ? 'Réduire' : `Voir les ${entries.length - 1} actions précédentes`}
+              {open ? 'Réduire' : `Voir les ${previous.length} action${previous.length > 1 ? 's' : ''} précédente${previous.length > 1 ? 's' : ''}`}
             </button>
           )}
         </div>
@@ -2200,57 +2146,6 @@ function ActionsTimeline({ audit, changes, etatHistory }) {
   );
 }
 
-function ClientAuditList({ entries }) {
-  if (!entries?.length) {
-    return <Empty text="Aucune action enregistrée pour ce client." />;
-  }
-  const sorted = [...entries].sort((a, b) =>
-    String(auditEntryDate(b) || '').localeCompare(String(auditEntryDate(a) || ''))
-  );
-  return (
-    <div style={{
-      border: `1px solid ${N.borderSft}`,
-      borderRadius: 10,
-      overflow: 'hidden',
-    }}>
-      {sorted.slice(0, 30).map((e, i) => (
-        <div key={i} style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          gap: 10,
-          padding: '8px 14px',
-          borderTop: i === 0 ? 'none' : `1px solid ${N.borderSft}`,
-          fontSize: 12, minWidth: 0,
-        }}>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            minWidth: 0, flexWrap: 'wrap',
-          }}>
-            <span style={{ fontWeight: 600, color: N.text, whiteSpace: 'nowrap' }}>
-              {AUDIT_FIELD_LABELS[e.field_name] || e.field_name}
-            </span>
-            <AuditValue v={e.old_value} muted />
-            <ChevronRight size={10} style={{ color: N.textFaint }} />
-            <AuditValue v={e.new_value} />
-            {e.period && (
-              <span style={{
-                fontSize: 10, fontWeight: 600, color: N.textMuted,
-                background: N.sideBg, borderRadius: 3, padding: '1px 6px',
-                whiteSpace: 'nowrap',
-              }}>
-                {formatMonthLabel(periodFromDate(e.period))}
-              </span>
-            )}
-          </span>
-          <span style={{
-            fontSize: 10.5, color: N.textFaint, whiteSpace: 'nowrap', flexShrink: 0,
-          }}>
-            {formatAuditDate(auditEntryDate(e))}{e.changed_by_name ? ` · ${e.changed_by_name}` : ''}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 // ── Rendez-vous & juriste référent (vue synthétique) ────────────────────────
 // Réplique inline de la modale « Agenda du client » du board Owner/Opti'Lex
@@ -2288,6 +2183,10 @@ function RdvJuristeSection({ boardRow, agenda, onCopied }) {
     }));
     return [...std, ...jur].sort((a, b) => (b.when || '').localeCompare(a.when || ''));
   }, [boardRow, agenda]);
+  // Un client suivi depuis un an cumule les RDV juristes : la liste entière
+  // n'apprend rien à la finance (retour dev 2026-09-03). On montre ce qui
+  // vient et les trois derniers passés ; le reste se déplie.
+  const [showAllRdv, setShowAllRdv] = useState(false);
 
   const ref = agenda?.reference_jurist || null;
   // Email du juriste de référence — nom de champ défensif : la réponse
@@ -2323,6 +2222,17 @@ function RdvJuristeSection({ boardRow, agenda, onCopied }) {
       return String(it.when).slice(0, 10) >= todayParis;
     }
   };
+
+  // Les RDV à venir en entier (ils sont rares et c'est l'agenda), puis les
+  // derniers passés — `items` est trié du plus récent au plus ancien.
+  const RECENT_PAST = 3;
+  const upcomingItems = items.filter(isUpcoming);
+  const pastItems = items.filter((it) => !isUpcoming(it));
+  const visibleItems = showAllRdv
+    ? items
+    : [...upcomingItems, ...pastItems.slice(0, RECENT_PAST)];
+  const hiddenRdv = items.length - visibleItems.length;
+  const canToggleRdv = pastItems.length > RECENT_PAST;
 
   return (
     <div>
@@ -2372,9 +2282,9 @@ function RdvJuristeSection({ boardRow, agenda, onCopied }) {
 
       {/* Liste des RDV — icône calendrier teintée (ambre = à venir,
           gris = passé/effectué), puis titre + date · heure · juriste/pôle */}
-      {items.length > 0 && (
+      {visibleItems.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {items.map((it, i) => {
+          {visibleItems.map((it, i) => {
             const upcoming = isUpcoming(it);
             return (
               <motion.div
@@ -2431,152 +2341,26 @@ function RdvJuristeSection({ boardRow, agenda, onCopied }) {
           })}
         </div>
       )}
-    </div>
-  );
-}
-
-// ── Accordéon « Voir le détail complet » ────────────────────────────────────
-// Contient TOUT le contenu historique du panneau (rien supprimé). Contrôlé
-// par le parent : le bouton Modifier du header l'ouvre et scrolle dessus.
-function DetailAccordion({ open, onToggle, innerRef, delay = 0, children }) {
-  return (
-    <motion.section
-      ref={innerRef}
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay, ease: [0.4, 0, 0.2, 1] }}
-      style={{
-        marginTop: 32,
-        borderTop: `1px solid ${N.border}`,
-        paddingTop: 14,
-        // scroll-margin : le scrollIntoView du bouton Modifier laisse un peu
-        // d'air au-dessus au lieu de coller le bord.
-        scrollMarginTop: 12,
-      }}
-    >
-      <button
-        type="button"
-        onClick={onToggle}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          width: '100%', border: `1px solid ${N.borderSft}`,
-          background: open ? N.sideBg : '#fff',
-          cursor: 'pointer', padding: '9px 14px',
-          borderRadius: 8,
-          fontFamily: 'inherit', textAlign: 'left',
-          transition: 'background 0.15s',
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = N.sideBg; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = open ? N.sideBg : '#fff'; }}
-      >
-        <motion.span
-          animate={{ rotate: open ? 90 : 0 }}
-          transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
-          style={{ display: 'inline-flex', color: N.textFaint }}
+      {canToggleRdv && (
+        <button
+          type="button"
+          onClick={() => setShowAllRdv((v) => !v)}
+          style={{
+            marginTop: 8, border: 'none', background: 'transparent',
+            cursor: 'pointer', padding: '2px 0', fontFamily: 'inherit',
+            fontSize: 12, fontWeight: 600, color: AGENDA_MUTED,
+          }}
         >
-          <ChevronRight size={14} />
-        </motion.span>
-        <span style={{ fontSize: 13, fontWeight: 600, color: N.text }}>
-          Voir le détail complet
-        </span>
-      </button>
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            key="detail-body"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            style={{ overflow: 'hidden' }}
-          >
-            <div style={{ paddingTop: 20 }}>
-              {children}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.section>
-  );
-}
-
-// ── Title Block ─────────────────────────────────────────────────────────────
-// `focusedRow` reserved for future use (e.g. period badge in the title).
-// Kept in the prop list so callers don't break if we re-introduce it.
-// eslint-disable-next-line no-unused-vars
-function TitleBlock({ client, etatMeta, focusedRow, inheritedEtat, onCopied }) {
-  const { societeName, representant: repFromSociete } = splitSocieteRep(client?.societe);
-  const rep = client?.representative_name || repFromSociete;
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
-      {/* État-color circle */}
-      <div style={{
-        width: 56, height: 56,
-        borderRadius: 12,
-        background: etatMeta.bg,
-        color: etatMeta.fg,
-        flexShrink: 0,
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        boxShadow: '0 1px 0 rgba(15,15,15,0.04)',
-      }}>
-        <div style={{
-          width: 18, height: 18, borderRadius: '50%',
-          background: etatMeta.fg,
-        }} />
-      </div>
-
-      {/* Titles */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontSize: 11, color: N.textFaint,
-          textTransform: 'uppercase', letterSpacing: '0.04em',
-          fontWeight: 600, marginBottom: 4,
-        }}>
-          {client?.numero_client ? `Client ${client.numero_client}` : 'Détail client'}
-        </div>
-        <span className="tsf-copy-wrap" style={{
-          display: 'inline-flex', alignItems: 'flex-start', gap: 6,
-          maxWidth: '100%',
-        }}>
-          <h1 style={{
-            fontSize: 28, fontWeight: 700, color: N.text,
-            margin: 0, letterSpacing: '-0.02em',
-            lineHeight: 1.2,
-            overflow: 'hidden', textOverflow: 'ellipsis',
-            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-          }}>
-            {societeName || '—'}
-          </h1>
-          {societeName && (
-            <CopyButton value={societeName} onCopied={onCopied} size={14} style={{ marginTop: 4 }} />
-          )}
-        </span>
-        {rep && (
-          <span className="tsf-copy-wrap" style={{
-            marginTop: 6,
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            fontSize: 14, color: N.textMuted,
-          }}>
-            <span>{rep}</span>
-            <CopyButton value={rep} onCopied={onCopied} size={12} />
-          </span>
-        )}
-        {inheritedEtat && (
-          <div style={{
-            marginTop: 8,
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '3px 9px', borderRadius: 4,
-            background: N.redBg, color: N.red,
-            fontSize: 11.5, fontWeight: 600,
-          }}>
-            <Lock size={11} />
-            {inheritedEtat === 'retractation' ? 'Rétractation' : 'Résiliation'} actée sur le board Owner/Opti'Lex
-          </div>
-        )}
-      </div>
+          {showAllRdv
+            ? 'Réduire'
+            : `Voir les ${hiddenRdv} rendez-vous plus ancien${hiddenRdv > 1 ? 's' : ''}`}
+        </button>
+      )}
     </div>
   );
 }
+
+
 
 // ── Meta row (pills) ────────────────────────────────────────────────────────
 // ── Sociétés couvertes / associés ──────────────────────────────────────────
@@ -2830,24 +2614,14 @@ function EffectiveMonthPrompt({ label, onPick, onCancel, periods = [] }) {
 // 2026-08-27) : le SIREN, et l'échéance du contrat. L'État était en double
 // avec l'en-tête juste au-dessus, l'Effectif avec la Formule des
 // informations contractuelles, et la Période est déjà celle du tableau.
-function MetaRow({
-  profile, boardRow, promise, onTogglePromise, canEdit,
-  loss = null, canManageExit = false, onOpenExit,
-}) {
+function FactsRow({ profile, boardRow, loss = null, promise = false }) {
   const items = [];
   if (profile?.siren) {
-    items.push({
-      icon: <Landmark size={12} />,
-      label: 'SIREN',
-      value: profile.siren,
-    });
+    items.push({ icon: <Landmark size={12} />, label: 'SIREN', value: profile.siren });
   }
   // Sortie de contrat posée au board : elle prime sur le renouvellement —
   // un contrat qui s'arrête ne se renouvelle pas. La date vient de l'état
   // daté du board (`etat_date`), seul endroit où la résiliation est datée.
-  // Correction du libellé 2026-08-27 : ce badge annonçait « Fin contrat »
-  // alors qu'il compte les jours jusqu'à l'échéance ANNUELLE, c'est-à-dire
-  // le renouvellement.
   const exitEtat = TERMINATED_BOARD_ETATS.has(boardRow?.etat_manuel)
     ? boardRow.etat_manuel
     : null;
@@ -2862,87 +2636,51 @@ function MetaRow({
       pillBg: meta.bg, pillFg: meta.fg,
     });
   } else if (!exitEtat && profile?.contract_end) {
-    // Le renouvellement est annuel et tombe à la date anniversaire : tout
-    // client signé en a un. Il ne s'affichait qu'à moins de 90 jours, donc
-    // presque jamais (retour dev 2026-08-27) — on montre désormais la date,
-    // et la couleur ne s'allume qu'à l'approche : orange dans la fenêtre de
-    // renouvellement (90 j), rouge à un mois, mêmes seuils que le board.
+    // Renouvellement annuel à la date anniversaire : le compte à rebours
+    // seul, la date exacte en survol ; la couleur ne s'allume qu'à
+    // l'approche (90 j orange, 30 j rouge — seuils du board).
     const d = profile.contract_days_left;
     const proche = d != null && d <= 90;
     const urgent = d != null && d <= 30;
     items.push({
       icon: <FileSignature size={12} />,
       label: 'Renouvellement',
-      // Le compte à rebours seul : c'est l'information utile d'un coup
-      // d'œil, la date exacte encombrait la pastille (dev 2026-08-27).
-      // Elle reste lisible en survol.
       value: d != null ? `J-${d}` : formatDateLongFR(profile.contract_end),
       title: formatDateLongFR(profile.contract_end),
       pillBg: urgent ? N.redBg : (proche ? '#fdecc8' : undefined),
       pillFg: urgent ? N.red : (proche ? '#9f6b00' : undefined),
     });
   }
-
-  if (!items.length && !canEdit && !canManageExit && !loss) return null;
+  // Perte : le client est là, mais il n'attend plus rien. Visible de TOUS —
+  // sans elle, un attendu à zéro passerait pour une donnée manquante.
+  if (loss) {
+    items.push({
+      icon: <TriangleAlert size={12} />,
+      label: 'Perte',
+      value: formatEUR(loss.amount_owner + loss.amount_optilex_ttc),
+      title: [
+        (loss.future_owner + loss.future_optilex_ttc) > 0
+          ? `attendu futur annulé ${formatEUR(loss.future_owner + loss.future_optilex_ttc)}`
+          : null,
+        loss.declared_by_name ? `déclarée par ${loss.declared_by_name}` : null,
+        loss.reason || null,
+      ].filter(Boolean).join(' · '),
+      pillBg: N.redBg, pillFg: N.red,
+    });
+  }
+  // Promesse de règlement posée : le client s'est engagé à payer.
+  if (promise) {
+    items.push({
+      icon: <Handshake size={12} />,
+      label: 'Promesse',
+      value: 'de règlement',
+      pillBg: '#fff3e3', pillFg: '#b45309',
+    });
+  }
+  if (!items.length) return null;
 
   return (
-    <div style={{
-      display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center',
-      marginBottom: 28,
-    }}>
-      {/* Perte : le client est là, mais il n'attend plus rien. La pastille
-          est visible de TOUS — sans elle, un attendu à zéro passerait pour
-          une donnée manquante. */}
-      {loss && (
-        <div
-          title={[
-            `Créance abandonnée ${formatEUR(loss.amount_owner + loss.amount_optilex_ttc)}`,
-            (loss.future_owner + loss.future_optilex_ttc) > 0
-              ? `attendu futur annulé ${formatEUR(loss.future_owner + loss.future_optilex_ttc)}`
-              : null,
-            loss.declared_by_name ? `déclarée par ${loss.declared_by_name}` : null,
-            loss.reason || null,
-          ].filter(Boolean).join(' · ')}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '4px 10px', borderRadius: 4,
-            background: N.redBg, color: N.red,
-            fontSize: 12.5, fontWeight: 600,
-          }}
-        >
-          <TriangleAlert size={12} />
-          Perte
-          <span style={{ fontWeight: 700 }}>
-            {formatEUR(loss.amount_owner + loss.amount_optilex_ttc)}
-          </span>
-        </div>
-      )}
-      {/* Promesse de règlement : le client s'est engagé à payer. Posée ici
-          d'un clic, retirée d'un clic, et retirée toute seule dès qu'il a
-          soldé (demande dev 2026-08-28). Chaque geste laisse un commentaire
-          daté dans son fil. */}
-      {(promise || canEdit) && (
-        <button
-          type="button"
-          onClick={canEdit ? onTogglePromise : undefined}
-          title={promise
-            ? 'Retirer la promesse de règlement'
-            : 'Marquer une promesse de règlement'}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '4px 10px', borderRadius: 4,
-            border: promise ? 'none' : `1px dashed ${N.border}`,
-            background: promise ? '#fff3e3' : 'transparent',
-            color: promise ? '#b45309' : N.textFaint,
-            fontSize: 12.5, fontWeight: promise ? 600 : 500,
-            cursor: canEdit ? 'pointer' : 'default',
-            fontFamily: 'inherit',
-          }}
-        >
-          <Handshake size={12} />
-          {promise ? 'Promesse de règlement' : 'Noter une promesse'}
-        </button>
-      )}
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 10 }}>
       {items.map((it, idx) => (
         <div key={idx} title={it.title || undefined} style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -2967,28 +2705,70 @@ function MetaRow({
           </span>
         </div>
       ))}
+    </div>
+  );
+}
 
-      {/* Point d'entrée unique des décisions de sortie : acter une
-          résiliation datée, ou déclarer une perte. Discret par défaut —
-          c'est une action rare et lourde, pas un bouton du quotidien. */}
-      {canManageExit && (
+// ── Les actions de la fiche, au même endroit ────────────────────────────────
+// Gérer les attendus (direction), noter/retirer une promesse (équipe),
+// sortie client (direction). Le bouton de sortie passe en avant quand elle
+// est DUE : fin de relation avec des créances antérieures non soldées.
+function ActionsBar({
+  canManageMoney, canEdit, promise, onTogglePromise, onOpenExpected, exitDue, onOpenExit,
+}) {
+  const items = [];
+  if (canManageMoney) {
+    items.push({
+      key: 'expected', Icon: SlidersHorizontal, label: 'Gérer les attendus', onClick: onOpenExpected,
+      title: 'Modifier, réduire, reporter ou mettre en pause les attendus',
+    });
+  }
+  if (canEdit) {
+    items.push({
+      key: 'promise', Icon: Handshake,
+      label: promise ? 'Retirer la promesse' : 'Noter une promesse',
+      onClick: onTogglePromise,
+      title: promise ? 'Retirer la promesse de règlement' : 'Le client s’est engagé à régler',
+    });
+  }
+  if (canManageMoney) {
+    items.push({
+      key: 'exit', Icon: exitDue ? TriangleAlert : LogOut,
+      label: exitDue ? 'Sortie client à acter' : 'Sortie client',
+      onClick: onOpenExit, warn: exitDue,
+      title: exitDue
+        ? 'Fin de relation avec des créances antérieures non soldées : à récupérer, ou à passer en perte'
+        : 'Acter une résiliation ou une rétractation, ou déclarer une perte',
+    });
+  }
+  if (!items.length) return null;
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 12, marginBottom: 28 }}>
+      {items.map((it) => (
         <button
+          key={it.key}
           type="button"
-          onClick={onOpenExit}
-          title="Acter une résiliation ou une rétractation, ou déclarer une perte"
+          onClick={it.onClick}
+          title={it.title}
           style={{
-            marginLeft: 'auto',
             display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '4px 10px', borderRadius: 4,
-            border: `1px solid ${N.borderSft}`, background: 'transparent',
-            color: N.textMuted, fontSize: 12.5, fontWeight: 500,
+            height: 30, padding: '0 12px', borderRadius: 7,
+            border: `1px solid ${it.warn ? '#f5dcb5' : N.border}`,
+            background: it.warn ? '#fff8ed' : '#fff',
+            color: it.warn ? '#b45309' : N.text,
+            fontSize: 12.5, fontWeight: it.warn ? 700 : 600,
             fontFamily: 'inherit', cursor: 'pointer',
+            boxShadow: '0 1px 2px rgba(15,15,15,0.04)',
+            transition: 'background 0.12s, color 0.14s, border-color 0.14s',
           }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = it.warn ? '#fdefd6' : N.sideBg; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = it.warn ? '#fff8ed' : '#fff'; }}
         >
-          <LogOut size={12} />
-          Sortie client
+          <it.Icon size={13} strokeWidth={2} style={{ color: it.warn ? '#b45309' : N.textMuted }} />
+          {it.label}
         </button>
-      )}
+      ))}
     </div>
   );
 }
@@ -3022,703 +2802,18 @@ function Section({ title, children, delay = 0, action = null }) {
   );
 }
 
-// ── Field row helper ────────────────────────────────────────────────────────
-// Renders a label + a value control (any React node) in a horizontal row.
-// `copyValue` triggers the hover-revealed Copy button next to the value.
-// `controlWidth` lets the editable input take a natural width (Notion-style).
-function Field({ label, children, copyValue, onCopied, align = 'right' }) {
-  return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: 12,
-      padding: '6px 0',
-      borderBottom: `1px solid ${N.borderSft}`,
-      fontSize: 13,
-      minWidth: 0,
-    }}>
-      <span style={{
-        color: N.textMuted, fontSize: 12.5,
-        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-        flexShrink: 0,
-        maxWidth: '55%',
-      }}>
-        {label}
-      </span>
-      <span
-        className="tsf-copy-wrap"
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
-          gap: 4,
-          flex: 1,
-          minWidth: 0,
-        }}
-      >
-        <span style={{
-          display: 'inline-flex', alignItems: 'center',
-          minWidth: 0, maxWidth: '100%',
-          justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
-        }}>
-          {children}
-        </span>
-        {copyValue !== null && copyValue !== undefined && copyValue !== '' && (
-          <CopyButton value={copyValue} onCopied={onCopied} size={13} />
-        )}
-      </span>
-    </div>
-  );
-}
 
-// ── Section : Identité client ───────────────────────────────────────────────
-function IdentitySection({
-  client, clientId, focusedRow, profile, canEdit, canEditMoney, refreshProfile,
-  boardRow, onBoardEtatChange, onCopied, onShowToast,
-}) {
-  if (!focusedRow) return <Empty />;
-  // Pattern "Société - Nom Prénom" présent sur la grande majorité des
-  // clients (cf. splitSocieteRep dans constants.js). La donnée brute
-  // (`client.societe`) reste la "vraie" valeur backend ; on extrait juste
-  // l'affichage UI pour cohérence visuelle entre clients anciens et récents.
-  const { societeName, representant: repFromSociete } = splitSocieteRep(client?.societe);
-  const rep = client?.representative_name || repFromSociete;
-  const inherited = profile?.etat_inherited || null;
 
-  // SIREN : le backfill est une donnée sourcée (lecture) ; sans lui, la
-  // saisie alimente l'override du board (siren_ovr) et le journal.
-  const sirenEditable = canEditMoney && profile && profile.siren_source !== 'backfill';
-  const commitSiren = async (value) => {
-    await apiClient.patch(`/api/v1/finance-periods/client/${clientId}/profile`, { siren: value || '' });
-    refreshProfile();
-  };
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <Field label="Numéro client" copyValue={client?.numero_client} onCopied={onCopied}>
-        <ReadOnlyText value={client?.numero_client} mono />
-      </Field>
 
-      <Field label="Société" copyValue={societeName} onCopied={onCopied}>
-        <ReadOnlyText value={societeName} />
-      </Field>
 
-      <Field label="Représentant" copyValue={rep} onCopied={onCopied}>
-        <ReadOnlyText value={rep} />
-      </Field>
 
-      <Field label="SIREN" copyValue={profile?.siren} onCopied={onCopied}>
-        {sirenEditable ? (
-          <EditableText
-            value={profile?.siren}
-            placeholder="9 chiffres"
-            onCommit={commitSiren}
-            width="auto"
-          />
-        ) : (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <ReadOnlyText value={profile?.siren} mono />
-            {profile?.siren_source === 'backfill' && (
-              <span style={{ fontSize: 10.5, color: N.textFaint }}>source interne</span>
-            )}
-          </span>
-        )}
-      </Field>
 
-      {/* Contacts typés : DÉPLACÉS dans « Informations contractuelles »
-          (demande dev 2026-08-27) — la finance a besoin du mail et du
-          téléphone sous les yeux, pas au fond d'un accordéon. Ils ne sont
-          pas dupliqués ici pour éviter deux endroits où éditer la même
-          donnée. */}
 
-      {/* État = celui du board Owner/Opti'Lex (source de vérité, même picker
-          que la colonne État du tableau). Fallbacks pour les clients hors
-          board : état hérité verrouillé, sinon `clients.etat` legacy en
-          lecture seule (le PATCH etat sur finance-periods est mort côté back). */}
-      <Field
-        label="État"
-        copyValue={
-          boardRow
-            ? displayEtat(boardRow)
-            : inherited
-              ? (ETAT_COLORS[inherited]?.label || inherited)
-              : (client?.etat && (ETAT_COLORS[client.etat]?.label || client.etat))
-        }
-        onCopied={onCopied}
-      >
-        {boardRow ? (
-          <BoardEtatCell
-            boardRow={boardRow}
-            disabled={!canEdit}
-            onEtatChange={(payload) => onBoardEtatChange?.(client?.numero_client, payload)}
-          />
-        ) : inherited ? (
-          // L'état est imposé par le board : on l'affiche verrouillé plutôt
-          // que d'offrir une édition qui serait écrasée à la prochaine sync.
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '2px 10px', borderRadius: 4,
-            background: (ETAT_COLORS[inherited] || ETAT_FALLBACK).bg,
-            color: (ETAT_COLORS[inherited] || ETAT_FALLBACK).fg,
-            fontSize: 12.5, fontWeight: 600,
-          }}>
-            <Lock size={11} />
-            {(ETAT_COLORS[inherited] || ETAT_FALLBACK).label || inherited}
-          </span>
-        ) : client?.etat ? (
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '2px 10px', borderRadius: 4,
-            background: (ETAT_COLORS[client.etat] || ETAT_FALLBACK).bg,
-            color: (ETAT_COLORS[client.etat] || ETAT_FALLBACK).fg,
-            fontSize: 12.5, fontWeight: 600,
-          }}>
-            {(ETAT_COLORS[client.etat] || ETAT_FALLBACK).label || client.etat}
-          </span>
-        ) : (
-          <ReadOnlyText value={null} />
-        )}
-      </Field>
 
-      <Field label="RDV lancement" copyValue={client?.rdv_lancement && formatDateFR(client.rdv_lancement)} onCopied={onCopied}>
-        <ReadOnlyDate value={client?.rdv_lancement} />
-      </Field>
 
-      <Field label="RDV onboarding" copyValue={client?.rdv_onboarding && formatDateFR(client.rdv_onboarding)} onCopied={onCopied}>
-        <ReadOnlyDate value={client?.rdv_onboarding} />
-      </Field>
-    </div>
-  );
-}
 
-// ── Section : Modalités ─────────────────────────────────────────────────────
-function ModalitesSection({
-  client, clientId, focusedRow, profile, canEdit, refreshProfile,
-  patch, onCopied, onShowToast,
-}) {
-  if (!focusedRow) return <Empty />;
 
-  // Effectif COURANT du client (fiche), pas le snapshot du mois affiché.
-  // L'édition alimente l'override partagé avec le board (tranche_ovr) et le
-  // journal de la fiche — d'où vient le mini-historique juste dessous.
-  const commitEffectif = async (value) => {
-    try {
-      await apiClient.patch(`/api/v1/finance-periods/client/${clientId}/profile`, { employee_range: value });
-      refreshProfile();
-    } catch (e) {
-      onShowToast?.(e?.message || 'Erreur', 'error');
-      throw e;
-    }
-  };
-  const lastRangeChange = (profile?.changes || []).find((c) => c.field === 'employee_range');
-  // Même libellé « X salariés » que la Formule, tranche hors grille comprise.
-  const effectifRange = normalizeEmployeeRange(profile?.employee_range);
-  const effectifLabels = EMPLOYEE_RANGES.reduce((acc, v) => {
-    acc[v] = employeeRangeLabel(v); return acc;
-  }, {});
-  if (effectifRange && !effectifLabels[effectifRange]) {
-    effectifLabels[effectifRange] = employeeRangeLabel(effectifRange);
-  }
-
-  // Fin de contrat = anniversaire de la signature (contrats d'un an) —
-  // calculée par le backend avec la même règle que le renouvellement du board.
-  const daysLeft = profile?.contract_days_left;
-  const endBadge = daysLeft != null && daysLeft <= 90
-    ? { bg: daysLeft <= 30 ? N.redBg : '#fdecc8', fg: daysLeft <= 30 ? N.red : '#9f6b00' }
-    : null;
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <Field label="Modalité de paiement" copyValue={focusedRow.payment_specificity} onCopied={onCopied}>
-        <EditableSelect
-          value={focusedRow.payment_specificity}
-          options={PAYMENT_SPECIFICITIES}
-          onCommit={patch('payment_specificity')}
-          pillColors={PAYMENT_SPECIFICITY_COLORS}
-          pillFallback={PAYMENT_SPECIFICITY_FALLBACK}
-          notionSolid
-          placeholderItalic
-          width="auto"
-        />
-      </Field>
-
-      <Field label="Prélèvement automatisé" copyValue={focusedRow.auto_debit} onCopied={onCopied}>
-        <EditableSelect
-          value={focusedRow.auto_debit}
-          options={AUTO_DEBIT_OPTIONS}
-          onCommit={patch('auto_debit')}
-          pillColors={AUTO_DEBIT_COLORS}
-          pillFallback={AUTO_DEBIT_FALLBACK}
-          notionSolid
-          placeholderItalic
-          truncate={false}
-          width="auto"
-        />
-      </Field>
-
-      <Field label="Effectif" copyValue={employeeRangeLabel(profile?.employee_range)} onCopied={onCopied}>
-        <EditableSelect
-          value={normalizeEmployeeRange(profile?.employee_range)}
-          options={EMPLOYEE_RANGES}
-          optionLabels={effectifLabels}
-          onCommit={commitEffectif}
-          disabled={!canEdit}
-          placeholderItalic
-          width="auto"
-        />
-      </Field>
-      {lastRangeChange && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '2px 0 6px', marginTop: -2,
-          borderBottom: `1px solid ${N.borderSft}`,
-          fontSize: 11, color: N.textFaint,
-        }}>
-          <PenLine size={10} />
-          <span>
-            {lastRangeChange.old_value || '∅'} → {lastRangeChange.new_value || '∅'}
-            {' · '}{formatAuditDate(lastRangeChange.changed_at)}
-            {lastRangeChange.changed_by ? ` · ${lastRangeChange.changed_by}` : ''}
-          </span>
-        </div>
-      )}
-
-      <Field
-        label="Fin contrat"
-        copyValue={profile?.contract_end && formatDateFR(profile.contract_end)}
-        onCopied={onCopied}
-      >
-        {profile?.contract_end ? (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 13.5, color: N.text, fontVariantNumeric: 'tabular-nums' }}>
-              {formatDateFR(profile.contract_end)}
-            </span>
-            {endBadge && (
-              <span style={{
-                padding: '1px 8px', borderRadius: 4,
-                background: endBadge.bg, color: endBadge.fg,
-                fontSize: 11.5, fontWeight: 700,
-              }}>
-                J-{daysLeft}
-              </span>
-            )}
-          </span>
-        ) : (
-          <ReadOnlyDate value={client?.finance_contract_end_date} />
-        )}
-      </Field>
-      {profile?.date_signature && (
-        <div style={{
-          padding: '2px 0 6px', marginTop: -2,
-          fontSize: 11, color: N.textFaint,
-        }}>
-          Anniversaire de la signature du {formatDateFR(profile.date_signature)} (contrat 1 an)
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Section : Owner | Opti'lex split (2 cols) ───────────────────────────────
-function OwnerOptilexSection({ focusedRow, patch, onCopied }) {
-  if (!focusedRow) return <Empty />;
-
-  // guard-ok: restitution BRUTE des 4 champs côte à côte (Owner | Opti'lex),
-  // aucune notion dérivée n'est recalculée ici.
-  const overdueOwnerCM   = toNumber(focusedRow.overdue_owner_current_month) || 0;
-  const overdueOptilexCM = toNumber(focusedRow.overdue_optilex_current_month) || 0;
-  const overdueOwnerCum  = toNumber(focusedRow.overdue_owner_cumulative) || 0;
-  const overdueOptilexCum = toNumber(focusedRow.overdue_optilex_cumulative) || 0;
-
-  // Each row in the split has : { label, ownerNode, optiNode, ownerCopy, optiCopy }
-  const rowsDef = [
-    {
-      label: 'Montant Attendu',
-      ownerNode: <ReadOnlyAmount value={focusedRow.expected_owner} />,
-      optiNode:  <ReadOnlyAmount value={focusedRow.expected_optilex_ttc} />,
-      ownerCopy: formatAmountForCopy(focusedRow.expected_owner),
-      optiCopy:  formatAmountForCopy(focusedRow.expected_optilex_ttc),
-    },
-    {
-      label: 'Montant Récupéré',
-      ownerNode: <EditableNumber value={focusedRow.received_owner} onCommit={patch('received_owner')} align="right" placeholderItalic />,
-      optiNode:  <EditableNumber value={focusedRow.received_optilex_ttc} onCommit={patch('received_optilex_ttc')} align="right" placeholderItalic />,
-      ownerCopy: formatAmountForCopy(focusedRow.received_owner),
-      optiCopy:  formatAmountForCopy(focusedRow.received_optilex_ttc),
-    },
-    {
-      label: 'Retard mois courant',
-      ownerNode: <OverdueInline amount={overdueOwnerCM} />,
-      optiNode:  <OverdueInline amount={overdueOptilexCM} />,
-      ownerCopy: overdueOwnerCM > 0 ? formatEUR(overdueOwnerCM) : null,
-      optiCopy:  overdueOptilexCM > 0 ? formatEUR(overdueOptilexCM) : null,
-    },
-    {
-      label: 'Retard mois précédents (cumul)',
-      ownerNode: <OverdueInline amount={overdueOwnerCum} />,
-      optiNode:  <OverdueInline amount={overdueOptilexCum} />,
-      ownerCopy: overdueOwnerCum > 0 ? formatEUR(overdueOwnerCum) : null,
-      optiCopy:  overdueOptilexCum > 0 ? formatEUR(overdueOptilexCum) : null,
-    },
-    {
-      label: 'Récupéré sur créances passées',
-      ownerNode: <EditableNumber value={focusedRow.received_overdue_owner} onCommit={patch('received_overdue_owner')} align="right" placeholderItalic />,
-      optiNode:  <EditableNumber value={focusedRow.received_overdue_optilex_ttc} onCommit={patch('received_overdue_optilex_ttc')} align="right" placeholderItalic />,
-      ownerCopy: formatAmountForCopy(focusedRow.received_overdue_owner),
-      optiCopy:  formatAmountForCopy(focusedRow.received_overdue_optilex_ttc),
-    },
-    {
-      label: 'Check (PSP)',
-      ownerNode: (
-        <EditableSelect
-          value={focusedRow.psp_owner}
-          options={PSP_OPTIONS}
-          onCommit={patch('psp_owner')}
-          pillColors={PSP_COLORS}
-          pillFallback={PSP_FALLBACK}
-          notionSolid
-          placeholderItalic
-          width="auto"
-        />
-      ),
-      optiNode: (
-        <EditableSelect
-          value={focusedRow.psp_optilex}
-          options={PSP_OPTIONS}
-          onCommit={patch('psp_optilex')}
-          pillColors={PSP_COLORS}
-          pillFallback={PSP_FALLBACK}
-          notionSolid
-          placeholderItalic
-          width="auto"
-        />
-      ),
-      ownerCopy: focusedRow.psp_owner,
-      optiCopy:  focusedRow.psp_optilex,
-    },
-    {
-      label: 'Date paiement',
-      // « prévue » = date issue d'une formule du classeur (échéance +30 j),
-      // pas d'une saisie. Elle date une attente, jamais un encaissement —
-      // le badge empêche de confondre les deux. Une saisie manuelle ici
-      // fait tomber le drapeau (côté backend).
-      ownerNode: (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          {focusedRow.payment_date_owner_projected && focusedRow.payment_date_owner && (
-            <span style={projectedBadgeStyle}>prévue</span>
-          )}
-          <EditableDate value={focusedRow.payment_date_owner} onCommit={patch('payment_date_owner')} />
-        </span>
-      ),
-      optiNode: (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          {focusedRow.payment_date_optilex_projected && focusedRow.payment_date_optilex && (
-            <span style={projectedBadgeStyle}>prévue</span>
-          )}
-          <EditableDate value={focusedRow.payment_date_optilex} onCommit={patch('payment_date_optilex')} />
-        </span>
-      ),
-      ownerCopy: focusedRow.payment_date_owner && formatDateFR(focusedRow.payment_date_owner),
-      optiCopy:  focusedRow.payment_date_optilex && formatDateFR(focusedRow.payment_date_optilex),
-    },
-  ];
-
-  return (
-    <div style={{
-      border: `1px solid ${N.borderSft}`,
-      borderRadius: 6,
-      overflow: 'hidden',
-    }}>
-      {/* Header bar : Owner | Opti'lex */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(140px, 1.1fr) 1fr 1fr',
-        gap: 0,
-        background: N.sideBg,
-        fontSize: 11, fontWeight: 600,
-        color: N.textMuted,
-        textTransform: 'uppercase', letterSpacing: '0.04em',
-        borderBottom: `1px solid ${N.borderSft}`,
-      }}>
-        <div style={{ padding: '8px 12px' }} />
-        <div style={{ textAlign: 'right', padding: '8px 12px 8px 8px' }}>Owner</div>
-        <div style={{ textAlign: 'right', padding: '8px 12px 8px 12px', borderLeft: `2px solid ${N.border}` }}>Opti'lex</div>
-      </div>
-
-      {rowsDef.map((r, idx) => (
-        <div
-          key={r.label}
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(140px, 1.1fr) 1fr 1fr',
-            gap: 0,
-            borderTop: idx === 0 ? 'none' : `1px solid ${N.borderSft}`,
-            fontSize: 13,
-            minHeight: 42,
-          }}
-        >
-          <div style={{
-            display: 'flex', alignItems: 'center',
-            padding: '8px 12px',
-            color: N.textMuted, fontSize: 12.5,
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}>
-            {r.label}
-          </div>
-
-          {/* Owner cell */}
-          <div
-            className="tsf-copy-wrap"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              gap: 4,
-              padding: '8px 12px 8px 8px',
-              minWidth: 0,
-            }}
-          >
-            <span style={{ display: 'inline-flex', alignItems: 'center', minWidth: 0, maxWidth: '100%' }}>
-              {r.ownerNode}
-            </span>
-            {r.ownerCopy !== null && r.ownerCopy !== undefined && r.ownerCopy !== '' && (
-              <CopyButton value={r.ownerCopy} onCopied={onCopied} size={13} />
-            )}
-          </div>
-
-          {/* Opti'lex cell */}
-          <div
-            className="tsf-copy-wrap"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              gap: 4,
-              padding: '8px 12px 8px 12px',
-              borderLeft: `2px solid ${N.border}`,
-              minWidth: 0,
-            }}
-          >
-            <span style={{ display: 'inline-flex', alignItems: 'center', minWidth: 0, maxWidth: '100%' }}>
-              {r.optiNode}
-            </span>
-            {r.optiCopy !== null && r.optiCopy !== undefined && r.optiCopy !== '' && (
-              <CopyButton value={r.optiCopy} onCopied={onCopied} size={13} />
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Read-only / display helpers ─────────────────────────────────────────────
-function ReadOnlyText({ value, mono = false }) {
-  if (!value) {
-    return <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 13 }}>Vide</span>;
-  }
-  return (
-    <span style={{
-      fontSize: 13.5, color: N.text,
-      fontFamily: mono ? 'ui-monospace, SFMono-Regular, Menlo, monospace' : 'inherit',
-      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-      maxWidth: '100%',
-    }}>
-      {value}
-    </span>
-  );
-}
-
-function ReadOnlyDate({ value }) {
-  if (!value) {
-    return <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 13 }}>Vide</span>;
-  }
-  return (
-    <span style={{ fontSize: 13.5, color: N.text, fontVariantNumeric: 'tabular-nums' }}>
-      {formatDateFR(value)}
-    </span>
-  );
-}
-
-function ReadOnlyAmount({ value }) {
-  const n = toNumber(value);
-  if (n === null || n === 0) {
-    return <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 13 }}>Vide</span>;
-  }
-  return (
-    <span style={{ fontSize: 13.5, color: N.text, fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
-      {formatEUR(n)}
-    </span>
-  );
-}
-
-function OverdueInline({ amount }) {
-  if (!amount || amount <= 0) {
-    return <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 13 }}>Aucun</span>;
-  }
-  return (
-    <span style={{
-      background: N.redBg,
-      color: N.red,
-      padding: '2px 10px',
-      borderRadius: 4,
-      fontSize: 12.5,
-      fontWeight: 600,
-      whiteSpace: 'nowrap',
-      fontVariantNumeric: 'tabular-nums',
-    }}>
-      {formatEUR(amount)}
-    </span>
-  );
-}
-
-const projectedBadgeStyle = {
-  padding: '1px 6px', borderRadius: 3,
-  background: '#fdecc8', color: '#9f6b00',
-  fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase',
-  letterSpacing: '0.03em', flexShrink: 0,
-};
-
-function formatAmountForCopy(v) {
-  const n = toNumber(v);
-  if (n === null || n === 0) return null;
-  return formatEUR(n);
-}
-
-// ── Section repliable ───────────────────────────────────────────────────────
-// L'historique complet allongeait la fiche au point de noyer la timeline :
-// replié par défaut, le compteur dit qu'il y a de la matière, le chevron
-// l'ouvre. (Demande dev : « qu'il soit plié et qu'on puisse le déplier ».)
-function CollapsibleSection({ title, count, children, delay = 0 }) {
-  const [openSec, setOpenSec] = useState(false);
-  return (
-    <motion.section
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay, ease: [0.4, 0, 0.2, 1] }}
-      style={{ marginTop: 28 }}
-    >
-      <button
-        type="button"
-        onClick={() => setOpenSec((v) => !v)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          width: '100%', border: 'none', background: 'transparent',
-          cursor: 'pointer', padding: 0, margin: '0 0 12px',
-          fontFamily: 'inherit', textAlign: 'left',
-        }}
-      >
-        <motion.span
-          animate={{ rotate: openSec ? 90 : 0 }}
-          transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
-          style={{ display: 'inline-flex', color: N.textFaint }}
-        >
-          <ChevronRight size={13} />
-        </motion.span>
-        <span style={{
-          fontSize: 11, fontWeight: 600, color: N.textMuted,
-          textTransform: 'uppercase', letterSpacing: '0.04em',
-        }}>
-          {title}
-        </span>
-        {count > 0 && (
-          <span style={{
-            fontSize: 10.5, fontWeight: 600, color: N.textMuted,
-            background: N.sideBg, borderRadius: 999, padding: '1px 8px',
-          }}>
-            {count}
-          </span>
-        )}
-      </button>
-      <AnimatePresence initial={false}>
-        {openSec && (
-          <motion.div
-            key="body"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-            style={{ overflow: 'hidden' }}
-          >
-            {children}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.section>
-  );
-}
-
-// ── Journal de la FICHE client (effectif, SIREN, contacts, état…) ───────────
-// Complète l'audit mensuel : ici vivent les changements du client lui-même,
-// qu'ils viennent du classeur (origin=sheet) ou d'une édition interne.
-function ProfileChangesList({ changes }) {
-  if (!changes?.length) return null;
-  return (
-    <div style={{ marginTop: 14 }}>
-      <div style={{
-        fontSize: 10.5, fontWeight: 600, color: N.textFaint,
-        textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6,
-      }}>
-        Fiche client
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {changes.slice(0, 15).map((c, i) => (
-          <div key={i} style={{
-            padding: '10px 12px', background: N.sideBg, borderRadius: 6,
-            display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12.5,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <span style={{
-                fontSize: 12.5, fontWeight: 600, color: N.text,
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-              }}>
-                <History size={11} style={{ color: N.textFaint }} />
-                {PROFILE_CHANGE_LABELS[c.field] || c.field}
-                <span style={{
-                  fontSize: 9.5, fontWeight: 700, letterSpacing: '0.04em',
-                  textTransform: 'uppercase', borderRadius: 3, padding: '1px 5px',
-                  background: c.origin === 'internal' ? '#e7f0fb' : '#efeeec',
-                  color: c.origin === 'internal' ? '#1e40af' : N.textMuted,
-                }}>
-                  {c.origin === 'internal' ? 'interne' : 'sheet'}
-                </span>
-              </span>
-              <span style={{ fontSize: 11, color: N.textFaint, whiteSpace: 'nowrap' }}>
-                {formatAuditDate(c.changed_at)}{c.changed_by ? ` · ${c.changed_by}` : ''}
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: N.textMuted, flexWrap: 'wrap' }}>
-              <AuditValue v={c.old_value} muted />
-              <ChevronRight size={11} style={{ color: N.textFaint }} />
-              <AuditValue v={c.new_value} />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Audit : helpers d'affichage ─────────────────────────────────────────────
-// 2026-08-21 : AuditList/AuditRow (audit PAR ROW) supprimés — doublon strict
-// de l'audit client-level rendu par ClientAuditList dans l'accordéon.
-function AuditValue({ v, muted = false }) {
-  const display = v === null || v === undefined || v === '' ? '∅' : String(v);
-  return (
-    <span style={{
-      padding: '1px 7px', borderRadius: 3,
-      background: muted ? '#ececeb' : '#e7f0fb',
-      color: muted ? N.textMuted : '#1e40af',
-      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-      fontSize: 11.5,
-      maxWidth: 220,
-      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-    }}>
-      {display}
-    </span>
-  );
-}
 
 function formatAuditDate(iso) {
   if (!iso) return '—';
@@ -3948,7 +3043,14 @@ function ClientComments({ clientId, onShowToast }) {
           Aucun commentaire pour ce client.
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        // Même parti pris que l'échéancier et l'agenda : rien n'est retiré,
+        // mais un fil de vingt commentaires ne pousse pas le reste hors écran.
+        <div style={{
+          display: 'flex', flexDirection: 'column', gap: 6,
+          maxHeight: visibleComments.length > 4 ? 300 : undefined,
+          overflowY: visibleComments.length > 4 ? 'auto' : undefined,
+          paddingRight: visibleComments.length > 4 ? 4 : undefined,
+        }}>
           <AnimatePresence initial={false}>
             {visibleComments.map((c, i) => (
               <CommentRow
