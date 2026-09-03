@@ -593,6 +593,21 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
     } finally { setBusyId(null); setTimeout(() => setClaimedMsg(null), 5000); }
   };
 
+  // « Demande à être rappelé » : le prospect a promis un rappel — le sales
+  // récupère le lead SANS RDV, dans son onglet « À rappeler », pour 3 jours
+  // (même fenêtre que la réactivité ; sans traitement, retour au pool).
+  const claimCallback = async (id) => {
+    setBusyId(id);
+    try {
+      await apiClient.post(`/api/v1/tracking/pools/traitement/${id}/claim-callback`);
+      setClaimedMsg("Lead récupéré dans votre onglet « À rappeler » — vous avez 3 jours pour le traiter.");
+      fetchPools();
+    } catch {
+      setClaimedMsg("Trop tard — ce lead vient d'être pris ou a quitté le pool.");
+      fetchPools();
+    } finally { setBusyId(null); setTimeout(() => setClaimedMsg(null), 5000); }
+  };
+
   const markCalled = async (id) => {
     try {
       const r = await apiClient.post(`/api/v1/tracking/pools/${id}/called`);
@@ -811,6 +826,19 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                                 style={{ padding: "5px 9px", borderRadius: 7, border: `1px solid ${C.border}`, background: calledFlash[lead.id] ? "#3e7d5a" : "transparent", color: calledFlash[lead.id] ? "#fff" : C.text, fontSize: 11, fontWeight: 650, cursor: "pointer", fontFamily: "inherit", transition: "background 0.2s, color 0.2s", whiteSpace: "nowrap" }}>
                                 {calledFlash[lead.id] ? "Noté ✓" : "J'ai appelé"}
                               </button>
+                              {/* Réservé aux sales : un setter ne garde pas de leads
+                                  (il passe par la prise avec un RDV pour quelqu'un). */}
+                              {!salesOptions && (
+                                <button onClick={() => claimCallback(lead.id)} disabled={busyId === lead.id}
+                                  title="Le prospect a demandé à être rappelé : récupérer ce lead dans votre onglet « À rappeler » pour 3 jours, sans poser de RDV"
+                                  style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 7, border: "1px solid #fcd9a8", background: busyId === lead.id ? "#f3e8d8" : "#fdf4e7", color: "#b45309", fontSize: 11, fontWeight: 700, cursor: busyId === lead.id ? "wait" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="16 2 16 8 22 8" /><line x1="22" y1="2" x2="16" y2="8" />
+                                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
+                                  </svg>
+                                  {busyId === lead.id ? "…" : "Demande à être rappelé"}
+                                </button>
+                              )}
                               <button onClick={() => { setRdvFor(rdvFor === lead.id ? null : lead.id); setRdvDate(""); setRdvSales(""); setRdvKind("r1"); }}
                                 style={{ padding: "5px 10px", borderRadius: 7, border: `1px solid ${rdvFor === lead.id ? "#3e7d5a" : "#cfe8d9"}`, background: rdvFor === lead.id ? "#3e7d5a" : "#e9f5ee", color: rdvFor === lead.id ? "#fff" : "#2f7a53", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
                                 Prendre avec un RDV
