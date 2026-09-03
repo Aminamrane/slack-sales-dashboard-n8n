@@ -35,8 +35,10 @@ export const ETAT_STYLE = {
 // en chips directes. Les familles résiliation/rétractation/liquidation (« en
 // cours de » ET actées) vivent dans le menu Filtre ; l'onboarding et les
 // programmes ont chacun leur menu ; la météo repasse en chips directes.
-const PRIMARY_TABS = ["Tous", "Signé", "Attente Opti'Lex", "Intégration à venir"];
-const SECONDARY_CATS = ["En cours de résiliation", "En cours de rétractation", "En cours de liquidation", "Résiliation", "Rétractation", "Self-Résiliation", "Liquidation", "Pause", "Renouvellement client", "Inactifs", "En cours", "En attente", "Sans suite"];
+// Retour de Paul (2026-09-03) : « en cours de résiliation » et « en cours de
+// rétractation » restent visibles en première ligne, le reste vit en menus.
+const PRIMARY_TABS = ["Tous", "Signé", "Attente Opti'Lex", "Intégration à venir", "En cours de résiliation", "En cours de rétractation"];
+const SECONDARY_CATS = ["En cours de liquidation", "Résiliation", "Rétractation", "Self-Résiliation", "Liquidation", "Pause", "Renouvellement client", "Inactifs", "En cours", "En attente", "Sans suite"];
 // Onglets à logique de tri PROPRE (pas le tri "entré le plus récemment dans l'état") : tout le
 // reste = onglet d'état -> tri par date d'entrée dans l'état, le plus récent en haut.
 const NON_ETAT_SORTED_TABS = ["Tous", "Renouvellement client", "Inactifs", "Onboarding à venir", "Intégration à venir"];
