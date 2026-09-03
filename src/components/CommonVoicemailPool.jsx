@@ -10,7 +10,8 @@
 // Auto-alimenté via GET /tracking/pools (les props legacy leads/claimingId/
 // onClaim sont acceptées mais ignorées : TrackingSheet reste intact).
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import apiClient from "../services/apiClient";
 import { leadAvatar } from "../utils/leadAvatar";
 
@@ -286,6 +287,173 @@ function MyCallsBadge({ lead, C, darkMode }) {
   );
 }
 
+// ── Fil de messages PARTAGÉ par lead ────────────────────────────────────────
+// Enveloppe sur chaque carte : clic -> popup avec les messages laissés par les
+// autres sales (promesse de RDV impossible à placer, « ne pas rappeler avant
+// telle date »…) + zone d'ajout. Append-only : l'auteur vient du JWT côté
+// backend, le contexte se transmet d'un sales à l'autre sans s'écraser.
+
+function initialsOf(name) {
+  return String(name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
+}
+
+function EnvelopeButton({ lead, C, darkMode, onOpen }) {
+  const [h, setH] = useState(false);
+  const n = lead.pool_comments || 0;
+  const accent = "#0891b2";
+  return (
+    <button onClick={() => onOpen(lead)}
+      onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)}
+      title={n ? `${n} message${n > 1 ? "s" : ""} laissé${n > 1 ? "s" : ""} sur ce lead — cliquer pour lire ou répondre` : "Laisser un message sur ce lead pour les autres sales"}
+      style={{ position: "relative", width: 30, height: 28, borderRadius: 7, border: "none",
+        background: h ? (darkMode ? "rgba(8,145,178,0.16)" : "#e6f6fa") : "transparent",
+        color: n ? accent : (h ? accent : C.muted), cursor: "pointer",
+        display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        transition: "background 0.15s, color 0.15s" }}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 7-10 6L2 7" />
+      </svg>
+      {n > 0 && (
+        <span style={{ position: "absolute", top: -4, right: -4, minWidth: 15, height: 15, padding: "0 4px",
+          borderRadius: 8, background: accent, color: "#fff", fontSize: 9.5, fontWeight: 800,
+          display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
+          {n > 99 ? "99+" : n}
+        </span>
+      )}
+    </button>
+  );
+}
+
+// Popup du fil : messages du plus ancien au plus récent (lecture naturelle),
+// saisie en bas, Cmd/Ctrl+Entrée pour publier, Échap ou clic dehors pour fermer.
+function PoolCommentsModal({ lead, C, darkMode, onClose, onPosted }) {
+  const [comments, setComments] = useState(null);   // null = chargement
+  const [draft, setDraft] = useState("");
+  const [posting, setPosting] = useState(false);
+  const [loadErr, setLoadErr] = useState(false);
+  const listRef = useRef(null);
+  const accent = "#0891b2";
+
+  useEffect(() => {
+    let alive = true;
+    apiClient.get(`/api/v1/tracking/pools/${lead.id}/comments`)
+      .then((r) => { if (alive) setComments(r.comments || []); })
+      .catch(() => { if (alive) { setComments([]); setLoadErr(true); } });
+    return () => { alive = false; };
+  }, [lead.id]);
+
+  // Toujours montrer le dernier message : au chargement et après chaque ajout.
+  useEffect(() => {
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [comments]);
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const submit = async () => {
+    const body = draft.trim();
+    if (!body || posting) return;
+    setPosting(true);
+    try {
+      const created = await apiClient.post(`/api/v1/tracking/pools/${lead.id}/comments`, { body });
+      setComments((prev) => [...(prev || []), created]);
+      setDraft("");
+      onPosted(lead.id, created.pool_comments);
+    } catch {
+      setLoadErr(true);
+    } finally { setPosting(false); }
+  };
+
+  return createPortal(
+    <>
+      <style>{`@keyframes cvpModalIn{from{opacity:0;transform:translateY(10px) scale(0.97)}to{opacity:1;transform:none}}
+        @keyframes cvpFadeIn{from{opacity:0}to{opacity:1}}
+        @keyframes cvpMsgIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+        @keyframes cvpSpin{to{transform:rotate(360deg)}}`}</style>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 10070, background: "rgba(15,20,30,0.45)", backdropFilter: "blur(2px)", animation: "cvpFadeIn 0.16s ease both" }} />
+      <div role="dialog" aria-modal="true" style={{ position: "fixed", zIndex: 10071, top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+        width: "min(480px, calc(100vw - 32px))", maxHeight: "min(600px, calc(100vh - 48px))", display: "flex", flexDirection: "column",
+        background: darkMode ? "#1c1f26" : "#fff", border: `1px solid ${C.border}`, borderRadius: 16,
+        boxShadow: "0 24px 64px rgba(10,14,22,0.35)", animation: "cvpModalIn 0.2s cubic-bezier(0.16,1,0.3,1) both", overflow: "hidden" }}>
+
+        {/* En-tête : qui est ce lead */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: `1px solid ${C.border}` }}>
+          <LeadFace lead={lead} />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {lead.full_name || lead.company_name || "Sans nom"}
+            </div>
+            <div style={{ fontSize: 11.5, color: C.muted }}>Messages de l'équipe sur ce lead</div>
+          </div>
+          <button onClick={onClose} title="Fermer (Échap)"
+            style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "transparent", color: C.muted, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? "rgba(255,255,255,0.06)" : "#f1f3f7"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        {/* Fil */}
+        <div ref={listRef} style={{ flex: 1, minHeight: 120, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+          {comments === null ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "28px 0" }}>
+              <span style={{ width: 22, height: 22, borderRadius: "50%", border: `2.5px solid ${C.border}`, borderTopColor: accent, animation: "cvpSpin 0.7s linear infinite" }} />
+            </div>
+          ) : comments.length === 0 ? (
+            <div style={{ textAlign: "center", color: C.muted, fontSize: 12.5, padding: "24px 12px", lineHeight: 1.5 }}>
+              Aucun message pour l'instant.<br />
+              Promesse de RDV, « ne veut pas être rappelé avant… » : laissez le contexte aux autres sales.
+            </div>
+          ) : comments.map((c, i) => (
+            <div key={c.id} style={{ display: "flex", gap: 9, animation: `cvpMsgIn 0.22s ease ${Math.min(i * 0.03, 0.3)}s both` }}>
+              <span style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0, background: darkMode ? "rgba(8,145,178,0.22)" : "#e6f6fa", color: accent, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10.5, fontWeight: 800 }}>
+                {initialsOf(c.author_name || c.author_email)}
+              </span>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 7, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{c.author_name || c.author_email || "—"}</span>
+                  <span style={{ fontSize: 10.5, color: C.muted }}>{fmtAge(c.created_at)}</span>
+                </div>
+                <div style={{ fontSize: 13, color: C.text, lineHeight: 1.45, marginTop: 2, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{c.body}</div>
+              </div>
+            </div>
+          ))}
+          {loadErr && (
+            <div style={{ fontSize: 11.5, color: "#b42318", textAlign: "center" }}>
+              Un envoi ou un chargement a échoué. Vérifiez votre connexion et réessayez.
+            </div>
+          )}
+        </div>
+
+        {/* Saisie */}
+        <div style={{ padding: "12px 16px 14px", borderTop: `1px solid ${C.border}`, background: darkMode ? "rgba(255,255,255,0.02)" : "#fafbfc" }}>
+          <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={2} autoFocus
+            onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); } }}
+            placeholder="Votre message pour les autres sales…"
+            style={{ width: "100%", resize: "vertical", padding: "9px 12px", borderRadius: 10, border: `1px solid ${C.border}`,
+              background: darkMode ? "rgba(255,255,255,0.04)" : "#fff", color: C.text, fontSize: 13, fontFamily: "inherit",
+              lineHeight: 1.45, outline: "none", boxSizing: "border-box" }} />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+            <span style={{ fontSize: 10.5, color: C.muted }}>Cmd/Ctrl + Entrée pour publier</span>
+            <button onClick={submit} disabled={!draft.trim() || posting}
+              style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 12.5, fontWeight: 700, fontFamily: "inherit",
+                cursor: draft.trim() && !posting ? "pointer" : "default",
+                background: draft.trim() ? accent : (darkMode ? "rgba(255,255,255,0.08)" : "#e5e7eb"),
+                color: draft.trim() ? "#fff" : C.muted, transition: "background 0.2s" }}>
+              {posting ? "…" : "Publier"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>,
+    document.body,
+  );
+}
+
 const MINE_FILTERS = [
   {
     key: "all", label: "Tous",
@@ -314,6 +482,7 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
   const [rdvKind, setRdvKind] = useState("r1"); // le sales choisit R1 ou R2 au claim
   const [rdvSales, setRdvSales] = useState("");   // setter : commercial destinataire
   const [claimedMsg, setClaimedMsg] = useState(null);
+  const [commentsFor, setCommentsFor] = useState(null); // lead dont le fil de messages est ouvert
   const [q, setQ] = useState("");
   // Un seul pool affiché à la fois : le sales choisit son mode de travail.
   const [pool, setPool] = useState("traitement");
@@ -419,6 +588,16 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
         reactivite: d.reactivite.map((l) => l.id === id ? { ...l, pool_calls: r.pool_calls, pool_last_call_at: r.pool_last_call_at, my_calls: r.my_calls, my_last_call_at: r.my_last_call_at } : l),
       });
     } catch {}
+  };
+
+  // Un message vient d'être publié : le badge de l'enveloppe suit sans refetch.
+  const onCommentPosted = (leadId, newCount) => {
+    setData((d) => !d ? d : {
+      ...d,
+      traitement: d.traitement.map((l) => l.id === leadId ? { ...l, pool_comments: newCount } : l),
+      reactivite: d.reactivite.map((l) => l.id === leadId ? { ...l, pool_comments: newCount } : l),
+    });
+    setCommentsFor((c) => (c && c.id === leadId ? { ...c, pool_comments: newCount } : c));
   };
 
   const card = (extra = {}) => ({
@@ -534,6 +713,7 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                               style={{ padding: "5px 12px", borderRadius: 8, border: "none", background: busyId === lead.id ? C.muted : "#3e7d5a", color: "#fff", fontSize: 11.5, fontWeight: 700, cursor: busyId === lead.id ? "wait" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
                               {busyId === lead.id ? "…" : "Je le prends"}
                             </button>
+                            <EnvelopeButton lead={lead} C={C} darkMode={darkMode} onOpen={setCommentsFor} />
                             <OptOutX lead={lead} C={C} busy={busyId === lead.id} onOptOut={optOut} />
                           </div>
                         </td>
@@ -607,6 +787,7 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                                 style={{ padding: "5px 10px", borderRadius: 7, border: `1px solid ${rdvFor === lead.id ? "#3e7d5a" : "#cfe8d9"}`, background: rdvFor === lead.id ? "#3e7d5a" : "#e9f5ee", color: rdvFor === lead.id ? "#fff" : "#2f7a53", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
                                 Prendre avec un RDV
                               </button>
+                              <EnvelopeButton lead={lead} C={C} darkMode={darkMode} onOpen={setCommentsFor} />
                               <OptOutX lead={lead} C={C} busy={busyId === lead.id} onOptOut={optOut} />
                             </div>
                           </td>
@@ -676,6 +857,12 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
           <Pager page={cur} pages={pages} total={activeAll.length} onPage={setPage} C={C} darkMode={darkMode} />
         )}
       </div>
+
+      {/* Popup du fil de messages du lead sélectionné */}
+      {commentsFor && (
+        <PoolCommentsModal lead={commentsFor} C={C} darkMode={darkMode}
+          onClose={() => setCommentsFor(null)} onPosted={onCommentPosted} />
+      )}
     </div>
   );
 }
