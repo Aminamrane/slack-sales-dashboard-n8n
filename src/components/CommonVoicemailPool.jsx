@@ -213,17 +213,15 @@ function SizeCell({ lead, C }) {
 // Bouton « ne souhaite pas être rappelé » — corbeille discrète, rouge au survol.
 function OptOutX({ lead, C, busy, onOptOut }) {
   const [h, setH] = useState(false);
-  // Pastille VISIBLE en permanence (fond + bordure rouges pâles) : la corbeille
-  // grise sans fond passait inaperçue tout à droite (retour sales 2026-09-03).
   return (
     <button onClick={() => onOptOut(lead.id, lead.full_name)} disabled={busy}
       onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)}
       title="Ne souhaite pas être rappelé : mettre ce lead à la corbeille (archivé, plus jamais rappelé)"
-      style={{ width: 30, height: 28, borderRadius: 7, border: `1px solid ${h ? "#b42318" : "#f3c6c0"}`,
-        background: h ? "#fbe3e0" : "#fdf3f1",
-        color: "#b42318", cursor: "pointer",
+      style={{ width: 28, height: 28, borderRadius: 7, border: "none",
+        background: h ? (C.muted && C.text ? "rgba(180,35,24,0.10)" : "transparent") : "transparent",
+        color: h ? "#b42318" : C.muted, cursor: "pointer",
         display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-        transition: "background 0.15s, border-color 0.15s" }}>
+        transition: "background 0.15s, color 0.15s" }}>
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
       </svg>
@@ -661,6 +659,13 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
   // du bord gauche, l'espace libre s'accumule en fin de ligne (demande dev).
   const thT = { ...thS };
   const tdT = { ...tdS, whiteSpace: "nowrap" };
+  // Colonne Actions ÉPINGLÉE à droite : sur petit écran le tableau défile
+  // horizontalement et la corbeille sortait de l'écran (retour dev 2026-09-03).
+  // Fond opaque obligatoire (sinon le contenu défile visiblement dessous) +
+  // ombre gauche pour marquer la séparation.
+  const actionsBg = darkMode ? "#23262d" : "#fff";
+  const thActions = { ...thS, textAlign: "right", position: "sticky", right: 0, zIndex: 2, background: darkMode ? "rgba(38,41,48,1)" : "#fcfcfd", boxShadow: "-8px 0 8px -8px rgba(17,24,39,0.18)" };
+  const tdActions = { ...tdS, whiteSpace: "nowrap", textAlign: "right", position: "sticky", right: 0, zIndex: 1, background: actionsBg, boxShadow: "-8px 0 8px -8px rgba(17,24,39,0.18)" };
 
   if (!data && !err) {
     return <div style={{ padding: 32, textAlign: "center", color: C.muted, fontSize: 13 }}>Chargement des pools…</div>;
@@ -737,7 +742,7 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                   <th style={thT}>Téléphone</th>
                   <th style={thT}>Email</th>
                   <th style={thT}>Taille</th>
-                  {canClaim && <th style={{ ...thS, textAlign: "right" }} aria-label="Actions" />}
+                  {canClaim && <th style={thActions} aria-label="Actions" />}
                 </tr></thead>
                 <tbody>
                   {rea.map((lead) => (
@@ -758,7 +763,7 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                       <td style={tdT}><CopyChip kind="email" value={lead.email} C={C} darkMode={darkMode} /></td>
                       <td style={tdT}><SizeCell lead={lead} C={C} /></td>
                       {canClaim && (
-                        <td style={{ ...tdS, whiteSpace: "nowrap", textAlign: "right" }}>
+                        <td style={tdActions}>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
                             <button onClick={() => claimRea(lead.id)} disabled={busyId === lead.id}
                               style={{ padding: "5px 12px", borderRadius: 8, border: "none", background: busyId === lead.id ? C.muted : "#3e7d5a", color: "#fff", fontSize: 11.5, fontWeight: 700, cursor: busyId === lead.id ? "wait" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
@@ -795,7 +800,7 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                   <th style={thT}>Téléphone</th>
                   <th style={thT}>Email</th>
                   <th style={thT}>Taille</th>
-                  {canClaim && <th style={{ ...thS, textAlign: "right" }} aria-label="Actions" />}
+                  {canClaim && <th style={thActions} aria-label="Actions" />}
                 </tr></thead>
                 <tbody>
                   {trt.map((lead) => (
@@ -828,7 +833,7 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                         <td style={tdT}><CopyChip kind="email" value={lead.email} C={C} darkMode={darkMode} /></td>
                         <td style={tdT}><SizeCell lead={lead} C={C} /></td>
                         {canClaim && (
-                          <td style={{ ...tdS, whiteSpace: "nowrap", textAlign: "right" }}>
+                          <td style={tdActions}>
                             <div style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
                               <button onClick={() => markCalled(lead.id)}
                                 style={{ padding: "5px 9px", borderRadius: 7, border: `1px solid ${C.border}`, background: calledFlash[lead.id] ? "#3e7d5a" : "transparent", color: calledFlash[lead.id] ? "#fff" : C.text, fontSize: 11, fontWeight: 650, cursor: "pointer", fontFamily: "inherit", transition: "background 0.2s, color 0.2s", whiteSpace: "nowrap" }}>
