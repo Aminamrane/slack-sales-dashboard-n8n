@@ -4,10 +4,13 @@
 // l'attendu. Il faut qu'elle puisse le mettre en pause, poser des réductions,
 // créer une réduction et l'appliquer à plusieurs clients, reporter un attendu,
 // tout ce dont une directrice financière a besoin. »
+// Puis 2026-09-04 : « il faut qu'elle puisse changer attendu, reçu, tout ! Et
+// revenir en arrière si mauvaise manip, un report… »
 //
-// Un seul dialogue, quatre gestes sur le même tableau de mois :
-//   · MODIFIER   — fixer le montant d'un mois à la main. Il fait foi, la grille
-//                  ne le réécrit plus (`expected_manual`).
+// Un seul dialogue, cinq onglets sur le même tableau de mois :
+//   · MODIFIER   — fixer l'attendu et/ou le reçu d'un mois à la main. La
+//                  valeur fait foi : ni la grille ni le classeur ne la
+//                  réécrivent (`expected_manual`, audit « l'interne prime »).
 //   · RÉDUIRE    — appliquer une réduction du catalogue (un pourcentage nommé,
 //                  réutilisable d'un client à l'autre) à des mois choisis. Le
 //                  montant réduit est écrit, jamais recalculé à l'affichage.
@@ -16,6 +19,9 @@
 //   · PAUSE      — suspendre l'exigibilité de mois : ils restent comptés dans
 //                  le contrat, mais ne créent ni retard ni créance tant que la
 //                  pause dure. Reprise à date, ou à la main.
+//   · HISTORIQUE — chaque geste est une opération avec son avant/après ;
+//                  tant que ses mois n'ont pas été retouchés depuis, on peut
+//                  l'annuler et l'état d'avant revient au centime.
 //
 // Chaque geste laisse une trace (audit + fil du client) côté serveur ; ici on
 // ne fait que présenter et envoyer. Direction financière seulement.
@@ -25,6 +31,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Check, Pencil, Percent, CornerDownRight, PauseCircle, Play, Plus, Trash2,
+  History, Undo2,
 } from 'lucide-react';
 
 import apiClient from '../../../services/apiClient.js';
@@ -52,11 +59,20 @@ const N = {
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
+// Un horodatage serveur est un vrai instant : la conversion locale est juste.
+const fmtWhen = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  return d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
 const MODES = [
-  { key: 'edit',     label: 'Modifier',  Icon: Pencil,          hint: 'Fixer le montant d’un mois. Il fait foi : la grille ne le réécrira plus.' },
-  { key: 'discount', label: 'Réduire',   Icon: Percent,         hint: 'Appliquer une réduction du catalogue à des mois. Réutilisable d’un client à l’autre.' },
-  { key: 'defer',    label: 'Reporter',  Icon: CornerDownRight, hint: 'Décaler ce qui reste dû sur un mois suivant. Sans destination, le montant part en perte.' },
-  { key: 'pause',    label: 'Pause',     Icon: PauseCircle,     hint: 'Suspendre l’exigibilité : les mois restent comptés, sans retard ni créance tant que la pause dure.' },
+  { key: 'edit',     label: 'Modifier',   Icon: Pencil,          hint: 'Fixer l’attendu ou le reçu d’un mois. La valeur fait foi : ni la grille ni le classeur ne la réécriront.' },
+  { key: 'discount', label: 'Réduire',    Icon: Percent,         hint: 'Appliquer une réduction du catalogue à des mois. Réutilisable d’un client à l’autre.' },
+  { key: 'defer',    label: 'Reporter',   Icon: CornerDownRight, hint: 'Décaler ce qui reste dû sur un mois suivant. Sans destination, le montant part en perte.' },
+  { key: 'pause',    label: 'Pause',      Icon: PauseCircle,     hint: 'Suspendre l’exigibilité : les mois restent comptés, sans retard ni créance tant que la pause dure.' },
+  { key: 'history',  label: 'Historique', Icon: History,         hint: 'Chaque geste peut être annulé tant que ses mois n’ont pas été retouchés depuis : l’état d’avant revient au centime.' },
 ];
 
 const STATUS = {
@@ -99,7 +115,8 @@ export default function ExpectedManager({
   const [entity, setEntity] = useState(scope === 'optilex' ? 'optilex' : 'owner');
   const [mode, setMode] = useState('edit');
   const [selected, setSelected] = useState(() => new Set());
-  const [drafts, setDrafts] = useState({});        // period_id -> montant saisi (Modifier / Reporter)
+  const [drafts, setDrafts] = useState({});        // period_id -> attendu saisi (Modifier / Reporter)
+  const [recDrafts, setRecDrafts] = useState({});  // period_id -> reçu saisi (Modifier)
   const [deferTo, setDeferTo] = useState('');
   const [pauseUntil, setPauseUntil] = useState('');
   // Ce que le client doit sur les mois en pause : 'later' (à rattraper) ou
@@ -114,6 +131,15 @@ export default function ExpectedManager({
   const [creating, setCreating] = useState(false);
   const [newDiscount, setNewDiscount] = useState({ label: '', percent: '', reason: '' });
 
+  // Opérations (historique annulable). `lastOps` : celles qu'on vient de
+  // faire, pour offrir un « Annuler » immédiat en cas de mauvaise manip.
+  const [ops, setOps] = useState(null);
+  const [confirmId, setConfirmId] = useState(null);
+  const [reverting, setReverting] = useState(null);
+  const [lastOps, setLastOps] = useState([]);
+
+  const base = `/api/v1/finance-periods/client/${clientId}`;
+
   // Ouverture : repartir propre, sur la vision active.
   useEffect(() => {
     if (!open) return;
@@ -121,11 +147,15 @@ export default function ExpectedManager({
     setMode('edit');
     setSelected(new Set());
     setDrafts({});
+    setRecDrafts({});
     setDeferTo('');
     setPauseUntil('');
     setPauseOwed('later');
     setReason('');
     setCreating(false);
+    setOps(null);
+    setConfirmId(null);
+    setLastOps([]);
   }, [open, scope]);
 
   const loadDiscounts = useCallback(() => {
@@ -135,6 +165,14 @@ export default function ExpectedManager({
   }, []);
   useEffect(() => { if (open && mode === 'discount' && discounts === null) loadDiscounts(); }, [open, mode, discounts, loadDiscounts]);
 
+  const loadOps = useCallback(() => {
+    if (!clientId) return;
+    apiClient.get(`${base}/operations`)
+      .then((d) => setOps(Array.isArray(d?.items) ? d.items : []))
+      .catch(() => setOps([]));
+  }, [base, clientId]);
+  useEffect(() => { if (open && mode === 'history') { setConfirmId(null); loadOps(); } }, [open, mode, loadOps]);
+
   // ── Les mois, dans l'entité choisie ──────────────────────────────────
   const f = ENTITY_FIELDS[entity];
   const nowKey = currentPeriod();
@@ -142,7 +180,9 @@ export default function ExpectedManager({
     .map((p) => {
       const key = String(p.period).slice(0, 7);
       const attendu = round2(p[f.expected]);
-      const recu = round2(Number(p[f.received] || 0) + Number(p[f.overdue] || 0));
+      const recuMois = round2(p[f.received] || 0);
+      const recuCreances = round2(p[f.overdue] || 0);
+      const recu = round2(recuMois + recuCreances);
       const reste = round2(Math.max(attendu - recu, 0));
       const pauseActive = !!p.expected_pause_active;
       let status = 'none';
@@ -157,7 +197,7 @@ export default function ExpectedManager({
       }
       return {
         id: p.id, key, label: formatMonthLabel(key),
-        attendu, recu, reste, status,
+        attendu, recu, recuMois, recuCreances, reste, status,
         manual: !!p.expected_manual,
         paused: !!p.expected_paused,
         pauseActive,
@@ -187,6 +227,7 @@ export default function ExpectedManager({
     if (mode === 'defer')    for (const r of rows) if (selectable(r) && r.passe) next.add(r.id);
     setSelected(next);
     setDrafts({});
+    setRecDrafts({});
     if (mode === 'defer') {
       const prochain = rows.find((r) => r.futur);
       setDeferTo(prochain ? prochain.id : '');
@@ -242,12 +283,17 @@ export default function ExpectedManager({
     .map(([id, v]) => ({ row: byId.get(id), value: v }))
     .filter(({ row, value }) => row && value !== '' && round2(value) !== row.attendu),
   [drafts, byId]);
+  const recEdits = useMemo(() => Object.entries(recDrafts)
+    .map(([id, v]) => ({ row: byId.get(id), value: v }))
+    .filter(({ row, value }) => row && value !== '' && round2(value) !== row.recuMois),
+  [recDrafts, byId]);
   const picked = useMemo(() => rows.filter((r) => selected.has(r.id)), [rows, selected]);
   const deferTotal = round2(picked.reduce((s, r) => s + round2(drafts[r.id] ?? r.reste), 0));
   const pausedRows = rows.filter((r) => r.pauseActive);
+  const editCount = edits.length + recEdits.length;
 
   const ready = (() => {
-    if (mode === 'edit') return edits.length > 0;
+    if (mode === 'edit') return editCount > 0;
     if (mode === 'discount') return !!discount && picked.length > 0;
     if (mode === 'defer') return deferTotal > 0;
     if (mode === 'pause') return picked.length > 0;
@@ -255,7 +301,7 @@ export default function ExpectedManager({
   })();
 
   const primaryLabel = (() => {
-    if (mode === 'edit') return edits.length ? `Enregistrer ${edits.length} mois` : 'Modifier un montant';
+    if (mode === 'edit') return editCount ? `Enregistrer ${editCount} modification${editCount > 1 ? 's' : ''}` : 'Modifier un montant';
     if (mode === 'discount') return discount && picked.length
       ? `Appliquer −${discount.percent} % sur ${picked.length} mois` : 'Choisir une réduction';
     if (mode === 'defer') return deferTotal
@@ -266,32 +312,51 @@ export default function ExpectedManager({
     return '';
   })();
 
-  const afterSuccess = (msg) => {
+  const afterSuccess = (msg, opIds = []) => {
     onShowToast?.(msg, 'success');
     setDrafts({});
+    setRecDrafts({});
     setSelected(new Set());
     setReason('');
+    setLastOps(opIds.filter(Boolean));
+    setOps(null);
     onDone?.();
   };
 
   const submit = useCallback(async () => {
     if (!ready || saving) return;
     setSaving(true);
-    const base = `/api/v1/finance-periods/client/${clientId}`;
     const note = reason.trim() || null;
     try {
       if (mode === 'edit') {
-        await apiClient.post(`${base}/expected`, {
-          entries: edits.map(({ row, value }) => ({ period: row.key, [entity]: round2(value) })),
-          reason: note,
-        });
-        afterSuccess(`${edits.length} attendu${edits.length > 1 ? 's' : ''} fixé${edits.length > 1 ? 's' : ''} à la main`);
+        const ids = [];
+        if (edits.length) {
+          const r = await apiClient.post(`${base}/expected`, {
+            entries: edits.map(({ row, value }) => ({ period: row.key, [entity]: round2(value) })),
+            reason: note,
+          });
+          ids.push(r?.operation_id);
+        }
+        if (recEdits.length) {
+          const r = await apiClient.post(`${base}/received`, {
+            entries: recEdits.map(({ row, value }) => ({ period: row.key, [entity]: round2(value) })),
+            reason: note,
+          });
+          ids.push(r?.operation_id);
+        }
+        const parts = [];
+        if (edits.length) parts.push(`${edits.length} attendu${edits.length > 1 ? 's' : ''}`);
+        if (recEdits.length) parts.push(`${recEdits.length} reçu${recEdits.length > 1 ? 's' : ''}`);
+        afterSuccess(`${parts.join(' et ')} fixé${editCount > 1 ? 's' : ''} à la main`, ids);
       } else if (mode === 'discount') {
-        await apiClient.post(`${base}/expected`, {
-          entries: picked.map((r) => ({ period: r.key, [entity]: reduced(r) })),
+        const r = await apiClient.post(`${base}/expected`, {
+          entries: picked.map((row) => ({ period: row.key, [entity]: reduced(row) })),
           reason: `Réduction « ${discount.label} » (−${discount.percent} %)${note ? ` — ${note}` : ''}`,
+          kind: 'discount',
+          discount_label: discount.label,
+          discount_percent: discount.percent,
         });
-        afterSuccess(`Réduction « ${discount.label} » appliquée sur ${picked.length} mois`);
+        afterSuccess(`Réduction « ${discount.label} » appliquée sur ${picked.length} mois`, [r?.operation_id]);
       } else if (mode === 'defer') {
         const r = await apiClient.post(`${base}/expected-correction`, {
           entity,
@@ -301,35 +366,64 @@ export default function ExpectedManager({
           defer_to: deferTo || null,
           reason: note,
         });
-        afterSuccess(deferTo ? `${formatEUR(r?.retire ?? deferTotal)} reporté` : `${formatEUR(r?.retire ?? deferTotal)} supprimé (perte)`);
+        afterSuccess(deferTo ? `${formatEUR(r?.retire ?? deferTotal)} reporté` : `${formatEUR(r?.retire ?? deferTotal)} supprimé (perte)`, [r?.operation_id]);
       } else if (mode === 'pause') {
-        await apiClient.post(`${base}/expected/pause`, {
-          periods: picked.map((r) => r.key), until: pauseUntil || null, reason: note, owed: pauseOwed,
+        const r = await apiClient.post(`${base}/expected/pause`, {
+          periods: picked.map((row) => row.key), until: pauseUntil || null, reason: note, owed: pauseOwed,
         });
-        afterSuccess(`${picked.length} mois en pause${pauseUntil ? ` jusqu'au ${formatDateFR(pauseUntil)}` : ''}${pauseOwed === 'never' ? ' · rien dû, passé en perte' : ' · à rattraper'}`);
+        afterSuccess(`${picked.length} mois en pause${pauseUntil ? ` jusqu'au ${formatDateFR(pauseUntil)}` : ''}${pauseOwed === 'never' ? ' · rien dû, passé en perte' : ' · à rattraper'}`, [r?.operation_id]);
       }
     } catch (e) {
       onShowToast?.(e?.data?.detail || 'Enregistrement impossible', 'error');
     } finally {
       setSaving(false);
     }
-  }, [ready, saving, clientId, reason, mode, edits, entity, picked, discount, deferTo, drafts, deferTotal, pauseUntil, pauseOwed, onShowToast]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, saving, base, reason, mode, edits, recEdits, editCount, entity, picked, discount, deferTo, drafts, deferTotal, pauseUntil, pauseOwed, onShowToast]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const resume = useCallback(async (keys) => {
     try {
-      const r = await apiClient.post(`/api/v1/finance-periods/client/${clientId}/expected/resume`, { periods: keys });
+      const r = await apiClient.post(`${base}/expected/resume`, { periods: keys });
       onShowToast?.(`Pause levée sur ${r?.count ?? keys?.length ?? ''} mois`, 'success');
+      setLastOps(r?.operation_id ? [r.operation_id] : []);
+      setOps(null);
       onDone?.();
     } catch (e) {
       onShowToast?.(e?.data?.detail || 'Reprise impossible', 'error');
     }
-  }, [clientId, onDone, onShowToast]);
+  }, [base, onDone, onShowToast]);
+
+  // Annuler une ou plusieurs opérations (les plus récentes d'abord : un
+  // « Annuler » après un enregistrement qui a produit deux gestes défait
+  // les deux). Le serveur refuse si un mois a bougé depuis.
+  const revert = useCallback(async (ids) => {
+    const list = (Array.isArray(ids) ? ids : [ids]).filter(Boolean);
+    if (!list.length || reverting) return;
+    setReverting(list[0]);
+    let done = 0;
+    try {
+      for (const id of list) {
+        await apiClient.post(`${base}/operations/${id}/revert`, {});
+        done += 1;
+      }
+      onShowToast?.(done > 1 ? `${done} opérations annulées` : 'Opération annulée : l’état d’avant est rétabli', 'success');
+    } catch (e) {
+      onShowToast?.(e?.data?.detail || 'Annulation impossible', 'error');
+    } finally {
+      setReverting(null);
+      setConfirmId(null);
+      setLastOps((l) => l.filter((id) => !list.slice(0, done).includes(id)));
+      loadOps();
+      if (done) onDone?.();
+    }
+  }, [base, reverting, loadOps, onDone, onShowToast]);
 
   if (!open) return null;
 
   const entityLabel = entity === 'owner' ? 'Owner' : "Opti'lex";
-  const showCheck = mode !== 'edit';
-  const gridCols = `${showCheck ? '28px ' : ''}minmax(120px, 1.2fr) 110px 100px 100px 110px minmax(120px, 1fr)`;
+  const showCheck = mode !== 'edit' && mode !== 'history';
+  const gridCols = mode === 'edit'
+    ? 'minmax(110px, 1.1fr) 96px 100px 88px 96px 118px 118px'
+    : `${showCheck ? '28px ' : ''}minmax(120px, 1.2fr) 110px 100px 100px 110px minmax(120px, 1fr)`;
 
   return createPortal(
     <AnimatePresence>
@@ -375,17 +469,19 @@ export default function ExpectedManager({
                 {client?.societe || '—'}{client?.numero_client ? ` · ${client.numero_client}` : ''}
               </div>
             </div>
-            <Segmented
-              value={entity}
-              onChange={setEntity}
-              options={[{ key: 'owner', label: 'Owner' }, { key: 'optilex', label: "Opti'lex" }]}
-            />
+            {mode !== 'history' && (
+              <Segmented
+                value={entity}
+                onChange={setEntity}
+                options={[{ key: 'owner', label: 'Owner' }, { key: 'optilex', label: "Opti'lex" }]}
+              />
+            )}
             <button type="button" onClick={onClose} style={{ ...btn('ghost'), padding: 4 }}>
               <X size={16} />
             </button>
           </div>
 
-          {/* Les quatre gestes */}
+          {/* Les cinq onglets */}
           <div style={{ padding: '12px 20px 0', borderBottom: `1px solid ${N.borderSft}` }}>
             <div style={{ display: 'flex', gap: 4 }}>
               {MODES.map((m) => {
@@ -401,6 +497,7 @@ export default function ExpectedManager({
                       cursor: 'pointer', fontFamily: 'inherit', fontSize: 13,
                       fontWeight: active ? 700 : 500, color: active ? N.text : N.textMuted,
                       transition: 'color 0.15s',
+                      marginLeft: m.key === 'history' ? 'auto' : 0,
                     }}
                   >
                     <m.Icon size={14} strokeWidth={1.9} style={{ color: active ? N.text : N.textFaint }} />
@@ -516,148 +613,212 @@ export default function ExpectedManager({
             )}
           </div>
 
-          {/* Le tableau des mois */}
+          {/* Le corps : le tableau des mois, ou l'historique des opérations */}
           <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-            <div style={{
-              display: 'grid', gridTemplateColumns: gridCols, gap: 10,
-              padding: '8px 20px', background: N.sideBg, position: 'sticky', top: 0, zIndex: 1,
-              fontSize: 10.5, fontWeight: 600, color: N.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em',
-            }}>
-              {showCheck && <span />}
-              <span>Mois</span>
-              <span style={{ textAlign: 'right' }}>Attendu {entityLabel}</span>
-              <span style={{ textAlign: 'right' }}>Reçu</span>
-              <span style={{ textAlign: 'right' }}>Reste dû</span>
-              <span>Statut</span>
-              <span style={{ textAlign: 'right' }}>
-                {mode === 'edit' ? 'Nouveau montant' : mode === 'discount' ? 'Après réduction' : mode === 'defer' ? 'Montant reporté' : 'Pause'}
-              </span>
-            </div>
-
-            {rows.length === 0 && (
-              <div style={{ padding: 30, textAlign: 'center', color: N.textMuted, fontSize: 13 }}>Aucun mois sur ce client.</div>
-            )}
-
-            {rows.map((r) => {
-              const st = STATUS[r.status];
-              const canPick = selectable(r);
-              const isPicked = selected.has(r.id);
-              const dim = r.attendu === 0 && r.recu === 0 && !r.pauseActive;
-              return (
-                <div
-                  key={r.id}
-                  onClick={showCheck && canPick ? () => toggle(r.id) : undefined}
-                  style={{
-                    display: 'grid', gridTemplateColumns: gridCols, gap: 10, alignItems: 'center',
-                    padding: '8px 20px', fontSize: 12.5,
-                    borderTop: `1px solid ${N.borderSft}`,
-                    background: isPicked ? '#f4f7fb' : 'transparent',
-                    opacity: dim && mode !== 'edit' ? 0.5 : 1,
-                    cursor: showCheck && canPick ? 'pointer' : 'default',
-                    transition: 'background 0.12s',
-                  }}
-                >
-                  {showCheck && (
-                    <input
-                      type="checkbox"
-                      checked={isPicked}
-                      disabled={!canPick}
-                      onChange={() => toggle(r.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      style={{ accentColor: N.text, cursor: canPick ? 'pointer' : 'default' }}
-                    />
-                  )}
-                  <span style={{ minWidth: 0 }}>
-                    <span style={{ fontWeight: r.courant ? 700 : 500, color: N.text }}>{r.label}</span>
-                    {r.manual && (
-                      <span title="Montant fixé à la main : la grille ne le réécrit plus" style={{
-                        marginLeft: 6, fontSize: 10, fontWeight: 700, color: N.blue, background: N.blueBg,
-                        borderRadius: 3, padding: '1px 5px', verticalAlign: 'middle',
-                      }}>
-                        manuel
-                      </span>
-                    )}
-                  </span>
-                  <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: N.text, fontWeight: 600 }}>
-                    {formatEUR(r.attendu)}
-                  </span>
-                  <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: N.textMuted }}>
-                    {formatEUR(r.recu)}
-                  </span>
-                  <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: r.reste > 0 ? N.red : N.textFaint }}>
-                    {formatEUR(r.reste)}
-                  </span>
-                  <span>
-                    <span style={{
-                      display: 'inline-block', padding: '2px 8px', borderRadius: 999,
-                      background: st.bg, color: st.fg, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
-                    }}>
-                      {st.label}
+            {mode === 'history' ? (
+              <OperationsList
+                ops={ops}
+                confirmId={confirmId}
+                onConfirm={setConfirmId}
+                reverting={reverting}
+                onRevert={(id) => revert([id])}
+              />
+            ) : (
+              <>
+                <div style={{
+                  display: 'grid', gridTemplateColumns: gridCols, gap: 10,
+                  padding: '8px 20px', background: N.sideBg, position: 'sticky', top: 0, zIndex: 1,
+                  fontSize: 10.5, fontWeight: 600, color: N.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em',
+                }}>
+                  {showCheck && <span />}
+                  <span>Mois</span>
+                  <span style={{ textAlign: 'right' }}>Attendu {entityLabel}</span>
+                  <span style={{ textAlign: 'right' }}>Reçu</span>
+                  <span style={{ textAlign: 'right' }}>Reste dû</span>
+                  <span>Statut</span>
+                  {mode === 'edit' ? (
+                    <>
+                      <span style={{ textAlign: 'right' }}>Nouvel attendu</span>
+                      <span style={{ textAlign: 'right' }}>Nouveau reçu</span>
+                    </>
+                  ) : (
+                    <span style={{ textAlign: 'right' }}>
+                      {mode === 'discount' ? 'Après réduction' : mode === 'defer' ? 'Montant reporté' : 'Pause'}
                     </span>
-                    {r.pauseActive && r.pauseUntil && (
-                      <span style={{ display: 'block', fontSize: 10.5, color: N.textFaint, marginTop: 2 }}>
-                        reprise le {formatDateFR(r.pauseUntil)}
-                      </span>
-                    )}
-                  </span>
-                  <span style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
-                    {mode === 'edit' && (
-                      <AmountInput
-                        value={drafts[r.id] ?? ''}
-                        placeholder={formatEUR(r.attendu, { withSymbol: false })}
-                        onChange={(v) => setDrafts((d) => ({ ...d, [r.id]: v }))}
-                      />
-                    )}
-                    {mode === 'discount' && isPicked && discount && (
-                      <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: N.green }}>
-                        {formatEUR(reduced(r))}
-                      </span>
-                    )}
-                    {mode === 'defer' && isPicked && (
-                      <AmountInput
-                        value={drafts[r.id] ?? r.reste}
-                        max={r.reste}
-                        onChange={(v) => setDrafts((d) => ({ ...d, [r.id]: v }))}
-                      />
-                    )}
-                    {mode === 'pause' && r.pauseActive && (
-                      <button type="button" onClick={() => resume([r.key])} style={{ ...btn('solid'), padding: '4px 9px', fontSize: 11.5 }}>
-                        <Play size={11} /> Reprendre
-                      </button>
-                    )}
-                  </span>
+                  )}
                 </div>
-              );
-            })}
+
+                {rows.length === 0 && (
+                  <div style={{ padding: 30, textAlign: 'center', color: N.textMuted, fontSize: 13 }}>Aucun mois sur ce client.</div>
+                )}
+
+                {rows.map((r) => {
+                  const st = STATUS[r.status];
+                  const canPick = selectable(r);
+                  const isPicked = selected.has(r.id);
+                  const dim = r.attendu === 0 && r.recu === 0 && !r.pauseActive;
+                  return (
+                    <div
+                      key={r.id}
+                      onClick={showCheck && canPick ? () => toggle(r.id) : undefined}
+                      style={{
+                        display: 'grid', gridTemplateColumns: gridCols, gap: 10, alignItems: 'center',
+                        padding: '8px 20px', fontSize: 12.5,
+                        borderTop: `1px solid ${N.borderSft}`,
+                        background: isPicked ? '#f4f7fb' : 'transparent',
+                        opacity: dim && mode !== 'edit' ? 0.5 : 1,
+                        cursor: showCheck && canPick ? 'pointer' : 'default',
+                        transition: 'background 0.12s',
+                      }}
+                    >
+                      {showCheck && (
+                        <input
+                          type="checkbox"
+                          checked={isPicked}
+                          disabled={!canPick}
+                          onChange={() => toggle(r.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ accentColor: N.text, cursor: canPick ? 'pointer' : 'default' }}
+                        />
+                      )}
+                      <span style={{ minWidth: 0 }}>
+                        <span style={{ fontWeight: r.courant ? 700 : 500, color: N.text }}>{r.label}</span>
+                        {r.manual && (
+                          <span title="Montant fixé à la main : la grille ne le réécrit plus" style={{
+                            marginLeft: 6, fontSize: 10, fontWeight: 700, color: N.blue, background: N.blueBg,
+                            borderRadius: 3, padding: '1px 5px', verticalAlign: 'middle',
+                          }}>
+                            manuel
+                          </span>
+                        )}
+                      </span>
+                      <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: N.text, fontWeight: 600 }}>
+                        {formatEUR(r.attendu)}
+                      </span>
+                      <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: N.textMuted }}>
+                        {formatEUR(r.recu)}
+                        {r.recuCreances > 0 && (
+                          <span
+                            title="Récupéré sur des créances antérieures, en plus du reçu du mois"
+                            style={{ display: 'block', fontSize: 10.5, color: N.textFaint, whiteSpace: 'nowrap' }}
+                          >
+                            dont {formatEUR(r.recuCreances)} sur créances
+                          </span>
+                        )}
+                      </span>
+                      <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: r.reste > 0 ? N.red : N.textFaint }}>
+                        {formatEUR(r.reste)}
+                      </span>
+                      <span>
+                        <span style={{
+                          display: 'inline-block', padding: '2px 8px', borderRadius: 999,
+                          background: st.bg, color: st.fg, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+                        }}>
+                          {st.label}
+                        </span>
+                        {r.pauseActive && r.pauseUntil && (
+                          <span style={{ display: 'block', fontSize: 10.5, color: N.textFaint, marginTop: 2 }}>
+                            reprise le {formatDateFR(r.pauseUntil)}
+                          </span>
+                        )}
+                      </span>
+                      {mode === 'edit' ? (
+                        <>
+                          <span style={{ textAlign: 'right' }}>
+                            <AmountInput
+                              value={drafts[r.id] ?? ''}
+                              placeholder={formatEUR(r.attendu, { withSymbol: false })}
+                              onChange={(v) => setDrafts((d) => ({ ...d, [r.id]: v }))}
+                            />
+                          </span>
+                          <span style={{ textAlign: 'right' }}>
+                            <AmountInput
+                              value={recDrafts[r.id] ?? ''}
+                              placeholder={formatEUR(r.recuMois, { withSymbol: false })}
+                              onChange={(v) => setRecDrafts((d) => ({ ...d, [r.id]: v }))}
+                            />
+                          </span>
+                        </>
+                      ) : (
+                        <span style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                          {mode === 'discount' && isPicked && discount && (
+                            <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: N.green }}>
+                              {formatEUR(reduced(r))}
+                            </span>
+                          )}
+                          {mode === 'defer' && isPicked && (
+                            <AmountInput
+                              value={drafts[r.id] ?? r.reste}
+                              max={r.reste}
+                              onChange={(v) => setDrafts((d) => ({ ...d, [r.id]: v }))}
+                            />
+                          )}
+                          {mode === 'pause' && r.pauseActive && (
+                            <button type="button" onClick={() => resume([r.key])} style={{ ...btn('solid'), padding: '4px 9px', fontSize: 11.5 }}>
+                              <Play size={11} /> Reprendre
+                            </button>
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
           </div>
 
-          {/* Pied : motif + action */}
+          {/* Pied : motif + action — ou, après un geste, l'annulation immédiate */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
             padding: '12px 20px', borderTop: `1px solid ${N.borderSft}`, background: '#fff',
           }}>
-            <input
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Motif (visible dans l’historique et le fil du client)"
-              style={{ ...input, flex: '1 1 260px' }}
-            />
-            <button type="button" onClick={onClose} style={btn('ghost')}>Fermer</button>
-            <button
-              type="button"
-              onClick={submit}
-              disabled={!ready || saving}
-              style={{
-                ...btn('primary'),
-                background: ready ? ((mode === 'defer' && !deferTo) || (mode === 'pause' && pauseOwed === 'never') ? N.red : N.text) : N.sideBg,
-                color: ready ? '#fff' : N.textFaint,
-                border: 'none',
-                cursor: ready && !saving ? 'pointer' : 'default',
-              }}
-            >
-              <Check size={13} />
-              {saving ? 'Enregistrement…' : primaryLabel}
-            </button>
+            {lastOps.length > 0 && (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                padding: '6px 10px', borderRadius: 8, background: N.greenBg, color: N.green,
+                fontSize: 12, fontWeight: 600,
+              }}>
+                <Check size={13} /> Enregistré
+                <button
+                  type="button"
+                  onClick={() => revert(lastOps)}
+                  disabled={!!reverting}
+                  title="Remettre l’état d’avant, au centime"
+                  style={{
+                    ...btn('ghost'), padding: '2px 6px', color: N.text, fontSize: 12,
+                    textDecoration: 'underline', textUnderlineOffset: 2,
+                  }}
+                >
+                  <Undo2 size={12} /> {reverting ? 'Annulation…' : 'Annuler'}
+                </button>
+              </span>
+            )}
+            {mode !== 'history' && (
+              <input
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Motif (visible dans l’historique et le fil du client)"
+                style={{ ...input, flex: '1 1 220px' }}
+              />
+            )}
+            <button type="button" onClick={onClose} style={{ ...btn('ghost'), marginLeft: mode === 'history' ? 'auto' : 0 }}>Fermer</button>
+            {mode !== 'history' && (
+              <button
+                type="button"
+                onClick={submit}
+                disabled={!ready || saving}
+                style={{
+                  ...btn('primary'),
+                  background: ready ? ((mode === 'defer' && !deferTo) || (mode === 'pause' && pauseOwed === 'never') ? N.red : N.text) : N.sideBg,
+                  color: ready ? '#fff' : N.textFaint,
+                  border: 'none',
+                  cursor: ready && !saving ? 'pointer' : 'default',
+                }}
+              >
+                <Check size={13} />
+                {saving ? 'Enregistrement…' : primaryLabel}
+              </button>
+            )}
           </div>
         </motion.div>
       </motion.div>
@@ -667,6 +828,97 @@ export default function ExpectedManager({
 }
 
 // ── Pièces ──────────────────────────────────────────────────────────────────
+
+// L'historique des gestes, du plus récent au plus ancien. Annuler se fait en
+// deux temps sur la ligne (pas de boîte de dialogue du navigateur) : la
+// directrice voit ce qu'elle annule, et confirme au même endroit.
+function OperationsList({ ops, confirmId, onConfirm, reverting, onRevert }) {
+  if (ops === null) {
+    return <div style={{ padding: 30, textAlign: 'center', color: N.textMuted, fontSize: 13 }}>Chargement…</div>;
+  }
+  if (ops.length === 0) {
+    return <div style={{ padding: 30, textAlign: 'center', color: N.textMuted, fontSize: 13 }}>Aucune opération sur ce client.</div>;
+  }
+  return (
+    <div style={{ padding: '2px 20px 10px' }}>
+      {ops.map((o, i) => {
+        const done = !!o.reverted_at;
+        const asking = confirmId === o.id;
+        const busy = reverting === o.id;
+        return (
+          <div
+            key={o.id}
+            style={{
+              display: 'flex', alignItems: 'flex-start', gap: 14,
+              padding: '11px 0', borderTop: i === 0 ? 'none' : `1px solid ${N.borderSft}`,
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: 12.5, lineHeight: 1.45,
+                color: done ? N.textFaint : N.text,
+                textDecoration: done ? 'line-through' : 'none',
+              }}>
+                <strong>{o.author_name || 'Quelqu’un'}</strong> {o.label}.
+              </div>
+              {o.reason && (
+                <div style={{ fontSize: 11.5, color: N.textMuted, fontStyle: 'italic', marginTop: 2 }}>
+                  « {o.reason} »
+                </div>
+              )}
+              <div style={{ fontSize: 11, color: N.textFaint, marginTop: 3 }}>
+                {fmtWhen(o.created_at)}
+                {done && ` · annulée le ${fmtWhen(o.reverted_at)}${o.reverted_by ? ` par ${o.reverted_by}` : ''}`}
+                {!done && !o.revertible && o.blocked_reason && ` · ${o.blocked_reason} : à corriger à la main`}
+              </div>
+            </div>
+            <div style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              {done ? (
+                <Tag>Annulée</Tag>
+              ) : !o.revertible ? (
+                <Tag title={o.blocked_reason || ''}>Non annulable</Tag>
+              ) : asking ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onRevert(o.id)}
+                    disabled={busy}
+                    style={{ ...btn('primary'), background: N.red, border: 'none', padding: '6px 11px', fontSize: 12 }}
+                  >
+                    <Undo2 size={12} /> {busy ? 'Annulation…' : 'Confirmer l’annulation'}
+                  </button>
+                  <button type="button" onClick={() => onConfirm(null)} disabled={busy} style={{ ...btn('ghost'), padding: '6px 8px', fontSize: 12 }}>
+                    Garder
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onConfirm(o.id)}
+                  title="Remettre l’état d’avant, au centime"
+                  style={{ ...btn('solid'), padding: '6px 11px', fontSize: 12 }}
+                >
+                  <Undo2 size={12} /> Annuler
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Tag({ children, title }) {
+  return (
+    <span title={title} style={{
+      display: 'inline-block', padding: '3px 8px', borderRadius: 999,
+      background: N.sideBg, color: N.textMuted, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+    }}>
+      {children}
+    </span>
+  );
+}
 
 function Segmented({ value, onChange, options }) {
   return (
@@ -725,7 +977,7 @@ function AmountInput({ value, onChange, max, placeholder }) {
           onChange(v);
         }}
         style={{
-          ...input, width: 104, padding: '5px 8px', textAlign: 'right',
+          ...input, width: 96, padding: '5px 8px', textAlign: 'right',
           fontWeight: 600, fontVariantNumeric: 'tabular-nums',
         }}
       />

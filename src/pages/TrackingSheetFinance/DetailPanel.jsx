@@ -147,6 +147,8 @@ export default function DetailPanel({
   // endpoint en cours de déploiement côté backend : toute erreur (404…)
   // masque simplement la section, jamais de crash.
   const [clientAudit, setClientAudit] = useState(null);
+  // Gestes de la direction (attendu, reçu, report, pause…) et leur annulation.
+  const [clientOps, setClientOps] = useState(null);
   // Historique des états du board (résiliations, pauses…) : fondu dans la
   // frise des actions, pour qu'acter une résiliation se relise ici.
   const [etatHistory, setEtatHistory] = useState(null);
@@ -178,6 +180,7 @@ export default function DetailPanel({
       setFullscreen(false);
       setProfile(null);
       setClientAudit(null);
+      setClientOps(null);
       setEtatHistory(null);
       setExitOpen(false);
       setExitPreset(null);
@@ -188,23 +191,37 @@ export default function DetailPanel({
     }
   }, [open]);
 
-  // Audit client (toutes périodes confondues) pour la « Dernière action » de
-  // la vue synthétique. Défensif sur la forme de la réponse ({entries} ou
-  // tableau nu) — le contrat backend est en cours de validation.
-  useEffect(() => {
-    if (!open || !clientId) return;
-    let cancelled = false;
-    setClientAudit(null);
+  // Historique des actions : l'audit (toutes périodes confondues) et les
+  // opérations de la direction (annulables). Rechargé après chaque geste,
+  // sinon la « Dernière action » resterait celle d'avant. Défensif sur la
+  // forme de la réponse d'audit ({entries} ou tableau nu). Une réponse
+  // arrivée après un changement de client est ignorée.
+  const historyClientRef = useRef(null);
+  const refreshHistory = useCallback(() => {
+    if (!clientId) return;
+    historyClientRef.current = clientId;
     apiClient.get(`/api/v1/finance-periods/client/${clientId}/audit`)
       .then((data) => {
-        if (cancelled) return;
+        if (historyClientRef.current !== clientId) return;
         const entries = Array.isArray(data?.entries) ? data.entries
           : Array.isArray(data) ? data : [];
         setClientAudit(entries);
       })
-      .catch(() => { if (!cancelled) setClientAudit(null); });
-    return () => { cancelled = true; };
-  }, [open, clientId]);
+      .catch(() => { if (historyClientRef.current === clientId) setClientAudit(null); });
+    apiClient.get(`/api/v1/finance-periods/client/${clientId}/operations`)
+      .then((d) => {
+        if (historyClientRef.current !== clientId) return;
+        setClientOps(Array.isArray(d?.items) ? d.items : []);
+      })
+      .catch(() => { if (historyClientRef.current === clientId) setClientOps(null); });
+  }, [clientId]);
+
+  useEffect(() => {
+    if (!open || !clientId) return;
+    setClientAudit(null);
+    setClientOps(null);
+    refreshHistory();
+  }, [open, clientId, refreshHistory]);
 
   // Historique des états posés sur le board — même client, même fil d'actions.
   // Sans ça, acter une résiliation depuis la finance n'aurait laissé aucune
@@ -625,13 +642,14 @@ export default function DetailPanel({
   const reloadAfterExit = useCallback(() => {
     refreshProfile();
     refreshEtatHistory();
+    refreshHistory();
     if (clientId) {
       apiClient.get(`/api/v1/finance-periods/client/${clientId}/timeline`)
         .then(setTimeline)
         .catch(() => {});
     }
     onPromiseChanged?.();
-  }, [clientId, refreshProfile, refreshEtatHistory, onPromiseChanged]);
+  }, [clientId, refreshProfile, refreshEtatHistory, refreshHistory, onPromiseChanged]);
 
   // `payload` porte le motif ET le périmètre choisi (créances antérieures /
   // mois en cours / reste du contrat) — la finance décide de chaque bloc.
@@ -924,6 +942,7 @@ export default function DetailPanel({
                 désigner deux actions différentes (retour dev 2026-09-03). */}
             <ActionsTimeline
               audit={clientAudit}
+              operations={clientOps}
               changes={profile?.changes}
               etatHistory={etatHistory}
             />
@@ -2040,18 +2059,32 @@ const auditEntryDate = (e) => e.changed_at || e.created_at || null;
 // Owner pour août 2026 ») plutôt qu'en « champ : avant → après » — retour dev
 // 2026-09-03 : « on ne comprend pas trop quelle était vraiment la dernière
 // action ». Les phrases vivent dans actionLabel.js, testées.
-function ActionsTimeline({ audit, changes, etatHistory }) {
+function ActionsTimeline({ audit, operations, changes, etatHistory }) {
   const [open, setOpen] = useState(false);
 
   const entries = useMemo(() => {
-    const fromAudit = (audit || []).map((e) => ({
+    // Une opération de la direction résume ses lignes d'audit : on montre la
+    // phrase de l'opération, pas chaque champ qu'elle a touché. Annulée, elle
+    // reste visible mais barrée, et son annulation est une action à part.
+    const fromOps = (operations || []).flatMap((o) => {
+      const items = [{ when: o.created_at, who: o.author_name || null, sentence: o.label, reverted: !!o.reverted_at }];
+      if (o.reverted_at) {
+        items.push({
+          when: o.reverted_at, who: o.reverted_by || null,
+          sentence: `a annulé l'opération « ${String(o.label || '').replace(/^a /, '')} »`,
+        });
+      }
+      return items;
+    });
+    const fromAudit = (audit || []).filter((e) => !e.operation_id).map((e) => ({
       when: auditEntryDate(e),
       who: e.changed_by_name || null,
       sentence: describeAction({
         field: e.field_name, from: e.old_value, to: e.new_value, period: e.period || null,
       }),
     }));
-    const fromChanges = (changes || []).map((c) => ({
+    // Le report d'attendu est déjà raconté par son opération.
+    const fromChanges = (changes || []).filter((c) => c.field !== 'expected_correction').map((c) => ({
       when: c.changed_at,
       who: c.changed_by || null,
       sentence: describeAction({ field: c.field, from: c.old_value, to: c.new_value }),
@@ -2067,9 +2100,9 @@ function ActionsTimeline({ audit, changes, etatHistory }) {
         field: 'etat', from: null, to: h.etat, effectiveOn: h.etat_date || null,
       }),
     }));
-    return [...fromAudit, ...fromChanges, ...fromEtats].sort((a, b) =>
+    return [...fromOps, ...fromAudit, ...fromChanges, ...fromEtats].sort((a, b) =>
       String(b.when || '').localeCompare(String(a.when || '')));
-  }, [audit, changes, etatHistory]);
+  }, [audit, operations, changes, etatHistory]);
 
   const [last, ...previous] = entries;
   const shown = open ? previous.slice(0, 40) : [];
@@ -2094,7 +2127,10 @@ function ActionsTimeline({ audit, changes, etatHistory }) {
               }}>
                 Dernière action · {formatRelativeFR(last.when)}
               </div>
-              <div style={{ fontSize: 13, color: N.text, marginTop: 3, lineHeight: 1.5 }}>
+              <div style={{
+                fontSize: 13, color: last.reverted ? N.textFaint : N.text, marginTop: 3, lineHeight: 1.5,
+                textDecoration: last.reverted ? 'line-through' : 'none',
+              }}>
                 <strong>{last.who || 'Quelqu’un'}</strong> {last.sentence}.
               </div>
               <div style={{ fontSize: 11, color: N.textFaint, marginTop: 2 }}>
@@ -2113,7 +2149,10 @@ function ActionsTimeline({ audit, changes, etatHistory }) {
                   gap: 12, padding: '9px 14px', fontSize: 12, minWidth: 0,
                   borderTop: i === 0 ? 'none' : `1px solid ${N.borderSft}`,
                 }}>
-                  <span style={{ minWidth: 0, color: N.text, lineHeight: 1.45 }}>
+                  <span style={{
+                    minWidth: 0, color: e.reverted ? N.textFaint : N.text, lineHeight: 1.45,
+                    textDecoration: e.reverted ? 'line-through' : 'none',
+                  }}>
                     <strong>{e.who || 'Quelqu’un'}</strong> {e.sentence}.
                   </span>
                   <span style={{
