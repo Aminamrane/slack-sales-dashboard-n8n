@@ -1,20 +1,44 @@
 // src/pages/WorkHours.jsx
 //
-// Heures de travail hebdomadaires (menu Humain). Accès : admin, ceo, hr.
+// Heures de travail (menu Humain). Accès : admin, ceo, hr.
 // Source : agendas Google de l'équipe, servis depuis un snapshot en base
-// rafraîchi par cron toutes les 15 min (arrivée instantanée sur la page) ;
-// calcul backend : jours ouvrés uniquement, vacances déclarées exclues,
-// événements non-travail (pause, sport, déjeuner...) exclus, chevauchements
-// fusionnés.
-// Interactif : classement avec photos (médailles + couronne du Leaderboard),
-// évolution vs semaine précédente (à portion comparable de semaine), filtre
-// par semaine, totaux par pôle recalculés en direct au coche/décoche.
+// rafraîchi par cron toutes les 15 min ; calcul backend : semaine de 7 JOURS
+// (le week-end compte dans le réalisé), vacances déclarées neutralisées,
+// événements non-travail exclus, chevauchements fusionnés.
+//
+// Nouvelle page (2026-09-04, brief dev) : « moyenne d'heures par jour et par
+// semaine, en haut, par pôle et par personne ; cocher des gens fait un total
+// ET une moyenne équipe ; l'attendu part d'une base de 40 h et s'adapte aux
+// absences, mi-temps, vacances ; filtrer, trier, cocher en masse par domaine ;
+// et un vrai changement de front, une meilleure page. »
+//
+// Structure :
+//   ┌ en-tête : titre + période (Semaine | Mois, ‹ ›, Aujourd'hui) ────────┐
+//   │ RAIL (gauche)                    │ CLASSEMENT (droite)                │
+//   │  · Équipe cochée : réalisé,      │  · tri par colonne                 │
+//   │    attendu + barre, moy/j, moy/s │  · une ligne par personne :        │
+//   │  · Un pôle par ligne : case de   │    cellules (jours ou semaines),   │
+//   │    coche en masse, icône, total, │    moy/j, moy/sem, attendu (jours  │
+//   │    attendu + barre, moy/j, moy/s │    travaillés au crayon), total    │
+//   │    — cliquer le nom filtre.      │    + barre, évolution              │
+//   └──────────────────────────────────┴────────────────────────────────────┘
+// La logique (agrégation, attendu, moyennes) vit dans utils/workHoursPeriod.js,
+// testée. Rien ne s'anime hors une entrée de page ; l'écran reste pendant les
+// chargements.
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
 import apiClient from "../services/apiClient";
 import SharedNavbar from "../components/SharedNavbar";
+import {
+  ClockIcon, TargetIcon, GaugeIcon, PencilIcon, ChevronLeftIcon, ChevronRightIcon,
+  DevsIcon, SalesIcon, SettersIcon, FinanceIcon, MarketingIcon, DirectionIcon,
+  RhIcon, ClientSuccessIcon, OtherIcon,
+} from "../components/icons/PoleIcons.jsx";
+import {
+  DAY_LABELS, MONTHS_FR, DEFAULT_WORKING_DAYS,
+  mondayOf, iso, addDays, fmtDay, monthKey, fmtH, statusFor, buildPeriod, aggregate, mondaysCovering,
+} from "../utils/workHoursPeriod.js";
 import crownIcon from "../assets/crown.png";
 import firstPlace from "../assets/1st-place.png";
 import secondPlace from "../assets/2st-place.png";
@@ -22,54 +46,45 @@ import thirdPlace from "../assets/3st-place.png";
 
 const NAVY = "#121b35";
 const GREEN = "#3e7d5a";
-const BORDER = "#e5e8ee";
+const VIOLET = "#7c3aed";
+const BORDER = "#e6e9ef";
 const MUTED = "#8a93a4";
+const FAINT = "#b9c2d2";
 const TEXT = "#1e2330";
 const CARD = "#ffffff";
 const FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif";
 
 const POLE_COLORS = {
   Devs: "#6366f1", Sales: "#2563eb", Setters: "#0ea5e9", Finance: "#d97706",
-  Marketing: "#db2777", Direction: NAVY, RH: "#7c3aed", "Client Success": GREEN, Autre: MUTED,
+  Marketing: "#db2777", Direction: NAVY, RH: VIOLET, "Client Success": GREEN, Autre: MUTED,
 };
-// Colonnes du classement (en-têtes + lignes : toujours identiques).
-const GRID = "28px minmax(0, 1.35fr) 96px 250px 64px 68px 88px";
-const DAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven"];
-// Moyennes : plancher mai 2026 (agendas peu tenus avant). La plage est
-// sélectionnable par MOIS (raccourcis) ou par semaines (deux dates).
-const AVG_FLOOR = "2026-05-04";
-const MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
-// Lundis couvrant un mois : du 1er lundi >= 1er du mois au dernier lundi <= fin du mois.
-const monthRange = (y, m) => {
-  const first = new Date(y, m, 1);
-  const start = mondayOf(first);
-  const startIso = iso(start) < iso(first) ? iso(new Date(start.getTime() + 7 * 864e5)) : iso(start);
-  const last = new Date(y, m + 1, 0);
-  const endIso = iso(mondayOf(last));
-  return { from: startIso < AVG_FLOOR ? AVG_FLOOR : startIso, to: endIso };
+const POLE_ICONS = {
+  Devs: DevsIcon, Sales: SalesIcon, Setters: SettersIcon, Finance: FinanceIcon,
+  Marketing: MarketingIcon, Direction: DirectionIcon, RH: RhIcon,
+  "Client Success": ClientSuccessIcon, Autre: OtherIcon,
 };
+const poleIcon = (pole) => POLE_ICONS[pole] || OtherIcon;
+const poleColor = (pole) => POLE_COLORS[pole] || MUTED;
+// Les agendas ne sont tenus que depuis mai 2026 : pas de période avant.
+const FIRST_MONTH = { y: 2026, m: 4 };
+const FIRST_WEEK = "2026-05-04";
+const minsAgo = (ts) => Math.max(0, Math.round((Date.now() - new Date(ts).getTime()) / 60000));
+const DAY_SHORT = ["L", "M", "M", "J", "V", "S", "D"];
 
-const mondayOf = (d) => {
-  const x = new Date(d);
-  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
-  return x;
-};
-const iso = (d) => d.toLocaleDateString("fr-CA");
-const fmtDay = (isoStr) => new Date(isoStr + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
-const fmtH = (h) => {
-  const hh = Math.floor(h);
-  const mm = Math.round((h - hh) * 60);
-  return mm ? `${hh}h${String(mm).padStart(2, "0")}` : `${hh}h`;
-};
-// Ancienneté d'un VRAI instant (refreshed_at, timestamptz) : conversion normale.
-const minsAgo = (isoTs) => Math.max(0, Math.round((Date.now() - new Date(isoTs).getTime()) / 60000));
+const SORTS = [
+  { key: "total", label: "Total" },
+  { key: "gap", label: "Écart" },
+  { key: "avgDay", label: "Moy./jour" },
+  { key: "name", label: "Nom" },
+];
 
-// Photo de profil (Slack) avec repli initiales teintées couleur du pôle.
-function Avatar({ p, size = 30 }) {
+/* ───────────────────────────── Pièces ───────────────────────────── */
+
+function Avatar({ p, size = 34 }) {
   const [err, setErr] = useState(false);
-  const pc = POLE_COLORS[p.pole] || MUTED;
+  const pc = poleColor(p.pole);
   const initials = (p.name || p.email).split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0].toUpperCase()).join("");
-  const base = { width: size, height: size, borderRadius: "50%", flexShrink: 0, boxSizing: "border-box" };
+  const base = { width: size, height: size, borderRadius: "50%", flexShrink: 0, boxSizing: "border-box", boxShadow: `0 0 0 2px ${CARD}, 0 0 0 3.5px ${pc}55` };
   if (p.avatar_url && !err) {
     return <img src={p.avatar_url} alt="" onError={() => setErr(true)} style={{ ...base, objectFit: "cover", display: "block" }} />;
   }
@@ -80,28 +95,59 @@ function Avatar({ p, size = 30 }) {
   );
 }
 
-// Évolution vs la MÊME portion de la semaine précédente (lun→jour courant) :
-// comparer une semaine entamée à une semaine pleine n'aurait aucun sens.
-function DeltaChip({ delta, daysCounted }) {
-  if (delta == null) return <span style={{ fontSize: 11, color: "#d5dae4" }}>·</span>;
-  const flat = Math.abs(delta) < 0.25;
-  const up = delta > 0;
-  const color = flat ? MUTED : up ? GREEN : "#b45309";
-  const bg = flat ? "#f3f4f6" : up ? GREEN + "16" : "#fff3e3";
-  const label = flat ? "=" : `${up ? "+" : "−"}${fmtH(Math.abs(delta))}`;
-  const portion = daysCounted === 5 ? "semaine précédente" : `même portion (lun-${DAY_LABELS[daysCounted - 1].toLowerCase()}) de la semaine précédente`;
+// Barre réalisé / attendu : une transition CSS, rien d'autre.
+function Bar({ value, max, color, height = 6, track = "#eef1f6" }) {
+  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return (
-    <span title={`vs ${portion}`}
-      style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 8px", borderRadius: 10, background: bg, color, fontSize: 11, fontWeight: 750, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-      {!flat && (
-        <svg width="8" height="8" viewBox="0 0 10 10" style={{ transform: up ? "none" : "rotate(180deg)" }}>
-          <path d="M5 1 L9 8 L1 8 Z" fill={color} />
-        </svg>
-      )}
-      {label}
+    <span style={{ display: "block", height, borderRadius: height, background: track, overflow: "hidden" }}>
+      <span style={{ display: "block", height: "100%", width: `${pct}%`, borderRadius: height, background: color, transition: "width 0.45s cubic-bezier(0.16,1,0.3,1)" }} />
     </span>
   );
 }
+
+function Check({ on, partial = false, color = GREEN, size = 17 }) {
+  const active = on || partial;
+  return (
+    <span style={{ width: size, height: size, borderRadius: 5, border: `1.5px solid ${active ? color : "#cbd2e0"}`, background: on ? color : "transparent", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.12s, border-color 0.12s" }}>
+      {on && <svg width={size * 0.6} height={size * 0.6} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
+      {!on && partial && <span style={{ width: size * 0.45, height: 2, borderRadius: 1, background: color }} />}
+    </span>
+  );
+}
+
+// Éditeur des jours travaillés (RH) : sept cases, une par jour.
+function WorkingDaysEditor({ initial, onSave, onCancel, saving }) {
+  const [days, setDays] = useState(() => new Set(initial));
+  const toggle = (d) => setDays((s) => { const n = new Set(s); if (n.has(d)) n.delete(d); else n.add(d); return n; });
+  return (
+    <div onClick={(e) => e.stopPropagation()}
+      style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 20, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 12px 32px rgba(17,24,39,0.14)", padding: "10px 12px", width: 236 }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: MUTED, marginBottom: 8 }}>Jours travaillés</div>
+      <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
+        {DAY_SHORT.map((l, i) => {
+          const d = i + 1;
+          const on = days.has(d);
+          return (
+            <button key={d} type="button" onClick={() => toggle(d)} title={DAY_LABELS[i]}
+              style={{ flex: 1, height: 28, borderRadius: 7, border: `1px solid ${on ? VIOLET : BORDER}`, background: on ? VIOLET : CARD, color: on ? "#fff" : i >= 5 ? FAINT : TEXT, fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+              {l}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ fontSize: 11, color: MUTED, flex: 1 }}>{days.size} j × 8 h = {fmtH(days.size * 8)}/sem</span>
+        <button type="button" onClick={onCancel} style={{ border: "none", background: "transparent", color: MUTED, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Annuler</button>
+        <button type="button" disabled={saving || days.size === 0} onClick={() => onSave([...days].sort())}
+          style={{ border: "none", background: VIOLET, color: "#fff", borderRadius: 7, padding: "5px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: days.size === 0 ? 0.5 : 1 }}>
+          {saving ? "…" : "Enregistrer"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────────── Page ─────────────────────────────────── */
 
 export default function WorkHours({ embed = false }) {
   const navigate = useNavigate();
@@ -110,326 +156,462 @@ export default function WorkHours({ embed = false }) {
     if (!user || !["admin", "ceo", "hr"].includes(user.role)) navigate("/");
   }, [user, navigate]);
 
+  // Période : Semaine (lundi ISO) ou Mois (année, mois 0-11).
+  const [mode, setMode] = useState("week");
   const [week, setWeek] = useState(() => iso(mondayOf(new Date())));
-  const [data, setData] = useState(null);
-  const [prevData, setPrevData] = useState(null); // semaine précédente (pour l'évolution)
+  const [month, setMonth] = useState(() => { const n = new Date(); return { y: n.getFullYear(), m: n.getMonth() }; });
+
+  const [period, setPeriod] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [reloadTick, setReloadTick] = useState(0);
+
   const [unchecked, setUnchecked] = useState(() => new Set());
-  // Période de moyenne : par défaut le mois courant.
-  const [avgRange, setAvgRange] = useState(() => {
-    const now = new Date();
-    return monthRange(now.getFullYear(), now.getMonth());
-  });
-  const [avgData, setAvgData] = useState(null);
-  const [avgLoading, setAvgLoading] = useState(true);
+  const [poleFilter, setPoleFilter] = useState(null);
+  const [sortBy, setSortBy] = useState("total");
+  const [editing, setEditing] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState(null);
 
+  // Chargement : l'écran reste tel quel pendant qu'on va chercher la période.
   useEffect(() => {
     let alive = true;
-    setAvgLoading(true);
-    apiClient.get(`/api/v1/hr/work-hours/averages?from=${avgRange.from}&to=${avgRange.to}`)
-      .then((r) => { if (alive) { setAvgData(r); setAvgLoading(false); } })
-      .catch(() => { if (alive) { setAvgData(null); setAvgLoading(false); } });
+    setRefreshing(true);
+    setError(null);
+    const get = (w) => apiClient.get(`/api/v1/hr/work-hours?week=${w}`);
+    const job = mode === "week"
+      ? Promise.all([get(week), get(addDays(week, -7)).catch(() => null)])
+        .then(([w, prev]) => buildPeriod({ mode: "week", weeks: [w], prevWeek: prev }))
+      : Promise.all(mondaysCovering(month.y, month.m).map(get))
+        .then((weeks) => buildPeriod({ mode: "month", weeks, y: month.y, m: month.m }));
+    job
+      .then((p) => { if (alive) setPeriod(p); })
+      .catch((e) => { if (alive) setError(e?.data?.detail || e?.message || "Erreur de chargement"); })
+      .finally(() => { if (alive) { setLoading(false); setRefreshing(false); } });
     return () => { alive = false; };
-  }, [avgRange.from, avgRange.to]);
+  }, [mode, week, month.y, month.m, reloadTick]);
 
-  const avgByEmail = useMemo(() => {
-    const m = {};
-    for (const p of (avgData?.people || [])) m[p.email] = p;
-    return m;
-  }, [avgData]);
-
-  // Mois proposés : de mai 2026 au mois courant.
-  const monthOptions = useMemo(() => {
-    const out = [];
-    const now = new Date();
-    for (let y = 2026, m = 4; y < now.getFullYear() || (y === now.getFullYear() && m <= now.getMonth()); m++) {
-      if (m > 11) { m = -1; y++; continue; }
-      out.push({ y, m, label: MONTHS_FR[m], ...monthRange(y, m) });
-    }
-    return out;
-  }, []);
-  const activeMonth = monthOptions.find((o) => o.from === avgRange.from && o.to === avgRange.to);
-
-  useEffect(() => {
-    let alive = true;
-    setLoading(true); setError(null); setPrevData(null);
-    apiClient.get(`/api/v1/hr/work-hours?week=${week}`)
-      .then((r) => { if (alive) { setData(r); setLoading(false); } })
-      .catch((e) => { if (alive) { setError(e.message || "Erreur"); setLoading(false); } });
-    // Semaine précédente (figée en base -> instantané) : nourrit l'évolution.
-    const d = new Date(week + "T00:00:00");
-    d.setDate(d.getDate() - 7);
-    apiClient.get(`/api/v1/hr/work-hours?week=${iso(d)}`)
-      .then((r) => { if (alive) setPrevData(r); })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, [week]);
-
-  const shiftWeek = (dir) => {
-    const d = new Date(week + "T00:00:00");
-    d.setDate(d.getDate() + dir * 7);
-    setWeek(iso(d));
+  const today = iso(new Date());
+  const isCurrent = mode === "week" ? week === iso(mondayOf(new Date())) : monthKey(month.y, month.m) === today.slice(0, 7);
+  const canGoBack = mode === "week" ? week > FIRST_WEEK : monthKey(month.y, month.m) > monthKey(FIRST_MONTH.y, FIRST_MONTH.m);
+  const shift = (dir) => {
+    if (mode === "week") setWeek((w) => addDays(w, dir * 7));
+    else setMonth(({ y, m }) => { const d = new Date(y, m + dir, 1); return { y: d.getFullYear(), m: d.getMonth() }; });
   };
+  const goToday = () => { const n = new Date(); setWeek(iso(mondayOf(n))); setMonth({ y: n.getFullYear(), m: n.getMonth() }); };
+  const periodLabel = mode === "week"
+    ? (period?.cells?.length === 7 ? `${fmtDay(period.cells[0].day)} – ${fmtDay(period.cells[6].day)}` : `Semaine du ${fmtDay(week)}`)
+    : `${MONTHS_FR[month.m][0].toUpperCase()}${MONTHS_FR[month.m].slice(1)} ${month.y}`;
 
-  const people = data?.people || [];
-  const accessible = useMemo(() => people.filter((p) => p.accessible), [people]);
-  const checked = useMemo(() => accessible.filter((p) => !unchecked.has(p.email)), [accessible, unchecked]);
-  const maxTotal = useMemo(() => Math.max(1, ...checked.map((p) => p.total)), [checked]);
+  /* Lignes, classement, agrégats. */
+  const rows = useMemo(() => (period?.rows || []).filter((r) => r.accessible), [period]);
+  const checked = useMemo(() => rows.filter((r) => !unchecked.has(r.email)), [rows, unchecked]);
+  const team = useMemo(() => aggregate(checked), [checked]);
+  const teamStatus = statusFor(team.total, team.expectedNow);
 
-  // Jours comptés cette semaine (semaine en cours : lun→aujourd'hui) et
-  // évolution par personne vs la même portion de la semaine précédente.
-  const daysCounted = useMemo(() => {
-    if (!data) return 5;
-    return data.days.filter((d) => !data.counted_until || d <= data.counted_until).length;
-  }, [data]);
-  const deltaByEmail = useMemo(() => {
+  const rankByEmail = useMemo(() => {
     const m = {};
-    if (!prevData) return m;
-    const prev = {};
-    for (const p of prevData.people || []) if (p.accessible) prev[p.email] = p.daily || [];
-    for (const p of accessible) {
-      const pd = prev[p.email];
-      if (!pd) continue;
-      const comparable = pd.slice(0, daysCounted).reduce((a, h) => a + h, 0);
-      m[p.email] = p.total - comparable;
-    }
+    [...rows].sort((a, b) => b.total - a.total).forEach((r, i) => { m[r.email] = i; });
     return m;
-  }, [prevData, accessible, daysCounted]);
+  }, [rows]);
 
-  const globalTotal = useMemo(() => checked.reduce((a, p) => a + p.total, 0), [checked]);
+  const visible = useMemo(() => {
+    const arr = poleFilter ? rows.filter((r) => r.pole === poleFilter) : [...rows];
+    if (sortBy === "avgDay") arr.sort((a, b) => (b.avgDay ?? -1) - (a.avgDay ?? -1));
+    else if (sortBy === "gap") arr.sort((a, b) => (b.total - b.expectedNow) - (a.total - a.expectedNow));
+    else if (sortBy === "name") arr.sort((a, b) => a.name.localeCompare(b.name, "fr"));
+    else arr.sort((a, b) => b.total - a.total);
+    return arr;
+  }, [rows, poleFilter, sortBy]);
+
+  // Un pôle par ligne du rail, toujours présent, dans un ordre stable.
   const poles = useMemo(() => {
     const m = new Map();
-    for (const p of checked) {
-      const cur = m.get(p.pole) || { total: 0, count: 0 };
-      cur.total += p.total; cur.count += 1;
-      m.set(p.pole, cur);
+    for (const r of rows) {
+      const cur = m.get(r.pole) || { pole: r.pole, members: [], on: [] };
+      cur.members.push(r);
+      if (!unchecked.has(r.email)) cur.on.push(r);
+      m.set(r.pole, cur);
     }
-    return [...m.entries()].sort((a, b) => b[1].total - a[1].total);
-  }, [checked]);
+    return [...m.values()]
+      .map((v) => ({ ...v, agg: aggregate(v.on) }))
+      .sort((a, b) => b.members.length - a.members.length || a.pole.localeCompare(b.pole));
+  }, [rows, unchecked]);
 
   const toggle = (email) => setUnchecked((prev) => {
     const next = new Set(prev);
     if (next.has(email)) next.delete(email); else next.add(email);
     return next;
   });
+  const togglePole = (pole) => setUnchecked((prev) => {
+    const members = rows.filter((r) => r.pole === pole).map((r) => r.email);
+    const allOn = members.every((e) => !prev.has(e));
+    const next = new Set(prev);
+    members.forEach((e) => { if (allOn) next.add(e); else next.delete(e); });
+    return next;
+  });
+  const toggleAll = () => setUnchecked((prev) => (prev.size ? new Set() : new Set(rows.map((r) => r.email))));
 
-  const weekLabel = data
-    ? `${fmtDay(data.days[0])} au ${fmtDay(data.days[4])}`
-    : "";
-  const isCurrentWeek = week === iso(mondayOf(new Date()));
+  const saveWorkingDays = async (email, days) => {
+    setSaving(true);
+    setEditError(null);
+    try {
+      await apiClient.put("/api/v1/hr/work-hours/working-days", { email, days });
+      setEditing(null);
+      setReloadTick((t) => t + 1);
+    } catch (e) {
+      setEditError(e?.data?.detail || "Enregistrement impossible");
+    } finally {
+      setSaving(false);
+    }
+  };
 
-  const card = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, boxShadow: "0 1px 3px rgba(17,24,39,0.05)" };
+  const cells = period?.cells || [];
+  // Tout tient dans la largeur, sans défilement : colonnes de chiffres
+  // compactes, la place restante va à la personne (retour dev 2026-09-04).
+  const cellsWidth = mode === "week" ? 258 : Math.max(180, cells.length * 46);
+  const GRID = `26px minmax(170px, 1.6fr) ${cellsWidth}px 62px 62px 70px 100px`;
+  const card = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, boxShadow: "0 1px 2px rgba(17,24,39,0.04)" };
 
   return (
     <div style={{ fontFamily: FONT, minHeight: embed ? "auto" : "100vh", background: embed ? "transparent" : "#f4f5f7", color: TEXT }}>
       {!embed && <SharedNavbar />}
       <style>{`
-        @keyframes whUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-        @keyframes whPulse{0%,100%{opacity:1}50%{opacity:0.35}}
+        @keyframes whIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
         @keyframes whShimmer{from{background-position:-400px 0}to{background-position:400px 0}}
+        .wh-page{animation:whIn 0.35s cubic-bezier(0.16,1,0.3,1) both}
+        .wh-layout{display:grid;grid-template-columns:284px minmax(0,1fr);gap:14px;align-items:start}
+        @media (max-width:1100px){.wh-layout{grid-template-columns:1fr}}
+        .wh-row{transition:background 0.12s ease, opacity 0.15s ease}
+        .wh-row:hover{background:#f3f5f9 !important}
+        .wh-edit{opacity:0;transition:opacity .15s ease}
+        .wh-row:hover .wh-edit{opacity:1}
+        .wh-btn{transition:background 0.12s, border-color 0.12s, color 0.12s}
+        .wh-btn:hover:not(:disabled){background:#f2f4f8}
+        .wh-pole{transition:background 0.12s}
+        .wh-pole:hover{background:#f6f7fa}
       `}</style>
-      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "28px 24px 60px", animation: "whUp 0.4s cubic-bezier(0.16,1,0.3,1) both" }}>
 
-        {/* En-tête + navigation semaine + fraîcheur du snapshot */}
-        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
+      <div className="wh-page" style={{ maxWidth: 1400, margin: "0 auto", padding: "26px 22px 60px" }}>
+
+        {/* ── En-tête ── */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
           <div>
-            <div style={{ fontSize: 23, fontWeight: 750, color: NAVY, letterSpacing: "-0.02em" }}>Heures de travail</div>
-            <div style={{ fontSize: 13, color: MUTED, marginTop: 3 }}>
-              Agendas Google · jours ouvrés (lun-ven) jusqu'au jour courant · vacances et événements non-travail exclus
+            <div style={{ fontSize: 24, fontWeight: 800, color: NAVY, letterSpacing: "-0.02em" }}>Heures de travail</div>
+            <div style={{ fontSize: 12.5, color: MUTED, marginTop: 3 }}>
+              Agendas Google, semaine de 7 jours · attendu = jours travaillés × 8 h, absences déduites
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            {data && isCurrentWeek && data.refreshed_at && (
-              <span title={`Dernier relevé des agendas : ${new Date(data.refreshed_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 10, background: GREEN + "12", color: GREEN, fontSize: 11.5, fontWeight: 650 }}>
-                <span style={{ width: 7, height: 7, borderRadius: "50%", background: GREEN, animation: "whPulse 2.2s ease-in-out infinite" }} />
-                {minsAgo(data.refreshed_at) === 0 ? "à l'instant" : `relevé il y a ${minsAgo(data.refreshed_at)} min`}
+            {period && isCurrent && mode === "week" && period.refreshedAt && (
+              <span title={`Dernier relevé : ${new Date(period.refreshedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`}
+                style={{ padding: "6px 11px", borderRadius: 10, background: GREEN + "12", color: GREEN, fontSize: 11.5, fontWeight: 650 }}>
+                {minsAgo(period.refreshedAt) === 0 ? "relevé à l'instant" : `relevé il y a ${minsAgo(period.refreshedAt)} min`}
               </span>
             )}
-            {data && !isCurrentWeek && (
-              <span style={{ padding: "7px 12px", borderRadius: 10, background: "#f0f2f5", color: MUTED, fontSize: 11.5, fontWeight: 650 }}>
-                Semaine figée
+            {period?.closed && (
+              <span style={{ padding: "6px 11px", borderRadius: 10, background: "#f0f2f5", color: MUTED, fontSize: 11.5, fontWeight: 650 }}>
+                {mode === "week" ? "Semaine figée" : "Mois clos"}
               </span>
             )}
-            <motion.button type="button" whileTap={{ scale: 0.95 }} onClick={() => shiftWeek(-1)}
-              style={{ padding: "8px 13px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>←</motion.button>
-            <div style={{ padding: "8px 16px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 170, textAlign: "center" }}>
-              Semaine du {weekLabel}{isCurrentWeek ? " · en cours" : ""}
-            </div>
-            <motion.button type="button" whileTap={{ scale: 0.95 }} onClick={() => shiftWeek(1)}
-              style={{ padding: "8px 13px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>→</motion.button>
+            {refreshing && !loading && (
+              <span style={{ padding: "6px 11px", borderRadius: 10, background: "#f0f2f5", color: MUTED, fontSize: 11.5, fontWeight: 650 }}>chargement…</span>
+            )}
+            <span style={{ display: "inline-flex", background: "#eceff4", border: `1px solid ${BORDER}`, borderRadius: 10, padding: 2, gap: 2 }}>
+              {[["week", "Semaine"], ["month", "Mois"]].map(([k, l]) => (
+                <button key={k} type="button" onClick={() => setMode(k)}
+                  style={{ padding: "6px 12px", borderRadius: 8, border: "none", background: mode === k ? CARD : "transparent", color: mode === k ? NAVY : MUTED, fontSize: 12.5, fontWeight: mode === k ? 700 : 600, cursor: "pointer", fontFamily: "inherit", boxShadow: mode === k ? "0 1px 2px rgba(17,24,39,0.10)" : "none", transition: "background 0.12s" }}>
+                  {l}
+                </button>
+              ))}
+            </span>
+            <span style={{ display: "inline-flex", alignItems: "center", border: `1px solid ${BORDER}`, background: CARD, borderRadius: 10, overflow: "hidden" }}>
+              <button type="button" onClick={() => shift(-1)} disabled={!canGoBack} className="wh-btn" title="Période précédente"
+                style={{ padding: "7px 8px", border: "none", background: "transparent", color: canGoBack ? NAVY : FAINT, cursor: canGoBack ? "pointer" : "default", display: "inline-flex" }}>
+                <ChevronLeftIcon size={16} />
+              </button>
+              <span style={{ padding: "0 8px", fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 168, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>
+                {periodLabel}
+              </span>
+              <button type="button" onClick={() => shift(1)} disabled={isCurrent} className="wh-btn" title="Période suivante"
+                style={{ padding: "7px 8px", border: "none", background: "transparent", color: isCurrent ? FAINT : NAVY, cursor: isCurrent ? "default" : "pointer", display: "inline-flex" }}>
+                <ChevronRightIcon size={16} />
+              </button>
+            </span>
+            {!isCurrent && (
+              <button type="button" onClick={goToday} className="wh-btn"
+                style={{ padding: "8px 12px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 12.5, fontWeight: 650, cursor: "pointer", fontFamily: "inherit" }}>
+                Aujourd'hui
+              </button>
+            )}
           </div>
         </div>
 
         {loading ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {[64, 150, 380].map((h, i) => (
-              <div key={i} style={{ ...card, height: h, border: "none", background: "linear-gradient(90deg, #eceef2 0%, #f5f6f8 40%, #eceef2 80%)", backgroundSize: "800px 100%", animation: "whShimmer 1.3s linear infinite" }} />
-            ))}
+          <div className="wh-layout">
+            <div style={{ ...card, height: 420, border: "none", background: "linear-gradient(90deg, #eceef2 0%, #f5f6f8 40%, #eceef2 80%)", backgroundSize: "800px 100%", animation: "whShimmer 1.3s linear infinite" }} />
+            <div style={{ ...card, height: 420, border: "none", background: "linear-gradient(90deg, #eceef2 0%, #f5f6f8 40%, #eceef2 80%)", backgroundSize: "800px 100%", animation: "whShimmer 1.3s linear infinite" }} />
           </div>
-        ) : error ? (
+        ) : error && !period ? (
           <div style={{ ...card, padding: 48, textAlign: "center", color: "#b42318", fontSize: 13.5 }}>{error}</div>
         ) : (
-          <>
-            {/* Totaux : global + par pôle (recalculés selon les personnes cochées) */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 11, marginBottom: 22 }}>
-              <div style={{ ...card, padding: "14px 16px", background: NAVY, border: "none" }}>
-                <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "rgba(255,255,255,0.65)", marginBottom: 8 }}>Total équipe</div>
-                <div style={{ fontSize: 26, fontWeight: 780, color: "#fff", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{fmtH(globalTotal)}</div>
-                <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.6)", marginTop: 4 }}>{checked.length} personne{checked.length > 1 ? "s" : ""} comptée{checked.length > 1 ? "s" : ""}</div>
-              </div>
-              {poles.map(([pole, v]) => (
-                <div key={pole} style={{ ...card, padding: "14px 16px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: POLE_COLORS[pole] || MUTED }} />
-                    <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: MUTED }}>{pole}</span>
-                  </div>
-                  <div style={{ fontSize: 24, fontWeight: 780, color: NAVY, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{fmtH(v.total)}</div>
-                  <div style={{ fontSize: 10.5, color: MUTED, marginTop: 4 }}>{v.count} pers. · {fmtH(v.count ? v.total / v.count : 0)}/pers.</div>
-                </div>
-              ))}
-            </div>
+          <div className="wh-layout" style={{ opacity: refreshing ? 0.7 : 1, transition: "opacity 0.2s ease" }}>
 
-            {/* Classement */}
-            <div style={{ ...card, padding: "18px 20px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                <div style={{ fontSize: 14.5, fontWeight: 750, color: NAVY }}>Classement de la semaine</div>
-                <button type="button" onClick={() => setUnchecked(new Set())}
-                  style={{ border: "none", background: "transparent", color: unchecked.size ? "#2563eb" : MUTED, fontSize: 12, fontWeight: 600, cursor: unchecked.size ? "pointer" : "default", fontFamily: "inherit" }}>
-                  Tout recocher{unchecked.size ? ` (${unchecked.size} masqué${unchecked.size > 1 ? "s" : ""})` : ""}
+            {/* ══ RAIL : équipe cochée + pôles ══ */}
+            <aside style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {/* Équipe */}
+              <div style={{ ...card, padding: "16px 16px 14px", background: NAVY, border: "none", color: "#fff" }}>
+                <button type="button" onClick={toggleAll} title={unchecked.size ? "Tout cocher" : "Tout décocher"}
+                  style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", padding: 0, color: "#fff", textAlign: "left" }}>
+                  <Check on={unchecked.size === 0} partial={unchecked.size > 0 && checked.length > 0} color="#7dd3a0" />
+                  <span style={{ fontSize: 13.5, fontWeight: 750 }}>Équipe</span>
+                  <span style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,0.6)", fontWeight: 600 }}>{checked.length}/{rows.length} cochés</span>
                 </button>
-              </div>
-              <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 12 }}>
-                Décoche une personne pour voir son impact sur les totaux. Évolution : vs la même portion de la semaine précédente.
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, color: "rgba(255,255,255,0.7)" }}>
+                  <ClockIcon size={14} />
+                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>Réalisé</span>
+                </div>
+                <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em", marginTop: 4 }}>{fmtH(team.total)}</div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, color: "rgba(255,255,255,0.7)" }}>
+                  <TargetIcon size={14} />
+                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>Attendu</span>
+                  <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 750, color: teamStatus.color === GREEN ? "#7dd3a0" : teamStatus.color === VIOLET ? "#c4b5fd" : "#fca5a5", fontVariantNumeric: "tabular-nums" }}>
+                    {team.total - team.expectedNow >= 0 ? "+" : ""}{fmtH(team.total - team.expectedNow)}
+                  </span>
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 4 }}>
+                  <span style={{ fontSize: 20, fontWeight: 800, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em" }}>{fmtH(team.expected)}</span>
+                  {!period?.closed && <span style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>dont {fmtH(team.expectedNow)} à ce stade</span>}
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <Bar value={team.total} max={team.expectedNow} color={teamStatus.color === GREEN ? "#7dd3a0" : teamStatus.color === VIOLET ? "#c4b5fd" : "#fca5a5"} track="rgba(255,255,255,0.14)" />
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, color: "rgba(255,255,255,0.6)" }}>
+                      <GaugeIcon size={12} /><span style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>Moy. / jour</span>
+                    </div>
+                    <div style={{ fontSize: 17, fontWeight: 800, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{team.avgDay != null ? fmtH(team.avgDay) : "—"}</div>
+                  </div>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, color: "rgba(255,255,255,0.6)" }}>
+                      <GaugeIcon size={12} /><span style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>Moy. / sem</span>
+                    </div>
+                    <div style={{ fontSize: 17, fontWeight: 800, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>{team.avgWeek != null ? fmtH(team.avgWeek) : "—"}</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.5)", marginTop: 8 }}>moyennes par personne, sur les jours qui comptaient</div>
               </div>
 
-              {/* Période de la colonne « Moyenne » : mois entiers ou plage libre de semaines. */}
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "10px 12px", borderRadius: 10, background: "#f7f8fa", border: `1px solid ${BORDER}`, marginBottom: 14 }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: MUTED }}>Moyenne</span>
-                {monthOptions.map((o) => {
-                  const on = activeMonth && activeMonth.from === o.from && activeMonth.to === o.to;
-                  return (
-                    <button key={`${o.y}-${o.m}`} type="button" onClick={() => setAvgRange({ from: o.from, to: o.to })}
-                      style={{ padding: "4px 11px", borderRadius: 16, border: `1px solid ${on ? NAVY : BORDER}`, background: on ? NAVY : CARD, color: on ? "#fff" : TEXT, fontSize: 11.5, fontWeight: 650, cursor: "pointer", fontFamily: "inherit", textTransform: "capitalize" }}>
-                      {o.label}
+              {/* Pôles */}
+              <div style={{ ...card, padding: "6px 6px 8px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px 6px" }}>
+                  <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: MUTED }}>Pôles</span>
+                  {poleFilter && (
+                    <button type="button" onClick={() => setPoleFilter(null)}
+                      style={{ border: "none", background: "transparent", color: "#2563eb", fontSize: 11.5, fontWeight: 650, cursor: "pointer", fontFamily: "inherit" }}>
+                      Tout afficher
                     </button>
+                  )}
+                </div>
+                {poles.map((v) => {
+                  const pc = poleColor(v.pole);
+                  const Icon = poleIcon(v.pole);
+                  const st = statusFor(v.agg.total, v.agg.expectedNow);
+                  const allOn = v.on.length === v.members.length;
+                  const someOn = v.on.length > 0 && !allOn;
+                  const filtered = poleFilter === v.pole;
+                  return (
+                    <div key={v.pole} className="wh-pole"
+                      style={{ display: "grid", gridTemplateColumns: "17px 30px minmax(0,1fr)", gap: 10, alignItems: "start", padding: "9px 10px", borderRadius: 11, background: filtered ? pc + "0d" : "transparent", boxShadow: filtered ? `inset 3px 0 0 ${pc}` : "none", opacity: v.on.length === 0 ? 0.6 : 1 }}>
+                      <button type="button" onClick={() => togglePole(v.pole)} title={allOn ? `Décocher tout le pôle ${v.pole}` : `Cocher tout le pôle ${v.pole}`}
+                        style={{ border: "none", background: "transparent", padding: 0, marginTop: 6, cursor: "pointer", display: "inline-flex" }}>
+                        <Check on={allOn} partial={someOn} color={pc} />
+                      </button>
+                      <span style={{ width: 30, height: 30, borderRadius: 9, background: pc + "16", color: pc, display: "inline-flex", alignItems: "center", justifyContent: "center", marginTop: 1 }}>
+                        <Icon size={16} />
+                      </span>
+                      <div style={{ minWidth: 0 }}>
+                        <button type="button" onClick={() => setPoleFilter(filtered ? null : v.pole)} title={filtered ? "Afficher tout le monde" : `N'afficher que ${v.pole}`}
+                          style={{ display: "flex", alignItems: "baseline", gap: 6, width: "100%", border: "none", background: "transparent", padding: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 750, color: filtered ? pc : TEXT }}>{v.pole}</span>
+                          <span style={{ fontSize: 10.5, color: MUTED, fontWeight: 600 }}>{v.on.length}/{v.members.length}</span>
+                          <span style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 800, color: st.color, fontVariantNumeric: "tabular-nums" }}>{fmtH(v.agg.total)}</span>
+                        </button>
+                        <div style={{ marginTop: 6 }}><Bar value={v.agg.total} max={v.agg.expectedNow} color={st.color} height={5} /></div>
+                        <div style={{ display: "flex", gap: 8, marginTop: 5, fontSize: 10.5, color: MUTED, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                          <span>attendu <b style={{ color: TEXT, fontWeight: 700 }}>{fmtH(v.agg.expected)}</b></span>
+                          <span>·</span>
+                          <span>{v.agg.avgDay != null ? `${fmtH(v.agg.avgDay)}/j` : "—"}</span>
+                          <span>·</span>
+                          <span>{v.agg.avgWeek != null ? `${fmtH(v.agg.avgWeek)}/sem` : "—"}</span>
+                        </div>
+                      </div>
+                    </div>
                   );
                 })}
-                <button type="button"
-                  onClick={() => setAvgRange({ from: AVG_FLOOR, to: iso(mondayOf(new Date())) })}
-                  style={{ padding: "4px 11px", borderRadius: 16, border: `1px solid ${!activeMonth ? NAVY : BORDER}`, background: !activeMonth ? NAVY : CARD, color: !activeMonth ? "#fff" : TEXT, fontSize: 11.5, fontWeight: 650, cursor: "pointer", fontFamily: "inherit" }}>
-                  Depuis mai
-                </button>
-                <span style={{ width: 1, height: 18, background: BORDER, margin: "0 2px" }} />
-                <input type="date" value={avgRange.from} min={AVG_FLOOR}
-                  onChange={(e) => e.target.value && setAvgRange((r) => ({ ...r, from: iso(mondayOf(new Date(e.target.value + "T00:00:00"))) }))}
-                  style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: "4px 8px", fontSize: 11.5, fontFamily: "inherit", color: TEXT, background: CARD }} />
-                <span style={{ fontSize: 11.5, color: MUTED }}>au</span>
-                <input type="date" value={avgRange.to} min={avgRange.from}
-                  onChange={(e) => e.target.value && setAvgRange((r) => ({ ...r, to: iso(mondayOf(new Date(e.target.value + "T00:00:00"))) }))}
-                  style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: "4px 8px", fontSize: 11.5, fontFamily: "inherit", color: TEXT, background: CARD }} />
-                <span style={{ marginLeft: "auto", fontSize: 10.5, color: MUTED }}>
-                  {avgLoading ? "calcul…" : "semaines avec absence exclues"}
+              </div>
+            </aside>
+
+            {/* ══ CLASSEMENT ══ */}
+            <div style={{ ...card, padding: "16px 18px 12px", minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, letterSpacing: "-0.01em" }}>
+                    Classement{poleFilter ? ` · ${poleFilter}` : ""}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: MUTED, marginTop: 2 }}>
+                    {visible.length} personne{visible.length > 1 ? "s" : ""} · rang sur la période, tous pôles confondus · vert ≥ attendu, violet ≥ 87,5 %, rouge en dessous
+                  </div>
+                </div>
+                <span style={{ marginLeft: "auto", display: "inline-flex", background: "#eceff4", border: `1px solid ${BORDER}`, borderRadius: 9, padding: 2, gap: 2 }}>
+                  {SORTS.map((s) => (
+                    <button key={s.key} type="button" onClick={() => setSortBy(s.key)}
+                      style={{ padding: "5px 10px", borderRadius: 7, border: "none", background: sortBy === s.key ? CARD : "transparent", color: sortBy === s.key ? NAVY : MUTED, fontSize: 11.5, fontWeight: sortBy === s.key ? 700 : 600, cursor: "pointer", fontFamily: "inherit", boxShadow: sortBy === s.key ? "0 1px 2px rgba(17,24,39,0.10)" : "none", transition: "background 0.12s" }}>
+                      {s.label}
+                    </button>
+                  ))}
                 </span>
               </div>
 
-              {/* En-têtes colonnes */}
-              <div style={{ display: "grid", gridTemplateColumns: GRID, gap: 12, padding: "0 12px 8px", alignItems: "center" }}>
-                <span /><span /><span />
-                <span style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4 }}>
-                  {DAY_LABELS.map((d) => <span key={d} style={{ fontSize: 9.5, fontWeight: 700, color: MUTED, textAlign: "center", textTransform: "uppercase" }}>{d}</span>)}
+              {editError && (
+                <div style={{ marginBottom: 10, padding: "8px 12px", borderRadius: 9, background: "#fdecec", color: "#b42318", fontSize: 12 }}>{editError}</div>
+              )}
+
+              {/* En-têtes */}
+              <div style={{ display: "grid", gridTemplateColumns: GRID, gap: 10, padding: "0 10px 8px", alignItems: "end", borderBottom: `1px solid ${BORDER}`, marginBottom: 4 }}>
+                <span /><span style={{ fontSize: 9.5, fontWeight: 700, color: MUTED, textTransform: "uppercase" }}>Personne</span>
+                <span style={{ display: "grid", gridTemplateColumns: `repeat(${cells.length || 1}, 1fr)`, gap: 3 }}>
+                  {cells.map((c) => (
+                    <span key={c.key} title={mode === "month" ? `Semaine du ${fmtDay(c.key)}` : undefined}
+                      style={{ fontSize: 9.5, fontWeight: 700, color: c.weekend ? FAINT : MUTED, textAlign: "center", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {c.label}
+                    </span>
+                  ))}
                 </span>
-                <span style={{ fontSize: 9.5, fontWeight: 700, color: MUTED, textAlign: "right", textTransform: "uppercase" }}>
-                  Moy. {activeMonth ? activeMonth.label.slice(0, 4) : "période"}
-                </span>
-                <span style={{ fontSize: 9.5, fontWeight: 700, color: MUTED, textAlign: "center", textTransform: "uppercase" }}>Évol.</span>
+                <span style={{ fontSize: 9.5, fontWeight: 700, color: MUTED, textAlign: "right", textTransform: "uppercase" }}>Moy./jour</span>
+                <span style={{ fontSize: 9.5, fontWeight: 700, color: MUTED, textAlign: "right", textTransform: "uppercase" }}>Moy./sem</span>
+                <span style={{ fontSize: 9.5, fontWeight: 700, color: MUTED, textAlign: "right", textTransform: "uppercase" }}>Attendu</span>
                 <span style={{ fontSize: 9.5, fontWeight: 700, color: MUTED, textAlign: "right", textTransform: "uppercase" }}>Total</span>
               </div>
 
-              <AnimatePresence initial={false}>
-                {accessible.map((p, i) => {
-                  const off = unchecked.has(p.email);
-                  const pc = POLE_COLORS[p.pole] || MUTED;
-                  const first = i === 0;
-                  // Repos : surbrillance chaude pour le 1er (comme la première ligne
-                  // du Leaderboard), zébrage léger à partir du 4e.
-                  const baseBg = first ? "#fdf8ea" : i >= 3 && i % 2 === 1 ? "#f9fafd" : "transparent";
-                  return (
-                    <motion.div key={p.email} layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1], delay: Math.min(i, 12) * 0.02 }}
-                      onClick={() => toggle(p.email)}
-                      style={{ display: "grid", gridTemplateColumns: GRID, gap: 12, alignItems: "center",
-                        padding: "11px 12px", borderRadius: 12, cursor: "pointer", opacity: off ? 0.38 : 1,
-                        background: baseBg, transition: "opacity 0.18s ease, background 0.15s ease" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = first ? "#fbf3dd" : "#f2f4f8"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = baseBg; }}>
-                      <span style={{ width: 17, height: 17, borderRadius: 5, border: `1.5px solid ${off ? "#cbd2e0" : GREEN}`, background: off ? "transparent" : GREEN, display: "inline-flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s, border-color 0.15s" }}>
-                        {!off && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
-                      </span>
-                      <span style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0 }}>
-                        {i < 3 ? (
-                          <img src={[firstPlace, secondPlace, thirdPlace][i]} alt={`${i + 1}e`} style={{ width: 28, height: 28, flexShrink: 0, objectFit: "contain" }} />
-                        ) : (
-                          <span style={{ fontSize: 12, fontWeight: 800, color: MUTED, width: 28, textAlign: "center", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{i + 1}</span>
+              {visible.length === 0 && (
+                <div style={{ padding: 30, textAlign: "center", color: MUTED, fontSize: 13 }}>Personne sur cette période.</div>
+              )}
+
+              {visible.map((r) => {
+                const off = unchecked.has(r.email);
+                const pc = poleColor(r.pole);
+                const rank = rankByEmail[r.email] ?? 0;
+                const first = rank === 0;
+                const st = statusFor(r.total, r.expectedNow);
+                const isEditing = editing === r.email;
+                const partTime = r.workingDays.length !== DEFAULT_WORKING_DAYS.length || r.workingDays.some((d) => d > 5);
+                const denom = mode === "week" ? r.perDay * 1.3 : r.perDay * r.workingDays.length * 1.3;
+                return (
+                  <div key={r.email} className="wh-row" onClick={() => !isEditing && toggle(r.email)}
+                    style={{ display: "grid", gridTemplateColumns: GRID, gap: 10, alignItems: "center", padding: "10px 10px", borderRadius: 12, cursor: "pointer", opacity: off ? 0.45 : 1, background: first ? "#fdf8ea" : "transparent" }}>
+                    <Check on={!off} />
+
+                    <span style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                      {rank < 3 ? (
+                        <img src={[firstPlace, secondPlace, thirdPlace][rank]} alt={`${rank + 1}e`} style={{ width: 26, height: 26, flexShrink: 0, objectFit: "contain" }} />
+                      ) : (
+                        <span style={{ fontSize: 12, fontWeight: 800, color: MUTED, width: 26, textAlign: "center", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{rank + 1}</span>
+                      )}
+                      <span style={{ position: "relative", display: "inline-flex", flexShrink: 0 }}>
+                        <Avatar p={r} size={34} />
+                        {first && (
+                          <img src={crownIcon} alt="" title={`En tête · ${periodLabel}`}
+                            style={{ position: "absolute", top: -9, left: "50%", transform: "translateX(-50%) rotate(-6deg)", width: 16, height: 16, filter: "drop-shadow(0 1px 3px rgba(17,24,39,0.25))" }} />
                         )}
-                        <span style={{ position: "relative", display: "inline-flex", flexShrink: 0 }}>
-                          <Avatar p={p} size={36} />
-                          {first && (
-                            <img src={crownIcon} alt="" title="En tête cette semaine"
-                              style={{ position: "absolute", top: -9, left: "50%", transform: "translateX(-50%) rotate(-6deg)", width: 17, height: 17, filter: "drop-shadow(0 1px 3px rgba(17,24,39,0.25))" }} />
-                          )}
-                        </span>
-                        <span style={{ minWidth: 0 }}>
-                          <span style={{ display: "block", fontSize: 14, fontWeight: 700, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
-                          {p.vacation_days.length > 0 && (
-                            <span style={{ fontSize: 10, color: "#b45309", fontWeight: 600 }}>{p.vacation_days.length} j. de vacances cette semaine</span>
-                          )}
+                      </span>
+                      <span style={{ minWidth: 0 }}>
+                        <span style={{ display: "block", fontSize: 13.5, fontWeight: 700, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</span>
+                        <span style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 1, fontSize: 10.5, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: pc, fontWeight: 700 }}>
+                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: pc }} />{r.pole}
+                          </span>
+                          {partTime && <span style={{ color: VIOLET, fontWeight: 700 }}>· {r.workingDays.length} j/sem</span>}
+                          {r.vacCount > 0 && <span style={{ color: "#b45309", fontWeight: 600 }}>· {r.vacCount} j. d'absence</span>}
                         </span>
                       </span>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, justifySelf: "start", padding: "2px 9px", borderRadius: 10, background: pc + "14", color: pc, fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap" }}>
-                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: pc }} />{p.pole}
-                      </span>
-                      <span style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4 }}>
-                        {p.daily.map((h, di) => {
-                          const future = data.counted_until && data.days[di] > data.counted_until;
+                    </span>
+
+                    <span style={{ display: "grid", gridTemplateColumns: `repeat(${cells.length || 1}, 1fr)`, gap: 3 }}>
+                      {r.cells.map((c) => {
+                        if (c.vacAll) {
                           return (
-                            <span key={di} title={future ? `${DAY_LABELS[di]} : à venir (non compté)` : `${DAY_LABELS[di]} : ${fmtH(h)}`}
-                              style={{ textAlign: "center", fontSize: 11, fontWeight: 650, fontVariantNumeric: "tabular-nums",
-                                padding: "4px 0", borderRadius: 6,
-                                background: future ? "transparent" : h > 0 ? GREEN + Math.min(Math.round((h / 10) * 40) + 10, 50).toString(16).padStart(2, "0") : "#f3f4f6",
-                                border: future ? "1px dashed #e0e4ec" : "none",
-                                color: future ? "#d5dae4" : h > 0 ? "#1d4a33" : "#c3cad6" }}>
-                              {future ? "—" : h > 0 ? fmtH(h) : "·"}
+                            <span key={c.key} title={`${c.label} : absence validée, neutralisée`}
+                              style={{ textAlign: "center", fontSize: 10, fontWeight: 700, padding: "5px 0", borderRadius: 7, background: "repeating-linear-gradient(45deg, #fef3e2, #fef3e2 3px, #fde9cc 3px, #fde9cc 6px)", color: "#b45309" }}>
+                              abs
                             </span>
                           );
-                        })}
-                      </span>
-                      {(() => {
-                        const a = avgByEmail[p.email];
+                        }
+                        const h = c.hours;
+                        const tone = c.weekend ? VIOLET : GREEN;
+                        const alpha = Math.min(Math.round((h / denom) * 46) + 10, 56).toString(16).padStart(2, "0");
                         return (
-                          <span title={a ? `Moyenne hebdomadaire sur ${a.weeks} semaine(s) pleine(s) de la période` : "Aucune semaine pleine sur la période"}
-                            style={{ textAlign: "right", fontSize: 12, fontWeight: 650, color: a ? MUTED : "#d5dae4", fontVariantNumeric: "tabular-nums" }}>
-                            {a ? fmtH(a.avg) : "·"}
+                          <span key={c.key} title={c.future ? `${c.label} : à venir` : `${c.label} : ${fmtH(h)}${c.vac ? " · absence partielle déduite" : ""}`}
+                            style={{ textAlign: "center", fontSize: 10.5, fontWeight: 650, fontVariantNumeric: "tabular-nums", padding: "5px 0", borderRadius: 7, letterSpacing: "-0.01em",
+                              background: c.future ? "transparent" : h > 0 ? tone + alpha : c.weekend ? "#f6f7fa" : "#f3f4f6",
+                              border: c.future ? "1px dashed #e0e4ec" : "none",
+                              color: c.future ? FAINT : h > 0 ? (c.weekend ? "#4c1d95" : "#1d4a33") : "#c3cad6" }}>
+                            {c.future ? "—" : h > 0 ? fmtH(h) : "·"}
                           </span>
                         );
-                      })()}
-                      <span style={{ textAlign: "center" }}>
-                        <DeltaChip delta={deltaByEmail[p.email] ?? null} daysCounted={daysCounted} />
+                      })}
+                    </span>
+
+                    <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: 12.5, fontWeight: 650, color: r.avgDay != null ? TEXT : FAINT }}>
+                      {r.avgDay != null ? fmtH(r.avgDay) : "·"}
+                    </span>
+                    <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: 12.5, fontWeight: 650, color: r.avgWeek != null ? TEXT : FAINT }}>
+                      {r.avgWeek != null ? fmtH(r.avgWeek) : "·"}
+                    </span>
+
+                    {/* Attendu sur la période + jours travaillés (crayon) */}
+                    <span style={{ textAlign: "right", position: "relative" }} onClick={(e) => e.stopPropagation()}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, justifyContent: "flex-end" }}>
+                        <span title={`${r.workingDays.length} jour${r.workingDays.length > 1 ? "s" : ""} travaillé${r.workingDays.length > 1 ? "s" : ""} par semaine (${r.workingDays.map((d) => DAY_LABELS[d - 1]).join(", ")}) × ${fmtH(r.perDay)} · absences déduites${!period?.closed ? ` · ${fmtH(r.expectedNow)} à ce stade` : ""}`}
+                          style={{ fontSize: 12.5, fontWeight: 700, color: TEXT, fontVariantNumeric: "tabular-nums" }}>
+                          {fmtH(r.expectedFull)}
+                        </span>
+                        <button type="button" className="wh-edit" title="Jours travaillés par semaine (temps partiel…)"
+                          onClick={() => { setEditError(null); setEditing(isEditing ? null : r.email); }}
+                          style={{ border: "none", background: "transparent", cursor: "pointer", padding: 2, color: MUTED, display: "inline-flex" }}>
+                          <PencilIcon size={12} />
+                        </button>
                       </span>
-                      <span style={{ textAlign: "right" }}>
-                        <span style={{ fontSize: 16, fontWeight: 800, color: NAVY, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em" }}>{fmtH(p.total)}</span>
-                        <span style={{ display: "block", height: 5, borderRadius: 3, background: "#eef1f6", marginTop: 5, overflow: "hidden" }}>
-                          <motion.span layout style={{ display: "block", height: "100%", borderRadius: 3, background: `linear-gradient(90deg, ${GREEN}, #5da97e)`, width: `${Math.round((p.total / maxTotal) * 100)}%`, transition: "width 0.35s cubic-bezier(0.16,1,0.3,1)" }} />
+                      {isEditing && (
+                        <WorkingDaysEditor initial={r.workingDays} saving={saving}
+                          onSave={(days) => saveWorkingDays(r.email, days)} onCancel={() => setEditing(null)} />
+                      )}
+                    </span>
+
+                    <span style={{ textAlign: "right" }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+                        {mode === "week" && r.delta != null && Math.abs(r.delta) >= 0.25 && (
+                          <span title="vs la même portion de la semaine précédente"
+                            style={{ fontSize: 10.5, fontWeight: 750, color: r.delta > 0 ? GREEN : "#b45309", fontVariantNumeric: "tabular-nums" }}>
+                            {r.delta > 0 ? "+" : "−"}{fmtH(Math.abs(r.delta))}
+                          </span>
+                        )}
+                        <span title={`${st.label} · attendu à ce stade ${fmtH(r.expectedNow)}`}
+                          style={{ fontSize: 15, fontWeight: 800, color: st.color, background: st.bg, padding: "3px 8px", borderRadius: 8, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em" }}>
+                          {fmtH(r.total)}
                         </span>
                       </span>
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-
+                      <span style={{ display: "block", marginTop: 6 }}><Bar value={r.total} max={r.expectedNow} color={st.color} height={5} /></span>
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-          </>
+          </div>
         )}
       </div>
     </div>
