@@ -1742,6 +1742,50 @@ function ContractInfoList({
       // facturation.
       value: formatDateLongFR(profile?.rdv_onboarding),
     },
+    // Date de paiement (dev 2026-09-07) : le jour du mois à partir duquel le
+    // client est en retard. Par défaut celui de l'onboarding Owner, mais
+    // DISTINCT de lui : la finance le change quand le client paie plus tard
+    // (attendu le 1er, paie le 15 → en retard seulement après le 15).
+    {
+      Icon: CalendarClock,
+      label: 'Date de paiement',
+      copyValue: profile?.payment_day_effective ? `le ${profile.payment_day_effective} du mois` : '',
+      node: (editing && canEditMoney) ? (
+        <EditableSelect
+          value={profile?.payment_day ? String(profile.payment_day) : ''}
+          options={PAYMENT_DAY_OPTIONS}
+          optionLabels={{
+            ...PAYMENT_DAY_LABELS,
+            '': profile?.rdv_onboarding
+              ? `Jour de l'onboarding (le ${new Date(profile.rdv_onboarding).getDate()})`
+              : 'Jour de l\'onboarding',
+          }}
+          onCommit={async (v) => {
+            await apiClient.put(`/api/v1/finance-periods/client/${clientId}/payment-day`, { day: v ? Number(v) : null });
+            onProfileChanged?.();
+          }}
+          width="auto"
+        />
+      ) : (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {profile?.payment_day_effective ? (
+            <span style={{ fontSize: 13, fontWeight: 500, color: N.text }}>
+              le {profile.payment_day_effective} de chaque mois
+            </span>
+          ) : (
+            <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }}>Vide</span>
+          )}
+          {profile?.payment_day_source === 'finance' && (
+            <span title={profile.payment_day_by ? `fixé par ${profile.payment_day_by}` : undefined} style={{ fontSize: 10.5, color: N.textFaint }}>
+              fixé par la finance
+            </span>
+          )}
+          {profile?.payment_day_source === 'onboarding' && (
+            <span style={{ fontSize: 10.5, color: N.textFaint }}>jour de l’onboarding</span>
+          )}
+        </span>
+      ),
+    },
     // Formule = tranche seule, éditable (PATCH employee_range sur la period
     // focus — optimiste + rollback + toast via le flow onPatchRow standard).
     {
@@ -1881,6 +1925,12 @@ function ContractInfoList({
     </div>
   );
 }
+
+// Jour de paiement : '' = automatique (jour de l'onboarding), sinon 1 à 31.
+const PAYMENT_DAY_OPTIONS = ['', ...Array.from({ length: 31 }, (_, i) => String(i + 1))];
+const PAYMENT_DAY_LABELS = Object.fromEntries(
+  Array.from({ length: 31 }, (_, i) => [String(i + 1), `le ${i + 1}${i === 0 ? 'er' : ''} du mois`]),
+);
 
 // ── État de compte (échéancier) ─────────────────────────────────────────────
 const INSTALLMENT_BADGES = {

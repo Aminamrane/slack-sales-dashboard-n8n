@@ -116,6 +116,9 @@ export function describeAction({ field, from, to, period = null, effectiveOn = n
     case 'responsible':
       if (isBlank(to)) return `a retiré le responsable${isBlank(from) ? '' : ` (${from})`}`;
       return `a désigné ${to} comme responsable`;
+    case 'payment_day':
+      if (isBlank(to)) return "a remis la date de paiement sur le jour de l'onboarding";
+      return `a fixé la date de paiement au ${to}${String(to) === '1' ? 'er' : ''} du mois${isBlank(from) ? '' : ` (au lieu du ${from})`}`;
     default:
       break;
   }

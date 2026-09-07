@@ -94,6 +94,12 @@ test('perte, promesse, responsable', () => {
   assert.equal(describeAction({ field: 'responsible', from: 'Ismahane', to: null }), 'a retiré le responsable (Ismahane)');
 });
 
+test('date de paiement : fixée, changée, remise sur l’onboarding', () => {
+  assert.equal(describeAction({ field: 'payment_day', from: null, to: '15' }), 'a fixé la date de paiement au 15 du mois');
+  assert.equal(describeAction({ field: 'payment_day', from: '15', to: '1' }), 'a fixé la date de paiement au 1er du mois (au lieu du 15)');
+  assert.equal(describeAction({ field: 'payment_day', from: '15', to: null }), "a remis la date de paiement sur le jour de l'onboarding");
+});
+
 test('champ de la fiche : libellé connu, vide dit « vide »', () => {
   assert.equal(
     describeAction({ field: 'employee_range', from: '1-2', to: '6-10' }),
