@@ -80,6 +80,7 @@ import {
   scopedOverdueCum,
   scopedPeriodAmounts,
   isExitCandidate,
+  deferralsByMonth,
 } from './constants.js';
 import { describeAction } from './actionLabel.js';
 import {
@@ -422,6 +423,11 @@ export default function DetailPanel({
   //   mois futur                → À venir
   //   mois courant              → En retard si retard courant calculé, sinon À venir
   //   mois passé sans paiement  → En retard
+  // Reports de créance (« reporter ne change pas l'attendu, il change la
+  // créance », dev 2026-09-07) : le mois déchargé n'est plus en retard, le
+  // mois receveur porte la créance en plus de son attendu.
+  const deferred = useMemo(() => deferralsByMonth(profile?.deferrals, scope), [profile?.deferrals, scope]);
+
   const installments = useMemo(() => {
     const nowMonth = currentPeriod();
     // `visiblePeriods` : une échéance ne peut pas précéder la signature.
@@ -429,11 +435,15 @@ export default function DetailPanel({
     const list = [];
     for (const p of sorted) {
       const a = scopedPeriodAmounts(p, scope);
-      if (a.expected <= 0 && a.received <= 0 && !p.expected_pause_active) continue;
       const month = String(p.period).slice(0, 7);
+      const deferredOut = deferred[month]?.out || 0;
+      const deferredIn = deferred[month]?.in || 0;
+      if (a.expected <= 0 && a.received <= 0 && deferredIn <= 0 && !p.expected_pause_active) continue;
+      const due = a.expected + deferredIn - deferredOut;
       let status;
-      if (a.received >= a.expected && a.received > 0) status = 'paid';
+      if (a.received >= due && a.received > 0) status = 'paid';
       else if (a.received > 0) status = 'partial';
+      else if (deferredOut > 0 && due <= 0) status = 'deferred';
       // Mois en pause : compté, pas exigible — ni « en retard » ni « à venir ».
       else if (p.expected_pause_active) status = 'paused';
       else if (month > nowMonth) status = 'upcoming';
@@ -441,12 +451,13 @@ export default function DetailPanel({
       else status = 'late';
       list.push({
         id: p.id, n: list.length + 1, month, status, ...a,
+        deferredOut, deferredIn,
         manual: !!p.expected_manual,
         pauseUntil: p.expected_paused_until || null,
       });
     }
     return list;
-  }, [visiblePeriods, scope]);
+  }, [visiblePeriods, scope, deferred]);
 
   // (Le forfait mensuel dérivé des échéances a été retiré avec le « N × … »
   // de la modalité — 2026-08-25. La Formule affiche la tranche seule.)
@@ -976,6 +987,7 @@ export default function DetailPanel({
             clientId={clientId}
             client={client}
             periods={periods}
+            deferrals={profile?.deferrals || []}
             scope={scope}
             onDone={reloadAfterExit}
             onShowToast={onShowToast}
@@ -1877,6 +1889,7 @@ const INSTALLMENT_BADGES = {
   late:     { label: 'En retard', bg: '#fdecec', fg: '#b42318' },
   upcoming: { label: 'À venir',   bg: '#faf3dd', fg: '#9f6b00' },
   paused:   { label: 'En pause',  bg: '#eef1f6', fg: '#5b6472' },
+  deferred: { label: 'Reportée',  bg: '#e7f0fb', fg: '#1e40af' },
 };
 
 // Échéancier : TOUT l'historique visible d'emblée (retour dev 2026-09-03 —
@@ -1897,7 +1910,12 @@ function installmentSubline(inst) {
   const monthLabel = formatMonthLabel(inst.month);
   // Un attendu fixé à la main se signale : la grille ne le réécrira plus.
   const manuel = inst.manual ? ' · fixé à la main' : '';
+  // Une créance déplacée se lit sur les deux mois : d'où elle part, où elle arrive.
+  const report = (inst.deferredOut > 0 ? ` · ${formatEUR(inst.deferredOut)} reportés sur un autre mois` : '')
+    + (inst.deferredIn > 0 ? ` · ${formatEUR(inst.deferredIn)} reportés ici` : '');
   switch (inst.status) {
+    case 'deferred':
+      return `${monthLabel} · créance reportée, attendu inchangé${manuel}`;
     case 'paused':
       return `${monthLabel} · en pause${inst.pauseUntil ? ` jusqu'au ${formatDateFR(inst.pauseUntil)}` : ', reprise à décider'}${manuel}`;
     case 'paid':
@@ -1905,9 +1923,9 @@ function installmentSubline(inst) {
     case 'partial':
       return `${formatEUR(inst.received)} / ${formatEUR(inst.expected)}${date ? ` · Prélevée le ${date}` : ` · ${monthLabel}`}`;
     case 'upcoming':
-      return (date ? `Prévue le ${date}` : `Prévue · ${monthLabel}`) + manuel;
+      return (date ? `Prévue le ${date}` : `Prévue · ${monthLabel}`) + manuel + report;
     default: // late
-      return (date ? `Prévue le ${date}` : monthLabel) + manuel;
+      return (date ? `Prévue le ${date}` : monthLabel) + manuel + report;
   }
 }
 

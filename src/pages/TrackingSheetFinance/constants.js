@@ -334,6 +334,30 @@ export const scopedPeriodAmounts = (p, scope) => {
   };
 };
 
+// ── Reports de créance (2026-09-07) ──────────────────────────────────────
+//
+// « Reporter ne change pas l'attendu, il change la créance. » Un report vit
+// dans `client_finance_adjustment` (kind 'defer') : −X daté du mois QUI SUIT
+// le mois déchargé, +X daté du mois de destination. Pour l'affichage, on
+// ramène chaque mouvement au mois qu'il concerne : le −X au mois déchargé
+// (période − 1), le +X au mois qui reçoit.
+//
+// Renvoie { 'YYYY-MM': { out, in } } dans la vision demandée (owner, optilex
+// ou global).
+export const deferralsByMonth = (deferrals, scope) => {
+  const out = {};
+  for (const d of deferrals || []) {
+    if (scope !== 'global' && d.entity !== scope) continue;
+    const amount = toNumber(d.amount) || 0;
+    if (!amount) continue;
+    const key = String(d.period).slice(0, 7);
+    const month = amount < 0 ? shiftMonth(key, -1) : key;
+    const cell = out[month] || (out[month] = { out: 0, in: 0 });
+    if (amount < 0) cell.out += -amount; else cell.in += amount;
+  }
+  return out;
+};
+
 // ── Recherche client (2026-08-21) ────────────────────────────────────────
 
 // Normalisation insensible casse/accents (NFD + strip diacritiques).

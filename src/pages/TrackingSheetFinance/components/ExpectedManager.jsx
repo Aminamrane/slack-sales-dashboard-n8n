@@ -14,8 +14,11 @@
 //   · RÉDUIRE    — appliquer une réduction du catalogue (un pourcentage nommé,
 //                  réutilisable d'un client à l'autre) à des mois choisis. Le
 //                  montant réduit est écrit, jamais recalculé à l'affichage.
-//   · REPORTER   — décaler ce qui reste dû sur un mois suivant ; sans mois de
-//                  destination, le montant est supprimé et part en perte.
+//   · REPORTER   — déplacer la CRÉANCE (ce qui reste dû) d'un mois sur un
+//                  mois CHOISI, jamais pré-rempli. L'attendu des deux mois ne
+//                  bouge pas : le contrat reste ce qu'il est, seul le solde se
+//                  déplace (dev 2026-09-07). Supprimer en perte est une option
+//                  à part, qui elle retire l'attendu.
 //   · PAUSE      — suspendre l'exigibilité de mois : ils restent comptés dans
 //                  le contrat, mais ne créent ni retard ni créance tant que la
 //                  pause dure. Reprise à date, ou à la main.
@@ -35,7 +38,7 @@ import {
 } from 'lucide-react';
 
 import apiClient from '../../../services/apiClient.js';
-import { formatEUR, formatMonthLabel, formatDateFR, currentPeriod } from '../constants.js';
+import { formatEUR, formatMonthLabel, formatDateFR, currentPeriod, deferralsByMonth } from '../constants.js';
 
 const N = {
   text: '#37352f',
@@ -70,7 +73,7 @@ const fmtWhen = (iso) => {
 const MODES = [
   { key: 'edit',     label: 'Modifier',   Icon: Pencil,          hint: 'Fixer l’attendu ou le reçu d’un mois. La valeur fait foi : ni la grille ni le classeur ne la réécriront.' },
   { key: 'discount', label: 'Réduire',    Icon: Percent,         hint: 'Appliquer une réduction du catalogue à des mois. Réutilisable d’un client à l’autre.' },
-  { key: 'defer',    label: 'Reporter',   Icon: CornerDownRight, hint: 'Décaler ce qui reste dû sur un mois suivant. Sans destination, le montant part en perte.' },
+  { key: 'defer',    label: 'Reporter',   Icon: CornerDownRight, hint: 'Déplacer la créance : cocher les mois à décharger, puis choisir le mois qui la reçoit. L’attendu ne change pas. Supprimer en perte est une option à part.' },
   { key: 'pause',    label: 'Pause',      Icon: PauseCircle,     hint: 'Suspendre l’exigibilité : les mois restent comptés, sans retard ni créance tant que la pause dure.' },
   { key: 'history',  label: 'Historique', Icon: History,         hint: 'Chaque geste peut être annulé tant que ses mois n’ont pas été retouchés depuis : l’état d’avant revient au centime.' },
 ];
@@ -81,6 +84,7 @@ const STATUS = {
   late:     { label: 'En retard', bg: N.redBg,   fg: N.red },
   upcoming: { label: 'À venir',   bg: '#faf3dd', fg: '#9f6b00' },
   paused:   { label: 'En pause',  bg: N.slateBg, fg: N.slate },
+  deferred: { label: 'Reportée',  bg: N.blueBg,  fg: N.blue },
   none:     { label: '—',         bg: 'transparent', fg: N.textFaint },
 };
 
@@ -110,7 +114,7 @@ const input = {
 };
 
 export default function ExpectedManager({
-  open, onClose, clientId, client, periods, scope, onDone, onShowToast,
+  open, onClose, clientId, client, periods, deferrals, scope, onDone, onShowToast,
 }) {
   const [entity, setEntity] = useState(scope === 'optilex' ? 'optilex' : 'owner');
   const [mode, setMode] = useState('edit');
@@ -176,6 +180,8 @@ export default function ExpectedManager({
   // ── Les mois, dans l'entité choisie ──────────────────────────────────
   const f = ENTITY_FIELDS[entity];
   const nowKey = currentPeriod();
+  // Reports de créance, ramenés au mois déchargé (out) et au mois receveur (in).
+  const deferred = useMemo(() => deferralsByMonth(deferrals, entity), [deferrals, entity]);
   const rows = useMemo(() => (periods || [])
     .map((p) => {
       const key = String(p.period).slice(0, 7);
@@ -183,12 +189,17 @@ export default function ExpectedManager({
       const recuMois = round2(p[f.received] || 0);
       const recuCreances = round2(p[f.overdue] || 0);
       const recu = round2(recuMois + recuCreances);
-      const reste = round2(Math.max(attendu - recu, 0));
+      const deferredOut = round2(deferred[key]?.out || 0);
+      const deferredIn = round2(deferred[key]?.in || 0);
+      // Ce qui reste dû sur le mois : l'attendu, moins ce qui a été reçu,
+      // moins ce qui a été reporté ailleurs, plus ce qui a été reporté ici.
+      const reste = round2(Math.max(attendu + deferredIn - recu - deferredOut, 0));
       const pauseActive = !!p.expected_pause_active;
       let status = 'none';
-      if (attendu > 0 || recu > 0) {
-        if (recu >= attendu && recu > 0) status = 'paid';
+      if (attendu > 0 || recu > 0 || deferredIn > 0) {
+        if (recu >= attendu + deferredIn && recu > 0) status = 'paid';
         else if (recu > 0) status = 'partial';
+        else if (deferredOut > 0 && reste === 0) status = 'deferred';
         else if (pauseActive) status = 'paused';
         else if (key > nowKey) status = 'upcoming';
         else status = 'late';
@@ -197,7 +208,7 @@ export default function ExpectedManager({
       }
       return {
         id: p.id, key, label: formatMonthLabel(key),
-        attendu, recu, recuMois, recuCreances, reste, status,
+        attendu, recu, recuMois, recuCreances, reste, status, deferredOut, deferredIn,
         manual: !!p.expected_manual,
         paused: !!p.expected_paused,
         pauseActive,
@@ -205,7 +216,7 @@ export default function ExpectedManager({
         passe: key < nowKey, courant: key === nowKey, futur: key > nowKey,
       };
     })
-    .sort((a, b) => a.key.localeCompare(b.key)), [periods, f, nowKey]);
+    .sort((a, b) => a.key.localeCompare(b.key)), [periods, f, nowKey, deferred]);
 
   const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
 
@@ -228,17 +239,23 @@ export default function ExpectedManager({
     setSelected(next);
     setDrafts({});
     setRecDrafts({});
-    if (mode === 'defer') {
-      const prochain = rows.find((r) => r.futur);
-      setDeferTo(prochain ? prochain.id : '');
-    }
+    // Le mois de destination d'un report se choisit toujours à la main.
+    if (mode === 'defer') setDeferTo('');
   }, [open, mode, entity]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = (id) => setSelected((s) => {
+    if (mode === 'defer' && id === deferTo) return s;
     const next = new Set(s);
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
+  const LOSS = '__loss__';
+  const deferIsLoss = deferTo === LOSS;
+  const deferTarget = deferTo && !deferIsLoss ? byId.get(deferTo) : null;
+  const chooseDeferTo = (id) => {
+    setDeferTo(id);
+    if (id && id !== LOSS) setSelected((s) => { const next = new Set(s); next.delete(id); return next; });
+  };
 
   // ── Réduction choisie ────────────────────────────────────────────────
   const discount = useMemo(
@@ -295,7 +312,7 @@ export default function ExpectedManager({
   const ready = (() => {
     if (mode === 'edit') return editCount > 0;
     if (mode === 'discount') return !!discount && picked.length > 0;
-    if (mode === 'defer') return deferTotal > 0;
+    if (mode === 'defer') return deferTotal > 0 && !!deferTo;
     if (mode === 'pause') return picked.length > 0;
     return false;
   })();
@@ -304,8 +321,11 @@ export default function ExpectedManager({
     if (mode === 'edit') return editCount ? `Enregistrer ${editCount} modification${editCount > 1 ? 's' : ''}` : 'Modifier un montant';
     if (mode === 'discount') return discount && picked.length
       ? `Appliquer −${discount.percent} % sur ${picked.length} mois` : 'Choisir une réduction';
-    if (mode === 'defer') return deferTotal
-      ? (deferTo ? `Reporter ${formatEUR(deferTotal)}` : `Supprimer ${formatEUR(deferTotal)} (perte)`) : 'Choisir des mois';
+    if (mode === 'defer') {
+      if (!deferTotal) return 'Cocher des mois';
+      if (!deferTo) return 'Choisir le mois de destination';
+      return deferIsLoss ? `Supprimer ${formatEUR(deferTotal)} (perte)` : `Reporter ${formatEUR(deferTotal)} sur ${deferTarget?.label || '…'}`;
+    }
     if (mode === 'pause') return picked.length
       ? (pauseOwed === 'never' ? `Mettre en pause ${picked.length} mois, rien dû` : `Mettre en pause ${picked.length} mois`)
       : 'Choisir des mois';
@@ -363,10 +383,12 @@ export default function ExpectedManager({
           removals: picked
             .map((row) => ({ period_id: row.id, amount: round2(drafts[row.id] ?? row.reste) }))
             .filter((x) => x.amount > 0),
-          defer_to: deferTo || null,
+          defer_to: deferIsLoss ? null : deferTo,
           reason: note,
         });
-        afterSuccess(deferTo ? `${formatEUR(r?.retire ?? deferTotal)} reporté` : `${formatEUR(r?.retire ?? deferTotal)} supprimé (perte)`, [r?.operation_id]);
+        afterSuccess(deferIsLoss
+          ? `${formatEUR(r?.retire ?? deferTotal)} supprimé (perte)`
+          : `${formatEUR(r?.retire ?? deferTotal)} reporté sur ${deferTarget?.label || 'le mois choisi'}`, [r?.operation_id]);
       } else if (mode === 'pause') {
         const r = await apiClient.post(`${base}/expected/pause`, {
           periods: picked.map((row) => row.key), until: pauseUntil || null, reason: note, owed: pauseOwed,
@@ -378,7 +400,7 @@ export default function ExpectedManager({
     } finally {
       setSaving(false);
     }
-  }, [ready, saving, base, reason, mode, edits, recEdits, editCount, entity, picked, discount, deferTo, drafts, deferTotal, pauseUntil, pauseOwed, onShowToast]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, saving, base, reason, mode, edits, recEdits, editCount, entity, picked, discount, deferTo, deferIsLoss, deferTarget, drafts, deferTotal, pauseUntil, pauseOwed, onShowToast]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const resume = useCallback(async (keys) => {
     try {
@@ -533,12 +555,17 @@ export default function ExpectedManager({
             )}
             {mode === 'defer' && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', paddingBottom: 12 }}>
-                <span style={{ fontSize: 12, color: N.textMuted }}>Reporter vers</span>
-                <select value={deferTo} onChange={(e) => setDeferTo(e.target.value)} style={{ ...input, minWidth: 220 }}>
-                  <option value="">— ne pas reporter : supprimer (part en perte) —</option>
-                  {rows.filter((r) => r.futur).map((r) => (
-                    <option key={r.id} value={r.id}>{r.label}</option>
+                <span style={{ fontSize: 12, color: N.textMuted }}>Reporter sur</span>
+                <select
+                  value={deferTo}
+                  onChange={(e) => chooseDeferTo(e.target.value)}
+                  style={{ ...input, minWidth: 250, borderColor: deferIsLoss ? N.red : (deferTo ? N.text : N.border) }}
+                >
+                  <option value="">Choisir le mois de destination…</option>
+                  {rows.filter((r) => r.courant || r.futur).map((r) => (
+                    <option key={r.id} value={r.id}>{r.label}{r.courant ? ' (ce mois-ci)' : ''}</option>
                   ))}
+                  <option value={LOSS}>Ne pas reporter : supprimer (part en perte)</option>
                 </select>
                 <button
                   type="button"
@@ -654,7 +681,8 @@ export default function ExpectedManager({
 
                 {rows.map((r) => {
                   const st = STATUS[r.status];
-                  const canPick = selectable(r);
+                  const isTarget = mode === 'defer' && r.id === deferTo;
+                  const canPick = selectable(r) && !isTarget;
                   const isPicked = selected.has(r.id);
                   const dim = r.attendu === 0 && r.recu === 0 && !r.pauseActive;
                   return (
@@ -665,7 +693,7 @@ export default function ExpectedManager({
                         display: 'grid', gridTemplateColumns: gridCols, gap: 10, alignItems: 'center',
                         padding: '8px 20px', fontSize: 12.5,
                         borderTop: `1px solid ${N.borderSft}`,
-                        background: isPicked ? '#f4f7fb' : 'transparent',
+                        background: isPicked ? '#f4f7fb' : isTarget ? N.greenBg : 'transparent',
                         opacity: dim && mode !== 'edit' ? 0.5 : 1,
                         cursor: showCheck && canPick ? 'pointer' : 'default',
                         transition: 'background 0.12s',
@@ -683,6 +711,14 @@ export default function ExpectedManager({
                       )}
                       <span style={{ minWidth: 0 }}>
                         <span style={{ fontWeight: r.courant ? 700 : 500, color: N.text }}>{r.label}</span>
+                        {isTarget && (
+                          <span style={{
+                            marginLeft: 6, fontSize: 10, fontWeight: 700, color: N.green, background: '#fff',
+                            border: `1px solid ${N.green}`, borderRadius: 3, padding: '1px 5px', verticalAlign: 'middle',
+                          }}>
+                            reçoit le report
+                          </span>
+                        )}
                         {r.manual && (
                           <span title="Montant fixé à la main : la grille ne le réécrit plus" style={{
                             marginLeft: 6, fontSize: 10, fontWeight: 700, color: N.blue, background: N.blueBg,
@@ -708,6 +744,16 @@ export default function ExpectedManager({
                       </span>
                       <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: r.reste > 0 ? N.red : N.textFaint }}>
                         {formatEUR(r.reste)}
+                        {r.deferredOut > 0 && (
+                          <span title="Créance reportée sur un autre mois : l’attendu du mois est inchangé" style={{ display: 'block', fontSize: 10.5, color: N.blue, whiteSpace: 'nowrap' }}>
+                            −{formatEUR(r.deferredOut)} reporté
+                          </span>
+                        )}
+                        {r.deferredIn > 0 && (
+                          <span title="Créance reçue d’un autre mois, en plus de l’attendu du mois" style={{ display: 'block', fontSize: 10.5, color: N.blue, whiteSpace: 'nowrap' }}>
+                            +{formatEUR(r.deferredIn)} reporté ici
+                          </span>
+                        )}
                       </span>
                       <span>
                         <span style={{
@@ -809,7 +855,7 @@ export default function ExpectedManager({
                 disabled={!ready || saving}
                 style={{
                   ...btn('primary'),
-                  background: ready ? ((mode === 'defer' && !deferTo) || (mode === 'pause' && pauseOwed === 'never') ? N.red : N.text) : N.sideBg,
+                  background: ready ? ((mode === 'defer' && deferIsLoss) || (mode === 'pause' && pauseOwed === 'never') ? N.red : N.text) : N.sideBg,
                   color: ready ? '#fff' : N.textFaint,
                   border: 'none',
                   cursor: ready && !saving ? 'pointer' : 'default',
