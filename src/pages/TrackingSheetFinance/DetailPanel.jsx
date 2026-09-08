@@ -97,6 +97,7 @@ import StructureSplits from './components/StructureSplits.jsx';
 import ExpectedManager from './components/ExpectedManager.jsx';
 import PortalDropdown from './components/PortalDropdown.jsx';
 import OnboardingFacturation from './components/OnboardingFacturation.jsx';
+import SignedContracts from './components/SignedContracts.jsx';
 
 // Notion palette (sync with index.jsx N).
 const N = {
@@ -896,6 +897,17 @@ export default function DetailPanel({
                 onProfileChanged={refreshProfile}
                 onShowToast={onShowToast}
                 onCopied={onCopied}
+              />
+            </Section>
+
+            {/* Section : Contrats signés — le contrat Owner et la convention
+                Opti'lex tels que signés sur Yousign, consultables dans une
+                pop-up (demande dev 2026-09-08). Lecture seule. */}
+            <Section title="Contrats signés" delay={0.105}>
+              <SignedContracts
+                clientId={clientId}
+                societe={client?.societe}
+                numeroClient={client?.numero_client}
               />
             </Section>
 
