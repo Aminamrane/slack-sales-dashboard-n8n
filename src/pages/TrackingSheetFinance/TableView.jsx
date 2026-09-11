@@ -858,6 +858,7 @@ const RowRenderer = React.memo(function RowRenderer({
           // FR « Mensuel/Annuel/Trimestriel », ~27 % des clients) —
           // ModalitesCell canonicalise via normalizePaymentMode.
           paymentMode={row.payment_mode || row.client?.payment_mode || boardRow?.periodicite}
+          paymentModeOptilex={row.payment_mode_optilex || row.client?.payment_mode_optilex}
           autoDebit={row.auto_debit}
           onCommitSpec={patch('payment_specificity')}
           onCommitAutoDebit={patch('auto_debit')}

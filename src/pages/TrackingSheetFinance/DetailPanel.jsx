@@ -895,6 +895,7 @@ export default function DetailPanel({
                 editing={contractEditing}
                 clientId={clientId}
                 onProfileChanged={refreshProfile}
+                onContractChanged={reloadAfterExit}
                 onShowToast={onShowToast}
                 onCopied={onCopied}
               />
@@ -1611,7 +1612,7 @@ function RefundPrompt({ value, onChange, onCancel, onSubmit }) {
 // ── Informations contractuelles (liste compacte icône + libellé / valeur) ───
 function ContractInfoList({
   client, profile, focusedRow, boardRow, patch, canEdit, canEditMoney, onCopied,
-  editing = false, clientId, onProfileChanged, onShowToast, periods = [],
+  editing = false, clientId, onProfileChanged, onContractChanged, onShowToast, periods = [],
 }) {
   // Séparation nom du client / société (2026-08-21) : « Nom du client » =
   // la/les personne(s), la société a sa propre ligne. Pas de personne
@@ -1665,7 +1666,12 @@ function ContractInfoList({
     const { field, value } = pending;
     setPending(null);
     await patch(field, { change_effective: effective })(value);
-  }, [pending, patch]);
+    // Une formule ou une modalité recalcule PLUSIEURS mois côté serveur ; la
+    // réponse du PATCH ne porte que la ligne courante. Sans rechargement,
+    // « Gérer les attendus » montrait encore les anciens montants (retour dev
+    // 2026-09-10 : « changer ne change pas les attendus »).
+    onContractChanged?.();
+  }, [pending, patch, onContractChanged]);
 
   const rows = [
     { Icon: Hash,       label: 'Client n°',            value: numeroValue, mono: true },
@@ -1821,16 +1827,35 @@ function ContractInfoList({
     // Modalité éditable (demande dev 2026-08-27) : passer d'annuel à mensuel
     // change le rythme de facturation, donc l'attendu — même traitement que
     // la formule, mois d'effet demandé avant écriture.
+    // Une ligne PAR ENTITÉ (dev 2026-09-10) : « il est possible d'être annuel
+    // pour Opti'lex et mensuel pour Owner ». Sans rythme Opti'lex propre, la
+    // ligne Opti'lex reflète celui d'Owner.
     {
       Icon: CreditCard,
-      label: 'Modalité de paiement',
+      label: 'Modalité Owner',
       copyValue: modalite,
       node: (
         <EditableSelect
           value={normalizePaymentMode(focusedRow?.payment_mode || client?.payment_mode)}
           options={PAYMENT_MODES}
           optionLabels={PAYMENT_MODE_LABELS}
-          onCommit={(v) => askEffective('payment_mode', v, paymentModeLabel(v))}
+          onCommit={(v) => askEffective('payment_mode', v, `Owner ${paymentModeLabel(v)}`)}
+          disabled={!canEdit}
+          placeholderItalic
+          width="auto"
+        />
+      ),
+    },
+    {
+      Icon: CreditCard,
+      label: "Modalité Opti'lex",
+      copyValue: paymentModeLabel(focusedRow?.payment_mode_optilex || client?.payment_mode_optilex || focusedRow?.payment_mode || client?.payment_mode),
+      node: (
+        <EditableSelect
+          value={normalizePaymentMode(focusedRow?.payment_mode_optilex || client?.payment_mode_optilex || focusedRow?.payment_mode || client?.payment_mode)}
+          options={PAYMENT_MODES}
+          optionLabels={PAYMENT_MODE_LABELS}
+          onCommit={(v) => askEffective('payment_mode_optilex', v, `Opti'lex ${paymentModeLabel(v)}`)}
           disabled={!canEdit}
           placeholderItalic
           width="auto"

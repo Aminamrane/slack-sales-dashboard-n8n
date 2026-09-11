@@ -43,7 +43,10 @@ const CHIP_STYLES = {
   monthly:   { bg: '#E9F3F7', fg: '#337EA9' }, // « M » — badge historique conservé
   yearly:    { bg: '#EEF3ED', fg: '#448361' }, // « A » — badge historique conservé
   quarterly: { bg: '#f3e8ff', fg: '#6940a5' }, // « T » — Trimestriel (client.payment_mode)
+  mixed:     { bg: '#f1f1ef', fg: '#37352f' }, // « M·A » — rythmes différents Owner / Opti'lex
 };
+const MODE_SHORT = { MONTHLY: 'M', YEARLY: 'A', QUARTERLY: 'T' };
+const MODE_LABEL = { MONTHLY: 'Mensuel', YEARLY: 'Annuel', QUARTERLY: 'Trimestriel' };
 
 // États des mini-pills entité — mêmes familles de couleurs que ETAT_STYLE du
 // board (Signé vert / Résiliation rouge / Pause grise) pour une finition
@@ -153,6 +156,7 @@ function EntityPill({ label, state, size = 'normal' }) {
 export default function ModalitesCell({
   paymentSpecificity,
   paymentMode,
+  paymentModeOptilex,   // rythme Opti'lex s'il diffère d'Owner (dev 2026-09-10)
   autoDebit,
   onCommitSpec,       // (value|null) → PATCH payment_specificity
   onCommitAutoDebit,  // (value|null) → PATCH auto_debit
@@ -169,6 +173,10 @@ export default function ModalitesCell({
   // normalizePaymentMode canonicalise tout vers MONTHLY/YEARLY/QUARTERLY.
   const specCount = parsePaymentSpecCount(paymentSpecificity);
   const mode = normalizePaymentMode(paymentMode);
+  // Un client peut être mensuel Owner et annuel Opti'lex (dev 2026-09-10) :
+  // la pastille dit alors les deux rythmes, Owner puis Opti'lex.
+  const modeOptilex = normalizePaymentMode(paymentModeOptilex) || mode;
+  const mixed = !!mode && !!modeOptilex && modeOptilex !== mode;
   let chipText = null;
   let chipStyle = null;
   let ChipIcon = null;
@@ -182,7 +190,12 @@ export default function ModalitesCell({
   // L'icône devant la lettre est un BÂTIMENT, pas un calendrier (retour dev
   // 2026-08-28) : cette colonne parle de l'entreprise facturée, pas d'une
   // échéance. Le calendrier suggérait une date, ce que la lettre ne dit pas.
-  if (mode === 'MONTHLY') {
+  if (mixed) {
+    chipText = `${MODE_SHORT[mode]}·${MODE_SHORT[modeOptilex]}`;
+    chipStyle = CHIP_STYLES.mixed;
+    ChipIcon = CardIcon;
+    chipTitle = `Owner ${MODE_LABEL[mode].toLowerCase()} · Opti'lex ${MODE_LABEL[modeOptilex].toLowerCase()}`;
+  } else if (mode === 'MONTHLY') {
     chipText = 'M';
     chipStyle = CHIP_STYLES.monthly;
     ChipIcon = CardIcon;

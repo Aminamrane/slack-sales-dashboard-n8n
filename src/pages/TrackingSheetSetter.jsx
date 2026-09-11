@@ -969,11 +969,19 @@ export default function TrackingSheetSetter() {
       // Build avatar map from multiple sources (same as PerfClosing)
       const avatarMap = {};
       const normalize = (n) => (n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+      // Un morceau de nom (prénom, nom) ne vaut que s'il désigne UNE seule
+      // personne : deux « Alexandre » dans la même équipe se prêtaient leur
+      // photo (retour dev 2026-09-09). En cas de collision, la clé est
+      // neutralisée et seul le nom complet fait foi.
       const addToMap = (name, avatar) => {
         if (!name || !avatar) return;
         const norm = normalize(name);
         avatarMap[norm] = avatar;
-        norm.split(/\s+/).forEach(part => { if (part.length >= 3 && !avatarMap[part]) avatarMap[part] = avatar; });
+        norm.split(/\s+/).forEach(part => {
+          if (part.length < 3) return;
+          if (avatarMap[part] === undefined) avatarMap[part] = avatar;
+          else if (avatarMap[part] !== avatar) avatarMap[part] = null;
+        });
       };
       // Source 1: getUsers()
       try {
@@ -4022,7 +4030,17 @@ export default function TrackingSheetSetter() {
           }
           // Group sheets by team
           const normalize = (n) => (n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-          const findSheet = (name, email) => allSheets.find(s => s.email === email || (name && normalize(s.full_name).includes(normalize(name).split(' ')[0])));
+          // Rattachement d'un membre d'équipe à sa sheet : par email, sinon par
+          // nom COMPLET. Jamais par prénom seul : « Alexandre » désignait la
+          // première sheet venue et Voratovic s'affichait sous le nom de
+          // Bourdin (retour dev 2026-09-09).
+          const findSheet = (name, email) => {
+            const em = (email || '').toLowerCase();
+            const byEmail = em && allSheets.find(s => (s.email || '').toLowerCase() === em);
+            if (byEmail) return byEmail;
+            const full = normalize(name);
+            return full ? allSheets.find(s => normalize(s.full_name) === full) : undefined;
+          };
 
           const renderSheetRow = (sheet, isCaptain) => {
             if (!sheet) return null;
