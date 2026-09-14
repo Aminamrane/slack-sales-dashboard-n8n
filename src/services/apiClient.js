@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'https://api.ownertechnology.com';
+const API_URL = import.meta.env?.VITE_API_URL || 'https://api.ownertechnology.com';
 
 const TOKEN_KEY = "auth_token";
 const REFRESH_KEY = "refresh_token";
@@ -52,85 +52,86 @@ class ApiClient {
     localStorage.removeItem('permissions');
   }
 
-  // Un SEUL refresh à la fois. Quand l'access token expire, toutes les requêtes
-  // en cours prennent 401 en même temps : sans ce verrou, chacune lançait sa
-  // propre rotation avec le même refresh token, le serveur révoquait l'ancien au
-  // premier passage et les suivantes tombaient en 401 → déconnexion et ressaisie
-  // du mot de passe (tous les matins, incident du 31/08). Elles attendent
-  // désormais la même promesse.
-  _refreshAccessToken() {
+  _expireSession() {
+    this.clearAuth();
+    window.location.href = '/login';
+    const error = new Error('Session expirée. Veuillez vous reconnecter.');
+    error.status = 401;
+    throw error;
+  }
+
+  // La promesse regroupe les requêtes d'un onglet ; Web Locks sérialise les
+  // rotations entre onglets qui partagent les mêmes tokens dans localStorage.
+  _refreshAccessToken(failedToken) {
     if (!this._refreshPromise) {
-      this._refreshPromise = this._doRefreshAccessToken()
+      const refresh = () => this._doRefreshAccessToken(failedToken);
+      this._refreshPromise = (globalThis.navigator?.locks?.request
+        ? navigator.locks.request('owner-auth-refresh', refresh)
+        : Promise.resolve().then(refresh))
         .finally(() => { this._refreshPromise = null; });
     }
     return this._refreshPromise;
   }
 
-  async _doRefreshAccessToken() {
+  async _doRefreshAccessToken(failedToken) {
+    // Un autre appel/onglet a déjà renouvelé la session pendant le trajet du 401.
+    if (this.getToken() && this.getToken() !== failedToken) return;
     const refreshToken = localStorage.getItem(REFRESH_KEY);
-    if (!refreshToken) return false;
+    if (!refreshToken) return this._expireSession();
 
-    try {
-      const res = await fetch(`${this.baseUrl}/api/v1/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refreshToken }),
-      });
+    const res = await fetch(`${this.baseUrl}/api/v1/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    const data = await safeJson(res);
 
-      if (!res.ok) return false;
-
-      const data = await safeJson(res);
-      const newToken = data?.access_token || data?.data?.access_token;
-      const newRefresh = data?.refresh_token || data?.data?.refresh_token;
-
-      if (!newToken) return false;
-
-      localStorage.setItem(TOKEN_KEY, newToken);
-      if (newRefresh) localStorage.setItem(REFRESH_KEY, newRefresh);
-
-      return true;
-    } catch {
-      return false;
+    // Une déconnexion ou une nouvelle connexion a eu lieu pendant le fetch.
+    // Ne jamais restaurer l'ancienne session ni effacer la nouvelle.
+    if (localStorage.getItem(REFRESH_KEY) !== refreshToken) {
+      if (this.getToken()) return;
+      const error = new Error('Session fermée.');
+      error.status = 401;
+      throw error;
     }
+    if (res.status === 401 || res.status === 403) return this._expireSession();
+    if (!res.ok) {
+      const error = new Error('Connexion momentanément indisponible. Réessayez.');
+      error.status = res.status;
+      throw error;
+    }
+    const newToken = data?.access_token || data?.data?.access_token;
+    const newRefresh = data?.refresh_token || data?.data?.refresh_token;
+    if (!newToken || !newRefresh) {
+      throw new Error('Renouvellement de session incomplet. Réessayez.');
+    }
+    localStorage.setItem(TOKEN_KEY, newToken);
+    localStorage.setItem(REFRESH_KEY, newRefresh);
   }
 
-  async request(endpoint, options = {}) {
-    const url = `${this.baseUrl}${endpoint}`;
+  async _authenticatedFetch(url, options = {}) {
     const token = this.getToken();
-
     const config = {
       ...options,
       headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
+        ...(token && { Authorization: `Bearer ${token}` }),
         ...options.headers,
       },
     };
-
-    console.log('[API] Request:', { url, method: config.method, body: options.body });
-
     let response = await fetch(url, config);
-
-    console.log('[API] Response:', { status: response.status, ok: response.ok });
-
-    // Token expiré → tenter un refresh silencieux
     if (response.status === 401) {
-      const refreshed = await this._refreshAccessToken();
-
-      if (refreshed) {
-        // Retry avec le nouveau token
-        config.headers['Authorization'] = `Bearer ${this.getToken()}`;
-        response = await fetch(url, config);
-        console.log('[API] Retry after refresh:', { status: response.status });
-      }
-
-      // Si refresh échoué ou retry encore 401 → logout réel
-      if (!refreshed || response.status === 401) {
-        this.clearAuth();
-        window.location.href = '/login';
-        return;
-      }
+      await this._refreshAccessToken(token);
+      config.headers.Authorization = `Bearer ${this.getToken()}`;
+      response = await fetch(url, config);
     }
+    return response;
+  }
+
+  async request(endpoint, options = {}) {
+    const response = await this._authenticatedFetch(`${this.baseUrl}${endpoint}`, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', ...options.headers },
+    });
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
@@ -225,6 +226,7 @@ class ApiClient {
     // Stocker le refresh token si présent
     const refreshToken = data?.refresh_token || null;
     if (refreshToken) localStorage.setItem(REFRESH_KEY, refreshToken);
+    else localStorage.removeItem(REFRESH_KEY);
 
     // Stocker les permissions si présentes
     if (data.permissions) {
@@ -235,18 +237,7 @@ class ApiClient {
   }
 
   async getMe() {
-    const token = this.getToken();
-    if (!token) throw new Error("No token");
-
-    const res = await fetch(`${API_URL}/api/v1/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    const payload = await safeJson(res);
-    if (!res.ok) {
-      const msg = payload?.detail || payload?.message || `HTTP ${res.status}`;
-      throw new Error(msg);
-    }
+    const payload = await this.get('/api/v1/auth/me');
 
     const data = payload?.data ?? payload;
 
@@ -260,19 +251,20 @@ class ApiClient {
   }
 
   async logout() {
-    // Révoquer le refresh token côté backend
     const refreshToken = localStorage.getItem(REFRESH_KEY);
+    // Fermer localement tout de suite, y compris si une rotation est en cours.
+    this.clearAuth();
+    window.location.href = '/login';
     if (refreshToken) {
       try {
         await fetch(`${this.baseUrl}/api/v1/auth/logout`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refresh_token: refreshToken }),
+          keepalive: true,
         });
-      } catch { /* fire-and-forget */ }
+      } catch { /* La session locale est déjà fermée. */ }
     }
-    this.clearAuth();
-    window.location.href = '/login';
   }
 
   // ============ PASSWORD ============
@@ -458,33 +450,12 @@ class ApiClient {
 
   // ============ FILE UPLOADS ============
   async uploadFile(endpoint, file, fieldName = 'file') {
-    const token = this.getToken();
     const formData = new FormData();
     formData.append(fieldName, file);
-    const url = `${this.baseUrl}${endpoint}`;
-    const response = await fetch(url, {
+    const response = await this._authenticatedFetch(`${this.baseUrl}${endpoint}`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
       body: formData,
     });
-    if (response.status === 401) {
-      const refreshed = await this._refreshAccessToken();
-      if (refreshed) {
-        const retry = await fetch(url, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${this.getToken()}` },
-          body: formData,
-        });
-        if (!retry.ok) {
-          const error = await retry.json().catch(() => ({}));
-          throw new Error(error.detail || 'Upload failed');
-        }
-        return retry.json();
-      }
-      this.clearAuth();
-      window.location.href = '/login';
-      return;
-    }
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       const err = new Error(error.detail || 'Upload failed');
