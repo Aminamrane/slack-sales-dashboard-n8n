@@ -1002,12 +1002,14 @@ export default function OptilexBoard({ embed = false }) {
   // ET aux compteurs par bande (qui restent stables quand on coche/décoche une bande météo).
   const preMeteoRows = useMemo(() => {
     const ql = q.trim().toLowerCase();
+    // Sélection multiple : les ÉTATS se combinent en OU, les CRITÈRES en ET.
+    const activeCats = [...new Set(etatFilter !== "Tous" ? [etatFilter, ...multiFilter] : multiFilter)];
+    const etatsSel = activeCats.filter((c) => !CRITERIA_CATS.includes(c));
+    const critsSel = activeCats.filter((c) => CRITERIA_CATS.includes(c));
     return rows.filter((r) => {
-      // Sélection multiple : les ÉTATS se combinent en OU (un client n'a qu'un
-      // état), les CRITÈRES en ET (ils se cumulent sur un même client).
-      const activeCats = [...new Set(etatFilter !== "Tous" ? [etatFilter, ...multiFilter] : multiFilter)];
-      const etatsSel = activeCats.filter((c) => !CRITERIA_CATS.includes(c));
-      const critsSel = activeCats.filter((c) => CRITERIA_CATS.includes(c));
+      // « Tous » regroupe les clients actuels et anciens, pas les prospects.
+      // Le statut du contrat ne suffit pas : un client peut avoir un contrat expiré.
+      if (activeCats.length === 0 && r.is_pending_contract) return false;
       if (etatsSel.length > 0 && !etatsSel.some((cat) => matchesCat(r, cat))) return false;
       if (critsSel.length > 0 && !critsSel.every((cat) => matchesCat(r, cat))) return false;
       // Menu « Programmes » : UNION des programmes cochés (ambassadeur / parrainage).
@@ -1218,8 +1220,8 @@ export default function OptilexBoard({ embed = false }) {
 
   // Onglet primaire -> vide le multi-filtre ; cocher une catégorie -> vide l'onglet primaire.
   // Sélection MULTIPLE (demande Vincent 2026-08-26) : l'onglet actif et les
-  // catégories cochées se CUMULENT (union des états). « Tous » = pas de
-  // restriction d'onglet ; les autres familles de filtres (météo, programmes,
+  // catégories cochées se CUMULENT (union des états). « Tous » = clients actuels
+  // et anciens ; les autres familles de filtres (météo, programmes,
   // onboarding, date, recherche) restent en ET par-dessus.
   const pickTab = (t) => {
     setSortCol(null);
@@ -1298,7 +1300,7 @@ export default function OptilexBoard({ embed = false }) {
           // Pilule animée uniquement en sélection unique : plusieurs éléments
           // partageant un layoutId feraient sauter l'animation Framer Motion.
           const soloPill = active && multiFilter.length <= 1;
-          const n = t === "Tous" ? rows.length : (counts[t] || 0);
+          const n = t === "Tous" ? establishedCount : (counts[t] || 0);
           return (
             <motion.button key={t} onClick={() => pickTab(t)} whileTap={{ scale: 0.96 }}
               onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "#f7f8fa"; }}
