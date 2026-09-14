@@ -749,9 +749,15 @@ export default function TrackingSheetFinance() {
       return next;
     });
     try {
-      await apiClient.post('/api/v1/optilex/etat-change', {
+      const response = await apiClient.post('/api/v1/optilex/etat-change', {
         numero_client: numero, etat, etat_date, pause_end_date: pe, pause_relance_date: pr,
       });
+      setBoardMap((prev) => {
+        const next = new Map(prev || []);
+        next.set(numero, { ...(next.get(numero) || {}), etat_manuel: response.etat, etat_date: response.etat_date });
+        return next;
+      });
+      return response;
     } catch (e) {
       // Un état qui « a l'air posé » mais ne l'est pas est inacceptable → rollback visible.
       if (snapshot) {
@@ -764,6 +770,7 @@ export default function TrackingSheetFinance() {
       }
       const msg = e?.data?.detail || e?.message || "Erreur lors du changement d'état";
       showToast(typeof msg === 'string' ? msg : "Erreur lors du changement d'état", 'error');
+      return { error: typeof msg === 'string' ? msg : "Erreur lors du changement d’état" };
     }
   }, [showToast]);
 
@@ -828,6 +835,9 @@ export default function TrackingSheetFinance() {
   // ── Refresh ─────────────────────────────────────────────────────────
   const onRefresh = useCallback(() => {
     fetchPeriod(period, { soft: true });
+    apiClient.get('/api/v1/optilex/board').then((r) => {
+      setBoardMap(new Map((r?.clients || []).filter(br => br.numero_client).map(br => [br.numero_client, br])));
+    }).catch((e) => console.error('[TrackingFinance] board refresh failed', e));
   }, [period, fetchPeriod]);
 
   // ── Synchronisation vivante ─────────────────────────────────────────

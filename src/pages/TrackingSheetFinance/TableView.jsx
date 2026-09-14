@@ -76,7 +76,7 @@ import {
   scopedOverdueCum,
   formatEUR,
   formatDateFR,
-  splitSocieteRep,
+  splitClientIdentity,
   toNumber,
 } from './constants.js';
 import { EditableNumber, EditableSelect, EditableDate } from './EditableCell.jsx';
@@ -1023,7 +1023,7 @@ function SocieteCell({ row, boardRow }) {
   // ~11% restants (clients récents généralement), `representant` sera null
   // et seul le nom de société est affiché. La logique est centralisée dans
   // `splitSocieteRep` (constants.js).
-  const { societeName, representant: repFromSociete } = splitSocieteRep(row.client?.societe);
+  const { societeName, representant: repFromSociete } = splitClientIdentity(row.client);
   const representant = row.client?.representative_name || repFromSociete;
 
   // Météo client (board) : icône MeteoIcon teintée par la bande

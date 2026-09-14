@@ -373,7 +373,7 @@ export const normalizeSearch = (s) => String(s || '')
 export const matchesClientSearch = (r, normalizedQuery) => {
   if (!normalizedQuery) return true;
   const c = r.client || {};
-  return [c.numero_client, c.societe, c.representative_name, c.email]
+  return [c.numero_client, c.societe, c.company_name, c.representative_name, c.email, ...(c.identity_aliases || [])]
     .some((v) => v && normalizeSearch(v).includes(normalizedQuery));
 };
 
@@ -766,4 +766,27 @@ export const AUDIT_FIELD_LABELS = {
   auto_debit:                    'Prélèv. auto',
   employee_range:                'Tranche salariés',
   payment_mode:                  'Mode paiement',
+};
+
+// Keep the historical representative even after correcting the company name.
+export const splitClientIdentity = (client) => {
+  const original = splitSocieteRep(client?.societe);
+  return {
+    societeName: client?.company_name || original.societeName,
+    representant: client?.representative_name || original.representant,
+  };
+};
+
+export const ndaPersonLabel = (person) => {
+  const full = person.fullName || '';
+  const extra = [['birthName', 'nom de naissance'], ['maritalName', 'nom marital']]
+    .filter(([key]) => person[key] && !full.toLocaleLowerCase('fr').includes(person[key].toLocaleLowerCase('fr')))
+    .map(([key, label]) => `${label} : ${person[key]}`);
+  return [full, ...extra].filter(Boolean).join(' · ');
+};
+
+export const distinctCrmName = (profile) => {
+  const key = (name) => normalizeSearch(name || '').split(/\s+/).sort().join(' ');
+  return profile?.crm_name && !(profile?.representatives || []).some(p => key(p.fullName) === key(profile.crm_name))
+    ? profile.crm_name : null;
 };

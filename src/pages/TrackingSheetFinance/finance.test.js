@@ -221,3 +221,20 @@ test('à sortir : la vision active compte, comme pour les autres filtres', () =>
   assert.equal(isExitCandidate(r, 'Résiliation', 'owner'), false);
   assert.equal(isExitCandidate(r, 'Résiliation', 'optilex'), true);
 });
+
+
+test('renaming a company preserves the historical representative and searches the new name', async () => {
+  const { splitClientIdentity, matchesClientSearch, normalizeSearch } = await import('./constants.js');
+  const client = {societe: "Old Company- Alice NOM", company_name: 'New Company - Lille'};
+  assert.deepEqual(splitClientIdentity(client), {societeName: 'New Company - Lille', representant: 'Alice NOM'});
+  assert.equal(matchesClientSearch({client}, normalizeSearch('New Company')), true);
+});
+
+test('both recorded family names and all NDA people remain searchable', async () => {
+  const { matchesClientSearch, normalizeSearch, ndaPersonLabel, distinctCrmName } = await import('./constants.js');
+  const person = {fullName: 'Delphine LECOMTE', maritalName: 'BRACQUEMOND'};
+  assert.match(ndaPersonLabel(person), /LECOMTE.*BRACQUEMOND/);
+  const client = {representative_name: 'LECOMTE Delphine / Jean MARTIN', identity_aliases: ['BRACQUEMOND Delphine']};
+  for (const name of ['lecomte', 'bracquemond', 'martin']) assert.equal(matchesClientSearch({client}, normalizeSearch(name)), true);
+  assert.equal(distinctCrmName({crm_name: 'LECOMTE Delphine', representatives: [{fullName:'Delphine LECOMTE'}]}), null);
+});

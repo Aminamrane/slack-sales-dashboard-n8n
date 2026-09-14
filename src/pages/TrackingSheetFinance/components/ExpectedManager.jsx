@@ -488,7 +488,7 @@ export default function ExpectedManager({
                 fontSize: 12, color: N.textMuted, marginTop: 2,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
-                {client?.societe || '—'}{client?.numero_client ? ` · ${client.numero_client}` : ''}
+                {client?.company_name || client?.societe || '—'}{client?.numero_client ? ` · ${client.numero_client}` : ''}
               </div>
             </div>
             {mode !== 'history' && (

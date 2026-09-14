@@ -55,7 +55,7 @@ import {
 
 import apiClient from '../../services/apiClient.js';
 import {
-  formatEUR, formatDateFR, formatMonthLabel, periodFromDate, splitSocieteRep,
+  formatEUR, formatDateFR, formatMonthLabel, periodFromDate, splitClientIdentity, ndaPersonLabel, distinctCrmName,
   ETAT_COLORS, ETAT_FALLBACK, TERMINATED_BOARD_ETATS,
   PAYMENT_SPECIFICITIES, PAYMENT_SPECIFICITY_COLORS, PAYMENT_SPECIFICITY_FALLBACK,
   AUTO_DEBIT_OPTIONS, AUTO_DEBIT_COLORS, AUTO_DEBIT_FALLBACK,
@@ -486,7 +486,7 @@ export default function DetailPanel({
       // Société découpée + personne(s) (source unique splitSocieteRep) ;
       // numero_client arrive préfixé « n° » en base → strip (le PDF pose
       // son propre « n° »).
-      const { societeName, representant: repFromSociete } = splitSocieteRep(client?.societe);
+      const { societeName, representant: repFromSociete } = splitClientIdentity(client);
       const personne = client?.representative_name || repFromSociete;
 
       // Lignes de l'entité demandée. Périmètre comptable (retour dev ZILWA
@@ -907,7 +907,7 @@ export default function DetailPanel({
             <Section title="Contrats signés" delay={0.105}>
               <SignedContracts
                 clientId={clientId}
-                societe={client?.societe}
+                societe={client?.company_name || client?.societe}
                 numeroClient={client?.numero_client}
               />
             </Section>
@@ -1018,11 +1018,14 @@ export default function DetailPanel({
             periods={periods}
             loss={profile?.loss || null}
             initialEtat={exitPreset}
+            signatureDate={profile?.date_signature}
             onEtatChange={async (chg) => {
               // Signature du parent : (numero_client, payload) — la même que
               // celle du badge d'état de la fiche.
-              await onBoardEtatChange?.(client?.numero_client, chg);
+              const result = await onBoardEtatChange?.(client?.numero_client, chg);
+              if (result?.error) throw new Error(result.error);
               reloadAfterExit();
+              return result;
             }}
             onDeclareLoss={declareLoss}
             onRevertLoss={revertLoss}
@@ -1035,7 +1038,7 @@ export default function DetailPanel({
 
 // ── Header ──────────────────────────────────────────────────────────────────
 function PanelHeader({ client, onClose, fullscreen, onToggleFullscreen }) {
-  const { societeName } = splitSocieteRep(client?.societe);
+  const { societeName } = splitClientIdentity(client);
   return (
     <div style={{
       height: 44,
@@ -1149,7 +1152,7 @@ function ClientHeader({ client }) {
   // L'avatar reste sur la SOCIÉTÉ (identité visuelle stable). Le numéro et
   // la date de signature ne sont pas répétés ici : ils vivent dans
   // « Informations contractuelles » (retour dev 2026-09-03).
-  const { societeName, representant: repFromSociete } = splitSocieteRep(client?.societe);
+  const { societeName, representant: repFromSociete } = splitClientIdentity(client);
   const personne = client?.representative_name || repFromSociete;
   const av = avatarMeta(societeName);
 
@@ -1617,7 +1620,7 @@ function ContractInfoList({
   // Séparation nom du client / société (2026-08-21) : « Nom du client » =
   // la/les personne(s), la société a sa propre ligne. Pas de personne
   // détectée → « Nom du client » = société, pas de ligne Société en doublon.
-  const { societeName, representant: repFromSociete } = splitSocieteRep(client?.societe);
+  const { societeName, representant: repFromSociete } = splitClientIdentity(client);
   const personne = client?.representative_name || repFromSociete;
   // numero_client contient déjà le préfixe « n° » en base (ex. « n°691 »).
   const numeroValue = client?.numero_client
@@ -1675,14 +1678,29 @@ function ContractInfoList({
 
   const rows = [
     { Icon: Hash,       label: 'Client n°',            value: numeroValue, mono: true },
-    ...(personne ? [
       {
         Icon: Briefcase,
         label: 'Société',
-        copyValue: societeName,
+        copyValue: profile?.company_name || societeName,
         node: (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-            <span>{societeName}</span>
+            {editing ? (
+              <EditableText
+                value={profile?.company_name || societeName}
+                placeholder="Nom de la société"
+                onCommit={async (value) => {
+                  try {
+                    await apiClient.patch(`/api/v1/finance-periods/client/${clientId}/profile`, { societe: value || '' });
+                    onProfileChanged?.();
+                    onContractChanged?.();
+                  } catch (e) {
+                    onShowToast?.(e?.data?.detail || 'Modification impossible', 'error');
+                    throw e;
+                  }
+                }}
+                width="auto"
+              />
+            ) : <span>{profile?.company_name || societeName}</span>}
             <RelatedEntityList
               items={profile?.companies || []}
               kind="societe"
@@ -1694,14 +1712,23 @@ function ContractInfoList({
           </div>
         ),
       },
-    ] : []),
     {
       Icon: User,
-      label: 'Nom du client',
-      copyValue: personne || societeName,
+      label: profile?.representatives?.length > 1 ? 'Personnes du NDA' : 'Nom du client',
+      copyValue: profile?.representatives?.length ? [...profile.representatives.map(ndaPersonLabel), distinctCrmName(profile)].filter(Boolean).join(" / ") : personne || societeName,
       node: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-          <span>{personne || societeName}</span>
+          {profile?.representatives?.length ? profile.representatives.map((person, index) => (
+            <div key={index} style={{ textAlign: 'right', whiteSpace: 'normal', lineHeight: 1.5 }}>
+              <span>{ndaPersonLabel(person)}</span>
+              {person.role && <span style={{ display: 'block', fontSize: 11, color: N.textFaint }}>{person.role}</span>}
+            </div>
+          )) : <span>{profile?.crm_name || personne || societeName}</span>}
+          {!!profile?.representatives?.length && distinctCrmName(profile) && (
+            <span style={{ fontSize: 11.5, color: N.textMuted, whiteSpace: 'normal', textAlign: 'right' }}>
+              Fiche commerciale : {distinctCrmName(profile)}
+            </span>
+          )}
           <RelatedEntityList
             items={profile?.partners || []}
             kind="associe"
@@ -1714,6 +1741,7 @@ function ContractInfoList({
       ),
     },
     { Icon: PenLine,    label: 'Date de signature',    value: formatDateLongFR(profile?.date_signature) },
+    { Icon: User,       label: 'Sales',                value: profile?.sales_name },
     // SIREN : le backfill est une donnée sourcée (lecture) ; sans lui, la
     // saisie alimente l'override du board (siren_ovr) et le journal. Vivait
     // dans l'accordéon « détail complet », retiré le 2026-09-03.
@@ -1721,7 +1749,7 @@ function ContractInfoList({
       Icon: Landmark,
       label: 'SIREN',
       copyValue: profile?.siren,
-      node: (editing && canEditMoney && profile && profile.siren_source !== 'backfill') ? (
+      node: (editing && canEditMoney && profile) ? (
         <EditableText
           value={profile?.siren}
           placeholder="9 chiffres"

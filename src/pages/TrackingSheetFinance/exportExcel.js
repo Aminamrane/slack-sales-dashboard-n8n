@@ -59,7 +59,7 @@ export function buildExportRows(rows, scope) {
       const moisCourant = round2(scopedOverdueCurrent(r, scope));
       return {
         numero: r.client?.numero_client || '',
-        client: r.client?.societe || '',
+        client: r.client?.company_name || r.client?.societe || '',
         anterieures,
         moisCourant,
         total: round2(anterieures + moisCourant),

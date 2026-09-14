@@ -64,7 +64,7 @@ export const FILTER_FIELDS = [
   },
   {
     key: 'societe', label: 'Nom / entreprise', type: 'text',
-    get: (r) => r.client?.societe || '',
+    get: (r) => r.client?.company_name || r.client?.societe || '',
   },
   {
     key: 'numero', label: 'N° client', type: 'text',
