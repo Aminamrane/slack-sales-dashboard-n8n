@@ -173,7 +173,7 @@ export default function ClientDetailModal({
                 margin: 0, letterSpacing: '-0.02em',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
-                {client?.societe || (clientId ? `Client #${clientId}` : '—')}
+                {client?.company_name || client?.societe || (clientId ? `Client #${clientId}` : '—')}
               </h2>
               {client?.etat && (
                 <div style={{ marginTop: 8 }}>

@@ -212,7 +212,7 @@ export default function ExitClientDialog({
   onEtatChange, onDeclareLoss, onRevertLoss, loss,
   // État choisi depuis le badge d'état de la fiche : le dialogue s'ouvre
   // dessus, il ne reste qu'à confirmer la date d'effet (dev 2026-09-03).
-  initialEtat = null,
+  initialEtat = null, signatureDate = null,
 }) {
   const [etat, setEtat] = useState('');
   const [etatDate, setEtatDate] = useState(todayISO());
@@ -220,6 +220,9 @@ export default function ExitClientDialog({
   const [busy, setBusy] = useState(null);
   const [confirming, setConfirming] = useState(false);
   const [etatDone, setEtatDone] = useState(null);
+  const [error, setError] = useState('');
+  const withdrawing = etat === 'Rétractation';
+  const effectiveDate = withdrawing ? (signatureDate || '').slice(0, 10) : etatDate;
 
   // À chaque ouverture : repartir propre, avec l'état pré-choisi s'il y en a un.
   useEffect(() => {
@@ -227,6 +230,7 @@ export default function ExitClientDialog({
     setEtat(initialEtat && ACTED_EXIT_ETATS.has(initialEtat) ? initialEtat : '');
     setEtatDate(todayISO());
     setEtatDone(null);
+    setError('');
     setConfirming(false);
   }, [open, initialEtat]);
   // Périmètre de la perte. Tout coché par défaut — c'est le cas courant —
@@ -248,15 +252,17 @@ export default function ExitClientDialog({
   const run = async (key, fn) => {
     if (busy) return;
     setBusy(key);
-    try { await fn(); } finally { setBusy(null); }
+    setError('');
+    try { await fn(); } catch (e) { setError(e?.data?.detail || e?.message || 'Enregistrement impossible'); } finally { setBusy(null); }
   };
 
   const submitEtat = () => run('etat', async () => {
-    await onEtatChange({ etat, etat_date: etatDate || null });
+    const result = await onEtatChange({ etat, etat_date: effectiveDate || null });
+    if (result?.error) throw new Error(result.error);
     // Confirmation explicite (retour dev 2026-08-28) : acter un état est une
     // décision lourde, on ne se contente pas de refermer une liste. On répète
     // ce qui a été posé ET quand ça prendra effet — la nuance qui compte.
-    setEtatDone({ etat, date: etatDate });
+    setEtatDone({ etat, date: result?.etat_date || effectiveDate });
     setEtat('');
   });
 
@@ -318,7 +324,7 @@ export default function ExitClientDialog({
                 fontSize: 12, color: N.textMuted, marginTop: 3,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
-                {client?.societe || '—'}
+                {client?.company_name || client?.societe || '—'}
                 {client?.numero_client ? ` · ${client.numero_client}` : ''}
               </div>
             </div>
@@ -354,7 +360,7 @@ export default function ExitClientDialog({
                   {etatDone.date && new Date(etatDone.date) > new Date()
                     ? <>Le client basculera le {formatDateFR(etatDone.date)} ; d’ici là il reste actif.</>
                     : <>Effective depuis le {formatDateFR(etatDone.date)}.</>}
-                  {' '}Le board Owner/Opti’Lex est à jour.
+                  {etatDone.etat === 'Rétractation' && ' Les attendus ont été annulés depuis la signature. Les règlements restent tracés.'}
                 </span>
               </motion.div>
             )}
@@ -386,7 +392,8 @@ export default function ExitClientDialog({
               </select>
               <input
                 type="date"
-                value={etatDate}
+                value={effectiveDate}
+                disabled={withdrawing}
                 onChange={(e) => setEtatDate(e.target.value)}
                 title={etat ? (ETAT_DATE_CONFIG[etat]?.label || "Date d'effet") : "Date d'effet"}
                 style={{
@@ -398,22 +405,30 @@ export default function ExitClientDialog({
               <button
                 type="button"
                 onClick={submitEtat}
-                disabled={!etat || !etatDate || busy === 'etat'}
+                disabled={!etat || !effectiveDate || !!busy}
                 style={{
                   ...btn('solid'),
-                  background: etat && etatDate ? N.text : N.sideBg,
-                  color: etat && etatDate ? '#fff' : N.textFaint,
+                  background: etat && effectiveDate ? N.text : N.sideBg,
+                  color: etat && effectiveDate ? '#fff' : N.textFaint,
                   border: 'none',
-                  cursor: etat && etatDate && !busy ? 'pointer' : 'default',
+                  cursor: etat && effectiveDate && !busy ? 'pointer' : 'default',
                 }}
               >
                 {busy === 'etat' ? 'Enregistrement…' : 'Acter'}
               </button>
             </div>
+            {withdrawing && (
+              <div style={{ marginTop: 10, fontSize: 12, lineHeight: 1.6, color: N.textMuted }}>
+                {effectiveDate
+                  ? <>Effet à la signature du <strong>{formatDateFR(effectiveDate)}</strong>. Tous les attendus Owner et Opti’lex depuis cette date, y compris les échéances futures, seront annulés. Les paiements et remboursements restent tracés. Cette opération pourra être annulée depuis le journal.</>
+                  : 'La date de signature doit être renseignée avant la rétractation.'}
+              </div>
+            )}
+            {error && <div role="alert" style={{ marginTop: 10, color: N.red, fontSize: 12 }}>{error}</div>}
           </section>
 
           {/* ── 2. Perte ─────────────────────────────────────────────── */}
-          <section style={{ padding: '16px 20px 20px' }}>
+          {(loss || (!withdrawing && etatDone?.etat !== 'Rétractation' && posedEtat !== 'Rétractation')) && <section style={{ padding: '16px 20px 20px' }}>
             <div style={{ fontSize: 12.5, fontWeight: 700, color: N.text, marginBottom: 4 }}>
               Déclarer une perte
             </div>
@@ -541,7 +556,7 @@ export default function ExitClientDialog({
                     <TriangleAlert size={15} style={{ flexShrink: 0 }} />
                     <span style={{ flex: '1 1 180px', lineHeight: 1.45 }}>
                       Passer <strong>{formatEUR(selectedTotal)}</strong> en perte sur{' '}
-                      {selectedMonths} mois pour <strong>{client?.societe}</strong> ?
+                      {selectedMonths} mois pour <strong>{client?.company_name || client?.societe}</strong> ?
                     </span>
                     <button
                       type="button"
@@ -577,7 +592,7 @@ export default function ExitClientDialog({
                 )}
               </>
             )}
-          </section>
+          </section>}
         </motion.div>
       </motion.div>
     </AnimatePresence>,
