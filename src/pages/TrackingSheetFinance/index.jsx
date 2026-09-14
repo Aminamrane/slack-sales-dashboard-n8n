@@ -54,7 +54,7 @@ import { exportFinanceXlsx } from './exportExcel.js';
 import companyLogo from '../../assets/my_image.png';
 import '../../index.css';
 
-import TableView, { AnimatedAmount } from './TableView.jsx';
+import TableView from './TableView.jsx';
 import DetailPanel from './DetailPanel.jsx';
 // `displayEtat` : règle métier unique de l'état affiché sur le board
 // Owner/Opti'Lex (import read-only — OptilexBoard n'est pas modifié).
@@ -256,6 +256,7 @@ const VIEW_ICONS = {
   trop_percu:       RefundIcon,
   onboarding_passe: CalendarCheckIcon,
   non_auto:         BankOffIcon,
+  payment_day_missing: CalendarCheckIcon,
   resilies:         ExitIcon,
 };
 
@@ -284,6 +285,7 @@ const VIEW_FILTERS = [
   // celui qui a déjà payé une partie.
   { key: 'onboarding_passe', label: 'Onboarding passé' },
   { key: 'non_auto',    label: 'Non automatisé' },
+  { key: 'payment_day_missing', label: 'Date de paiement à définir' },
   { key: 'resilies',    label: 'Résiliés / Rétractés' },
 ];
 
@@ -409,6 +411,8 @@ export default function TrackingSheetFinance() {
         return scopedOverdueCurrent(r, scope) === 0 && scopedOverdueCum(r, scope) === 0;
       case 'retard_mois':
         return scopedOverdueCurrent(r, scope) > 0;
+      case 'payment_day_missing':
+        return !r.client?.payment_day;
       case 'creances': {
         if (scopedOverdueCum(r, scope) <= 0) return false;
         if (creanceExitOnly && !isExitCandidate(r, boardEtatOf(r), scope)) return false;
@@ -1674,34 +1678,41 @@ function TitleBlock({ kpis, loading }) {
             subTitle: `Totaux calculés sur les ${kpis.total} clients affichés, `
               + `pas sur les ${kpis.totalAll} du mois`,
           },
-          { label: 'Attendu', value: loading ? '…' : formatEUR(kpis.expectedGlobal), color: N.text, dot: N.textFaint },
+          { label: 'Attendu', value: loading ? '…' : formatEUR(kpis.expectedGlobal), color: N.text, dot: N.textFaint,
+            sub: loading || !kpis.notDue ? null : `${formatEUR(kpis.notDue)} non exigibles`,
+            subColor: N.textMuted,
+            subTitle: 'Reste du mois dont l’échéance n’est pas passée, est en pause ou dont le premier paiement reste à dater.',
+          },
           {
             label: 'Reçu',
-            value: loading ? '…' : <AnimatedAmount countFromZero value={kpis.receivedTotal} style={{ fontWeight: 700, color: N.green }} />,
+            value: loading ? '…' : formatEUR(kpis.receivedTotal),
             color: N.green, dot: N.green,
             // Taux de récupération du classeur finance : reçu ÷ attendu.
             sub: loading ? null : kpis.receivedPct,
             subColor: N.green,
-            subTitle: 'Montant reçu ÷ montant attendu',
+            subTitle: 'Reçu affecté au mois ÷ attendu du mois. Les règlements des anciennes créances sont suivis séparément.',
           },
           {
             // Dette totale à date (mois + antérieur) — la colonne « Retard de
             // paiement » du classeur, celle que la finance lit en premier.
             label: 'Retard',
-            value: loading ? '…' : <AnimatedAmount countFromZero value={kpis.overdueTotalWithCum} style={{ fontWeight: 700, color: kpis.overdueTotalWithCum > 0 ? N.red : N.text }} />,
+            value: loading ? '…' : formatEUR(kpis.overdueTotalWithCum),
             color: kpis.overdueTotalWithCum > 0 ? N.red : N.text,
             dot: kpis.overdueTotalWithCum > 0 ? N.red : N.textFaint,
+            sub: loading ? null : `${formatEUR(kpis.overdueTotal)} du mois`,
+            subColor: N.textMuted,
+            subTitle: 'Retard du mois + anciennes créances encore dues. Les trop-perçus restent séparés.',
           },
           {
             // « Retard de paiement sur les mois précédents » du classeur.
             label: 'Créances ant.',
-            value: loading ? '…' : <AnimatedAmount countFromZero value={kpis.overdueCumTotal} style={{ fontWeight: 700, color: kpis.overdueCumTotal > 0 ? N.red : N.text }} />,
+            value: loading ? '…' : formatEUR(kpis.overdueCumTotal),
             color: kpis.overdueCumTotal > 0 ? N.red : N.text,
             dot: kpis.overdueCumTotal > 0 ? N.red : N.textFaint,
             // Récupération sur les créances des mois précédents.
-            sub: loading ? null : kpis.overdueRecoveredPct,
+            sub: loading || !kpis.overdueRecoveredPct ? null : `${kpis.overdueRecoveredPct} recouvrées`,
             subColor: N.textMuted,
-            subTitle: 'Montant récupéré ÷ créances des mois précédents',
+            subTitle: `${formatEUR(kpis.recoveredPrior)} recouvrés sur ${formatEUR(kpis.openingDebt)} dus au début du mois. Le montant au-dessus est le solde restant.`,
           },
         ].map((kpi, i) => (
           <div key={i} style={{

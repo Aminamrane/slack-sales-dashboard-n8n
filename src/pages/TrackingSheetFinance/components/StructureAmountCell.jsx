@@ -56,7 +56,7 @@ export default function StructureAmountCell({
       setStructures(st?.items || []);
       const d = {};
       for (const s of (sp?.items || [])) {
-        if (s.period_id === row.id && s.entity === entity) d[s.structure_id] = s.amount;
+        if (s.period_id === row.id && s.entity === entity && s.kind === 'received') d[s.structure_id] = s.amount;
       }
       setDraft(d);
     } catch {
@@ -101,7 +101,7 @@ export default function StructureAmountCell({
         }))
         .filter((s) => s.amount);
       await apiClient.put(
-        `/api/v1/finance-periods/client/${clientId}/splits/${row.id}?sync_received=true`,
+        `/api/v1/finance-periods/client/${clientId}/splits/${row.id}?sync_received=true&entity=${entity}&kind=received`,
         body,
       );
       onShowToast?.(`Récupéré ${formatEUR(total)} · ${body.length} structure${body.length > 1 ? 's' : ''}`, 'success');
