@@ -1714,6 +1714,7 @@ function ContractInfoList({
       ),
     },
     { Icon: PenLine,    label: 'Date de signature',    value: formatDateLongFR(profile?.date_signature) },
+    { Icon: User,       label: 'Sales',                value: profile?.sales_name },
     // SIREN : le backfill est une donnée sourcée (lecture) ; sans lui, la
     // saisie alimente l'override du board (siren_ovr) et le journal. Vivait
     // dans l'accordéon « détail complet », retiré le 2026-09-03.
