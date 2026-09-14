@@ -15,12 +15,15 @@ const ROLE_PERMISSIONS = {
 export default function ProtectedRoute({ children, allowedRoles = null }) {
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
+  const [connectionError, setConnectionError] = useState(false);
 
   useEffect(() => {
     checkAuth();
   }, []);
 
   const checkAuth = async () => {
+    setLoading(true);
+    setConnectionError(false);
     const token = apiClient.getToken();
     const user = apiClient.getUser();
 
@@ -37,15 +40,16 @@ export default function ProtectedRoute({ children, allowedRoles = null }) {
       return;
     }
 
-    // Optionnel : vérifier le token côté serveur
+    // getMe renouvelle la session si le jeton d'accès a expiré.
     try {
       await apiClient.getMe();
       setAllowed(true);
     } catch (e) {
       console.error("getMe failed:", e);
-      // TEMP: ne wipe pas tant qu'on n'a pas compris
-      // apiClient.clearAuth();
       setAllowed(false);
+      // Une panne réseau/serveur n'est pas une déconnexion. Garder la session
+      // et permettre de réessayer, sans afficher de page protégée non vérifiée.
+      setConnectionError(e.status !== 401 && e.status !== 403);
     }
 
     setLoading(false);
@@ -64,6 +68,15 @@ export default function ProtectedRoute({ children, allowedRoles = null }) {
         color: isDark ? '#f5f5f7' : '#1d1d1f'
       }}>
         Chargement...
+      </div>
+    );
+  }
+
+  if (connectionError) {
+    return (
+      <div role="alert" style={{ padding: '3rem', textAlign: 'center' }}>
+        <p>Connexion momentanément indisponible. Votre session est conservée.</p>
+        <button type="button" onClick={checkAuth}>Réessayer</button>
       </div>
     );
   }
