@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import apiClient from "../services/apiClient";
 
@@ -924,6 +925,8 @@ function SigCell({ status, sentAt, signedAt, scheduledAt, grouped }) {
 }
 
 export default function OptilexBoard({ embed = false }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedClient = searchParams.get('client');
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [etatFilter, setEtatFilter] = useState("Signé");   // onglet primaire actif (défaut Signé, décision dev 2026-08-25)
@@ -942,6 +945,19 @@ export default function OptilexBoard({ embed = false }) {
   const [sortDir, setSortDir] = useState("asc");  // asc | desc
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState(null); // numero_client du client ouvert
+  useEffect(() => {
+    if (!requestedClient) return;
+    const row = rows.find(r => r.numero_client === requestedClient);
+    if (row) setSelected(row.row_key || row.numero_client);
+  }, [requestedClient, rows]);
+  const closeDetail = () => {
+    setSelected(null);
+    if (requestedClient) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('client');
+      setSearchParams(next, { replace: true });
+    }
+  };
 
   // Anti-stale : toute mutation locale incrémente mutSeq ; une réponse de polling partie AVANT
   // la mutation est jetée (sinon elle écraserait l'optimiste avec une photo périmée de la base).
@@ -1579,7 +1595,7 @@ export default function OptilexBoard({ embed = false }) {
       </div>
 
       <AnimatePresence>
-        {selRow && <DetailPanel key="detail" row={selRow} onClose={() => setSelected(null)} reload={reloadBoard} patch={patch} changeEtat={changeEtat} etatHistVersion={etatHistVersion} recordMeteo={recordMeteo} meteoHistVersion={meteoHistVersion} />}
+        {selRow && <DetailPanel key="detail" row={selRow} onClose={closeDetail} reload={reloadBoard} patch={patch} changeEtat={changeEtat} etatHistVersion={etatHistVersion} recordMeteo={recordMeteo} meteoHistVersion={meteoHistVersion} />}
       </AnimatePresence>
     </div>
   );

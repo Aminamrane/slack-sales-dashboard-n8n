@@ -1281,6 +1281,10 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                       if (!notif.read) markNotifsRead([notif.id]);
                       setNotifIslandOpen(false);
                       setTimeout(() => setIslandOpen(false), 150);
+                      if (notif.type === 'owner_rating_regression') {
+                        const client = notif.data?.numero_client;
+                        navigate('/ceo/optilex-board' + (client ? `?client=${encodeURIComponent(client)}` : ''));
+                      }
                       // Navigate for invitation notifications → go to notifications tab in tracking sheet
                       if (notif.type === 'sheet_invitation') {
                         navigate('/tracking-sheet?view=notifications');
