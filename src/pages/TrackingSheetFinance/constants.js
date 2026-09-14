@@ -199,45 +199,32 @@ export const SCOPE_FIELDS = {
   },
 };
 
-// Retard courant / cumulé d'une row selon la vision active ('global' = somme).
-export const scopedOverdueCurrent = (r, scope) =>
-  (scope === 'optilex' ? 0 : (toNumber(r.overdue_owner_current_month) || 0)) +
-  (scope === 'owner' ? 0 : (toNumber(r.overdue_optilex_current_month) || 0));
+// Each entity is allocated separately: credits never offset another client's
+// arrears or the other entity. The fallback supports a rolling API deployment.
+const entityPosition = (r, entity) => {
+  const balance = r[`balance_${entity}`];
+  if (balance) return Object.fromEntries(Object.entries(balance).map(([k, v]) => [k, toNumber(v) || 0]));
+  const current = toNumber(r[`overdue_${entity}_current_month`]) || 0;
+  const prior = toNumber(r[`overdue_${entity}_cumulative`]) || 0;
+  const priorRemaining = Math.max(prior + Math.min(current, 0), 0);
+  return {
+    current_overdue: Math.max(current + Math.min(prior, 0), 0),
+    prior_remaining: priorRemaining,
+    opening_debt: Math.max(prior, 0),
+    recovered_prior: Math.max(Math.max(prior, 0) - priorRemaining, 0),
+    not_due: 0,
+    credit: Math.max(-(current + prior), 0),
+  };
+};
+const scopedPosition = (r, scope, key) =>
+  (scope === 'optilex' ? 0 : entityPosition(r, 'owner')[key] || 0) +
+  (scope === 'owner' ? 0 : entityPosition(r, 'optilex')[key] || 0);
 
-export const scopedOverdueCum = (r, scope) =>
-  (scope === 'optilex' ? 0 : (toNumber(r.overdue_owner_cumulative) || 0)) +
-  (scope === 'owner' ? 0 : (toNumber(r.overdue_optilex_cumulative) || 0));
-
-// Trop-perçu reporté des mois antérieurs (backend 2026-08-25 : `credit_owner`
-// / `credit_optilex_ttc`, toujours >= 0). Un solde créditeur N'EST PAS un
-// retard : quand il existe, la créance de l'entité reste à 0. Deux suites
-// possibles côté finance — déduire de la prochaine échéance ou rembourser —
-// d'où sa mise en visibilité dans la page.
-// Défensif : champs absents tant que le backend n'est pas déployé → 0.
-// Trop-perçu = ce qu'on DOIT au client, entité par entité.
-//
-// Correction 2026-08-29 (signalée par Ismahane sur n°454) : on lisait
-// `credit_*`, qui ne reprend que le cumul des mois ANTÉRIEURS. Un client qui
-// solde tout son arriéré ET paie trop sur le mois en cours restait donc
-// invisible — n°454 avait versé 4 235 € pour 1 155 € dus, soit 770 € de
-// trop-perçu, et le filtre affichait « Trop-perçu 0 ».
-//
-// On raisonne désormais sur le SOLDE COMPLET du mois affiché : mois en cours
-// + créances antérieures. Négatif = trop-perçu. Par entité, pour que les
-// visions Owner / Opti'lex / Globale restent justes (un crédit d'un côté ne
-// doit pas être masqué par une dette de l'autre).
-const entityBalance = (r, entity) =>
-  (toNumber(r[`overdue_${entity}_current_month`]) || 0)
-  + (toNumber(r[`overdue_${entity}_cumulative`]) || 0);
-
-// Ce qu'on doit au client sur UNE entité (0 s'il nous doit).
-// Exporté : le formulaire de remboursement en a besoin par entité, et il ne
-// doit surtout pas refaire le calcul dans son coin.
-export const entityCredit = (r, entity) => Math.max(-entityBalance(r, entity), 0);
-
-export const scopedCredit = (r, scope) =>
-  (scope === 'optilex' ? 0 : entityCredit(r, 'owner')) +
-  (scope === 'owner' ? 0 : entityCredit(r, 'optilex'));
+export const scopedOverdueCurrent = (r, scope) => scopedPosition(r, scope, 'current_overdue');
+export const scopedOverdueCum = (r, scope) => scopedPosition(r, scope, 'prior_remaining');
+export const scopedOpeningDebt = (r, scope) => scopedPosition(r, scope, 'opening_debt');
+export const entityCredit = (r, entity) => entityPosition(r, entity).credit;
+export const scopedCredit = (r, scope) => scopedPosition(r, scope, 'credit');
 
 // Ancienneté de la créance, en mois, dans la vision active.
 //
@@ -249,8 +236,8 @@ export const scopedCredit = (r, scope) =>
 // c'est celle qui commande la relance.
 export const creanceAgeMonths = (r, scope) => {
   const dates = [];
-  if (scope !== 'optilex' && r.overdue_owner_since) dates.push(r.overdue_owner_since);
-  if (scope !== 'owner' && r.overdue_optilex_since) dates.push(r.overdue_optilex_since);
+  if (scope !== 'optilex' && entityPosition(r, 'owner').prior_remaining > 0 && r.overdue_owner_since) dates.push(r.overdue_owner_since);
+  if (scope !== 'owner' && entityPosition(r, 'optilex').prior_remaining > 0 && r.overdue_optilex_since) dates.push(r.overdue_optilex_since);
   if (!dates.length) return null;
   const plusAncienne = dates.sort()[0];
   const [y, m] = String(plusAncienne).slice(0, 7).split('-').map(Number);
@@ -266,41 +253,36 @@ export const creanceAgeMonths = (r, scope) => {
 //
 // Vit dans ce fichier, avec les autres règles, pour être testable et ne pas
 // pouvoir diverger de ce que le tableau affiche.
-export const computeKpis = (visibleRows, scope, allCount = null) => {
-  let expected = 0;
-  let received = 0;
-  let overdue = 0;
-  let overdueCum = 0;
-  let receivedOverdue = 0;
+const round2 = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
 
+export const computeKpis = (visibleRows, scope, allCount = null) => {
+  let expected = 0, received = 0, overdue = 0, overdueCum = 0;
+  let openingDebt = 0, recoveredPrior = 0, notDue = 0, credit = 0;
   (visibleRows || []).forEach((r) => {
     const a = scopedPeriodAmounts(r, scope);
     expected += a.expected;
     received += a.received;
     overdue += scopedOverdueCurrent(r, scope);
     overdueCum += scopedOverdueCum(r, scope);
-    receivedOverdue += a.receivedOverdue;
+    openingDebt += scopedOpeningDebt(r, scope);
+    recoveredPrior += scopedPosition(r, scope, 'recovered_prior');
+    notDue += scopedPosition(r, scope, 'not_due');
+    credit += scopedCredit(r, scope);
   });
-
   const total = (visibleRows || []).length;
   return {
-    total,
-    totalAll: allCount === null ? total : allCount,
+    total, totalAll: allCount === null ? total : allCount,
     filtered: allCount !== null && allCount !== total,
-    expectedGlobal: expected,
-    receivedTotal: received,
-    overdueTotal: overdue,
-    // « Retard de paiement » du classeur = dette totale à date : retard du
-    // mois + créances antérieures. C'est ce montant que la finance compare.
-    overdueTotalWithCum: overdue + overdueCum,
-    overdueCumTotal: overdueCum,
-    // Taux du classeur finance (null si dénominateur 0 → rien affiché).
+    expectedGlobal: round2(expected), receivedTotal: round2(received),
+    overdueTotal: round2(overdue), overdueTotalWithCum: round2(overdue + overdueCum),
+    overdueCumTotal: round2(overdueCum), openingDebt: round2(openingDebt),
+    recoveredPrior: round2(recoveredPrior), notDue: round2(notDue), credit: round2(credit),
     receivedPct: formatPercent(received, expected),
-    overdueRecoveredPct: formatPercent(receivedOverdue, overdueCum),
+    overdueRecoveredPct: formatPercent(recoveredPrior, openingDebt),
   };
 };
 
-// « Retard à date » = mois en cours + créances antérieures. Négatif = crédit.
+// « Retard à date » = retard du mois + anciennes créances restantes. Les crédits sont distincts.
 // Une seule définition, pour que la tuile de la fiche, la colonne du tableau
 // et les filtres ne puissent pas diverger (incident n°454, 2026-08-29).
 export const scopedOverdueToDate = (r, scope) =>

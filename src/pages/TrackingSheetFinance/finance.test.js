@@ -41,7 +41,7 @@ const row = (o = {}) => ({
 test('trop-perçu : le mois en cours compte, pas seulement les créances anciennes', () => {
   const r = row({ overdue_owner_current_month: -3080, overdue_owner_cumulative: 2310 });
   assert.equal(scopedCredit(r, 'owner'), 770);
-  assert.equal(scopedOverdueToDate(r, 'owner'), -770);
+  assert.equal(scopedOverdueToDate(r, 'owner'), 0);
 });
 
 test('trop-perçu : un client en retard n’est jamais créditeur', () => {
@@ -86,17 +86,15 @@ test('vision : chaque helper ne compte que l’entité affichée', () => {
 // ── Cohérence des notions entre elles ─────────────────────────────────────
 // Le point qui a réellement fait mal : deux surfaces peuvent afficher deux
 // chiffres pour la même réalité. On verrouille le lien entre les deux.
-test('cohérence : retard à date négatif ⇔ trop-perçu du même montant', () => {
+test('cohérence : dette et crédit sont distincts et conservent le solde par entité', () => {
   for (const cur of [-3080, -100, 0, 250]) {
     for (const cum of [-500, 0, 2310]) {
       const r = row({ overdue_owner_current_month: cur, overdue_owner_cumulative: cum });
-      const solde = scopedOverdueToDate(r, 'owner');
+      const debt = scopedOverdueToDate(r, 'owner');
       const credit = scopedCredit(r, 'owner');
-      if (solde < 0) {
-        assert.equal(credit, -solde, `solde ${solde} devrait donner un crédit de ${-solde}`);
-      } else {
-        assert.equal(credit, 0, `solde ${solde} ne doit produire aucun crédit`);
-      }
+      assert.equal(debt - credit, cur + cum);
+      assert.ok(debt >= 0 && credit >= 0);
+      assert.ok(debt === 0 || credit === 0);
     }
   }
 });
@@ -187,14 +185,14 @@ test('ancienneté : null quand le client n’a aucune dette datée', () => {
 });
 
 test('ancienneté : ne lit que l’entité de la vision active', () => {
-  const r = { overdue_owner_since: '2025-10-01', overdue_optilex_since: '2026-08-01' };
+  const r = { overdue_owner_since: '2025-10-01', overdue_optilex_since: '2026-08-01', overdue_owner_cumulative: 100, overdue_optilex_cumulative: 50 };
   assert.ok(creanceAgeMonths(r, 'owner') > creanceAgeMonths(r, 'optilex'),
     'la dette Owner est plus ancienne');
   assert.equal(creanceAgeMonths({ overdue_optilex_since: '2026-08-01' }, 'owner'), null);
 });
 
 test('ancienneté : en Globale, c’est la dette la PLUS ANCIENNE qui commande', () => {
-  const r = { overdue_owner_since: '2025-10-01', overdue_optilex_since: '2026-08-01' };
+  const r = { overdue_owner_since: '2025-10-01', overdue_optilex_since: '2026-08-01', overdue_owner_cumulative: 100, overdue_optilex_cumulative: 50 };
   assert.equal(creanceAgeMonths(r, 'global'), creanceAgeMonths(r, 'owner'));
 });
 
@@ -237,4 +235,42 @@ test('both recorded family names and all NDA people remain searchable', async ()
   const client = {representative_name: 'LECOMTE Delphine / Jean MARTIN', identity_aliases: ['BRACQUEMOND Delphine']};
   for (const name of ['lecomte', 'bracquemond', 'martin']) assert.equal(matchesClientSearch({client}, normalizeSearch(name)), true);
   assert.equal(distinctCrmName({crm_name: 'LECOMTE Delphine', representatives: [{fullName:'Delphine LECOMTE'}]}), null);
+});
+
+
+test('les avances d’un client ne réduisent pas le retard d’un autre client', () => {
+  const rows = [ligne({ overdue_owner_current_month: 100 }), ligne({ overdue_owner_cumulative: -80 })];
+  const k = computeKpis(rows, 'owner');
+  assert.equal(k.overdueTotalWithCum, 100);
+  assert.equal(k.credit, 80);
+});
+
+test('une avance antérieure couvre le mois avant le filtre retard du mois', () => {
+  const r = row({ overdue_owner_current_month: 165, overdue_owner_cumulative: -330 });
+  assert.equal(scopedOverdueCurrent(r, 'owner'), 0);
+  assert.equal(scopedOverdueCum(r, 'owner'), 0);
+  assert.equal(scopedCredit(r, 'owner'), 165);
+});
+
+test('le global ne compense pas une dette Owner avec un crédit Optilex', () => {
+  const r = row({ overdue_owner_current_month: 300, overdue_optilex_current_month: -100 });
+  assert.equal(scopedOverdueToDate(r, 'global'), 300);
+  assert.equal(scopedCredit(r, 'global'), 100);
+});
+
+test('le bandeau reprend les soldes API, le recouvrement utilise la dette d’ouverture', () => {
+  const r = ligne({ expected_owner: 100, received_owner: 50, received_overdue_owner: 20,
+    balance_owner: { opening_debt: '80', prior_remaining: '60', current_remaining: '50',
+      current_overdue: '0', not_due: '50', credit: '0', recovered_prior: '20' } });
+  const k = computeKpis([r], 'owner');
+  assert.equal(k.expectedGlobal, 100);
+  assert.equal(k.receivedTotal, 50);
+  assert.equal(k.overdueTotal, 0);
+  assert.equal(k.overdueCumTotal, 60);
+  assert.equal(k.overdueTotalWithCum, 60);
+  assert.equal(k.notDue, 50);
+  assert.equal(k.openingDebt, 80);
+  assert.equal(k.recoveredPrior, 20);
+  assert.equal(parseFloat(k.receivedPct.replace(',', '.')), 50);
+  assert.equal(parseFloat(k.overdueRecoveredPct.replace(',', '.')), 25);
 });

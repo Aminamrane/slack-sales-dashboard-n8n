@@ -74,6 +74,7 @@ import {
   canEditContract,
   scopedOverdueCurrent,
   scopedOverdueCum,
+  scopedOpeningDebt,
   formatEUR,
   formatDateFR,
   splitClientIdentity,
@@ -742,7 +743,7 @@ const RowRenderer = React.memo(function RowRenderer({
   const received         = sumOrField('received_owner', 'received_optilex_ttc', fields?.received);
   // guard-ok: noms de champs passés en paramètres à sumOrField, qui applique
   // la règle de vision — pas d'arithmétique dérivée sur place.
-  const overdueCum       = sumOrField('overdue_owner_cumulative', 'overdue_optilex_cumulative', fields?.overdueCum) || 0;
+  const overdueCum       = scopedOverdueCum(row, scope);
   // Trop-perçu reporté de l'entité active (0 si le backend ne l'expose pas).
   const rowCredit        = scopedCredit(row, scope);
   // Dette réelle à cet instant : retard du mois + créances antérieures. Les
@@ -918,7 +919,7 @@ const RowRenderer = React.memo(function RowRenderer({
       {/* Retard sur les mois précédents (cumul, entité active). Sans
           créance mais avec un trop-perçu reporté : montant vert négatif. */}
       {keys.includes('overdueCum') && C('overdueCum', (
-        <OverduePill amount={overdueCum} credit={rowCredit} />
+        <OverduePill amount={overdueCum} />
       ))}
 
       {/* Récupéré sur créances passées — montant seul : le reste dû se lit
@@ -944,7 +945,7 @@ const RowRenderer = React.memo(function RowRenderer({
             placeholderItalic
             valueBold
             // Même logique sur les arriérés : on propose la créance à solder.
-            suggestion={overdueCum}
+            suggestion={scopedOpeningDebt(row, scope)}
             suggestionTitle="Créances antérieures — cliquer pour solder"
           />
         )
@@ -1110,71 +1111,16 @@ function ReadOnlyAmount({ value }) {
 //                            géré côté cell Récupéré via pill verte)
 function RemainingAmount({ expected, received }) {
   const exp = Number(expected || 0);
-  const rec = Number(received || 0);
-  const isChecked = rec >= exp && exp > 0;
-
-  // Animation à jouer SEULEMENT si le check passe de false→true pendant que
-  // le composant est monté (= validation utilisateur). Au mount initial avec
-  // check déjà acquis (= remount virtuoso après scroll), l'animation est
-  // skip et le check apparait directement statique.
-  // Cf. retour dev capture #12 : l'animation se rejouait à chaque scroll.
-  const wasCheckedAtMount = useRef(isChecked);
-  const shouldAnimate = isChecked && !wasCheckedAtMount.current;
-
-  if (exp === 0 && rec === 0) return <EmptyCell />;
-  if (isChecked) {
-    return (
-      <span
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: '100%',
-        }}
-      >
-        <motion.svg
-          width={26}
-          height={26}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="#0f7b6c"
-          strokeWidth={3.2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          initial={shouldAnimate ? { opacity: 0 } : false}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.15 }}
-        >
-          <motion.path
-            d="M5 12.5 L10 17.5 L19 7"
-            initial={shouldAnimate ? { pathLength: 0 } : false}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: 0.55, ease: 'easeOut', delay: 0.05 }}
-          />
-        </motion.svg>
-      </span>
-    );
-  }
-  // Rien reçu encore → afficher le tarif initial en gris
-  if (rec === 0) {
-    return (
-      <span style={{ fontSize: CELL_FONT_SIZE, color: N.text, fontVariantNumeric: 'tabular-nums' }}>
-        {formatEUR(exp)}
-      </span>
-    );
-  }
-  // Reçu partiel → restant en orange, animé
-  const remaining = exp - rec;
+  const remaining = Math.max(exp - Number(received || 0), 0);
+  if (!exp) return <EmptyCell />;
   return (
-    <AnimatedAmount
-      value={remaining}
-      style={{
-        fontSize: CELL_FONT_SIZE,
-        fontWeight: 700,
-        color: '#a4581d',  // orange Notion dark — signal "à percevoir"
-        fontVariantNumeric: 'tabular-nums',
-      }}
-    />
+    <span title={`Attendu du mois : ${formatEUR(exp)}. Reste avant imputation des avances : ${formatEUR(remaining)}.`}
+      style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+      <span style={{ fontSize: CELL_FONT_SIZE, color: N.text, fontVariantNumeric: 'tabular-nums' }}>{formatEUR(exp)}</span>
+      {Number(received || 0) > 0 && <span style={{ fontSize: 10, color: remaining ? '#a4581d' : '#0f7b6c' }}>
+        {remaining ? `Reste ${formatEUR(remaining)}` : 'Réglé'}
+      </span>}
+    </span>
   );
 }
 
@@ -1202,55 +1148,17 @@ function RecoveredAmount({ value, previous }) {
 // les chiffres tac tac tac"). MVP : interpole l'ancienne → nouvelle valeur en
 // 700ms avec ease-out.
 function OverduePill({ amount, previous, credit = 0 }) {
-  // Pas de créance mais un trop-perçu reporté (backend `credit_*`) : la
-  // cellule ne reste plus vide — montant VERT préfixé d'un moins, l'action
-  // finance (déduire ou rembourser) devient visible. Un crédit n'étant pas
-  // un retard, aucun signal rouge n'est déclenché (ici comme sur les
-  // cellules d'identité).
-  if ((!amount || amount === 0) && credit > 0) {
-    return (
-      <span
-        title="Trop-perçu à déduire ou rembourser"
-        style={{
-          fontSize: CELL_FONT_SIZE,
-          fontWeight: 700,
-          color: '#0f7b6c',
-          fontVariantNumeric: 'tabular-nums',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        −{formatEUR(credit)}
-      </span>
-    );
-  }
-  if (!amount || amount === 0) {
-    return <EmptyCell />;
-  }
-  const isPositive = amount > 0;
-  // Créance antérieure = pastille rouge pleine (seul signal couleur des
-  // colonnes financières depuis 2026-08-24). Un montant négatif est un
-  // trop-perçu : pas une créance, donc pas de pastille rouge.
-  return (
-    <span style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      padding: isPositive ? '2px 8px' : 0,
-      borderRadius: 5,
-      background: isPositive ? PRIOR_DEBT_RED.bg : 'transparent',
-      transition: 'background 0.2s ease',
-    }}>
-      <AnimatedAmount
-        value={Number(amount)}
-        previous={previous}
-        style={{
-          fontSize: CELL_FONT_SIZE,
-          fontWeight: 700,
-          color: isPositive ? PRIOR_DEBT_RED.fg : '#0f7b6c',
-          fontVariantNumeric: 'tabular-nums',
-        }}
-      />
-    </span>
-  );
+  if (!amount && !credit) return <EmptyCell />;
+  return <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+    {amount > 0 && <span style={{ padding: '2px 8px', borderRadius: 5, background: PRIOR_DEBT_RED.bg }}>
+      <AnimatedAmount value={Number(amount)} previous={previous}
+        style={{ fontSize: CELL_FONT_SIZE, fontWeight: 700, color: PRIOR_DEBT_RED.fg, fontVariantNumeric: 'tabular-nums' }} />
+    </span>}
+    {credit > 0 && <span title="Trop-perçu à déduire ou rembourser, distinct de la dette"
+      style={{ fontSize: amount > 0 ? 10 : 12, fontWeight: 600, color: '#0f7b6c', whiteSpace: 'nowrap' }}>
+      Crédit {formatEUR(credit)}
+    </span>}
+  </span>;
 }
 
 // DeltaPill — pastille à droite du montant Récupéré, signal visuel sur l'écart

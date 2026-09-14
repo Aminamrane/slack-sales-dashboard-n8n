@@ -1677,6 +1677,8 @@ function ContractInfoList({
     onContractChanged?.();
   }, [pending, patch, onContractChanged]);
 
+  const [paymentDaySaving, setPaymentDaySaving] = useState(false);
+
   const rows = [
     { Icon: Hash,       label: 'Client n°',            value: numeroValue, mono: true },
       {
@@ -1787,30 +1789,36 @@ function ContractInfoList({
       // facturation.
       value: formatDateLongFR(profile?.rdv_onboarding),
     },
-    // Date de paiement (dev 2026-09-07) : le jour du mois à partir duquel le
-    // client est en retard. Par défaut celui de l'onboarding Owner, mais
-    // DISTINCT de lui : la finance le change quand le client paie plus tard
-    // (attendu le 1er, paie le 15 → en retard seulement après le 15).
+    // Premier paiement réel, puis jour modifiable par la direction financière.
     {
       Icon: CalendarClock,
       label: 'Date de paiement',
       copyValue: profile?.payment_day_effective ? `le ${profile.payment_day_effective} du mois` : '',
       node: (editing && canEditMoney) ? (
-        <EditableSelect
+        <select
+          aria-label="Jour de paiement attendu"
+          disabled={paymentDaySaving}
           value={profile?.payment_day ? String(profile.payment_day) : ''}
-          options={PAYMENT_DAY_OPTIONS}
-          optionLabels={{
-            ...PAYMENT_DAY_LABELS,
-            '': profile?.rdv_onboarding
-              ? `Jour de l'onboarding (le ${new Date(profile.rdv_onboarding).getDate()})`
-              : 'Jour de l\'onboarding',
+          onChange={async (event) => {
+            const day = event.target.value;
+            setPaymentDaySaving(true);
+            try {
+              await apiClient.put(`/api/v1/finance-periods/client/${clientId}/payment-day`, { day: day ? Number(day) : null });
+              await onProfileChanged?.();
+              onContractChanged?.();
+            } catch (error) {
+              onShowToast?.(error?.data?.detail || 'Modification du jour impossible', 'error');
+            } finally { setPaymentDaySaving(false); }
           }}
-          onCommit={async (v) => {
-            await apiClient.put(`/api/v1/finance-periods/client/${clientId}/payment-day`, { day: v ? Number(v) : null });
-            onProfileChanged?.();
-          }}
-          width="auto"
-        />
+          style={{ border: `1px solid ${N.border}`, borderRadius: 6, padding: '6px 8px',
+            maxWidth: '100%', fontFamily: 'inherit', color: N.text, background: '#fff' }}
+        >
+          {PAYMENT_DAY_OPTIONS.map((day) => <option key={day} value={day}>
+            {day ? PAYMENT_DAY_LABELS[day] : profile?.first_payment_date
+              ? `Premier paiement (le ${Number(String(profile.first_payment_date).slice(8, 10))})`
+              : 'Automatique au premier paiement'}
+          </option>)}
+        </select>
       ) : (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           {profile?.payment_day_effective ? (
@@ -1818,15 +1826,15 @@ function ContractInfoList({
               le {profile.payment_day_effective} de chaque mois
             </span>
           ) : (
-            <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }}>Vide</span>
+            <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }}>À définir au premier paiement</span>
           )}
           {profile?.payment_day_source === 'finance' && (
             <span title={profile.payment_day_by ? `fixé par ${profile.payment_day_by}` : undefined} style={{ fontSize: 10.5, color: N.textFaint }}>
               fixé par la finance
             </span>
           )}
-          {profile?.payment_day_source === 'onboarding' && (
-            <span style={{ fontSize: 10.5, color: N.textFaint }}>jour de l’onboarding</span>
+          {profile?.payment_day_source === 'first_payment' && (
+            <span style={{ fontSize: 10.5, color: N.textFaint }}>premier paiement réel</span>
           )}
         </span>
       ),
@@ -1990,7 +1998,7 @@ function ContractInfoList({
   );
 }
 
-// Jour de paiement : '' = automatique (jour de l'onboarding), sinon 1 à 31.
+// Jour de paiement : '' = premier paiement réel, sinon 1 à 31.
 const PAYMENT_DAY_OPTIONS = ['', ...Array.from({ length: 31 }, (_, i) => String(i + 1))];
 const PAYMENT_DAY_LABELS = Object.fromEntries(
   Array.from({ length: 31 }, (_, i) => [String(i + 1), `le ${i + 1}${i === 0 ? 'er' : ''} du mois`]),
