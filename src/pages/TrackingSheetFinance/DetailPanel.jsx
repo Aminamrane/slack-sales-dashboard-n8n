@@ -97,6 +97,7 @@ import StructureSplits from './components/StructureSplits.jsx';
 import ExpectedManager from './components/ExpectedManager.jsx';
 import PortalDropdown from './components/PortalDropdown.jsx';
 import OnboardingFacturation from './components/OnboardingFacturation.jsx';
+import CompanyNameInput from './components/CompanyNameInput.jsx';
 import SignedContracts from './components/SignedContracts.jsx';
 
 // Notion palette (sync with index.jsx N).
@@ -1683,11 +1684,10 @@ function ContractInfoList({
         label: 'Société',
         copyValue: profile?.company_name || societeName,
         node: (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end', minWidth: 0, width: '100%' }}>
             {editing ? (
-              <EditableText
+              <CompanyNameInput
                 value={profile?.company_name || societeName}
-                placeholder="Nom de la société"
                 onCommit={async (value) => {
                   try {
                     await apiClient.patch(`/api/v1/finance-periods/client/${clientId}/profile`, { societe: value || '' });
@@ -1698,7 +1698,6 @@ function ContractInfoList({
                     throw e;
                   }
                 }}
-                width="auto"
               />
             ) : <span>{profile?.company_name || societeName}</span>}
             <RelatedEntityList
@@ -2577,7 +2576,7 @@ function RelatedEntityList({ items, kind, clientId, editing, onChanged, onShowTo
   if (!items.length && !editing) return null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end', maxWidth: '100%' }}>
       {items.map((it) => (
         <span key={it.id} style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -2604,7 +2603,7 @@ function RelatedEntityList({ items, kind, clientId, editing, onChanged, onShowTo
         </span>
       ))}
       {editing && (
-        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap', maxWidth: '100%' }}>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
