@@ -399,12 +399,15 @@ export const EXIT_ETATS = new Set([
   'Self-Résiliation',
 ]);
 
+// Masquage facultatif dans « Créances antérieures » (demande du 15/09/2026).
+// Utilise l'état affiché du board, y compris une liquidation en cours.
+export const isLiquidationEtat = (boardEtat) =>
+  boardEtat === 'Liquidation' || boardEtat === 'En cours de liquidation';
+
 // Un client « à sortir » : dans un état de fin de relation, avec des créances
-// antérieures encore dues dans la vision active, et sans perte actée. Il ne
-// doit surtout pas disparaître du filtre « Créances antérieures » : tant que
-// la sortie n'est pas actée, on ne sait pas ce qu'il reste à récupérer
-// (règle dev 2026-09-03). C'est la sortie client qui le fait sortir, rien
-// d'autre.
+// antérieures encore dues dans la vision active, et sans perte actée.
+// L'alerte de sa fiche reste valable même si la finance choisit de masquer
+// les liquidations dans la vue de suivi : le masquage ne solde aucune dette.
 export const isExitCandidate = (r, boardEtat, scope) =>
   !!boardEtat && EXIT_ETATS.has(boardEtat)
   && !r?.client?.is_loss
