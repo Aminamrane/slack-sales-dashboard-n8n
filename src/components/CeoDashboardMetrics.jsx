@@ -94,6 +94,7 @@ export function CeoFinanceMetrics({ onOpenFinance, darkMode }) {
 
 export function CeoProductMetrics({ boardRows, darkMode }) {
   const product = useDashboardData('/api/v1/ceo-dashboard/product', 15 * 60 * 1000);
+  const identities = useDashboardData('/api/v1/ceo-dashboard/portfolio', 15 * 60 * 1000);
   const onboarding = useMemo(() => {
     if (!Array.isArray(boardRows)) return null;
     const clients = boardRows.filter((r) => !r.is_pending_contract);
@@ -102,6 +103,16 @@ export function CeoProductMetrics({ boardRows, darkMode }) {
       remaining: clients.filter((r) => isCurrentProductClient(r, displayEtat(r)) && !r.rdv_onboarding_done).length,
     };
   }, [boardRows]);
+  const directors = useMemo(() => {
+    if (!Array.isArray(boardRows) || !identities.data) return null;
+    const clients = boardRows.filter((r) => isCurrentProductClient(r, displayEtat(r)));
+    return clients.reduce((totals, row) => {
+      const identity = identities.data.clients?.[row.numero_client];
+      totals.count += identity?.directors ?? 0;
+      if (!identity?.directors_documented) totals.missing++;
+      return totals;
+    }, { count: 0, missing: 0 });
+  }, [boardRows, identities.data]);
   const d = product.data;
   const formatDate = (v) => v ? new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris' }).format(new Date(v)) : 'non renseignée';
   return <section className={`ceo-metrics-section${darkMode ? ' is-dark' : ''}`} aria-label="Produit">
@@ -110,19 +121,19 @@ export function CeoProductMetrics({ boardRows, darkMode }) {
       <Card title="Onboarding Owner" Icon={CalendarCheck} color="#10b981" loading={!onboarding} footer="Effectués par le suivi client · à faire parmi les clients en cours">
         <div className="ceo-metric-value">{onboarding?.done}<span> effectués</span></div><div className="ceo-metric-secondary"><strong>{onboarding?.remaining}</strong><span>restent à onboarder</span></div>
       </Card>
-      <Card title="Sociétés accompagnées" Icon={Building2} color="#5b6abf" {...product} footer={d ? `Sociétés référencées · dont ${d.archived_companies ?? '—'} archivées` : 'Source : interface client'}>
+      <Card title="Sociétés accompagnées" Icon={Building2} color="#5b6abf" {...product} footer={d ? `Sociétés référencées · dont ${d.archived_companies ?? '—'} archivées` : 'Sociétés et économies : interface client'}>
         <div className="ceo-metric-value">{d?.companies == null ? '—' : new Intl.NumberFormat('fr-FR').format(d.companies)}</div><div className="ceo-metric-note">Interface client · au {formatDate(d?.companies_as_of)}</div>
       </Card>
-      <Card title="Dirigeants accompagnés" Icon={Users} color="#8b5cf6" {...product} footer="Nombre de personnes distinctes · source interface client">
-        <div className="ceo-metric-value">{d?.directors == null ? '—' : new Intl.NumberFormat('fr-FR').format(d.directors)}</div>
-        {d?.directors == null && <div className="ceo-metric-note">Nombre de dirigeants en attente du partenaire</div>}
+      <Card title="Dirigeants accompagnés" Icon={Users} color="#8b5cf6" {...identities} loading={identities.loading || !directors} footer={directors?.missing ? `${directors.missing} dossiers sans identité NDA documentée` : 'Identités documentées lors de la génération du NDA'}>
+        <div className="ceo-metric-value">{directors ? new Intl.NumberFormat('fr-FR').format(directors.count) : '—'}</div>
+        <div className="ceo-metric-note">Source : NDA Owner · clients en cours</div>
       </Card>
       <Card title="Économies réalisées" Icon={Sparkles} color="#f59e0b" {...product} footer="Total réalisé · économies à venir exclues">
         <div className="ceo-metric-value">{euro(d?.savings)}</div><div className="ceo-metric-note">Arrêté au {formatDate(d?.savings_as_of)}</div>
       </Card>
     </div>
     {d && <p className="ceo-metrics-caption" role={d.stale ? 'status' : undefined}>
-      {d.stale ? 'Actualisation temporairement indisponible · dernières données disponibles' : 'Source : interface client'}
+      {d.stale ? 'Actualisation temporairement indisponible · dernières données disponibles' : 'Sociétés et économies : interface client'}
       {' · Dernière vérification le '}{formatDate(d.checked_at)}{' à '}{new Intl.DateTimeFormat('fr-FR', { hour:'2-digit', minute:'2-digit', timeZone:'Europe/Paris' }).format(new Date(d.checked_at))}
     </p>}
   </section>;
