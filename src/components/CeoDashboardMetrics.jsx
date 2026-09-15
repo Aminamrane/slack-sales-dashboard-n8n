@@ -132,9 +132,8 @@ export function CeoProductMetrics({ boardRows, darkMode }) {
         <div className="ceo-metric-value">{euro(d?.savings)}</div><div className="ceo-metric-note">Arrêté au {formatDate(d?.savings_as_of)}</div>
       </Card>
     </div>
-    {d && <p className="ceo-metrics-caption" role={d.stale ? 'status' : undefined}>
-      {d.stale ? 'Actualisation temporairement indisponible · dernières données disponibles' : 'Sociétés et économies : interface client'}
-      {' · Dernière vérification le '}{formatDate(d.checked_at)}{' à '}{new Intl.DateTimeFormat('fr-FR', { hour:'2-digit', minute:'2-digit', timeZone:'Europe/Paris' }).format(new Date(d.checked_at))}
+    {d?.stale && <p className="ceo-metrics-caption" role="status">
+      Actualisation temporairement indisponible · dernières données disponibles
     </p>}
   </section>;
 }
