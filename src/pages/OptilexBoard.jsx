@@ -1,4 +1,5 @@
 import { matchesUpcomingIntegration } from "../utils/boardIntegration.js";
+import { matchesSignedClient, resolvePendingExit } from "../utils/boardClientState.js";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
@@ -166,6 +167,9 @@ const PENDING_ETAT_DISPLAY = {
   "En cours de liquidation": "En cours de liquidation",
 };
 export const displayEtat = (r) => {
+  const rawState = r.etat_manuel || r.etat;
+  const effectiveState = resolvePendingExit(rawState, r.etat_date, _todayParisISO());
+  if (effectiveState !== rawState) return effectiveState;
   if (r.etat_manuel && !isEtatPending(r)) return r.etat_manuel;   // override cabinet, une fois EFFECTIF (date d'effet atteinte)
   if (r.etat_manuel && PENDING_ETAT_DISPLAY[r.etat_manuel]) return PENDING_ETAT_DISPLAY[r.etat_manuel]; // prévu à date future -> déjà « en cours de … »
   if (r.etat) return r.etat;                 // état du Sheet (vérité des ÉTATS)
@@ -222,6 +226,7 @@ const isRenewalUpcoming = (r) => {
 };
 
 const matchesCat = (r, cat) => {
+  if (cat === "Signé") return matchesSignedClient(r, displayEtat(r));
   if (cat === "Onboarding à venir") return isOnboardingUpcoming(r);
   if (cat === "Intégration à venir") return isIntegrationUpcoming(r);
   if (cat === "Inactifs") return isInactif(r);
@@ -1000,6 +1005,7 @@ export default function OptilexBoard({ embed = false }) {
     for (const r of rows) {
       const e = displayEtat(r);   // état effectif (override / Sheet / signé interne / attente / en cours)
       if (e) c[e] = (c[e] || 0) + 1;
+      if (e !== "Signé" && matchesSignedClient(r, e)) c["Signé"] = (c["Signé"] || 0) + 1;
       if (isOnboardingUpcoming(r)) c["Onboarding à venir"] = (c["Onboarding à venir"] || 0) + 1;
       if (isIntegrationUpcoming(r)) c["Intégration à venir"] = (c["Intégration à venir"] || 0) + 1;
       if (isIntegrationOverdue(r)) c["__integration_overdue"] = (c["__integration_overdue"] || 0) + 1;

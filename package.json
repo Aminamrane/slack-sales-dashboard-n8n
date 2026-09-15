@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "verify": "node src/pages/TrackingSheetFinance/guard.mjs && npm run test",
-    "test": "node --test src/services/apiClient.test.js src/pages/TrackingSheetFinance/finance.test.js src/pages/TrackingSheetFinance/actionLabel.test.js src/utils/workHoursPeriod.test.js src/utils/boardIntegration.test.js",
+    "test": "node --test src/services/apiClient.test.js src/pages/TrackingSheetFinance/finance.test.js src/pages/TrackingSheetFinance/actionLabel.test.js src/utils/workHoursPeriod.test.js src/utils/boardIntegration.test.js src/utils/dashboardAudience.test.js",
     "guard": "node src/pages/TrackingSheetFinance/guard.mjs"
   },
   "dependencies": {

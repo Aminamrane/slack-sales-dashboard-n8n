@@ -5,6 +5,7 @@ import apiClient from "../services/apiClient";
 import lightIcon from "../assets/light.png";
 import darkIcon from "../assets/dark.png";
 import meetIcon from "../assets/meet.png";
+import { usesDashboardOnlyNavbar } from "../utils/dashboardAudience.js";
 
 const COLORS = {
   primary: "#6366f1",
@@ -165,6 +166,7 @@ function AvailabilityControl({ darkMode }) {
 
 export default function SharedNavbar({ session, darkMode, setDarkMode, notification, hideDarkToggle, centerShift = 0 }) {
   const navigate = useNavigate();
+  const dashboardOnly = usesDashboardOnlyNavbar(apiClient.getUser());
 
   // ── COLLAPSE STATE (Dynamic Island) ─────────────────────────────────────────
   const [islandOpen, setIslandOpen] = useState(false);
@@ -714,7 +716,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
             )}
 
             {/* Mes pages - Dropdown */}
-            <div style={{
+            {!dashboardOnly && <><div style={{
               position: 'relative',
               opacity: collapsed ? 0 : 1,
               maxWidth: collapsed ? 0 : '200px',
@@ -1124,7 +1126,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                 onMouseEnter={(e) => e.target.style.transform = 'scale(1.05)'}
                 onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
               />
-            </div>
+            </div></>}
 
             {/* Logout */}
             <button
@@ -1165,7 +1167,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
       </div>
 
       {/* ── STATUT DISPO/INDISPO (chantier réactivité) ── */}
-      {!collapsed && <AvailabilityControl darkMode={darkMode} />}
+      {!collapsed && !dashboardOnly && <AvailabilityControl darkMode={darkMode} />}
 
       {/* ── NOTIFICATION ISLAND (visible only when navbar is expanded) ── */}
       {unreadCount > 0 && !collapsed && (
