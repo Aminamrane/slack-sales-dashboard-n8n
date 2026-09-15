@@ -1,0 +1,54 @@
+.finance-calls { overflow: auto; padding: 22px 4px 28px; color: #37352f; font-size: 13px; }
+.finance-calls button, .fc-dialog button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: #fff; border: 1px solid #e5e5e2; border-radius: 6px; padding: 7px 11px; cursor: pointer; font: inherit; color: inherit; }
+.finance-calls button:hover, .fc-dialog button:hover { background: #f5f5f3; }
+.finance-calls button:disabled { opacity: .45; cursor: default; }
+.finance-calls button:focus-visible, .fc-dialog button:focus-visible { outline: 2px solid #2383e2; outline-offset: 3px; }
+.finance-calls h2, .fc-dialog h2 { margin: 0; font-size: 19px; font-weight: 650; }
+.finance-calls h3, .fc-dialog h3 { font-size: 14px; font-weight: 650; margin: 22px 0 12px; }
+.fc-heading, .fc-dialog header { display: flex; justify-content: space-between; gap: 18px; align-items: center; }
+.fc-heading p, .fc-dialog header p { margin: 7px 0 0; color: #787774; }
+.fc-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 24px 0 20px; }
+.fc-filters label { display: grid; gap: 6px; color: #787774; }
+.fc-filters input { padding: 7px 10px; border: 1px solid #e5e5e2; border-radius: 6px; font: inherit; color: #37352f; background: white; }
+.fc-filters > span { color: #787774; font-size: 12px; padding-bottom: 9px; margin-left: auto; }
+.fc-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.fc-cards .fc-card { display: flex; flex-direction: column; align-items: start; text-align: left; gap: 10px; border: 1px solid #e9e9e7; border-radius: 9px; padding: 18px 20px; background: #fff; }
+.fc-card > span { color: #787774; }
+.fc-card strong { font-size: 29px; font-weight: 650; line-height: 1.1; }
+.fc-card small { color: #787774; display: inline-flex; align-items: center; gap: 6px; }
+.fc-cards .fc-total { background: #f7f8f7; }
+.fc-cards .fc-selected { border-color: #0f7b6c; background: #f1f8f6; box-shadow: inset 0 0 0 1px #0f7b6c; }
+.fc-selected strong { color: #0f7b6c; }
+.fc-list-heading { display: flex; align-items: baseline; gap: 12px; margin-top: 5px; }
+.fc-list-heading > span, .fc-muted { color: #787774; }
+.fc-table-wrap { border: 1px solid #e9e9e7; border-radius: 8px; overflow: auto; }
+.finance-calls table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+.finance-calls th { background: #fafaf9; font-weight: 500; color: #787774; text-align: left; }
+.finance-calls td, .finance-calls th { padding: 13px 14px; border-bottom: 1px solid #eeedeb; }
+.finance-calls tbody tr:last-child td { border-bottom: 0; }
+.finance-calls td strong { display: block; max-width: 280px; white-space: normal; font-weight: 500; }
+.finance-calls td small, .fc-detail-grid small { display: block; color: #787774; margin-top: 4px; }
+.fc-inline { display: inline-flex; align-items: center; gap: 5px; }
+.fc-result { background: #f1f1ef; color: #787774; border-radius: 4px; padding: 3px 6px; font-size: 12px; }
+.fc-answered { background: #e7f3ed; color: #0f7b6c; }
+.fc-pagination { display: flex; align-items: center; justify-content: end; gap: 8px; margin-top: 14px; }
+.fc-pagination > span { color: #787774; margin-right: auto; }
+.fc-empty { border: 1px dashed #e9e9e7; border-radius: 8px; padding: 36px; text-align: center; color: #787774; }
+.fc-empty svg { margin: auto; }
+.fc-error { border-radius: 6px; background: #fff2f0; color: #b74133; padding: 12px; }
+.fc-dialog { position: fixed; margin: auto; width: min(860px, calc(100vw - 40px)); max-height: 88vh; padding: 26px; border: 1px solid #e9e9e7; border-radius: 12px; color: #37352f; background: #fff; box-shadow: 0 18px 60px #0003; font: 13px Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.fc-dialog::backdrop { background: #18252b66; }
+.fc-dialog header { border-bottom: 1px solid #e9e9e7; padding-bottom: 18px; }
+.fc-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding: 20px 0; margin: 0; }
+.fc-detail-grid dt { color: #787774; margin-bottom: 5px; }
+.fc-detail-grid dd { margin: 0; }
+.fc-recording { padding: 14px; background: #f5f7f6; border-radius: 8px; }
+.fc-recording audio { width: 100%; }
+.fc-summary { white-space: pre-wrap; line-height: 1.7; overflow-wrap: anywhere; }
+.fc-transcript { display: grid; gap: 12px; }
+.fc-utterance { padding: 13px 15px; background: #f7f7f6; border-radius: 8px; }
+.fc-utterance.fc-team { background: #edf6f3; }
+.fc-utterance > div { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; }
+.fc-utterance time { color: #787774; }
+.fc-utterance p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; margin: 8px 0 0; }
+@media(max-width: 700px) { .fc-cards { grid-template-columns: 1fr; } .fc-heading { align-items: start; } .fc-filters > span { margin-left: 0; } .fc-dialog { padding: 18px; } }

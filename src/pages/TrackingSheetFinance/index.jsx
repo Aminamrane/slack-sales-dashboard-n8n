@@ -33,7 +33,7 @@ import {
   AlertCircle, CheckCircle2, Home, MessageSquare, Mail, PanelLeft,
   Edit3, Plus, Filter, ArrowUpDown, MoreHorizontal, Share2,
   CheckCircle, Sparkles, FileText, Users, Settings, Clock,
-  XCircle, CircleDot, FilterX, Eye, Check, Star, Handshake, TriangleAlert, Download,
+  XCircle, CircleDot, FilterX, Eye, Check, Star, Handshake, TriangleAlert, Download, Phone,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
@@ -43,6 +43,7 @@ import { matchesSavedFilter, describeFilter } from './savedFilters.js';
 import LossesView from './components/LossesView.jsx';
 import ReceiptsView from './components/ReceiptsView.jsx';
 import CreancesExitBanner from './components/CreancesExitBanner.jsx';
+import CallsView from './components/CallsView.jsx';
 // Icônes de navigation dessinées pour la page (barre latérale, onglets,
 // filtre responsable) : filaires, monochromes, dans l'esprit de la référence
 // donnée par le dev (2026-09-03). Pas de bibliothèque : le trait est le nôtre.
@@ -330,6 +331,15 @@ export default function TrackingSheetFinance() {
 
   // ── Auth gating (mirrors Campaigns.jsx) ─────────────────────────────
   const [authChecked, setAuthChecked] = useState(false);
+  const [canViewCalls, setCanViewCalls] = useState(false);
+  useEffect(() => {
+    if (!authChecked) return;
+    let live = true;
+    apiClient.get('/api/v1/finance-calls/access')
+      .then(data => { if (live) setCanViewCalls(data?.allowed === true); })
+      .catch(() => { if (live) setCanViewCalls(false); });
+    return () => { live = false; };
+  }, [authChecked]);
   useEffect(() => {
     const token = apiClient.getToken();
     const user = apiClient.getUser();
@@ -942,6 +952,7 @@ export default function TrackingSheetFinance() {
           { id: 'table',    label: 'Suivi mensuel', Icon: TableIcon,   active: onTable && viewFilter === 'all', action: goTable('all') },
           { id: 'receipts', label: 'Encaissements', Icon: InboxIcon,   active: activeTab === 'receipts', action: () => setActiveTab('receipts') },
           { id: 'losses',   label: 'Pertes',        Icon: LossIcon,    active: activeTab === 'losses',   action: () => setActiveTab('losses') },
+          ...(canViewCalls ? [{ id: 'calls', label: 'Tracking des appels', Icon: Phone, active: activeTab === 'calls', action: () => setActiveTab('calls') }] : []),
         ],
       },
       {
@@ -965,7 +976,7 @@ export default function TrackingSheetFinance() {
         ],
       },
     ];
-  }, [activeTab, viewFilter, viewCounts, exportToExcel, exportedRows.length]);
+  }, [activeTab, viewFilter, viewCounts, exportToExcel, exportedRows.length, canViewCalls]);
 
   if (!authChecked) {
     return null;
@@ -1037,12 +1048,14 @@ export default function TrackingSheetFinance() {
           <TitleBlock
             kpis={kpis}
             loading={loading}
+            showKpis={activeTab !== 'calls'}
           />
 
           {/* Tab row + actions */}
           <TabRow
             activeTab={activeTab}
             setActiveTab={setActiveTab}
+            canViewCalls={canViewCalls}
             period={period}
             setPeriod={setPeriod}
             searchQuery={searchQuery}
@@ -1092,7 +1105,7 @@ export default function TrackingSheetFinance() {
             </>
           )}
 
-          {error && (
+          {error && activeTab !== 'calls' && (
             <div style={{
               margin: '12px 0',
               padding: 14,
@@ -1126,7 +1139,9 @@ export default function TrackingSheetFinance() {
               transition={{ duration: 0.4, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
               style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
             >
-              {activeTab === 'losses' ? (
+              {activeTab === 'calls' && canViewCalls ? (
+                <CallsView />
+              ) : activeTab === 'losses' ? (
                 <LossesView
                   boardMap={boardMap}
                   scope={scope}
@@ -1625,7 +1640,7 @@ const iconBtnStyle = {
 // ════════════════════════════════════════════════════════════════════════════
 // TITLE BLOCK (icon + title + subtitle + KPI strip)
 // ════════════════════════════════════════════════════════════════════════════
-function TitleBlock({ kpis, loading }) {
+function TitleBlock({ kpis, loading, showKpis = true }) {
   // Compactage 2026-05-11 : titre 40 → 22, KPIs inline avec le titre,
   // padding vertical réduit → max d'espace vertical pour le tableau.
   return (
@@ -1657,7 +1672,7 @@ function TitleBlock({ kpis, loading }) {
       </h1>
 
       {/* KPI mini-table */}
-      <div className="tsf-kpis" style={{
+      {showKpis && <div className="tsf-kpis" style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(5, auto)',
         marginLeft: 12,
@@ -1744,7 +1759,7 @@ function TitleBlock({ kpis, loading }) {
             )}
           </div>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -2426,7 +2441,7 @@ function HiddenColsPill({ hiddenKeys, labels, onShowCol, onShowAll }) {
 }
 
 function TabRow({
-  activeTab, setActiveTab,
+  activeTab, setActiveTab, canViewCalls = false,
   period, setPeriod,
   searchQuery, setSearchQuery, searchResultCount,
   onRefresh, refreshing, onExport, exportCount = 0,
@@ -2444,6 +2459,7 @@ function TabRow({
     { key: 'receipts', label: 'Encaissements',       Icon: InboxIcon },
     // Quantifier ce qui a été abandonné (demande dev 2026-09-01).
     { key: 'losses',   label: 'Pertes',              Icon: LossIcon },
+    ...(canViewCalls ? [{ key: 'calls', label: 'Tracking des appels', Icon: Phone }] : []),
   ];
 
   return (
@@ -2503,6 +2519,7 @@ function TabRow({
       <div style={{ flex: 1 }} />
 
       {/* Vision Owner / Opti'lex / Global (segmented control) */}
+      {activeTab !== 'calls' && <>
       <ScopeSelector scope={scope} setScope={setScope} canGlobal={canGlobalScope} />
 
       {/* Hidden columns dropdown — left of month nav */}
@@ -2592,6 +2609,7 @@ function TabRow({
           <ChevronDown size={13} />
         </button>
       </div>
+      </>}
     </div>
   );
 }
