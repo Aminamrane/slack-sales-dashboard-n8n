@@ -76,7 +76,7 @@ import {
   scopedReceivedTotal,
   normalizeSearch,
   matchesClientSearch,
-  isExitCandidate,
+  isLiquidationEtat,
 } from './constants.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -393,16 +393,19 @@ export default function TrackingSheetFinance() {
   // L'ancienneté vient du serveur (`overdue_*_since`) : c'est le premier mois
   // d'une dette qui n'a jamais été soldée depuis.
   const [creanceAge, setCreanceAge] = useState('all');
-  // Dans « Créances antérieures », ne voir que les clients en fin de relation
-  // (liquidation, résiliation…) qui gardent des créances : ceux dont la sortie
-  // est à acter (règle dev 2026-09-03). Bascule depuis le bandeau d'alerte.
-  const [creanceExitOnly, setCreanceExitOnly] = useState(false);
+  // Option de suivi, limitée aux créances antérieures : les liquidations
+  // peuvent être masquées sans changer les données ni les autres vues.
+  const [hideLiquidations, setHideLiquidations] = useState(false);
 
   // État board d'une ligne — la règle d'affichage du board, jamais recopiée.
   const boardEtatOf = useCallback((r) => {
     const br = (r.client?.numero_client && boardMap) ? boardMap.get(r.client.numero_client) : null;
     return br ? displayEtat(br) : null;
   }, [boardMap]);
+
+  const isHiddenInView = useCallback((r, filterKey) =>
+    filterKey === 'creances' && hideLiquidations && isLiquidationEtat(boardEtatOf(r)),
+  [hideLiquidations, boardEtatOf]);
 
   // Prédicat d'une vue-filtre pour une row, dans la vision active.
   const matchesView = useCallback((r, filterKey) => {
@@ -415,7 +418,6 @@ export default function TrackingSheetFinance() {
         return !r.client?.payment_day;
       case 'creances': {
         if (scopedOverdueCum(r, scope) <= 0) return false;
-        if (creanceExitOnly && !isExitCandidate(r, boardEtatOf(r), scope)) return false;
         if (creanceAge === 'all') return true;
         const mois = creanceAgeMonths(r, scope);
         if (mois === null) return creanceAge === 'recent';
@@ -461,22 +463,7 @@ export default function TrackingSheetFinance() {
       default:
         return true; // 'all'
     }
-  }, [scope, boardMap, relanceMonths, creanceAge, creanceExitOnly, boardEtatOf]);
-
-  // Clients en fin de relation qui gardent des créances antérieures : ils
-  // restent dans la vue (on ne les invisibilise pas), et on les compte pour
-  // l'alerte — indépendamment de l'ancienneté choisie.
-  const creanceExitCount = useMemo(() => {
-    if (viewFilter !== 'creances') return 0;
-    let n = 0;
-    for (const r of rows) {
-      if (isExitCandidate(r, boardEtatOf(r), scope)) n += 1;
-    }
-    return n;
-  }, [rows, scope, viewFilter, boardEtatOf]);
-  useEffect(() => {
-    if (viewFilter !== 'creances') setCreanceExitOnly(false);
-  }, [viewFilter]);
+  }, [scope, boardMap, relanceMonths, creanceAge]);
 
   // Filtre « Responsable » : les personnes qui suivent au moins un client du
   // mois, avec leur volume, et « sans responsable » (demande dev 2026-09-03 :
@@ -533,15 +520,15 @@ export default function TrackingSheetFinance() {
     for (const v of VIEW_FILTERS) {
       counts[v.key] = v.key === 'all'
         ? rows.length
-        : rows.filter((r) => matchesView(r, v.key)).length;
+        : rows.filter((r) => matchesView(r, v.key) && !isHiddenInView(r, v.key)).length;
     }
     return counts;
-  }, [rows, matchesView]);
+  }, [rows, matchesView, isHiddenInView]);
 
   // Apply business filters to rows : vue-filtre active (chips) PUIS filtres
   // dropdown historiques (union : un lead matche s'il satisfait AU MOINS UN
   // filtre actif). La recherche s'applique en aval dans TableView.
-  const filteredRows = useMemo(() => {
+  const rowsBeforeLiquidationFilter = useMemo(() => {
     const viewed = viewFilter === 'all'
       ? rows
       : rows.filter((r) => matchesView(r, viewFilter));
@@ -583,6 +570,20 @@ export default function TrackingSheetFinance() {
       return false;
     });
   }, [rows, tableFilters, viewFilter, matchesView, boardMap, savedFilters, scope]);
+
+  // Garder le compteur avant masquage permet toujours de réafficher les
+  // clients. Il suit l'ancienneté, les filtres et la recherche de cette vue.
+  const liquidationCount = useMemo(() => {
+    if (viewFilter !== 'creances') return 0;
+    const query = normalizeSearch(searchQuery.trim());
+    return rowsBeforeLiquidationFilter.filter((r) =>
+      isLiquidationEtat(boardEtatOf(r)) && matchesClientSearch(r, query)).length;
+  }, [rowsBeforeLiquidationFilter, viewFilter, boardEtatOf, searchQuery]);
+
+  // Tableau, recherche, export et KPI partagent les mêmes lignes visibles.
+  const filteredRows = useMemo(() =>
+    rowsBeforeLiquidationFilter.filter((r) => !isHiddenInView(r, viewFilter)),
+  [rowsBeforeLiquidationFilter, isHiddenInView, viewFilter]);
 
   // Compteur de résultats de recherche — même prédicat que le filtre de
   // TableView (matchesClientSearch), appliqué APRÈS vues-filtres + filtres
@@ -1081,11 +1082,13 @@ export default function TrackingSheetFinance() {
                 onCreanceAgeChange={setCreanceAge}
                 onRelanceMonthsChange={setRelanceMonths}
               />
-              <CreancesExitBanner
-                count={creanceExitCount}
-                only={creanceExitOnly}
-                onToggle={() => setCreanceExitOnly((v) => !v)}
-              />
+              {viewFilter === 'creances' && (
+                <CreancesExitBanner
+                  count={liquidationCount}
+                  hidden={hideLiquidations}
+                  onToggle={() => setHideLiquidations((v) => !v)}
+                />
+              )}
             </>
           )}
 
