@@ -1595,7 +1595,7 @@ export default function OptilexBoard({ embed = false }) {
       </div>
 
       <AnimatePresence>
-        {selRow && <DetailPanel key="detail" row={selRow} onClose={closeDetail} reload={reloadBoard} patch={patch} changeEtat={changeEtat} etatHistVersion={etatHistVersion} recordMeteo={recordMeteo} meteoHistVersion={meteoHistVersion} />}
+        {selRow && <DetailPanel key="detail" row={selRow} onClose={closeDetail} reload={reloadBoard} reloadRatings={() => { mutSeq.current += 1; reloadBoard(); }} patch={patch} changeEtat={changeEtat} etatHistVersion={etatHistVersion} recordMeteo={recordMeteo} meteoHistVersion={meteoHistVersion} />}
       </AnimatePresence>
     </div>
   );
@@ -2414,7 +2414,7 @@ function ClientAgendaModal({ row, num, onClose }) {
   );
 }
 
-function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion, recordMeteo, meteoHistVersion }) {
+function DetailPanel({ row, onClose, reload, reloadRatings, patch, changeEtat, etatHistVersion, recordMeteo, meteoHistVersion }) {
   const num = row.numero_client;
   // Rafraîchit le bloc signature Opti'Lex après un changement d'email (le destinataire du
   // rappel Yousign est re-résolu côté backend) : bumpé par EmailSelect après le patch commité.
@@ -2524,7 +2524,7 @@ function DetailPanel({ row, onClose, reload, patch, changeEtat, etatHistVersion,
           {row.numero_client && (
             <div className="ob-sec" style={{ animationDelay: "0.075s" }}>
               <SecTitle icon="meteo">Météo client</SecTitle>
-              <MeteoSection row={row} num={num} recordMeteo={recordMeteo} version={meteoHistVersion} />
+              <MeteoSection key={num} row={row} num={num} recordMeteo={recordMeteo} version={meteoHistVersion} onChanged={reloadRatings} />
             </div>
           )}
 
@@ -2894,21 +2894,25 @@ function JalonRow({ label, done, date, onToggle, onDate, alwaysDate = false, tog
 
 // Section météo de la fiche : note courante (badge + qui/quand), saisie inline (Owner
 // uniquement pour l'instant : score + note d'interaction), et historique des notations.
-function MeteoSection({ row, num, recordMeteo, version }) {
+function MeteoSection({ row, num, recordMeteo, version, onChanged }) {
   const [hist, setHist] = useState([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [historyVersion, setHistoryVersion] = useState(0);
+  const refreshHistory = () => setHistoryVersion((v) => v + 1);
   const [sel, setSel] = useState(null);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const settable = meteoSettable();
   useEffect(() => {
     let alive = true;
-    setSel(null); setNote("");
+    setHistoryError("");
     apiClient.get(`/api/v1/optilex/meteo-history?numero_client=${encodeURIComponent(num)}`)
-      .then((r) => { if (alive) setHist(r.history || []); })
-      .catch(() => {});
+      .then((r) => { if (alive) { setHist(r.history || []); setHistoryLoaded(true); } })
+      .catch(() => { if (alive) setHistoryError("Impossible de charger les notations. Réessayez."); });
     return () => { alive = false; };
-  }, [num, version]);
-  const current = hist[0] || (row.meteo_score != null
+  }, [num, version, historyVersion]);
+  const current = historyLoaded ? (hist[0] || null) : (row.meteo_score != null
     ? { score: row.meteo_score, note: row.meteo_note, author_name: row.meteo_by, created_at: row.meteo_at }
     : null);
   const noteRequired = meteoNoteRequired(sel);
@@ -2964,6 +2968,9 @@ function MeteoSection({ row, num, recordMeteo, version }) {
         </div>
       )}
 
+      {historyError && <div role="alert" style={{ color: "#b91c1c", marginBottom: 10 }}>
+        {historyError} <button type="button" onClick={refreshHistory}>Réessayer</button>
+      </div>}
       {/* Historique des notations (plus récent d'abord) */}
       {hist.length > 0 && (
         <div>
@@ -2983,7 +2990,13 @@ function MeteoSection({ row, num, recordMeteo, version }) {
                       <span style={{ fontSize: 11, fontWeight: 700, color: st.color }}>Note {h.score}</span>
                       <span style={{ fontSize: 11, color: MUTED }}>{timeAgo(h.created_at)}</span>
                     </div>
-                    {h.note && <div style={{ fontSize: 13.5, color: TEXT, lineHeight: 1.45, marginTop: 2, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{h.note}</div>}
+                    <RatingHistoryActions rating={h} numero={num}
+                      onEdited={(updated) => {
+                        setHist((items) => items.map((item) => item.id === updated.id ? updated : item));
+                        onChanged();
+                      }}
+                      onDeleted={() => { setHist((items) => items.filter((item) => item.id !== h.id)); refreshHistory(); onChanged(); }}
+                      onConflict={refreshHistory} />
                   </div>
                 </motion.div>
               );
@@ -2993,6 +3006,68 @@ function MeteoSection({ row, num, recordMeteo, version }) {
       )}
     </div>
   );
+}
+
+// Editing preserves the score and original chronology. Capabilities come from the API.
+function RatingHistoryActions({ rating, numero, onEdited, onDeleted, onConflict }) {
+  const [mode, setMode] = useState(null);
+  const [draft, setDraft] = useState("");
+  const [expectedNote, setExpectedNote] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const begin = (nextMode) => {
+    setExpectedNote(rating.note ?? null);
+    setDraft(rating.note || "");
+    setError(""); setMode(nextMode);
+  };
+  const cancel = () => { setMode(null); setError(""); };
+  const submit = async () => {
+    if (busy || (mode === 'edit' && !draft.trim())) return;
+    setBusy(true); setError("");
+    try {
+      const payload = { numero_client: numero, expected_note: expectedNote };
+      if (mode === 'edit') {
+        const updated = await apiClient.patch(`/api/v1/optilex/meteo/${rating.id}/comment`, { ...payload, note: draft.trim() });
+        onEdited(updated);
+      } else {
+        await apiClient.request(`/api/v1/optilex/meteo/${rating.id}`, { method: 'DELETE', body: JSON.stringify(payload) });
+        onDeleted();
+      }
+      setMode(null);
+    } catch (e) {
+      setError(typeof e.message === 'string' ? e.message : "Impossible d’enregistrer cette modification.");
+      if (e.status === 409 || e.status === 404) onConflict();
+    } finally { setBusy(false); }
+  };
+  const actionStyle = { border: "none", background: "transparent", padding: "5px 0", fontSize: 12, color: MUTED, cursor: "pointer", fontFamily: "inherit" };
+  return <div>
+    {rating.note && <div style={{ fontSize: 13.5, color: TEXT, lineHeight: 1.45, marginTop: 2, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{rating.note}</div>}
+    {rating.note_updated_at && <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>
+      Commentaire modifié{rating.note_updated_by_name ? ` par ${rating.note_updated_by_name}` : ""} · {timeAgo(rating.note_updated_at)}
+    </div>}
+    {!mode && <div style={{ display: "flex", gap: 16 }}>
+      {rating.can_edit_note && <button type="button" style={actionStyle} onClick={() => begin('edit')}>Modifier le commentaire</button>}
+      {rating.can_delete && <button type="button" style={{ ...actionStyle, color: "#b91c1c" }} onClick={() => begin('delete')}>Supprimer la notation</button>}
+    </div>}
+    {mode && <div style={{ marginTop: 8, padding: 12, border: `1px solid ${BORDER}`, borderRadius: 8, background: "#f7f8fa" }}>
+      {mode === 'edit' ? <label style={{ display: "block", fontSize: 12 }}>
+        Commentaire de la notation {rating.score}/5
+        <textarea aria-label="Modifier le commentaire de notation" value={draft} onChange={(e) => setDraft(e.target.value)}
+          maxLength={4000} rows={3} disabled={busy} autoFocus
+          style={{ ...inputStyle, width: "100%", marginTop: 6, resize: "vertical" }} />
+      </label> : <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.5 }}>
+        Supprimer cette note de {rating.score}/5 et son commentaire ? La dernière notation restante deviendra la note courante, ou le client sera « non noté ». Les alertes déjà envoyées ne seront pas retirées.
+      </p>}
+      {error && <p role="alert" style={{ color: "#b91c1c", fontSize: 12 }}>{error}</p>}
+      <div style={{ display: "flex", gap: 14, marginTop: 8 }}>
+        <button type="button" disabled={busy || (mode === 'edit' && !draft.trim())} onClick={submit}
+          style={{ ...actionStyle, fontWeight: 700, color: mode === 'delete' ? "#b91c1c" : NAVY }}>
+          {busy ? "Enregistrement…" : mode === 'edit' ? "Enregistrer le commentaire" : "Confirmer la suppression"}
+        </button>
+        <button type="button" disabled={busy} onClick={cancel} style={actionStyle}>Annuler</button>
+      </div>
+    </div>}
+  </div>;
 }
 
 function CommentThread({ numero }) {
