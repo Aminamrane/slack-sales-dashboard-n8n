@@ -3222,34 +3222,36 @@ function ClientComments({ clientId, onShowToast }) {
           Aucun commentaire pour ce client.
         </div>
       ) : (
-        // Même parti pris que l'échéancier et l'agenda : rien n'est retiré,
-        // mais un fil de vingt commentaires ne pousse pas le reste hors écran.
-        <div style={{
-          display: 'flex', flexDirection: 'column', gap: 6,
-          maxHeight: visibleComments.length > 4 ? 300 : undefined,
-          overflowY: visibleComments.length > 4 ? 'auto' : undefined,
-          paddingRight: visibleComments.length > 4 ? 4 : undefined,
-        }}>
-          <AnimatePresence initial={false}>
-            {visibleComments.map((c, i) => (
-              <CommentRow
-                key={c.id}
-                comment={c}
-                index={i}
-                confirming={confirmDelete === c.id}
-                onAskDelete={() => setConfirmDelete(c.id)}
-                onCancelDelete={() => setConfirmDelete(null)}
-                onConfirmDelete={() => remove(c)}
-                onTogglePin={() => togglePin(c)}
-              />
-            ))}
-          </AnimatePresence>
+        <div>
+          {/* Le fil défile sans compresser les cartes ; le bouton reste
+              hors de la zone défilante, accessible même sur un long fil. */}
+          <div style={{
+            display: 'flex', flexDirection: 'column', gap: 6,
+            maxHeight: visibleComments.length > 4 ? 300 : undefined,
+            overflowY: visibleComments.length > 4 ? 'auto' : undefined,
+            paddingRight: visibleComments.length > 4 ? 4 : undefined,
+          }}>
+            <AnimatePresence initial={false}>
+              {visibleComments.map((c, i) => (
+                <CommentRow
+                  key={c.id}
+                  comment={c}
+                  index={i}
+                  confirming={confirmDelete === c.id}
+                  onAskDelete={() => setConfirmDelete(c.id)}
+                  onCancelDelete={() => setConfirmDelete(null)}
+                  onConfirmDelete={() => remove(c)}
+                  onTogglePin={() => togglePin(c)}
+                />
+              ))}
+            </AnimatePresence>
+          </div>
           {comments.length > COMMENTS_PREVIEW && (
             <button
               type="button"
               onClick={() => setAllCommentsShown((v) => !v)}
               style={{
-                alignSelf: 'flex-start',
+                marginTop: 6,
                 border: 'none', background: 'transparent', cursor: 'pointer',
                 padding: '4px 2px', fontFamily: 'inherit',
                 fontSize: 12, fontWeight: 600, color: N.textMuted,
@@ -3291,6 +3293,8 @@ function CommentRow({
       style={{
         position: 'relative',
         display: 'flex', alignItems: 'flex-start', gap: 10,
+        // Une carte garde toute sa hauteur dans le fil plafonné à 300 px.
+        flexShrink: 0,
         padding: '10px 12px',
         border: `1px solid ${N.borderSft}`,
         borderLeft: comment.pinned ? `2px solid ${COMMENT_AMBER}` : `1px solid ${N.borderSft}`,
