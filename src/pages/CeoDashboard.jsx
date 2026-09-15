@@ -14,6 +14,8 @@ import {
   meteoBandOf, METEO_BANDS,
 } from "./OptilexBoard.jsx";
 import SharedNavbar from "../components/SharedNavbar.jsx";
+import { CeoFinanceMetrics, CeoProductMetrics, CeoDelayMetrics } from "../components/CeoDashboardMetrics.jsx";
+import { matchesSignedClient } from "../utils/boardClientState.js";
 import SalesTeamGrid from "../components/SalesTeamGrid.jsx";
 import SettersGrid from "../components/SettersGrid.jsx";
 import SalesSettersToggle from "../components/SalesSettersToggle.jsx";
@@ -176,34 +178,6 @@ const meteoWording = (avg) => {
 // est parfois absent selon le runtime -> "201946 €"). On groupe les milliers à
 // la main, puis on suffixe le symbole euro. Espaces insecables ecrits en \u00A0
 // pour une source propre (pas d'"irregular whitespace").
-const fmtEuro0 = (n) => {
-  const v = Math.round(Number(n) || 0);
-  const grouped = String(Math.abs(v)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0');
-  return `${v < 0 ? '-' : ''}${grouped}\u00A0€`;
-};
-// Pourcentage FR. Le `pct` du snapshot est TOUJOURS un ratio 0-1 (confirmé :
-// 0.7182 = 71,8 %). Conversion déterministe *100, 1 décimale max.
-const fmtPct = (v) => {
-  if (v === null || v === undefined || Number.isNaN(Number(v))) return '—';
-  const pct = Number(v) * 100;
-  return `${pct.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 1 })}\u00A0%`;
-};
-
-
-// Sélectionne le mois "cash" à afficher : le mois courant (YYYY-MM) s'il existe
-// dans le tableau et porte des valeurs, sinon le mois le plus récent non vide.
-function pickCashMonth(months, currentKey) {
-  if (!Array.isArray(months) || months.length === 0) return null;
-  const hasValue = (m) => (m?.montant_attendu?.total || 0) > 0
-    || (m?.montant_recupere?.total || 0) > 0
-    || (m?.retard?.total || 0) > 0;
-  const current = months.find((m) => m?.month === currentKey);
-  if (current && hasValue(current)) return current;
-  // Le plus récent non vide (months supposé chronologique ; on reparcourt en fin).
-  const sorted = [...months].sort((a, z) => (z?.month || '').localeCompare(a?.month || ''));
-  return sorted.find(hasValue) || sorted[0] || current || null;
-}
-
 const MOCK_TEAM = [
   { name: 'Youcef Amrane', role: 'CEO', location: 'Paris, France', tz: 'Europe/Paris', flag: '🇫🇷', lat: 48.8566, lng: 2.3522 },
   { name: 'Léo Mafrici', role: 'Head of Sales', location: 'Lisbonne, Portugal', tz: 'Europe/Lisbon', flag: '🇵🇹', lat: 38.7223, lng: -9.1393 },
@@ -551,282 +525,6 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
 // couleur d'accent de sa carte via `currentColor` (badge `color: <accent>`),
 // donc lisible en dark mode comme en light (l'accent reste vif sur fond sombre).
 // ══════════════════════════════════════════════════════════════════════════
-const CASH_CARD_ICONS = {
-  // 1 — Taux de récupération (vert)
-  recovery: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20.5 12a8 8 0 1 1-2.6-5.9" />
-      <path d="M20.8 4.8l-.2 3.3-3.3-.2" />
-      <path d="M14 9.7a3.2 3.2 0 1 0 0 4.6" />
-      <path d="M8.7 11.3h4.3M8.7 12.9h3.7" />
-    </svg>
-  ),
-  // 2 — Récupéré / Attendu (ardoise)
-  collected: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 8a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v0" />
-      <rect x="3" y="8" width="18" height="12" rx="2.5" />
-      <path d="M21 12.6h-3.4a1.7 1.7 0 0 0 0 3.4H21" />
-      <circle cx="17.4" cy="14.3" r="0.95" fill="currentColor" stroke="none" />
-    </svg>
-  ),
-  // 3 — Cash en retard (orange)
-  late: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="10.5" cy="13.5" r="6.7" />
-      <path d="M13 11a3 3 0 1 0 0 5" />
-      <path d="M8 12.7h3.4M8 14.2h3" />
-      <circle cx="18.2" cy="6.8" r="3.6" />
-      <path d="M18.2 5.2V6.8l1.2 0.9" />
-    </svg>
-  ),
-  // 4 — Créances antérieures (rouge)
-  receivables: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M19 10.5V8l-5-5H7a2 2 0 0 0-2 2v6" />
-      <path d="M14 3v5h5" />
-      <path d="M8.5 7.5h2.5" />
-      <path d="M16.5 21a4.2 4.2 0 1 0-3.7-6.2" />
-      <path d="M12.3 12.4v2.6h2.6" />
-    </svg>
-  ),
-};
-
-// Badge icône carré arrondi (≈34px), fond = accent à ~10%, icône 22px en accent.
-// Positionné en haut-droite de la carte (.ceo-card est position: relative).
-// NB : .ceo-card a un fond clair FIXE (gradient ::after, indépendant du dark
-// mode), donc l'accent reste lisible en light comme en dark — pas de variante
-// de fond nécessaire ici.
-function CashCardIcon({ icon, accent }) {
-  return (
-    <div
-      aria-hidden="true"
-      style={{
-        position: 'absolute', top: 16, right: 16,
-        width: 34, height: 34, borderRadius: 11,
-        background: `${accent}1a`, // accent à ~10% d'opacité (hex alpha 0x1a)
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: accent, flexShrink: 0, pointerEvents: 'none',
-      }}
-    >
-      <span style={{ width: 22, height: 22, display: 'flex' }}>
-        {React.cloneElement(icon, { width: 22, height: 22 })}
-      </span>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// CEO CASH BANNER — bandeau "cash du mois courant" au-dessus des cartes états.
-// Vue fiscaliste-CEO : le cash d'abord, le risque (retard / créances) en avant.
-// 4 blocs : taux de récup • récupéré/attendu • cash en retard • créances
-// antérieures. Chaque montant € porte son split Owner / Optilex.
-// `month` = un élément de snapshot.months (ou null → état "—" propre, no crash).
-// ══════════════════════════════════════════════════════════════════════════
-// `months` = snapshot.months complet, `defaultMonthKey` = mois à afficher au
-// montage (mois courant si présent+non vide, sinon plus récent non vide). Le
-// sélecteur de mois ne pilote QUE ce bandeau ; les cartes d'états (instantané
-// "maintenant") ne sont jamais affectées.
-function CeoCashBanner({ months, defaultMonthKey, dataLoading, darkMode, C }) {
-  const list = Array.isArray(months) ? months : [];
-  // Mois sélectionné (state local au bandeau). Resync si le défaut change
-  // (ex : snapshot arrive après le 1er render avec months=[]).
-  const [selectedKey, setSelectedKey] = useState(defaultMonthKey);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const pickerRef = useRef(null);
-  useEffect(() => { setSelectedKey(defaultMonthKey); }, [defaultMonthKey]);
-  useEffect(() => {
-    if (!pickerOpen) return undefined;
-    const onClick = (e) => { if (pickerRef.current && !pickerRef.current.contains(e.target)) setPickerOpen(false); };
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, [pickerOpen]);
-
-  const month = list.find((m) => m?.month === selectedKey) || null;
-  const empty = !month;
-
-  const recPct = month?.montant_recupere?.pct;
-  const recTotal = month?.montant_recupere?.total ?? 0;
-  const attTotal = month?.montant_attendu?.total ?? 0;
-  const recOwner = month?.montant_recupere?.owner ?? 0;
-  const recOptilex = month?.montant_recupere?.optilex ?? 0;
-  const retardTotal = month?.retard?.total ?? 0;
-  const retardOwner = month?.retard?.owner ?? 0;
-  const retardOptilex = month?.retard?.optilex ?? 0;
-  const prec = month?.retard_prec?.total ?? 0;
-  const recupCreancesPct = month?.recup_creances?.pct;
-  const recupCreancesTotal = month?.recup_creances?.total ?? 0;
-
-  // Décomposition exacte du retard.total (formule sheet par client) :
-  //   retard.total = monthGap + oldDebt
-  //   monthGap = montant_attendu.total − montant_recupere.total  (impayé du mois)
-  //   oldDebt  = retard_prec.total      − recup_creances.total   (reste antérieur)
-  const monthGap = attTotal - recTotal;
-  const oldDebt = prec - recupCreancesTotal;
-
-  // Mini-ligne split Owner / Optilex sous un montant principal.
-  const Split = ({ owner, optilex }) => (
-    <div style={{ display: 'flex', gap: 14, marginTop: 8, fontSize: 11, fontWeight: 600 }}>
-      <span style={{ color: C.muted }}>
-        Owner <span style={{ color: '#1e2330', fontVariantNumeric: 'tabular-nums' }}>{empty ? '—' : fmtEuro0(owner)}</span>
-      </span>
-      <span style={{ color: C.muted }}>
-        Optilex <span style={{ color: '#1e2330', fontVariantNumeric: 'tabular-nums' }}>{empty ? '—' : fmtEuro0(optilex)}</span>
-      </span>
-    </div>
-  );
-
-  const monthLabel = month?.label || (empty ? 'Aucune donnée' : (month?.month ?? '—'));
-
-  return (
-    <div style={{ marginBottom: 28 }}>
-      {/* En-tête : titre + mois PROÉMINENT + sélecteur de mois (pilote ce bandeau) */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, paddingLeft: 2 }}>
-        <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: 0, letterSpacing: '-0.01em' }}>
-          Cash
-        </h2>
-        <div ref={pickerRef} style={{ position: 'relative' }}>
-          <button
-            type="button"
-            disabled={list.length === 0}
-            onClick={() => setPickerOpen((o) => !o)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '7px 12px 7px 14px', borderRadius: 12,
-              border: `1px solid ${C.border}`,
-              background: pickerOpen ? (darkMode ? '#2a2b36' : '#f4f6fb') : C.bg,
-              cursor: list.length === 0 ? 'default' : 'pointer',
-              color: C.text, fontFamily: 'inherit',
-              fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em',
-              boxShadow: darkMode ? '0 1px 2px rgba(0,0,0,0.25)' : '0 1px 2px rgba(0,0,0,0.04)',
-              transition: 'background 0.15s, box-shadow 0.15s',
-            }}
-          >
-            <span style={{ textTransform: 'capitalize' }}>{monthLabel}</span>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
-              style={{ transform: pickerOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s cubic-bezier(0.34,1.56,0.64,1)' }}>
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-          {pickerOpen && list.length > 0 && (
-            <div style={{
-              position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 3000,
-              minWidth: 180, maxHeight: 300, overflowY: 'auto',
-              background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14, padding: 6,
-              boxShadow: darkMode ? '0 12px 32px rgba(0,0,0,0.45)' : '0 12px 32px rgba(15,23,42,0.12)',
-              animation: 'ceoFadeIn 0.18s cubic-bezier(0.16,1,0.3,1) both',
-            }}
-            className="ceo-scroll"
-            >
-              {list.map((m) => {
-                const active = m.month === selectedKey;
-                return (
-                  <button
-                    key={m.month}
-                    type="button"
-                    onClick={() => { setSelectedKey(m.month); setPickerOpen(false); }}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-                      width: '100%', padding: '9px 12px', borderRadius: 10, border: 'none',
-                      background: active ? (darkMode ? 'rgba(124,138,219,0.18)' : 'rgba(91,106,191,0.10)') : 'transparent',
-                      color: active ? C.accent : C.text,
-                      fontFamily: 'inherit', fontSize: 13.5, fontWeight: active ? 700 : 500,
-                      cursor: 'pointer', textAlign: 'left', textTransform: 'capitalize',
-                      transition: 'background 0.12s',
-                    }}
-                    onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.05)' : '#f5f5f4'; }}
-                    onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
-                  >
-                    <span>{m.label || m.month}</span>
-                    {active && (
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-        {/* 1 — Taux de récupération (la mesure clé du cash rentré) */}
-        <div className="ceo-card" style={{ padding: '20px 22px 18px', animation: 'ceoCardPop 0.4s ease 0ms both' }}>
-          <CashCardIcon icon={CASH_CARD_ICONS.recovery} accent="#10b981" />
-          <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 8 }}>Taux de récupération</div>
-          <div style={{ fontSize: 30, fontWeight: 800, color: '#10b981', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
-            {dataLoading ? <span style={{ animation: 'ceoPulse 1.2s ease infinite' }}>—</span> : (empty ? '—' : fmtPct(recPct))}
-          </div>
-          {/* Barre de progression du taux (pct = ratio 0-1 → *100) */}
-          <div style={{ marginTop: 14, height: 6, borderRadius: 3, background: darkMode ? 'rgba(255,255,255,0.06)' : '#eef0f4', overflow: 'hidden' }}>
-            <div style={{
-              height: '100%', borderRadius: 3, background: '#10b981',
-              width: empty ? '0%' : `${Math.min(100, Math.max(0, (Number(recPct) || 0) * 100))}%`,
-              transition: 'width 0.8s ease',
-            }} />
-          </div>
-        </div>
-
-        {/* 2 — Récupéré / Attendu en € + split */}
-        <div className="ceo-card" style={{ padding: '20px 22px 18px', animation: 'ceoCardPop 0.4s ease 80ms both' }}>
-          <CashCardIcon icon={CASH_CARD_ICONS.collected} accent="#475569" />
-          <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 8 }}>Récupéré / Attendu</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: '#212121', letterSpacing: '-0.02em', lineHeight: 1.15 }}>
-            {dataLoading ? <span style={{ animation: 'ceoPulse 1.2s ease infinite' }}>—</span> : (empty ? '—' : fmtEuro0(recTotal))}
-            <span style={{ fontSize: 14, fontWeight: 600, color: C.muted }}> / {empty ? '—' : fmtEuro0(attTotal)}</span>
-          </div>
-          <Split owner={recOwner} optilex={recOptilex} />
-        </div>
-
-        {/* 3 — Cash en retard : GLOBAL = total dû à ce jour (mois précédents inclus). */}
-        <div className="ceo-card" style={{ padding: '20px 22px 18px', animation: 'ceoCardPop 0.4s ease 160ms both' }}>
-          <CashCardIcon icon={CASH_CARD_ICONS.late} accent="#f59e0b" />
-          <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 2 }}>Cash en retard</div>
-          <div style={{ fontSize: 10.5, color: C.muted, fontWeight: 500, marginBottom: 8, opacity: 0.85 }}>Total dû à ce jour (global)</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: '#f97316', letterSpacing: '-0.02em', lineHeight: 1.15 }}>
-            {dataLoading ? <span style={{ animation: 'ceoPulse 1.2s ease infinite' }}>—</span> : (empty ? '—' : fmtEuro0(retardTotal))}
-          </div>
-          {/* Décomposition : impayé du mois + reste antérieur (== total au rounding) */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8, fontSize: 11, fontWeight: 600 }}>
-            <span style={{ color: C.muted }}>
-              Mois courant <span style={{ color: '#1e2330', fontVariantNumeric: 'tabular-nums' }}>{empty ? '—' : fmtEuro0(monthGap)}</span>
-            </span>
-            <span style={{ color: C.muted }}>
-              Antérieur <span style={{ color: '#1e2330', fontVariantNumeric: 'tabular-nums' }}>{empty ? '—' : fmtEuro0(oldDebt)}</span>
-            </span>
-          </div>
-          <Split owner={retardOwner} optilex={retardOptilex} />
-        </div>
-
-        {/* 4 — Créances antérieures + taux de récup créances */}
-        <div className="ceo-card" style={{ padding: '20px 22px 18px', animation: 'ceoCardPop 0.4s ease 240ms both' }}>
-          <CashCardIcon icon={CASH_CARD_ICONS.receivables} accent="#ef4444" />
-          <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 8 }}>Créances antérieures</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: '#ef4444', letterSpacing: '-0.02em', lineHeight: 1.15 }}>
-            {dataLoading ? <span style={{ animation: 'ceoPulse 1.2s ease infinite' }}>—</span> : (empty ? '—' : fmtEuro0(prec))}
-          </div>
-          <div style={{ marginTop: 8, fontSize: 11, fontWeight: 600, color: C.muted }}>
-            Récup. créances{' '}
-            <span style={{ color: '#10b981' }}>{empty ? '—' : fmtPct(recupCreancesPct)}</span>
-            {' · '}
-            <span style={{ color: '#1e2330', fontVariantNumeric: 'tabular-nums' }}>{empty ? '—' : fmtEuro0(recupCreancesTotal)}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// MÉTÉO ANIMÉE — même dessin que `MeteoIcon` du board (orage → grand soleil),
-// mais découpé en groupes pour que chaque élément vive : les rayons tournent,
-// les nuages dérivent, la pluie tombe, l'éclair claque. Le board garde sa
-// version statique 16 px ; ici on est en 54 px, à l'échelle d'un widget météo.
-// Les keyframes `ceoMeteo*` sont injectées avec le reste du CSS de la page et
-// coupées sous `prefers-reduced-motion`.
-// ══════════════════════════════════════════════════════════════════════════
 function AnimatedMeteoIcon({ score, size = 54, color, strokeWidth = 1.6 }) {
   const stroke = {
     fill: 'none', stroke: color, strokeWidth,
@@ -1097,197 +795,6 @@ function EtatPeriodPicker({ value, options, onChange, darkMode, C }) {
 // ══════════════════════════════════════════════════════════════════════════
 // Hauteur commune de la rangée basse. C'est le globe qui la fixe : il est
 // carré (340 de large), donc 340 de haut. Tout le reste s'y aligne.
-const ROW_H = 340;
-
-const TX_FILTERS = [
-  { key: 'all', label: 'Tout' },
-  { key: 'owner', label: 'Owner' },
-  { key: 'optilex', label: "Opti'Lex" },
-];
-
-// Vert = encaissement (convention argent qui rentre, cohérente avec le CA).
-// La jambe ne change que la teinte du badge, pas celle du montant.
-const TX_LEG_ACCENT = { owner: '#10b981', optilex: '#5b6abf' };
-const TX_LEG_LABEL = { owner: 'Owner', optilex: "Opti'Lex" };
-
-// La saisie PSP du sheet finance n'est pas normalisée ("ok Learnypay", "timou").
-// On n'affiche que ce qu'on sait reconnaître — le reste est tu plutôt que
-// restitué sale.
-const TX_KNOWN_PSPS = { learnypay: 'Learnypay', quonto: 'Qonto', ifx: 'IFX', stripe: 'Stripe', gocardless: 'GoCardless' };
-const prettyPsp = (raw) => {
-  if (!raw) return null;
-  const hay = String(raw).toLowerCase();
-  const hit = Object.keys(TX_KNOWN_PSPS).find((k) => hay.includes(k));
-  return hit ? TX_KNOWN_PSPS[hit] : null;
-};
-
-const txAmount = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
-
-// "2026-05-12" -> "12 mai" (+ année si ce n'est pas l'année courante).
-const txDate = (iso) => {
-  if (!iso) return '—';
-  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return '—';
-  const sameYear = d.getFullYear() === new Date().getFullYear();
-  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) });
-};
-
-// Badge carré arrondi : flèche entrante = argent qui rentre. Teinte = jambe.
-function TxIcon({ leg }) {
-  const accent = TX_LEG_ACCENT[leg] || '#5b6abf';
-  return (
-    <div style={{
-      width: 30, height: 30, flexShrink: 0, borderRadius: '50%',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: `${accent}14`, color: accent,
-    }}>
-      {/* Glyphe de dépôt : la flèche descend et se pose sur le trait du
-          compte. C'est le vocabulaire des relevés bancaires — plus juste
-          qu'une flèche seule, qui ne dit pas où va l'argent. */}
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 4v9" />
-        <path d="m8.5 9.5 3.5 3.5 3.5-3.5" />
-        <path d="M5 18h14" />
-      </svg>
-    </div>
-  );
-}
-
-function CeoRecentTransactions({ payments, loading, darkMode, C }) {
-  const [filter, setFilter] = useState('all');
-  const list = Array.isArray(payments) ? payments : [];
-  const rows = useMemo(
-    () => (filter === 'all' ? list : list.filter((p) => p.leg === filter)),
-    [list, filter],
-  );
-
-  return (
-    <div className="ceo-card" style={{
-      animation: 'ceoCardPop 0.4s ease 260ms both',
-      flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
-      // Plafond de hauteur INDISPENSABLE : sans lui, cette carte grandit avec
-      // le nombre d'encaissements et impose sa taille à toute la rangée. Le
-      // globe s'étire alors en œuf et les deux autres cartes se vident. C'est
-      // à la liste de défiler, pas à la composition de se déformer.
-      maxHeight: ROW_H,
-    }}>
-      {/* En-tête : titre + segmented control (pilote uniquement cette carte) */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        gap: 12, padding: '12px 14px 12px 18px', borderBottom: `1px solid ${C.border}`,
-      }}>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>Transactions récentes</div>
-          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Derniers encaissements enregistrés</div>
-        </div>
-        <div style={{
-          display: 'flex', gap: 2, padding: 3, borderRadius: 999,
-          background: darkMode ? 'rgba(255,255,255,0.05)' : '#f1f2f6',
-        }}>
-          {TX_FILTERS.map((f) => {
-            const on = filter === f.key;
-            return (
-              <button
-                key={f.key}
-                type="button"
-                onClick={() => setFilter(f.key)}
-                style={{
-                  position: 'relative', border: 'none', background: 'transparent',
-                  padding: '6px 14px', borderRadius: 999, cursor: 'pointer',
-                  fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
-                  color: on ? C.text : C.muted,
-                  transition: 'color 0.18s ease',
-                }}
-              >
-                {on && (
-                  <motion.span
-                    layoutId="ceo-tx-pill"
-                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                    style={{
-                      position: 'absolute', inset: 0, borderRadius: 999, zIndex: -1,
-                      background: darkMode ? '#2a2b36' : '#ffffff',
-                      boxShadow: darkMode ? 'none' : '0 1px 2px rgba(0,0,0,0.06)',
-                    }}
-                  />
-                )}
-                {f.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Liste — scroll interne au-delà de ~6 lignes, la carte garde sa hauteur */}
-      <div className="ceo-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '2px 0' }}>
-        {loading && (
-          [0, 1, 2, 3].map((i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 22px' }}>
-              <div style={{ width: 34, height: 34, borderRadius: 11, background: C.subtle, animation: 'ceoPulse 1.2s ease infinite' }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ width: 180, height: 11, borderRadius: 4, background: C.subtle, animation: 'ceoPulse 1.2s ease infinite' }} />
-                <div style={{ width: 96, height: 9, borderRadius: 4, background: C.subtle, marginTop: 7, animation: 'ceoPulse 1.2s ease infinite' }} />
-              </div>
-              <div style={{ width: 72, height: 12, borderRadius: 4, background: C.subtle, animation: 'ceoPulse 1.2s ease infinite' }} />
-            </div>
-          ))
-        )}
-
-        {!loading && rows.length === 0 && (
-          <div style={{ padding: '38px 22px 40px', textAlign: 'center' }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: C.secondary }}>
-              {list.length === 0 ? 'Aucun encaissement enregistré' : 'Aucun encaissement sur cette jambe'}
-            </div>
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 5 }}>
-              Les paiements saisis côté finance apparaissent ici.
-            </div>
-          </div>
-        )}
-
-        {!loading && rows.map((p, i) => {
-          const psp = prettyPsp(p.psp);
-          return (
-            <motion.div
-              key={`${p.row_id}-${p.leg}`}
-              layout
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1], delay: Math.min(i, 8) * 0.025 }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '9px 18px',
-                borderTop: i === 0 ? 'none' : `1px dashed ${C.border}`,
-              }}
-            >
-              <TxIcon leg={p.leg} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
-                  fontSize: 13, fontWeight: 600, color: C.text, letterSpacing: '-0.01em',
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                }} title={p.societe || ''}>
-                  {p.societe || `Client ${p.client_id}`}
-                </div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
-                  {TX_LEG_LABEL[p.leg] || p.leg}{psp ? ` · ${psp}` : ''} · {txDate(p.paid_on)}
-                </div>
-              </div>
-              <div style={{
-                fontSize: 13, fontWeight: 700, color: '#10b981',
-                fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
-              }}>
-                +{txAmount(p.amount)}
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// COMPONENT
-// ══════════════════════════════════════════════════════════════════════════
 export default function CeoDashboard() {
   const navigate = useNavigate();
   // Vue CEO/admin "tout" -> on réinitialise le scope de navigation (les sous-vues
@@ -1468,7 +975,6 @@ export default function CeoDashboard() {
   // les cartes états (migrées vers ceoSheet), mais l'endpoint reste branché —
   // données disponibles ici pour un futur usage (délais, autres KPI).
   const [perfClosingData, setPerfClosingData] = useState(null); // eslint-disable-line no-unused-vars
-  const [ceoSheet, setCeoSheet] = useState(null); // snapshot Suivi Clients (GET /ceo-sheet/current)
   // Encaissements réels (carte "Transactions récentes") et lignes du board
   // Owner/Opti'Lex (carte "RDV intégration à venir"). Chargés SÉPARÉMENT du
   // bloc principal : ni l'un ni l'autre ne doit retarder l'affichage du haut
@@ -1477,8 +983,6 @@ export default function CeoDashboard() {
   // 'YYYY-MM' = on se replace à ce mois-là. Strictement indépendant du
   // sélecteur du bandeau Cash, qui ne pilote que les montants.
   const [etatPeriod, setEtatPeriod] = useState('all');
-  const [recentPayments, setRecentPayments] = useState([]);
-  const [paymentsLoading, setPaymentsLoading] = useState(true);
   const [boardRows, setBoardRows] = useState(null); // null = pas encore chargé
   const [perfClients, setPerfClients] = useState([]); // perf-closing clients list
   const [dataLoading, setDataLoading] = useState(true);
@@ -1517,10 +1021,9 @@ export default function CeoDashboard() {
     (async () => {
       setDataLoading(true);
       try {
-        const [lb, pc, cs] = await Promise.all([
+        const [lb, pc] = await Promise.all([
           apiClient.getLeaderboardStats('current_month').catch(() => null),
           apiClient.get('/api/v1/perf-closing/dashboard').catch(() => null),
-          apiClient.get('/api/v1/ceo-sheet/current').catch(() => null),
         ]);
         if (lb) {
           setLeaderboardData(lb);
@@ -1535,37 +1038,15 @@ export default function CeoDashboard() {
           setAvatarMap(map);
         }
         if (pc) setPerfClosingData(pc);
-        // snapshot peut être { snapshot: {...} } ou { snapshot: null } → on
-        // stocke le snapshot (null géré gracieusement par les useMemo dérivés).
-        if (cs) setCeoSheet(cs.snapshot ?? null);
       } catch (e) { console.warn('CEO dashboard data fetch failed:', e); }
       setDataLoading(false);
     })();
   }, [user]);
 
-  // ── TRANSACTIONS RÉCENTES + BOARD OWNER/OPTI'LEX ───────────────────
-  // Deux fetchs indépendants du bloc principal. Échec = état vide côté carte
-  // (aucune donnée de repli n'est fabriquée), jamais une page cassée.
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
-    (async () => {
-      try {
-        const data = await apiClient.get('/api/v1/finance-periods/recent-payments?limit=12');
-        if (!cancelled) setRecentPayments(data?.payments || []);
-      } catch {
-        if (!cancelled) setRecentPayments([]);
-      } finally {
-        if (!cancelled) setPaymentsLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    (async () => {
+    const loadBoard = async () => {
       try {
         const data = await apiClient.get('/api/v1/optilex/board');
         if (!cancelled) setBoardRows(data?.clients || []);
@@ -1574,8 +1055,12 @@ export default function CeoDashboard() {
         // indisponible ne doit pas se lire comme "0 RDV à venir".
         console.warn('[CeoDashboard] board Owner/Opti\'Lex indisponible:', e);
       }
-    })();
-    return () => { cancelled = true; };
+    };
+    loadBoard();
+    const refresh = () => { if (!document.hidden) loadBoard(); };
+    const timer = setInterval(refresh, 30000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { cancelled = true; clearInterval(timer); document.removeEventListener('visibilitychange', refresh); };
   }, [user]);
 
   // ── MONTHLY OBJECTIVES — load on mount, refetch when modal opens ───
@@ -1681,7 +1166,6 @@ export default function CeoDashboard() {
   // (importés, jamais recopiés) : chaque carte = un onglet du board, vérifiable
   // en un clic. null tant que le board n'est pas chargé → les cartes montrent
   // "—" plutôt qu'un chiffre faux.
-  const BOARD_ACTIF = 'Signé';
   const BOARD_RESILIE = 'Résiliation';
   const BOARD_RETRACTE = 'Rétractation';
   const boardStats = useMemo(() => {
@@ -1711,7 +1195,7 @@ export default function CeoDashboard() {
     const actifs = established.filter((r) => {
       if (!signedBy(r)) return false;
       const e = displayEtat(r);
-      if (e === BOARD_ACTIF) return true;
+      if (matchesSignedClient(r, e)) return true;
       if (allTime || !BOARD_TERMINAL_ETATS.has(e)) return false;
       const d = dateOnly(r.etat_date);
       return !!d && d > end;   // sorti après la fin de période → encore actif à cette date
@@ -1720,14 +1204,6 @@ export default function CeoDashboard() {
     // ── FLUX : les entrées dans l'état pendant la période ──
     const countEtat = (name) => established
       .filter((r) => displayEtat(r) === name && (allTime || inPeriod(r.etat_date))).length;
-
-    // ── CONTRATS ENVOYÉS ──
-    // Comptés sur TOUTES les lignes du board, contrats en vol compris : une
-    // vente pas encore déclarée reste un contrat parti. `owner_sent_at` n'existe
-    // que depuis le passage à Yousign (premiers envois tracés en mars 2026) —
-    // avant, rien n'est daté, la carte ne peut pas inventer ces envois.
-    const contratsEnvoyes = boardRows
-      .filter((r) => r.owner_sent_at && (allTime || inPeriod(r.owner_sent_at))).length;
 
     // ── HISTORIQUE DES SORTIES : hors filtre ──
     // 12 derniers mois + mois courant, par état. Ils nourrissent les courbes et
@@ -1756,9 +1232,10 @@ export default function CeoDashboard() {
     // ── À DATE : insensibles à la période ──
     // Un RDV "à venir" est par nature dans le futur, et la météo est un relevé
     // courant (l'historique par client vit dans /optilex/meteo-history, pas ici).
-    const scores = established
+    const signedNow = established.filter((r) => matchesSignedClient(r, displayEtat(r)));
+    const scores = signedNow
       .map((r) => r.meteo_score)
-      .filter((s) => typeof s === 'number');
+      .filter((s) => typeof s === 'number' && Number.isFinite(s) && s >= 1 && s <= 5);
     const meteoBands = { rouge: 0, orange: 0, vert: 0 };
     scores.forEach((s) => { const b = meteoBandOf(s); if (b) meteoBands[b] += 1; });
 
@@ -1767,7 +1244,6 @@ export default function CeoDashboard() {
       actifs,
       resilies: countEtat(BOARD_RESILIE),
       retractes: countEtat(BOARD_RETRACTE),
-      contratsEnvoyes,
       resiliesSeries: resiliesExits.series,
       resiliesThisMonth: resiliesExits.thisMonth,
       retractesSeries: retractesExits.series,
@@ -1778,6 +1254,9 @@ export default function CeoDashboard() {
       integrationOverdue: established.filter(isIntegrationOverdue).length,
       meteoAvg: scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null,
       meteoRated: scores.length,
+      meteoSigned: signedNow.length,
+      pendingResiliation: established.filter((r) => displayEtat(r) === 'En cours de résiliation' && signedBy(r)).length,
+      pendingRetraction: established.filter((r) => displayEtat(r) === 'En cours de rétractation' && signedBy(r)).length,
       meteoBands,
     };
   }, [boardRows, etatPeriod]);
@@ -1822,17 +1301,13 @@ export default function CeoDashboard() {
         valueGradient: meteoBand ? METEO_VALUE_GRADIENT[meteoBand] : null,
         loading: boardLoading,
         sub: meteoBand
-          ? `${meteoWording(boardStats.meteoAvg)} · ${boardStats.meteoRated} notés`
+          ? `${boardStats.meteoRated} / ${boardStats.meteoSigned} clients signés notés`
           : 'Aucune note posée',
         breakdown: meteoBands ? [
           { label: 'Satisfaits (4-5)', value: meteoBands.vert },
           { label: 'Mécontents (3)', value: meteoBands.orange },
           { label: 'Critiques (1-2)', value: meteoBands.rouge },
         ].filter((b) => b.value > 0) : [],
-      },
-      {
-        label: 'Onboarding Owner à venir', Icon: CalendarClock, value: n(boardStats?.onboarding), color: '#eab308',
-        loading: boardLoading, sub: 'RDV onboarding non effectués',
       },
       {
         // Ce RDV est celui du CABINET (Opti'Lex), pas d'Owner : la balance le
@@ -1872,21 +1347,16 @@ export default function CeoDashboard() {
         spark: boardStats ? { values: boardStats.retractesSeries } : null,
       },
       {
-        label: 'Contrats envoyés', Icon: Send, value: n(boardStats?.contratsEnvoyes),
+        label: 'En cours de rétractation', Icon: RotateCcw, value: n(boardStats?.pendingRetraction),
         color: '#8b5cf6', loading: boardLoading,
-        sub: periodLabel ? `Envoyés en ${periodLabel}` : 'Tous mois confondus',
+        sub: 'Rétractations non encore effectives',
+      },
+      {
+        label: 'En cours de résiliation', Icon: UserRoundX, value: n(boardStats?.pendingResiliation),
+        color: '#e66b58', loading: boardLoading, sub: 'Résiliations non encore effectives',
       },
     ];
   }, [boardStats, etatPeriod]);
-
-  // ── CASH : mois par défaut du bandeau (snapshot.months) ───────────────
-  // Clé du mois affiché au montage : mois courant si présent + non vide,
-  // sinon le mois le plus récent non vide. Le sélecteur du bandeau peut
-  // ensuite changer le mois localement (cf. CeoCashBanner).
-  const defaultCashMonthKey = useMemo(
-    () => pickCashMonth(ceoSheet?.months, currentMonthKey)?.month,
-    [ceoSheet, currentMonthKey],
-  );
 
   useEffect(() => {
     localStorage.setItem('darkMode', darkMode);
@@ -2438,7 +1908,7 @@ export default function CeoDashboard() {
                 )}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 28 }}>
+              <div className="ceo-client-kpis" style={{ display: 'grid', gap: 14, marginBottom: 28 }}>
                 {kpiRow2.map((kpi, i) => (
                   <CeoKpiCard
                     key={kpi.label}
@@ -2451,75 +1921,10 @@ export default function CeoDashboard() {
                 ))}
               </div>
 
-              {/* ── BANDEAU CASH — Suivi Clients snapshot (sélecteur de mois) ── */}
-              {/* Les états clients d'abord (façon board Owner) ; le cash / finance ensuite. */}
-              <CeoCashBanner
-                months={ceoSheet?.months}
-                defaultMonthKey={defaultCashMonthKey}
-                dataLoading={dataLoading}
-                darkMode={darkMode}
-                C={C}
-              />
-
-              {/* ── TRANSACTIONS · DÉLAIS · GLOBE · CLASSEMENT ──
-                  Quatre cartes de même hauteur sur une seule rangée. Les deux
-                  premières se partagent la place restante, le globe et le
-                  classement gardent leur largeur fixe. */}
-              <div style={{ display: 'flex', gap: 20, marginBottom: 28, alignItems: 'stretch' }}>
-              <CeoRecentTransactions
-                payments={recentPayments}
-                loading={paymentsLoading}
-                darkMode={darkMode}
-                C={C}
-              />
-              <div className="ceo-card" style={{
-                animation: 'ceoCardPop 0.4s ease 320ms both', flex: 1, minWidth: 0,
-              }}>
-                <div style={{ padding: '12px 18px', borderBottom: `1px solid ${C.border}` }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>Délais Moyens</div>
-                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Temps moyen entre les étapes clés</div>
-                </div>
-                <div style={{ padding: '2px 0' }}>
-                  {[
-                    { label: 'Délai Signature / RDV Lancement', count: 485, days: 14.4, color: '#10b981' },
-                    { label: 'Délai 1er Contact / Signature', count: 441, days: 26.9, color: '#f59e0b' },
-                    { label: 'Délai 1er contact / Audit R2', count: 490, days: 23, color: '#f59e0b' },
-                    { label: 'Délai Arrivée lead / Premier contact', count: 202, days: 1, color: '#94a3b8' },
-                  ].map((d, i, arr) => (
-                    <div key={i} style={{
-                      display: 'flex', alignItems: 'center', padding: '10px 22px', gap: 12,
-                      borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : 'none',
-                      animation: `ceoRowIn 0.3s ease ${i * 50}ms both`,
-                    }}>
-                      <div style={{
-                        width: 30, height: 30, borderRadius: 8,
-                        background: darkMode ? 'rgba(91,106,191,0.12)' : 'rgba(91,106,191,0.06)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                      }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: C.text }}>{d.label}</div>
-                        <div style={{ fontSize: 11, color: C.muted }}>{d.count} clients</div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                        <div style={{ fontSize: 18, fontWeight: 700, color: C.text, fontVariantNumeric: 'tabular-nums', minWidth: 50, textAlign: 'right' }}>
-                          {d.days % 1 === 0 ? d.days.toFixed(0) : d.days.toFixed(1)}<span style={{ fontSize: 11, fontWeight: 500, color: C.muted, marginLeft: 2 }}>j</span>
-                        </div>
-                        <div style={{ width: 44, height: 6, borderRadius: 3, background: darkMode ? 'rgba(255,255,255,0.06)' : '#f1f5f9', overflow: 'hidden', flexShrink: 0 }}>
-                          <div style={{
-                            height: '100%', borderRadius: 3,
-                            width: `${Math.min(100, (d.days / 60) * 100)}%`,
-                            background: d.color,
-                            transition: 'width 0.8s ease',
-                          }} />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
+              <CeoFinanceMetrics darkMode={darkMode} onOpenFinance={(period) => navigate(`/ceo/dispatch?period=${period}&scope=owner`)} />
+              <CeoProductMetrics boardRows={boardRows} darkMode={darkMode} />
+              <CeoDelayMetrics darkMode={darkMode} />
+              <div style={{ display: 'flex', gap: 20, marginBottom: 28, alignItems: 'stretch', flexWrap: 'wrap' }}>
               {/* Globe */}
               <div className="ceo-card" style={{
                 animation: 'ceoCardPop 0.4s ease 400ms both',

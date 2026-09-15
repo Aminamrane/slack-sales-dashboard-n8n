@@ -350,7 +350,10 @@ export default function TrackingSheetFinance() {
   }, [navigate, embedMode]);
 
   // ── State ────────────────────────────────────────────────────────────
-  const [period, setPeriod] = useState(currentPeriod());
+  const [period, setPeriod] = useState(() => {
+    const requested = new URLSearchParams(window.location.search).get('period');
+    return /^20\d{2}-(0[1-9]|1[0-2])$/.test(requested || '') ? requested : currentPeriod();
+  });
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -378,6 +381,7 @@ export default function TrackingSheetFinance() {
   );
   const [scope, setScope] = useState(() => {
     const canGlobal = (apiClient.getUser()?.role || null) !== 'finance_team';
+    if (new URLSearchParams(window.location.search).get('scope') === 'owner') return 'owner';
     const stored = localStorage.getItem(SCOPE_LS_KEY);
     if (stored === 'owner' || stored === 'optilex') return stored;
     if (stored === 'global' && canGlobal) return 'global';
