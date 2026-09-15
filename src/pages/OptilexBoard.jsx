@@ -1,3 +1,4 @@
+import { matchesUpcomingIntegration } from "../utils/boardIntegration.js";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
@@ -127,12 +128,11 @@ const _todayParisISO = () => new Date().toLocaleDateString("en-CA", { timeZone: 
 // Split des contrats effectif au 01/07/2026 : depuis cette date, un RDV intégration NON marqué
 // "effectué" reste "à venir" MÊME si sa date est passée (il n'a pas été réalisé par Lisa).
 // Avant le 01/07 = pré-split, pas de suivi "effectué" fiable -> exclu (on n'inonde pas la case).
-const SPLIT_EFFECTIVE_ISO = "2026-07-01";
 // Exportés (avec `displayEtat` plus bas) : les cartes d'états du dashboard CEO
 // comptent avec CES prédicats-ci. Une seule définition de la règle métier, pas de
 // copie qui dérive — board et dashboard affichent forcément les mêmes chiffres.
 export const isOnboardingUpcoming = (r) => { const d = r.rdv_onboarding_date_manual || r.rdv_onboarding_date; return !!r.numero_client && !!d && !r.rdv_onboarding_done && String(d).slice(0, 10) >= _todayParisISO(); };
-export const isIntegrationUpcoming = (r) => !!r.numero_client && !!r.rdv_lancement_date && !r.rdv_lancement_done && String(r.rdv_lancement_date).slice(0, 10) >= SPLIT_EFFECTIVE_ISO;
+export const isIntegrationUpcoming = (r) => matchesUpcomingIntegration(r, displayEtat(r));
 // "En retard" : dans "à venir" (donc non effectué, depuis le 01/07) MAIS date déjà passée = non réalisé.
 export const isIntegrationOverdue = (r) => isIntegrationUpcoming(r) && String(r.rdv_lancement_date).slice(0, 10) < _todayParisISO();
 // Contrat Opti'Lex SÉPARÉ (split) pas encore signé : optilex_status existe (non null =
