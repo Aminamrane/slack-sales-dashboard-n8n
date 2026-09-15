@@ -5,7 +5,7 @@
 // le service account recordings-fetcher). Shell CEO standard (sidebar + navbar),
 // strictement aligné sur CeoSalesTeamView.
 //
-// Auth gate : admin | ceo | acquisition_director | head_of_sales_manager.
+// Auth gate : admin | ceo | acquisition_director | head_of_sales_manager | head_of_sales.
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -19,7 +19,7 @@ import SalesRecordingsGrid from "../components/SalesRecordingsGrid.jsx";
 import SalesRecordingsDetail from "../components/SalesRecordingsDetail.jsx";
 import TeamReportView from "../components/TeamReportView.jsx";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo", "acquisition_director", "head_of_acquisition", "head_of_sales_manager"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo", "acquisition_director", "head_of_acquisition", "head_of_sales_manager", "head_of_sales"]);
 
 // Sales dont la transcription Meet est coupée -> analysés depuis Whisper (basse
 // fidélité) : à signaler dans le classement pour ne pas sur-interpréter le score.
