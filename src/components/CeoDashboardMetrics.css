@@ -42,3 +42,16 @@
 .ceo-client-kpis { grid-template-columns:repeat(4,minmax(0,1fr)); }
 @media(max-width:1000px) { .ceo-client-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:620px) { .ceo-client-kpis { grid-template-columns:1fr; } }
+
+.ceo-kpi-split { grid-column:span 2; }
+.ceo-kpi-sections { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+.ceo-kpi-section { min-width:0; padding-right:18px; }
+.ceo-kpi-section + .ceo-kpi-section { padding-right:0; padding-left:18px; border-left:1px solid #94a3b830; }
+.ceo-kpi-section-title { display:flex; align-items:center; gap:6px; margin-bottom:6px; font-size:12px; font-weight:600; }
+.ceo-kpi-section-title svg { flex-shrink:0; }
+@media(max-width:620px) {
+  .ceo-kpi-split { grid-column:span 1; }
+  .ceo-kpi-sections { grid-template-columns:1fr; }
+  .ceo-kpi-section { padding-right:0; }
+  .ceo-kpi-section + .ceo-kpi-section { border-left:0; border-top:1px solid #94a3b830; margin-top:16px; padding:16px 0 0; }
+}

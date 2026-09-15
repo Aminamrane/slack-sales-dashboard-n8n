@@ -459,6 +459,15 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
       {/* Quand il y a une illustration, le texte réserve sa place et s'ellipse
           avant de passer dessous. */}
       <div style={{ paddingRight: Artwork ? 70 : 0, minWidth: 0, position: 'relative', zIndex: 2 }}>
+        {kpi.sections ? <div className="ceo-kpi-sections" role="group" aria-label={kpi.label}>
+          {kpi.sections.map(({ Icon: SectionIcon, ...section }) => <div key={section.label} className="ceo-kpi-section">
+            <div className="ceo-kpi-section-title" style={{ color: C.muted }}>
+              <SectionIcon size={14} strokeWidth={2.2} color={section.color} aria-hidden="true" />
+              <span>{section.label}</span>
+            </div>
+            {renderReading(section)}
+          </div>)}
+        </div> : <>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, minWidth: 0,
         }}>
@@ -504,6 +513,7 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
             </AnimatePresence>
           </div>
         ) : renderReading(shown)}
+        </>}
       </div>
 
       {hasTooltip && (
@@ -1261,7 +1271,7 @@ export default function CeoDashboard() {
     };
   }, [boardRows, etatPeriod]);
 
-  // États clients — 8 cartes, TOUTES alignées sur le board Owner/Opti'Lex, sauf
+  // États clients — cartes alignées sur le board Owner/Opti'Lex, sauf
   // "En retard de paiement" : la notion de retard n'existe pas dans le board
   // (elle est orthogonale à l'état : un client "Signé" peut être en retard),
   // elle reste donc servie par le snapshot Suivi Clients.
@@ -1347,13 +1357,11 @@ export default function CeoDashboard() {
         spark: boardStats ? { values: boardStats.retractesSeries } : null,
       },
       {
-        label: 'En cours de rétractation', Icon: RotateCcw, value: n(boardStats?.pendingRetraction),
-        color: '#8b5cf6', loading: boardLoading,
-        sub: 'Rétractations non encore effectives',
-      },
-      {
-        label: 'En cours de résiliation', Icon: UserRoundX, value: n(boardStats?.pendingResiliation),
-        color: '#e66b58', loading: boardLoading, sub: 'Résiliations non encore effectives',
+        label: 'Sorties en cours', cardClass: 'ceo-kpi-split', loading: boardLoading,
+        sections: [
+          { label: 'En cours de résiliation', Icon: UserRoundX, value: n(boardStats?.pendingResiliation), color: '#e66b58', sub: 'Résiliations non encore effectives' },
+          { label: 'En cours de rétractation', Icon: RotateCcw, value: n(boardStats?.pendingRetraction), color: '#8b5cf6', sub: 'Rétractations non encore effectives' },
+        ],
       },
     ];
   }, [boardStats, etatPeriod]);
