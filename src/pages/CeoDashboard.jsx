@@ -10,12 +10,11 @@ import medal2 from "../assets/2st-place.png";
 import medal3 from "../assets/3st-place.png";
 import ceo6 from "../assets/ceo6.svg";
 import {
-  displayEtat, isOnboardingUpcoming, isIntegrationUpcoming, isIntegrationOverdue,
+  displayEtat, isOnboardingUpcoming, isOnboardingOverdue, isIntegrationUpcoming, isIntegrationOverdue,
   meteoBandOf, METEO_BANDS,
 } from "./OptilexBoard.jsx";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import { CeoFinanceMetrics, CeoProductMetrics, CeoDelayMetrics, CeoUpcomingAppointments } from "../components/CeoDashboardMetrics.jsx";
-import { matchesOverdueOnboarding } from "../utils/boardIntegration.js";
 import { matchesSignedClient } from "../utils/boardClientState.js";
 import SalesTeamGrid from "../components/SalesTeamGrid.jsx";
 import SettersGrid from "../components/SettersGrid.jsx";
@@ -347,7 +346,7 @@ function KpiTooltipPortal({ anchorRef, isOpen, tooltipId, breakdown, darkMode, C
 // Héberge le ref ancre + state hover/focus + montage du KpiTooltipPortal
 // uniquement quand la carte a un `breakdown` (= Résiliés aujourd'hui).
 // ══════════════════════════════════════════════════════════════════════════
-function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
+export function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
   const hasTooltip = Array.isArray(kpi.breakdown) && kpi.breakdown.length > 0;
   const tooltipId = hasTooltip ? `ceo-kpi-tooltip-${index}` : undefined;
   const anchorRef = useRef(null);
@@ -416,7 +415,7 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
       ) : (
         <div style={{
           marginTop: 6, fontSize: 12, fontWeight: 500, color: C.muted,
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          whiteSpace: Artwork ? 'normal' : 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.5,
         }} title={r.sub}>{r.sub}</div>
       )}
     </>
@@ -451,7 +450,7 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
       {kpi.spark && <CardSparkline values={kpi.spark.values} color={kpi.color} />}
       {Artwork && (
         <div aria-hidden="true" style={{
-          position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)',
+          position: 'absolute', right: 24, top: '44%', transform: 'translateY(-50%)',
           display: 'flex', alignItems: 'center', pointerEvents: 'none',
         }}>
           <Artwork hovered={hovered} />
@@ -459,7 +458,7 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
       )}
       {/* Quand il y a une illustration, le texte réserve sa place et s'ellipse
           avant de passer dessous. */}
-      <div style={{ paddingRight: Artwork ? 70 : 0, minWidth: 0, position: 'relative', zIndex: 2 }}>
+      <div style={{ paddingRight: Artwork ? 88 : 0, minWidth: 0, position: 'relative', zIndex: 2 }}>
         {kpi.appointments ? <CeoUpcomingAppointments appointments={kpi.appointments} loading={isLoading} /> : kpi.sections ? <div className="ceo-kpi-sections" role="group" aria-label={kpi.label}>
           {kpi.sections.map(({ Icon: SectionIcon, ...section }) => <div key={section.label} className="ceo-kpi-section">
             <div className="ceo-kpi-section-title" style={{ color: C.muted }}>
@@ -688,7 +687,7 @@ const METEO_BLUE = '#3b82f6';
 const METEO_SHOWCASE_ORDER = [5, 4, 3, 2, 1];
 const METEO_SHOWCASE_MS = 3200;
 
-function MeteoShowcase({ realScore, hovered, size = 54 }) {
+export function MeteoShowcase({ realScore, hovered, size = 54 }) {
   const [step, setStep] = useState(0);
   useEffect(() => {
     if (hovered) return undefined;   // survol = on fige, le défilé reprend après
@@ -1243,7 +1242,6 @@ export default function CeoDashboard() {
     // ── À DATE : insensibles à la période ──
     // Un RDV "à venir" est par nature dans le futur, et la météo est un relevé
     // courant (l'historique par client vit dans /optilex/meteo-history, pas ici).
-    const todayParis = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Paris" });
     const signedNow = established.filter((r) => matchesSignedClient(r, displayEtat(r)));
     const scores = signedNow
       .map((r) => r.meteo_score)
@@ -1262,7 +1260,7 @@ export default function CeoDashboard() {
       retractesThisMonth: retractesExits.thisMonth,
       currentMonthLabel: `${MONTH_LABELS_FR[now.getMonth()].toLowerCase()} ${now.getFullYear()}`,
       onboarding: established.filter(isOnboardingUpcoming).length,
-      onboardingOverdue: established.filter((r) => matchesOverdueOnboarding(r, displayEtat(r), todayParis)).length,
+      onboardingOverdue: established.filter(isOnboardingOverdue).length,
       integration: established.filter(isIntegrationUpcoming).length,
       integrationOverdue: established.filter(isIntegrationOverdue).length,
       meteoAvg: scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null,
@@ -1305,7 +1303,7 @@ export default function CeoDashboard() {
         // Seule carte à porter une illustration : au repos les 5 temps
         // défilent, au survol on voit la météo réelle du parc.
         Artwork: meteoRounded != null
-          ? (props) => <MeteoShowcase {...props} realScore={meteoRounded} size={54} />
+          ? (props) => <MeteoShowcase {...props} realScore={meteoRounded} size={68} />
           : null,
         Icon: Cloud,
         value: boardStats?.meteoAvg != null ? `${boardStats.meteoAvg.toFixed(1).replace('.', ',')}/5` : '—',
