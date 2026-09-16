@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
-import { ArrowUpRight, Wallet, RotateCcw, TrendingUp, CalendarCheck, Building2, Users, Sparkles, Clock } from 'lucide-react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { ArrowUpRight, Wallet, RotateCcw, TrendingUp, CalendarCheck, Building2, Users, Sparkles, Clock, Banknote, ChevronDown, CalendarDays, Scale, CalendarClock } from 'lucide-react';
 import apiClient from '../services/apiClient';
 import { computeKpis } from '../pages/TrackingSheetFinance/constants.js';
 import { isCurrentProductClient } from '../utils/boardClientState.js';
@@ -44,25 +44,33 @@ function PeriodSelect({ value, onChange, all = false, label }) {
     }
     return out;
   }, []);
-  return <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className="ceo-metrics-period">
-    {all && <option value="all">Tout l’historique</option>}
-    {options.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-  </select>;
+  return <div className="ceo-metrics-period-wrap"><CalendarDays size={18} aria-hidden="true" />
+    <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className="ceo-metrics-period">
+      {all && <option value="all">Tout l’historique</option>}
+      {options.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+    </select><ChevronDown size={16} aria-hidden="true" />
+  </div>;
 }
 
 function Card({ title, Icon, color, children, footer, loading, error, retry, onClick }) {
-  return <motion.article className="ceo-card ceo-metric" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .25 }} style={{ '--metric-accent': color }} aria-busy={loading}>
-    <div className="ceo-metric-heading"><span>{title}</span><Icon size={22} aria-hidden="true" /></div>
-    {error ? <div className="ceo-metric-error">Données indisponibles <button onClick={retry}>Réessayer</button></div> : loading ? <div className="ceo-metric-placeholder" aria-label="Chargement">—</div> : children}
-    <div className="ceo-metric-footer">{footer}</div>
-    {onClick && <button className="ceo-metric-link" onClick={onClick}>Voir dans Finance <ArrowUpRight size={14} /></button>}
+  const reduceMotion = useReducedMotion();
+  return <motion.article className="ceo-card ceo-metric" initial={reduceMotion ? false : { opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: .12 }} transition={{ duration: .4, ease: [.22, 1, .36, 1] }} style={{ '--metric-accent': color }} aria-busy={loading}>
+    <div className="ceo-metric-heading"><h3>{title}</h3><span className="ceo-metric-icon"><Icon size={24} strokeWidth={1.9} aria-hidden="true" /></span></div>
+    <div className="ceo-metric-body">
+      {error ? <div className="ceo-metric-error">Données indisponibles <button onClick={retry}>Réessayer</button></div> : loading ? <div className="ceo-metric-placeholder" aria-label="Chargement">—</div> : children}
+    </div>
+    <div className="ceo-metric-footer">{footer}
+      {onClick && <button className="ceo-metric-link" onClick={onClick}>Voir dans Finance <ArrowUpRight size={17} aria-hidden="true" /></button>}
+    </div>
   </motion.article>;
 }
 
 function Ratio({ received, expected }) {
+  const reduceMotion = useReducedMotion();
   const pct = expected > 0 ? received / expected * 100 : null;
-  return <><div className="ceo-metric-value">{euro(received)}<span> / {euro(expected)}</span></div>
-    <div className="ceo-metric-ratio"><div className="ceo-metric-track"><div style={{ width: `${Math.min(100, Math.max(0, pct || 0))}%` }} /></div>
+  return <><div className="ceo-metric-value">{euro(received)}</div>
+    <div className="ceo-metric-expected">sur <strong>{euro(expected)}</strong> attendus</div>
+    <div className="ceo-metric-ratio"><div className="ceo-metric-track" aria-hidden="true"><motion.div initial={reduceMotion ? false : { scaleX: 0 }} whileInView={{ scaleX: Math.min(1, Math.max(0, (pct || 0) / 100)) }} viewport={{ once: true }} transition={{ duration: reduceMotion ? 0 : .65, ease: [.22, 1, .36, 1] }} /></div>
     <span>{pct == null ? 'Taux non calculable' : `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(pct)} % récupérés`}</span></div></>;
 }
 
@@ -74,17 +82,17 @@ export function CeoFinanceMetrics({ onOpenFinance, darkMode }) {
   return <section className={`ceo-metrics-section${darkMode ? ' is-dark' : ''}`} aria-label="Finance Owner">
     <div className="ceo-metrics-title"><h2>Finance <small>Owner uniquement</small></h2><PeriodSelect value={period} onChange={setPeriod} label="Mois des indicateurs finance" /></div>
     <div className="ceo-metrics-grid">
-      <Card title="Récupération du mois" Icon={Wallet} color="#10b981" {...finance} footer="Reçu affecté au mois / attendu du mois" onClick={() => onOpenFinance(period)}>
+      <Card title="Récupération du mois" Icon={Wallet} color="#087f5b" {...finance} footer="Reçu affecté au mois / attendu du mois" onClick={() => onOpenFinance(period)}>
         <Ratio received={k?.receivedTotal} expected={k?.expectedGlobal} />
       </Card>
-      <Card title="Récupération des antérieurs" Icon={RotateCcw} color="#f59e0b" {...finance} footer="Recouvré / créances dues au début du mois" onClick={() => onOpenFinance(period)}>
+      <Card title="Récupération des antérieurs" Icon={RotateCcw} color="#a75b09" {...finance} footer="Recouvré / créances dues au début du mois" onClick={() => onOpenFinance(period)}>
         <Ratio received={k?.recoveredPrior} expected={k?.openingDebt} />
       </Card>
-      <Card title="Nouveau cash mensuel" Icon={Wallet} color="#5b6abf" {...sales} footer={<>{sales.data?.count ?? '—'} ventes valorisées · signatures du mois{sales.data?.missing_amount_or_plan > 0 && <span className="ceo-metric-warning">{sales.data.missing_amount_or_plan} à compléter (montant ou modalité)</span>}</>}>
+      <Card title="Nouveau cash mensuel" Icon={Banknote} color="#4f5fba" {...sales} footer={<>{sales.data?.count ?? '—'} ventes valorisées · signatures du mois{sales.data?.missing_amount_or_plan > 0 && <span className="ceo-metric-warning">{sales.data.missing_amount_or_plan} à compléter (montant ou modalité)</span>}</>}>
         <div className="ceo-metric-value">{euro(sales.data?.monthly)}<span> / mois</span></div>
         <div className="ceo-metric-secondary"><span>Contrats annuels</span><strong>{euro(sales.data?.annual)} / an</strong></div>
       </Card>
-      <Card title="Nouvel ARR du mois" Icon={TrendingUp} color="#8b5cf6" {...sales} footer="Mensualités × 12 + contrats annuels signés">
+      <Card title="Nouvel ARR du mois" Icon={TrendingUp} color="#7544ce" {...sales} footer="Mensualités × 12 + contrats annuels signés">
         <div className="ceo-metric-value">{euro(sales.data?.annualized)}<span> / an</span></div>
         <div className="ceo-metric-note">Engagement signé, même avant encaissement</div>
       </Card>
@@ -118,17 +126,17 @@ export function CeoProductMetrics({ boardRows, darkMode }) {
   return <section className={`ceo-metrics-section${darkMode ? ' is-dark' : ''}`} aria-label="Produit">
     <div className="ceo-metrics-title"><h2>Produit <small>Parc client à date</small></h2></div>
     <div className="ceo-metrics-grid">
-      <Card title="Onboarding Owner" Icon={CalendarCheck} color="#10b981" loading={!onboarding} footer="Effectués par le suivi client · à faire parmi les clients en cours">
+      <Card title="Onboarding Owner" Icon={CalendarCheck} color="#087f5b" loading={!onboarding} footer="Effectués par le suivi client · à faire parmi les clients en cours">
         <div className="ceo-metric-value">{onboarding?.done}<span> effectués</span></div><div className="ceo-metric-secondary"><strong>{onboarding?.remaining}</strong><span>restent à onboarder</span></div>
       </Card>
-      <Card title="Sociétés accompagnées" Icon={Building2} color="#5b6abf" {...product} footer={d ? `Sociétés référencées · dont ${d.archived_companies ?? '—'} archivées` : 'Sociétés et économies : interface client'}>
+      <Card title="Sociétés accompagnées" Icon={Building2} color="#4f5fba" {...product} footer={d ? `Sociétés référencées · dont ${d.archived_companies ?? '—'} archivées` : 'Sociétés et économies : interface client'}>
         <div className="ceo-metric-value">{d?.companies == null ? '—' : new Intl.NumberFormat('fr-FR').format(d.companies)}</div><div className="ceo-metric-note">Interface client · au {formatDate(d?.companies_as_of)}</div>
       </Card>
-      <Card title="Dirigeants accompagnés" Icon={Users} color="#8b5cf6" {...identities} loading={identities.loading || !directors} footer={directors?.missing ? `${directors.missing} dossiers sans identité NDA documentée` : 'Identités documentées lors de la génération du NDA'}>
+      <Card title="Dirigeants accompagnés" Icon={Users} color="#7544ce" {...identities} loading={identities.loading || !directors} footer={directors?.missing ? `${directors.missing} dossiers sans identité NDA documentée` : 'Identités documentées lors de la génération du NDA'}>
         <div className="ceo-metric-value">{directors ? new Intl.NumberFormat('fr-FR').format(directors.count) : '—'}</div>
         <div className="ceo-metric-note">Source : NDA Owner · clients en cours</div>
       </Card>
-      <Card title="Économies réalisées" Icon={Sparkles} color="#f59e0b" {...product} footer="Total réalisé · économies à venir exclues">
+      <Card title="Économies réalisées" Icon={Sparkles} color="#a75b09" {...product} footer="Total réalisé · économies à venir exclues">
         <div className="ceo-metric-value">{euro(d?.savings)}</div><div className="ceo-metric-note">Arrêté au {formatDate(d?.savings_as_of)}</div>
       </Card>
     </div>
@@ -161,6 +169,21 @@ export function CeoDelayMetrics({ darkMode }) {
           <span className="ceo-delay-value">{d?.average == null ? '—' : new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(d.average)} <small>{d?.average == null ? '' : d.unit}</small></span>
         </div>;
       })}
-    </div><p className="ceo-metrics-caption">Les étapes non réalisées, dates absentes ou incohérentes sont exclues des moyennes. Aucun temps ouvré n’est déduit.</p>
+    </div>
   </section>;
+}
+
+export function CeoUpcomingAppointments({ appointments, loading }) {
+  return <div className="ceo-appointments" role="group" aria-label="Rendez-vous à venir" aria-busy={loading}>
+    {[['onboarding', 'RDV onboarding à venir', 'Owner', CalendarClock], ['integration', 'RDV intégration à venir', 'Cabinet partenaire', Scale]].map(([key, label, entity, Icon]) => {
+      const data = appointments[key];
+      return <div className="ceo-appointment" key={key}>
+        <span className={`ceo-appointment-icon ceo-appointment-icon--${key}`}><Icon size={22} strokeWidth={1.9} aria-hidden="true" /></span>
+        <div className="ceo-appointment-copy"><h3>{label}</h3><span>{entity}</span>
+          {!loading && data.overdue > 0 && <span className="ceo-appointment-alert">{key === 'integration' ? 'dont ' : '+ '}{data.overdue} en retard</span>}
+        </div>
+        <strong className="ceo-appointment-value">{loading ? '—' : new Intl.NumberFormat('fr-FR').format(data.upcoming)}</strong>
+      </div>;
+    })}
+  </div>;
 }
