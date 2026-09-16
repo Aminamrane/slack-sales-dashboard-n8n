@@ -39,6 +39,7 @@ const CeoOptilexBoardView = lazy(() => import("./pages/CeoOptilexBoardView.jsx")
 const HrDashboard = lazy(() => import("./pages/HrDashboard.jsx"));
 const CeoLeadQualityView = lazy(() => import("./pages/CeoLeadQualityView.jsx"));
 const CeoSalesTeamView = lazy(() => import("./pages/CeoSalesTeamView.jsx"));
+const OwnerIntegrationPreview = lazy(() => import("./pages/OwnerIntegrationPreview.jsx"));
 const CeoSalesRecordingsView = lazy(() => import("./pages/CeoSalesRecordingsView.jsx"));
 const CeoWebinarView = lazy(() => import("./pages/CeoWebinarView.jsx"));
 const CeoFunnelLeadsView = lazy(() => import("./pages/CeoFunnelLeadsView.jsx"));
@@ -276,6 +277,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/owner/integration-preview" element={<ProtectedRoute><OwnerIntegrationPreview /></ProtectedRoute>} />
         <Route
           path="/ceo/sales-recordings"
           element={

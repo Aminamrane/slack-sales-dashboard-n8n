@@ -1,3 +1,4 @@
+import { canSeeIntegrationPreview } from "./integrationPreview/model";
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'framer-motion';
@@ -1015,6 +1016,13 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
                     Funnel Leads
+                  </button>
+                )}
+
+                {canSeeIntegrationPreview(apiClient.getUser()) && (
+                  <button onClick={() => { navigate('/owner/integration-preview'); }}
+                    style={{display:'flex',alignItems:'center',gap:8,padding:'10px 12px',borderRadius:8,border:'none',background:'transparent',color:darkMode?'#f5f5f7':'#1d1d1f',fontSize:14,fontWeight:500,cursor:'pointer',textAlign:'left',width:'100%'}}>
+                    Fiche Owner · espace de test
                   </button>
                 )}
 
