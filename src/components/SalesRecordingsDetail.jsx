@@ -212,7 +212,7 @@ export default function SalesRecordingsDetail({ sales, onBack, C, darkMode, init
 
       {["videos", "transcriptions", "shared"].includes(tab) && (() => {
         const files = tab === "videos" ? videos : tab === "shared" ? shared : notes;
-        if (loadingFiles && !files.length) return <Loading label="Chargement des fichiers…" />;
+        if ((sales.files_loading ?? loadingFiles) && !files.length) return <Loading label="Chargement des fichiers…" />;
         if (!files.length) return <div className="recordings-empty">{tab === "videos" ? "Aucune vidéo disponible pour le moment." : "Aucun document disponible pour le moment."}</div>;
         return <div className="recordings-files">{files.map((r) => {
           const isVideo = r.kind === "video";

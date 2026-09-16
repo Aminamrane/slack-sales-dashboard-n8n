@@ -86,8 +86,8 @@ export default function CeoSalesRecordingsView({ embed = false }) {
     if (refresh) setRefreshing(true); else setLoading(true);
     setError(null);
     return apiClient.getRecordingsOverview(refresh)
-      .then((resp) => setData(resp))
-      .catch((e) => { console.warn("[CeoSalesRecordingsView] overview failed:", e); setError(e?.message || "erreur"); })
+      .then((resp) => { setData(resp); setVideosLoading(!!resp.refreshing); })
+      .catch((e) => { console.warn("[CeoSalesRecordingsView] overview failed:", e); setError(e?.message || "erreur"); setVideosLoading(false); })
       .finally(() => { setLoading(false); setRefreshing(false); });
   };
   useEffect(() => {
@@ -101,11 +101,22 @@ export default function CeoSalesRecordingsView({ embed = false }) {
       .finally(() => { if (alive) setLoading(false); });
     // 2) COMPLET : scan Drive (vidéos + transcriptions) en arrière-plan -> complète les compteurs.
     apiClient.getRecordingsOverview(false)
-      .then((resp) => { if (alive) setData(resp); })
-      .catch((e) => { if (alive) { console.warn("[CeoSalesRecordingsView] full overview failed:", e); setError("Les fichiers n’ont pas pu être actualisés."); } })
-      .finally(() => { if (alive) setVideosLoading(false); });
+      .then((resp) => { if (alive) { setData(resp); setVideosLoading(!!resp.refreshing); } })
+      .catch((e) => { if (alive) { console.warn("[CeoSalesRecordingsView] full overview failed:", e); setError("Les fichiers n’ont pas pu être actualisés."); setVideosLoading(false); } });
     return () => { alive = false; };
   }, [authChecked]);
+
+  // During a refresh, read the shared index only; polling never starts a new Drive scan.
+  useEffect(() => {
+    if (!authChecked || !data?.refreshing) return;
+    let alive = true;
+    const timer = setTimeout(() => {
+      apiClient.getRecordingsOverview(false)
+        .then((resp) => { if (alive) { setData(resp); setVideosLoading(!!resp.refreshing); if (resp.sync_error) setError("Les fichiers n’ont pas tous pu être actualisés."); } })
+        .catch(() => { if (alive) { setVideosLoading(false); setError("L’actualisation a été interrompue. Vous pouvez réessayer."); } });
+    }, 2000);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [authChecked, data]);
 
   // Photos de profil (map email -> avatar_url) via /assignable, comme la page Équipe.
   useEffect(() => {
