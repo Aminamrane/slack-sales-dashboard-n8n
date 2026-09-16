@@ -1,4 +1,4 @@
-import { matchesUpcomingIntegration } from "../utils/boardIntegration.js";
+import { matchesUpcomingIntegration, matchesUpcomingOnboarding, matchesOverdueOnboarding, parisWallTime } from "../utils/boardIntegration.js";
 import { matchesSignedClient, resolvePendingExit } from "../utils/boardClientState.js";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -132,7 +132,8 @@ const _todayParisISO = () => new Date().toLocaleDateString("en-CA", { timeZone: 
 // Exportés (avec `displayEtat` plus bas) : les cartes d'états du dashboard CEO
 // comptent avec CES prédicats-ci. Une seule définition de la règle métier, pas de
 // copie qui dérive — board et dashboard affichent forcément les mêmes chiffres.
-export const isOnboardingUpcoming = (r) => { const d = r.rdv_onboarding_date_manual || r.rdv_onboarding_date; return !!r.numero_client && !!d && !r.rdv_onboarding_done && String(d).slice(0, 10) >= _todayParisISO(); };
+export const isOnboardingUpcoming = (r) => matchesUpcomingOnboarding(r, _todayParisISO());
+export const isOnboardingOverdue = (r) => matchesOverdueOnboarding(r, parisWallTime());
 export const isIntegrationUpcoming = (r) => matchesUpcomingIntegration(r, displayEtat(r));
 // "En retard" : dans "à venir" (donc non effectué, depuis le 01/07) MAIS date déjà passée = non réalisé.
 export const isIntegrationOverdue = (r) => isIntegrationUpcoming(r) && String(r.rdv_lancement_date).slice(0, 10) < _todayParisISO();

@@ -1,4 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { createPortal } from 'react-dom';
+import { AnimatePresence } from 'framer-motion';
+import { GlobalNotificationPanel, GlobalNotificationPreview } from './GlobalNotifications.jsx';
+import { notificationTarget, notificationPlacement, freshNotifications } from '../utils/notificationPresentation.js';
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import apiClient from "../services/apiClient";
@@ -313,10 +317,33 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
   const [notifBellShake, setNotifBellShake] = useState(false);
   const [notifTab, setNotifTab] = useState('unread'); // 'unread' | 'read'
   const notifIslandRef = useRef(null);
+  const notifPanelRef = useRef(null);
+  const notifBellRef = useRef(null);
+  const [globalPreview, setGlobalPreview] = useState(null);
+  const [previewPaused, setPreviewPaused] = useState(false);
+  const [notifPosition, setNotifPosition] = useState(null);
+  const seenNotifs = useRef(new Set());
+  const notifsHydrated = useRef(false);
+  const incomingNotifs = useRef(null);
 
   const [globalNotifs, setGlobalNotifs] = useState([]);
   const unreadCount = globalNotifs.filter(n => !n.read).length;
   const notifPollRef = useRef(null);
+
+  incomingNotifs.current = (items, push = false) => {
+    const fresh = freshNotifications(items, seenNotifs.current);
+    setGlobalNotifs(prev => push ? [...items.filter(n => !prev.some(p => p.id === n.id)), ...prev] : items);
+    if ((push || notifsHydrated.current) && fresh.length && !notifIslandOpen) {
+      setPreviewPaused(false);
+      setGlobalPreview(fresh[0]);
+    }
+    if (!push) notifsHydrated.current = true;
+  };
+  useEffect(() => {
+    if (!globalPreview || previewPaused) return;
+    const timer = setTimeout(() => setGlobalPreview(null), 8000);
+    return () => clearTimeout(timer);
+  }, [globalPreview, previewPaused]);
 
   // Fetch global notifications on mount + poll every 30s
   useEffect(() => {
@@ -325,7 +352,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
         const token = apiClient.getToken();
         if (!token) return;
         const data = await apiClient.get('/api/v1/notifications/global?limit=20');
-        if (data?.notifications) setGlobalNotifs(data.notifications);
+        if (data?.notifications) incomingNotifs.current(data.notifications);
       } catch {}
     };
     fetchNotifs();
@@ -341,10 +368,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
       // Check role filter
       const user = apiClient.getUser();
       if (notif.target_roles && !notif.target_roles.includes(user?.role)) return;
-      setGlobalNotifs(prev => {
-        if (prev.some(n => n.id === notif.id)) return prev;
-        return [notif, ...prev];
-      });
+      incomingNotifs.current([notif], true);
     };
     window.addEventListener('global_notification', handler);
     return () => window.removeEventListener('global_notification', handler);
@@ -364,21 +388,25 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
     } catch {}
   };
 
-  // Time ago helper
-  const timeAgo = (dateStr) => {
-    if (!dateStr) return '';
-    const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-    if (diff < 60) return 'À l\'instant';
-    if (diff < 3600) return `Il y a ${Math.floor(diff / 60)} min`;
-    if (diff < 86400) return `Il y a ${Math.floor(diff / 3600)}h`;
-    return `Il y a ${Math.floor(diff / 86400)}j`;
+  const openGlobalNotification = (notif) => {
+    setGlobalPreview(null);
+    const target = notificationTarget(notif);
+    if (!notif.read) markNotifsRead([notif.id]);
+    if (target) {
+      setNotifIslandOpen(false);
+      setIslandOpen(false);
+      navigate(target);
+    } else {
+      setNotifTab('read');
+      setNotifIslandOpen(true);
+    }
   };
 
   // Close panel on outside click
   useEffect(() => {
     if (!notifIslandOpen) return;
     const close = (e) => {
-      if (notifIslandRef.current && !notifIslandRef.current.contains(e.target)) {
+      if (notifIslandRef.current && !notifIslandRef.current.contains(e.target) && !notifPanelRef.current?.contains(e.target)) {
         setNotifIslandOpen(false);
         if (islandRef.current && !islandRef.current.contains(e.target)) {
           setIslandOpen(false);
@@ -404,20 +432,6 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
     }
   }, [unreadCount, notifIslandOpen]);
 
-  const NOTIF_ICONS = {
-    new_sale: { icon: '💰', color: '#10b981' },
-    eod_alert: { icon: '⚠', color: '#f59e0b' },
-    perf_alert: { icon: '📊', color: '#6366f1' },
-    contract_signed: { icon: '✓', color: '#10b981' },
-    contract_expired: { icon: '⏰', color: '#fb923c' },
-    sheet_invitation: { icon: '📋', color: '#8b5cf6' },
-    eod_missed: { icon: '⚠', color: '#f59e0b' },
-    eod_low_score: { icon: '📉', color: '#ef4444' },
-    setter_placed_r1: { icon: 'R1', color: '#3b82f6' },
-    setter_placed_r2: { icon: 'R2', color: '#fb923c' },
-    default: { icon: '●', color: '#94a3b8' },
-  };
-
   // ── KEYBOARD SHORTCUT ───────────────────────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -440,11 +454,34 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
 
   // ── DERIVED STATE ─────────────────────────────────────────────────────────
   const isNotifActive = !!notifPhase;
-  const forceOpen = isNotifActive || isClosing; // Keep island "open" during WAAPI close animation
+  const forceOpen = isNotifActive || isClosing || !!globalPreview; // Keep island "open" during WAAPI close animation
   const collapsed = !islandOpen && !forceOpen;
 
+  useLayoutEffect(() => {
+    if (!notifIslandOpen && !globalPreview) return;
+    const update = () => {
+      const nav = islandRef.current?.getBoundingClientRect();
+      const bell = notifIslandRef.current?.getBoundingClientRect();
+      if (nav && bell) setNotifPosition(notificationPlacement(nav,bell,window.innerWidth,window.innerHeight));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    if (islandRef.current) observer.observe(islandRef.current);
+    if (notifIslandRef.current) observer.observe(notifIslandRef.current);
+    window.addEventListener('resize',update);
+    return () => { observer.disconnect(); window.removeEventListener('resize',update); };
+  }, [notifIslandOpen, globalPreview, collapsed, centerShift]);
+  useEffect(() => {
+    const close = e => {
+      if (e.key !== 'Escape' || (!notifIslandOpen && !globalPreview)) return;
+      setNotifIslandOpen(false); setGlobalPreview(null); setIslandOpen(false); notifBellRef.current?.focus();
+    };
+    window.addEventListener('keydown',close);
+    return () => window.removeEventListener('keydown',close);
+  }, [notifIslandOpen,globalPreview]);
+
   return (
-    <div style={{
+    <div className="owner-shared-navbar" style={{
       position: 'fixed',
       top: '6px',
       left: 0,
@@ -458,7 +495,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
       transform: `translateX(-${centerShift || 0}px)`,
     }}>
       <div
-        ref={islandRef}
+        ref={islandRef} data-owner-island="true"
         onMouseEnter={() => { if (hoverDelayRef.current) { clearTimeout(hoverDelayRef.current); hoverDelayRef.current = null; } !isNotifActive && setIslandOpen(true); }}
         onMouseLeave={() => { if (!isNotifActive && !notifIslandOpen) { if (unreadCount > 0) { hoverDelayRef.current = setTimeout(() => setIslandOpen(false), 450); } else { setIslandOpen(false); } } }}
         style={{
@@ -1170,7 +1207,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
       {!collapsed && !dashboardOnly && <AvailabilityControl darkMode={darkMode} />}
 
       {/* ── NOTIFICATION ISLAND (visible only when navbar is expanded) ── */}
-      {unreadCount > 0 && !collapsed && (
+      {globalNotifs.length > 0 && !collapsed && (
         <div
           ref={notifIslandRef}
           onMouseEnter={() => { if (hoverDelayRef.current) { clearTimeout(hoverDelayRef.current); hoverDelayRef.current = null; } setIslandOpen(true); }}
@@ -1184,8 +1221,8 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
           }}
         >
           {/* Notification pill */}
-          <button
-            onClick={() => { setNotifIslandOpen(!notifIslandOpen); if (!notifIslandOpen) setNotifTab('unread'); }}
+          <button ref={notifBellRef} aria-label="Notifications" aria-expanded={notifIslandOpen}
+            onClick={() => { setGlobalPreview(null); setNotifIslandOpen(!notifIslandOpen); if (!notifIslandOpen) setNotifTab(unreadCount ? 'unread' : 'read'); }}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '8px 12px', height: 52,
@@ -1209,7 +1246,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
             {/* Badge */}
-            <span style={{
+            {unreadCount > 0 && <span style={{
               minWidth: 18, height: 18, borderRadius: 10,
               background: '#ef4444', color: '#fff',
               fontSize: 11, fontWeight: 700,
@@ -1218,125 +1255,16 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
               animation: 'notifBadgePop 0.35s cubic-bezier(0.34,1.56,0.64,1) both',
             }}>
               {unreadCount}
-            </span>
+            </span>}
           </button>
 
-          {/* Expanded panel */}
-          {notifIslandOpen && (
-            <div style={{
-              position: 'fixed', top: 68, left: 'calc(50% - 206px)', transform: 'translateX(-50%)',
-              width: 400, maxHeight: 440,
-              borderRadius: 22,
-              background: darkMode ? 'rgba(30,31,40,0.97)' : 'rgba(255,255,255,0.97)',
-              backdropFilter: 'blur(56px)', WebkitBackdropFilter: 'blur(56px)',
-              border: `1px solid ${darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}`,
-              boxShadow: darkMode ? '0 16px 48px rgba(0,0,0,0.5)' : '0 16px 48px rgba(0,0,0,0.1)',
-              overflow: 'hidden',
-              animation: 'notifPanelExpand 0.5s cubic-bezier(0.16, 1, 0.3, 1) both',
-            }}>
-              {/* Header + Tabs */}
-              <div style={{ borderBottom: `1px solid ${darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'}` }}>
-                <div style={{ padding: '14px 18px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: darkMode ? '#f5f5f7' : '#1d1d1f', letterSpacing: '-0.02em' }}>
-                    Notifications
-                  </span>
-                  {notifTab === 'unread' && unreadCount > 0 && (
-                    <button onClick={() => {
-                      markAllRead();
-                    }} style={{
-                      border: 'none', background: 'transparent', fontSize: 11, fontWeight: 600,
-                      color: COLORS.primary, cursor: 'pointer', fontFamily: 'inherit',
-                      padding: '2px 6px', borderRadius: 6,
-                    }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                    >Tout lire</button>
-                  )}
-                </div>
-                {/* Tabs */}
-                <div style={{ display: 'flex', padding: '8px 18px 0', gap: 0 }}>
-                  {[{ key: 'unread', label: 'Non lues' }, { key: 'read', label: 'Lues' }].map(tab => (
-                    <button key={tab.key} onClick={() => setNotifTab(tab.key)} style={{
-                      padding: '6px 14px', border: 'none', background: 'transparent',
-                      fontSize: 12, fontWeight: notifTab === tab.key ? 650 : 500, fontFamily: 'inherit',
-                      color: notifTab === tab.key ? (darkMode ? '#f5f5f7' : '#1d1d1f') : (darkMode ? '#5e6273' : '#9ca3af'),
-                      cursor: 'pointer', borderBottom: `2px solid ${notifTab === tab.key ? COLORS.primary : 'transparent'}`,
-                      transition: 'all 0.15s', marginBottom: -1,
-                    }}>{tab.label}{tab.key === 'unread' && unreadCount > 0 && (
-                      <span style={{ marginLeft: 5, fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: '#ef4444', color: '#fff' }}>{unreadCount}</span>
-                    )}</button>
-                  ))}
-                </div>
-              </div>
 
-              {/* Notification list */}
-              <div style={{ padding: '6px 0', overflowY: 'auto', maxHeight: 340 }}>
-                {globalNotifs.filter(n => notifTab === 'unread' ? !n.read : n.read).length === 0 && (
-                  <div style={{ textAlign: 'center', padding: '24px 16px', color: darkMode ? '#5e6273' : '#9ca3af', fontSize: 12.5 }}>
-                    {notifTab === 'unread' ? 'Aucune nouvelle notification' : 'Aucune notification lue'}
-                  </div>
-                )}
-                {globalNotifs.filter(n => notifTab === 'unread' ? !n.read : n.read).map((notif, idx) => {
-                  const nConfig = NOTIF_ICONS[notif.type] || NOTIF_ICONS.default;
-                  return (
-                    <div key={notif.id} onClick={() => {
-                      if (!notif.read) markNotifsRead([notif.id]);
-                      setNotifIslandOpen(false);
-                      setTimeout(() => setIslandOpen(false), 150);
-                      if (notif.type === 'owner_rating_regression') {
-                        const client = notif.data?.numero_client;
-                        navigate('/ceo/optilex-board' + (client ? `?client=${encodeURIComponent(client)}` : ''));
-                      }
-                      // Navigate for invitation notifications → go to notifications tab in tracking sheet
-                      if (notif.type === 'sheet_invitation') {
-                        navigate('/tracking-sheet?view=notifications');
-                      }
-                      // Navigate for setter R1/R2 notifications → tracking sheet
-                      if (notif.type === 'setter_placed_r1' || notif.type === 'setter_placed_r2') {
-                        navigate('/tracking-sheet');
-                      }
-                    }} style={{
-                      display: 'flex', alignItems: 'flex-start', gap: 10,
-                      padding: '10px 18px', cursor: 'pointer',
-                      background: notif.read ? 'transparent' : (darkMode ? 'rgba(99,102,241,0.06)' : 'rgba(99,102,241,0.03)'),
-                      transition: 'background 0.15s',
-                      animation: `notifItemSlide 0.3s ease ${idx * 50}ms both`,
-                    }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = notif.read ? 'transparent' : (darkMode ? 'rgba(99,102,241,0.06)' : 'rgba(99,102,241,0.03)')}
-                    >
-                      {/* Icon */}
-                      <div style={{
-                        width: 28, height: 28, borderRadius: 8, flexShrink: 0, marginTop: 1,
-                        background: `${nConfig.color}15`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 13, fontWeight: 700, color: nConfig.color,
-                      }}>{nConfig.icon}</div>
-                      {/* Content */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{
-                          fontSize: 12.5, fontWeight: notif.read ? 500 : 600,
-                          color: darkMode ? '#eef0f6' : '#1e2330',
-                          lineHeight: 1.4, letterSpacing: '-0.01em',
-                        }}>{notif.title || notif.message}</div>
-                        <div style={{ fontSize: 11, color: darkMode ? '#5e6273' : '#9ca3af', marginTop: 2 }}>{notif.message !== notif.title ? notif.message : ''}</div>
-                        <div style={{ fontSize: 10, color: darkMode ? '#444' : '#c4c4c4', marginTop: 2 }}>{timeAgo(notif.created_at)}</div>
-                      </div>
-                      {/* Unread dot */}
-                      {!notif.read && (
-                        <div style={{
-                          width: 7, height: 7, borderRadius: '50%', background: COLORS.primary,
-                          flexShrink: 0, marginTop: 6,
-                        }} />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       )}
+      {createPortal(<AnimatePresence>
+        {notifIslandOpen && notifPosition && <GlobalNotificationPanel key="notifications-panel" panelRef={notifPanelRef} notifications={globalNotifs} tab={notifTab} setTab={setNotifTab} unreadCount={unreadCount} onReadAll={markAllRead} onOpen={openGlobalNotification} onClose={() => { setNotifIslandOpen(false); setIslandOpen(false); notifBellRef.current?.focus(); }} darkMode={darkMode} position={notifPosition} />}
+        {globalPreview && !notifIslandOpen && notifPosition && <GlobalNotificationPreview key={globalPreview.id} notification={globalPreview} onOpen={openGlobalNotification} onClose={() => setGlobalPreview(null)} onPause={setPreviewPaused} darkMode={darkMode} position={notifPosition} />}
+      </AnimatePresence>, document.body)}
     </div>
   );
 }

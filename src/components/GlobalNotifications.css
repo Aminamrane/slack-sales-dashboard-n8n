@@ -1,0 +1,37 @@
+.owner-notif-panel,.owner-notif-preview { --notif-bg:#fff;--notif-text:#252c38;--notif-muted:#626d80;--notif-border:#e8ebf1;--notif-soft:#f5f6fa;position:fixed;z-index:1100;pointer-events:auto;box-sizing:border-box;background:var(--notif-bg);color:var(--notif-text);border:1px solid var(--notif-border);border-radius:20px;box-shadow:0 16px 48px #1e293b1c;font-family:Inter,Arial,sans-serif;overflow:hidden;transform-origin:top center; }
+.owner-notif-panel.is-dark,.owner-notif-preview.is-dark { --notif-bg:#20232e;--notif-text:#f0f2f8;--notif-muted:#b8c1d1;--notif-border:#363b4b;--notif-soft:#292e3c; }
+.owner-notif-panel {display:flex;flex-direction:column;}
+.owner-notif-panel button,.owner-notif-preview button {font:inherit;cursor:pointer;border:0;background:transparent;color:inherit;}
+.owner-notif-panel button:focus-visible,.owner-notif-preview button:focus-visible {outline:2px solid #687ab5;outline-offset:2px;border-radius:5px;}
+.owner-notif-header {display:flex;align-items:center;justify-content:space-between;padding:14px 16px 4px;flex-shrink:0;}
+.owner-notif-header h2 {font-size:17px;font-weight:650;margin:0;}
+.owner-notif-header>button,.owner-notif-preview-top>button {width:32px;height:32px;display:grid;place-items:center;border-radius:9px;}
+.owner-notif-toolbar {display:flex;justify-content:space-between;gap:8px;padding:4px 16px 12px;border-bottom:1px solid var(--notif-border);flex-shrink:0;}
+.owner-notif-tabs {display:flex;gap:4px;padding:3px;background:var(--notif-soft);border-radius:9px;}
+.owner-notif-tabs button {font-size:12px;padding:7px 9px;border-radius:7px;min-height:34px;}
+.owner-notif-tabs button[aria-pressed=true] {background:var(--notif-bg);box-shadow:0 1px 4px #0000000d;font-weight:650;}
+.owner-notif-tabs button>span {margin-left:6px;font-size:11px;font-weight:650;}
+.owner-notif-toolbar .owner-notif-read-all {display:flex;align-items:center;gap:5px;font-size:12px;color:var(--notif-muted);}
+.owner-notif-list {overflow-y:auto;overscroll-behavior:contain;min-height:0;scrollbar-gutter:stable;}
+.owner-notif-item {display:flex;align-items:flex-start;gap:12px;padding:18px 16px;border-bottom:1px solid var(--notif-border);}
+.owner-notif-item:last-child {border-bottom:0;}
+.owner-notif-item.is-unread {background:color-mix(in srgb,var(--notif-soft) 65%,var(--notif-bg));}
+.owner-notif-icon {display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--notif-soft);color:var(--notif-muted);flex-shrink:0;}
+.owner-notif-content {flex:1;min-width:0;}
+.owner-notif-content .owner-notif-title {display:block;text-align:left;font-size:14px;font-weight:650;line-height:1.45;padding:0;overflow-wrap:anywhere;}
+.owner-notif-content time {display:block;font-size:11px;color:var(--notif-muted);margin-top:5px;font-variant-numeric:tabular-nums;}
+.owner-notif-content p {font-size:13px;line-height:1.65;color:var(--notif-muted);margin:10px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;}
+.owner-notif-content p.is-excerpt {display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
+.owner-notif-content .owner-notif-expand {font-size:12px;font-weight:600;padding:8px 0 0;}
+.owner-notif-unread-dot {width:6px;height:6px;flex-shrink:0;border-radius:50%;background:#6576a9;margin-top:7px;}
+.owner-notif-empty {display:flex;align-items:center;flex-direction:column;padding:32px 16px;color:var(--notif-muted);font-size:13px;}
+.owner-notif-preview {padding:10px 14px 16px;}
+.owner-notif-preview-top {display:flex;align-items:center;justify-content:space-between;color:var(--notif-muted);font-size:11px;margin-bottom:4px;}
+.owner-notif-preview-open {display:flex;align-items:flex-start;gap:12px;width:100%;text-align:left;padding:0;}
+.owner-notif-preview-open>span:last-child {min-width:0;flex:1;}
+.owner-notif-preview-open strong {display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:14px;line-height:1.45;}
+.owner-notif-preview-text {display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:12px;line-height:1.6;color:var(--notif-muted);margin-top:5px;overflow-wrap:anywhere;}
+.owner-notif-preview-link {display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;margin-top:10px;}
+@media(prefers-reduced-motion:reduce){.owner-notif-panel,.owner-notif-preview {animation:none!important;transition:none!important;}}
+
+@media(prefers-reduced-motion:reduce){.owner-shared-navbar *{animation-duration:.001ms!important;transition-duration:.001ms!important;}}
