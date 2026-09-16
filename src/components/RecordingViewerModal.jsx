@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import apiClient from "../services/apiClient";
-import { Video, FileText, ChartNoAxesCombined, X } from "lucide-react";
+import { Video, FileText, ChartNoAxesCombined, LoaderCircle, X } from "lucide-react";
 import "./SalesRecordings.css";
 import ScorecardView from "./ScorecardView.jsx";
 
@@ -20,13 +20,15 @@ export default function RecordingViewerModal({ rec, mode, onClose, C, darkMode }
   const [documentView, setDocumentView] = useState("transcription");
   const [trans, setTrans] = useState(null);
   const [scData, setScData] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(mode !== "video");
+  const [videoLoading, setVideoLoading] = useState(true);
+  const [videoAttempt, setVideoAttempt] = useState(0);
   const [err, setErr] = useState(null);
 
   useEffect(() => {
     if (mode !== "transcription" || !rec) return;
     let alive = true;
-    setLoading(true); setErr(null); setTrans(null);
+    setLoading(true); setErr(null); setTrans(null); setDocumentView("transcription");
     apiClient.getRecordingTranscription(rec.id, rec.owner)
       .then((r) => { if (alive) setTrans(r); })
       .catch((e) => { if (alive) setErr(e?.message || "erreur"); })
@@ -44,6 +46,8 @@ export default function RecordingViewerModal({ rec, mode, onClose, C, darkMode }
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [rec, mode]);
+
+  useEffect(() => { setVideoLoading(true); setErr(null); }, [rec?.id, mode]);
 
   useEffect(() => {
     const previous = document.activeElement;
@@ -100,9 +104,20 @@ export default function RecordingViewerModal({ rec, mode, onClose, C, darkMode }
 
         <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: (mode === "video" || mode === "scorecard") ? 0 : "18px 22px", background: mode === "video" ? "#000" : mode === "scorecard" ? "#FBFAF7" : body }}>
           {mode === "video" ? (
-            <video src={streamUrl} controls autoPlay preload="metadata" style={{ width: "100%", maxHeight: "78vh", background: "#000", display: "block" }} />
+            <div className="recordings-video-stage" aria-busy={videoLoading && !err}>
+              <video key={`${rec.id}-${videoAttempt}`} src={streamUrl} controls autoPlay preload="auto"
+                onLoadStart={() => { setVideoLoading(true); setErr(null); }}
+                onLoadedData={() => setVideoLoading(false)} onCanPlay={() => setVideoLoading(false)}
+                onPlaying={() => setVideoLoading(false)} onWaiting={() => setVideoLoading(true)}
+                onError={() => { setVideoLoading(false); setErr("video"); }} />
+              {videoLoading && !err && <div className="recordings-video-loading" role="status" aria-live="polite"><LoaderCircle size={30} className="is-spinning" aria-hidden="true" /><span>Chargement de la vidéo…</span></div>}
+              {err && <div className="recordings-video-error" role="alert"><span>La vidéo n’a pas pu être chargée.</span><button onClick={() => { setErr(null); setVideoLoading(true); setVideoAttempt(n => n + 1); }}>Réessayer</button></div>}
+            </div>
           ) : loading ? (
-            <div style={{ color: C.muted, fontSize: 13, padding: "24px 4px" }}>Chargement…</div>
+            <div className="recordings-document-loading" role="status" aria-live="polite" aria-busy="true">
+              <div><LoaderCircle size={25} className="is-spinning" aria-hidden="true" /><span>{mode === "scorecard" ? "Chargement de l’analyse…" : "Chargement du document…"}</span></div>
+              <div className="recordings-text-skeleton" aria-hidden="true"><i /><i /><i /><i /><i /></div>
+            </div>
           ) : err ? (
             <div style={{ color: "#ef4444", fontSize: 13, padding: "24px 4px" }}>{mode === "scorecard" ? "Scorecard indisponible." : "Transcription indisponible."} </div>
           ) : mode === "scorecard" ? (
