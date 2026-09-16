@@ -1,16 +1,81 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <meta name="theme-color" content="#f5f7fb" />
     <title>Owner Interne</title>
+    <!-- Critical loading UI: no external font, stylesheet or image is needed. -->
+    <style>
+      .owner-loading{box-sizing:border-box;min-height:100vh;display:grid;place-items:center;padding:24px;background:#f5f7fb;color:#17233b;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-align:center}
+      body:has(#owner-startup){margin:0}
+      .owner-loading-card{width:min(100%,420px)}
+      .owner-loading-brand{display:block;font-size:24px;font-weight:750;letter-spacing:-1px;margin-bottom:28px}
+      .owner-loading h1{font-size:20px;line-height:1.4;margin:20px 0 10px;font-weight:650}
+      .owner-loading p{font-size:15px;line-height:1.6;color:#536078;margin:0}
+      .owner-loading button{margin-top:22px;padding:11px 18px;border:0;border-radius:9px;background:#17233b;color:white;font:inherit;cursor:pointer}
+      .owner-loading button:focus-visible{outline:3px solid #667eea;outline-offset:4px}
+      .owner-loading button[hidden]{display:none}
+      .owner-loading-spinner{display:inline-block;width:28px;height:28px;border:3px solid #dbe2ef;border-top-color:#5268dc;border-radius:50%;animation:owner-loading-spin 1s linear infinite}
+      @keyframes owner-loading-spin{to{transform:rotate(360deg)}}
+      @media(prefers-reduced-motion:reduce){.owner-loading-spinner{animation:none}}
+      @media(prefers-color-scheme:dark){.owner-loading{background:#13141b;color:#f5f7fb}.owner-loading p{color:#b5bed0}.owner-loading button{background:#dde5ff;color:#17233b}}
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main id="owner-startup" class="owner-loading" role="status" aria-live="polite">
+        <div class="owner-loading-card">
+          <span class="owner-loading-brand">Owner</span>
+          <span class="owner-loading-spinner" aria-hidden="true"></span>
+          <h1>Chargement de votre espace</h1>
+          <p id="owner-startup-message">Votre page sera prête dans quelques instants.</p>
+          <button id="owner-startup-retry" type="button" hidden>Recharger la page</button>
+          <noscript><p>Activez JavaScript dans votre navigateur pour ouvrir votre espace.</p></noscript>
+        </div>
+      </main>
+    </div>
+    <script>
+      // This runs before the module download. An unavailable entry script must
+      // still leave the loading message and an explicit way to retry.
+      (() => {
+        const message = document.getElementById('owner-startup-message');
+        const retry = document.getElementById('owner-startup-retry');
+        let slow = false;
+        let failed = false;
+        const update = () => {
+          message.textContent = !navigator.onLine
+            ? 'Connexion interrompue. Vérifiez votre connexion Internet.'
+            : failed
+              ? 'Le chargement a été interrompu. Vous pouvez réessayer.'
+              : slow
+                ? 'Le chargement prend un peu plus de temps. Vous pouvez patienter ou réessayer.'
+                : 'Votre page sera prête dans quelques instants.';
+          retry.hidden = !(slow || failed || !navigator.onLine);
+        };
+        const fail = () => { failed = true; update(); };
+        const onError = event => {
+          if (event.target?.tagName === 'SCRIPT' && event.target.type === 'module') fail();
+        };
+        const timer = setTimeout(() => { slow = true; update(); }, 12000);
+        retry.addEventListener('click', () => window.location.reload());
+        window.addEventListener('online', update);
+        window.addEventListener('offline', update);
+        window.addEventListener('error', onError, true);
+        window.ownerStartup = {
+          fail,
+          finish() {
+            clearTimeout(timer);
+            window.removeEventListener('online', update);
+            window.removeEventListener('offline', update);
+            window.removeEventListener('error', onError, true);
+            delete window.ownerStartup;
+          }
+        };
+        update();
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
