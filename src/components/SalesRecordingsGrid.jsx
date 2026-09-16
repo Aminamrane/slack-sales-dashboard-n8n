@@ -1,125 +1,34 @@
-// src/components/SalesRecordingsGrid.jsx
-//
-// Grille des sales par équipe (avec photo de profil), cliquable. Le clic ouvre la
-// fiche du sales (SalesRecordingsDetail) — analyses d'abord. Ici on n'affiche que
-// le résumé par sales : nb analysées (primaire) + nb vidéos + nb transcriptions.
+import { useMemo, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { Search, Video, FileText, ChartNoAxesCombined, Users, ArrowUpRight, RefreshCw, FolderOpen, Share2 } from 'lucide-react';
+import './SalesRecordings.css';
 
-import { useMemo } from "react";
-
-function Avatar({ url, name, size = 38 }) {
-  const initials = (name || "").split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-  if (url) return <img src={url} alt="" style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
-  return (
-    <div style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, background: "#1e2330", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.36, fontWeight: 700 }}>{initials}</div>
-  );
+const number = value => value == null ? '—' : new Intl.NumberFormat('fr-FR').format(value);
+function Avatar({name='',url}) {
+  return url ? <img className="recordings-avatar" src={url} alt=""/> : <span className="recordings-avatar">{name.split(' ').filter(Boolean).slice(0,2).map(s=>s[0]).join('')}</span>;
 }
-
-function Metric({ n, label, color, darkMode, dim }) {
-  const pending = n === null || n === undefined; // scan Drive pas encore arrivé
-  const on = !pending && n > 0 && !dim;
-  return (
-    <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4, flexShrink: 0, whiteSpace: "nowrap" }} title={pending ? "Chargement en arrière-plan…" : undefined}>
-      <span style={{ fontSize: 15, fontWeight: 800, color: on ? color : (darkMode ? "#6b7280" : "#c4c8cf"), opacity: pending ? 0.6 : 1 }}>{pending ? "…" : n}</span>
-      <span style={{ fontSize: 11, fontWeight: 600, color: on ? (darkMode ? "#9aa2ad" : "#6b7280") : (darkMode ? "#6b7280" : "#c4c8cf") }}>{label}</span>
-    </span>
-  );
-}
-
-export default function SalesRecordingsGrid({ data, loading, videosLoading, error, onRefresh, refreshing, onSelectSales, avatars = {}, C, darkMode }) {
-  const teams = useMemo(() => {
-    const sales = data?.sales || [];
-    const byTeam = new Map();
-    for (const s of sales) {
-      const t = s.team || "Sans équipe";
-      if (!byTeam.has(t)) byTeam.set(t, []);
-      byTeam.get(t).push(s);
-    }
-    return Array.from(byTeam.entries()).map(([team, members]) => ({ team, members }));
-  }, [data]);
-
-  if (loading && !data) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: "56px 24px" }}>
-        <style>{`@keyframes recSpinG { to { transform: rotate(360deg); } }
-          @keyframes recPulseG { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }`}</style>
-        <span style={{ width: 34, height: 34, borderRadius: "50%", border: "3px solid " + (darkMode ? "rgba(255,255,255,0.12)" : "#E1DED5"), borderTopColor: "#E8A317", animation: "recSpinG 0.7s linear infinite" }} />
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace", fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", color: C.text, fontWeight: 600 }}>Scan des enregistrements…</div>
-          <div style={{ fontSize: 12.5, color: C.muted, marginTop: 6, animation: "recPulseG 1.6s ease-in-out infinite" }}>Lecture des dossiers Meet de chaque sales, quelques secondes.</div>
-        </div>
-        {/* Aperçu structurel en fond, pour signaler que du contenu arrive */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%", maxWidth: 620, marginTop: 8 }}>
-          {[0, 1, 2].map((i) => (
-            <div key={i} style={{ height: 52, borderRadius: 14, background: darkMode ? "rgba(255,255,255,0.035)" : "#f4f5f7", animation: "recPulseG 1.6s ease-in-out infinite", animationDelay: `${i * 0.2}s` }} />
-          ))}
-        </div>
-      </div>
-    );
-  }
-  if (error) {
-    return <div style={{ padding: "32px 20px", textAlign: "center", color: C.muted, fontSize: 13.5 }}>Impossible de charger les enregistrements. {String(error).slice(0, 120)}</div>;
-  }
-
-  const totals = data?.totals || { sales: 0, videos: 0, transcriptions: 0 };
-  const totalScored = (data?.sales || []).reduce((a, s) => a + (s.nb_scored || 0), 0);
-
-  return (
-    <div>
-      <style>{`@keyframes recSpin { to { transform: rotate(360deg); } }
-        .rec-sales:hover { background: ${darkMode ? "rgba(255,255,255,0.045)" : "#fafbfc"} !important; border-color: ${darkMode ? "rgba(255,255,255,0.14)" : "#d7dae0"} !important; }`}</style>
-
-      {/* Bandeau totaux */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 18 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-          <div style={{ fontSize: 13, color: C.muted }}><b style={{ color: "#2F6B4F", fontSize: 15 }}>{totalScored}</b> analyses</div>
-          <div style={{ fontSize: 13, color: C.muted }}><b style={{ color: C.text, fontSize: 15 }}>{totals.sales}</b> sales</div>
-          <div style={{ fontSize: 13, color: C.muted }}><b style={{ color: "#0891b2", fontSize: 15 }}>{totals.videos == null ? "…" : totals.videos}</b> vidéos</div>
-          <div style={{ fontSize: 13, color: C.muted }}><b style={{ color: "#7c3aed", fontSize: 15 }}>{totals.transcriptions == null ? "…" : totals.transcriptions}</b> transcriptions</div>
-          {videosLoading && <span style={{ fontSize: 11.5, color: C.muted, opacity: 0.8, display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", border: "1.5px solid " + C.border, borderTopColor: "#0891b2", animation: "recSpin 0.7s linear infinite" }} />vidéos en cours…</span>}
-          {data?.cached && <span style={{ fontSize: 11, color: C.muted, opacity: 0.7 }}>· cache</span>}
-        </div>
-        <button onClick={onRefresh} disabled={refreshing} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 9, border: `1px solid ${C.border}`, background: "transparent", color: C.text, fontSize: 12.5, fontWeight: 600, cursor: refreshing ? "wait" : "pointer", fontFamily: "inherit", opacity: refreshing ? 0.6 : 1 }}>
-          <span style={{ display: "inline-block", animation: refreshing ? "recSpin 0.8s linear infinite" : "none" }}>↻</span>
-          {refreshing ? "Scan en cours…" : "Rafraîchir"}
-        </button>
-      </div>
-
-      {/* Sales par équipe */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-        {teams.map(({ team, members }) => (
-          <div key={team}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8, paddingLeft: 4 }}>{team}</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {members.map((s) => {
-                const clickable = !s.error;
-                return (
-                  <div
-                    key={s.email}
-                    className={clickable ? "rec-sales" : ""}
-                    onClick={() => clickable && onSelectSales && onSelectSales(s.email)}
-                    style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderRadius: 14, border: `1px solid ${C.border}`, background: darkMode ? "rgba(255,255,255,0.03)" : "#fff", cursor: clickable ? "pointer" : "default", transition: "background 0.12s, border-color 0.12s" }}
-                  >
-                    <Avatar url={avatars[(s.email || "").toLowerCase()]} name={s.name} />
-                    <span style={{ fontSize: 14.5, fontWeight: 600, color: C.text, flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name}</span>
-                    {s.error ? (
-                      <span title={s.error} style={{ fontSize: 11.5, color: "#ef4444", fontWeight: 600 }}>⚠ inaccessible</span>
-                    ) : (
-                      <>
-                        <Metric n={s.nb_scored || 0} label="analysées" color="#2F6B4F" darkMode={darkMode} />
-                        <span style={{ width: 1, height: 18, background: C.border }} />
-                        <Metric n={s.nb_videos} label="vidéos" color="#0891b2" darkMode={darkMode} dim />
-                        <span style={{ width: 1, height: 18, background: C.border }} />
-                        <Metric n={s.nb_transcriptions} label="transcriptions" color="#7c3aed" darkMode={darkMode} dim />
-                        <span style={{ fontSize: 15, color: C.muted, marginLeft: 4 }}>›</span>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+export default function SalesRecordingsGrid({data,loading,videosLoading,error,onRefresh,refreshing,onSelectSales,avatars={},darkMode}) {
+  const [search,setSearch]=useState('');
+  const [team,setTeam]=useState('');
+  const reduce=useReducedMotion();
+  const sales=data?.sales||[];
+  const teams=useMemo(()=>[...new Set(sales.map(s=>s.team||'Sans équipe'))],[sales]);
+  const filtered=sales.filter(s=>(!team||(s.team||'Sans équipe')===team)&&`${s.name||s.full_name||''} ${s.email}`.toLocaleLowerCase('fr').includes(search.toLocaleLowerCase('fr')));
+  const totals=[{Icon:Users,value:sales.length,label:'Sales actifs'},{Icon:ChartNoAxesCombined,value:sales.reduce((n,s)=>n+(s.nb_scored||0),0),label:'Analyses'},{Icon:Video,value:data?.totals?.videos,label:'Vidéos'},{Icon:FileText,value:data?.totals?.transcriptions,label:'Notes & transcriptions'}];
+  return <section className={`sales-recordings-ui${darkMode?' is-dark':''}`} aria-label="Enregistrements des équipes">
+    <div className="recordings-summary">{totals.map(({Icon,value,label})=><div className="recordings-stat" key={label}><span className="recordings-icon"><Icon size={22} strokeWidth={1.7}/></span><div><strong>{loading&&!data?'—':number(value)}</strong><span>{label}</span></div></div>)}</div>
+    <div className="recordings-toolbar"><label className="recordings-search"><Search size={18}/><input aria-label="Rechercher un sales" placeholder="Rechercher un sales…" value={search} onChange={e=>setSearch(e.target.value)}/></label><select aria-label="Filtrer par équipe" value={team} onChange={e=>setTeam(e.target.value)}><option value="">Toutes les équipes</option>{teams.map(t=><option key={t}>{t}</option>)}</select><button className="recordings-refresh" disabled={refreshing||videosLoading} onClick={()=>onRefresh?.()}><RefreshCw size={17} className={refreshing||videosLoading?'is-spinning':''}/>{refreshing||videosLoading?'Actualisation…':'Actualiser'}</button></div>
+    {error&&<div role="alert" className="recordings-empty">Les enregistrements n’ont pas pu être chargés. <button onClick={()=>onRefresh?.()}>Réessayer</button></div>}
+    {!loading&&!error&&!filtered.length&&<div className="recordings-empty"><FolderOpen size={28}/><p>Aucun sales ne correspond à cette recherche.</p></div>}
+    {teams.filter(t=>filtered.some(s=>(s.team||'Sans équipe')===t)).map(t=><section className="recordings-team" key={t}><h3>{t}<span>{filtered.filter(s=>(s.team||'Sans équipe')===t).length}</span></h3><div className="recordings-grid">{filtered.filter(s=>(s.team||'Sans équipe')===t).map((s,i)=>{
+      const name=s.name||s.full_name||s.email;
+      const shared=s.nb_shared??s.recordings?.filter(r=>r.shared).length??0;
+      return <motion.article className="recordings-person" key={s.email} initial={reduce?false:{opacity:0,y:7}} animate={{opacity:1,y:0}} transition={{duration:reduce?0:.28,delay:reduce?0:Math.min(i*.025,.12),ease:[.16,1,.3,1]}}>
+        <button className="recordings-person-heading" onClick={()=>onSelectSales(s.email,s.nb_scored?'analyses':'transcriptions')}><Avatar name={name} url={avatars[s.email.toLowerCase()]}/><strong>{name}</strong><ArrowUpRight size={17}/></button>
+        <div className="recordings-actions">{[{key:'videos',Icon:Video,n:s.nb_videos,label:'Vidéos'},{key:'transcriptions',Icon:FileText,n:s.nb_transcriptions,label:'Documents'},{key:'analyses',Icon:ChartNoAxesCombined,n:s.nb_scored,label:'Analyses'}].map(({key,Icon,n,label})=><button key={key} onClick={()=>onSelectSales(s.email,key)} aria-label={`${label} de ${name} : ${number(n)}`}><Icon size={19} strokeWidth={1.7}/><strong>{number(n)}</strong><span>{label}</span></button>)}</div>
+        {shared>0&&<button className="recordings-shared" onClick={()=>onSelectSales(s.email,'shared')}><Share2 size={15}/>{number(shared)} document{shared>1?'s':''} partagé{shared>1?'s':''}<ArrowUpRight size={14}/></button>}
+        {s.error&&<div className="recordings-access-note">Accès aux fichiers à rétablir</div>}
+      </motion.article>;
+    })}</div></section>)}
+  </section>;
 }

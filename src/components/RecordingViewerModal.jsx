@@ -5,14 +5,19 @@
 // transcription (note Gemini exportée en texte). createPortal(document.body)
 // -> on remet fontFamily Inter explicitement (le portal sort du conteneur de police).
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import apiClient from "../services/apiClient";
+import { Video, FileText, ChartNoAxesCombined, X } from "lucide-react";
+import "./SalesRecordings.css";
 import ScorecardView from "./ScorecardView.jsx";
 
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif";
 
 export default function RecordingViewerModal({ rec, mode, onClose, C, darkMode }) {
+  const closeRef = useRef(null);
+  const dialogRef = useRef(null);
+  const [documentView, setDocumentView] = useState("transcription");
   const [trans, setTrans] = useState(null);
   const [scData, setScData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -41,17 +46,28 @@ export default function RecordingViewerModal({ rec, mode, onClose, C, darkMode }
   }, [rec, mode]);
 
   useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    const previous = document.activeElement;
+    closeRef.current?.focus();
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "Tab") {
+        const items = [...(dialogRef.current?.querySelectorAll('button, a[href], video[controls], [tabindex="0"]') || [])];
+        const first = items[0], last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+      }
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => { window.removeEventListener("keydown", onKey); previous?.focus(); };
   }, [onClose]);
 
   if (!rec) return null;
   const streamUrl = mode === "video" ? apiClient.getRecordingStreamUrl(rec.id, rec.owner) : null;
+  const Icon = mode === "video" ? Video : mode === "scorecard" ? ChartNoAxesCombined : FileText;
   const body = darkMode ? "#1a1c25" : "#fff";
 
   return createPortal(
-    <div
+    <div className={`recordings-viewer sales-recordings-ui${darkMode ? " is-dark" : ""}`}
       onClick={onClose}
       style={{
         position: "fixed", inset: 0, zIndex: 9000, background: "rgba(6,8,15,0.62)",
@@ -61,7 +77,7 @@ export default function RecordingViewerModal({ rec, mode, onClose, C, darkMode }
     >
       <style>{`@keyframes recModalIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes recPanelIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }`}</style>
-      <div
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={rec.name}
         onClick={(e) => e.stopPropagation()}
         style={{
           background: body, borderRadius: 16, fontFamily: INTER,
@@ -72,14 +88,14 @@ export default function RecordingViewerModal({ rec, mode, onClose, C, darkMode }
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderBottom: `1px solid ${C.border}` }}>
-          <span style={{ fontSize: 16 }}>{mode === "video" ? "🎥" : mode === "scorecard" ? "📊" : "📄"}</span>
+          <Icon size={24} strokeWidth={1.8} color={C.muted} aria-hidden="true" />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{rec.name}</div>
             {mode === "transcription" && trans?.words != null && (
-              <div style={{ fontSize: 11.5, color: C.muted, marginTop: 1 }}>{trans.words.toLocaleString("fr-FR")} mots</div>
+              <div style={{ fontSize: 11.5, color: C.muted, marginTop: 1 }}>{trans.has_verbatim ? "Transcription disponible" : "Notes de réunion"}</div>
             )}
           </div>
-          <button onClick={onClose} style={{ border: "none", background: "transparent", color: C.muted, fontSize: 22, lineHeight: 1, cursor: "pointer", padding: 4, fontFamily: INTER }}>×</button>
+          <button ref={closeRef} aria-label="Fermer le document" onClick={onClose} style={{ border: "none", background: "transparent", color: C.muted, fontSize: 22, lineHeight: 1, cursor: "pointer", padding: 4, fontFamily: INTER }}><X size={22} aria-hidden="true" /></button>
         </div>
 
         <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: (mode === "video" || mode === "scorecard") ? 0 : "18px 22px", background: mode === "video" ? "#000" : mode === "scorecard" ? "#FBFAF7" : body }}>
@@ -88,18 +104,19 @@ export default function RecordingViewerModal({ rec, mode, onClose, C, darkMode }
           ) : loading ? (
             <div style={{ color: C.muted, fontSize: 13, padding: "24px 4px" }}>Chargement…</div>
           ) : err ? (
-            <div style={{ color: "#ef4444", fontSize: 13, padding: "24px 4px" }}>{mode === "scorecard" ? "Scorecard indisponible." : "Transcription indisponible."} {String(err).slice(0, 140)}</div>
+            <div style={{ color: "#ef4444", fontSize: 13, padding: "24px 4px" }}>{mode === "scorecard" ? "Scorecard indisponible." : "Transcription indisponible."} </div>
           ) : mode === "scorecard" ? (
             <ScorecardView sc={scData} />
           ) : (
             <div>
-              {!trans?.has_verbatim && (
-                <div style={{ fontSize: 12, color: "#b45309", background: darkMode ? "rgba(180,83,9,0.15)" : "#fff7ed", borderRadius: 8, padding: "9px 12px", marginBottom: 14, lineHeight: 1.5 }}>
-                  ⚠ Verbatim complet non détecté (note Gemini sans transcription intégrale, ou appel très court). Le texte ci-dessous est le contenu brut de la note.
+              {trans?.has_verbatim && (
+                <div className="recordings-document-tabs">
+                  <button aria-pressed={documentView === "transcription"} onClick={() => setDocumentView("transcription")}>Transcription</button>
+                  <button aria-pressed={documentView === "notes"} onClick={() => setDocumentView("notes")}>Document complet</button>
                 </div>
               )}
               <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: INTER, fontSize: 13, lineHeight: 1.65, color: C.text, margin: 0 }}>
-                {trans?.verbatim || trans?.text || "(vide)"}
+                {(documentView === "transcription" ? trans?.verbatim || trans?.text : trans?.text) || "Ce document ne contient pas encore de texte."}
               </pre>
             </div>
           )}

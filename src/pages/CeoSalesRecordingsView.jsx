@@ -76,6 +76,7 @@ export default function CeoSalesRecordingsView({ embed = false }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [selectedEmail, setSelectedEmail] = useState(null);
+  const [selectedTab, setSelectedTab] = useState("analyses");
   const [avatars, setAvatars] = useState({});
 
   // ── ANALYSES HEBDO : rapport direction + sélecteur de semaine ────────
@@ -105,7 +106,7 @@ export default function CeoSalesRecordingsView({ embed = false }) {
     // 2) COMPLET : scan Drive (vidéos + transcriptions) en arrière-plan -> complète les compteurs.
     apiClient.getRecordingsOverview(false)
       .then((resp) => { if (alive) setData(resp); })
-      .catch((e) => { if (alive) { console.warn("[CeoSalesRecordingsView] full overview failed:", e); } })
+      .catch((e) => { if (alive) { console.warn("[CeoSalesRecordingsView] full overview failed:", e); setError("Les fichiers n’ont pas pu être actualisés."); } })
       .finally(() => { if (alive) setVideosLoading(false); });
     return () => { alive = false; };
   }, [authChecked]);
@@ -255,7 +256,7 @@ export default function CeoSalesRecordingsView({ embed = false }) {
 
       <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: embed ? 0 : 64 }}>
         {!embed && <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />}
-        <div style={{ padding: embed ? "4px 4px 40px" : "32px 56px 64px" }}>
+        <div style={{ padding: embed ? "4px 4px 40px" : "32px clamp(16px, 4vw, 56px) 64px" }}>
           <div style={{ animation: "ceoFadeIn 0.35s ease both" }}>
             {selectedEmail ? (
               <SalesRecordingsDetail
@@ -264,6 +265,8 @@ export default function CeoSalesRecordingsView({ embed = false }) {
                   avatar_url: avatars[selectedEmail.toLowerCase()],
                   period: selectedPeriod,
                 }}
+                initialTab={selectedTab}
+                loadingFiles={videosLoading || refreshing}
                 onBack={() => setSelectedEmail(null)}
                 C={C}
                 darkMode={darkMode}
@@ -272,10 +275,10 @@ export default function CeoSalesRecordingsView({ embed = false }) {
               <>
                 <div style={{ marginBottom: 20 }}>
                   <h1 style={{ fontSize: 24, fontWeight: 700, color: C.text, margin: "0 0 4px", letterSpacing: "-0.02em" }}>
-                    Enregistrement sales
+                    Enregistrements sales
                   </h1>
                   <p style={{ fontSize: 14, color: C.muted, margin: 0 }}>
-                    Les équipes et leurs analyses. Ouvrez « Rapport direction » pour la vue de pilotage tous-sales.
+                    Retrouvez les rendez-vous, les documents et les analyses de chaque sales.
                   </p>
                 </div>
 
@@ -302,7 +305,7 @@ export default function CeoSalesRecordingsView({ embed = false }) {
                     error={error}
                     onRefresh={() => load(true)}
                     refreshing={refreshing}
-                    onSelectSales={setSelectedEmail}
+                    onSelectSales={(email, tab) => { setSelectedTab(tab || "analyses"); setSelectedEmail(email); }}
                     avatars={avatars}
                     C={C}
                     darkMode={darkMode}
