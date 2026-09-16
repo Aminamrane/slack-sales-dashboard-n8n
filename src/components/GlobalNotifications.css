@@ -13,7 +13,7 @@
 .owner-notif-tabs button>span {margin-left:6px;font-size:11px;font-weight:650;}
 .owner-notif-toolbar .owner-notif-read-all {display:flex;align-items:center;gap:5px;font-size:12px;color:var(--notif-muted);}
 .owner-notif-list {overflow-y:auto;overscroll-behavior:contain;min-height:0;scrollbar-gutter:stable;}
-.owner-notif-item {display:flex;align-items:flex-start;gap:12px;padding:18px 16px;border-bottom:1px solid var(--notif-border);}
+.owner-notif-item {cursor:pointer;display:flex;align-items:flex-start;gap:12px;padding:18px 16px;border-bottom:1px solid var(--notif-border);}
 .owner-notif-item:last-child {border-bottom:0;}
 .owner-notif-item.is-unread {background:color-mix(in srgb,var(--notif-soft) 65%,var(--notif-bg));}
 .owner-notif-icon {display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--notif-soft);color:var(--notif-muted);flex-shrink:0;}

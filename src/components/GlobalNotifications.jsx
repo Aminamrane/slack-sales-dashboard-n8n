@@ -19,7 +19,7 @@ export function GlobalNotificationPanel({ notifications, tab, setTab, unreadCoun
     <div className="owner-notif-list">
       {notifications.filter(n=>tab==='unread'?!n.read:n.read).map(n=>{
         const date=notificationDate(n.created_at); const message=n.message!==n.title?n.message:'';
-        return <article key={n.id} className={`owner-notif-item${n.read?'':' is-unread'}`}>
+        return <article key={n.id} className={`owner-notif-item${n.read?'':' is-unread'}`} onClick={e=>{if(!e.target.closest('button'))onOpen(n);}}>
           <Icon notification={n}/><div className="owner-notif-content">
             <button className="owner-notif-title" onClick={()=>onOpen(n)}>{n.title||n.message}</button>
             <time dateTime={date.iso}>{date.label}</time>
