@@ -14,7 +14,8 @@ import {
   meteoBandOf, METEO_BANDS,
 } from "./OptilexBoard.jsx";
 import SharedNavbar from "../components/SharedNavbar.jsx";
-import { CeoFinanceMetrics, CeoProductMetrics, CeoDelayMetrics } from "../components/CeoDashboardMetrics.jsx";
+import { CeoFinanceMetrics, CeoProductMetrics, CeoDelayMetrics, CeoUpcomingAppointments } from "../components/CeoDashboardMetrics.jsx";
+import { matchesOverdueOnboarding } from "../utils/boardIntegration.js";
 import { matchesSignedClient } from "../utils/boardClientState.js";
 import SalesTeamGrid from "../components/SalesTeamGrid.jsx";
 import SettersGrid from "../components/SettersGrid.jsx";
@@ -459,7 +460,7 @@ function CeoKpiCard({ kpi, index, dataLoading, darkMode, C }) {
       {/* Quand il y a une illustration, le texte réserve sa place et s'ellipse
           avant de passer dessous. */}
       <div style={{ paddingRight: Artwork ? 70 : 0, minWidth: 0, position: 'relative', zIndex: 2 }}>
-        {kpi.sections ? <div className="ceo-kpi-sections" role="group" aria-label={kpi.label}>
+        {kpi.appointments ? <CeoUpcomingAppointments appointments={kpi.appointments} loading={isLoading} /> : kpi.sections ? <div className="ceo-kpi-sections" role="group" aria-label={kpi.label}>
           {kpi.sections.map(({ Icon: SectionIcon, ...section }) => <div key={section.label} className="ceo-kpi-section">
             <div className="ceo-kpi-section-title" style={{ color: C.muted }}>
               <SectionIcon size={14} strokeWidth={2.2} color={section.color} aria-hidden="true" />
@@ -1242,6 +1243,7 @@ export default function CeoDashboard() {
     // ── À DATE : insensibles à la période ──
     // Un RDV "à venir" est par nature dans le futur, et la météo est un relevé
     // courant (l'historique par client vit dans /optilex/meteo-history, pas ici).
+    const todayParis = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Paris" });
     const signedNow = established.filter((r) => matchesSignedClient(r, displayEtat(r)));
     const scores = signedNow
       .map((r) => r.meteo_score)
@@ -1260,6 +1262,7 @@ export default function CeoDashboard() {
       retractesThisMonth: retractesExits.thisMonth,
       currentMonthLabel: `${MONTH_LABELS_FR[now.getMonth()].toLowerCase()} ${now.getFullYear()}`,
       onboarding: established.filter(isOnboardingUpcoming).length,
+      onboardingOverdue: established.filter((r) => matchesOverdueOnboarding(r, displayEtat(r), todayParis)).length,
       integration: established.filter(isIntegrationUpcoming).length,
       integrationOverdue: established.filter(isIntegrationOverdue).length,
       meteoAvg: scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null,
@@ -1320,16 +1323,11 @@ export default function CeoDashboard() {
         ].filter((b) => b.value > 0) : [],
       },
       {
-        // Ce RDV est celui du CABINET (Opti'Lex), pas d'Owner : la balance le
-        // dit, là où une fusée ne disait rien. Et un RDV en retard appelle une
-        // action — il passe en pastille d'alerte plutôt qu'en ligne de légende.
-        label: 'RDV intégration à venir', Icon: Scale, value: n(boardStats?.integration),
-        color: '#3b82f6', loading: boardLoading,
-        subChip: boardStats?.integrationOverdue > 0,
-        subChipTone: 'alert',
-        sub: boardStats?.integrationOverdue
-          ? `${boardStats.integrationOverdue} en retard`
-          : 'RDV de lancement non effectués',
+        label: 'Rendez-vous à venir', cardClass: 'ceo-kpi-appointments', loading: boardLoading,
+        appointments: {
+          onboarding: { upcoming: boardStats?.onboarding, overdue: boardStats?.onboardingOverdue },
+          integration: { upcoming: boardStats?.integration, overdue: boardStats?.integrationOverdue },
+        },
       },
       {
         label: 'Résiliés', Icon: UserRoundX, value: n(boardStats?.resilies), color: '#ef4444',
