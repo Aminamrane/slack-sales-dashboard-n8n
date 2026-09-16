@@ -21,10 +21,6 @@ import TeamReportView from "../components/TeamReportView.jsx";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo", "acquisition_director", "head_of_acquisition", "head_of_sales_manager", "head_of_sales"]);
 
-// Sales dont la transcription Meet est coupée -> analysés depuis Whisper (basse
-// fidélité) : à signaler dans le classement pour ne pas sur-interpréter le score.
-const WHISPER_SALES = new Set(["y.debowski@ownertechnology.com", "y.zairi@ownertechnology.com"]);
-
 // "2026-W31" -> "Semaine 31 · 2026"
 const fmtPeriod = (p) => {
   if (!p) return "";
@@ -189,7 +185,6 @@ export default function CeoSalesRecordingsView({ embed = false }) {
       nb_r2: a.r2.length,
       avg_r1: mean(a.r1),
       avg_r2: mean(a.r2),
-      whisper: WHISPER_SALES.has(a.email), // transcription Meet coupée -> Whisper (basse fidélité)
     }));
   }, [allScorecards, data, avatars]);
 
