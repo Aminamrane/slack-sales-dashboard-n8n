@@ -1,0 +1,220 @@
+.ti-rollout {
+  margin: 8px 12px;
+  padding: 12px 16px;
+  border: 1px solid #dfe6ec;
+  border-radius: 12px;
+  background: #fff;
+  color: #283441;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font:
+    12px/1.5 Inter,
+    sans-serif;
+  flex-shrink: 0;
+}
+.ti-rollout > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ti-rollout > div:first-child {
+  flex: 1;
+}
+.ti-rollout span {
+  color: #60717e;
+}
+.ti-rollout button,
+.ti-dialog-head button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid #dfe6ec;
+  background: #f8fafb;
+  border-radius: 8px;
+  font: inherit;
+  color: #283441;
+  cursor: pointer;
+}
+.ti-rollout button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ti-confirm {
+  flex-basis: 100%;
+  padding: 16px;
+  border-top: 1px solid #e2e8eb;
+}
+.ti-confirm p {
+  color: #647480;
+}
+.ti-confirm label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+}
+.ti-confirm input {
+  padding: 10px;
+  border: 1px solid #bac8d1;
+  border-radius: 8px;
+  max-width: 330px;
+  font: inherit;
+}
+.ti-confirm button {
+  margin-right: 8px;
+}
+.ti-open {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid #dce6e4;
+  background: #f4f8f7;
+  border-radius: 10px;
+  padding: 12px;
+  color: #254b44;
+  cursor: pointer;
+  font:
+    600 12px Inter,
+    sans-serif;
+}
+.ti-open > span:nth-child(2) {
+  flex: 1;
+}
+.ti-open small {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: #60736f;
+  margin-top: 4px;
+}
+.ti-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  background: #14233066;
+  backdrop-filter: blur(5px);
+  padding: 22px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  animation: tiFade 0.18s ease-out;
+}
+.ti-dialog {
+  width: min(1240px, 100%);
+  max-height: calc(100dvh - 44px);
+  overflow: auto;
+  background: #f5f7f8;
+  border-radius: 22px;
+  box-shadow: 0 24px 80px #15212a33;
+  animation: tiEnter 0.24s cubic-bezier(0.2, 0.75, 0.3, 1);
+  outline: none;
+}
+.ti-dialog-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 22px;
+  background: #fffffff5;
+  border-bottom: 1px solid #e2e8eb;
+  font:
+    13px Inter,
+    sans-serif;
+  color: #283441;
+}
+.ti-dialog-head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ip-embedded {
+  min-height: 0;
+}
+.ip-embedded .ip-shell {
+  padding: 28px;
+  max-width: none;
+}
+.ip-embedded .ip-page-head h1 {
+  font-size: 30px;
+}
+.ip-embedded .ip-aside {
+  position: static;
+}
+.ti-source-note {
+  padding: 14px 28px;
+  margin: 0;
+  background: #fff5dd;
+  color: #6f541d;
+  font:
+    13px/1.5 Inter,
+    sans-serif;
+}
+.dark-mode .ti-rollout {
+  background: #242b35;
+  border-color: #39434f;
+  color: #e5ebf1;
+}
+.dark-mode .ti-rollout span {
+  color: #b4c1cb;
+}
+@keyframes tiEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.992);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes tiFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (max-width: 720px) {
+  .ti-overlay {
+    padding: 0;
+  }
+  .ti-dialog {
+    max-height: 100dvh;
+    height: 100dvh;
+    border-radius: 0;
+  }
+  .ti-dialog-head {
+    padding: 12px;
+  }
+  .ti-dialog-head strong {
+    display: none;
+  }
+  .ip-embedded .ip-shell {
+    padding: 18px;
+  }
+  .ti-rollout > div {
+    flex-wrap: wrap;
+  }
+  .ti-rollout {
+    margin: 6px;
+  }
+  .ti-open {
+    font-size: 11px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ti-dialog,
+  .ti-overlay {
+    animation: none;
+  }
+}

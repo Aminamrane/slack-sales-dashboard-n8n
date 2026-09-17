@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
+import { IntegrationRollout, IntegrationButton, IntegrationDialog } from "../components/integrationPreview/TrackingIntegration";
 import { leadAvatar } from "../utils/leadAvatar";
 import { supabase } from "../lib/supabaseClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
@@ -471,6 +472,35 @@ export default function TrackingSheet() {
   // Embed mode: masque uniquement SharedNavbar interne. Utilisé par
   // CeoSheetView qui rend déjà sa propre sidebar CEO autour du TS.
   const embedMode = urlParams.get('embed') === 'true';
+  const [intakeRollout, setIntakeRollout] = useState(null);
+  const [intakeDialog, setIntakeDialog] = useState(null);
+  const [intakeReady, setIntakeReady] = useState({});
+  const [saleOnboardingOnly, setSaleOnboardingOnly] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const refresh = async () => {
+      if (!apiClient.getToken()) return;
+      try { const state = await apiClient.get('/api/v1/owner-integration/context'); if (alive) setIntakeRollout(state); }
+      catch { /* Existing sheet remains usable if the optional context is unavailable. */ }
+    };
+    refresh();
+    const timer = setInterval(refresh, 60000);
+    return () => { alive = false; clearInterval(timer); };
+  }, []);
+  const openIntake = async (leadId) => {
+    try {
+      const context = await apiClient.get(`/api/v1/owner-integration/leads/${leadId}`);
+      if (!context.required) { setContractErrorModal({ message: 'Ce dossier conserve le parcours actuel : son contrat a déjà été envoyé ou le nouveau parcours n’est pas activé pour ce dossier.', isNdaMissing: false }); return; }
+      setIntakeDialog(context);
+    } catch (error) { setContractErrorModal({ message: error.message || 'Impossible de charger la fiche.', isNdaMissing: false }); }
+  };
+  const checkIntakeBeforeSend = async (leadId) => {
+    if (!intakeRollout?.available) return true;
+    const context = await apiClient.get(`/api/v1/owner-integration/leads/${leadId}`);
+    if (context.required && !context.ready) { setIntakeDialog(context); return false; }
+    return true;
+  };
+
 
   // ── REFRESH DATA (reusable — called on mount + polling) ────────────────────
   const refreshData = useCallback(async () => {
@@ -1058,11 +1088,11 @@ export default function TrackingSheet() {
     try {
       await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, {
         rdv_onboarding_date: saleSlots.onboarding,
-        rdv_lancement_date: saleSlots.lancement,
+        ...(!saleOnboardingOnly ? { rdv_lancement_date: saleSlots.lancement } : {}),
       });
       // Reflète les dates choisies dans l'état local -> les pickers de reprogrammation
       // (affichés seulement quand les dates sont posées) apparaissent aussitôt.
-      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, rdv_onboarding_date: saleSlots.onboarding, rdv_lancement_date: saleSlots.lancement } : l));
+      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, rdv_onboarding_date: saleSlots.onboarding, ...(!saleOnboardingOnly ? { rdv_lancement_date: saleSlots.lancement } : {}) } : l));
     } catch (e) {
       console.error('patch rdv dates failed:', e);
       alert("Impossible d'enregistrer les créneaux. Réessaie.");
@@ -2031,6 +2061,7 @@ export default function TrackingSheet() {
       // Date choisie : envoyée seulement si le commercial l'a saisie. Sans elle,
       // la charge utile est strictement celle d'avant et le contrat porte la
       // date du jour.
+      if (!await checkIntakeBeforeSend(lead.id)) { setNavNotif(null); return; }
       const chosenDate = contractDates[lead.id];
       await apiClient.post('/api/v1/contracts/send', {
         lead_id: lead.id,
@@ -2069,6 +2100,7 @@ export default function TrackingSheet() {
         try {
           // Le renvoi crée un nouveau contrat : on lui transmet le choix courant
           // du commercial. Champ vidé = null = date du jour, choix explicite.
+          if (!await checkIntakeBeforeSend(leadId)) return;
           await apiClient.post(`/api/v1/contracts/${contractId}/resend`, {
             contract_display_date: contractDates[leadId] || null,
           });
@@ -3090,6 +3122,8 @@ export default function TrackingSheet() {
               </>;
             })()}
           </div>
+
+          <IntegrationRollout state={intakeRollout} onChange={setIntakeRollout} />
 
           {/* ── CONTENT ROW (board + detail panel side by side) ──────────────── */}
           <div style={{ flex: 1, display: 'flex', minHeight: 0, marginLeft: 8 }}>
@@ -7711,6 +7745,7 @@ export default function TrackingSheet() {
                 });
                 return (
                   <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {intakeRollout?.available && <IntegrationButton ready={intakeReady[lead.id]} onClick={() => openIntake(lead.id)} />}
                     {latestContract && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{
@@ -7890,6 +7925,7 @@ export default function TrackingSheet() {
                 const olLabel = _ol ? (OL_LABELS[_ol] || _ol) : (_grouped ? 'Signé (inclus au contrat Owner)' : '—');
                 return (
                   <div style={{ marginBottom: 16 }}>
+                    {intakeRollout?.available && <div style={{ marginBottom: 12 }}><IntegrationButton ready={intakeReady[lead.id]} onClick={() => openIntake(lead.id)} /></div>}
                     {_ownerDone && (
                       <div style={{ marginBottom: 16 }}>
                         <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Contrats</div>
@@ -7957,8 +7993,15 @@ export default function TrackingSheet() {
 
                     {/* Déclarer une vente button */}
                     <button
-                      onClick={() => {
+                      onClick={async () => {
                         if (!canDeclare) return;
+                        try {
+                          const journey = await apiClient.get(`/api/v1/owner-integration/leads/${lead.id}/journey`);
+                          setSaleOnboardingOnly(journey.onboarding_only);
+                        } catch (error) {
+                          setContractErrorModal({ message: error.message || 'Impossible de vérifier le parcours de ce dossier. Réessayez.', isNdaMissing: false });
+                          return;
+                        }
                         setSaleForm({ email: lead.email || '', paymentModality: 'M', employeeRange: lead.employee_range || '', billingStructures: '', structuresCount: '', discount: null, discountValue: '' });
                         setSaleStep('form'); setSaleSlots({ onboarding: null, lancement: null });
                         setShowSaleModal(lead.id);
@@ -9390,6 +9433,9 @@ export default function TrackingSheet() {
         );
       })(), document.body)}
 
+      {intakeDialog && <IntegrationDialog key={intakeDialog.lead_id} context={intakeDialog}
+        onClose={() => setIntakeDialog(null)} onSaved={result => setIntakeReady(previous => ({ ...previous, [intakeDialog.lead_id]: result.ready }))} />}
+
       {showSaleModal && createPortal((() => {
         const lead = leads.find(l => l.id === showSaleModal);
         return (
@@ -9479,7 +9525,7 @@ export default function TrackingSheet() {
                   </div>
 
                   {/* Continuer -> choix des créneaux (dispo agenda). Ordre : Lancement d'abord. */}
-                  <button onClick={() => setSaleStep('lancement')}
+                  <button onClick={() => setSaleStep(saleOnboardingOnly ? 'onboarding' : 'lancement')}
                     disabled={!saleForm.email.trim() || !saleForm.employeeRange}
                     style={{
                       width: '100%', padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600,
@@ -9601,7 +9647,7 @@ export default function TrackingSheet() {
                       )}
                     </div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>{saleStep === 'onboarding' ? 'RDV Onboarding' : 'RDV Lancement'}</div>
-                    <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Choisis un créneau libre · {saleStep === 'onboarding' ? 'facturation' : "Opti'Lex"}</div>
+                    <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Choisis un créneau libre · {saleStep === 'onboarding' ? 'Vincent et facturation' : "Opti'Lex"}</div>
                   </div>
 
                   <SaleSlotPicker key={saleStep} kind={saleStep} value={saleSlots[saleStep]} band={saleForm.employeeRange}
@@ -9609,7 +9655,7 @@ export default function TrackingSheet() {
 
                   {/* Navigation : d'abord Lancement (cabinet Opti'Lex), puis Onboarding (facturation) */}
                   <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
-                    <button onClick={() => setSaleStep(saleStep === 'onboarding' ? 'lancement' : 'form')} disabled={saleSubmitting}
+                    <button onClick={() => setSaleStep(saleStep === 'onboarding' && !saleOnboardingOnly ? 'lancement' : 'form')} disabled={saleSubmitting}
                       style={{ padding: '11px 16px', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent',
                         color: C.muted, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', cursor: saleSubmitting ? 'default' : 'pointer' }}>Retour</button>
                     {saleStep === 'lancement' ? (

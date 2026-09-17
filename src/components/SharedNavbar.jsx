@@ -1020,9 +1020,9 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                 )}
 
                 {canSeeIntegrationPreview(apiClient.getUser()) && (
-                  <button onClick={() => { navigate('/owner/integration-preview'); }}
+                  <button onClick={() => { navigate('/tracking-sheet'); }}
                     style={{display:'flex',alignItems:'center',gap:8,padding:'10px 12px',borderRadius:8,border:'none',background:'transparent',color:darkMode?'#f5f5f7':'#1d1d1f',fontSize:14,fontWeight:500,cursor:'pointer',textAlign:'left',width:'100%'}}>
-                    Fiche Owner · espace de test
+                    Fiche Owner · ma tracking sheet
                   </button>
                 )}
 

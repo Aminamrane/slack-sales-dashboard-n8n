@@ -83,12 +83,22 @@ function Field({
     </label>
   );
 }
-export default function IntegrationPreviewStudio({ validateDraft }) {
-  const [draft, setDraft] = useState(readDraft),
+export default function IntegrationPreviewStudio({
+  validateDraft,
+  embedded = false,
+  initialDraft,
+  initialValidated = false,
+  clientName = "Atelier Horizon",
+  saveDraft,
+  onDirty = () => {},
+}) {
+  const [draft, setDraft] = useState(() => initialDraft || readDraft()),
     [step, setStep] = useState(0),
     [future, setFuture] = useState(false),
     [view, setView] = useState("form");
-  const [validated, setValidated] = useState(null),
+  const [validated, setValidated] = useState(
+      initialValidated ? JSON.stringify(initialDraft) : null,
+    ),
     [busy, setBusy] = useState(false),
     [feedback, setFeedback] = useState(null),
     [booking, setBooking] = useState("");
@@ -98,9 +108,10 @@ export default function IntegrationPreviewStudio({ validateDraft }) {
   const ready = validated === JSON.stringify(draft);
   useEffect(() => {
     try {
-      sessionStorage.setItem(STORAGE, JSON.stringify(draft));
+      if (!embedded) sessionStorage.setItem(STORAGE, JSON.stringify(draft));
     } catch {}
     setFeedback(null);
+    onDirty(JSON.stringify(draft));
   }, [draft]);
   const change = (key, value) => {
     setDraft((d) => ({ ...d, [key]: value }));
@@ -139,14 +150,18 @@ export default function IntegrationPreviewStudio({ validateDraft }) {
         setValidated(JSON.stringify(draft));
         setFeedback({
           success: true,
-          text: "Fiche validée. Le parcours est prêt à être testé.",
+          text: embedded
+            ? "Fiche enregistrée et validée. Vous pouvez revenir au contrat."
+            : "Fiche validée. Le parcours est prêt à être testé.",
         });
         setStep(3);
       } else setFeedback({ success: false, text: result.errors.join(" ") });
-    } catch {
+    } catch (error) {
       setFeedback({
         success: false,
-        text: "La validation n’a pas abouti. Réessayez dans un instant.",
+        text:
+          error?.message ||
+          "La validation n’a pas abouti. Réessayez dans un instant.",
       });
     } finally {
       setBusy(false);
@@ -167,24 +182,26 @@ export default function IntegrationPreviewStudio({ validateDraft }) {
   };
   const WeatherIcon = WEATHER_ICONS[(draft.weather || 3) - 1];
   return (
-    <div className="integration-preview">
-      <div className="ip-studio-bar">
-        <a href="/ceo" aria-label="Retour au dashboard">
-          <ArrowLeft size={17} />
-          <strong>OWNER</strong>
-        </a>
-        <span>
-          <FlaskConical size={15} /> Espace privé · Sales de test
-        </span>
-        <div>
-          <button onClick={reset}>
-            <RotateCcw size={15} /> Réinitialiser
-          </button>
-          <span className="ip-live-state">
-            <span /> Système actuel conservé
+    <div className={`integration-preview ${embedded ? "ip-embedded" : ""}`}>
+      {!embedded && (
+        <div className="ip-studio-bar">
+          <a href="/ceo" aria-label="Retour au dashboard">
+            <ArrowLeft size={17} />
+            <strong>OWNER</strong>
+          </a>
+          <span>
+            <FlaskConical size={15} /> Espace privé · Sales de test
           </span>
+          <div>
+            <button onClick={reset}>
+              <RotateCcw size={15} /> Réinitialiser
+            </button>
+            <span className="ip-live-state">
+              <span /> Système actuel conservé
+            </span>
+          </div>
         </div>
-      </div>
+      )}
       <main className="ip-shell">
         <header className="ip-page-head">
           <div>
@@ -204,63 +221,72 @@ export default function IntegrationPreviewStudio({ validateDraft }) {
             <FileCheck2 size={18} /> Voir la synthèse
           </button>
         </header>
-        <section className="ip-control" aria-label="Simulation de la bascule">
-          <div className="ip-control-icon">
-            <ShieldCheck size={22} />
-          </div>
-          <div>
-            <strong>
-              {future
-                ? "Nouveau parcours activé dans le test"
-                : "Préparation de la bascule"}
-            </strong>
-            <p>
-              {future
-                ? "Fiche obligatoire avant contrat · un seul rendez-vous onboarding."
-                : "Testez le futur parcours avant sa validation avec Paul."}
-            </p>
-          </div>
-          <button
-            className={future ? "ip-secondary" : "ip-primary"}
-            aria-pressed={future}
-            onClick={() => {
-              setFuture((v) => !v);
-              setFeedback(null);
-            }}
-          >
-            {future ? "Revenir au parcours actuel" : "Simuler la bascule"}
-            <ArrowRight size={17} />
-          </button>
-        </section>
-        <div className="ip-demo-line">
-          <span>
-            <span className="ip-demo-dot" /> Dossier de démonstration · données
-            fictives
-          </span>
-          <span>Aucune activation réelle ni automatique</span>
-        </div>
+        {!embedded && (
+          <>
+            <section
+              className="ip-control"
+              aria-label="Simulation de la bascule"
+            >
+              <div className="ip-control-icon">
+                <ShieldCheck size={22} />
+              </div>
+              <div>
+                <strong>
+                  {future
+                    ? "Nouveau parcours activé dans le test"
+                    : "Préparation de la bascule"}
+                </strong>
+                <p>
+                  {future
+                    ? "Fiche obligatoire avant contrat · un seul rendez-vous onboarding."
+                    : "Testez le futur parcours avant sa validation avec Paul."}
+                </p>
+              </div>
+              <button
+                className={future ? "ip-secondary" : "ip-primary"}
+                aria-pressed={future}
+                onClick={() => {
+                  setFuture((v) => !v);
+                  setFeedback(null);
+                }}
+              >
+                {future ? "Revenir au parcours actuel" : "Simuler la bascule"}
+                <ArrowRight size={17} />
+              </button>
+            </section>
+            <div className="ip-demo-line">
+              <span>
+                <span className="ip-demo-dot" /> Dossier de démonstration ·
+                données fictives
+              </span>
+              <span>Aucune activation réelle ni automatique</span>
+            </div>
+          </>
+        )}
         <div className="ip-workspace">
           <div className="ip-main">
-            <div
-              className="ip-workspace-tabs"
-              role="tablist"
-              aria-label="Parcours de test"
-            >
-              <button
-                role="tab"
-                aria-selected={view === "form"}
-                onClick={() => setView("form")}
+            {!embedded && (
+              <div
+                className="ip-workspace-tabs"
+                role="tablist"
+                aria-label="Parcours de test"
               >
-                <NotebookPen size={17} /> Fiche commerciale
-              </button>
-              <button
-                role="tab"
-                aria-selected={view === "calendar"}
-                onClick={() => setView("calendar")}
-              >
-                <CalendarDays size={17} /> Rendez-vous
-              </button>
-            </div>
+                <button
+                  role="tab"
+                  aria-selected={view === "form"}
+                  onClick={() => setView("form")}
+                >
+                  <NotebookPen size={17} /> Fiche commerciale
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={view === "calendar"}
+                  onClick={() => setView("calendar")}
+                >
+                  <CalendarDays size={17} /> Rendez-vous
+                </button>
+              </div>
+            )}
             {view === "form" ? (
               <>
                 <nav className="ip-steps" aria-label="Étapes de la fiche">
@@ -307,7 +333,11 @@ export default function IntegrationPreviewStudio({ validateDraft }) {
                         <h3>
                           <Building2 size={19} /> Sociétés
                         </h3>
-                        <span>Préremplies depuis le NDA de démonstration</span>
+                        <span>
+                          {embedded
+                            ? "Préremplies depuis le NDA"
+                            : "Préremplies depuis le NDA de démonstration"}
+                        </span>
                       </div>
                       <div className="ip-company-list">
                         {draft.companies.map((c) => (
@@ -557,12 +587,6 @@ export default function IntegrationPreviewStudio({ validateDraft }) {
                             placeholder="Personne qui suivra les échanges"
                           />
                         </div>
-                        <Field
-                          label="Préférences de communication"
-                          value={draft.preferences}
-                          onChange={(v) => change("preferences", v)}
-                          placeholder="Disponibilités, canal préféré…"
-                        />
                       </details>
                       <Field
                         label="Notes du commercial"
@@ -622,7 +646,7 @@ export default function IntegrationPreviewStudio({ validateDraft }) {
                       <div className="ip-summary-title">
                         <div>
                           <span>FICHE DE TRANSMISSION</span>
-                          <h3>Atelier Horizon</h3>
+                          <h3>{clientName}</h3>
                         </div>
                         <span className="ip-pill">
                           {ready ? "Validée" : "Brouillon"}
@@ -704,7 +728,6 @@ export default function IntegrationPreviewStudio({ validateDraft }) {
                         ["Gestion de la paie", draft.payroll],
                         ["Conseil juridique", draft.legal],
                         ["Contact privilégié", draft.contact],
-                        ["Préférences de communication", draft.preferences],
                       ]
                         .filter(([, v]) => v)
                         .map(([k, v]) => (
@@ -736,8 +759,9 @@ export default function IntegrationPreviewStudio({ validateDraft }) {
                         </>
                       )}
                       <div className="ip-print-footer">
-                        Démonstration Owner · Données fictives · Proposition à
-                        valider avec Paul
+                        {embedded
+                          ? "Owner · Fiche de transmission commerciale"
+                          : "Démonstration Owner · Données fictives"}
                       </div>
                       <button
                         className="ip-secondary ip-print-button"
@@ -896,43 +920,73 @@ export default function IntegrationPreviewStudio({ validateDraft }) {
                 Valider la fiche
               </button>
             </section>
-            <section className="ip-contract">
-              <div className="ip-block-title">
-                <h3>
-                  <FileCheck2 size={19} /> Contrat Owner
-                </h3>
-              </div>
-              <span
-                className={`ip-contract-state ${future && !ready ? "" : "is-ready"}`}
+            {!embedded && (
+              <>
+                <section className="ip-contract">
+                  <div className="ip-block-title">
+                    <h3>
+                      <FileCheck2 size={19} /> Contrat Owner
+                    </h3>
+                  </div>
+                  <span
+                    className={`ip-contract-state ${future && !ready ? "" : "is-ready"}`}
+                  >
+                    {future && !ready ? (
+                      <LockKeyhole size={15} />
+                    ) : (
+                      <CheckCircle2 size={15} />
+                    )}{" "}
+                    {future
+                      ? ready
+                        ? "Prêt à envoyer"
+                        : "Fiche à valider"
+                      : "Parcours actuel"}
+                  </span>
+                  <p>
+                    {future
+                      ? "La fiche validée accompagne la préparation du contrat."
+                      : "La fiche reste facultative tant que la bascule n’est pas activée."}
+                  </p>
+                  <button className="ip-secondary" onClick={send}>
+                    <Send size={16} /> Tester l’envoi du contrat
+                  </button>
+                </section>
+                <div className="ip-test-note">
+                  <FlaskConical size={17} />
+                  <p>
+                    Profil provisoire de simulation.
+                    <br />
+                    Votre session habituelle est conservée.
+                  </p>
+                </div>
+              </>
+            )}
+            {embedded && saveDraft && (
+              <button
+                className="ip-secondary"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await saveDraft(draft);
+                    setValidated(null);
+                    setFeedback({
+                      success: true,
+                      text: "Brouillon enregistré.",
+                    });
+                  } catch (error) {
+                    setFeedback({
+                      success: false,
+                      text: error?.message || "Enregistrement impossible.",
+                    });
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
               >
-                {future && !ready ? (
-                  <LockKeyhole size={15} />
-                ) : (
-                  <CheckCircle2 size={15} />
-                )}{" "}
-                {future
-                  ? ready
-                    ? "Prêt à envoyer"
-                    : "Fiche à valider"
-                  : "Parcours actuel"}
-              </span>
-              <p>
-                {future
-                  ? "La fiche validée accompagne la préparation du contrat."
-                  : "La fiche reste facultative tant que la bascule n’est pas activée."}
-              </p>
-              <button className="ip-secondary" onClick={send}>
-                <Send size={16} /> Tester l’envoi du contrat
+                Enregistrer le brouillon
               </button>
-            </section>
-            <div className="ip-test-note">
-              <FlaskConical size={17} />
-              <p>
-                Profil provisoire de simulation.
-                <br />
-                Votre session habituelle est conservée.
-              </p>
-            </div>
+            )}
           </aside>
         </div>
         {feedback && (
