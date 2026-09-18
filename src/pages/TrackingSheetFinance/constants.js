@@ -34,6 +34,15 @@ const METEO_FILTER_USER_IDS = new Set([
 ]);
 export const canFilterMeteo = (user) => METEO_FILTER_USER_IDS.has(user?.id);
 
+// Vision « Global » (Owner + Opti'lex) : ouverte à admin, direction financière
+// et ceo ; fermée au rôle finance_team, sauf Aurélie B (demande dev
+// 2026-09-18). Porte purement front : la liste renvoie déjà les deux entités.
+const GLOBAL_SCOPE_USER_IDS = new Set([
+  '6dfc7435-c938-4bd3-b143-a6516b2981bd', // Aurélie B
+]);
+export const canUseGlobalScope = (user) =>
+  (user?.role || null) !== 'finance_team' || GLOBAL_SCOPE_USER_IDS.has(user?.id);
+
 // Clients « Attente Opti'Lex » du board : Owner signé, contrat Opti'Lex encore
 // en vol, pas de numéro client ni d'attendu. La finance doit les voir, avec un
 // flag et un filtre (demande dev 2026-09-18). La ligne est SYNTHÉTIQUE : elle
