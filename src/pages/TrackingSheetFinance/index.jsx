@@ -81,6 +81,7 @@ import {
   canFilterMeteo, onboardingPhaseOf, hasEverPaid,
   scopedOpeningDebt,
   PENDING_OPTILEX_LABEL, pendingFinanceRow,
+  canUseGlobalScope,
 } from './constants.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -401,14 +402,12 @@ export default function TrackingSheetFinance() {
   const onHiddenColsChange = useCallback((cols, colLabels) => setHiddenColsInfo({ count: cols.size, keys: [...cols], labels: colLabels || {} }), []);
 
   // ── Vision Owner / Opti'lex / Global (phase 2, 2026-08-18) ───────────
-  // finance_team n'a pas accès à la vision Globale ; admin, finance_director
-  // (et ceo en mode embed) ont les trois. Choix persisté en localStorage.
-  const canGlobalScope = useMemo(
-    () => (apiClient.getUser()?.role || null) !== 'finance_team',
-    []
-  );
+  // finance_team n'a pas accès à la vision Globale (sauf exception nominative,
+  // cf. canUseGlobalScope) ; admin, finance_director (et ceo en mode embed)
+  // ont les trois. Choix persisté en localStorage.
+  const canGlobalScope = useMemo(() => canUseGlobalScope(apiClient.getUser()), []);
   const [scope, setScope] = useState(() => {
-    const canGlobal = (apiClient.getUser()?.role || null) !== 'finance_team';
+    const canGlobal = canUseGlobalScope(apiClient.getUser());
     if (new URLSearchParams(window.location.search).get('scope') === 'owner') return 'owner';
     const stored = localStorage.getItem(SCOPE_LS_KEY);
     if (stored === 'owner' || stored === 'optilex') return stored;
