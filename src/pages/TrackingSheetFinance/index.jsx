@@ -2674,7 +2674,7 @@ function SearchInline({ value, onChange, resultCount = null }) {
             else { setOpen(false); e.currentTarget.blur(); }
           }
         }}
-        placeholder="N°, société, nom, email…"
+        placeholder="N°, société, nom, email, téléphone…"
         style={{
           border: 'none', outline: 'none', background: 'transparent',
           fontSize: 13, fontFamily: 'inherit',
