@@ -285,6 +285,7 @@ test('la vue Onboarding classe la date Owner en passée ou à venir, jamais sans
   assert.equal(canFilterMeteo({ id: '94b5dcc1-a1bb-41ac-94fe-14cf047cffef', role: 'finance_director' }), true);
   assert.equal(canFilterMeteo({ id: 'someone-else', role: 'finance_director' }), false);
   assert.equal(canFilterMeteo(null), false);
+});
 
 test('la recherche trouve les contacts secondaires, les téléphones et les sociétés rattachées', async () => {
   const { matchesClientSearch, normalizeSearch } = await import('./constants.js');
