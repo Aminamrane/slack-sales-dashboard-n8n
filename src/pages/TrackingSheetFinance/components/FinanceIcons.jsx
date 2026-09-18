@@ -133,6 +133,17 @@ export const CalendarClockIcon = (p) => (
   </Icon>
 );
 
+// Attente Opti'Lex — le contrat, une horloge posée dans le coin.
+export const ContractPendingIcon = (p) => (
+  <Icon {...p}>
+    <path d="M13.5 20.5H7A1.5 1.5 0 0 1 5.5 19V5A1.5 1.5 0 0 1 7 3.5h7l4.5 4.5v3.5" />
+    <path d="M14 3.5V8h4.5" />
+    <path d="M8.5 12.5h5M8.5 16h3" />
+    <circle cx="17.5" cy="17.5" r="3.5" />
+    <path d="M17.5 15.9v1.8l1.2.9" />
+  </Icon>
+);
+
 // Météo client — le soleil derrière un nuage, pour le filtre du menu.
 export const MeteoFilterIcon = (p) => (
   <Icon {...p}>
