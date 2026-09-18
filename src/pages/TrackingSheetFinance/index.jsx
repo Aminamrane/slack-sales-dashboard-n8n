@@ -50,7 +50,7 @@ import CallsView from './components/CallsView.jsx';
 // donnée par le dev (2026-09-03). Pas de bibliothèque : le trait est le nôtre.
 import {
   TableIcon, InboxIcon, LossIcon, CheckCircleIcon, ClockIcon, OverdueIcon,
-  RefundIcon, CalendarCheckIcon, CalendarClockIcon, MeteoFilterIcon, BankOffIcon, ExitIcon, ExportIcon, ContactIcon,
+  RefundIcon, CalendarCheckIcon, CalendarClockIcon, MeteoFilterIcon, ContractPendingIcon, BankOffIcon, ExitIcon, ExportIcon, ContactIcon,
 } from './components/FinanceIcons.jsx';
 import { exportFinanceXlsx } from './exportExcel.js';
 import companyLogo from '../../assets/my_image.png';
@@ -80,6 +80,7 @@ import {
   isLiquidationEtat,
   canFilterMeteo, onboardingPhaseOf, hasEverPaid,
   scopedOpeningDebt,
+  PENDING_OPTILEX_LABEL, pendingFinanceRow,
 } from './constants.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -259,6 +260,7 @@ const VIEW_ICONS = {
   trop_percu:       RefundIcon,
   onboarding:       CalendarCheckIcon,
   non_auto:         BankOffIcon,
+  attente_optilex:  ContractPendingIcon,
   resilies:         ExitIcon,
 };
 
@@ -288,6 +290,9 @@ const VIEW_FILTERS = [
   // même jour : « les très anciens clients ne nous intéressent pas »).
   { key: 'onboarding',  label: 'Onboarding' },
   { key: 'non_auto',    label: 'Non automatisé' },
+  // Owner signé, Opti'Lex pas encore : lignes venues du board, sans numéro
+  // ni attendu, flaguées (demande dev 2026-09-18).
+  { key: 'attente_optilex', label: PENDING_OPTILEX_LABEL },
   { key: 'resilies',    label: 'Résiliés / Rétractés' },
 ];
 
@@ -419,6 +424,9 @@ export default function TrackingSheetFinance() {
   // Rétractés ») ; le fetch vit plus bas. Map numero_client → row board,
   // null = pas encore chargé.
   const [boardMap, setBoardMap] = useState(null);
+  // Contrats en vol du board (Owner signé, Opti'Lex en attente) : ils n'ont
+  // pas de numéro client, donc pas de ligne finance — on les synthétise.
+  const [boardPending, setBoardPending] = useState([]);
 
   // ── Vue-filtre active (chips) — single-select, « Tous » par défaut ────
   const [viewFilter, setViewFilter] = useState('all');
@@ -570,26 +578,42 @@ export default function TrackingSheetFinance() {
   // Compteur par chip (nb de clients) — sur les rows brutes de la période,
   // indépendant de la recherche et des autres filtres (le compteur décrit la
   // vue, pas l'intersection).
+  // Lignes synthétiques « Attente Opti'Lex », pour le mois affiché.
+  const pendingRows = useMemo(
+    () => boardPending.map((br) => pendingFinanceRow(br, `${period}-01`)),
+    [boardPending, period],
+  );
+
   const viewCounts = useMemo(() => {
     const counts = {};
     for (const v of VIEW_FILTERS) {
       counts[v.key] = v.key === 'all'
-        ? rows.length
-        : rows.filter((r) => matchesView(r, v.key) && !isHiddenInView(r, v.key)).length;
+        ? rows.length + pendingRows.length
+        : v.key === 'attente_optilex'
+          ? pendingRows.length
+          : rows.filter((r) => matchesView(r, v.key) && !isHiddenInView(r, v.key)).length;
     }
     return counts;
-  }, [rows, matchesView, isHiddenInView]);
+  }, [rows, pendingRows, matchesView, isHiddenInView]);
 
   // Apply business filters to rows : vue-filtre active (chips) PUIS filtres
   // dropdown historiques (union : un lead matche s'il satisfait AU MOINS UN
   // filtre actif). La recherche s'applique en aval dans TableView.
   const rowsBeforeLiquidationFilter = useMemo(() => {
+    // « Tous » : les contrats en attente Opti'Lex en tête, flagués ; leur vue
+    // dédiée ne montre qu'eux ; les autres vues portent sur des montants
+    // qu'ils n'ont pas encore.
     const viewed = viewFilter === 'all'
-      ? rows
-      : rows.filter((r) => matchesView(r, viewFilter));
+      ? [...pendingRows, ...rows]
+      : viewFilter === 'attente_optilex'
+        ? pendingRows
+        : rows.filter((r) => matchesView(r, viewFilter));
     if (tableFilters.size === 0) return viewed;
     // Parser FR/ISO factorisé dans constants.js (`parseDateFR`).
     return viewed.filter((r) => {
+      // Sans montant ni état board posé, une ligne en attente ne peut
+      // satisfaire aucun filtre du menu.
+      if (r.pending) return false;
       // Helpers partagés, et SCOPÉS : ces filtres additionnaient les deux
       // entités quelle que soit la vision active — un retard Opti'lex
       // faisait donc matcher un filtre consulté en vision Owner.
@@ -626,7 +650,7 @@ export default function TrackingSheetFinance() {
       }
       return false;
     });
-  }, [rows, tableFilters, viewFilter, matchesView, boardMap, savedFilters, scope]);
+  }, [rows, pendingRows, tableFilters, viewFilter, matchesView, boardMap, savedFilters, scope]);
 
   // Garder le compteur avant masquage permet toujours de réafficher les
   // clients. Il suit l'ancienneté, les filtres et la recherche de cette vue.
@@ -787,6 +811,7 @@ export default function TrackingSheetFinance() {
         const map = new Map();
         for (const br of list) if (br.numero_client) map.set(br.numero_client, br);
         setBoardMap(map);
+        setBoardPending(list.filter((br) => br.is_pending_contract && displayEtat(br) === PENDING_OPTILEX_LABEL));
       })
       .catch((e) => console.error('[TrackingFinance] board load failed', e));
     return () => { alive = false; };
@@ -864,7 +889,7 @@ export default function TrackingSheetFinance() {
   // pas celui des 730. On somme donc les lignes RÉELLEMENT affichées —
   // vue-filtre, filtres du menu, filtres personnels et recherche compris.
   const kpis = useMemo(
-    () => computeKpis(exportedRows, scope, rows.length),
+    () => computeKpis(exportedRows.filter((r) => !r.pending), scope, rows.length),
     [exportedRows, rows.length, scope],
   );
 
@@ -1097,6 +1122,7 @@ export default function TrackingSheetFinance() {
             loading={loading}
             showKpis={activeTab !== 'calls'}
             view={activeTab === 'all' ? viewFilter : 'all'}
+            pendingCount={exportedRows.filter((r) => r.pending).length}
           />
 
           {/* Tab row + actions */}
@@ -1696,7 +1722,7 @@ const iconBtnStyle = {
 //  · dans la vue « Créances antérieures », les CRÉANCES ANTÉRIEURES elles-mêmes
 //    (demande dev 2026-09-18) : dues en début de mois, recouvrées, restantes.
 //    Les montants viennent des mêmes soldes serveur, seule la lecture change.
-function kpiTiles(kpis, loading, view) {
+function kpiTiles(kpis, loading, view, pendingCount = 0) {
   const clients = {
     label: 'Clients',
     value: loading ? '…' : kpis.total,
@@ -1711,6 +1737,16 @@ function kpiTiles(kpis, loading, view) {
     subTitle: `Totaux calculés sur les ${kpis.total} clients affichés, `
       + `pas sur les ${kpis.totalAll} du mois`,
   };
+  if (view === 'attente_optilex') {
+    return [
+      { ...clients, label: 'En attente', value: loading ? '…' : pendingCount, sub: null, subTitle: undefined },
+      { label: 'Attendu', value: loading ? '…' : formatEUR(0), color: N.textFaint, dot: N.textFaint,
+        sub: 'contrat Opti’lex en attente',
+        subColor: N.textMuted,
+        subTitle: 'Owner signé, contrat Opti’lex pas encore signé : aucun attendu tant que le client n’est pas finalisé (pas de numéro client).',
+      },
+    ];
+  }
   if (view === 'creances') {
     return [
       clients,
@@ -1781,10 +1817,10 @@ function kpiTiles(kpis, loading, view) {
   ];
 }
 
-function TitleBlock({ kpis, loading, showKpis = true, view = 'all' }) {
+function TitleBlock({ kpis, loading, showKpis = true, view = 'all', pendingCount = 0 }) {
   // Compactage 2026-05-11 : titre 40 → 22, KPIs inline avec le titre,
   // padding vertical réduit → max d'espace vertical pour le tableau.
-  const tiles = kpiTiles(kpis, loading, view);
+  const tiles = kpiTiles(kpis, loading, view, pendingCount);
   const creancesView = view === 'creances';
   return (
     <div style={{
@@ -1824,7 +1860,7 @@ function TitleBlock({ kpis, loading, showKpis = true, view = 'all' }) {
         transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(5, auto)',
+          gridTemplateColumns: `repeat(${tiles.length}, auto)`,
           marginLeft: 12,
           border: `1px solid ${creancesView ? N.red : N.border}`,
           borderRadius: 10,
@@ -1836,7 +1872,7 @@ function TitleBlock({ kpis, loading, showKpis = true, view = 'all' }) {
         {tiles.map((kpi, i) => (
           <div key={i} style={{
             padding: '8px 16px',
-            borderRight: i < 4 ? `1px solid ${N.borderSoft}` : 'none',
+            borderRight: i < tiles.length - 1 ? `1px solid ${N.borderSoft}` : 'none',
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
             minWidth: 90,
           }}>

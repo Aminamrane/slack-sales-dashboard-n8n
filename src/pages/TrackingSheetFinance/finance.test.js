@@ -308,3 +308,16 @@ test('un client qui a payé une fois dans sa vie, quelle que soit l’entité ou
   assert.equal(hasEverPaid({ client: { ever_paid: false }, received_total_owner: 0, received_total_optilex_ttc: 0 }), false);
   assert.equal(hasEverPaid({ received_total_owner: null }), false);
 });
+
+test('un contrat en attente Opti’lex devient une ligne finance flaguée, sans montant ni numéro', async () => {
+  const { pendingFinanceRow, isPendingOptilexRow, matchesClientSearch, normalizeSearch } = await import('./constants.js');
+  const r = pendingFinanceRow({ row_key: 'c:42', crm_societe: 'SAS Exemple', contact_name: 'Jean EXEMPLE', email: 'j@exemple.fr',
+    contact_phone: '0611223344', owner_signed_at: '2026-09-10T10:00:00', optilex_status: 'ongoing' }, '2026-09-01');
+  assert.equal(isPendingOptilexRow(r), true);
+  assert.equal(r.client.numero_client, null);
+  assert.equal(r.client.societe, 'SAS Exemple');
+  assert.equal(r.client.representative_name, 'Jean EXEMPLE');
+  assert.equal(r.expected_owner, undefined);
+  assert.equal(matchesClientSearch(r, normalizeSearch('exemple')), true);
+  assert.equal(computeKpis([r].filter((x) => !x.pending), 'owner', 1).total, 0);
+});

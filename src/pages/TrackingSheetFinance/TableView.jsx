@@ -79,6 +79,7 @@ import {
   formatDateFR,
   splitClientIdentity,
   toNumber,
+  PENDING_OPTILEX_LABEL,
 } from './constants.js';
 import { EditableNumber, EditableSelect, EditableDate } from './EditableCell.jsx';
 import ModalitesCell from './components/ModalitesCell.jsx';
@@ -992,6 +993,92 @@ const RowRenderer = React.memo(function RowRenderer({
   );
 });
 
+// ── Ligne « Attente Opti'Lex » ──────────────────────────────────────────────
+// Contrat en vol venu du board (Owner signé, Opti'Lex pas encore) : pas de
+// numéro client, pas d'attendu, rien à saisir. Même grille que les autres
+// lignes, mais aucune cellule éditable, aucun bouton OUVRIR : le flag ambre
+// dit ce qui manque, la colonne Modalités dit où en est le contrat.
+const PENDING = { fg: '#b45309', bg: '#fff3e3' };
+const PendingRowRenderer = React.memo(function PendingRowRenderer({ row, cols, keys, stickyLefts, collapsingCol }) {
+  const [hover, setHover] = useState(false);
+  const c = row.client || {};
+  const signedAt = c.owner_signed_at ? formatDateFR(c.owner_signed_at) : null;
+  const optilex = c.optilex_status === 'awaiting_owner_signature' ? 'à envoyer'
+    : c.optilex_status === 'scheduled' ? 'planifié'
+      : c.optilex_status === 'ongoing' ? 'envoyé, en attente de signature' : 'en attente';
+  const cell = (k, children) => (
+    <Cell
+      key={k}
+      k={k}
+      cols={cols}
+      stickyLefts={stickyLefts}
+      hover={hover}
+      isActive={false}
+      selected={false}
+      onSelect={() => {}}
+      commentable={false}
+      commentCount={0}
+      onOpenCommentPopup={() => {}}
+      collapsingCol={collapsingCol}
+    >
+      {children}
+    </Cell>
+  );
+  return (
+    <div
+      className="tsf-row"
+      title="Owner signé, contrat Opti’lex pas encore signé : pas de numéro client ni d’attendu pour l’instant."
+      style={{
+        display: 'flex', height: ROW_HEIGHT, borderBottom: `1px solid ${N.borderSft}`,
+        background: hover ? N.rowHover : N.pageBg, transition: 'background 0.12s', position: 'relative',
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <div style={{ width: GUTTER, flex: `0 0 ${GUTTER}px`, position: 'sticky', left: 0, zIndex: 10, background: hover ? N.rowHover : N.pageBg }} />
+      {keys.map((k) => {
+        if (k === 'numero') {
+          return cell(k, (
+            <span style={{ fontSize: 11, color: N.textFaint, fontStyle: 'italic', whiteSpace: 'nowrap' }}>à venir</span>
+          ));
+        }
+        if (k === 'societe') {
+          return cell(k, (
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25, minWidth: 0, maxWidth: '100%', flex: 1 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, maxWidth: '100%' }}>
+                <span style={{ fontSize: CELL_FONT_SIZE, fontWeight: 500, color: N.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={c.societe || ''}>
+                  {c.societe || <EmptyCell />}
+                </span>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+                  color: PENDING.fg, background: PENDING.bg, borderRadius: 4, padding: '1px 6px 1px 4px',
+                  fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
+                }}>
+                  <ContractPendingIcon size={13} strokeWidth={1.8} />
+                  {PENDING_OPTILEX_LABEL}
+                </span>
+              </span>
+              {c.representative_name && (
+                <span style={{ fontSize: 12, color: N.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.representative_name}>
+                  {c.representative_name}
+                </span>
+              )}
+            </div>
+          ));
+        }
+        if (k === 'modalites') {
+          return cell(k, (
+            <span style={{ fontSize: 11.5, color: N.textMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {signedAt ? `Owner signé le ${signedAt}` : 'Owner signé'} · Opti’lex {optilex}
+            </span>
+          ));
+        }
+        return cell(k, <EmptyCell />);
+      })}
+    </div>
+  );
+});
+
 // ── Cell sub-components ─────────────────────────────────────────────────────
 // EmptyCell : cellule vide reste vide visuellement (demande dev 2026-05-11
 // "on marque pas 'vide', on sait déjà que c'est vide").
@@ -1570,7 +1657,15 @@ export default function TableView({
             customScrollParent={scrollParent}
             data={filtered}
             totalCount={filtered.length}
-            itemContent={(_, row) => (
+            itemContent={(_, row) => row.pending ? (
+              <PendingRowRenderer
+                row={row}
+                cols={cols}
+                keys={keys}
+                stickyLefts={stickyLefts}
+                collapsingCol={collapsingCol}
+              />
+            ) : (
               <RowRenderer
                 row={row}
                 onPatchRow={onPatchRow}

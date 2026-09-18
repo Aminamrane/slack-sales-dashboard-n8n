@@ -34,6 +34,40 @@ const METEO_FILTER_USER_IDS = new Set([
 ]);
 export const canFilterMeteo = (user) => METEO_FILTER_USER_IDS.has(user?.id);
 
+// Clients « Attente Opti'Lex » du board : Owner signé, contrat Opti'Lex encore
+// en vol, pas de numéro client ni d'attendu. La finance doit les voir, avec un
+// flag et un filtre (demande dev 2026-09-18). La ligne est SYNTHÉTIQUE : elle
+// vient du board (source de vérité de cet état), n'a aucun montant, n'est pas
+// éditable et ne compte dans aucun total.
+export const PENDING_OPTILEX_LABEL = "Attente Opti'Lex";
+export const isPendingOptilexRow = (r) => r?.pending === true;
+export const pendingFinanceRow = (br, period) => {
+  const societe = (br.crm_societe || br.contact_name || '').trim();
+  const contact = (br.contact_name || '').trim();
+  return {
+    id: `pending:${br.row_key || br.email || societe}`,
+    pending: true,
+    period,
+    board: br,
+    client: {
+      id: null,
+      numero_client: null,
+      societe,
+      company_name: null,
+      representative_name: contact && contact !== societe ? contact : null,
+      email: br.email || null,
+      phone: br.contact_phone || null,
+      etat: null,
+      owner_signed_at: br.owner_signed_at || null,
+      optilex_status: br.optilex_status || null,
+      optilex_sent_at: br.optilex_sent_at || br.optilex_scheduled_at || null,
+      identity_aliases: [],
+      contact_emails: [],
+      contact_phones: [],
+    },
+  };
+};
+
 // Vue « Onboarding » : la date d'onboarding Owner de la ligne, comparée à
 // aujourd'hui. 'past' = déjà passée (le jour même compte comme passé),
 // 'upcoming' = encore à venir. Sans date connue, la ligne n'est dans aucune
