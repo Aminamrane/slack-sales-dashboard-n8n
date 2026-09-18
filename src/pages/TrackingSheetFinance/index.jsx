@@ -34,6 +34,7 @@ import {
   Edit3, Plus, Filter, ArrowUpDown, MoreHorizontal, Share2,
   CheckCircle, Sparkles, FileText, Users, Settings, Clock,
   XCircle, CircleDot, FilterX, Eye, Check, Star, Handshake, TriangleAlert, Download, Phone,
+  CircleDashed,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
@@ -49,7 +50,7 @@ import CallsView from './components/CallsView.jsx';
 // donnée par le dev (2026-09-03). Pas de bibliothèque : le trait est le nôtre.
 import {
   TableIcon, InboxIcon, LossIcon, CheckCircleIcon, ClockIcon, OverdueIcon,
-  RefundIcon, CalendarCheckIcon, BankOffIcon, ExitIcon, ExportIcon, ContactIcon,
+  RefundIcon, CalendarCheckIcon, CalendarClockIcon, MeteoFilterIcon, ContractPendingIcon, BankOffIcon, ExitIcon, ExportIcon, ContactIcon,
 } from './components/FinanceIcons.jsx';
 import { exportFinanceXlsx } from './exportExcel.js';
 import companyLogo from '../../assets/my_image.png';
@@ -59,7 +60,7 @@ import TableView from './TableView.jsx';
 import DetailPanel from './DetailPanel.jsx';
 // `displayEtat` : règle métier unique de l'état affiché sur le board
 // Owner/Opti'Lex (import read-only — OptilexBoard n'est pas modifié).
-import { displayEtat } from '../OptilexBoard.jsx';
+import { displayEtat, MeteoIcon, METEO_BANDS, meteoBandOf } from '../OptilexBoard.jsx';
 import {
   ALLOWED_ROLES,
   formatEUR,
@@ -74,10 +75,13 @@ import {
   computeKpis,
   creanceAgeMonths,
   scopedCredit,
-  scopedReceivedTotal,
   normalizeSearch,
   matchesClientSearch,
   isLiquidationEtat,
+  canFilterMeteo, onboardingPhaseOf, hasEverPaid,
+  scopedOpeningDebt,
+  PENDING_OPTILEX_LABEL, pendingFinanceRow,
+  canUseGlobalScope,
 } from './constants.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -255,9 +259,9 @@ const VIEW_ICONS = {
   retard_mois:      ClockIcon,
   creances:         OverdueIcon,
   trop_percu:       RefundIcon,
-  onboarding_passe: CalendarCheckIcon,
+  onboarding:       CalendarCheckIcon,
   non_auto:         BankOffIcon,
-  payment_day_missing: CalendarCheckIcon,
+  attente_optilex:  ContractPendingIcon,
   resilies:         ExitIcon,
 };
 
@@ -280,14 +284,31 @@ const VIEW_FILTERS = [
   // Trop-perçu reporté (backend `credit_*`) : action finance à faire —
   // déduire de la prochaine échéance ou rembourser.
   { key: 'trop_percu',  label: 'Trop-perçu' },
-  // La liste de relance : onboarding Owner passé (le paiement est réellement
-  // exigible), une dette à date, et rien d'encaissé ce mois-ci. Demande dev
-  // 2026-08-27 — on ne relance pas un client qui n'a pas encore démarré, ni
-  // celui qui a déjà payé une partie.
-  { key: 'onboarding_passe', label: 'Onboarding passé' },
+  // Onboarding Owner, en deux phases comme sur le board (demande dev
+  // 2026-09-18) : « Passés » (date passée, par mois) et « À venir » — pour
+  // les seuls clients qui n'ont JAMAIS encaissé : un seul montant récupéré,
+  // à n'importe quelle date, les sort des deux phases (précision dev le
+  // même jour : « les très anciens clients ne nous intéressent pas »).
+  { key: 'onboarding',  label: 'Onboarding' },
   { key: 'non_auto',    label: 'Non automatisé' },
-  { key: 'payment_day_missing', label: 'Date de paiement à définir' },
+  // Owner signé, Opti'Lex pas encore : lignes venues du board, sans numéro
+  // ni attendu, flaguées (demande dev 2026-09-18).
+  { key: 'attente_optilex', label: PENDING_OPTILEX_LABEL },
   { key: 'resilies',    label: 'Résiliés / Rétractés' },
+];
+
+// Les deux phases de la vue « Onboarding ».
+const ONBOARDING_PHASES = [
+  { key: 'past',     label: 'Passés',  Icon: CalendarCheckIcon },
+  { key: 'upcoming', label: 'À venir', Icon: CalendarClockIcon },
+];
+
+// Bandes météo du filtre (menu Filtre). L'icône reprend celle du board,
+// teintée de la bande ; « Sans météo » = aucune note posée.
+const METEO_FILTER_BANDS = [
+  { key: 'rouge',  score: 2 },
+  { key: 'orange', score: 3 },
+  { key: 'vert',   score: 4 },
 ];
 
 // Tiny colored "page emblem" — Notion's signature visual cue per item.
@@ -332,12 +353,20 @@ export default function TrackingSheetFinance() {
   // ── Auth gating (mirrors Campaigns.jsx) ─────────────────────────────
   const [authChecked, setAuthChecked] = useState(false);
   const [canViewCalls, setCanViewCalls] = useState(false);
+  // Opérateurs que le serveur autorise pour cette personne (Ismahane : les
+  // deux ; Aurélie B : Lény seulement — décision dev 2026-09-18). Vide tant
+  // que l'API ne les renvoie pas : la vue retombe alors sur sa liste d'usage.
+  const [callsOperators, setCallsOperators] = useState([]);
   useEffect(() => {
     if (!authChecked) return;
     let live = true;
     apiClient.get('/api/v1/finance-calls/access')
-      .then(data => { if (live) setCanViewCalls(data?.allowed === true); })
-      .catch(() => { if (live) setCanViewCalls(false); });
+      .then(data => {
+        if (!live) return;
+        setCanViewCalls(data?.allowed === true);
+        setCallsOperators(Array.isArray(data?.operators) ? data.operators : []);
+      })
+      .catch(() => { if (live) { setCanViewCalls(false); setCallsOperators([]); } });
     return () => { live = false; };
   }, [authChecked]);
   useEffect(() => {
@@ -373,14 +402,12 @@ export default function TrackingSheetFinance() {
   const onHiddenColsChange = useCallback((cols, colLabels) => setHiddenColsInfo({ count: cols.size, keys: [...cols], labels: colLabels || {} }), []);
 
   // ── Vision Owner / Opti'lex / Global (phase 2, 2026-08-18) ───────────
-  // finance_team n'a pas accès à la vision Globale ; admin, finance_director
-  // (et ceo en mode embed) ont les trois. Choix persisté en localStorage.
-  const canGlobalScope = useMemo(
-    () => (apiClient.getUser()?.role || null) !== 'finance_team',
-    []
-  );
+  // finance_team n'a pas accès à la vision Globale (sauf exception nominative,
+  // cf. canUseGlobalScope) ; admin, finance_director (et ceo en mode embed)
+  // ont les trois. Choix persisté en localStorage.
+  const canGlobalScope = useMemo(() => canUseGlobalScope(apiClient.getUser()), []);
   const [scope, setScope] = useState(() => {
-    const canGlobal = (apiClient.getUser()?.role || null) !== 'finance_team';
+    const canGlobal = canUseGlobalScope(apiClient.getUser());
     if (new URLSearchParams(window.location.search).get('scope') === 'owner') return 'owner';
     const stored = localStorage.getItem(SCOPE_LS_KEY);
     if (stored === 'owner' || stored === 'optilex') return stored;
@@ -396,11 +423,15 @@ export default function TrackingSheetFinance() {
   // Rétractés ») ; le fetch vit plus bas. Map numero_client → row board,
   // null = pas encore chargé.
   const [boardMap, setBoardMap] = useState(null);
+  // Contrats en vol du board (Owner signé, Opti'Lex en attente) : ils n'ont
+  // pas de numéro client, donc pas de ligne finance — on les synthétise.
+  const [boardPending, setBoardPending] = useState([]);
 
   // ── Vue-filtre active (chips) — single-select, « Tous » par défaut ────
   const [viewFilter, setViewFilter] = useState('all');
-  // Périmètre du filtre « Onboarding passé » : tous les onboardings, ceux
-  // du mois courant, ceux du mois précédent, ou les deux derniers mois.
+  // Vue « Onboarding » : phase ('past' | 'upcoming') puis, pour les passés,
+  // les mois d'onboarding cochés (aucun = tous).
+  const [onboardingPhase, setOnboardingPhase] = useState('past');
   const [relanceMonths, setRelanceMonths] = useState(() => new Set());
   // Sous-filtre des créances antérieures par ANCIENNETÉ (demande dev
   // 2026-09-01) : 'all' | 'old' (≥ 2 mois) | 'recent' (< 2 mois).
@@ -428,39 +459,37 @@ export default function TrackingSheetFinance() {
         return scopedOverdueCurrent(r, scope) === 0 && scopedOverdueCum(r, scope) === 0;
       case 'retard_mois':
         return scopedOverdueCurrent(r, scope) > 0;
-      case 'payment_day_missing':
-        return !r.client?.payment_day;
       case 'creances': {
-        if (scopedOverdueCum(r, scope) <= 0) return false;
+        // Population = les clients qui AVAIENT des créances antérieures au
+        // début du mois affiché, qu'elles soient soldées ou non depuis. Ne
+        // garder que ceux à qui il en reste faisait disparaître les clients
+        // qui ont tout réglé, donc leur « reçu » : le taux recouvré du
+        // bandeau, sur lequel reposent les variables de l'équipe finance,
+        // était faussé (précision dev 2026-09-18).
+        if (scopedOpeningDebt(r, scope) <= 0) return false;
         if (creanceAge === 'all') return true;
+        // Les sous-filtres d'ancienneté servent la relance : un client qui a
+        // tout soldé n'y a plus sa place.
+        if (scopedOverdueCum(r, scope) <= 0) return false;
         const mois = creanceAgeMonths(r, scope);
         if (mois === null) return creanceAge === 'recent';
         return creanceAge === 'old' ? mois >= 2 : mois < 2;
       }
       case 'trop_percu':
         return scopedCredit(r, scope) > 0;
-      case 'onboarding_passe': {
-        // 1. L'onboarding Owner doit être passé : avant lui rien n'est
-        //    exigible. Sans date connue, on s'en remet au calcul, qui
-        //    applique déjà la règle côté serveur.
+      case 'onboarding': {
+        // Jamais payé, une seule fois dans sa vie de client, toutes entités
+        // et visions confondues : un client qui a déjà réglé n'est plus un
+        // onboarding à suivre, passé ou à venir.
+        if (hasEverPaid(r)) return false;
+        // Deux phases, sur la seule date d'onboarding Owner (comme le board) :
+        // sans date connue, la ligne n'est ni passée ni à venir.
+        if (onboardingPhaseOf(r) !== onboardingPhase) return false;
+        if (onboardingPhase === 'upcoming' || relanceMonths.size === 0) return true;
+        // Passés : mois d'onboarding cochés (aucun = tous).
         const onboarding = parseDateFR(r.client?.rdv_onboarding);
-        if (onboarding && onboarding > new Date()) return false;
-        // 1 bis. Mois d'onboarding cochés (aucun = tous). Un client sans
-        //    date connue sort du lot dès qu'on coche un mois : on ne peut
-        //    pas affirmer qu'il en fait partie.
-        if (relanceMonths.size > 0) {
-          if (!onboarding) return false;
-          const m = `${onboarding.getFullYear()}-${String(onboarding.getMonth() + 1).padStart(2, '0')}`;
-          if (!relanceMonths.has(m)) return false;
-        }
-        // 2. Une dette à cette date — mois courant ou créances passées.
-        const due = scopedOverdueCurrent(r, scope) + scopedOverdueCum(r, scope);
-        if (due <= 0) return false;
-        // 3. JAMAIS payé, depuis le premier mois de son historique — pas
-        //    même la première échéance (précision dev 2026-08-27). Le total
-        //    encaissé vient du backend : la ligne mensuelle ne connaît que
-        //    son propre mois et ne pouvait pas répondre à la question.
-        return scopedReceivedTotal(r, scope) === 0;
+        const m = `${onboarding.getFullYear()}-${String(onboarding.getMonth() + 1).padStart(2, '0')}`;
+        return relanceMonths.has(m);
       }
       case 'non_auto': {
         // Pastille rouge du scope actif (les deux rouges en Globale).
@@ -477,7 +506,26 @@ export default function TrackingSheetFinance() {
       default:
         return true; // 'all'
     }
-  }, [scope, boardMap, relanceMonths, creanceAge]);
+  }, [scope, boardMap, relanceMonths, creanceAge, onboardingPhase]);
+
+  // Filtre « Météo client » (menu Filtre), réservé à deux personnes : les
+  // bandes du board avec leur volume, plus « Sans météo ».
+  const meteoFilterOptions = useMemo(() => {
+    if (!canFilterMeteo(apiClient.getUser())) return [];
+    const counts = { rouge: 0, orange: 0, vert: 0, none: 0 };
+    for (const r of rows) {
+      const br = (r.client?.numero_client && boardMap) ? boardMap.get(r.client.numero_client) : null;
+      counts[meteoBandOf(br?.meteo_score) || 'none'] += 1;
+    }
+    return [
+      ...METEO_FILTER_BANDS.map(({ key, score }) => ({
+        value: `meteo:${key}`,
+        label: `${METEO_BANDS[key].label} (${counts[key]})`,
+        Icon: (p) => <MeteoIcon score={score} size={p.size} color={METEO_BANDS[key].color} strokeWidth={1.8} />,
+      })),
+      { value: 'meteo:none', label: `Sans météo (${counts.none})`, Icon: CircleDashed },
+    ];
+  }, [rows, boardMap]);
 
   // Filtre « Responsable » : les personnes qui suivent au moins un client du
   // mois, avec leur volume, et « sans responsable » (demande dev 2026-09-03 :
@@ -529,26 +577,42 @@ export default function TrackingSheetFinance() {
   // Compteur par chip (nb de clients) — sur les rows brutes de la période,
   // indépendant de la recherche et des autres filtres (le compteur décrit la
   // vue, pas l'intersection).
+  // Lignes synthétiques « Attente Opti'Lex », pour le mois affiché.
+  const pendingRows = useMemo(
+    () => boardPending.map((br) => pendingFinanceRow(br, `${period}-01`)),
+    [boardPending, period],
+  );
+
   const viewCounts = useMemo(() => {
     const counts = {};
     for (const v of VIEW_FILTERS) {
       counts[v.key] = v.key === 'all'
-        ? rows.length
-        : rows.filter((r) => matchesView(r, v.key) && !isHiddenInView(r, v.key)).length;
+        ? rows.length + pendingRows.length
+        : v.key === 'attente_optilex'
+          ? pendingRows.length
+          : rows.filter((r) => matchesView(r, v.key) && !isHiddenInView(r, v.key)).length;
     }
     return counts;
-  }, [rows, matchesView, isHiddenInView]);
+  }, [rows, pendingRows, matchesView, isHiddenInView]);
 
   // Apply business filters to rows : vue-filtre active (chips) PUIS filtres
   // dropdown historiques (union : un lead matche s'il satisfait AU MOINS UN
   // filtre actif). La recherche s'applique en aval dans TableView.
   const rowsBeforeLiquidationFilter = useMemo(() => {
+    // « Tous » : les contrats en attente Opti'Lex en tête, flagués ; leur vue
+    // dédiée ne montre qu'eux ; les autres vues portent sur des montants
+    // qu'ils n'ont pas encore.
     const viewed = viewFilter === 'all'
-      ? rows
-      : rows.filter((r) => matchesView(r, viewFilter));
+      ? [...pendingRows, ...rows]
+      : viewFilter === 'attente_optilex'
+        ? pendingRows
+        : rows.filter((r) => matchesView(r, viewFilter));
     if (tableFilters.size === 0) return viewed;
     // Parser FR/ISO factorisé dans constants.js (`parseDateFR`).
     return viewed.filter((r) => {
+      // Sans montant ni état board posé, une ligne en attente ne peut
+      // satisfaire aucun filtre du menu.
+      if (r.pending) return false;
       // Helpers partagés, et SCOPÉS : ces filtres additionnaient les deux
       // entités quelle que soit la vision active — un retard Opti'lex
       // faisait donc matcher un filtre consulté en vision Owner.
@@ -574,6 +638,8 @@ export default function TrackingSheetFinance() {
         ? boardMap.get(r.client.numero_client) : null;
       const etat = br ? displayEtat(br) : null;
       if (etat && tableFilters.has(`etat:${etat}`)) return true;
+      // Filtres par météo client (clés « meteo:rouge », « meteo:none »…).
+      if (tableFilters.has(`meteo:${meteoBandOf(br?.meteo_score) || 'none'}`)) return true;
       // Filtres personnels : chacun est une définition à évaluer.
       for (const f of savedFilters) {
         if (tableFilters.has(`saved:${f.id}`)
@@ -583,7 +649,7 @@ export default function TrackingSheetFinance() {
       }
       return false;
     });
-  }, [rows, tableFilters, viewFilter, matchesView, boardMap, savedFilters, scope]);
+  }, [rows, pendingRows, tableFilters, viewFilter, matchesView, boardMap, savedFilters, scope]);
 
   // Garder le compteur avant masquage permet toujours de réafficher les
   // clients. Il suit l'ancienneté, les filtres et la recherche de cette vue.
@@ -744,6 +810,7 @@ export default function TrackingSheetFinance() {
         const map = new Map();
         for (const br of list) if (br.numero_client) map.set(br.numero_client, br);
         setBoardMap(map);
+        setBoardPending(list.filter((br) => br.is_pending_contract && displayEtat(br) === PENDING_OPTILEX_LABEL));
       })
       .catch((e) => console.error('[TrackingFinance] board load failed', e));
     return () => { alive = false; };
@@ -821,7 +888,7 @@ export default function TrackingSheetFinance() {
   // pas celui des 730. On somme donc les lignes RÉELLEMENT affichées —
   // vue-filtre, filtres du menu, filtres personnels et recherche compris.
   const kpis = useMemo(
-    () => computeKpis(exportedRows, scope, rows.length),
+    () => computeKpis(exportedRows.filter((r) => !r.pending), scope, rows.length),
     [exportedRows, rows.length, scope],
   );
 
@@ -1053,6 +1120,8 @@ export default function TrackingSheetFinance() {
             kpis={kpis}
             loading={loading}
             showKpis={activeTab !== 'calls'}
+            view={activeTab === 'all' ? viewFilter : 'all'}
+            pendingCount={exportedRows.filter((r) => r.pending).length}
           />
 
           {/* Tab row + actions */}
@@ -1076,6 +1145,7 @@ export default function TrackingSheetFinance() {
             onCreateSavedFilter={createSavedFilter}
             onRemoveSavedFilter={removeSavedFilter}
             responsibleOptions={responsibleFilterOptions}
+            meteoOptions={meteoFilterOptions}
             hiddenColsInfo={hiddenColsInfo}
             onShowAllCols={() => showAllColsRef.current?.()}
             onShowCol={(key) => showColRef.current?.(key)}
@@ -1094,6 +1164,8 @@ export default function TrackingSheetFinance() {
                 active={viewFilter}
                 onChange={setViewFilter}
                 counts={viewCounts}
+                onboardingPhase={onboardingPhase}
+                onOnboardingPhaseChange={setOnboardingPhase}
                 relanceMonths={relanceMonths}
                 creanceAge={creanceAge}
                 onCreanceAgeChange={setCreanceAge}
@@ -1144,7 +1216,7 @@ export default function TrackingSheetFinance() {
               style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
             >
               {activeTab === 'calls' && canViewCalls ? (
-                <CallsView />
+                <CallsView operators={callsOperators} />
               ) : activeTab === 'losses' ? (
                 <LossesView
                   boardMap={boardMap}
@@ -1644,9 +1716,111 @@ const iconBtnStyle = {
 // ════════════════════════════════════════════════════════════════════════════
 // TITLE BLOCK (icon + title + subtitle + KPI strip)
 // ════════════════════════════════════════════════════════════════════════════
-function TitleBlock({ kpis, loading, showKpis = true }) {
+// Tuiles du bandeau. Deux lectures :
+//  · par défaut, le MOIS affiché (attendu, reçu, retard du mois + antérieur) ;
+//  · dans la vue « Créances antérieures », les CRÉANCES ANTÉRIEURES elles-mêmes
+//    (demande dev 2026-09-18) : dues en début de mois, recouvrées, restantes.
+//    Les montants viennent des mêmes soldes serveur, seule la lecture change.
+function kpiTiles(kpis, loading, view, pendingCount = 0) {
+  const clients = {
+    label: 'Clients',
+    value: loading ? '…' : kpis.total,
+    color: N.text,
+    dot: kpis.filtered ? N.accent : N.textFaint,
+    // Sélection active : on rappelle sur combien de clients portent
+    // TOUS les montants du bandeau. Sans ça, « 153 956 € de retard »
+    // se lit comme le total du mois alors qu'il ne couvre qu'un
+    // filtre — le genre de malentendu qui coûte cher en finance.
+    sub: loading || !kpis.filtered ? null : `sur ${kpis.totalAll}`,
+    subColor: N.accent,
+    subTitle: `Totaux calculés sur les ${kpis.total} clients affichés, `
+      + `pas sur les ${kpis.totalAll} du mois`,
+  };
+  if (view === 'attente_optilex') {
+    return [
+      { ...clients, label: 'En attente', value: loading ? '…' : pendingCount, sub: null, subTitle: undefined },
+      { label: 'Attendu', value: loading ? '…' : formatEUR(0), color: N.textFaint, dot: N.textFaint,
+        sub: 'contrat Opti’lex en attente',
+        subColor: N.textMuted,
+        subTitle: 'Owner signé, contrat Opti’lex pas encore signé : aucun attendu tant que le client n’est pas finalisé (pas de numéro client).',
+      },
+    ];
+  }
+  if (view === 'creances') {
+    return [
+      clients,
+      { label: 'Attendu', value: loading ? '…' : formatEUR(kpis.openingDebt), color: N.text, dot: N.textFaint,
+        sub: loading ? null : 'créances antérieures',
+        subColor: N.textMuted,
+        subTitle: 'Créances des mois précédents encore dues au début du mois affiché, pour les clients listés.',
+      },
+      { label: 'Reçu', value: loading ? '…' : formatEUR(kpis.recoveredPrior), color: N.green, dot: N.green,
+        sub: loading || !kpis.overdueRecoveredPct ? null : `${kpis.overdueRecoveredPct} recouvrées`,
+        subColor: N.green,
+        subTitle: 'Montant récupéré ce mois sur les créances des mois précédents ÷ créances dues au début du mois.',
+      },
+      { label: 'Retard', value: loading ? '…' : formatEUR(kpis.overdueCumTotal),
+        color: kpis.overdueCumTotal > 0 ? N.red : N.text,
+        dot: kpis.overdueCumTotal > 0 ? N.red : N.textFaint,
+        sub: loading ? null : 'créances restantes',
+        subColor: N.textMuted,
+        subTitle: 'Créances des mois précédents toujours dues après les règlements du mois.',
+      },
+      { label: 'Retard du mois', value: loading ? '…' : formatEUR(kpis.overdueTotal),
+        color: kpis.overdueTotal > 0 ? N.red : N.text,
+        dot: kpis.overdueTotal > 0 ? N.red : N.textFaint,
+        sub: loading ? null : `${formatEUR(kpis.overdueTotalWithCum)} à date`,
+        subColor: N.textMuted,
+        subTitle: 'Retard du mois affiché seul, hors créances antérieures. En dessous : retard total à date (mois + antérieur).',
+      },
+    ];
+  }
+  return [
+    clients,
+    { label: 'Attendu', value: loading ? '…' : formatEUR(kpis.expectedGlobal), color: N.text, dot: N.textFaint,
+      sub: loading || !kpis.notDue ? null : `${formatEUR(kpis.notDue)} non exigibles`,
+      subColor: N.textMuted,
+      subTitle: 'Reste du mois dont l’échéance n’est pas encore passée, dont l’onboarding est à venir, ou qui est en pause.',
+    },
+    {
+      label: 'Reçu',
+      value: loading ? '…' : formatEUR(kpis.receivedTotal),
+      color: N.green, dot: N.green,
+      // Taux de récupération du classeur finance : reçu ÷ attendu.
+      sub: loading ? null : kpis.receivedPct,
+      subColor: N.green,
+      subTitle: 'Reçu affecté au mois ÷ attendu du mois. Les règlements des anciennes créances sont suivis séparément.',
+    },
+    {
+      // Dette totale à date (mois + antérieur) — la colonne « Retard de
+      // paiement » du classeur, celle que la finance lit en premier.
+      label: 'Retard',
+      value: loading ? '…' : formatEUR(kpis.overdueTotalWithCum),
+      color: kpis.overdueTotalWithCum > 0 ? N.red : N.text,
+      dot: kpis.overdueTotalWithCum > 0 ? N.red : N.textFaint,
+      sub: loading ? null : `${formatEUR(kpis.overdueTotal)} du mois`,
+      subColor: N.textMuted,
+      subTitle: 'Retard du mois + anciennes créances encore dues. Les trop-perçus restent séparés.',
+    },
+    {
+      // « Retard de paiement sur les mois précédents » du classeur.
+      label: 'Créances ant.',
+      value: loading ? '…' : formatEUR(kpis.overdueCumTotal),
+      color: kpis.overdueCumTotal > 0 ? N.red : N.text,
+      dot: kpis.overdueCumTotal > 0 ? N.red : N.textFaint,
+      // Récupération sur les créances des mois précédents.
+      sub: loading || !kpis.overdueRecoveredPct ? null : `${kpis.overdueRecoveredPct} recouvrées`,
+      subColor: N.textMuted,
+      subTitle: `${formatEUR(kpis.recoveredPrior)} recouvrés sur ${formatEUR(kpis.openingDebt)} dus au début du mois. Le montant au-dessus est le solde restant.`,
+    },
+  ];
+}
+
+function TitleBlock({ kpis, loading, showKpis = true, view = 'all', pendingCount = 0 }) {
   // Compactage 2026-05-11 : titre 40 → 22, KPIs inline avec le titre,
   // padding vertical réduit → max d'espace vertical pour le tableau.
+  const tiles = kpiTiles(kpis, loading, view, pendingCount);
+  const creancesView = view === 'creances';
   return (
     <div style={{
       paddingTop: 20, paddingBottom: 12,
@@ -1675,71 +1849,29 @@ function TitleBlock({ kpis, loading, showKpis = true }) {
         Tracking Finance
       </h1>
 
-      {/* KPI mini-table */}
-      {showKpis && <div className="tsf-kpis" style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(5, auto)',
-        marginLeft: 12,
-        border: `1px solid ${N.border}`,
-        borderRadius: 10,
-        overflow: 'hidden',
-        background: '#fff',
-      }}>
-        {[
-          {
-            label: 'Clients',
-            value: loading ? '…' : kpis.total,
-            color: N.text,
-            dot: kpis.filtered ? N.accent : N.textFaint,
-            // Sélection active : on rappelle sur combien de clients portent
-            // TOUS les montants du bandeau. Sans ça, « 153 956 € de retard »
-            // se lit comme le total du mois alors qu'il ne couvre qu'un
-            // filtre — le genre de malentendu qui coûte cher en finance.
-            sub: loading || !kpis.filtered ? null : `sur ${kpis.totalAll}`,
-            subColor: N.accent,
-            subTitle: `Totaux calculés sur les ${kpis.total} clients affichés, `
-              + `pas sur les ${kpis.totalAll} du mois`,
-          },
-          { label: 'Attendu', value: loading ? '…' : formatEUR(kpis.expectedGlobal), color: N.text, dot: N.textFaint,
-            sub: loading || !kpis.notDue ? null : `${formatEUR(kpis.notDue)} non exigibles`,
-            subColor: N.textMuted,
-            subTitle: 'Reste du mois dont l’échéance n’est pas passée, est en pause ou dont le premier paiement reste à dater.',
-          },
-          {
-            label: 'Reçu',
-            value: loading ? '…' : formatEUR(kpis.receivedTotal),
-            color: N.green, dot: N.green,
-            // Taux de récupération du classeur finance : reçu ÷ attendu.
-            sub: loading ? null : kpis.receivedPct,
-            subColor: N.green,
-            subTitle: 'Reçu affecté au mois ÷ attendu du mois. Les règlements des anciennes créances sont suivis séparément.',
-          },
-          {
-            // Dette totale à date (mois + antérieur) — la colonne « Retard de
-            // paiement » du classeur, celle que la finance lit en premier.
-            label: 'Retard',
-            value: loading ? '…' : formatEUR(kpis.overdueTotalWithCum),
-            color: kpis.overdueTotalWithCum > 0 ? N.red : N.text,
-            dot: kpis.overdueTotalWithCum > 0 ? N.red : N.textFaint,
-            sub: loading ? null : `${formatEUR(kpis.overdueTotal)} du mois`,
-            subColor: N.textMuted,
-            subTitle: 'Retard du mois + anciennes créances encore dues. Les trop-perçus restent séparés.',
-          },
-          {
-            // « Retard de paiement sur les mois précédents » du classeur.
-            label: 'Créances ant.',
-            value: loading ? '…' : formatEUR(kpis.overdueCumTotal),
-            color: kpis.overdueCumTotal > 0 ? N.red : N.text,
-            dot: kpis.overdueCumTotal > 0 ? N.red : N.textFaint,
-            // Récupération sur les créances des mois précédents.
-            sub: loading || !kpis.overdueRecoveredPct ? null : `${kpis.overdueRecoveredPct} recouvrées`,
-            subColor: N.textMuted,
-            subTitle: `${formatEUR(kpis.recoveredPrior)} recouvrés sur ${formatEUR(kpis.openingDebt)} dus au début du mois. Le montant au-dessus est le solde restant.`,
-          },
-        ].map((kpi, i) => (
+      {/* KPI mini-table — la lecture bascule avec la vue (mois ⇄ créances
+          antérieures) ; un fondu court marque le changement de sens. */}
+      {showKpis && <motion.div
+        key={creancesView ? 'creances' : 'mois'}
+        className="tsf-kpis"
+        initial={{ opacity: 0, y: 3 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${tiles.length}, auto)`,
+          marginLeft: 12,
+          border: `1px solid ${creancesView ? N.red : N.border}`,
+          borderRadius: 10,
+          overflow: 'hidden',
+          background: '#fff',
+        }}
+        title={creancesView ? 'Lecture « Créances antérieures » : les montants portent sur les créances des mois précédents.' : undefined}
+      >
+        {tiles.map((kpi, i) => (
           <div key={i} style={{
             padding: '8px 16px',
-            borderRight: i < 4 ? `1px solid ${N.borderSft}` : 'none',
+            borderRight: i < tiles.length - 1 ? `1px solid ${N.borderSoft}` : 'none',
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
             minWidth: 90,
           }}>
@@ -1763,7 +1895,7 @@ function TitleBlock({ kpis, loading, showKpis = true }) {
             )}
           </div>
         ))}
-      </div>}
+      </motion.div>}
     </div>
   );
 }
@@ -1824,6 +1956,54 @@ const CREANCE_AGES = [
   { key: 'recent', label: 'Moins de 2 mois' },
 ];
 
+// Phase de la vue « Onboarding » : deux segments, une pastille sombre qui
+// glisse de l'un à l'autre (layoutId) — le même mouvement que les chips.
+function OnboardingPhasePicker({ value, onChange }) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Phase de l’onboarding"
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 2, marginLeft: 4,
+        padding: 2, border: `1px solid ${N.border}`, borderRadius: 999, background: '#fff',
+      }}
+    >
+      {ONBOARDING_PHASES.map((o) => {
+        const actif = value === o.key;
+        return (
+          <button
+            key={o.key}
+            type="button"
+            role="radio"
+            aria-checked={actif}
+            onClick={() => onChange(o.key)}
+            style={{
+              position: 'relative',
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              height: 22, padding: '0 10px',
+              border: 'none', borderRadius: 999, background: 'transparent',
+              color: actif ? '#fff' : N.textMuted,
+              fontSize: 12, fontWeight: actif ? 600 : 500,
+              fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap',
+              transition: 'color 0.18s ease',
+            }}
+          >
+            {actif && (
+              <motion.span
+                layoutId="tsf-onboarding-phase-pill"
+                transition={{ type: 'spring', stiffness: 480, damping: 38 }}
+                style={{ position: 'absolute', inset: 0, background: N.text, borderRadius: 999 }}
+              />
+            )}
+            <o.Icon size={13} strokeWidth={1.8} style={{ position: 'relative', zIndex: 1 }} />
+            <span style={{ position: 'relative', zIndex: 1 }}>{o.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function CreanceAgePicker({ value, onChange }) {
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 4 }}>
@@ -1835,7 +2015,7 @@ function CreanceAgePicker({ value, onChange }) {
             type="button"
             onClick={() => onChange(o.key)}
             style={{
-              border: `1px solid ${actif ? N.text : N.borderSft}`,
+              border: `1px solid ${actif ? N.text : N.borderSoft}`,
               background: actif ? N.text : '#fff',
               color: actif ? '#fff' : N.textMuted,
               borderRadius: 999, padding: '3px 11px',
@@ -1914,7 +2094,7 @@ function RelanceMonthPicker({ selected, onChange }) {
             padding: '7px 12px', fontSize: 12.5, fontFamily: 'inherit',
             color: selected.size ? N.textMuted : N.text,
             fontWeight: selected.size ? 500 : 600,
-            borderBottom: `1px solid ${N.borderSft}`,
+            borderBottom: `1px solid ${N.borderSoft}`,
           }}
         >
           Tous les onboardings passés
@@ -1952,8 +2132,8 @@ function RelanceMonthPicker({ selected, onChange }) {
   );
 }
 
-function ViewChips({ active, onChange, counts, relanceMonths, onRelanceMonthsChange,
-  creanceAge, onCreanceAgeChange }) {
+function ViewChips({ active, onChange, counts, onboardingPhase, onOnboardingPhaseChange,
+  relanceMonths, onRelanceMonthsChange, creanceAge, onCreanceAgeChange }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 6,
@@ -2011,9 +2191,23 @@ function ViewChips({ active, onChange, counts, relanceMonths, onRelanceMonthsCha
           </button>
         );
       })}
-      {active === 'onboarding_passe' && (
-        <RelanceMonthPicker selected={relanceMonths} onChange={onRelanceMonthsChange} />
-      )}
+      <AnimatePresence initial={false}>
+        {active === 'onboarding' && (
+          <motion.div
+            key="onboarding-phase"
+            initial={{ opacity: 0, x: -6 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -6 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          >
+            <OnboardingPhasePicker value={onboardingPhase} onChange={onOnboardingPhaseChange} />
+            {onboardingPhase === 'past' && (
+              <RelanceMonthPicker selected={relanceMonths} onChange={onRelanceMonthsChange} />
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
       {active === 'creances' && (
         <CreanceAgePicker value={creanceAge} onChange={onCreanceAgeChange} />
       )}
@@ -2103,7 +2297,7 @@ const FILTER_OPTIONS = [
 ];
 
 function FilterDropdown({
-  values, onToggle, etatOptions = [], responsibleOptions = [],
+  values, onToggle, etatOptions = [], responsibleOptions = [], meteoOptions = [],
   savedFilters = [], onCreateSavedFilter, onRemoveSavedFilter,
 }) {
   const [building, setBuilding] = useState(false);
@@ -2140,6 +2334,12 @@ function FilterDropdown({
     if (!q) return allOptions;
     return allOptions.filter((o) => o.label.toLowerCase().includes(q));
   }, [search, allOptions]);
+  // Météo client : un groupe à part, titré, comme « Mes filtres » — visible
+  // seulement pour les personnes autorisées (la liste arrive vide sinon).
+  const filteredMeteo = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return q ? meteoOptions.filter((o) => o.label.toLowerCase().includes(q)) : meteoOptions;
+  }, [search, meteoOptions]);
 
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-flex' }}>
@@ -2149,7 +2349,7 @@ function FilterDropdown({
         onClick={() => setOpen((v) => !v)}
         style={{
           ...iconBtnStyle,
-          background: active ? N.rowHover : iconBtnStyle.background,
+          background: active ? N.sideHover : iconBtnStyle.background,
           color: active ? N.text : iconBtnStyle.color,
           position: 'relative',
         }}
@@ -2258,7 +2458,44 @@ function FilterDropdown({
             );
           })}
 
-          {/* Footer : filtre avancé (placeholder MVP) */}
+          {filteredMeteo.length > 0 && (
+            <div style={{ marginTop: 4, paddingTop: 4, borderTop: `1px solid ${N.borderSoft}` }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '6px 14px 2px', fontSize: 10.5, fontWeight: 600,
+                color: N.textFaint, textTransform: 'uppercase', letterSpacing: '0.04em',
+              }}>
+                <MeteoFilterIcon size={13} strokeWidth={1.7} />
+                Météo client
+              </div>
+              {filteredMeteo.map((opt) => {
+                const isActive = values && values.has(opt.value);
+                const Icon = opt.Icon;
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => onToggle(opt.value)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      width: '100%', padding: '10px 14px',
+                      border: 'none',
+                      background: isActive ? N.sideHover : 'transparent',
+                      borderRadius: 6, fontSize: 14, color: N.text,
+                      textAlign: 'left', cursor: 'pointer',
+                      fontWeight: isActive ? 600 : 400, fontFamily: 'inherit',
+                    }}
+                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = N.sideHover; }}
+                    onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <Icon size={18} strokeWidth={1.8} style={{ flexShrink: 0, color: N.textMuted }} />
+                    <span style={{ flex: 1 }}>{opt.label}</span>
+                    {isActive && <span style={{ color: N.accent, fontSize: 14 }}>✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* Mes filtres — ceux que l'utilisateur a composés lui-même
               (demande dev 2026-08-28). Séparés des filtres fournis pour
               qu'on voie tout de suite ce qui vient de soi. */}
@@ -2453,6 +2690,7 @@ function TabRow({
   tableFilters, onToggleFilter, etatFilterOptions = [],
   savedFilters = [], onCreateSavedFilter, onRemoveSavedFilter,
   responsibleOptions = [],
+  meteoOptions = [],
   scope, setScope, canGlobalScope,
 }) {
   // Trois onglets, trois contenus. « Par état » et « Mes clients » ne
@@ -2547,6 +2785,7 @@ function TabRow({
           onToggle={onToggleFilter}
           etatOptions={etatFilterOptions}
           responsibleOptions={responsibleOptions}
+          meteoOptions={meteoOptions}
           savedFilters={savedFilters}
           onCreateSavedFilter={onCreateSavedFilter}
           onRemoveSavedFilter={onRemoveSavedFilter}
@@ -2674,7 +2913,7 @@ function SearchInline({ value, onChange, resultCount = null }) {
             else { setOpen(false); e.currentTarget.blur(); }
           }
         }}
-        placeholder="N°, société, nom, email…"
+        placeholder="N°, société, nom, email, téléphone…"
         style={{
           border: 'none', outline: 'none', background: 'transparent',
           fontSize: 13, fontFamily: 'inherit',

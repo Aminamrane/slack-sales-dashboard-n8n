@@ -123,6 +123,35 @@ export const CalendarCheckIcon = (p) => (
   </Icon>
 );
 
+// Onboarding à venir — le calendrier, une horloge posée dans le coin.
+export const CalendarClockIcon = (p) => (
+  <Icon {...p}>
+    <path d="M20.5 11V7a2 2 0 0 0-2-2h-13a2 2 0 0 0-2 2v11.5a2 2 0 0 0 2 2H11" />
+    <path d="M3.5 9.5h17M8 3v3.5M16 3v3.5" />
+    <circle cx="17" cy="17.5" r="4" />
+    <path d="M17 15.6v2l1.4 1" />
+  </Icon>
+);
+
+// Attente Opti'Lex — le contrat, une horloge posée dans le coin.
+export const ContractPendingIcon = (p) => (
+  <Icon {...p}>
+    <path d="M13.5 20.5H7A1.5 1.5 0 0 1 5.5 19V5A1.5 1.5 0 0 1 7 3.5h7l4.5 4.5v3.5" />
+    <path d="M14 3.5V8h4.5" />
+    <path d="M8.5 12.5h5M8.5 16h3" />
+    <circle cx="17.5" cy="17.5" r="3.5" />
+    <path d="M17.5 15.9v1.8l1.2.9" />
+  </Icon>
+);
+
+// Météo client — le soleil derrière un nuage, pour le filtre du menu.
+export const MeteoFilterIcon = (p) => (
+  <Icon {...p}>
+    <path d="M9 5.5a3.6 3.6 0 0 1 6.9 1" />
+    <path d="M7.5 18.5h9a3.5 3.5 0 0 0 .4-7 5 5 0 0 0-9.6-1.3A4.2 4.2 0 0 0 7.5 18.5Z" />
+  </Icon>
+);
+
 // Non automatisé — la banque, barrée.
 export const BankOffIcon = (p) => (
   <Icon {...p}>

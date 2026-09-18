@@ -210,18 +210,35 @@ const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 export default function ExitClientDialog({
   open, onClose, client, boardRow, periods,
   onEtatChange, onDeclareLoss, onRevertLoss, loss,
+  // Dernier mois facturé choisi par la direction (« AAAA-MM »), et son
+  // enregistrement : contrôle total sur la fin de facturation (dev 2026-09-18).
+  billingLastMonth = null, onBillingStop,
   // État choisi depuis le badge d'état de la fiche : le dialogue s'ouvre
   // dessus, il ne reste qu'à confirmer la date d'effet (dev 2026-09-03).
   initialEtat = null, signatureDate = null,
 }) {
   const [etat, setEtat] = useState('');
   const [etatDate, setEtatDate] = useState(todayISO());
+  // Fin de facturation : par défaut, le mois qui précède la date d'effet
+  // (règle automatique). La direction peut choisir n'importe quel mois.
+  const [lastBilled, setLastBilled] = useState('');
+  const [billingDone, setBillingDone] = useState(null);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(null);
   const [confirming, setConfirming] = useState(false);
   const [etatDone, setEtatDone] = useState(null);
   const [error, setError] = useState('');
   const withdrawing = etat === 'Rétractation';
+  // Pour une résiliation ou une liquidation, la finance peut maintenir les
+  // attendus au-delà de la date d'effet. La rétractation annule tout.
+  const billingChoice = !!etat && !withdrawing;
+  const monthBefore = (iso) => {
+    if (!iso) return '';
+    const y = Number(iso.slice(0, 4)); const m = Number(iso.slice(5, 7));
+    return m > 1 ? `${y}-${String(m - 1).padStart(2, '0')}` : `${y - 1}-12`;
+  };
+  const defaultLastBilled = monthBefore(etatDate);
+  const chosenLastBilled = lastBilled || billingLastMonth || defaultLastBilled;
   const effectiveDate = withdrawing ? (signatureDate || '').slice(0, 10) : etatDate;
 
   // À chaque ouverture : repartir propre, avec l'état pré-choisi s'il y en a un.
@@ -263,6 +280,12 @@ export default function ExitClientDialog({
     // décision lourde, on ne se contente pas de refermer une liste. On répète
     // ce qui a été posé ET quand ça prendra effet — la nuance qui compte.
     setEtatDone({ etat, date: result?.etat_date || effectiveDate });
+    // Fin de facturation : seulement si elle diffère de la règle automatique
+    // (ou si un choix existait déjà et qu'on le change).
+    if (billingChoice && onBillingStop && chosenLastBilled && (chosenLastBilled !== defaultLastBilled || billingLastMonth)) {
+      await onBillingStop(chosenLastBilled === defaultLastBilled ? null : chosenLastBilled);
+      setBillingDone(chosenLastBilled);
+    }
     setEtat('');
   });
 
@@ -417,6 +440,39 @@ export default function ExitClientDialog({
                 {busy === 'etat' ? 'Enregistrement…' : 'Acter'}
               </button>
             </div>
+            {billingChoice && (
+              <div style={{
+                marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                fontSize: 12, color: N.textMuted,
+              }}>
+                <span>Facturer jusqu’à</span>
+                <input
+                  type="month"
+                  value={chosenLastBilled}
+                  onChange={(e) => setLastBilled(e.target.value)}
+                  title="Dernier mois facturé, inclus. Par défaut : le mois qui précède la date d’effet."
+                  style={{
+                    border: `1px solid ${N.border}`, borderRadius: 7, padding: '6px 8px',
+                    fontSize: 12.5, fontFamily: 'inherit', background: '#fff', color: N.text, outline: 'none',
+                  }}
+                />
+                <span>inclus</span>
+                {chosenLastBilled && chosenLastBilled !== defaultLastBilled && (
+                  <button type="button" onClick={() => setLastBilled(defaultLastBilled)} style={{ ...btn('ghost'), fontSize: 11.5, padding: '3px 8px' }}>
+                    Remettre la règle automatique
+                  </button>
+                )}
+                <span style={{ flexBasis: '100%', fontSize: 11.5, lineHeight: 1.5 }}>
+                  Les attendus restent dus jusqu’à ce mois inclus, puis tombent à zéro.
+                  Un mois déjà encaissé ou fixé à la main n’est jamais retouché.
+                </span>
+              </div>
+            )}
+            {billingDone && (
+              <div style={{ marginTop: 8, fontSize: 12, color: '#15794a' }}>
+                Facturation maintenue jusqu’à {billingDone.slice(5, 7)}/{billingDone.slice(0, 4)} inclus.
+              </div>
+            )}
             {withdrawing && (
               <div style={{ marginTop: 10, fontSize: 12, lineHeight: 1.6, color: N.textMuted }}>
                 {effectiveDate
