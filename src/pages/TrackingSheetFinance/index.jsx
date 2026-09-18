@@ -460,7 +460,11 @@ export default function TrackingSheetFinance() {
       case 'a_jour':
         return scopedOverdueCurrent(r, scope) === 0 && scopedOverdueCum(r, scope) === 0;
       case 'retard_mois':
-        return scopedOverdueCurrent(r, scope) > 0;
+        // Retard sur le mois courant SEUL. Un client qui traîne des créances
+        // antérieures relève de la vue « Créances antérieures », plus de
+        // celle-ci : les deux vues sont disjointes (dev 2026-09-18, n°164 :
+        // 2 400 € d'antérieur, sortait encore en « retard du mois »).
+        return scopedOverdueCurrent(r, scope) > 0 && scopedOverdueCum(r, scope) <= 0;
       case 'creances': {
         // Population = les clients qui AVAIENT des créances antérieures au
         // début du mois affiché, qu'elles soient soldées ou non depuis. Ne
