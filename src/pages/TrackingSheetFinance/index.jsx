@@ -1086,6 +1086,7 @@ export default function TrackingSheetFinance() {
             kpis={kpis}
             loading={loading}
             showKpis={activeTab !== 'calls'}
+            view={activeTab === 'all' ? viewFilter : 'all'}
           />
 
           {/* Tab row + actions */}
@@ -1680,9 +1681,101 @@ const iconBtnStyle = {
 // ════════════════════════════════════════════════════════════════════════════
 // TITLE BLOCK (icon + title + subtitle + KPI strip)
 // ════════════════════════════════════════════════════════════════════════════
-function TitleBlock({ kpis, loading, showKpis = true }) {
+// Tuiles du bandeau. Deux lectures :
+//  · par défaut, le MOIS affiché (attendu, reçu, retard du mois + antérieur) ;
+//  · dans la vue « Créances antérieures », les CRÉANCES ANTÉRIEURES elles-mêmes
+//    (demande dev 2026-09-18) : dues en début de mois, recouvrées, restantes.
+//    Les montants viennent des mêmes soldes serveur, seule la lecture change.
+function kpiTiles(kpis, loading, view) {
+  const clients = {
+    label: 'Clients',
+    value: loading ? '…' : kpis.total,
+    color: N.text,
+    dot: kpis.filtered ? N.accent : N.textFaint,
+    // Sélection active : on rappelle sur combien de clients portent
+    // TOUS les montants du bandeau. Sans ça, « 153 956 € de retard »
+    // se lit comme le total du mois alors qu'il ne couvre qu'un
+    // filtre — le genre de malentendu qui coûte cher en finance.
+    sub: loading || !kpis.filtered ? null : `sur ${kpis.totalAll}`,
+    subColor: N.accent,
+    subTitle: `Totaux calculés sur les ${kpis.total} clients affichés, `
+      + `pas sur les ${kpis.totalAll} du mois`,
+  };
+  if (view === 'creances') {
+    return [
+      clients,
+      { label: 'Attendu', value: loading ? '…' : formatEUR(kpis.openingDebt), color: N.text, dot: N.textFaint,
+        sub: loading ? null : 'créances antérieures',
+        subColor: N.textMuted,
+        subTitle: 'Créances des mois précédents encore dues au début du mois affiché, pour les clients listés.',
+      },
+      { label: 'Reçu', value: loading ? '…' : formatEUR(kpis.recoveredPrior), color: N.green, dot: N.green,
+        sub: loading || !kpis.overdueRecoveredPct ? null : `${kpis.overdueRecoveredPct} recouvrées`,
+        subColor: N.green,
+        subTitle: 'Montant récupéré ce mois sur les créances des mois précédents ÷ créances dues au début du mois.',
+      },
+      { label: 'Retard', value: loading ? '…' : formatEUR(kpis.overdueCumTotal),
+        color: kpis.overdueCumTotal > 0 ? N.red : N.text,
+        dot: kpis.overdueCumTotal > 0 ? N.red : N.textFaint,
+        sub: loading ? null : 'créances restantes',
+        subColor: N.textMuted,
+        subTitle: 'Créances des mois précédents toujours dues après les règlements du mois.',
+      },
+      { label: 'Retard du mois', value: loading ? '…' : formatEUR(kpis.overdueTotal),
+        color: kpis.overdueTotal > 0 ? N.red : N.text,
+        dot: kpis.overdueTotal > 0 ? N.red : N.textFaint,
+        sub: loading ? null : `${formatEUR(kpis.overdueTotalWithCum)} à date`,
+        subColor: N.textMuted,
+        subTitle: 'Retard du mois affiché seul, hors créances antérieures. En dessous : retard total à date (mois + antérieur).',
+      },
+    ];
+  }
+  return [
+    clients,
+    { label: 'Attendu', value: loading ? '…' : formatEUR(kpis.expectedGlobal), color: N.text, dot: N.textFaint,
+      sub: loading || !kpis.notDue ? null : `${formatEUR(kpis.notDue)} non exigibles`,
+      subColor: N.textMuted,
+      subTitle: 'Reste du mois dont l’échéance n’est pas encore passée, dont l’onboarding est à venir, ou qui est en pause.',
+    },
+    {
+      label: 'Reçu',
+      value: loading ? '…' : formatEUR(kpis.receivedTotal),
+      color: N.green, dot: N.green,
+      // Taux de récupération du classeur finance : reçu ÷ attendu.
+      sub: loading ? null : kpis.receivedPct,
+      subColor: N.green,
+      subTitle: 'Reçu affecté au mois ÷ attendu du mois. Les règlements des anciennes créances sont suivis séparément.',
+    },
+    {
+      // Dette totale à date (mois + antérieur) — la colonne « Retard de
+      // paiement » du classeur, celle que la finance lit en premier.
+      label: 'Retard',
+      value: loading ? '…' : formatEUR(kpis.overdueTotalWithCum),
+      color: kpis.overdueTotalWithCum > 0 ? N.red : N.text,
+      dot: kpis.overdueTotalWithCum > 0 ? N.red : N.textFaint,
+      sub: loading ? null : `${formatEUR(kpis.overdueTotal)} du mois`,
+      subColor: N.textMuted,
+      subTitle: 'Retard du mois + anciennes créances encore dues. Les trop-perçus restent séparés.',
+    },
+    {
+      // « Retard de paiement sur les mois précédents » du classeur.
+      label: 'Créances ant.',
+      value: loading ? '…' : formatEUR(kpis.overdueCumTotal),
+      color: kpis.overdueCumTotal > 0 ? N.red : N.text,
+      dot: kpis.overdueCumTotal > 0 ? N.red : N.textFaint,
+      // Récupération sur les créances des mois précédents.
+      sub: loading || !kpis.overdueRecoveredPct ? null : `${kpis.overdueRecoveredPct} recouvrées`,
+      subColor: N.textMuted,
+      subTitle: `${formatEUR(kpis.recoveredPrior)} recouvrés sur ${formatEUR(kpis.openingDebt)} dus au début du mois. Le montant au-dessus est le solde restant.`,
+    },
+  ];
+}
+
+function TitleBlock({ kpis, loading, showKpis = true, view = 'all' }) {
   // Compactage 2026-05-11 : titre 40 → 22, KPIs inline avec le titre,
   // padding vertical réduit → max d'espace vertical pour le tableau.
+  const tiles = kpiTiles(kpis, loading, view);
+  const creancesView = view === 'creances';
   return (
     <div style={{
       paddingTop: 20, paddingBottom: 12,
@@ -1711,68 +1804,26 @@ function TitleBlock({ kpis, loading, showKpis = true }) {
         Tracking Finance
       </h1>
 
-      {/* KPI mini-table */}
-      {showKpis && <div className="tsf-kpis" style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(5, auto)',
-        marginLeft: 12,
-        border: `1px solid ${N.border}`,
-        borderRadius: 10,
-        overflow: 'hidden',
-        background: '#fff',
-      }}>
-        {[
-          {
-            label: 'Clients',
-            value: loading ? '…' : kpis.total,
-            color: N.text,
-            dot: kpis.filtered ? N.accent : N.textFaint,
-            // Sélection active : on rappelle sur combien de clients portent
-            // TOUS les montants du bandeau. Sans ça, « 153 956 € de retard »
-            // se lit comme le total du mois alors qu'il ne couvre qu'un
-            // filtre — le genre de malentendu qui coûte cher en finance.
-            sub: loading || !kpis.filtered ? null : `sur ${kpis.totalAll}`,
-            subColor: N.accent,
-            subTitle: `Totaux calculés sur les ${kpis.total} clients affichés, `
-              + `pas sur les ${kpis.totalAll} du mois`,
-          },
-          { label: 'Attendu', value: loading ? '…' : formatEUR(kpis.expectedGlobal), color: N.text, dot: N.textFaint,
-            sub: loading || !kpis.notDue ? null : `${formatEUR(kpis.notDue)} non exigibles`,
-            subColor: N.textMuted,
-            subTitle: 'Reste du mois dont l’échéance n’est pas encore passée, dont l’onboarding est à venir, ou qui est en pause.',
-          },
-          {
-            label: 'Reçu',
-            value: loading ? '…' : formatEUR(kpis.receivedTotal),
-            color: N.green, dot: N.green,
-            // Taux de récupération du classeur finance : reçu ÷ attendu.
-            sub: loading ? null : kpis.receivedPct,
-            subColor: N.green,
-            subTitle: 'Reçu affecté au mois ÷ attendu du mois. Les règlements des anciennes créances sont suivis séparément.',
-          },
-          {
-            // Dette totale à date (mois + antérieur) — la colonne « Retard de
-            // paiement » du classeur, celle que la finance lit en premier.
-            label: 'Retard',
-            value: loading ? '…' : formatEUR(kpis.overdueTotalWithCum),
-            color: kpis.overdueTotalWithCum > 0 ? N.red : N.text,
-            dot: kpis.overdueTotalWithCum > 0 ? N.red : N.textFaint,
-            sub: loading ? null : `${formatEUR(kpis.overdueTotal)} du mois`,
-            subColor: N.textMuted,
-            subTitle: 'Retard du mois + anciennes créances encore dues. Les trop-perçus restent séparés.',
-          },
-          {
-            // « Retard de paiement sur les mois précédents » du classeur.
-            label: 'Créances ant.',
-            value: loading ? '…' : formatEUR(kpis.overdueCumTotal),
-            color: kpis.overdueCumTotal > 0 ? N.red : N.text,
-            dot: kpis.overdueCumTotal > 0 ? N.red : N.textFaint,
-            // Récupération sur les créances des mois précédents.
-            sub: loading || !kpis.overdueRecoveredPct ? null : `${kpis.overdueRecoveredPct} recouvrées`,
-            subColor: N.textMuted,
-            subTitle: `${formatEUR(kpis.recoveredPrior)} recouvrés sur ${formatEUR(kpis.openingDebt)} dus au début du mois. Le montant au-dessus est le solde restant.`,
-          },
-        ].map((kpi, i) => (
+      {/* KPI mini-table — la lecture bascule avec la vue (mois ⇄ créances
+          antérieures) ; un fondu court marque le changement de sens. */}
+      {showKpis && <motion.div
+        key={creancesView ? 'creances' : 'mois'}
+        className="tsf-kpis"
+        initial={{ opacity: 0, y: 3 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(5, auto)',
+          marginLeft: 12,
+          border: `1px solid ${creancesView ? N.red : N.border}`,
+          borderRadius: 10,
+          overflow: 'hidden',
+          background: '#fff',
+        }}
+        title={creancesView ? 'Lecture « Créances antérieures » : les montants portent sur les créances des mois précédents.' : undefined}
+      >
+        {tiles.map((kpi, i) => (
           <div key={i} style={{
             padding: '8px 16px',
             borderRight: i < 4 ? `1px solid ${N.borderSoft}` : 'none',
@@ -1799,7 +1850,7 @@ function TitleBlock({ kpis, loading, showKpis = true }) {
             )}
           </div>
         ))}
-      </div>}
+      </motion.div>}
     </div>
   );
 }
