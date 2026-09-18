@@ -285,4 +285,17 @@ test('la vue Onboarding classe la date Owner en passée ou à venir, jamais sans
   assert.equal(canFilterMeteo({ id: '94b5dcc1-a1bb-41ac-94fe-14cf047cffef', role: 'finance_director' }), true);
   assert.equal(canFilterMeteo({ id: 'someone-else', role: 'finance_director' }), false);
   assert.equal(canFilterMeteo(null), false);
+
+test('la recherche trouve les contacts secondaires, les téléphones et les sociétés rattachées', async () => {
+  const { matchesClientSearch, normalizeSearch } = await import('./constants.js');
+  const client = {
+    numero_client: 'n°12', societe: 'Boulangerie Martin - Paul MARTIN', email: 'paul@martin.fr', phone: '0612345678',
+    identity_aliases: ['MARTIN Paul', 'Holding Martin'], contact_emails: ['compta@cabinet-dupont.fr'], contact_phones: ['+33 7 98 76 54 32'],
+  };
+  for (const q of ['cabinet-dupont', 'holding martin', '06 12 34', '+33 7 98', '0798765432']) {
+    assert.equal(matchesClientSearch({client}, normalizeSearch(q)), true, q);
+  }
+  assert.equal(matchesClientSearch({client}, normalizeSearch('0655')), false);
+  assert.equal(matchesClientSearch({client}, normalizeSearch('12')), true, 'numéro client, pas les chiffres seuls du téléphone');
+  assert.equal(matchesClientSearch({client: {societe: 'Autre'}}, normalizeSearch('cabinet')), false);
 });

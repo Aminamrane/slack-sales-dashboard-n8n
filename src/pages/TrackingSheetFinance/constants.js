@@ -373,15 +373,41 @@ export const normalizeSearch = (s) => String(s || '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '');
 
+// Un numéro de téléphone se cherche par ses chiffres : « 06 12 » trouve
+// « 0612345678 » comme « +33 6 12 ». Vide si la saisie n'est pas numérique.
+export const searchDigits = (s) => {
+  const raw = String(s || '').trim();
+  return /^[\d\s.+()-]+$/.test(raw) ? raw.replace(/\D/g, '') : '';
+};
+
+// Formes comparables d'un numéro : chiffres bruts, et forme nationale quand
+// il est écrit en international (+33 7 98… ↔ 07 98…). Les deux sont gardées
+// pour qu'une saisie dans l'un ou l'autre format retrouve le numéro.
+export const phoneForms = (s) => {
+  const d = String(s || '').replace(/\D/g, '');
+  if (!d) return [];
+  const forms = [d];
+  if (d.startsWith('0033')) forms.push(`0${d.slice(4)}`);
+  else if (d.startsWith('33') && d.length === 11) forms.push(`0${d.slice(2)}`);
+  return forms;
+};
+
 // Prédicat de recherche d'une row finance-period — source UNIQUE partagée
 // entre le filtre de TableView et le compteur de résultats d'index.jsx.
 // Champs : numéro client, société (contient aussi le représentant),
-// representative_name et email quand le backend les expose.
+// representative_name, alias d'identité (nom CRM, sociétés et associés
+// rattachés), email principal et contacts secondaires de la fiche
+// (contact_emails / contact_phones, tables partagées avec le board).
 export const matchesClientSearch = (r, normalizedQuery) => {
   if (!normalizedQuery) return true;
   const c = r.client || {};
-  return [c.numero_client, c.societe, c.company_name, c.representative_name, c.email, ...(c.identity_aliases || [])]
-    .some((v) => v && normalizeSearch(v).includes(normalizedQuery));
+  const texts = [c.numero_client, c.societe, c.company_name, c.representative_name, c.email,
+    ...(c.identity_aliases || []), ...(c.contact_emails || [])];
+  if (texts.some((v) => v && normalizeSearch(v).includes(normalizedQuery))) return true;
+  const wanted = phoneForms(searchDigits(normalizedQuery));
+  if (!wanted.length || wanted[0].length < 4) return false;
+  return [c.phone, ...(c.contact_phones || [])]
+    .some((v) => phoneForms(v).some((form) => wanted.some((w) => form.includes(w))));
 };
 
 // ── Vues-filtres (chips, phase 2 2026-08-18) ─────────────────────────────
