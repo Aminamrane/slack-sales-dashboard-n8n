@@ -300,3 +300,11 @@ test('la recherche trouve les contacts secondaires, les téléphones et les soci
   assert.equal(matchesClientSearch({client}, normalizeSearch('12')), true, 'numéro client, pas les chiffres seuls du téléphone');
   assert.equal(matchesClientSearch({client: {societe: 'Autre'}}, normalizeSearch('cabinet')), false);
 });
+
+test('un client qui a payé une fois dans sa vie, quelle que soit l’entité ou la vision, a payé', async () => {
+  const { hasEverPaid } = await import('./constants.js');
+  assert.equal(hasEverPaid({ client: {}, received_total_owner: 0, received_total_optilex_ttc: '108.00' }), true, 'Opti’lex seul compte');
+  assert.equal(hasEverPaid({ client: { ever_paid: true }, received_total_owner: 0, received_total_optilex_ttc: 0 }), true, 'cash du classeur avant l’historique');
+  assert.equal(hasEverPaid({ client: { ever_paid: false }, received_total_owner: 0, received_total_optilex_ttc: 0 }), false);
+  assert.equal(hasEverPaid({ received_total_owner: null }), false);
+});
