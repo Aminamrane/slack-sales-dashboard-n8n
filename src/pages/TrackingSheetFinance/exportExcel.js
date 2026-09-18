@@ -58,7 +58,7 @@ export function buildExportRows(rows, scope) {
       const anterieures = round2(scopedOverdueCum(r, scope));
       const moisCourant = round2(scopedOverdueCurrent(r, scope));
       return {
-        numero: r.pending ? "Attente Opti'Lex" : (r.client?.numero_client || ''),
+        numero: r.client?.numero_client || '',
         client: r.client?.company_name || r.client?.societe || '',
         anterieures,
         moisCourant,

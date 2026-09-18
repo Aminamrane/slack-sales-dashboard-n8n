@@ -25,74 +25,6 @@ export const canEditAmounts = (role) => AMOUNT_EDIT_ROLES.includes(role);
 // Modalités, sociétés, associés, contacts.
 export const canEditContract = (role) => ALLOWED_ROLES.includes(role);
 
-// Filtre « Météo client » du menu Filtre : réservé à deux personnes, pas à
-// un rôle (décision dev 2026-09-18) — Ismahane (direction financière) et
-// Aurélie B (équipe finance). Même mécanique que l'onglet des appels.
-const METEO_FILTER_USER_IDS = new Set([
-  '94b5dcc1-a1bb-41ac-94fe-14cf047cffef', // Ismahane
-  '6dfc7435-c938-4bd3-b143-a6516b2981bd', // Aurélie B
-]);
-export const canFilterMeteo = (user) => METEO_FILTER_USER_IDS.has(user?.id);
-
-// Vision « Global » (Owner + Opti'lex) : ouverte à admin, direction financière
-// et ceo ; fermée au rôle finance_team, sauf Aurélie B (demande dev
-// 2026-09-18). Porte purement front : la liste renvoie déjà les deux entités.
-const GLOBAL_SCOPE_USER_IDS = new Set([
-  '6dfc7435-c938-4bd3-b143-a6516b2981bd', // Aurélie B
-]);
-export const canUseGlobalScope = (user) =>
-  (user?.role || null) !== 'finance_team' || GLOBAL_SCOPE_USER_IDS.has(user?.id);
-
-// Clients « Attente Opti'Lex » du board : Owner signé, contrat Opti'Lex encore
-// en vol, pas de numéro client ni d'attendu. La finance doit les voir, avec un
-// flag et un filtre (demande dev 2026-09-18). La ligne est SYNTHÉTIQUE : elle
-// vient du board (source de vérité de cet état), n'a aucun montant, n'est pas
-// éditable et ne compte dans aucun total.
-export const PENDING_OPTILEX_LABEL = "Attente Opti'Lex";
-export const isPendingOptilexRow = (r) => r?.pending === true;
-export const pendingFinanceRow = (br, period) => {
-  const societe = (br.crm_societe || br.contact_name || '').trim();
-  const contact = (br.contact_name || '').trim();
-  return {
-    id: `pending:${br.row_key || br.email || societe}`,
-    pending: true,
-    period,
-    board: br,
-    client: {
-      id: null,
-      numero_client: null,
-      societe,
-      company_name: null,
-      representative_name: contact && contact !== societe ? contact : null,
-      email: br.email || null,
-      phone: br.contact_phone || null,
-      etat: null,
-      owner_signed_at: br.owner_signed_at || null,
-      optilex_status: br.optilex_status || null,
-      optilex_sent_at: br.optilex_sent_at || br.optilex_scheduled_at || null,
-      identity_aliases: [],
-      contact_emails: [],
-      contact_phones: [],
-    },
-  };
-};
-
-// Vue « Onboarding » : la date d'onboarding Owner de la ligne, comparée à
-// aujourd'hui. 'past' = déjà passée (le jour même compte comme passé),
-// 'upcoming' = encore à venir. Sans date connue, la ligne n'est dans aucune
-// des deux phases : on n'affirme rien qu'on ne sait pas.
-// Comparaison sur le JOUR calendaire (heure-mur), jamais sur l'instant : une
-// date ISO « 2026-09-18 » est minuit UTC, soit 02:00 à Paris — la lire comme
-// un instant la ferait passer « à venir » le jour même.
-const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-export const onboardingPhaseOf = (r, today = new Date()) => {
-  const raw = r?.client?.rdv_onboarding;
-  const d = parseDateFR(raw);
-  if (!d) return null;
-  const key = /^\d{4}-\d{2}-\d{2}/.test(String(raw).trim()) ? String(raw).trim().slice(0, 10) : dayKey(d);
-  return key > dayKey(today) ? 'upcoming' : 'past';
-};
-
 // ── Commentable cells ────────────────────────────────────────────────────
 //
 // Maps `colKey` (frontend column key from `COLS_FULL` in TableView.jsx) to
@@ -363,13 +295,6 @@ export const scopedReceivedTotal = (r, scope) =>
   (scope === 'optilex' ? 0 : (toNumber(r.received_total_owner) || 0)) +
   (scope === 'owner' ? 0 : (toNumber(r.received_total_optilex_ttc) || 0));
 
-// « A payé au moins une fois dans sa vie de client » (règle dev 2026-09-18),
-// QUELLE QUE SOIT la vision et l'entité. Le serveur le dit (`client.ever_paid`,
-// qui connaît aussi le cash collecté par le classeur avant l'historique de la
-// base, octobre 2025) ; à défaut, le total encaissé des deux entités.
-export const hasEverPaid = (r) =>
-  r?.client?.ever_paid === true || scopedReceivedTotal(r, 'global') > 0;
-
 // Montants d'une period (row timeline) dans la vision active. `payDate` :
 // par entité en vision entité ; en Globale, Owner en priorité (une somme de
 // dates n'existe pas, on montre la première date connue).
@@ -423,41 +348,15 @@ export const normalizeSearch = (s) => String(s || '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '');
 
-// Un numéro de téléphone se cherche par ses chiffres : « 06 12 » trouve
-// « 0612345678 » comme « +33 6 12 ». Vide si la saisie n'est pas numérique.
-export const searchDigits = (s) => {
-  const raw = String(s || '').trim();
-  return /^[\d\s.+()-]+$/.test(raw) ? raw.replace(/\D/g, '') : '';
-};
-
-// Formes comparables d'un numéro : chiffres bruts, et forme nationale quand
-// il est écrit en international (+33 7 98… ↔ 07 98…). Les deux sont gardées
-// pour qu'une saisie dans l'un ou l'autre format retrouve le numéro.
-export const phoneForms = (s) => {
-  const d = String(s || '').replace(/\D/g, '');
-  if (!d) return [];
-  const forms = [d];
-  if (d.startsWith('0033')) forms.push(`0${d.slice(4)}`);
-  else if (d.startsWith('33') && d.length === 11) forms.push(`0${d.slice(2)}`);
-  return forms;
-};
-
 // Prédicat de recherche d'une row finance-period — source UNIQUE partagée
 // entre le filtre de TableView et le compteur de résultats d'index.jsx.
 // Champs : numéro client, société (contient aussi le représentant),
-// representative_name, alias d'identité (nom CRM, sociétés et associés
-// rattachés), email principal et contacts secondaires de la fiche
-// (contact_emails / contact_phones, tables partagées avec le board).
+// representative_name et email quand le backend les expose.
 export const matchesClientSearch = (r, normalizedQuery) => {
   if (!normalizedQuery) return true;
   const c = r.client || {};
-  const texts = [c.numero_client, c.societe, c.company_name, c.representative_name, c.email,
-    ...(c.identity_aliases || []), ...(c.contact_emails || [])];
-  if (texts.some((v) => v && normalizeSearch(v).includes(normalizedQuery))) return true;
-  const wanted = phoneForms(searchDigits(normalizedQuery));
-  if (!wanted.length || wanted[0].length < 4) return false;
-  return [c.phone, ...(c.contact_phones || [])]
-    .some((v) => phoneForms(v).some((form) => wanted.some((w) => form.includes(w))));
+  return [c.numero_client, c.societe, c.company_name, c.representative_name, c.email, ...(c.identity_aliases || [])]
+    .some((v) => v && normalizeSearch(v).includes(normalizedQuery));
 };
 
 // ── Vues-filtres (chips, phase 2 2026-08-18) ─────────────────────────────

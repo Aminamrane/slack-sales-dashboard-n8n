@@ -937,9 +937,8 @@ export default function DetailPanel({
               />
             </Section>
 
-            {/* Saisie et ventilation par structure. Les structures viennent du
-                classeur (« Paye / N sct ») ET des sociétés déclarées dans la
-                fiche : en ajouter une crée sa structure (dev 2026-09-18).
+            {/* Ventilation par structure — n'apparaît que pour les clients
+                qui règlent pour plusieurs sociétés (« Paye / N sct »).
                 Demande dev 2026-09-01 : savoir QUELLE structure a payé. */}
             <Section title="Structures & ventilation" delay={0.12}>
               <StructureSplits
@@ -949,8 +948,6 @@ export default function DetailPanel({
                 canEdit={canEdit}
                 canEditMoney={canEditMoney}
                 onShowToast={onShowToast}
-                reloadKey={profile?.companies?.length || 0}
-                onReceiptsChanged={reloadAfterExit}
               />
             </Section>
 
@@ -1023,16 +1020,6 @@ export default function DetailPanel({
             loss={profile?.loss || null}
             initialEtat={exitPreset}
             signatureDate={profile?.date_signature}
-            billingLastMonth={profile?.billing_last_month || null}
-            onBillingStop={async (lastMonth) => {
-              try {
-                await apiClient.put(`/api/v1/finance-periods/client/${clientId}/billing-stop`, { last_month: lastMonth });
-                reloadAfterExit();
-              } catch (e) {
-                onShowToast?.(e?.data?.detail || 'Fin de facturation non enregistrée', 'error');
-                throw e;
-              }
-            }}
             onEtatChange={async (chg) => {
               // Signature du parent : (numero_client, payload) — la même que
               // celle du badge d'état de la fiche.
@@ -1754,23 +1741,7 @@ function ContractInfoList({
         </div>
       ),
     },
-    // Date de signature EFFECTIVE pour la finance : la date d'effet posée par
-    // les sales sur le contrat prime (dev 2026-09-18) ; on le dit quand c'est
-    // le cas, pour que personne ne cherche pourquoi elle diffère du CRM.
-    { Icon: PenLine,    label: 'Date de signature',
-      value: formatDateLongFR(profile?.date_signature),
-      node: profile?.date_signature ? (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <span>{formatDateLongFR(profile.date_signature)}</span>
-          {profile.date_signature_source === 'contrat' && (
-            <span title="Date d’effet posée par les sales sur le contrat : la finance la prend pour signature (grille, départ, anniversaire)."
-              style={{ fontSize: 10.5, color: N.textFaint }}>
-              date d’effet du contrat
-            </span>
-          )}
-        </span>
-      ) : undefined,
-    },
+    { Icon: PenLine,    label: 'Date de signature',    value: formatDateLongFR(profile?.date_signature) },
     { Icon: User,       label: 'Sales',                value: profile?.sales_name },
     // SIREN : le backfill est une donnée sourcée (lecture) ; sans lui, la
     // saisie alimente l'override du board (siren_ovr) et le journal. Vivait
@@ -1855,7 +1826,7 @@ function ContractInfoList({
               le {profile.payment_day_effective} de chaque mois
             </span>
           ) : (
-            <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }} title="Sans jour connu, le mois est dû dès le 1er. Le jour se fixera au premier paiement daté, ou à la main.">Dès le 1er, jusqu'au premier paiement</span>
+            <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }}>À définir au premier paiement</span>
           )}
           {profile?.payment_day_source === 'finance' && (
             <span title={profile.payment_day_by ? `fixé par ${profile.payment_day_by}` : undefined} style={{ fontSize: 10.5, color: N.textFaint }}>
@@ -3256,9 +3227,9 @@ function ClientComments({ clientId, onShowToast }) {
               hors de la zone défilante, accessible même sur un long fil. */}
           <div style={{
             display: 'flex', flexDirection: 'column', gap: 6,
-            // Toujours borné et défilant : basculer maxHeight/overflow au
-            // « Réduire » changeait la géométrie en plein mouvement.
-            maxHeight: 320, overflowY: 'auto', paddingRight: 4,
+            maxHeight: visibleComments.length > 4 ? 300 : undefined,
+            overflowY: visibleComments.length > 4 ? 'auto' : undefined,
+            paddingRight: visibleComments.length > 4 ? 4 : undefined,
           }}>
             <AnimatePresence initial={false}>
               {visibleComments.map((c, i) => (
@@ -3311,16 +3282,12 @@ function CommentRow({
   const showActions = comment.can_moderate && (hover || confirming);
 
   return (
-    // Pas d'animation de mise en page (`layout`) ni de sortie en hauteur
-    // nulle : au « Réduire », framer-motion mesurait les cartes pendant que
-    // le conteneur perdait sa hauteur bornée et laissait la carte restante
-    // écrasée, ses lignes invisibles (retour finance 2026-09-18). Les cartes
-    // entrent et sortent en fondu, à leur hauteur naturelle.
     <motion.div
+      layout
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: comment._pending ? 0.6 : 1, y: 0 }}
-      exit={{ opacity: 0, y: -4 }}
-      transition={{ duration: 0.18, delay: Math.min(index, 6) * 0.02, ease: [0.4, 0, 0.2, 1] }}
+      exit={{ opacity: 0, height: 0, marginTop: 0 }}
+      transition={{ duration: 0.22, delay: Math.min(index, 6) * 0.025, ease: [0.4, 0, 0.2, 1] }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
