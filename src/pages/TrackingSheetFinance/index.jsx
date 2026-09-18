@@ -1762,19 +1762,15 @@ function kpiTiles(kpis, loading, view, pendingCount = 0) {
         subColor: N.green,
         subTitle: 'Montant récupéré ce mois sur les créances des mois précédents ÷ créances dues au début du mois.',
       },
+      // Ce bandeau ne parle QUE des créances antérieures : créance au 1er,
+      // récupéré pendant le mois, reste. Le retard du mois courant a sa
+      // propre vue ; le mélanger ici brouillait la lecture (dev 2026-09-18).
       { label: 'Retard', value: loading ? '…' : formatEUR(kpis.overdueCumTotal),
         color: kpis.overdueCumTotal > 0 ? N.red : N.text,
         dot: kpis.overdueCumTotal > 0 ? N.red : N.textFaint,
         sub: loading ? null : 'créances restantes',
         subColor: N.textMuted,
         subTitle: 'Créances des mois précédents toujours dues après les règlements du mois.',
-      },
-      { label: 'Retard du mois', value: loading ? '…' : formatEUR(kpis.overdueTotal),
-        color: kpis.overdueTotal > 0 ? N.red : N.text,
-        dot: kpis.overdueTotal > 0 ? N.red : N.textFaint,
-        sub: loading ? null : `${formatEUR(kpis.overdueTotalWithCum)} à date`,
-        subColor: N.textMuted,
-        subTitle: 'Retard du mois affiché seul, hors créances antérieures. En dessous : retard total à date (mois + antérieur).',
       },
     ];
   }
