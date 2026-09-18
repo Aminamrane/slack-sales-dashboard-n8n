@@ -50,7 +50,7 @@ import {
   Hash, User, Box, CreditCard, Pencil, Download,
   Pin, Trash2, MessageSquarePlus,
   Scale, CalendarClock, CalendarCheck2, Handshake, TriangleAlert, LogOut,
-  SlidersHorizontal, ChevronDown,
+  SlidersHorizontal, ChevronDown, ChevronUp,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
@@ -97,7 +97,6 @@ import StructureSplits from './components/StructureSplits.jsx';
 import ExpectedManager from './components/ExpectedManager.jsx';
 import PortalDropdown from './components/PortalDropdown.jsx';
 import OnboardingFacturation from './components/OnboardingFacturation.jsx';
-import CompanyNameInput from './components/CompanyNameInput.jsx';
 import SignedContracts from './components/SignedContracts.jsx';
 
 // Notion palette (sync with index.jsx N).
@@ -1709,56 +1708,17 @@ function ContractInfoList({
         label: 'Société',
         copyValue: profile?.company_name || societeName,
         node: (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end', minWidth: 0, width: '100%' }}>
-            {editing ? (
-              <CompanyNameInput
-                value={profile?.company_name || societeName}
-                onCommit={async (value) => {
-                  try {
-                    await apiClient.patch(`/api/v1/finance-periods/client/${clientId}/profile`, { societe: value || '' });
-                    onProfileChanged?.();
-                    onContractChanged?.();
-                  } catch (e) {
-                    onShowToast?.(e?.data?.detail || 'Modification impossible', 'error');
-                    throw e;
-                  }
-                }}
-              />
-            ) : <span>{profile?.company_name || societeName}</span>}
-            {/* SIREN de la société principale, sous son nom : c'est celui
-                que l'onglet Détails affiche (demande dev 2026-09-18). Même
-                enregistrement que l'ancienne ligne SIREN (PATCH profile). */}
-            {(editing && canEditMoney && profile) ? (
-              <EditableText
-                value={profile?.siren}
-                placeholder="SIREN (9 chiffres)"
-                onCommit={async (value) => {
-                  try {
-                    await apiClient.patch(`/api/v1/finance-periods/client/${clientId}/profile`, { siren: value || '' });
-                    onProfileChanged?.();
-                  } catch (e) {
-                    onShowToast?.(e?.data?.detail || 'Modification impossible', 'error');
-                    throw e;
-                  }
-                }}
-                width="auto"
-              />
-            ) : (profile?.siren ? (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: N.textFaint }}>
-                SIREN
-                <span style={{ color: N.text, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{profile.siren}</span>
-                {profile?.siren_source === 'backfill' && <span style={{ fontSize: 10.5 }}>source interne</span>}
-              </span>
-            ) : null)}
-            <RelatedEntityList
-              items={profile?.companies || []}
-              kind="societe"
-              clientId={clientId}
-              editing={editing}
-              onChanged={onProfileChanged}
-              onShowToast={onShowToast}
-            />
-          </div>
+          <CompanyList
+            clientId={clientId}
+            principalName={profile?.company_name || societeName}
+            principalSiren={profile?.siren}
+            principalSirenSource={profile?.siren_source}
+            companies={profile?.companies || []}
+            editing={editing}
+            canEditSiren={Boolean(editing && canEditMoney && profile)}
+            onChanged={() => { onProfileChanged?.(); onContractChanged?.(); }}
+            onShowToast={onShowToast}
+          />
         ),
       },
     {
@@ -2579,6 +2539,161 @@ function RdvJuristeSection({ boardRow, agenda, onCopied }) {
 // associés (demande dev 2026-08-27). Rien ne pouvait les stocker : la table
 // des sociétés de convention est rattachée au lead, celle des contacts ne
 // gère que des emails. Backend : `client_related_entity`, archivage logique.
+// ── Sociétés du client : liste ordonnée, principale en tête ─────────────────
+// Demande dev 2026-09-18 : « structure 1, 2, 3 = société 1, 2, 3 ; pouvoir
+// mettre une société en premier, changer l'ordre, tout supprimer ». Les
+// flèches réordonnent (la première devient la principale), ✕ retire (la
+// suivante devient principale), nom et SIREN se corrigent en ligne.
+function CompanyList({
+  clientId, principalName, principalSiren, principalSirenSource,
+  companies, editing, canEditSiren, onChanged, onShowToast,
+}) {
+  const [busy, setBusy] = useState(false);
+  const items = useMemo(() => [
+    { id: 'principal', name: principalName || '', siren: principalSiren || null, principal: true },
+    ...(companies || []).map((c) => ({ id: c.id, name: c.name, siren: c.siren || null, principal: false })),
+  ], [principalName, principalSiren, companies]);
+
+  const run = useCallback(async (fn, failMsg) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await fn();
+      onChanged?.();
+    } catch (e) {
+      onShowToast?.(e?.data?.detail || failMsg, 'error');
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, onChanged, onShowToast]);
+
+  const move = useCallback((index, delta) => {
+    const target = index + delta;
+    if (target < 0 || target >= items.length) return;
+    const order = items.map((it) => it.id);
+    [order[index], order[target]] = [order[target], order[index]];
+    return run(
+      () => apiClient.put(`/api/v1/finance-periods/client/${clientId}/companies/order`, { order }),
+      'Réordonnancement impossible',
+    );
+  }, [items, clientId, run]);
+
+  const remove = useCallback((it) => run(
+    () => (it.principal
+      ? apiClient.delete(`/api/v1/finance-periods/client/${clientId}/companies/principal`)
+      : apiClient.delete(`/api/v1/finance-periods/client/${clientId}/entities/${it.id}`)),
+    'Retrait impossible',
+  ), [clientId, run]);
+
+  const rename = useCallback((it, value) => run(
+    () => (it.principal
+      ? apiClient.patch(`/api/v1/finance-periods/client/${clientId}/profile`, { societe: value || '' })
+      : apiClient.patch(`/api/v1/finance-periods/client/${clientId}/entities/${it.id}`, { name: value || '' })),
+    'Modification impossible',
+  ), [clientId, run]);
+
+  const setSiren = useCallback((it, value) => run(
+    () => (it.principal
+      ? apiClient.patch(`/api/v1/finance-periods/client/${clientId}/profile`, { siren: value || '' })
+      : apiClient.patch(`/api/v1/finance-periods/client/${clientId}/entities/${it.id}`, { siren: value || '' })),
+    'Modification impossible',
+  ), [clientId, run]);
+
+  const arrowStyle = (disabled) => ({
+    border: 'none', background: 'transparent', padding: 0, display: 'inline-flex',
+    color: disabled ? '#d5d5d2' : N.textFaint, cursor: disabled ? 'default' : 'pointer',
+  });
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end', minWidth: 0, width: '100%' }}>
+      <AnimatePresence initial={false}>
+        {items.map((it, index) => (
+          <motion.div
+            key={it.id}
+            layout
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end',
+              maxWidth: '100%', minWidth: 0, width: '100%',
+            }}
+          >
+            {editing && (
+              <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 0, flexShrink: 0 }}>
+                <button type="button" title="Monter" disabled={index === 0 || busy} onClick={() => move(index, -1)} style={arrowStyle(index === 0 || busy)}>
+                  <ChevronUp size={13} />
+                </button>
+                <button type="button" title="Descendre" disabled={index === items.length - 1 || busy} onClick={() => move(index, 1)} style={arrowStyle(index === items.length - 1 || busy)}>
+                  <ChevronDown size={13} />
+                </button>
+              </span>
+            )}
+            <span style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, minWidth: 0, flex: 1,
+              padding: it.principal ? 0 : '2px 0',
+            }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, maxWidth: '100%' }}>
+                {it.principal && (
+                  <span style={{ fontSize: 10.5, fontWeight: 600, color: N.textFaint, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>
+                    Principale
+                  </span>
+                )}
+                {editing ? (
+                  <EditableText
+                    value={it.name}
+                    placeholder="Nom de la société"
+                    onCommit={(value) => rename(it, value)}
+                    width="auto"
+                  />
+                ) : (
+                  <span style={{ fontWeight: it.principal ? 500 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={it.name}>
+                    {it.name}
+                  </span>
+                )}
+              </span>
+              {(canEditSiren && editing) ? (
+                <EditableText
+                  value={it.siren}
+                  placeholder="SIREN (9 chiffres)"
+                  onCommit={(value) => setSiren(it, value)}
+                  width="auto"
+                />
+              ) : (it.siren ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: N.textFaint }}>
+                  SIREN
+                  <span style={{ color: N.text, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{it.siren}</span>
+                  {it.principal && principalSirenSource === 'backfill' && <span style={{ fontSize: 10.5 }}>source interne</span>}
+                </span>
+              ) : null)}
+            </span>
+            {editing && (
+              <button
+                type="button"
+                onClick={() => remove(it)}
+                disabled={busy}
+                title={it.principal ? 'Retirer la principale (la suivante prend sa place)' : 'Retirer'}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: N.textFaint, display: 'inline-flex', padding: 0, flexShrink: 0 }}
+              >
+                <X size={12} />
+              </button>
+            )}
+          </motion.div>
+        ))}
+      </AnimatePresence>
+      <RelatedEntityList
+        items={[]}
+        kind="societe"
+        clientId={clientId}
+        editing={editing}
+        onChanged={onChanged}
+        onShowToast={onShowToast}
+      />
+    </div>
+  );
+}
+
 function RelatedEntityList({ items, kind, clientId, editing, onChanged, onShowToast }) {
   const [name, setName] = useState('');
   const [extra, setExtra] = useState('');
