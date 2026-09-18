@@ -12,10 +12,16 @@ function initialDates() {
   return { start: `${today.slice(0, 7)}-01`, end: today };
 }
 
-export default function CallsView() {
+// Opérateurs connus, par défaut : tant que /access ne renvoie pas la liste
+// (ancienne API), la page reste telle qu'elle était.
+const ALL_OPERATORS = [{ key: 'leny', name: 'Lény Perron' }, { key: 'aurelie', name: 'Aurélie Boukantar' }];
+const joinNames = names => names.length > 1 ? `${names.slice(0, -1).join(', ')} et ${names[names.length - 1]}` : names[0] || '';
+
+export default function CallsView({ operators = [] }) {
+  const allowed = operators.length ? operators : ALL_OPERATORS;
   const [draft, setDraft] = useState(initialDates);
   const [dates, setDates] = useState(initialDates);
-  const [operator, setOperator] = useState('leny');
+  const [operator, setOperator] = useState(() => allowed[0].key);
   const [page, setPage] = useState(1);
   const [revision, setRevision] = useState(0);
   const [overview, setOverview] = useState(null);
@@ -37,9 +43,11 @@ export default function CallsView() {
     return () => { live = false; };
   }, [query, operator, page, revision]);
   const chooseOperator = key => { setOperator(key); setPage(1); };
+  const current = allowed.find(x => x.key === operator) || allowed[0];
+  const single = allowed.length === 1;
   return <section className="finance-calls" aria-label="Tracking des appels">
     <div className="fc-heading">
-      <div><h2>Appels de l’équipe finance</h2><p>Lény Perron et Aurélie Boukantar · appels entrants et sortants</p></div>
+      <div><h2>{single ? `Appels de ${current.name}` : 'Appels de l’équipe finance'}</h2><p>{joinNames(allowed.map(x => x.name))} · appels entrants et sortants</p></div>
       <button type="button" onClick={() => setRevision(v => v + 1)} title="Actualiser les appels"><RefreshCw size={15} /> Actualiser</button>
     </div>
     <form className="fc-filters" onSubmit={e => { e.preventDefault(); setPage(1); setDates({ ...draft }); }}>
@@ -49,14 +57,14 @@ export default function CallsView() {
       <span>Heures de Paris · actualisation à la demande</span>
     </form>
     {error && <p className="fc-error" role="alert">{error}</p>}
-    <div className="fc-cards" aria-live="polite">
-      <div className="fc-card fc-total"><span>Total des appels</span><strong>{overview?.total_calls ?? '—'}</strong><small>Les deux collaborateurs, sur la période</small></div>
-      {(overview?.operators || [{ key: 'leny', name: 'Lény Perron' }, { key: 'aurelie', name: 'Aurélie Boukantar' }]).map(user =>
+    <div className={`fc-cards ${single ? 'fc-cards-single' : ''}`} aria-live="polite">
+      <div className="fc-card fc-total"><span>Total des appels</span><strong>{overview?.total_calls ?? '…'}</strong><small>{single ? current.name : 'Les deux collaborateurs'}, sur la période</small></div>
+      {(overview?.operators || allowed).filter(user => allowed.some(x => x.key === user.key)).map(user =>
         <button type="button" key={user.key} className={`fc-card ${operator === user.key ? 'fc-selected' : ''}`} aria-pressed={operator === user.key} onClick={() => chooseOperator(user.key)}>
-          <span>{user.name}</span><strong>{user.calls ?? '—'}</strong><small>Voir les appels <ChevronRight size={13} /></small>
+          <span>{user.name}</span><strong>{user.calls ?? '…'}</strong><small>Voir les appels <ChevronRight size={13} /></small>
         </button>)}
     </div>
-    <div className="fc-list-heading"><h3>{operator === 'leny' ? 'Lény Perron' : 'Aurélie Boukantar'}</h3><span>{list ? `${list.pagination.total_count} appel${list.pagination.total_count > 1 ? 's' : ''}` : 'Chargement…'}</span></div>
+    <div className="fc-list-heading"><h3>{current.name}</h3><span>{list ? `${list.pagination.total_count} appel${list.pagination.total_count > 1 ? 's' : ''}` : 'Chargement…'}</span></div>
     {listError ? <p className="fc-error" role="alert">{listError}</p> : !list ? <p role="status">Chargement des appels…</p> : !list.calls.length ? <div className="fc-empty"><Phone size={26} /><p>Aucun appel sur cette période.</p></div> : <div className="fc-table-wrap"><table>
       <thead><tr><th>Date et heure</th><th>Contact</th><th>Sens</th><th>Résultat</th><th>Durée</th><th>Enregistrement</th><th><span className="sr-only">Détails</span></th></tr></thead>
       <tbody>{list.calls.map(call => <tr key={call.id}>
