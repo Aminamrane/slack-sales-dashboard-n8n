@@ -13,9 +13,12 @@
 //      N'importe quel mois de l'échéancier, y compris passé : la finance
 //      rattrape l'historique quand elle en a le temps.
 //
-// La ventilation ne CONTRAINT PAS le montant encaissé : on affiche l'écart,
-// on ne bloque pas. Une ventilation partielle est le cas normal — exiger le
-// compte juste empêcherait de commencer.
+// Depuis le 2026-09-18 (demande dev : « rentrer le montant payé seulement
+// pour cette structure ») la saisie par structure EST l'encaissement : le
+// serveur écrit la ventilation et le total du mois dans la même transaction
+// (`sync_received`, comme la cellule du tableau). N'importe quel mois de
+// l'échéancier peut être saisi, pas seulement ceux déjà encaissés. Les
+// structures viennent aussi des sociétés déclarées dans la fiche.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
@@ -39,6 +42,7 @@ const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 export default function StructureSplits({
   clientId, periods, scope, canEdit, canEditMoney, onShowToast,
+  reloadKey = 0, onReceiptsChanged,
 }) {
   const [structures, setStructures] = useState(null);
   const [splits, setSplits] = useState([]);
@@ -59,19 +63,25 @@ export default function StructureSplits({
       .catch(() => setSplits([]));
   }, [clientId]);
 
-  useEffect(() => { load(); }, [load]);
+  // Rechargé quand une société est ajoutée ou retirée dans la fiche : sa
+  // structure apparaît sans rouvrir le panneau.
+  useEffect(() => { load(); }, [load, reloadKey]);
 
-  // Mois où il y a de l'argent à ventiler — du plus récent au plus ancien,
-  // parce qu'on saisit le mois courant bien plus souvent que mars dernier.
-  const months = useMemo(() => (periods || [])
-    .map((p) => ({
-      id: p.id,
-      period: p.period,
-      received: Number(p[`received_${entity === 'owner' ? 'owner' : 'optilex_ttc'}`] || 0)
-        + Number(p[`received_overdue_${entity === 'owner' ? 'owner' : 'optilex_ttc'}`] || 0),
-    }))
-    .filter((m) => m.received > 0)
-    .sort((a, b) => String(b.period).localeCompare(String(a.period))), [periods, entity]);
+  // Tous les mois de l'échéancier jusqu'au mois courant, du plus récent au
+  // plus ancien : on saisit le mois courant bien plus souvent que mars
+  // dernier, et un mois encore vide doit pouvoir recevoir sa première saisie.
+  const months = useMemo(() => {
+    const now = new Date();
+    const cutoff = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    return (periods || [])
+      .filter((p) => String(p.period).slice(0, 7) <= cutoff)
+      .map((p) => ({
+        id: p.id,
+        period: p.period,
+        received: Number(p[`received_${entity === 'owner' ? 'owner' : 'optilex_ttc'}`] || 0),
+      }))
+      .sort((a, b) => String(b.period).localeCompare(String(a.period)));
+  }, [periods, entity]);
 
   useEffect(() => {
     if (monthId === null && months.length) setMonthId(months[0].id);
@@ -84,7 +94,7 @@ export default function StructureSplits({
     if (!current) { setDraft({}); return; }
     const d = {};
     for (const s of splits) {
-      if (s.period_id === current.id && s.entity === entity) d[s.structure_id] = s.amount;
+      if (s.period_id === current.id && s.entity === entity && s.kind === 'received') d[s.structure_id] = s.amount;
     }
     setDraft(d);
   }, [current, splits, entity]);
@@ -100,7 +110,7 @@ export default function StructureSplits({
   const parStructure = useMemo(() => {
     const acc = {};
     for (const s of splits) {
-      if (s.entity !== entity) continue;
+      if (s.entity !== entity || s.kind !== 'received') continue;
       acc[s.structure_id] = round2((acc[s.structure_id] || 0) + s.amount);
     }
     return acc;
@@ -116,17 +126,22 @@ export default function StructureSplits({
           amount: round2(amount),
         }))
         .filter((s) => s.amount);
+      // sync_received : le total du mois devient la somme des structures,
+      // dans la même transaction (jamais de total qui contredit son détail).
       const d = await apiClient.put(
-        `/api/v1/finance-periods/client/${clientId}/splits/${current.id}`, body,
+        `/api/v1/finance-periods/client/${clientId}/splits/${current.id}`
+          + `?sync_received=true&entity=${entity}&kind=received`,
+        body,
       );
       setSplits(d?.items || []);
-      onShowToast?.('Ventilation enregistrée', 'success');
+      onShowToast?.(`${formatEUR(ventile)} encaissés sur ${formatMonthLabel(String(current.period).slice(0, 7))}`, 'success');
+      onReceiptsChanged?.();
     } catch (e) {
       onShowToast?.(e?.data?.detail || 'Enregistrement impossible', 'error');
     } finally {
       setSaving(false);
     }
-  }, [current, draft, entity, clientId, saving, onShowToast]);
+  }, [current, draft, entity, clientId, saving, onShowToast, ventile, onReceiptsChanged]);
 
   // Remplissage assisté par Pappers — même clé que les sales.
   // Ne remplit QUE les structures encore sans nom : on ne remplace jamais un
@@ -182,7 +197,18 @@ export default function StructureSplits({
     }
   }, [clientId, onShowToast]);
 
-  if (!structures || !structures.length) return null;
+  if (!structures) return null;
+  if (!structures.length) {
+    // Pas encore de structure : dire comment en créer une plutôt que
+    // laisser une section vide sans explication.
+    return (
+      <div style={{ fontSize: 11.5, color: N.textFaint, lineHeight: 1.5 }}>
+        Aucune structure. Ajoutez une société dans « Informations contractuelles »
+        (bouton Modifier) : chaque société déclarée devient une structure sur
+        laquelle saisir ce qu’elle a payé.
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -190,9 +216,10 @@ export default function StructureSplits({
         display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap',
       }}>
         <div style={{ flex: '1 1 260px', fontSize: 11.5, color: N.textMuted, lineHeight: 1.5 }}>
-          Ce client règle pour <strong>{structures.length} structures</strong>.
-          Nommez-les, puis indiquez ce que chacune a versé — sur n’importe quel
-          mois, y compris passé.
+          Ce client règle pour <strong>{structures.length} structure{structures.length > 1 ? 's' : ''}</strong>.
+          Choisissez le mois, saisissez ce que chaque structure a versé : le
+          total du mois en découle. Une société ajoutée dans la fiche crée sa
+          structure.
         </div>
         {canEdit && structures.some((s) => !s.named) && (
           <button
@@ -240,7 +267,7 @@ export default function StructureSplits({
               color: Math.abs(reste) < 0.005 ? N.green : N.amber,
             }}>
               {Math.abs(reste) < 0.005
-                ? 'Entièrement ventilé'
+                ? (current.received > 0 ? 'Entièrement ventilé' : 'Rien d’encaissé ce mois')
                 : `${formatEUR(reste)} non attribué`}
             </span>
           )}
@@ -345,14 +372,14 @@ export default function StructureSplits({
             }}
           >
             <Check size={13} />
-            {saving ? 'Enregistrement…' : 'Enregistrer la ventilation'}
+            {saving ? 'Enregistrement…' : 'Enregistrer les montants'}
           </button>
         </div>
       )}
 
       {!months.length && (
         <div style={{ fontSize: 11.5, color: N.textFaint }}>
-          Aucun encaissement à ventiler pour l’instant sur cette vision.
+          Aucune échéance à saisir pour l’instant sur cette vision.
         </div>
       )}
     </div>
