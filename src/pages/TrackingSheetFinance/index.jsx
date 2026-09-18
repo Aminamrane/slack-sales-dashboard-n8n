@@ -466,7 +466,11 @@ export default function TrackingSheetFinance() {
         // qui ont tout réglé, donc leur « reçu » : le taux recouvré du
         // bandeau, sur lequel reposent les variables de l'équipe finance,
         // était faussé (précision dev 2026-09-18).
-        if (scopedOpeningDebt(r, scope) <= 0) return false;
+        // Créance au 1er du mois (à date), OU créance antérieure restante
+        // aujourd'hui : une dette qui n'existait pas au 1er mais apparaît par
+        // correction en cours de mois (n°363, 288 € le 08/09) reste visible
+        // ici — « les créances antérieures ne sont jamais invisibilisées ».
+        if (scopedOpeningDebt(r, scope) <= 0 && scopedOverdueCum(r, scope) <= 0) return false;
         if (creanceAge === 'all') return true;
         // Les sous-filtres d'ancienneté servent la relance : un client qui a
         // tout soldé n'y a plus sa place.
