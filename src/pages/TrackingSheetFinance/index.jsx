@@ -79,6 +79,7 @@ import {
   matchesClientSearch,
   isLiquidationEtat,
   canFilterMeteo, onboardingPhaseOf, hasEverPaid,
+  scopedOpeningDebt,
 } from './constants.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -452,8 +453,17 @@ export default function TrackingSheetFinance() {
       case 'retard_mois':
         return scopedOverdueCurrent(r, scope) > 0;
       case 'creances': {
-        if (scopedOverdueCum(r, scope) <= 0) return false;
+        // Population = les clients qui AVAIENT des créances antérieures au
+        // début du mois affiché, qu'elles soient soldées ou non depuis. Ne
+        // garder que ceux à qui il en reste faisait disparaître les clients
+        // qui ont tout réglé, donc leur « reçu » : le taux recouvré du
+        // bandeau, sur lequel reposent les variables de l'équipe finance,
+        // était faussé (précision dev 2026-09-18).
+        if (scopedOpeningDebt(r, scope) <= 0) return false;
         if (creanceAge === 'all') return true;
+        // Les sous-filtres d'ancienneté servent la relance : un client qui a
+        // tout soldé n'y a plus sa place.
+        if (scopedOverdueCum(r, scope) <= 0) return false;
         const mois = creanceAgeMonths(r, scope);
         if (mois === null) return creanceAge === 'recent';
         return creanceAge === 'old' ? mois >= 2 : mois < 2;
