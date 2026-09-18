@@ -89,7 +89,7 @@ import { ContractPendingIcon } from './components/FinanceIcons.jsx';
 // teinte en pastel les cellules sticky N°/société (la colonne État dédiée a
 // été retirée 2026-08-21, l'édition vit dans le DetailPanel), et la météo
 // client s'affiche à côté du nom (MeteoIcon + bandes rouge/orange/vert).
-import { MeteoIcon, METEO_BANDS, meteoBandOf } from '../OptilexBoard.jsx';
+import { displayEtat, MeteoIcon, METEO_BANDS, meteoBandOf } from '../OptilexBoard.jsx';
 import CommentPopup from './CommentPopup.jsx';
 import apiClient from '../../services/apiClient.js';
 
@@ -1001,6 +1001,20 @@ const RowRenderer = React.memo(function RowRenderer({
 // lignes, mais aucune cellule éditable, aucun bouton OUVRIR : le flag ambre
 // dit ce qui manque, la colonne Modalités dit où en est le contrat.
 const PENDING = { fg: '#b45309', bg: '#fff3e3' };
+// Flag « Attente Opti'Lex », après le nom : le même pour un contrat sans
+// numéro client et pour un client que le board affiche dans cet état.
+function PendingFlag() {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+      color: PENDING.fg, background: PENDING.bg, borderRadius: 4, padding: '1px 6px 1px 4px',
+      fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
+    }}>
+      <ContractPendingIcon size={13} strokeWidth={1.8} />
+      {PENDING_OPTILEX_LABEL}
+    </span>
+  );
+}
 const PendingRowRenderer = React.memo(function PendingRowRenderer({ row, cols, keys, stickyLefts, collapsingCol }) {
   const [hover, setHover] = useState(false);
   const c = row.client || {};
@@ -1051,14 +1065,7 @@ const PendingRowRenderer = React.memo(function PendingRowRenderer({ row, cols, k
                 <span style={{ fontSize: CELL_FONT_SIZE, fontWeight: 500, color: N.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={c.societe || ''}>
                   {c.societe || <EmptyCell />}
                 </span>
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
-                  color: PENDING.fg, background: PENDING.bg, borderRadius: 4, padding: '1px 6px 1px 4px',
-                  fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
-                }}>
-                  <ContractPendingIcon size={13} strokeWidth={1.8} />
-                  {PENDING_OPTILEX_LABEL}
-                </span>
+                <PendingFlag />
               </span>
               {c.representative_name && (
                 <span style={{ fontSize: 12, color: N.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.representative_name}>
@@ -1147,6 +1154,10 @@ function SocieteCell({ row, boardRow }) {
         >
           {societeName || <EmptyCell />}
         </span>
+        {/* Contrat Opti'lex encore en vol (état du board) : même flag que
+            les contrats sans numéro client, pour que la vue « Attente
+            Opti'Lex » se lise d'un coup d'œil. */}
+        {boardRow && displayEtat(boardRow) === PENDING_OPTILEX_LABEL && <PendingFlag />}
         {/* Météo client : l'icône seule demandait de connaître le code
             couleur — le mot dit l'état sans effort (demande dev
             2026-08-28). Pastille discrète pour ne pas concurrencer le nom. */}

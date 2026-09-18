@@ -75,7 +75,12 @@ export default function ReceiptsView({ scope, onOpenClient }) {
     setError(null);
     try {
       const d = await apiClient.get(`/api/v1/finance-periods/receipts?days=${days}&limit=500`);
-      setItems(d?.items || []);
+      // Garde-fou : une saisie n'apparaît qu'une fois, même si l'API la
+      // renvoie en double (deux enfants React avec la même clé = ligne
+      // fantôme possible au changement de vision, constaté le 2026-09-18
+      // sur n°241). La cause est corrigée côté requête ; ceci protège l'écran.
+      const seen = new Set();
+      setItems((d?.items || []).filter((r) => !seen.has(r.id) && seen.add(r.id)));
     } catch (e) {
       setError(e?.data?.detail || e?.message || 'chargement impossible');
     } finally {

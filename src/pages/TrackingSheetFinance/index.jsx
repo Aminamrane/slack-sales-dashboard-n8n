@@ -503,10 +503,17 @@ export default function TrackingSheetFinance() {
         const br = (numero && boardMap) ? boardMap.get(numero) : null;
         return !!br && TERMINATED_BOARD_ETATS.has(displayEtat(br));
       }
+      case 'attente_optilex':
+        // Même règle que le board : l'état affiché est « Attente Opti'Lex »
+        // (Owner signé, contrat Opti'lex encore en vol), numéro client ou
+        // pas. Les contrats sans numéro arrivent en plus, en lignes
+        // synthétiques (`pendingRows`). Ne prendre que ces derniers faisait
+        // afficher 1 client là où le board en compte 13 (2026-09-18).
+        return boardEtatOf(r) === PENDING_OPTILEX_LABEL;
       default:
         return true; // 'all'
     }
-  }, [scope, boardMap, relanceMonths, creanceAge, onboardingPhase]);
+  }, [scope, boardMap, boardEtatOf, relanceMonths, creanceAge, onboardingPhase]);
 
   // Filtre « Météo client » (menu Filtre), réservé à deux personnes : les
   // bandes du board avec leur volume, plus « Sans météo ».
@@ -586,11 +593,12 @@ export default function TrackingSheetFinance() {
   const viewCounts = useMemo(() => {
     const counts = {};
     for (const v of VIEW_FILTERS) {
-      counts[v.key] = v.key === 'all'
-        ? rows.length + pendingRows.length
-        : v.key === 'attente_optilex'
-          ? pendingRows.length
-          : rows.filter((r) => matchesView(r, v.key) && !isHiddenInView(r, v.key)).length;
+      const real = v.key === 'all'
+        ? rows.length
+        : rows.filter((r) => matchesView(r, v.key) && !isHiddenInView(r, v.key)).length;
+      // Les contrats sans numéro client (lignes synthétiques) comptent dans
+      // « Tous » et dans « Attente Opti'Lex », nulle part ailleurs.
+      counts[v.key] = real + (v.key === 'all' || v.key === 'attente_optilex' ? pendingRows.length : 0);
     }
     return counts;
   }, [rows, pendingRows, matchesView, isHiddenInView]);
@@ -599,13 +607,14 @@ export default function TrackingSheetFinance() {
   // dropdown historiques (union : un lead matche s'il satisfait AU MOINS UN
   // filtre actif). La recherche s'applique en aval dans TableView.
   const rowsBeforeLiquidationFilter = useMemo(() => {
-    // « Tous » : les contrats en attente Opti'Lex en tête, flagués ; leur vue
-    // dédiée ne montre qu'eux ; les autres vues portent sur des montants
-    // qu'ils n'ont pas encore.
+    // « Tous » : les contrats sans numéro client en tête, flagués. La vue
+    // « Attente Opti'Lex » = ces contrats + les clients que le board affiche
+    // dans cet état. Les autres vues portent sur des montants que les
+    // contrats sans numéro n'ont pas encore.
     const viewed = viewFilter === 'all'
       ? [...pendingRows, ...rows]
       : viewFilter === 'attente_optilex'
-        ? pendingRows
+        ? [...pendingRows, ...rows.filter((r) => matchesView(r, viewFilter))]
         : rows.filter((r) => matchesView(r, viewFilter));
     if (tableFilters.size === 0) return viewed;
     // Parser FR/ISO factorisé dans constants.js (`parseDateFR`).
@@ -1736,16 +1745,6 @@ function kpiTiles(kpis, loading, view, pendingCount = 0) {
     subTitle: `Totaux calculés sur les ${kpis.total} clients affichés, `
       + `pas sur les ${kpis.totalAll} du mois`,
   };
-  if (view === 'attente_optilex') {
-    return [
-      { ...clients, label: 'En attente', value: loading ? '…' : pendingCount, sub: null, subTitle: undefined },
-      { label: 'Attendu', value: loading ? '…' : formatEUR(0), color: N.textFaint, dot: N.textFaint,
-        sub: 'contrat Opti’lex en attente',
-        subColor: N.textMuted,
-        subTitle: 'Owner signé, contrat Opti’lex pas encore signé : aucun attendu tant que le client n’est pas finalisé (pas de numéro client).',
-      },
-    ];
-  }
   if (view === 'creances') {
     return [
       clients,
@@ -1775,8 +1774,7 @@ function kpiTiles(kpis, loading, view, pendingCount = 0) {
       },
     ];
   }
-  return [
-    clients,
+  const standard = [
     { label: 'Attendu', value: loading ? '…' : formatEUR(kpis.expectedGlobal), color: N.text, dot: N.textFaint,
       sub: loading || !kpis.notDue ? null : `${formatEUR(kpis.notDue)} non exigibles`,
       subColor: N.textMuted,
@@ -1814,6 +1812,23 @@ function kpiTiles(kpis, loading, view, pendingCount = 0) {
       subTitle: `${formatEUR(kpis.recoveredPrior)} recouvrés sur ${formatEUR(kpis.openingDebt)} dus au début du mois. Le montant au-dessus est le solde restant.`,
     },
   ];
+  if (view === 'attente_optilex') {
+    // Même population que le board (13 le 2026-09-18) : les clients avec
+    // numéro portent déjà leurs montants ; ceux sans numéro n'en ont pas
+    // encore et ne sont que comptés.
+    return [
+      {
+        ...clients,
+        label: 'En attente',
+        value: loading ? '…' : kpis.total + pendingCount,
+        sub: loading || !pendingCount ? null : `dont ${pendingCount} sans numéro client`,
+        subColor: N.textMuted,
+        subTitle: 'Clients dont le contrat Opti’lex n’est pas encore signé, comme sur le board. Les montants du bandeau portent sur ceux qui ont déjà un numéro client.',
+      },
+      ...standard,
+    ];
+  }
+  return [clients, ...standard];
 }
 
 function TitleBlock({ kpis, loading, showKpis = true, view = 'all', pendingCount = 0 }) {
