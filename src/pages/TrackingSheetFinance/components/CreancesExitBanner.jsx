@@ -5,52 +5,49 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
 
-const AMBER = '#b45309';
-const AMBER_BG = '#fff8ed';
-const AMBER_BORDER = '#f5dcb5';
+// Gris de la page (mêmes valeurs que la palette N d'index.jsx, non exportée).
+const TEXT_MUTED = '#787774';
+const TEXT_FAINT = '#9b9a97';
 
 export default function CreancesExitBanner({ count, hidden, onToggle }) {
+  // Ligne discrète, pas un bandeau : le suivi des créances est l'objet de
+  // la vue, les liquidations n'en sont qu'une note de bas de page. Masquées
+  // par défaut ; le lien les affiche ou les remasque (dev 2026-09-18 :
+  // « il faut juste que ce soit plus discret »).
   const VisibilityIcon = hidden ? EyeOff : Eye;
   return (
     <AnimatePresence initial={false}>
-      {(count > 0 || hidden) && (
+      {(count > 0 || !hidden) && (
         <motion.div
           key="creances-exit"
           initial={{ opacity: 0, height: 0, marginTop: 0 }}
-          animate={{ opacity: 1, height: 'auto', marginTop: 8 }}
+          animate={{ opacity: 1, height: 'auto', marginTop: 6 }}
           exit={{ opacity: 0, height: 0, marginTop: 0 }}
           transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
           style={{ overflow: 'hidden' }}
         >
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-            padding: '9px 12px', borderRadius: 9,
-            background: AMBER_BG, border: `1px solid ${AMBER_BORDER}`,
-            color: AMBER, fontSize: 12.5, lineHeight: 1.45,
+            display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+            padding: '2px 4px', color: TEXT_FAINT, fontSize: 11.5, lineHeight: 1.4,
           }}>
-            <VisibilityIcon size={15} style={{ flexShrink: 0 }} />
-            <span style={{ flex: '1 1 320px' }}>
-              <strong>{count} client{count !== 1 ? 's' : ''} en liquidation</strong>
-              {hidden ? ` masqué${count !== 1 ? 's' : ''} dans cette vue.` : ' avec des créances antérieures.'}
-              <span style={{ display: 'block', fontSize: 11.5, marginTop: 2 }}>
-                Liquidations en cours incluses. Les créances restent enregistrées.
-              </span>
+            <VisibilityIcon size={13} style={{ flexShrink: 0 }} />
+            <span>
+              {count} client{count !== 1 ? 's' : ''} en liquidation
+              {hidden ? ` masqué${count !== 1 ? 's' : ''}` : ` affiché${count !== 1 ? 's' : ''}`}
+              {' · '}
             </span>
             <button
               type="button"
               onClick={onToggle}
-              aria-pressed={hidden}
+              aria-pressed={!hidden}
+              title="Liquidations en cours incluses. Les créances restent enregistrées."
               style={{
-                border: `1px solid ${hidden ? AMBER : AMBER_BORDER}`,
-                background: hidden ? AMBER : '#fff',
-                color: hidden ? '#fff' : AMBER,
-                borderRadius: 999, padding: '4px 12px',
-                fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
-                cursor: 'pointer', whiteSpace: 'normal', textAlign: 'center',
-                transition: 'background 0.12s, color 0.12s, border-color 0.12s',
+                border: 'none', background: 'transparent', padding: 0,
+                color: TEXT_MUTED, fontSize: 11.5, fontWeight: 600, fontFamily: 'inherit',
+                cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2,
               }}
             >
-              {hidden ? 'Réafficher les clients en liquidation' : 'Masquer tous les clients en liquidation'}
+              {hidden ? 'Afficher' : 'Masquer'}
             </button>
           </div>
         </motion.div>
