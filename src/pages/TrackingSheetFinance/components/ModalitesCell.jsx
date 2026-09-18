@@ -155,10 +155,6 @@ function EntityPill({ label, state, size = 'normal' }) {
 
 export default function ModalitesCell({
   paymentSpecificity,
-  // Nombre de structures connu du serveur (classeur, sociétés déclarées dans
-  // la fiche, structures créées) : la pastille l'affiche même sans mention
-  // « Paye / N sct » (retour dev 2026-09-18).
-  structureCount = 0,
   paymentMode,
   paymentModeOptilex,   // rythme Opti'lex s'il diffère d'Owner (dev 2026-09-10)
   autoDebit,
@@ -175,9 +171,7 @@ export default function ModalitesCell({
   // `paymentMode` peut venir de la period, du fallback `client.payment_mode`
   // (enum backend) OU de la `periodicite` du board (libellés FR) —
   // normalizePaymentMode canonicalise tout vers MONTHLY/YEARLY/QUARTERLY.
-  const specCount = Math.max(parsePaymentSpecCount(paymentSpecificity) || 0, structureCount || 0) > 1
-    ? Math.max(parsePaymentSpecCount(paymentSpecificity) || 0, structureCount || 0)
-    : parsePaymentSpecCount(paymentSpecificity);
+  const specCount = parsePaymentSpecCount(paymentSpecificity);
   const mode = normalizePaymentMode(paymentMode);
   // Un client peut être mensuel Owner et annuel Opti'lex (dev 2026-09-10) :
   // la pastille dit alors les deux rythmes, Owner puis Opti'lex.
@@ -219,10 +213,9 @@ export default function ModalitesCell({
   }
 
   if (specCount !== null) {
-    const specLabel = paymentSpecificity || `${specCount} structures`;
     chipTitle = chipText
-      ? `${chipTitle} · ${specLabel}`
-      : specLabel;
+      ? `${chipTitle} · ${paymentSpecificity}`
+      : paymentSpecificity;
   }
 
   // ── Pastilles prélèvement ──────────────────────────────────────────────
