@@ -728,7 +728,13 @@ const RowRenderer = React.memo(function RowRenderer({
   // Client qui règle pour plusieurs sociétés (« Paye / N sct ») : le récupéré
   // se saisit structure par structure. 44 clients sur 730 — pour tous les
   // autres, la cellule ne change pas d'un pixel.
-  const multiStructure = (parsePaymentSpecCount(row.payment_specificity) || 0) > 1;
+  // Le nombre de structures vient du serveur (classeur, sociétés déclarées
+  // dans la fiche, structures créées) ; la mention « Paye / N sct » reste le
+  // repli tant que la liste ne l'expose pas (demande dev 2026-09-18).
+  const multiStructure = Math.max(
+    row.client?.structure_count || 0,
+    parsePaymentSpecCount(row.payment_specificity) || 0,
+  ) > 1;
   const amountsEditable = canEditAmounts(apiClient.getUser()?.role);
 
   // Valeurs numériques de l'entité active (sommes Owner+Opti'lex en Globale).

@@ -937,8 +937,9 @@ export default function DetailPanel({
               />
             </Section>
 
-            {/* Ventilation par structure — n'apparaît que pour les clients
-                qui règlent pour plusieurs sociétés (« Paye / N sct »).
+            {/* Saisie et ventilation par structure. Les structures viennent du
+                classeur (« Paye / N sct ») ET des sociétés déclarées dans la
+                fiche : en ajouter une crée sa structure (dev 2026-09-18).
                 Demande dev 2026-09-01 : savoir QUELLE structure a payé. */}
             <Section title="Structures & ventilation" delay={0.12}>
               <StructureSplits
@@ -948,6 +949,8 @@ export default function DetailPanel({
                 canEdit={canEdit}
                 canEditMoney={canEditMoney}
                 onShowToast={onShowToast}
+                reloadKey={profile?.companies?.length || 0}
+                onReceiptsChanged={reloadAfterExit}
               />
             </Section>
 
