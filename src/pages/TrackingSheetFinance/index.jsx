@@ -1778,7 +1778,7 @@ function kpiTiles(kpis, loading, view, pendingCount = 0) {
     { label: 'Attendu', value: loading ? '…' : formatEUR(kpis.expectedGlobal), color: N.text, dot: N.textFaint,
       sub: loading || !kpis.notDue ? null : `${formatEUR(kpis.notDue)} non exigibles`,
       subColor: N.textMuted,
-      subTitle: 'Reste du mois dont l’échéance n’est pas encore passée, dont l’onboarding est à venir, ou qui est en pause.',
+      subTitle: 'Reste du mois dont la date de paiement n’est pas encore passée, ou qui est en pause. Les clients dont le rendez-vous d’onboarding n’a pas eu lieu n’ont pas d’attendu.',
     },
     {
       label: 'Reçu',
@@ -1827,6 +1827,17 @@ function kpiTiles(kpis, loading, view, pendingCount = 0) {
       },
       ...standard,
     ];
+  }
+  // « Tous » : le chip compte aussi les contrats sans numéro client (lignes
+  // synthétiques en tête) ; la tuile ne compte que les clients facturés.
+  // Dire l'écart évite de lire « 763 » d'un côté et « 762 » de l'autre.
+  if (view === 'all' && pendingCount > 0 && !loading && !kpis.filtered) {
+    return [{
+      ...clients,
+      sub: `+ ${pendingCount} en attente Opti’lex`,
+      subColor: '#b45309',
+      subTitle: `${pendingCount} contrat${pendingCount > 1 ? 's' : ''} Owner signé${pendingCount > 1 ? 's' : ''} sans numéro client encore : affiché${pendingCount > 1 ? 's' : ''} en tête, sans montant.`,
+    }, ...standard];
   }
   return [clients, ...standard];
 }

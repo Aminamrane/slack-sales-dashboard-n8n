@@ -86,10 +86,52 @@ for (const file of files) {
   });
 }
 
-if (problems.length === 0) {
-  console.log('✓ garde-fou finance : aucune règle de calcul dupliquée');
+// ── Garde-fou n°2 : composant JSX utilisé sans import ni définition ──────────
+//
+// Incident 2026-09-18 : `<ContractPendingIcon />` utilisé dans TableView.jsx
+// sans être importé. Le build passe (Rollup ne vérifie pas les identifiants
+// libres), ESLint n'a pas de règle `react/jsx-no-undef` ici, et la page
+// finance entière tombait sur l'écran de secours dès qu'une ligne concernée
+// était rendue. Cette vérification tourne dans `npm run verify`, donc avant
+// tout build Vercel.
+const JSX_TAG = /<([A-Z][A-Za-z0-9_]*)[\s/>]/g;
+const jsxProblems = [];
+for (const file of files) {
+  if (!file.endsWith('.jsx')) continue;
+  const rel = relative(ROOT, file);
+  const src = readFileSync(file, 'utf8');
+  const known = new Set();
+  // Imports : `import X from`, `import { A, B as C } from`, `import * as N from`.
+  for (const m of src.matchAll(/import\s+([^;]*?)\s+from\s+['"]/g)) {
+    for (const name of m[1].matchAll(/([A-Za-z_$][\w$]*)\s*(?=,|}|$|\s+from)/g)) known.add(name[1]);
+    for (const alias of m[1].matchAll(/as\s+([A-Za-z_$][\w$]*)/g)) known.add(alias[1]);
+  }
+  // Définitions locales, y compris les composants reçus en prop (`icon: Icon`)
+  // et les destructurations (`{ Icon }`).
+  for (const m of src.matchAll(/\b(?:function|const|let|var|class)\s+([A-Z][\w$]*)/g)) known.add(m[1]);
+  for (const m of src.matchAll(/[{,]\s*(?:[\w$]+\s*:\s*)?([A-Z][\w$]*)\s*(?=[,}=])/g)) known.add(m[1]);
+  for (const m of src.matchAll(/\(\s*\{[^)]*?\b([A-Z][\w$]*)\b[^)]*\}\s*\)/g)) known.add(m[1]);
+  src.split('\n').forEach((line, i) => {
+    if (line.trimStart().startsWith('//') || line.trimStart().startsWith('*')) return;
+    for (const m of line.matchAll(JSX_TAG)) {
+      const tag = m[1];
+      if (known.has(tag) || tag === 'Fragment') continue;
+      jsxProblems.push({ rel, line: i + 1, tag });
+    }
+  });
+}
+
+if (problems.length === 0 && jsxProblems.length === 0) {
+  console.log('✓ garde-fou finance : aucune règle de calcul dupliquée, aucun composant JSX sans import');
   process.exit(0);
 }
+
+if (jsxProblems.length > 0) {
+  console.error('\n✗ garde-fou finance : composant JSX utilisé sans import ni définition\n');
+  for (const p of jsxProblems) console.error(`  ${p.rel}:${p.line}  <${p.tag} />`);
+  console.error('\n  Importer le composant, ou le définir dans le fichier. (Incident 2026-09-18 : ContractPendingIcon.)\n');
+}
+if (problems.length === 0) process.exit(1);
 
 console.error('\n✗ garde-fou finance : champ brut lu hors de constants.js\n');
 for (const p of problems) {

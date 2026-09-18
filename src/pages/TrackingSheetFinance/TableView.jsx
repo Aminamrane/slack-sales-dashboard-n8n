@@ -879,7 +879,12 @@ const RowRenderer = React.memo(function RowRenderer({
 
       {/* Montant Attendu (dynamique : reste à percevoir) */}
       {keys.includes('expected') && C('expected', (
-        <RemainingAmount expected={expected} received={received} />
+        <RemainingAmount
+          expected={expected}
+          received={received}
+          onboardingPending={Boolean(row.onboarding_pending)}
+          onboardingDate={row.client?.rdv_onboarding}
+        />
       ))}
 
       {/* Montant Récupéré (vert + pill verte si surplus). Vision entité =
@@ -1216,9 +1221,23 @@ function ReadOnlyAmount({ value }) {
 //   received < expected    → (expected − received) en ORANGE — manquement
 //   received ≥ expected    → check ✓ animé en vert (objectif atteint, surplus
 //                            géré côté cell Récupéré via pill verte)
-function RemainingAmount({ expected, received }) {
+function RemainingAmount({ expected, received, onboardingPending = false, onboardingDate = null }) {
   const exp = Number(expected || 0);
   const remaining = Math.max(exp - Number(received || 0), 0);
+  // Règle dev 2026-09-18 : aucun attendu tant que le rendez-vous d'onboarding
+  // n'a pas eu lieu. La cellule le dit, sinon un attendu vide se lit comme
+  // un oubli (« pourquoi il n'a pas d'attendu ? »).
+  if (!exp && onboardingPending) {
+    const when = onboardingDate ? formatDateFR(onboardingDate) : null;
+    return (
+      <span
+        title="Pas d’attendu avant le rendez-vous d’onboarding : c’est lui qui ouvre la facturation."
+        style={{ fontSize: 11, color: N.textFaint, fontStyle: 'italic', whiteSpace: 'nowrap' }}
+      >
+        {when ? `onboarding le ${when}` : 'onboarding à venir'}
+      </span>
+    );
+  }
   if (!exp) return <EmptyCell />;
   return (
     <span title={`Attendu du mois : ${formatEUR(exp)}. Reste avant imputation des avances : ${formatEUR(remaining)}.`}
