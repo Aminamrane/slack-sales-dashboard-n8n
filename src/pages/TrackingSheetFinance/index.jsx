@@ -439,8 +439,10 @@ export default function TrackingSheetFinance() {
   // d'une dette qui n'a jamais été soldée depuis.
   const [creanceAge, setCreanceAge] = useState('all');
   // Option de suivi, limitée aux créances antérieures : les liquidations
-  // peuvent être masquées sans changer les données ni les autres vues.
-  const [hideLiquidations, setHideLiquidations] = useState(false);
+  // sont MASQUÉES par défaut (dev 2026-09-18 : elles polluent le suivi de
+  // recouvrement) ; un lien discret permet de les afficher. Les données et
+  // les autres vues ne changent pas.
+  const [hideLiquidations, setHideLiquidations] = useState(true);
 
   // État board d'une ligne — la règle d'affichage du board, jamais recopiée.
   const boardEtatOf = useCallback((r) => {
