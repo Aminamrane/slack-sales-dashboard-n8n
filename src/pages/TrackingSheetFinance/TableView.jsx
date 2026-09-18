@@ -861,6 +861,7 @@ const RowRenderer = React.memo(function RowRenderer({
       {keys.includes('modalites') && C('modalites', (
         <ModalitesCell
           paymentSpecificity={row.payment_specificity}
+          structureCount={row.client?.structure_count || 0}
           // Chaîne de fallback (2026-08-21) : mode de la period → mode
           // normalisé du client (backend) → `periodicite` du board (libellés
           // FR « Mensuel/Annuel/Trimestriel », ~27 % des clients) —

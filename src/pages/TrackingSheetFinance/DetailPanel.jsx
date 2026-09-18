@@ -3230,9 +3230,9 @@ function ClientComments({ clientId, onShowToast }) {
               hors de la zone défilante, accessible même sur un long fil. */}
           <div style={{
             display: 'flex', flexDirection: 'column', gap: 6,
-            maxHeight: visibleComments.length > 4 ? 300 : undefined,
-            overflowY: visibleComments.length > 4 ? 'auto' : undefined,
-            paddingRight: visibleComments.length > 4 ? 4 : undefined,
+            // Toujours borné et défilant : basculer maxHeight/overflow au
+            // « Réduire » changeait la géométrie en plein mouvement.
+            maxHeight: 320, overflowY: 'auto', paddingRight: 4,
           }}>
             <AnimatePresence initial={false}>
               {visibleComments.map((c, i) => (
@@ -3285,12 +3285,16 @@ function CommentRow({
   const showActions = comment.can_moderate && (hover || confirming);
 
   return (
+    // Pas d'animation de mise en page (`layout`) ni de sortie en hauteur
+    // nulle : au « Réduire », framer-motion mesurait les cartes pendant que
+    // le conteneur perdait sa hauteur bornée et laissait la carte restante
+    // écrasée, ses lignes invisibles (retour finance 2026-09-18). Les cartes
+    // entrent et sortent en fondu, à leur hauteur naturelle.
     <motion.div
-      layout
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: comment._pending ? 0.6 : 1, y: 0 }}
-      exit={{ opacity: 0, height: 0, marginTop: 0 }}
-      transition={{ duration: 0.22, delay: Math.min(index, 6) * 0.025, ease: [0.4, 0, 0.2, 1] }}
+      exit={{ opacity: 0, y: -4 }}
+      transition={{ duration: 0.18, delay: Math.min(index, 6) * 0.02, ease: [0.4, 0, 0.2, 1] }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
