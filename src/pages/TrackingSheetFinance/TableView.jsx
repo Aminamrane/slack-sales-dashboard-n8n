@@ -84,6 +84,7 @@ import {
 import { EditableNumber, EditableSelect, EditableDate } from './EditableCell.jsx';
 import ModalitesCell from './components/ModalitesCell.jsx';
 import StructureAmountCell from './components/StructureAmountCell.jsx';
+import { ContractPendingIcon } from './components/FinanceIcons.jsx';
 // Palette + règles du board Owner/Opti'Lex (imports read-only) : l'état
 // teinte en pastel les cellules sticky N°/société (la colonne État dédiée a
 // été retirée 2026-08-21, l'édition vit dans le DetailPanel), et la météo
