@@ -1836,9 +1836,12 @@ function kpiTiles(kpis, loading, view, pendingCount = 0) {
   if (view === 'all' && pendingCount > 0 && !loading && !kpis.filtered) {
     return [{
       ...clients,
-      sub: `+ ${pendingCount} en attente Opti’lex`,
+      // « sans numéro client », pas « en attente Opti'lex » : les clients en
+      // attente qui ont déjà un numéro sont comptés dans les clients ; seul
+      // le contrat sans numéro s'ajoute (dev 2026-09-18 : « + 1 » vs 14).
+      sub: `+ ${pendingCount} contrat${pendingCount > 1 ? 's' : ''} sans numéro client`,
       subColor: '#b45309',
-      subTitle: `${pendingCount} contrat${pendingCount > 1 ? 's' : ''} Owner signé${pendingCount > 1 ? 's' : ''} sans numéro client encore : affiché${pendingCount > 1 ? 's' : ''} en tête, sans montant.`,
+      subTitle: `${pendingCount} contrat${pendingCount > 1 ? 's' : ''} Owner signé${pendingCount > 1 ? 's' : ''} sans numéro client encore (Opti’lex en attente) : affiché${pendingCount > 1 ? 's' : ''} en tête, sans montant. Les autres clients en attente Opti’lex ont un numéro et comptent dans les clients.`,
     }, ...standard];
   }
   return [clients, ...standard];
