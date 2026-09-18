@@ -495,7 +495,7 @@ export default function ExitClientDialog({
                   padding: '11px 12px', borderRadius: 9, background: N.redBg,
                   color: N.red, fontSize: 12, lineHeight: 1.55, marginBottom: 12,
                 }}>
-                  <strong>Client déclaré en perte</strong>
+                  <strong>{loss.kind === 'withdrawal' ? 'Rétractation actée, comptée en perte' : 'Client déclaré en perte'}</strong>
                   {loss.declared_by_name ? ` par ${loss.declared_by_name}` : ''}
                   {loss.declared_at ? ` le ${formatDateFR(loss.declared_at)}` : ''}.
                   <div style={{ marginTop: 5 }}>
