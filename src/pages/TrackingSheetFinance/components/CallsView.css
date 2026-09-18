@@ -12,6 +12,7 @@
 .fc-filters input { padding: 7px 10px; border: 1px solid #e5e5e2; border-radius: 6px; font: inherit; color: #37352f; background: white; }
 .fc-filters > span { color: #787774; font-size: 12px; padding-bottom: 9px; margin-left: auto; }
 .fc-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.fc-cards.fc-cards-single { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .fc-cards .fc-card { display: flex; flex-direction: column; align-items: start; text-align: left; gap: 10px; border: 1px solid #e9e9e7; border-radius: 9px; padding: 18px 20px; background: #fff; }
 .fc-card > span { color: #787774; }
 .fc-card strong { font-size: 29px; font-weight: 650; line-height: 1.1; }

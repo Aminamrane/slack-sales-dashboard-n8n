@@ -332,12 +332,20 @@ export default function TrackingSheetFinance() {
   // ── Auth gating (mirrors Campaigns.jsx) ─────────────────────────────
   const [authChecked, setAuthChecked] = useState(false);
   const [canViewCalls, setCanViewCalls] = useState(false);
+  // Opérateurs que le serveur autorise pour cette personne (Ismahane : les
+  // deux ; Aurélie B : Lény seulement — décision dev 2026-09-18). Vide tant
+  // que l'API ne les renvoie pas : la vue retombe alors sur sa liste d'usage.
+  const [callsOperators, setCallsOperators] = useState([]);
   useEffect(() => {
     if (!authChecked) return;
     let live = true;
     apiClient.get('/api/v1/finance-calls/access')
-      .then(data => { if (live) setCanViewCalls(data?.allowed === true); })
-      .catch(() => { if (live) setCanViewCalls(false); });
+      .then(data => {
+        if (!live) return;
+        setCanViewCalls(data?.allowed === true);
+        setCallsOperators(Array.isArray(data?.operators) ? data.operators : []);
+      })
+      .catch(() => { if (live) { setCanViewCalls(false); setCallsOperators([]); } });
     return () => { live = false; };
   }, [authChecked]);
   useEffect(() => {
@@ -1144,7 +1152,7 @@ export default function TrackingSheetFinance() {
               style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
             >
               {activeTab === 'calls' && canViewCalls ? (
-                <CallsView />
+                <CallsView operators={callsOperators} />
               ) : activeTab === 'losses' ? (
                 <LossesView
                   boardMap={boardMap}
