@@ -31,6 +31,7 @@ export const canEditContract = (role) => ALLOWED_ROLES.includes(role);
 const METEO_FILTER_USER_IDS = new Set([
   '94b5dcc1-a1bb-41ac-94fe-14cf047cffef', // Ismahane
   '6dfc7435-c938-4bd3-b143-a6516b2981bd', // Aurélie B
+  '445a5b0d-61e3-4e3b-b1fc-77b04b66df12', // Youcef Amrane — le dev est toujours inclus (règle 2026-09-19)
 ]);
 export const canFilterMeteo = (user) => METEO_FILTER_USER_IDS.has(user?.id);
 
