@@ -274,3 +274,15 @@ test('le bandeau reprend les soldes API, le recouvrement utilise la dette d’ou
   assert.equal(parseFloat(k.receivedPct.replace(',', '.')), 50);
   assert.equal(parseFloat(k.overdueRecoveredPct.replace(',', '.')), 25);
 });
+
+test('la vue Onboarding classe la date Owner en passée ou à venir, jamais sans date', async () => {
+  const { onboardingPhaseOf, canFilterMeteo } = await import('./constants.js');
+  const today = new Date(2026, 8, 18, 15, 30);
+  assert.equal(onboardingPhaseOf({ client: { rdv_onboarding: '2026-09-18' } }, today), 'past', 'le jour même est passé');
+  assert.equal(onboardingPhaseOf({ client: { rdv_onboarding: '17/09/2026' } }, today), 'past');
+  assert.equal(onboardingPhaseOf({ client: { rdv_onboarding: '2026-09-19' } }, today), 'upcoming');
+  assert.equal(onboardingPhaseOf({ client: {} }, today), null);
+  assert.equal(canFilterMeteo({ id: '94b5dcc1-a1bb-41ac-94fe-14cf047cffef', role: 'finance_director' }), true);
+  assert.equal(canFilterMeteo({ id: 'someone-else', role: 'finance_director' }), false);
+  assert.equal(canFilterMeteo(null), false);
+});

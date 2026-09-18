@@ -978,6 +978,7 @@ const RowRenderer = React.memo(function RowRenderer({
       {keys.includes('payDate') && !isGlobal && C('payDate', (
         <EditableDate
           value={row[fields.payDate]}
+          projected={Boolean(row[`${fields.payDate}_projected`])}
           onCommit={patch(fields.payDate)}
         />
       ))}

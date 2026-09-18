@@ -25,6 +25,31 @@ export const canEditAmounts = (role) => AMOUNT_EDIT_ROLES.includes(role);
 // Modalités, sociétés, associés, contacts.
 export const canEditContract = (role) => ALLOWED_ROLES.includes(role);
 
+// Filtre « Météo client » du menu Filtre : réservé à deux personnes, pas à
+// un rôle (décision dev 2026-09-18) — Ismahane (direction financière) et
+// Aurélie B (équipe finance). Même mécanique que l'onglet des appels.
+const METEO_FILTER_USER_IDS = new Set([
+  '94b5dcc1-a1bb-41ac-94fe-14cf047cffef', // Ismahane
+  '6dfc7435-c938-4bd3-b143-a6516b2981bd', // Aurélie B
+]);
+export const canFilterMeteo = (user) => METEO_FILTER_USER_IDS.has(user?.id);
+
+// Vue « Onboarding » : la date d'onboarding Owner de la ligne, comparée à
+// aujourd'hui. 'past' = déjà passée (le jour même compte comme passé),
+// 'upcoming' = encore à venir. Sans date connue, la ligne n'est dans aucune
+// des deux phases : on n'affirme rien qu'on ne sait pas.
+// Comparaison sur le JOUR calendaire (heure-mur), jamais sur l'instant : une
+// date ISO « 2026-09-18 » est minuit UTC, soit 02:00 à Paris — la lire comme
+// un instant la ferait passer « à venir » le jour même.
+const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+export const onboardingPhaseOf = (r, today = new Date()) => {
+  const raw = r?.client?.rdv_onboarding;
+  const d = parseDateFR(raw);
+  if (!d) return null;
+  const key = /^\d{4}-\d{2}-\d{2}/.test(String(raw).trim()) ? String(raw).trim().slice(0, 10) : dayKey(d);
+  return key > dayKey(today) ? 'upcoming' : 'past';
+};
+
 // ── Commentable cells ────────────────────────────────────────────────────
 //
 // Maps `colKey` (frontend column key from `COLS_FULL` in TableView.jsx) to
