@@ -1023,6 +1023,16 @@ export default function DetailPanel({
             loss={profile?.loss || null}
             initialEtat={exitPreset}
             signatureDate={profile?.date_signature}
+            billingLastMonth={profile?.billing_last_month || null}
+            onBillingStop={async (lastMonth) => {
+              try {
+                await apiClient.put(`/api/v1/finance-periods/client/${clientId}/billing-stop`, { last_month: lastMonth });
+                reloadAfterExit();
+              } catch (e) {
+                onShowToast?.(e?.data?.detail || 'Fin de facturation non enregistrée', 'error');
+                throw e;
+              }
+            }}
             onEtatChange={async (chg) => {
               // Signature du parent : (numero_client, payload) — la même que
               // celle du badge d'état de la fiche.
