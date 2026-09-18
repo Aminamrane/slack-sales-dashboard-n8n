@@ -443,6 +443,9 @@ export const EditableDate = React.memo(function EditableDate({
   onCommit,
   width = '100%',
   disabled = false,
+  // Date PROJETÉE par le classeur (mois précédent + 30 j), pas un
+  // encaissement : affichée en retrait, jamais comme une date réelle.
+  projected = false,
 }) {
   const [editing, setEditing] = useState(false);
   const [state, flash] = useSaveFlash();
@@ -503,18 +506,28 @@ export const EditableDate = React.memo(function EditableDate({
     );
   }
 
+  const isProjected = Boolean(value && projected);
   return (
     <span
       onClick={(e) => { e.stopPropagation(); startEdit(); }}
-      title={disabled ? '' : 'Cliquer pour modifier'}
+      title={isProjected
+        ? 'Date prévue par le classeur (mois précédent + 30 jours), pas un encaissement. Cliquer pour saisir la date réelle.'
+        : disabled ? '' : 'Cliquer pour modifier'}
       style={{
         ...cellStyle(state),
         width,
-        color: !value ? '#9ca3af' : '#111827',
+        color: !value ? '#9ca3af' : isProjected ? '#9ca3af' : '#111827',
+        fontStyle: isProjected ? 'italic' : 'normal',
         cursor: disabled ? 'default' : 'pointer',
+        display: 'inline-flex', alignItems: 'baseline', gap: 5,
       }}
     >
       {value ? display : placeholder}
+      {isProjected && (
+        <span style={{ fontSize: 9.5, fontStyle: 'normal', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#b5b5b1' }}>
+          prévue
+        </span>
+      )}
     </span>
   );
 });

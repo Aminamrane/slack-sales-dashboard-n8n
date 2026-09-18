@@ -79,10 +79,12 @@ import {
   formatDateFR,
   splitClientIdentity,
   toNumber,
+  PENDING_OPTILEX_LABEL,
 } from './constants.js';
 import { EditableNumber, EditableSelect, EditableDate } from './EditableCell.jsx';
 import ModalitesCell from './components/ModalitesCell.jsx';
 import StructureAmountCell from './components/StructureAmountCell.jsx';
+import { ContractPendingIcon } from './components/FinanceIcons.jsx';
 // Palette + règles du board Owner/Opti'Lex (imports read-only) : l'état
 // teinte en pastel les cellules sticky N°/société (la colonne État dédiée a
 // été retirée 2026-08-21, l'édition vit dans le DetailPanel), et la météo
@@ -728,7 +730,13 @@ const RowRenderer = React.memo(function RowRenderer({
   // Client qui règle pour plusieurs sociétés (« Paye / N sct ») : le récupéré
   // se saisit structure par structure. 44 clients sur 730 — pour tous les
   // autres, la cellule ne change pas d'un pixel.
-  const multiStructure = (parsePaymentSpecCount(row.payment_specificity) || 0) > 1;
+  // Le nombre de structures vient du serveur (classeur, sociétés déclarées
+  // dans la fiche, structures créées) ; la mention « Paye / N sct » reste le
+  // repli tant que la liste ne l'expose pas (demande dev 2026-09-18).
+  const multiStructure = Math.max(
+    row.client?.structure_count || 0,
+    parsePaymentSpecCount(row.payment_specificity) || 0,
+  ) > 1;
   const amountsEditable = canEditAmounts(apiClient.getUser()?.role);
 
   // Valeurs numériques de l'entité active (sommes Owner+Opti'lex en Globale).
@@ -854,6 +862,7 @@ const RowRenderer = React.memo(function RowRenderer({
       {keys.includes('modalites') && C('modalites', (
         <ModalitesCell
           paymentSpecificity={row.payment_specificity}
+          structureCount={row.client?.structure_count || 0}
           // Chaîne de fallback (2026-08-21) : mode de la period → mode
           // normalisé du client (backend) → `periodicite` du board (libellés
           // FR « Mensuel/Annuel/Trimestriel », ~27 % des clients) —
@@ -978,9 +987,96 @@ const RowRenderer = React.memo(function RowRenderer({
       {keys.includes('payDate') && !isGlobal && C('payDate', (
         <EditableDate
           value={row[fields.payDate]}
+          projected={Boolean(row[`${fields.payDate}_projected`])}
           onCommit={patch(fields.payDate)}
         />
       ))}
+    </div>
+  );
+});
+
+// ── Ligne « Attente Opti'Lex » ──────────────────────────────────────────────
+// Contrat en vol venu du board (Owner signé, Opti'Lex pas encore) : pas de
+// numéro client, pas d'attendu, rien à saisir. Même grille que les autres
+// lignes, mais aucune cellule éditable, aucun bouton OUVRIR : le flag ambre
+// dit ce qui manque, la colonne Modalités dit où en est le contrat.
+const PENDING = { fg: '#b45309', bg: '#fff3e3' };
+const PendingRowRenderer = React.memo(function PendingRowRenderer({ row, cols, keys, stickyLefts, collapsingCol }) {
+  const [hover, setHover] = useState(false);
+  const c = row.client || {};
+  const signedAt = c.owner_signed_at ? formatDateFR(c.owner_signed_at) : null;
+  const optilex = c.optilex_status === 'awaiting_owner_signature' ? 'à envoyer'
+    : c.optilex_status === 'scheduled' ? 'planifié'
+      : c.optilex_status === 'ongoing' ? 'envoyé, en attente de signature' : 'en attente';
+  const cell = (k, children) => (
+    <Cell
+      key={k}
+      k={k}
+      cols={cols}
+      stickyLefts={stickyLefts}
+      hover={hover}
+      isActive={false}
+      selected={false}
+      onSelect={() => {}}
+      commentable={false}
+      commentCount={0}
+      onOpenCommentPopup={() => {}}
+      collapsingCol={collapsingCol}
+    >
+      {children}
+    </Cell>
+  );
+  return (
+    <div
+      className="tsf-row"
+      title="Owner signé, contrat Opti’lex pas encore signé : pas de numéro client ni d’attendu pour l’instant."
+      style={{
+        display: 'flex', height: ROW_HEIGHT, borderBottom: `1px solid ${N.borderSft}`,
+        background: hover ? N.rowHover : N.pageBg, transition: 'background 0.12s', position: 'relative',
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <div style={{ width: GUTTER, flex: `0 0 ${GUTTER}px`, position: 'sticky', left: 0, zIndex: 10, background: hover ? N.rowHover : N.pageBg }} />
+      {keys.map((k) => {
+        if (k === 'numero') {
+          return cell(k, (
+            <span style={{ fontSize: 11, color: N.textFaint, fontStyle: 'italic', whiteSpace: 'nowrap' }}>à venir</span>
+          ));
+        }
+        if (k === 'societe') {
+          return cell(k, (
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25, minWidth: 0, maxWidth: '100%', flex: 1 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, maxWidth: '100%' }}>
+                <span style={{ fontSize: CELL_FONT_SIZE, fontWeight: 500, color: N.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={c.societe || ''}>
+                  {c.societe || <EmptyCell />}
+                </span>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+                  color: PENDING.fg, background: PENDING.bg, borderRadius: 4, padding: '1px 6px 1px 4px',
+                  fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
+                }}>
+                  <ContractPendingIcon size={13} strokeWidth={1.8} />
+                  {PENDING_OPTILEX_LABEL}
+                </span>
+              </span>
+              {c.representative_name && (
+                <span style={{ fontSize: 12, color: N.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.representative_name}>
+                  {c.representative_name}
+                </span>
+              )}
+            </div>
+          ));
+        }
+        if (k === 'modalites') {
+          return cell(k, (
+            <span style={{ fontSize: 11.5, color: N.textMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {signedAt ? `Owner signé le ${signedAt}` : 'Owner signé'} · Opti’lex {optilex}
+            </span>
+          ));
+        }
+        return cell(k, <EmptyCell />);
+      })}
     </div>
   );
 });
@@ -1563,7 +1659,15 @@ export default function TableView({
             customScrollParent={scrollParent}
             data={filtered}
             totalCount={filtered.length}
-            itemContent={(_, row) => (
+            itemContent={(_, row) => row.pending ? (
+              <PendingRowRenderer
+                row={row}
+                cols={cols}
+                keys={keys}
+                stickyLefts={stickyLefts}
+                collapsingCol={collapsingCol}
+              />
+            ) : (
               <RowRenderer
                 row={row}
                 onPatchRow={onPatchRow}
