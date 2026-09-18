@@ -1725,6 +1725,31 @@ function ContractInfoList({
                 }}
               />
             ) : <span>{profile?.company_name || societeName}</span>}
+            {/* SIREN de la société principale, sous son nom : c'est celui
+                que l'onglet Détails affiche (demande dev 2026-09-18). Même
+                enregistrement que l'ancienne ligne SIREN (PATCH profile). */}
+            {(editing && canEditMoney && profile) ? (
+              <EditableText
+                value={profile?.siren}
+                placeholder="SIREN (9 chiffres)"
+                onCommit={async (value) => {
+                  try {
+                    await apiClient.patch(`/api/v1/finance-periods/client/${clientId}/profile`, { siren: value || '' });
+                    onProfileChanged?.();
+                  } catch (e) {
+                    onShowToast?.(e?.data?.detail || 'Modification impossible', 'error');
+                    throw e;
+                  }
+                }}
+                width="auto"
+              />
+            ) : (profile?.siren ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: N.textFaint }}>
+                SIREN
+                <span style={{ color: N.text, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{profile.siren}</span>
+                {profile?.siren_source === 'backfill' && <span style={{ fontSize: 10.5 }}>source interne</span>}
+              </span>
+            ) : null)}
             <RelatedEntityList
               items={profile?.companies || []}
               kind="societe"
@@ -1782,38 +1807,6 @@ function ContractInfoList({
       ) : undefined,
     },
     { Icon: User,       label: 'Sales',                value: profile?.sales_name },
-    // SIREN : le backfill est une donnée sourcée (lecture) ; sans lui, la
-    // saisie alimente l'override du board (siren_ovr) et le journal. Vivait
-    // dans l'accordéon « détail complet », retiré le 2026-09-03.
-    {
-      Icon: Landmark,
-      label: 'SIREN',
-      copyValue: profile?.siren,
-      node: (editing && canEditMoney && profile) ? (
-        <EditableText
-          value={profile?.siren}
-          placeholder="9 chiffres"
-          onCommit={async (value) => {
-            await apiClient.patch(`/api/v1/finance-periods/client/${clientId}/profile`, { siren: value || '' });
-            onProfileChanged?.();
-          }}
-          width="auto"
-        />
-      ) : (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          {profile?.siren ? (
-            <span style={{ fontSize: 13, fontWeight: 500, color: N.text, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-              {profile.siren}
-            </span>
-          ) : (
-            <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }}>Vide</span>
-          )}
-          {profile?.siren_source === 'backfill' && (
-            <span style={{ fontSize: 10.5, color: N.textFaint }}>source interne</span>
-          )}
-        </span>
-      ),
-    },
     // RDV d'onboarding : c'est lui qui déclenche la facturation — premier
     // mois facturé, départ de l'engagement 12 mois, et bascule en retard
     // (demande dev 2026-08-26). Servi par /profile, qui prend la date du
