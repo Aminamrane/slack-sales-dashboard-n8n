@@ -78,7 +78,7 @@ import {
   normalizeSearch,
   matchesClientSearch,
   isLiquidationEtat,
-  canFilterMeteo, onboardingPhaseOf,
+  canFilterMeteo, onboardingPhaseOf, scopedReceivedTotal,
 } from './constants.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -281,7 +281,10 @@ const VIEW_FILTERS = [
   // déduire de la prochaine échéance ou rembourser.
   { key: 'trop_percu',  label: 'Trop-perçu' },
   // Onboarding Owner, en deux phases comme sur le board (demande dev
-  // 2026-09-18) : « Passés » (date passée, par mois) et « À venir ».
+  // 2026-09-18) : « Passés » (date passée, par mois) et « À venir » — pour
+  // les seuls clients qui n'ont JAMAIS encaissé : un seul montant récupéré,
+  // à n'importe quelle date, les sort des deux phases (précision dev le
+  // même jour : « les très anciens clients ne nous intéressent pas »).
   { key: 'onboarding',  label: 'Onboarding' },
   { key: 'non_auto',    label: 'Non automatisé' },
   { key: 'resilies',    label: 'Résiliés / Rétractés' },
@@ -458,6 +461,11 @@ export default function TrackingSheetFinance() {
       case 'trop_percu':
         return scopedCredit(r, scope) > 0;
       case 'onboarding': {
+        // Jamais payé, depuis le premier mois de son historique : le total
+        // encaissé vient du backend, la ligne mensuelle ne connaît que son
+        // propre mois. Un client qui a déjà réglé une fois n'est plus un
+        // onboarding à suivre, passé ou à venir.
+        if (scopedReceivedTotal(r, scope) !== 0) return false;
         // Deux phases, sur la seule date d'onboarding Owner (comme le board) :
         // sans date connue, la ligne n'est ni passée ni à venir.
         if (onboardingPhaseOf(r) !== onboardingPhase) return false;
