@@ -31,8 +31,6 @@ const N = {
   red: '#b42318',
   redBg: '#fdecec',
   green: '#0f7b6c',
-  amber: '#b45309',
-  amberBg: '#fff3e3',
 };
 
 // Regroupement métier demandé : on veut lire « combien nous coûtent les
@@ -82,9 +80,6 @@ export default function LossesView({ boardMap, scope, onOpenClient }) {
       // parce qu'il n'aurait pas dû être facturé. Ce ne sont pas les mêmes
       // décisions, et on ne les lit pas de la même façon.
       correction: l.kind === 'correction',
-      // 'withdrawal' = rétractation actée : une « fausse vente », comptée à
-      // part des clients mis en perte (demande dev 2026-09-18).
-      withdrawal: l.kind === 'withdrawal',
       creance: scoped(l, scope, 'amount'),
       futur: scoped(l, scope, 'future'),
     };
@@ -106,10 +101,9 @@ export default function LossesView({ boardMap, scope, onOpenClient }) {
       acc[l.famille].n += 1;
     }
     const parNature = { declared: { creance: 0, futur: 0, n: 0 },
-                        correction: { creance: 0, futur: 0, n: 0 },
-                        withdrawal: { creance: 0, futur: 0, n: 0 } };
+                        correction: { creance: 0, futur: 0, n: 0 } };
     for (const l of enriched) {
-      const k = l.correction ? 'correction' : l.withdrawal ? 'withdrawal' : 'declared';
+      const k = l.correction ? 'correction' : 'declared';
       parNature[k].creance += l.creance;
       parNature[k].futur += l.futur;
       parNature[k].n += 1;
@@ -163,14 +157,6 @@ export default function LossesView({ boardMap, scope, onOpenClient }) {
           value={totaux.parNature.correction.creance}
           hint={`${totaux.parNature.correction.n} correction${totaux.parNature.correction.n > 1 ? 's' : ''} · facturé à tort`}
           accent={N.textMuted}
-        />
-        {/* Les rétractations actées : le chiffre signé qui ne rentrera pas.
-            Comptées à part pour être rapportées aux signatures. */}
-        <Carte
-          label="Rétractations"
-          value={totaux.parNature.withdrawal.creance + totaux.parNature.withdrawal.futur}
-          hint={`${totaux.parNature.withdrawal.n} fausse${totaux.parNature.withdrawal.n > 1 ? 's' : ''} vente${totaux.parNature.withdrawal.n > 1 ? 's' : ''} · signé puis rétracté`}
-          accent={N.amber}
         />
         <button
           type="button"
@@ -288,14 +274,6 @@ export default function LossesView({ boardMap, scope, onOpenClient }) {
                   whiteSpace: 'nowrap',
                 }}>
                   Attendu supprimé
-                </span>
-              ) : l.withdrawal ? (
-                <span style={{
-                  fontSize: 11, fontWeight: 600, color: N.amber,
-                  background: N.amberBg, borderRadius: 4, padding: '2px 7px',
-                  whiteSpace: 'nowrap',
-                }}>
-                  Rétractation actée
                 </span>
               ) : (l.etat || '—')}
             </span>
