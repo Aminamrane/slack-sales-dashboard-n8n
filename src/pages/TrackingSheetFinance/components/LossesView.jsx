@@ -30,7 +30,7 @@ const N = {
   sideBg: '#f7f7f5',
   red: '#b42318',
   redBg: '#fdecec',
-  green: '#0f7b6c',,
+  green: '#0f7b6c',
   amber: '#b45309',
   amberBg: '#fff3e3',
 };
