@@ -7,7 +7,7 @@
 // 100 % additif : nouvelle route + nouvelle page. Rien de l'existant touché.
 // Rôles : admin / ceo / marketing / acquisition_director (mêmes que le backend).
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -17,6 +17,7 @@ import {
 import apiClient from '../../services/apiClient.js';
 import SharedNavbar from '../../components/SharedNavbar.jsx';
 import Leaderboard from './Leaderboard.jsx';
+import useMetaAdsCache from '../../hooks/useMetaAdsCache.js';
 
 const ALLOWED_ROLES = ['admin', 'ceo', 'marketing', 'acquisition_director', 'head_of_acquisition'];
 const ACCENT = '#f0653e'; // coral, comme la réf
@@ -108,27 +109,13 @@ export default function MetaAds() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // all | active | inactive
 
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const fetchData = useCallback(async () => {
-    // L'onglet Leaderboard fait son propre fetch (endpoint dédié) — le
-    // tableau standard n'a rien à charger dans ce mode.
-    if (level === 'leaderboard') { setLoading(false); return; }
-    setLoading(true); setError(null);
-    try {
-      const q = `?level=${level}&since=${period.since}&until=${period.until}`;
-      const r = await apiClient.get(`/api/v1/marketing/meta-ads${q}`);
-      setData(r);
-    } catch (e) {
-      setData(null);
-      if (e?.status === 503) setError({ kind: 'config', msg: e?.data?.detail || 'Configuration Meta en attente (tokens .env).' });
-      else setError({ kind: 'err', msg: e?.data?.detail || e?.message || 'Erreur de chargement' });
-    } finally { setLoading(false); }
-  }, [level, period]);
-
-  useEffect(() => { if (authChecked) fetchData(); }, [authChecked, fetchData]);
+  // L'onglet Leaderboard fait son propre fetch (endpoint dédié, cf.
+  // Leaderboard.jsx) — le tableau standard n'a rien à charger dans ce mode,
+  // donc `kind` est null pour ne déclencher aucun appel réseau superflu.
+  // Idem tant que l'auth n'est pas confirmée (le hook est appelé avant le
+  // `return null` ci-dessous, donc AVANT authChecked au tout premier rendu).
+  const tabularKind = (!authChecked || level === 'leaderboard') ? null : level;
+  const { data, loading, error, refresh: fetchData } = useMetaAdsCache(tabularKind, period.since, period.until);
 
   const rows = useMemo(() => {
     let r = data?.rows || [];

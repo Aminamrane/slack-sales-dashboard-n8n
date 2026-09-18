@@ -8,10 +8,10 @@
 // Les "variantes" sont des SUGGESTIONS textuelles générées par heuristiques
 // côté backend — rien n'est créé ni modifié sur Meta.
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Lightbulb, Info, AlertCircle, ChevronDown } from 'lucide-react';
-import apiClient from '../../services/apiClient.js';
+import useMetaAdsCache from '../../hooks/useMetaAdsCache.js';
 
 const nf = new Intl.NumberFormat('fr-FR');
 const eur = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
@@ -202,24 +202,7 @@ function VariantSuggestions({ rows, T }) {
 
 // ── Composant principal ─────────────────────────────────────────────────────
 export default function Leaderboard({ T, period }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const fetchData = useCallback(async () => {
-    setLoading(true); setError(null);
-    try {
-      const q = `?since=${period.since}&until=${period.until}`;
-      const r = await apiClient.get(`/api/v1/marketing/meta-ads/leaderboard${q}`);
-      setData(r);
-    } catch (e) {
-      setData(null);
-      if (e?.status === 503) setError({ kind: 'config', msg: e?.data?.detail || 'Configuration Meta en attente (tokens .env).' });
-      else setError({ kind: 'err', msg: e?.data?.detail || e?.message || 'Erreur de chargement' });
-    } finally { setLoading(false); }
-  }, [period]);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const { data, loading, error } = useMetaAdsCache('leaderboard', period.since, period.until);
 
   const rows = useMemo(() => data?.rows || [], [data]);
   const td = { padding: '11px 14px', fontSize: 13, textAlign: 'right', color: T.text, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' };

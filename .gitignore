@@ -52,3 +52,12 @@ src/assets/clients-export-*.csv
 src/assets/prospects-*.csv
 data/clients-export-*.csv
 data/prospects-*.csv
+
+# Infra/accès SSH prod (hosts, users, commandes, clés) — jamais commité, repo public
+connexions-ssh-owner.txt
+api/connexions-ssh-owner.txt
+ovh_migration
+api/ovh_migration
+*.pem
+id_ed25519*
+id_rsa*
