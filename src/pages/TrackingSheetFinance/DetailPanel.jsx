@@ -270,6 +270,16 @@ export default function DetailPanel({
       .catch((e) => console.error('[DetailPanel profile]', e));
   }, [clientId]);
 
+  // Une édition de la fiche (contact, société rattachée, associé…) change
+  // aussi ce que la TABLE affiche et cherche : les emails et téléphones
+  // secondaires font partie de la ligne. On recharge donc les lignes du mois
+  // tout de suite, sans attendre la synchro (incident 2026-09-18, n°81 :
+  // un email ajouté restait introuvable dans la recherche).
+  const refreshProfileAndRows = useCallback(() => {
+    refreshProfile();
+    onPromiseChanged?.();
+  }, [refreshProfile, onPromiseChanged]);
+
   useEffect(() => {
     if (!open || !clientId) return;
     setProfile(null);
@@ -895,7 +905,7 @@ export default function DetailPanel({
                 canEditMoney={canEditMoney}
                 editing={contractEditing}
                 clientId={clientId}
-                onProfileChanged={refreshProfile}
+                onProfileChanged={refreshProfileAndRows}
                 onContractChanged={reloadAfterExit}
                 onShowToast={onShowToast}
                 onCopied={onCopied}
