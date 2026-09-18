@@ -1826,7 +1826,7 @@ function ContractInfoList({
               le {profile.payment_day_effective} de chaque mois
             </span>
           ) : (
-            <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }}>À définir au premier paiement</span>
+            <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }} title="Sans jour connu, le mois est dû dès le 1er. Le jour se fixera au premier paiement daté, ou à la main.">Dès le 1er, jusqu'au premier paiement</span>
           )}
           {profile?.payment_day_source === 'finance' && (
             <span title={profile.payment_day_by ? `fixé par ${profile.payment_day_by}` : undefined} style={{ fontSize: 10.5, color: N.textFaint }}>
