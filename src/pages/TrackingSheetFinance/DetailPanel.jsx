@@ -1744,7 +1744,23 @@ function ContractInfoList({
         </div>
       ),
     },
-    { Icon: PenLine,    label: 'Date de signature',    value: formatDateLongFR(profile?.date_signature) },
+    // Date de signature EFFECTIVE pour la finance : la date d'effet posée par
+    // les sales sur le contrat prime (dev 2026-09-18) ; on le dit quand c'est
+    // le cas, pour que personne ne cherche pourquoi elle diffère du CRM.
+    { Icon: PenLine,    label: 'Date de signature',
+      value: formatDateLongFR(profile?.date_signature),
+      node: profile?.date_signature ? (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span>{formatDateLongFR(profile.date_signature)}</span>
+          {profile.date_signature_source === 'contrat' && (
+            <span title="Date d’effet posée par les sales sur le contrat : la finance la prend pour signature (grille, départ, anniversaire)."
+              style={{ fontSize: 10.5, color: N.textFaint }}>
+              date d’effet du contrat
+            </span>
+          )}
+        </span>
+      ) : undefined,
+    },
     { Icon: User,       label: 'Sales',                value: profile?.sales_name },
     // SIREN : le backfill est une donnée sourcée (lecture) ; sans lui, la
     // saisie alimente l'override du board (siren_ovr) et le journal. Vivait
