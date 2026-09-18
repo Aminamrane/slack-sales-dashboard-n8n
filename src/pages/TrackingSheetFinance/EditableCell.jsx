@@ -554,10 +554,14 @@ export const EditableSelect = React.memo(function EditableSelect({
   notionSolid = false,
   placeholderItalic = false,
   truncate = true,
+  // `chip` : rendu « champ » (bordure, fond, chevron) pour la fiche, où un
+  // simple texte ne se lisait pas comme modifiable (retour dev 2026-09-19).
+  chip = false,
 }) {
   const [open, setOpen] = useState(false);
   const [state, flash] = useSaveFlash();
   const triggerRef = useRef(null);
+  const [hover, setHover] = useState(false);
 
   const onPick = useCallback(async (next) => {
     setOpen(false);
@@ -611,6 +615,8 @@ export const EditableSelect = React.memo(function EditableSelect({
       <span
         ref={triggerRef}
         onClick={(e) => { if (!disabled) { e.stopPropagation(); setOpen((v) => !v); } }}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
         style={{
           ...cellStyle(state),
           width,
@@ -619,7 +625,15 @@ export const EditableSelect = React.memo(function EditableSelect({
           maxWidth: '100%',
           overflow: 'hidden',
           fontStyle: !value && placeholderItalic ? 'italic' : 'normal',
+          ...(chip && !disabled ? {
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '3px 8px 3px 10px', borderRadius: 6,
+            border: `1px solid ${hover || open ? '#9b9a97' : '#d5d5d2'}`,
+            background: hover || open ? '#f7f6f3' : '#fff',
+            transition: 'border-color 0.12s, background 0.12s',
+          } : {}),
         }}
+        title={chip && !disabled ? 'Cliquer pour modifier' : undefined}
       >
         {value ? (
           pillColors ? (
@@ -654,6 +668,11 @@ export const EditableSelect = React.memo(function EditableSelect({
                   }}>{placeholder}</span>
                 : null)
             : placeholder
+        )}
+        {chip && !disabled && (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#787774" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+            <path d="m6 9 6 6 6-6" />
+          </svg>
         )}
       </span>
       <PortalDropdown

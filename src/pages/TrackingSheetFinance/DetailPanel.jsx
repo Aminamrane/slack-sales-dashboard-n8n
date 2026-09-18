@@ -145,6 +145,10 @@ export default function DetailPanel({
   const [profile, setProfile] = useState(null);
   // Édition en place des informations contractuelles (crayon de section).
   const [contractEditing, setContractEditing] = useState(false);
+  // Le mode modification est propre à UNE fiche : changer de client ou fermer
+  // le panneau le referme. Sinon on arrivait chez un autre client en pleine
+  // édition sans l'avoir ouverte (retour dev 2026-09-19).
+  useEffect(() => { setContractEditing(false); }, [clientId, open]);
   // Historique des actions client (vue synthétique, demande Ismahane) —
   // endpoint en cours de déploiement côté backend : toute erreur (404…)
   // masque simplement la section, jamais de crash.
@@ -1775,11 +1779,34 @@ function ContractInfoList({
     {
       Icon: CalendarCheck2,
       label: "RDV d'onboarding",
-      // LECTURE SEULE, volontairement (arbitrage dev 2026-08-27) : la date
-      // vient de la déclaration de vente. La finance la consulte, elle ne
-      // la saisit pas — sinon deux vérités pour la date qui déclenche la
-      // facturation.
-      value: formatDateLongFR(profile?.rdv_onboarding),
+      // Lecture seule quand la date existe (arbitrage dev 2026-08-27 : elle
+      // vient de la déclaration de vente). Quand elle MANQUE, la finance peut
+      // la saisir (retour dev 2026-09-19) : elle est écrite comme date
+      // manuelle du board (même champ que le board, même endpoint), donc le
+      // board, la facturation et la fiche restent une seule vérité.
+      copyValue: formatDateLongFR(profile?.rdv_onboarding),
+      node: (editing && canEdit && profile && !profile.rdv_onboarding) ? (
+        <EditableDate
+          value={null}
+          placeholder="Saisir la date"
+          onCommit={async (value) => {
+            if (!value) return;
+            const numero = client?.numero_client || profile?.numero_client;
+            if (!numero) throw new Error('Client sans numéro');
+            try {
+              await apiClient.patch('/api/v1/optilex/board-tracking', { numero_client: numero, rdv_onboarding_date_manual: value });
+              onProfileChanged?.();
+              onContractChanged?.();
+            } catch (e) {
+              onShowToast?.(e?.data?.detail || 'Saisie impossible', 'error');
+              throw e;
+            }
+          }}
+          width="auto"
+        />
+      ) : (
+        <span>{formatDateLongFR(profile?.rdv_onboarding) || <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }}>Vide</span>}</span>
+      ),
     },
     // Premier paiement réel, puis jour modifiable par la direction financière.
     {
@@ -1846,6 +1873,7 @@ function ContractInfoList({
           // La formule commande le montant facturé : direction financière
           // seulement. La modalité, elle, reste ouverte à l'équipe.
           disabled={!canEditMoney}
+          chip
           placeholderItalic
           width="auto"
         />
@@ -1868,6 +1896,7 @@ function ContractInfoList({
           optionLabels={PAYMENT_MODE_LABELS}
           onCommit={(v) => askEffective('payment_mode', v, `Owner ${paymentModeLabel(v)}`)}
           disabled={!canEdit}
+          chip
           placeholderItalic
           width="auto"
         />
@@ -1884,6 +1913,7 @@ function ContractInfoList({
           optionLabels={PAYMENT_MODE_LABELS}
           onCommit={(v) => askEffective('payment_mode_optilex', v, `Opti'lex ${paymentModeLabel(v)}`)}
           disabled={!canEdit}
+          chip
           placeholderItalic
           width="auto"
         />
@@ -2540,28 +2570,51 @@ function RdvJuristeSection({ boardRow, agenda, onCopied }) {
 // des sociétés de convention est rattachée au lead, celle des contacts ne
 // gère que des emails. Backend : `client_related_entity`, archivage logique.
 // ── Sociétés du client : liste ordonnée, principale en tête ─────────────────
-// Demande dev 2026-09-18 : « structure 1, 2, 3 = société 1, 2, 3 ; pouvoir
-// mettre une société en premier, changer l'ordre, tout supprimer ». Les
-// flèches réordonnent (la première devient la principale), ✕ retire (la
-// suivante devient principale), nom et SIREN se corrigent en ligne.
+// Demande dev 2026-09-18/19 : « structure 1, 2, 3 = société 1, 2, 3 ; pouvoir
+// mettre une société en premier, changer l'ordre, tout supprimer » et « qu'on
+// repère bien chaque structure avec son SIREN, un SVG, la principale… et que
+// l'ajout soit clair ». Chaque société est une carte numérotée (icône, nom,
+// SIREN) ; en édition : flèches pour réordonner (la première devient la
+// principale), ✕ pour retirer (la suivante prend la place), nom et SIREN
+// modifiables en ligne, bouton « Ajouter une société » qui ouvre le formulaire.
+const SIREN_FMT = (v) => (v ? String(v).replace(/\D/g, '').replace(/(\d{3})(?=\d)/g, '$1 ') : '');
+
+function BuildingIcon({ size = 16, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16" />
+      <path d="M15 9h4a1 1 0 0 1 1 1v11" />
+      <path d="M2 21h20" />
+      <path d="M8 8h2M8 12h2M8 16h2M12 8h-1M12 12h-1M12 16h-1M17 13h1M17 17h1" />
+    </svg>
+  );
+}
+
 function CompanyList({
   clientId, principalName, principalSiren, principalSirenSource,
   companies, editing, canEditSiren, onChanged, onShowToast,
 }) {
   const [busy, setBusy] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newSiren, setNewSiren] = useState('');
   const items = useMemo(() => [
     { id: 'principal', name: principalName || '', siren: principalSiren || null, principal: true },
     ...(companies || []).map((c) => ({ id: c.id, name: c.name, siren: c.siren || null, principal: false })),
   ], [principalName, principalSiren, companies]);
 
+  useEffect(() => { if (!editing) { setAdding(false); setNewName(''); setNewSiren(''); } }, [editing]);
+
   const run = useCallback(async (fn, failMsg) => {
-    if (busy) return;
+    if (busy) return false;
     setBusy(true);
     try {
       await fn();
       onChanged?.();
+      return true;
     } catch (e) {
       onShowToast?.(e?.data?.detail || failMsg, 'error');
+      return false;
     } finally {
       setBusy(false);
     }
@@ -2599,13 +2652,24 @@ function CompanyList({
     'Modification impossible',
   ), [clientId, run]);
 
-  const arrowStyle = (disabled) => ({
-    border: 'none', background: 'transparent', padding: 0, display: 'inline-flex',
+  const add = useCallback(async () => {
+    const name = newName.trim();
+    if (name.length < 2) return;
+    const ok = await run(
+      () => apiClient.post(`/api/v1/finance-periods/client/${clientId}/entities`, { kind: 'societe', name, siren: newSiren.trim() || null }),
+      'Ajout impossible',
+    );
+    if (ok) { setNewName(''); setNewSiren(''); setAdding(false); }
+  }, [newName, newSiren, clientId, run]);
+
+  const iconBtn = (disabled) => ({
+    border: 'none', background: 'transparent', padding: 2, display: 'inline-flex', borderRadius: 4,
     color: disabled ? '#d5d5d2' : N.textFaint, cursor: disabled ? 'default' : 'pointer',
   });
+  const inputStyle = { border: `1px solid ${N.border}`, borderRadius: 6, padding: '5px 8px', fontSize: 12.5, fontFamily: 'inherit', outline: 'none', background: '#fff' };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end', minWidth: 0, width: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'stretch', minWidth: 0, width: '100%' }}>
       <AnimatePresence initial={false}>
         {items.map((it, index) => (
           <motion.div
@@ -2616,80 +2680,94 @@ function CompanyList({
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
             style={{
-              display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end',
-              maxWidth: '100%', minWidth: 0, width: '100%',
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '7px 10px', borderRadius: 8,
+              border: `1px solid ${it.principal ? '#c9d7cf' : N.border}`,
+              background: it.principal ? '#f1f6f3' : N.sideBg,
+              minWidth: 0,
             }}
           >
-            {editing && (
-              <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 0, flexShrink: 0 }}>
-                <button type="button" title="Monter" disabled={index === 0 || busy} onClick={() => move(index, -1)} style={arrowStyle(index === 0 || busy)}>
-                  <ChevronUp size={13} />
-                </button>
-                <button type="button" title="Descendre" disabled={index === items.length - 1 || busy} onClick={() => move(index, 1)} style={arrowStyle(index === items.length - 1 || busy)}>
-                  <ChevronDown size={13} />
-                </button>
-              </span>
-            )}
-            <span style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, minWidth: 0, flex: 1,
-              padding: it.principal ? 0 : '2px 0',
-            }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, maxWidth: '100%' }}>
+            {/* Numéro de structure + icône : « 1 », « 2 »… la principale en tête */}
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, color: it.principal ? '#3e7d5a' : N.textMuted }}>
+              <span style={{
+                width: 18, height: 18, borderRadius: 999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 10.5, fontWeight: 700, background: it.principal ? '#3e7d5a' : '#e5e4e0', color: it.principal ? '#fff' : N.textMuted,
+              }}>{index + 1}</span>
+              <BuildingIcon size={15} />
+            </span>
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                {editing ? (
+                  <EditableText value={it.name} placeholder="Nom de la société" onCommit={(value) => rename(it, value)} width="auto" />
+                ) : (
+                  <span style={{ fontWeight: 500, color: N.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={it.name}>{it.name}</span>
+                )}
                 {it.principal && (
-                  <span style={{ fontSize: 10.5, fontWeight: 600, color: N.textFaint, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#3e7d5a', background: '#dcebe2', borderRadius: 4, padding: '1px 6px', letterSpacing: '0.04em', textTransform: 'uppercase', flexShrink: 0 }}>
                     Principale
                   </span>
                 )}
-                {editing ? (
-                  <EditableText
-                    value={it.name}
-                    placeholder="Nom de la société"
-                    onCommit={(value) => rename(it, value)}
-                    width="auto"
-                  />
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: N.textFaint }}>
+                <span style={{ letterSpacing: '0.04em', fontWeight: 600, fontSize: 10.5 }}>SIREN</span>
+                {(canEditSiren && editing) ? (
+                  <EditableText value={it.siren} placeholder="9 chiffres" onCommit={(value) => setSiren(it, value)} width="auto" />
                 ) : (
-                  <span style={{ fontWeight: it.principal ? 500 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={it.name}>
-                    {it.name}
+                  <span style={{ color: it.siren ? N.text : N.textFaint, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontStyle: it.siren ? 'normal' : 'italic' }}>
+                    {it.siren ? SIREN_FMT(it.siren) : 'non renseigné'}
                   </span>
                 )}
+                {it.principal && it.siren && principalSirenSource === 'backfill' && <span style={{ fontSize: 10.5 }}>source interne</span>}
               </span>
-              {(canEditSiren && editing) ? (
-                <EditableText
-                  value={it.siren}
-                  placeholder="SIREN (9 chiffres)"
-                  onCommit={(value) => setSiren(it, value)}
-                  width="auto"
-                />
-              ) : (it.siren ? (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: N.textFaint }}>
-                  SIREN
-                  <span style={{ color: N.text, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{it.siren}</span>
-                  {it.principal && principalSirenSource === 'backfill' && <span style={{ fontSize: 10.5 }}>source interne</span>}
-                </span>
-              ) : null)}
             </span>
             {editing && (
-              <button
-                type="button"
-                onClick={() => remove(it)}
-                disabled={busy}
-                title={it.principal ? 'Retirer la principale (la suivante prend sa place)' : 'Retirer'}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: N.textFaint, display: 'inline-flex', padding: 0, flexShrink: 0 }}
-              >
-                <X size={12} />
-              </button>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+                <span style={{ display: 'inline-flex', flexDirection: 'column' }}>
+                  <button type="button" title="Monter" disabled={index === 0 || busy} onClick={() => move(index, -1)} style={iconBtn(index === 0 || busy)}>
+                    <ChevronUp size={13} />
+                  </button>
+                  <button type="button" title="Descendre" disabled={index === items.length - 1 || busy} onClick={() => move(index, 1)} style={iconBtn(index === items.length - 1 || busy)}>
+                    <ChevronDown size={13} />
+                  </button>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => remove(it)}
+                  disabled={busy}
+                  title={it.principal ? 'Retirer la principale (la suivante prend sa place)' : 'Retirer cette société'}
+                  style={iconBtn(busy)}
+                >
+                  <X size={13} />
+                </button>
+              </span>
             )}
           </motion.div>
         ))}
       </AnimatePresence>
-      <RelatedEntityList
-        items={[]}
-        kind="societe"
-        clientId={clientId}
-        editing={editing}
-        onChanged={onChanged}
-        onShowToast={onShowToast}
-      />
+      {editing && !adding && (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          style={{
+            alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6,
+            border: `1px dashed ${N.border}`, background: 'transparent', borderRadius: 8,
+            padding: '6px 10px', fontSize: 12.5, fontWeight: 600, color: N.textMuted, cursor: 'pointer', fontFamily: 'inherit',
+          }}
+        >
+          <span style={{ fontSize: 15, lineHeight: 1 }}>+</span> Ajouter une société
+        </button>
+      )}
+      {editing && adding && (
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '8px 10px', borderRadius: 8, border: `1px dashed ${N.border}`, background: '#fff' }}>
+          <BuildingIcon size={15} color={N.textFaint} />
+          <input autoFocus value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add(); if (e.key === 'Escape') setAdding(false); }} placeholder="Nom de la société" style={{ ...inputStyle, flex: 1, minWidth: 140 }} />
+          <input value={newSiren} onChange={(e) => setNewSiren(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add(); if (e.key === 'Escape') setAdding(false); }} placeholder="SIREN (9 chiffres)" style={{ ...inputStyle, width: 130 }} />
+          <button type="button" onClick={add} disabled={busy || newName.trim().length < 2} style={{ border: 'none', borderRadius: 6, padding: '6px 10px', fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit', cursor: newName.trim().length < 2 ? 'default' : 'pointer', background: newName.trim().length < 2 ? N.sideBg : N.text, color: newName.trim().length < 2 ? N.textFaint : '#fff' }}>
+            Ajouter
+          </button>
+          <button type="button" onClick={() => setAdding(false)} style={{ border: 'none', background: 'transparent', color: N.textFaint, cursor: 'pointer', fontSize: 12.5, fontFamily: 'inherit' }}>Annuler</button>
+        </div>
+      )}
     </div>
   );
 }
