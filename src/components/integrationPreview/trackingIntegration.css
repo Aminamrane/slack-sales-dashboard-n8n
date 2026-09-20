@@ -329,7 +329,7 @@
   .ti-contract-review h1 { font-size:22px; }
   .ip-embedded .ip-page-head { margin-bottom:12px; }
 }
-.ti-preparation .ti-review-actions { position:sticky; bottom:-16px; padding:12px 0 4px; z-index:2; background:#f5f7f8; box-shadow:0 -10px 14px #f5f7f8; }
+.ti-preparation .ti-review-actions { position:sticky; bottom:0; padding:12px 0 4px; z-index:2; background:#f5f7f8; box-shadow:0 -10px 14px #f5f7f8; }
 @media print {
   body:has(.ti-saved-view) #root { display:none; }
   .ti-overlay:has(.ti-saved-view) { position:static; display:block; background:none; padding:0; backdrop-filter:none; }
