@@ -11,8 +11,11 @@ import thirdPlace from "../assets/3st-place.png";
 import iconGlobal from "../assets/global.png";
 import iconFinance from "../assets/finance.png";
 import "../index.css";
+import { performanceRows, ratio } from "../utils/performanceSales.js";
 import RdvHeatmap from "../components/RdvHeatmap.jsx";
 
+const percent = (value, digits=1) => value == null ? '—' : value.toLocaleString('fr-FR', {minimumFractionDigits:digits, maximumFractionDigits:digits}) + '%';
+const parisMonth = () => new Intl.DateTimeFormat('fr-CA',{year:'numeric',month:'2-digit',timeZone:'Europe/Paris'}).format(new Date()).slice(0,7);
 const COLORS = { primary: "#6366f1", secondary: "#fb923c", tertiary: "#10b981" };
 const MONTHS_FR = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
 const monthLabelFR = (ym) => { const p = String(ym || '').split('-'); return (MONTHS_FR[(+p[1] || 1) - 1] || '') + ' ' + (p[0] || ''); };
@@ -58,7 +61,7 @@ const CANONICAL_DISPLAY_NAMES = {
 
 const getCanonicalKey = (rawName) => { const n = normalizeSalesKey(rawName); return NAME_VARIANTS_TO_CANONICAL[n] || n; };
 const displaySalesName = (rawName) => { const k = getCanonicalKey(rawName); return CANONICAL_DISPLAY_NAMES[k] || (rawName ? rawName.trim() : "Unknown"); };
-const EXCLUDED_KEYS = new Set(["mohamed bouaksa", "sara benabid", "sarah amroune", "youcef amrane"]);
+const EXCLUDED_KEYS = new Set();
 const VENTES_BRACKETS = ['1-2', '3-5', '6-10', '11-19', '20+', 'autre'];
 const VENTES_BRACKET_LABEL = { '1-2': '1-2', '3-5': '3-5', '6-10': '6-10', '11-19': '11-19', '20+': '20+', 'autre': 'Autre' };
 
@@ -124,11 +127,14 @@ export default function MonitoringPerf() {
   const [perfData, setPerfData] = useState(null);
   const [callsCrm, setCallsCrm] = useState(null); // /tracking/sales-calls-crm (appels/répondu/répondeur hybride, mai+)
   const [dataLoading, setDataLoading] = useState(true);
+  const [dataError, setDataError] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [sectionErrors, setSectionErrors] = useState({});
   const [leadQualityData, setLeadQualityData] = useState(null);
   const [leadQualityLoading, setLeadQualityLoading] = useState(false);
-  const [leadQualityRange, setLeadQualityRange] = useState(() => { const n = new Date(); return n.getFullYear() + '-' + String(n.getMonth()+1).padStart(2,'0'); });
+  const [leadQualityRange, setLeadQualityRange] = useState(parisMonth);
   const [selectedOrigins, setSelectedOrigins] = useState([]);
-  const [range, setRange] = useState(() => { const n = new Date(); return n.getFullYear() + '-' + String(n.getMonth()+1).padStart(2,'0'); });
+  const [range, setRange] = useState(parisMonth);
   const [canal, setCanal] = useState("global");
   const [adsDetailView, setAdsDetailView] = useState(false);
   const [headcountData, setHeadcountData] = useState(null);
@@ -141,7 +147,7 @@ export default function MonitoringPerf() {
   useEffect(()=>{ try { localStorage.setItem('perfHiddenCols', JSON.stringify([...hiddenCols])); } catch { /* noop */ } }, [hiddenCols]);
   const [avatarMap, setAvatarMap] = useState({});
   useEffect(()=>{ if(!hasAccess) return; let cancelled=false; apiClient.get('/api/v1/users/assignable').then(d=>{ if(cancelled) return; const m={}; (d?.users||[]).forEach(u=>{ const url=u.avatar_url?(/^https?:\/\//i.test(u.avatar_url)?u.avatar_url:apiClient.baseUrl+u.avatar_url):null; m[getCanonicalKey(u.full_name)]={av:url,role:u.role}; }); setAvatarMap(m); }).catch(()=>{}); return ()=>{cancelled=true;}; }, [hasAccess]);
-  const [trackingKpis, setTrackingKpis] = useState(null); // from /tracking/perf-sales-kpis
+  // Appointment figures are supplied by the selected performance channel.
   const [rdvAnalytics, setRdvAnalytics] = useState(null); // from /tracking/rdv-analytics (délai R1→R2 + heatmap no-show)
   const [salesBreakdown, setSalesBreakdown] = useState(null); // from /tracking/sales-breakdown (vue Ventes)
   const [perfView, setPerfView] = useState('default'); // 'default' (tableau perf) | 'ventes' (ventilation salariés/paiement)
@@ -150,97 +156,70 @@ export default function MonitoringPerf() {
   const [setterModal, setSetterModal] = useState(null); // détail d'un setter (par sales)
   const [heatmapSales, setHeatmapSales] = useState('global'); // taux de présence : global | nom d'un sales
 
-  const openDetail = async (personName) => { if (canal !== "ads" && canal !== "cc") return; setDetailModal({ personName, type: canal, data: null, loading: true }); try { const ep = canal === "ads" ? '/api/v1/monitoring/performance/detail/ads' : '/api/v1/monitoring/performance/detail/cc'; const res = await apiClient.get(ep + '?person_name=' + encodeURIComponent(personName) + '&period=' + range); setDetailModal(prev => prev ? { ...prev, data: res, loading: false } : null); } catch { setDetailModal(prev => prev ? { ...prev, data: null, loading: false } : null); } };
+  const detailRequest = useRef(0);
+  const openDetail = async (personName) => {
+    if (!['ads', 'cc'].includes(canal)) return;
+    const request = ++detailRequest.current;
+    setDetailModal({personName, type: canal, data: null, loading: true});
+    try {
+      const res = await apiClient.get(`/api/v1/monitoring/performance/detail/${canal}?person_name=${encodeURIComponent(personName)}&period=${range}`);
+      if (request === detailRequest.current) setDetailModal(prev => prev ? {...prev, data: res, loading: false} : null);
+    } catch {
+      if (request === detailRequest.current) setDetailModal(prev => prev ? {...prev, loading: false} : null);
+    }
+  };
+  useEffect(() => { ++detailRequest.current; setDetailModal(null); setSetterModal(null); setAutreModal(null); setHeatmapSales('global'); }, [range, canal]);
 
-  useEffect(() => { if (!adsDetailView || canal !== "ads") return; let c = false; (async () => { setHeadcountLoading(true); try { const res = await apiClient.get('/api/v1/monitoring/performance/detail/ads/headcount?period=' + range); if (!c) setHeadcountData(res); } catch { if (!c) setHeadcountData(null); } finally { if (!c) setHeadcountLoading(false); } })(); return () => { c = true; }; }, [adsDetailView, range, canal]);
+  useEffect(() => { if (!adsDetailView || canal !== "ads") return; let c = false; (async () => { setHeadcountLoading(true); try { const res = await apiClient.get('/api/v1/monitoring/performance/detail/ads/headcount?period=' + range); if (!c) setHeadcountData(res); } catch { if (!c) setHeadcountData(null); } finally { if (!c) setHeadcountLoading(false); } })(); return () => { c = true; }; }, [adsDetailView, range, canal, refreshKey]);
 
-  useEffect(() => { if (hasAccess) { setDataLoading(true); const period = range === "all" ? "all" : range.match(/^\d{4}-\d{2}$/) ? range : "current_month"; apiClient.get('/api/v1/monitoring/performance/v2?period=' + period).then(d => setPerfData(d)).catch(err => { if (err.message && err.message.includes('401')) navigate("/login"); }).finally(() => setTimeout(() => setDataLoading(false), 150)); } }, [hasAccess, range]);
-  // Appels/répondu/répondeur hybride CRM — mai+ uniquement (avril et avant = OnOff via v2).
-  useEffect(() => { if (hasAccess && range && range.match(/^\d{4}-\d{2}$/) && range >= '2026-05') { setCallsCrm(null); apiClient.get('/api/v1/tracking/sales-calls-crm?month=' + range).then(d => setCallsCrm(d)).catch(() => setCallsCrm(null)); } else { setCallsCrm(null); } }, [hasAccess, range]);
+  useEffect(() => {
+    if (!hasAccess) return;
+    let cancelled = false;
+    setDataLoading(true); setDataError(''); setPerfData(null); setCallsCrm(null);
+    const crm = /^\d{4}-\d{2}$/.test(range) && range >= '2026-05';
+    Promise.all([
+      apiClient.get('/api/v1/monitoring/performance/v2?period=' + range),
+      crm ? apiClient.get('/api/v1/tracking/sales-calls-crm?month=' + range) : Promise.resolve(null),
+    ]).then(([performance, calls]) => {
+      if (!cancelled) { setPerfData(performance); setCallsCrm(calls); }
+    }).catch(() => {
+      if (!cancelled) setDataError('Les performances n’ont pas pu être chargées. Réessayez.');
+    }).finally(() => { if (!cancelled) setDataLoading(false); });
+    return () => { cancelled = true; };
+  }, [hasAccess, range, refreshKey]);
 
-  // Fetch tracking-based R1/R2 KPIs (correct placed/done counts)
-  useEffect(() => { if (hasAccess && range && range !== 'all' && range.match(/^\d{4}-\d{2}$/)) { apiClient.get('/api/v1/tracking/perf-sales-kpis?month=' + range).then(d => setTrackingKpis(d)).catch(() => setTrackingKpis(null)); } else { setTrackingKpis(null); } }, [hasAccess, range]);
+  useEffect(() => {
+    if (!hasAccess) return;
+    let cancelled = false;
+    setRdvAnalytics(null); setSectionErrors(e => ({...e, rdv: false}));
+    apiClient.get('/api/v1/tracking/rdv-analytics' + (range === 'all' ? '' : '?month=' + range))
+      .then(d => { if (!cancelled) setRdvAnalytics(d); })
+      .catch(() => { if (!cancelled) setSectionErrors(e => ({...e, rdv: true})); });
+    return () => { cancelled = true; };
+  }, [hasAccess, range, refreshKey]);
 
-  // Analytics RDV (délai R1→R2 + heatmap no-show par créneau) — suit le mois sélectionné (range), comme le tableau.
-  useEffect(() => { if (hasAccess) { const q = (range && range !== 'all' && range.match(/^\d{4}-\d{2}$/)) ? '?month=' + range : ''; apiClient.get('/api/v1/tracking/rdv-analytics' + q).then(d => setRdvAnalytics(d)).catch(() => setRdvAnalytics(null)); } }, [hasAccess, range]);
-
-  // Vue Ventes (ventilation salariés + paiement par commercial) — lazy, suit le mois sélectionné.
-  useEffect(() => { if (hasAccess && perfView === 'ventes' && range && range !== 'all' && range.match(/^\d{4}-\d{2}$/)) { setSalesBreakdown(null); apiClient.get('/api/v1/tracking/sales-breakdown?month=' + range).then(d => setSalesBreakdown(d)).catch(() => setSalesBreakdown(null)); } }, [hasAccess, perfView, range]);
-
-  // Vue Setters (appels/répondu/répondeur/R1-R2 placés par setter) — lazy, mois sélectionné (mai+).
-  useEffect(() => { if (hasAccess && perfView === 'setters' && range && range !== 'all' && range.match(/^\d{4}-\d{2}$/)) { setSettersPerf(null); apiClient.get('/api/v1/tracking/setters-perf?month=' + range).then(d => setSettersPerf(d)).catch(() => setSettersPerf(null)); } }, [hasAccess, perfView, range]);
+  useEffect(() => {
+    let cancelled = false;
+    setSalesBreakdown(null); setSettersPerf(null); setSectionErrors(e => ({...e, extra: false}));
+    if (!hasAccess || range === 'all' || !['ventes', 'setters'].includes(perfView)) return;
+    if (perfView === 'setters' && range < '2026-05') return;
+    const endpoint = perfView === 'ventes' ? 'sales-breakdown' : 'setters-perf';
+    apiClient.get('/api/v1/tracking/' + endpoint + '?month=' + range)
+      .then(d => { if (!cancelled) (perfView === 'ventes' ? setSalesBreakdown : setSettersPerf)(d); })
+      .catch(() => { if (!cancelled) setSectionErrors(e => ({...e, extra: true})); });
+    return () => { cancelled = true; };
+  }, [hasAccess, perfView, range, refreshKey]);
 
   useEffect(() => { if (hasAccess && viewMode === 'lead_quality') { setLeadQualityLoading(true); let url = '/api/v1/monitoring/lead-quality?period=' + (leadQualityRange || 'current_month'); if (selectedOrigins.length > 0) url += '&' + selectedOrigins.map(o => 'origins=' + encodeURIComponent(o)).join('&'); apiClient.get(url).then(d => setLeadQualityData(d)).catch(err => { if (err.message && err.message.includes('401')) navigate("/login"); }).finally(() => setTimeout(() => setLeadQualityLoading(false), 150)); } }, [hasAccess, viewMode, leadQualityRange, selectedOrigins]);
 
-  // Build lookup from tracking KPIs — by email (primary) + canonical name (fallback)
-  const trackingLookup = useMemo(() => {
-    if (!trackingKpis || !trackingKpis.by_sales) return { byEmail: {}, byName: {} };
-    const byEmail = {};
-    const byName = {};
-    trackingKpis.by_sales.forEach(s => {
-      if (s.email) byEmail[s.email.trim().toLowerCase()] = s;
-      const key = getCanonicalKey(s.sales_name);
-      byName[key] = s;
-    });
-    return { byEmail, byName };
-  }, [trackingKpis]);
-
-  const performanceData = useMemo(() => {
-    if (!perfData) return [];
-    const vd = canal === "ads" ? perfData.ads_view : canal === "cc" ? perfData.cc_view : perfData.global_view;
-    if (!vd || !vd.by_person) return [];
-    const arr = vd.by_person.filter(p => !EXCLUDED_KEYS.has(getCanonicalKey(p.name))).filter(p => (p.leads_assigned||0) > 0 || (p.nbr_signature||0) > 0).map(p => {
-      const ct=p.nbr_appel||0, ca=p.nbr_appel_d||0, sig=p.nbr_signature||0, rev=p.total_revenue||0, cash=p.total_cash||0, la=p.leads_assigned||0, lads=p.leads_ads||0, lcc=p.leads_cc||0, ua=p.unique_attempted||0, uan=p.unique_answered||0;
-      const key = getCanonicalKey(p.name);
-      // Use tracking KPIs for R1/R2 placed/done — match by email (primary) then canonical name (fallback)
-      const nameIsEmail = (p.name || '').includes('@');
-      const pEmail = (p.email || (nameIsEmail ? p.name : '') || '').trim().toLowerCase();
-      const tk = (pEmail && trackingLookup.byEmail[pEmail]) || trackingLookup.byName[key] || null;
-      const r1p = tk ? tk.r1_placed : (p.r1p||0);
-      const r1d = tk ? tk.r1_done : (p.r1r||0);
-      const r2p = tk ? tk.r2_placed : (p.r2p||0);
-      const r2d = tk ? tk.r2_done : (p.r2r||0);
-      // Use conv_v from tracking KPIs (pre-calculated, avoids >100% issues)
-      const convSales = tk && tk.conv_v != null ? tk.conv_v : (r2d>0?(sig/r2d)*100:0);
-      const resolvedName = nameIsEmail && tk?.sales_name ? tk.sales_name : displaySalesName(p.name);
-      const resolvedKey = nameIsEmail && tk ? getCanonicalKey(tk.sales_name) : key;
-      return { salesName: resolvedName, salesKey: resolvedKey, calls_total:ct, calls_answered:ca, r1_placed:r1p, r1_done:r1d, r2_placed:r2p, r2_done:r2d, signatures:sig, revenue:rev, cashCollected:cash, leads_assigned:la, leads_ads:lads, leads_cc:lcc, unique_attempted:ua, unique_answered:uan, conv_global: p.conversion_global||(la>0?(sig/la)*100:0), conv_calls_to_answered: p.conv_calls_to_answered||(ct>0?(ca/ct)*100:0), conv_answered_to_r1p: ca>0?(r1p/ca)*100:0, conv_r1p_to_r1r: r1p>0?(r1d/r1p)*100:0, conv_r2p_to_r2r: r2p>0?(r2d/r2p)*100:0, conv_sales: convSales };
-    });
-    const seen = new Set(); const deduped = arr.filter(p => { if (seen.has(p.salesKey)) return false; seen.add(p.salesKey); return true; });
-    deduped.sort((a,b) => b.signatures !== a.signatures ? b.signatures-a.signatures : b.conv_global !== a.conv_global ? b.conv_global-a.conv_global : b.calls_total-a.calls_total);
-    return deduped;
-  }, [perfData, canal, trackingLookup]);
-
-  // Régime CRM des appels = mai 2026 et après (avant = OnOff).
   const isCrmMonth = !!(range && /^\d{4}-\d{2}$/.test(range) && range >= '2026-05');
-  // Lookup CRM par clé canonique, pour le canal actif (total/ads/cc).
-  const callsLookup = useMemo(() => {
-    if (!callsCrm?.by_sales) return null;
-    const m = {};
-    callsCrm.by_sales.forEach(s => {
-      const v = canal === 'ads' ? s.ads : canal === 'cc' ? s.cc : s.total;
-      const entry = { appels: v.appels || 0, repondu: v.repondu || 0, repondu_lead: v.repondu_lead || 0, repondeur: v.repondeur || 0, qualif: v.qualif || 0, r1p_self: v.r1p_self || 0, r1p_s: v.r1p_s || 0, r2p_self: v.r2p_self || 0, r2p_s: v.r2p_s || 0, crm: !!s.crm_appels };
-      [getCanonicalKey(s.canonical), getCanonicalKey(s.sales), normalizeSalesKey(s.sales)].forEach(k => { if (k) m[k] = entry; });
-    });
-    return m;
-  }, [callsCrm, canal]);
-  // Overlay mai+ : Appels=volume CRM, Décrochés->Répondu (vérité CRM), +Répondeur.
-  const perfRows = useMemo(() => {
-    if (!isCrmMonth || !callsLookup) return performanceData;
-    return performanceData.map(s => {
-      const cr = callsLookup[s.salesKey] || callsLookup[normalizeSalesKey(s.salesName)];
-      const appels = cr ? cr.appels : 0, repondu = cr ? cr.repondu : 0, repondeur = cr ? cr.repondeur : 0;
-      return { ...s, calls_total: appels, calls_answered: repondu, repondeur, unique_answered: repondu, qualif: cr ? cr.qualif : 0, crm_appels: cr ? cr.crm : false,
-        r1p_self: cr ? cr.r1p_self : 0, r1p_s: cr ? cr.r1p_s : 0, r2p_self: cr ? cr.r2p_self : 0, r2p_s: cr ? cr.r2p_s : 0,
-        conv_calls_to_answered: appels > 0 ? (repondu / appels) * 100 : 0,
-        conv_answered_to_r1p: (cr && cr.repondu_lead > 0) ? (((cr.r1p_self||0) + (cr.r1p_s||0)) / cr.repondu_lead) * 100 : 0 };
-    });
-  }, [performanceData, isCrmMonth, callsLookup]);
+  const perfRows = useMemo(() => performanceRows(perfData, callsCrm, canal, getCanonicalKey), [perfData, callsCrm, canal]);
+  const callsAvailable = perfData?.calls_available !== false && perfRows.every(r => r.calls_available);
 
   const totals = useMemo(() => {
     if (!perfRows.length) return { calls:0, answered:0, repondeur:0, qualif:0, signatures:0, revenue:0, cashCollected:0, r1_placed:0, r1_done:0, r2_placed:0, r2_done:0, leads_assigned:0, unique_attempted:0, unique_answered:0, conv_global:0, lead_qualifie:0, closing_r1:0, closing_r2:0, closing_audit:0, conv_calls_to_answered:0, conv_answered_to_r1p:0, conv_r1p_to_r1r:0, conv_r2p_to_r2r:0, conv_sales:0 };
     const t = perfRows.reduce((a,s) => ({ calls:a.calls+s.calls_total, answered:a.answered+s.calls_answered, repondeur:a.repondeur+(s.repondeur||0), qualif:a.qualif+(s.qualif||0), r1_placed:a.r1_placed+s.r1_placed, r1_done:a.r1_done+s.r1_done, r2_placed:a.r2_placed+s.r2_placed, r2_done:a.r2_done+s.r2_done, signatures:a.signatures+s.signatures, revenue:a.revenue+s.revenue, cashCollected:a.cashCollected+s.cashCollected, leads_assigned:a.leads_assigned+s.leads_assigned, unique_attempted:a.unique_attempted+s.unique_attempted, unique_answered:a.unique_answered+s.unique_answered }), { calls:0, answered:0, repondeur:0, qualif:0, r1_placed:0, r1_done:0, r2_placed:0, r2_done:0, signatures:0, revenue:0, cashCollected:0, leads_assigned:0, unique_attempted:0, unique_answered:0 });
-    return { ...t, lead_qualifie:isCrmMonth?(t.answered>0?(t.qualif/t.answered)*100:0):(t.leads_assigned>0?(t.unique_answered/t.leads_assigned)*100:0), closing_r1:t.unique_answered>0?(t.r1_done/t.unique_answered)*100:0, closing_r2:t.r1_done>0?(t.r2_done/t.r1_done)*100:0, closing_audit:t.r2_done>0?(t.signatures/t.r2_done)*100:0, conv_global:t.leads_assigned>0?(t.signatures/t.leads_assigned)*100:0, conv_calls_to_answered:t.calls>0?(t.answered/t.calls)*100:0, conv_answered_to_r1p:t.answered>0?(t.r1_placed/t.answered)*100:0, conv_r1p_to_r1r:t.r1_placed>0?(t.r1_done/t.r1_placed)*100:0, conv_r2p_to_r2r:t.r2_placed>0?(t.r2_done/t.r2_placed)*100:0, conv_sales:t.r2_done>0?(t.signatures/t.r2_done)*100:0 };
+    return { ...t, lead_qualifie:isCrmMonth?(t.answered>0?(t.qualif/t.answered)*100:0):(t.leads_assigned>0?(t.unique_answered/t.leads_assigned)*100:0), closing_r1:ratio(t.r1_done,t.r1_placed), closing_r2:ratio(t.r2_done,t.r2_placed), closing_audit:ratio(t.signatures,t.r2_done), conv_global:ratio(t.signatures,t.leads_assigned), conv_calls_to_answered:t.calls>0?(t.answered/t.calls)*100:0, conv_answered_to_r1p:t.unique_answered>0?(t.r1_placed/t.unique_answered)*100:0, conv_r1p_to_r1r:t.r1_placed>0?(t.r1_done/t.r1_placed)*100:0, conv_r2p_to_r2r:t.r2_placed>0?(t.r2_done/t.r2_placed)*100:0, conv_sales:ratio(t.signatures,t.r2_done) };
   }, [perfRows, isCrmMonth]);
 
   // Vue Ventes : fusionne les rapporteurs bruts par clé canonique (mêmes
@@ -281,9 +260,9 @@ export default function MonitoringPerf() {
 
   const medal = (i) => i===0?<img src={firstPlace} alt="" style={{width:25,height:25}}/>:i===1?<img src={secondPlace} alt="" style={{width:25,height:25}}/>:i===2?<img src={thirdPlace} alt="" style={{width:25,height:25}}/>:<span style={{fontSize:16,fontWeight:800,color:C.secondary,fontVariantNumeric:"tabular-nums"}}>{i+1}</span>;
 
-  const monthOpts = (sy,sm) => { const o=[]; const td=new Date(); const c=new Date(sy,sm-1); const ym=td.getFullYear()*100+td.getMonth(); while(true){ const y=c.getFullYear()*100+c.getMonth(); if(y>ym) break; const v=c.getFullYear()+'-'+String(c.getMonth()+1).padStart(2,'0'); const l=new Intl.DateTimeFormat('fr-FR',{month:'long',year:'numeric'}).format(c); o.unshift({value:v,label:l.charAt(0).toUpperCase()+l.slice(1)}); c.setMonth(c.getMonth()+1); } return o; };
+  const monthOpts = (sy,sm) => { const o=[]; const td=new Date(parisMonth()+'-15T12:00:00'); const c=new Date(sy,sm-1); const ym=td.getFullYear()*100+td.getMonth(); while(true){ const y=c.getFullYear()*100+c.getMonth(); if(y>ym) break; const v=c.getFullYear()+'-'+String(c.getMonth()+1).padStart(2,'0'); const l=new Intl.DateTimeFormat('fr-FR',{month:'long',year:'numeric'}).format(c); o.unshift({value:v,label:l.charAt(0).toUpperCase()+l.slice(1)}); c.setMonth(c.getMonth()+1); } return o; };
   const selS = { fontSize:12, fontWeight:500, padding:'6px 10px', borderRadius:8, border:'1px solid '+C.border, background:darkMode?C.subtle:'#fff', color:C.text, cursor:'pointer', outline:'none' };
-  const pillS = (a) => ({ fontSize:11.5, fontWeight:a?600:500, padding:'5px 14px', borderRadius:8, border:'1px solid '+(a?C.accent:C.border), background:a?(darkMode?C.accent+'25':C.accent+'12'):'transparent', color:a?C.accent:C.muted, cursor:'pointer', transition:'all 0.15s', whiteSpace:'nowrap' });
+  const pillS = (a) => ({ fontSize:11.5, fontWeight:a?600:500, padding:'5px 14px', borderRadius:8, border:'1px solid '+(a?C.accent:C.border), background:a?(darkMode?C.accent+'25':C.accent+'12'):'transparent', color:a?C.accent:C.secondary, cursor:'pointer', transition:'all 0.15s', whiteSpace:'nowrap' });
   const thS = { whiteSpace:'nowrap', textAlign:'center' };
   const tdS = { textAlign:'center', fontVariantNumeric:'tabular-nums' };
   const pctPill = (txt,color)=><span style={{display:'inline-block',padding:'3px 11px',borderRadius:8,fontSize:12.5,fontWeight:600,color,background:color+'22',fontVariantNumeric:'tabular-nums'}}>{txt}</span>;
@@ -304,24 +283,24 @@ export default function MonitoringPerf() {
     { key:'rank', label:'#', tip:'Classement par ventes', always:true, cell:(s,i,k)=><td key={k} style={tdS}>{medal(i)}</td> },
     { key:'sales', label:'Sales', tip:'Commercial', always:true, cell:(s,i,k)=>{const meta=avatarMap[s.salesKey]||{};const av=meta.av;const rl={sales:'Sales',head_of_sales:'Head of Sales',head_of_sales_manager:'Manager',admin:'Admin'}[meta.role]||'';return <td key={k} style={{...tdS,textAlign:'left',paddingLeft:8}}><div style={{display:'flex',alignItems:'center',gap:11}}>{av?<img src={av} alt="" style={{width:36,height:36,borderRadius:'50%',objectFit:'cover',flexShrink:0,border:'1px solid '+C.border}} />:<div style={{width:36,height:36,borderRadius:'50%',background:i===0?COLORS.tertiary:i===1?COLORS.secondary:COLORS.primary,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,color:'#fff',fontWeight:600,flexShrink:0}}>{s.salesName.charAt(0).toUpperCase()}</div>}<div style={{minWidth:0}}><div style={{fontWeight:650,fontSize:13.5,color:C.text,whiteSpace:'nowrap',letterSpacing:'-0.01em',...(canal!=='global'?{cursor:'pointer'}:{})}} onClick={()=>canal!=='global'&&openDetail(s.salesName)}>{s.salesName}</div>{rl&&<div style={{fontSize:11,color:C.muted,marginTop:1}}>{rl}</div>}</div></div></td>;} },
     { key:'leads', label:'Leads', tip:'Leads reçus (créés) dans le mois', cell:(s,i,k)=><td key={k} style={{...tdS,fontWeight:700}}>{canal==='ads'?(s.leads_ads||0):canal==='cc'?(s.leads_cc||0):(s.leads_assigned||0)}</td> },
-    { key:'conv', label:'Conv.%', tip:'Conversion globale : Ventes ÷ Leads', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(s.conv_global.toFixed(2)+'%',gcColor(s.conv_global))}</td> },
-    { key:'appels', label:'Appels', tip:'Volume des appels', cell:(s,i,k)=><td key={k} style={tdS}>{s.calls_total.toLocaleString('fr-FR')}</td> },
+    { key:'conv', label:'Conv.%', tip:'Ventes déclarées dans la période ÷ leads reçus dans la période. Ce ratio d’activité ne suit pas une même cohorte de clients.', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_global,2),gcColor(s.conv_global))}</td> },
+    { key:'appels', label:'Appels', tip:'Volume des appels', cell:(s,i,k)=><td key={k} style={tdS}>{s.calls_available?s.calls_total.toLocaleString('fr-FR'):'—'}</td> },
     { key:'rep', label:isCrmMonth?'Rép.':'Décr.', tip:isCrmMonth?'Leads répondu (atteints), vérité CRM':'Décrochés (OnOff)', cell:(s,i,k)=><td key={k} style={isCrmMonth?{...tdS,color:COLORS.tertiary,fontWeight:600}:tdS}>{s.calls_answered.toLocaleString('fr-FR')}</td> },
     { key:'repondeur', label:'Répondeur', tip:'Tombés sur répondeur / messagerie', crmOnly:true, cell:(s,i,k)=><td key={k} style={{...tdS,color:C.muted}}>{s.repondeur!=null?s.repondeur.toLocaleString('fr-FR'):'—'}</td> },
-    { key:'txrep', label:isCrmMonth?'Tx Rép.':'Tx Décr.', tip:isCrmMonth?'Répondu ÷ Appels':'Décrochés ÷ Appels', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(s.conv_calls_to_answered.toFixed(1)+'%',dcColor(s.conv_calls_to_answered))}</td> },
-    { key:'r1rep', label:isCrmMonth?'R1/Rép':'R1/Décr', tip:isCrmMonth?'R1 placés (sales + setter) ÷ Répondu global (leads atteints)':'R1 placés ÷ Décrochés', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(s.conv_answered_to_r1p.toFixed(1)+'%',r1pColor(s.conv_answered_to_r1p))}</td> },
-    { key:'r1p', label:'R1p', tip:'R1 placés par le sales lui-même', cell:(s,i,k)=><td key={k} style={tdS}>{isCrmMonth?s.r1p_self:s.r1_placed}</td> },
+    { key:'txrep', label:isCrmMonth?'Tx Rép.':'Tx Décr.', tip:isCrmMonth?'Répondu ÷ Appels':'Décrochés ÷ Appels', cell:(s,i,k)=><td key={k} style={tdS}>{s.calls_available?pctPill(percent(s.conv_calls_to_answered,1),dcColor(s.conv_calls_to_answered)):'—'}</td> },
+    { key:'r1rep', label:isCrmMonth?'R1/Rép':'R1/Décr', tip:isCrmMonth?'Parmi les contacts atteints dans la période : part ayant un R1 planifié dans cette même période':'R1 placés ÷ Décrochés', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_answered_to_r1p,1),r1pColor(s.conv_answered_to_r1p))}</td> },
+    { key:'r1p', label:'R1p', tip:'R1 planifiés dans la période, par le sales lui-même', cell:(s,i,k)=><td key={k} style={tdS}>{isCrmMonth?s.r1p_self:s.r1_placed}</td> },
     { key:'r1s', label:'R1(S)', tip:'R1 placés par le setter', crmOnly:true, cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.primary,fontWeight:600}}>{s.r1p_s||'—'}</td> },
-    { key:'r1e', label:'R1E', tip:'R1 effectués (réalisés)', cell:(s,i,k)=><td key={k} style={tdS}>{s.r1_done}</td> },
-    { key:'txr1', label:'Tx R1', tip:'R1 effectués ÷ R1 placés', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(s.conv_r1p_to_r1r.toFixed(0)+'%',rxColor(s.conv_r1p_to_r1r))}</td> },
+    { key:'r1e', label:'R1E', tip:'R1 planifiés dans la période et qualifiés comme effectués', cell:(s,i,k)=><td key={k} style={tdS}>{s.r1_done}</td> },
+    { key:'txr1', label:'Tx R1', tip:'R1 effectués ÷ R1 placés', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_r1p_to_r1r,0),rxColor(s.conv_r1p_to_r1r))}</td> },
     { key:'r2p', label:'R2p', tip:'R2 placés par le sales', cell:(s,i,k)=><td key={k} style={tdS}>{isCrmMonth?s.r2p_self:s.r2_placed}</td> },
     { key:'r2s', label:'R2(S)', tip:'R2 placés par le setter', crmOnly:true, cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.primary,fontWeight:600}}>{s.r2p_s||'—'}</td> },
-    { key:'r2e', label:'R2E', tip:'R2 effectués', cell:(s,i,k)=><td key={k} style={tdS}>{s.r2_done}</td> },
-    { key:'txr2', label:'Tx R2', tip:'R2 effectués ÷ R2 placés', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(s.conv_r2p_to_r2r.toFixed(0)+'%',rxColor(s.conv_r2p_to_r2r))}</td> },
+    { key:'r2e', label:'R2E', tip:'R2 planifiés dans la période et qualifiés comme effectués, y compris réflexion ou refus après rendez-vous', cell:(s,i,k)=><td key={k} style={tdS}>{s.r2_done}</td> },
+    { key:'txr2', label:'Tx R2', tip:'R2 effectués ÷ R2 placés', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_r2p_to_r2r,0),rxColor(s.conv_r2p_to_r2r))}</td> },
     { key:'ventes', label:'Ventes', tip:'Nombre de ventes', cell:(s,i,k)=><td key={k} style={{...tdS,fontWeight:800,fontSize:15,color:COLORS.tertiary}}>{s.signatures}</td> },
-    { key:'convv', label:'Conv.V.', tip:'Conversion ventes : Ventes ÷ R2 effectués', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(s.conv_sales.toFixed(1)+'%',cvColor(s.conv_sales))}</td> },
-    { key:'revenue', label:'Revenue', tip:'Revenu généré', cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.secondary}}>{s.revenue>0?Math.round(s.revenue).toLocaleString('fr-FR')+'€':'—'}</td> },
-    { key:'cash', label:'Cash', tip:'Cash encaissé', cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.tertiary}}>{s.cashCollected>0?Math.round(s.cashCollected).toLocaleString('fr-FR')+'€':'—'}</td> },
+    { key:'convv', label:'Conv.V.', tip:'Conversion ventes : Ventes ÷ R2 effectués', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_sales,1),cvColor(s.conv_sales))}</td> },
+    { key:'revenue', label:'Revenu', tip:'Revenu enregistré dans les déclarations de vente', cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.secondary}}>{s.revenue.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})}</td> },
+    { key:'cash', label:'Cash déclaré', tip:'Cash déclaré à la vente ; ce montant ne constitue pas un encaissement bancaire', cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.tertiary}}>{s.cashCollected.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})}</td> },
   ];
 
   if (loading) return <div style={{minHeight:'100vh',background:C.surface}} />;
@@ -331,7 +310,7 @@ export default function MonitoringPerf() {
     <>
       {!embedMode && <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />}
       {tip && <CalcTip text={tip.t} rect={tip.r} darkMode={darkMode} />}
-      <style>{`@keyframes pageReveal{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@keyframes sidebarReveal{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:none}}@keyframes rowIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}html,body{background:${darkMode?'#13141b':'#ffffff'}}.mp-scroll::-webkit-scrollbar{width:3px;height:3px}.mp-scroll::-webkit-scrollbar-track{background:transparent}.mp-scroll::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:4px}`}</style>
+      <style>{`@keyframes pageReveal{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@keyframes sidebarReveal{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:none}}@keyframes rowIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}html,body{background:${darkMode?'#13141b':'#ffffff'}}.perfv2{border-collapse:separate;border-spacing:0;background:${C.bg};border-radius:14px}.perfv2 th{padding:14px 12px;font-size:12px;font-weight:600;color:${C.secondary};border-bottom:1px solid ${C.border}}.perfv2 td{padding:13px 12px;font-size:13px;border-bottom:1px solid ${C.border};white-space:nowrap}.perfv2 tbody tr:hover{background:${C.subtle}}.mp-scroll::-webkit-scrollbar{width:3px;height:3px}.mp-scroll::-webkit-scrollbar-track{background:transparent}.mp-scroll::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:4px}`}</style>
 
       <div style={{animation:'pageReveal 0.5s cubic-bezier(0.4,0,0.2,1) both',fontFamily:"'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"}}>
         <div style={{display:'flex',alignItems:'stretch',minHeight:'100vh'}}>
@@ -363,16 +342,17 @@ export default function MonitoringPerf() {
           <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column',padding:'8px 8px 8px 0',gap:12}}>
 
             {/* FILTERS HEADER */}
-            <div style={{height:76,background:darkMode?C.bg:'#f6f7f9',borderRadius:8,flexShrink:0,border:'1px solid '+C.border,marginLeft:8,display:'flex',alignItems:'center',padding:'0 20px',gap:10}}>
+            <div style={{minHeight:76,flexWrap:'wrap',background:darkMode?C.bg:'#f6f7f9',borderRadius:8,flexShrink:0,border:'1px solid '+C.border,marginLeft:8,display:'flex',alignItems:'center',padding:'12px 20px',gap:10}}>
               {viewMode==='perf_sales' ? (<>
-                <select value={range} onChange={e=>setRange(e.target.value)} style={selS}>
+                <select aria-label="Période des performances" value={range} onChange={e=>setRange(e.target.value)} style={selS}>
                   {monthOpts(2025,9).map(m=><option key={m.value} value={m.value}>{m.label}</option>)}
-                  <option value="all">All time</option>
+                  <option value="all">Toutes les périodes</option>
                 </select>
                 <div style={{width:1,height:28,background:C.border}} />
-                {['global','ads','cc'].map(c=>(<button key={c} onClick={()=>{setCanal(c);if(c!=='ads')setAdsDetailView(false);}} style={pillS(canal===c)}>{c==='global'?'Global':c.toUpperCase()}</button>))}
-                {canal==='ads' && (<><div style={{width:1,height:28,background:C.border}} /><button onClick={()=>setAdsDetailView(v=>!v)} style={pillS(adsDetailView)}>{adsDetailView?'Funnel':'D\u00e9tail'}</button></>)}
+                {perfView === 'default' && ['global','ads','cc'].map(c=>(<button key={c} onClick={()=>{setCanal(c);if(c!=='ads')setAdsDetailView(false);}} style={pillS(canal===c)}>{c==='global'?'Global':c.toUpperCase()}</button>))}
+                {perfView === 'default' && canal==='ads' && (<><div style={{width:1,height:28,background:C.border}} /><button onClick={()=>setAdsDetailView(v=>!v)} style={pillS(adsDetailView)}>{adsDetailView?'Funnel':'D\u00e9tail'}</button></>)}
                 <div style={{flex:1}} />
+                <button onClick={()=>setRefreshKey(k=>k+1)} style={selS} disabled={dataLoading}>Actualiser</button>
                 <button onClick={()=>setPerfView(v=>v==='ventes'?'default':'ventes')} style={pillS(perfView==='ventes')}>Ventes</button>
                 <button onClick={()=>setPerfView(v=>v==='setters'?'default':'setters')} style={pillS(perfView==='setters')}>Setters</button>
               </>) : (<>
@@ -398,13 +378,16 @@ export default function MonitoringPerf() {
               <div className="mp-scroll" style={{background:darkMode?C.bg:'#f6f7f9',borderRadius:8,border:'1px solid '+C.border,overflow:'auto',minHeight:'calc(100vh - 120px)',maxHeight:'calc(100vh - 120px)'}}>
 
                 {viewMode==='perf_sales' && (<div style={{padding:'20px 20px 28px'}}>
-                  <h2 style={{fontSize:20,fontWeight:700,color:C.text,margin:'0 0 4px'}}>Monitoring Perf. Sales</h2>
+                  <h2 style={{fontSize:20,fontWeight:700,color:C.text,margin:'0 0 4px'}}>Performance Sales</h2>
+                  <p style={{color:C.secondary,fontSize:13,margin:"8px 0 20px"}}>Les ventes déclarées et l’activité commerciale de la période sélectionnée.</p>
+                  {dataError && <div role="alert" style={{padding:16,color:C.text,border:`1px solid ${C.border}`,borderRadius:12}}>{dataError} <button onClick={()=>setRefreshKey(k=>k+1)} style={selS}>Réessayer</button></div>}
+                  {sectionErrors.extra && <p role="alert" style={{color:C.secondary}}>Cette vue n’a pas pu être chargée. Utilisez « Actualiser » pour réessayer.</p>}
 
                   {perfView === 'ventes' ? (
                     <div style={{padding:'4px 0 8px'}}>
                       {range==='all' ? (
                         <div style={{textAlign:'center',padding:48,color:C.muted}}>S&eacute;lectionne un mois pr&eacute;cis pour la vue Ventes.</div>
-                      ) : !salesBreakdown ? (
+                      ) : sectionErrors.extra ? null : !salesBreakdown ? (
                         <div style={{textAlign:'center',padding:48,color:C.muted}}>Chargement&hellip;</div>
                       ) : ventesData.rows.length===0 ? (
                         <div style={{textAlign:'center',padding:48,color:C.muted}}>Aucune vente sur ce mois.</div>
@@ -461,14 +444,14 @@ export default function MonitoringPerf() {
                         <div style={{textAlign:'center',padding:48,color:C.muted}}>Sélectionne un mois précis pour la vue Setters.</div>
                       ) : range < '2026-05' ? (
                         <div style={{textAlign:'center',padding:48,color:C.muted}}>Données setter disponibles à partir de mai 2026.</div>
-                      ) : !settersPerf ? (
+                      ) : sectionErrors.extra ? null : !settersPerf ? (
                         <div style={{textAlign:'center',padding:48,color:C.muted}}>Chargement…</div>
                       ) : (settersPerf.by_setter||[]).length===0 ? (
                         <div style={{textAlign:'center',padding:48,color:C.muted}}>Aucun setter sur ce mois.</div>
                       ) : (
                         <div style={{overflowX:'auto'}}>
                           <table className="leaderboard" style={{width:'100%',minWidth:800}}>
-                            <thead><tr>{['#','Setter','Appels','Répondu','Répondeur','R1 placés','R2 placés','Signés'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead>
+                            <thead><tr>{['#','Setter','Appels','Répondu','Non aboutis','R1 placés','R2 placés','Signés'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead>
                             <tbody>
                               {[...settersPerf.by_setter].sort((a,b)=>(b.signes-a.signes)||(b.appels-a.appels)).map((s,i)=>(
                                 <tr key={s.setter} onClick={()=>setSetterModal(s)} style={{cursor:'pointer'}}>
@@ -484,7 +467,7 @@ export default function MonitoringPerf() {
                               ))}
                             </tbody>
                           </table>
-                          <div style={{fontSize:11.5,color:C.muted,marginTop:10,fontStyle:'italic'}}>Clique un setter pour le détail par commercial.</div>
+                          <p style={{fontSize:12,color:C.secondary}}>Appels : compteurs cumulés des dossiers contactés ce mois-ci. Les rendez-vous suivent leur date planifiée et les signatures leur date de signature.</p><div style={{fontSize:11.5,color:C.muted,marginTop:10,fontStyle:'italic'}}>Clique un setter pour le détail par commercial.</div>
                         </div>
                       )}
                       {setterModal && (
@@ -493,7 +476,7 @@ export default function MonitoringPerf() {
                             <div style={{fontSize:15,fontWeight:700,color:C.text}}>Détail — {setterModal.setter}</div>
                             <div style={{fontSize:12,color:C.muted,margin:'2px 0 14px'}}>Par commercial · {setterModal.appels} appels · {setterModal.repondu} répondu · {setterModal.r1_places} R1 · {setterModal.r2_places} R2 · {setterModal.signes} signés</div>
                             <table style={{width:'100%',fontSize:13,borderCollapse:'collapse'}}>
-                              <thead><tr>{['Commercial','Appels','Répondu','Répondeur','R1 placés','R2 placés'].map((h,i)=><th key={h} style={{textAlign:i===0?'left':'center',color:C.muted,fontWeight:600,padding:'4px 8px',borderBottom:'1px solid '+C.border}}>{h}</th>)}</tr></thead>
+                              <thead><tr>{['Commercial','Appels','Répondu','Non aboutis','R1 placés','R2 placés'].map((h,i)=><th key={h} style={{textAlign:i===0?'left':'center',color:C.muted,fontWeight:600,padding:'4px 8px',borderBottom:'1px solid '+C.border}}>{h}</th>)}</tr></thead>
                               <tbody>
                                 {setterModal.detail.map((d,i)=>(<tr key={i}><td style={{padding:'7px 8px',color:C.text,borderBottom:'1px solid '+C.subtle}}>{displaySalesName(d.sales)}</td><td style={{padding:'7px 8px',textAlign:'center',color:C.text,fontWeight:600,borderBottom:'1px solid '+C.subtle}}>{d.appels}</td><td style={{padding:'7px 8px',textAlign:'center',color:COLORS.tertiary,fontWeight:600,borderBottom:'1px solid '+C.subtle}}>{d.repondu}</td><td style={{padding:'7px 8px',textAlign:'center',color:C.muted,borderBottom:'1px solid '+C.subtle}}>{d.repondeur}</td><td style={{padding:'7px 8px',textAlign:'center',color:C.text,borderBottom:'1px solid '+C.subtle}}>{d.r1_places||'—'}</td><td style={{padding:'7px 8px',textAlign:'center',color:C.text,borderBottom:'1px solid '+C.subtle}}>{d.r2_places||'—'}</td></tr>))}
                               </tbody>
@@ -505,23 +488,25 @@ export default function MonitoringPerf() {
                     </div>
                   ) : (<>
 
-                  <div style={{display:'grid',gridTemplateColumns:'repeat(5, minmax(0, 1fr))',gap:10,marginBottom:16}}>
-                    {[{l:'Appels',v:totals.calls.toLocaleString('fr-FR'),ic:'phone'},...(isCrmMonth?[{l:'Répondu',v:totals.answered.toLocaleString('fr-FR'),a:COLORS.tertiary,ic:'check'},{l:'Répondeur',v:totals.repondeur.toLocaleString('fr-FR'),ic:'voicemail'}]:[{l:'Décrochés',v:totals.answered.toLocaleString('fr-FR'),ic:'check'}]),{l:'R1 placé',v:totals.r1_placed.toLocaleString('fr-FR'),ic:'calendar'},{l:'R1 effectué',v:totals.r1_done.toLocaleString('fr-FR'),ic:'calcheck'},{l:'R2 placé',v:totals.r2_placed.toLocaleString('fr-FR'),ic:'calendar'},{l:'R2 effectué',v:totals.r2_done.toLocaleString('fr-FR'),ic:'calcheck'},{l:'Leads',v:totals.leads_assigned.toLocaleString('fr-FR'),ic:'users'},{l:'Ventes',v:totals.signatures.toLocaleString('fr-FR'),a:COLORS.tertiary,ic:'trophy'},{l:'Revenue',v:totals.revenue>0?Math.round(totals.revenue).toLocaleString('fr-FR')+'€':'0€',a:COLORS.secondary,ic:'trending'},{l:'Cash',v:totals.cashCollected>0?Math.round(totals.cashCollected).toLocaleString('fr-FR')+'€':'0€',a:COLORS.tertiary,ic:'card'}].map(k=>(<div key={k.l} style={{padding:'14px 16px',borderRadius:14,background:C.bg,border:'1px solid '+C.border,boxShadow:darkMode?'none':'0 1px 2px rgba(0,0,0,0.03)'}}><div style={{display:'flex',alignItems:'center',gap:6,marginBottom:9,color:C.muted}}>{kpiIcon(k.ic)}<span style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.07em'}}>{k.l}</span></div><div style={{fontSize:22,fontWeight:700,color:k.a||C.text,letterSpacing:'-0.02em',fontVariantNumeric:'tabular-nums'}}>{k.v}</div></div>))}
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(165px, 1fr))',gap:10,marginBottom:16}}>
+                    {[{l:'Appels',v:callsAvailable?totals.calls.toLocaleString('fr-FR'):'—',ic:'phone'},...(isCrmMonth?[{l:'Répondu',v:totals.answered.toLocaleString('fr-FR'),a:COLORS.tertiary,ic:'check'},{l:'Répondeur',v:totals.repondeur.toLocaleString('fr-FR'),ic:'voicemail'}]:[{l:'Décrochés',v:totals.answered.toLocaleString('fr-FR'),ic:'check'}]),{l:'R1 placé',v:totals.r1_placed.toLocaleString('fr-FR'),ic:'calendar'},{l:'R1 effectué',v:totals.r1_done.toLocaleString('fr-FR'),ic:'calcheck'},{l:'R2 placé',v:totals.r2_placed.toLocaleString('fr-FR'),ic:'calendar'},{l:'R2 effectué',v:totals.r2_done.toLocaleString('fr-FR'),ic:'calcheck'},{l:'Leads',v:totals.leads_assigned.toLocaleString('fr-FR'),ic:'users'},{l:'Ventes',v:totals.signatures.toLocaleString('fr-FR'),a:COLORS.tertiary,ic:'trophy'},{l:'Revenu',v:totals.revenue.toLocaleString('fr-FR',{style:'currency',currency:'EUR'}),a:COLORS.secondary,ic:'trending'},{l:'Cash déclaré',v:totals.cashCollected.toLocaleString('fr-FR',{style:'currency',currency:'EUR'}),a:COLORS.tertiary,ic:'card'}].map(k=>(<div key={k.l} style={{padding:'14px 16px',borderRadius:14,background:C.bg,border:'1px solid '+C.border,boxShadow:darkMode?'none':'0 1px 2px rgba(0,0,0,0.03)'}}><div style={{display:'flex',alignItems:'center',gap:6,marginBottom:9,color:C.muted}}>{kpiIcon(k.ic)}<span style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.07em'}}>{k.l}</span></div><div style={{fontSize:22,fontWeight:700,color:k.a||C.text,letterSpacing:'-0.02em',fontVariantNumeric:'tabular-nums'}}>{dataLoading || dataError ? '—' : k.v}</div></div>))}
                   </div>
 
-                  <div style={{display:'flex',justifyContent:'center',gap:0,marginBottom:20,borderRadius:10,border:'1px solid '+C.border,overflow:'hidden',background:darkMode?C.subtle:'#fff'}}>
+                  <div style={{display:'flex',justifyContent:'center',flexWrap:'wrap',gap:0,marginBottom:20,borderRadius:10,border:'1px solid '+C.border,overflow:'hidden',background:darkMode?C.subtle:'#fff'}}>
                     {[
-                      ...(canal!=='cc' ? [{l:'Lead Qualifi\u00e9',v:totals.lead_qualifie.toFixed(1)+'%',f:isCrmMonth?'Leads qualifi\u00e9s (ont atteint un R1 ou R2) \u00f7 R\u00e9pondu':'D\u00e9croch\u00e9s uniques \u00f7 Leads affect\u00e9s'}] : []),
-                      {l:'Closing R1',v:totals.closing_r1.toFixed(1)+'%',f:isCrmMonth?'R1 effectu\u00e9s \u00f7 R\u00e9pondu':'R1 effectu\u00e9s \u00f7 D\u00e9croch\u00e9s uniques'},
-                      {l:'Closing R2',v:totals.closing_r2.toFixed(1)+'%',f:'R2 effectu\u00e9s \u00f7 R1 effectu\u00e9s'},
-                      {l:'Closing Audit',v:totals.closing_audit.toFixed(1)+'%',f:'Ventes \u00f7 R2 effectu\u00e9s'},
-                      {l:'Conv. Globale',v:totals.conv_global.toFixed(2)+'%',f:'Ventes \u00f7 Leads affect\u00e9s'},
-                    ].map((k,i,arr)=>(<div key={k.l} onMouseEnter={e=>setTip({t:k.f,r:e.currentTarget.getBoundingClientRect()})} onMouseLeave={()=>setTip(null)} style={{flex:1,textAlign:'center',padding:'10px 16px',borderRight:i<arr.length-1?'1px solid '+C.border:'none',cursor:'help'}}><div style={{fontSize:12,fontWeight:500,color:C.muted,marginBottom:2}}>{k.l}</div><div style={{fontSize:17,fontWeight:700,color:C.text,fontVariantNumeric:'tabular-nums',letterSpacing:'-0.01em'}}>{k.v}</div></div>))}
+                      ...(canal!=='cc' ? [{l:'Lead Qualifi\u00e9',v:percent(totals.lead_qualifie,1),f:isCrmMonth?'Leads qualifi\u00e9s (ont atteint un R1 ou R2) \u00f7 R\u00e9pondu':'D\u00e9croch\u00e9s uniques \u00f7 Leads affect\u00e9s'}] : []),
+                      {l:'Présence R1',v:percent(totals.closing_r1,1),f:'R1 effectués ÷ R1 planifiés dans la période'},
+                      {l:'Présence R2',v:percent(totals.closing_r2,1),f:'R2 effectués ÷ R2 planifiés dans la période'},
+                      {l:'Ventes / R2',v:percent(totals.closing_audit,1),f:'Volumes de la période : ventes déclarées ÷ R2 effectués. Ces ventes peuvent provenir de rendez-vous antérieurs.'},
+                      {l:'Conv. Globale',v:percent(totals.conv_global,2),f:'Volumes de la période : ventes déclarées ÷ leads reçus. Les ventes peuvent provenir de leads plus anciens.'},
+                    ].map((k,i,arr)=>(<div key={k.l} onMouseEnter={e=>setTip({t:k.f,r:e.currentTarget.getBoundingClientRect()})} onMouseLeave={()=>setTip(null)} style={{flex:1,textAlign:'center',padding:'10px 16px',borderRight:i<arr.length-1?'1px solid '+C.border:'none',cursor:'help'}}><div style={{fontSize:12,fontWeight:500,color:C.muted,marginBottom:2}}>{k.l}</div><div style={{fontSize:17,fontWeight:700,color:C.text,fontVariantNumeric:'tabular-nums',letterSpacing:'-0.01em'}}>{dataLoading || dataError ? '—' : k.v}</div></div>))}
                   </div>
 
+                  {!dataLoading && !dataError && !callsAvailable && <p role="status" style={{fontSize:13,color:C.secondary,lineHeight:1.6,padding:'12px 16px',background:C.bg,border:`1px solid ${C.border}`,borderRadius:12}}>Le volume d’appels est indisponible sur cette période. Les contacts renseignés dans le suivi restent consultables.</p>}
+                  {sectionErrors.rdv && <p role="alert" style={{fontSize:13,color:C.secondary}}>Les statistiques de rendez-vous n’ont pas pu être chargées.</p>}
                   {dataLoading && <div style={{textAlign:'center',padding:60,color:C.muted}}>Chargement...</div>}
 
-                  {!dataLoading && canal==='ads' && adsDetailView && (headcountLoading ? <div style={{textAlign:'center',padding:60,color:C.muted}}>Chargement...</div> : !headcountData ? <div style={{textAlign:'center',padding:60,color:C.muted}}>Aucune donn&eacute;e</div> : <table className="leaderboard" style={{width:'100%'}}><thead><tr>{['#','Sales','Leads','1-2','3-4','5-6','7-10','11-19','20+','Inconnu'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>
+                  {!dataLoading && canal==='ads' && adsDetailView && (headcountLoading ? <div style={{textAlign:'center',padding:60,color:C.muted}}>Chargement...</div> : !headcountData ? <div style={{textAlign:'center',padding:60,color:C.muted}}>Le détail des effectifs n’a pas pu être chargé. Utilisez Actualiser pour réessayer.</div> : <table className="leaderboard" style={{width:'100%'}}><thead><tr>{['#','Sales','Leads','1-2','3-4','5-6','7-10','11-19','20+','Inconnu'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>
                     {[...(headcountData.by_person||[])].sort((a,b)=>(b.leads_assigned||0)-(a.leads_assigned||0)).map((p,i)=>{const hc=p.headcount_breakdown||{};return(<tr key={p.person_name} style={{animation:'rowIn 0.3s cubic-bezier(0.16,1,0.3,1) '+(i*40)+'ms both'}}><td style={tdS}>{medal(i)}</td><td style={{...tdS,textAlign:'left',fontWeight:i<3?700:500,paddingLeft:12}}>{p.person_name}</td><td style={{...tdS,fontWeight:700}}>{(p.leads_assigned||0).toLocaleString('fr-FR')}</td>{['1-2','3-4','5-6','7-10','11-19','20+'].map(b=><td key={b} style={tdS}>{hc[b]||0}</td>)}<td style={{...tdS,color:C.muted}}>{p.unknown||0}</td></tr>);})}
                     {headcountData.totals && <tr style={{borderTop:'2px solid '+C.border,fontWeight:700,background:darkMode?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.02)'}}><td style={tdS}></td><td style={{...tdS,textAlign:'left',paddingLeft:12}}>Total</td><td style={tdS}>{(headcountData.totals.leads_assigned||0).toLocaleString('fr-FR')}</td>{['1-2','3-4','5-6','7-10','11-19','20+'].map(b=><td key={b} style={tdS}>{(headcountData.totals.headcount_breakdown||{})[b]||0}</td>)}<td style={{...tdS,color:C.muted}}>{headcountData.totals.unknown||0}</td></tr>}
                   </tbody></table>)}
@@ -555,13 +540,14 @@ export default function MonitoringPerf() {
                     </>);
                   })()}
 
-                  {!dataLoading && !perfRows.length && !adsDetailView && <div style={{textAlign:'center',padding:60,color:C.muted}}>Aucune donn&eacute;e disponible</div>}
+                  {!dataLoading && !dataError && !perfRows.length && !adsDetailView && <div style={{textAlign:'center',padding:60,color:C.muted}}>Aucune donn&eacute;e disponible</div>}
 
                   {rdvAnalytics && (
                     <div style={{padding:'8px 20px 28px',display:'flex',flexDirection:'column',gap:20,borderTop:'1px solid '+C.border,marginTop:8}}>
+                      <p style={{fontSize:12,color:C.secondary,margin:0}}>Rendez-vous · toutes origines · heures de Paris. Présence calculée sur les qualifications renseignées.</p>
                       <div>
                         <h2 style={{fontSize:18,fontWeight:700,color:C.text,margin:'8px 0 2px'}}>D&eacute;lai moyen R1 &rarr; R2 (effectu&eacute;s)</h2>
-                        <div style={{fontSize:12,color:C.muted,marginBottom:12}}>Temps &eacute;coul&eacute; entre un R1 et un R2 r&eacute;alis&eacute;s (par mois du R1).</div>
+                        <div style={{fontSize:12,color:C.secondary,marginBottom:12}}>Temps &eacute;coul&eacute; entre un R1 et un R2 r&eacute;alis&eacute;s (par mois du R1).</div>
                         <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
                           {rdvAnalytics.delay_by_month.length===0 && <div style={{fontSize:13,color:C.muted}}>Pas encore de R1+R2 effectu&eacute;s.</div>}
                           {rdvAnalytics.delay_by_month.map(m=>(
@@ -663,7 +649,7 @@ export default function MonitoringPerf() {
                               {hbs.map(s=><option key={s.sales} value={s.sales}>{s.sales}</option>)}
                             </select>
                           </div>
-                          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(440px, 1fr))',gap:16}}>
+                          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(min(100%, 440px), 1fr))',gap:16}}>
                             <RdvHeatmap cells={sel?sel.r1:rdvAnalytics.heatmap_r1} C={C} title="Pr&eacute;sence R1 &mdash; jour/heure" />
                             <RdvHeatmap cells={sel?sel.r2:rdvAnalytics.heatmap_r2} C={C} title="Pr&eacute;sence R2 &mdash; jour/heure" />
                           </div>
@@ -679,7 +665,7 @@ export default function MonitoringPerf() {
                   <p style={{fontSize:13,color:C.muted,margin:'0 0 20px'}}>Analyse par origine</p>
 
                   <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:24}}>
-                    {[{l:'Total Leads',v:(leadQualityData&&leadQualityData.summary?leadQualityData.summary.total_leads:0).toLocaleString('fr-FR')},{l:'Clients r\u00e9els',v:(leadQualityData&&leadQualityData.summary?leadQualityData.summary.total_sales:0).toLocaleString('fr-FR'),a:COLORS.tertiary},{l:'Taux Perte',v:leadQualityData&&leadQualityData.summary&&leadQualityData.summary.global_loss_rate!=null?leadQualityData.summary.global_loss_rate.toFixed(1)+'%':'\u2014'},{l:'Non trait\u00e9s',v:(leadQualityData&&leadQualityData.summary?leadQualityData.summary.total_untreated:0).toLocaleString('fr-FR')},{l:'Tx Conv.',v:(leadQualityData&&leadQualityData.summary?leadQualityData.summary.global_conversion_rate:0).toFixed(1)+'%',a:COLORS.tertiary},{l:'Tx Conv. R\u00e9el',v:(leadQualityData&&leadQualityData.summary?leadQualityData.summary.global_real_conversion_rate:0).toFixed(1)+'%',a:COLORS.tertiary},{l:'Cash Total',v:leadQualityData&&leadQualityData.summary&&leadQualityData.summary.total_cash>0?Math.round(leadQualityData.summary.total_cash).toLocaleString('fr-FR')+'\u20ac':'0\u20ac',a:COLORS.tertiary},{l:'ARR Total',v:leadQualityData&&leadQualityData.summary&&leadQualityData.summary.total_arr>0?Math.round(leadQualityData.summary.total_arr).toLocaleString('fr-FR')+'\u20ac':'0\u20ac',a:COLORS.secondary}].map(k=>(<div key={k.l} style={{flex:1,minWidth:100,padding:'10px 14px',borderRadius:10,background:darkMode?C.subtle:'#fff',border:'1px solid '+C.border}}><div style={{fontSize:10,fontWeight:500,color:C.muted,textTransform:'uppercase',marginBottom:4}}>{k.l}</div><div style={{fontSize:18,fontWeight:700,color:k.a||C.text}}>{k.v}</div></div>))}
+                    {[{l:'Total Leads',v:(leadQualityData&&leadQualityData.summary?leadQualityData.summary.total_leads:0).toLocaleString('fr-FR')},{l:'Clients r\u00e9els',v:(leadQualityData&&leadQualityData.summary?leadQualityData.summary.total_sales:0).toLocaleString('fr-FR'),a:COLORS.tertiary},{l:'Taux Perte',v:leadQualityData&&leadQualityData.summary&&leadQualityData.summary.global_loss_rate!=null?leadQualityData.summary.global_loss_rate.toFixed(1)+'%':'\u2014'},{l:'Non trait\u00e9s',v:(leadQualityData&&leadQualityData.summary?leadQualityData.summary.total_untreated:0).toLocaleString('fr-FR')},{l:'Tx Conv.',v:(leadQualityData&&leadQualityData.summary?leadQualityData.summary.global_conversion_rate:0).toFixed(1)+'%',a:COLORS.tertiary},{l:'Tx Conv. R\u00e9el',v:(leadQualityData&&leadQualityData.summary?leadQualityData.summary.global_real_conversion_rate:0).toFixed(1)+'%',a:COLORS.tertiary},{l:'Cash Total',v:leadQualityData&&leadQualityData.summary&&leadQualityData.summary.total_cash>0?Math.round(leadQualityData.summary.total_cash).toLocaleString('fr-FR')+'\u20ac':'0\u20ac',a:COLORS.tertiary},{l:'ARR Total',v:leadQualityData&&leadQualityData.summary&&leadQualityData.summary.total_arr>0?Math.round(leadQualityData.summary.total_arr).toLocaleString('fr-FR')+'\u20ac':'0\u20ac',a:COLORS.secondary}].map(k=>(<div key={k.l} style={{flex:1,minWidth:100,padding:'10px 14px',borderRadius:10,background:darkMode?C.subtle:'#fff',border:'1px solid '+C.border}}><div style={{fontSize:10,fontWeight:500,color:C.muted,textTransform:'uppercase',marginBottom:4}}>{k.l}</div><div style={{fontSize:18,fontWeight:700,color:k.a||C.text}}>{leadQualityLoading ? '—' : k.v}</div></div>))}
                   </div>
 
                   {leadQualityLoading && <div style={{textAlign:'center',padding:60,color:C.muted}}>Chargement...</div>}
@@ -718,8 +704,8 @@ export default function MonitoringPerf() {
           </div>
           {detailModal.loading && <div style={{textAlign:'center',padding:40,color:C.muted}}>Chargement...</div>}
           {!detailModal.loading && !detailModal.data && <div style={{textAlign:'center',padding:40,color:C.muted}}>Erreur lors du chargement</div>}
-          {!detailModal.loading && detailModal.data && detailModal.type==='ads' && (<><p style={{fontSize:13,color:C.muted,marginBottom:10}}>{detailModal.data.total||detailModal.data.leads&&detailModal.data.leads.length||0} leads</p><table className="leaderboard" style={{width:'100%'}}><thead><tr style={{borderBottom:'2px solid '+C.border}}>{['Nom','T\u00e9l\u00e9phone','Origine','Date'].map(h=><th key={h} style={{...thS,textAlign:'left'}}>{h}</th>)}</tr></thead><tbody>{(detailModal.data.leads||[]).map((l,idx)=>(<tr key={idx}><td style={{...tdS,textAlign:'left',fontWeight:500}}>{l.full_name}</td><td style={{...tdS,textAlign:'left',fontFamily:'monospace',fontSize:11}}>{l.phone}</td><td style={{...tdS,textAlign:'left'}}>{l.origin}</td><td style={{...tdS,textAlign:'left',whiteSpace:'nowrap'}}>{l.date}</td></tr>))}</tbody></table></>)}
-          {!detailModal.loading && detailModal.data && detailModal.type==='cc' && (<><p style={{fontSize:13,color:C.muted,marginBottom:10}}>{detailModal.data.total_entries||detailModal.data.entries&&detailModal.data.entries.length||0} jours &middot; {detailModal.data.total_appels?detailModal.data.total_appels.toLocaleString('fr-FR'):0} appels</p><table className="leaderboard" style={{width:'100%'}}><thead><tr style={{borderBottom:'2px solid '+C.border}}><th style={{...thS,textAlign:'left'}}>Date</th><th style={thS}>Nombre d&apos;appels</th></tr></thead><tbody>{(detailModal.data.entries||[]).map((e,idx)=>(<tr key={idx}><td style={{...tdS,textAlign:'left',fontWeight:500}}>{e.date}</td><td style={{...tdS,fontWeight:600}}>{e.nbr_appel?e.nbr_appel.toLocaleString('fr-FR'):0}</td></tr>))}</tbody></table></>)}
+          {!detailModal.loading && detailModal.data && (detailModal.type==='ads' || detailModal.data.leads?.length > 0) && (<><p style={{fontSize:13,color:C.muted,marginBottom:10}}>{detailModal.data.total||detailModal.data.leads&&detailModal.data.leads.length||0} leads</p><table className="leaderboard" style={{width:'100%'}}><thead><tr style={{borderBottom:'2px solid '+C.border}}>{['Nom','T\u00e9l\u00e9phone','Origine','Date'].map(h=><th key={h} style={{...thS,textAlign:'left'}}>{h}</th>)}</tr></thead><tbody>{(detailModal.data.leads||[]).map((l,idx)=>(<tr key={idx}><td style={{...tdS,textAlign:'left',fontWeight:500}}>{l.full_name}</td><td style={{...tdS,textAlign:'left',fontFamily:'monospace',fontSize:11}}>{l.phone}</td><td style={{...tdS,textAlign:'left'}}>{l.origin}</td><td style={{...tdS,textAlign:'left',whiteSpace:'nowrap'}}>{l.date}</td></tr>))}</tbody></table></>)}
+          {!detailModal.loading && detailModal.data && detailModal.type==='cc' && detailModal.data.entries?.length > 0 && (<><p style={{fontSize:13,color:C.muted,marginBottom:10}}>{detailModal.data.total_entries||detailModal.data.entries&&detailModal.data.entries.length||0} jours historiques &middot; {detailModal.data.total_appels?detailModal.data.total_appels.toLocaleString('fr-FR'):0} appels</p><table className="leaderboard" style={{width:'100%'}}><thead><tr style={{borderBottom:'2px solid '+C.border}}><th style={{...thS,textAlign:'left'}}>Date</th><th style={thS}>Nombre d&apos;appels</th></tr></thead><tbody>{(detailModal.data.entries||[]).map((e,idx)=>(<tr key={idx}><td style={{...tdS,textAlign:'left',fontWeight:500}}>{e.date}</td><td style={{...tdS,fontWeight:600}}>{e.nbr_appel?e.nbr_appel.toLocaleString('fr-FR'):0}</td></tr>))}</tbody></table></>)}
         </div>
       </div>)}
     </>
