@@ -5,7 +5,7 @@ export const ratio = (numerator, denominator) => denominator > 0 ? numerator / d
 export function performanceRows(perfData, callsData, canal, keyForName) {
   const view = perfData?.[`${canal === 'global' ? 'global' : canal}_view`];
   const calls = new Map((callsData?.by_sales || []).map(row => [keyForName(row.sales), row]));
-  return (view?.by_person || []).filter(p =>
+  return (view?.by_person || []).filter(p => isPerformanceSalesPerson(p.name)).filter(p =>
     ['leads_assigned', 'nbr_appel', 'r1p', 'r1r', 'r2p', 'r2r', 'nbr_signature', 'total_revenue', 'total_cash'].some(k => Number(p[k] || 0) !== 0)
   ).map(p => {
     const cr = calls.get(keyForName(p.name));
@@ -29,4 +29,21 @@ export function performanceRows(perfData, callsData, canal, keyForName) {
       conv_r1p_to_r1r: ratio(r1d, r1p), conv_r2p_to_r2r: ratio(r2d, r2p), conv_sales: ratio(sig, r2d),
     };
   }).sort((a, b) => b.signatures - a.signatures || b.conv_global - a.conv_global || a.salesName.localeCompare(b.salesName, 'fr'));
+}
+
+export function isPerformanceSalesPerson(name) {
+  const key = String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return !['youcef', 'youcef amrane', 'youcef amran', 'y.amrane@ownertechnology.com'].includes(key);
+}
+
+export function visibleHeadcount(data) {
+  if (!data) return data;
+  const by_person = (data.by_person || []).filter(p => isPerformanceSalesPerson(p.person_name));
+  const totals = {leads_assigned:0, unknown:0, headcount_breakdown:{}};
+  for (const row of by_person) {
+    totals.leads_assigned += row.leads_assigned || 0;
+    totals.unknown += row.unknown || 0;
+    for (const [key,value] of Object.entries(row.headcount_breakdown || {})) totals.headcount_breakdown[key] = (totals.headcount_breakdown[key] || 0) + value;
+  }
+  return {...data, by_person, totals};
 }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {performanceRows} from './performanceSales.js';
+import {performanceRows,isPerformanceSalesPerson,visibleHeadcount} from './performanceSales.js';
 const person = (name, extra={}) => ({name, leads_assigned:0, nbr_appel:0, r1p:0, r1r:0, r2p:0, r2r:0, nbr_signature:0, total_cash:0, total_revenue:0, ...extra});
 const key = s => s.toLowerCase();
 test('uses the selected channel and its sales as the conversion numerator', () => {
@@ -19,7 +19,12 @@ test('unavailable calls stay marked unavailable while CRM contacts remain readab
   assert.equal(r.calls_available,false); assert.equal(r.unique_answered,6); assert.equal(r.conv_answered_to_r1p,50);
   assert.equal(r.r1p_self+r.r1p_s,r.r1_placed);
 });
-test('does not silently exclude admins or former sales who have real activity', () => {
-  const p = {global_view:{by_person:[person('Youcef Amrane',{nbr_signature:1,total_cash:100.25})]}};
-  assert.equal(performanceRows(p,null,'global',key)[0].cashCollected,100.25);
+test('Youcef is excluded explicitly while other admins and new sales stay visible', () => {
+  const p = {global_view:{by_person:[person('Youcef Amrane',{nbr_signature:1,total_cash:100.25}),person('Alexandre Bourdin',{r1p:3}),person('David Dubois',{nbr_signature:2})]}};
+  assert.deepEqual(performanceRows(p,null,'global',key).map(r=>r.salesName),['David Dubois','Alexandre Bourdin']);
+  for (const name of ['Youcef Amran','Youcef Amrane','y.amrane@ownertechnology.com']) assert.equal(isPerformanceSalesPerson(name),false);
+});
+test('headcount totals exclude Youcef consistently with visible rows',()=>{
+ const data=visibleHeadcount({by_person:[{person_name:'Youcef Amrane',leads_assigned:3,unknown:1,headcount_breakdown:{'1-2':2}},{person_name:'Alix Deslandes',leads_assigned:4,unknown:2,headcount_breakdown:{'1-2':2}}]});
+ assert.equal(data.by_person.length,1);assert.equal(data.totals.leads_assigned,4);assert.equal(data.totals.unknown,2);assert.equal(data.totals.headcount_breakdown['1-2'],2);
 });
