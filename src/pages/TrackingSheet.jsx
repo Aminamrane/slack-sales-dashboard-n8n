@@ -8,6 +8,7 @@ import { CalendarCheck2, ChevronRight, Building2, UserRoundCheck, ArrowRight } f
 import R1QualificationDialog from '../components/salesJourney/R1QualificationDialog';
 import QualificationDialog from '../components/salesJourney/QualificationDialog';
 import NotesDialog from '../components/salesJourney/NotesDialog';
+import PortalAccess from '../components/salesJourney/PortalAccess';
 import NdaProgress from '../components/salesJourney/NdaProgress';
 import SalesNotes, { SalesNotesView } from '../components/salesJourney/SalesNotes';
 import { qualificationPatch } from '../utils/r2Qualification';
@@ -1171,6 +1172,7 @@ export default function TrackingSheet() {
       // Success
       setSaleClientNumero(clientNumero);
       setSaleSuccess(true);
+      setPortalRevision(value => value + 1);
       setTimeout(() => { setSaleSuccess(false); setSaleClientNumero(null); setShowSaleModal(null); setSaleForm({ email: '', paymentModality: 'M', employeeRange: '', billingStructures: '', structuresCount: '', discount: null, discountValue: '' }); setSaleStep('form'); setSaleSlots({ onboarding: null, lancement: null }); }, 2500);
     } catch (e) { console.error('Sale submit error:', e); }
     setSaleSubmitting(false);
@@ -1549,6 +1551,10 @@ export default function TrackingSheet() {
   const [ndaPappersUrl, setNdaPappersUrl] = useState(''); // pappers URL after prefill
   const [ndaError, setNdaError] = useState('');
   const [ndaSuccess, setNdaSuccess] = useState(false);
+  const [portalOptIn, setPortalOptIn] = useState(false);
+  const [portalRevision, setPortalRevision] = useState(0);
+  useEffect(() => { setPortalOptIn(false); }, [ndaPopup?.leadId]);
+
   const [ndaGenerating, setNdaGenerating] = useState(false); // PDF generation in progress
   // ── Nouveau flux NDA (convention v2, 2026-08-20) : le prefill n'est plus
   // optionnel — étapes guidées : 'siren' (saisie/flag création) → 'dirigeants'
@@ -2684,6 +2690,10 @@ export default function TrackingSheet() {
           if (ndaPopup.nextAction || isGuidedLead(lead)) { try { await discovery; } catch { throw new Error('Les sociétés du client n’ont pas pu être récupérées. Réessayez la préparation du NDA pour compléter la fiche.'); } }
           else discovery.catch(e => console.warn('Sociétés couvertes (annexe) non récupérées:', e));
         }
+      }
+      if (portalOptIn) {
+        await apiClient.post(`/api/v1/owner-integration/leads/${lead.id}/portal/provisional`, {});
+        setPortalRevision(value => value + 1);
       }
       if (ndaPopup.nextAction) {
         const unchanged = await checkIntakeBeforeSend(lead.id,ndaPopup.nextAction);
@@ -6663,6 +6673,7 @@ export default function TrackingSheet() {
                 <IntegrationButton consult ready={intakeSaved[lead.id].validated} onClick={() => openSavedIntake(lead.id)} />
               </div>}
 
+              {intakeRollout?.can_manage && <PortalAccess key={lead.id} leadId={lead.id} revision={portalRevision} />}
               {/* ─── INFO DETAILS ─── */}
               <div style={{
                 display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14,
@@ -8709,6 +8720,7 @@ export default function TrackingSheet() {
                 </div>
               </div>
 
+              {intakeRollout?.can_manage && <PortalAccess key={lead.id} leadId={lead.id} choice selected={portalOptIn} onSelect={setPortalOptIn} revision={portalRevision} />}
               {/* Pappers link */}
               {ndaPappersUrl && (
                 <a href={ndaPappersUrl} target="_blank" rel="noopener noreferrer" style={{

@@ -1,0 +1,12 @@
+.portal-access { display:flex; gap:12px; padding:16px; margin:14px 0; border:1px solid #dce1e9; border-radius:18px; background:rgba(130,143,160,.05); color:inherit; animation:portal-appear .25s ease both; font-family:inherit; }
+.portal-access__icon { flex-shrink:0; width:38px; height:38px; border-radius:12px; display:grid; place-items:center; background:rgba(130,143,160,.1); }
+.portal-access__body { min-width:0; flex:1; }
+.portal-access strong { font-size:13px; line-height:1.4; }
+.portal-access p { margin:5px 0 0; font-size:12px; line-height:1.5; opacity:.8; overflow-wrap:anywhere; }
+.portal-access small { display:flex; gap:5px; align-items:center; margin-top:7px; font-size:11px; flex-wrap:wrap; }
+.portal-access__choice { display:flex; gap:9px; align-items:center; font-size:12px; line-height:1.5; margin-top:12px; cursor:pointer; }
+.portal-access input { width:18px; height:18px; accent-color:#202532; flex-shrink:0; }
+.portal-access__spin { animation:portal-spin 1.2s linear infinite; }
+@keyframes portal-spin { to { transform:rotate(360deg); } }
+@keyframes portal-appear { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+@media(prefers-reduced-motion:reduce) { .portal-access,.portal-access__spin { animation:none; } }
