@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
-import { IntegrationRollout, IntegrationButton, IntegrationDialog } from "../components/integrationPreview/TrackingIntegration";
+import { IntegrationRollout, IntegrationButton, IntegrationDialog, SalesJourneySteps } from "../components/integrationPreview/TrackingIntegration";
 import { leadAvatar } from "../utils/leadAvatar";
 import { supabase } from "../lib/supabaseClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
@@ -475,6 +475,8 @@ export default function TrackingSheet() {
   const [intakeRollout, setIntakeRollout] = useState(null);
   const [intakeDialog, setIntakeDialog] = useState(null);
   const [intakeReady, setIntakeReady] = useState({});
+  const [intakeContexts, setIntakeContexts] = useState({});
+  const [intakeJourneys, setIntakeJourneys] = useState({});
   const [saleOnboardingOnly, setSaleOnboardingOnly] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -492,12 +494,13 @@ export default function TrackingSheet() {
       const context = await apiClient.get(`/api/v1/owner-integration/leads/${leadId}`);
       if (!context.required) { setContractErrorModal({ message: 'Ce dossier conserve le parcours actuel : son contrat a déjà été envoyé ou le nouveau parcours n’est pas activé pour ce dossier.', isNdaMissing: false }); return; }
       setIntakeDialog(context);
+      setIntakeContexts(previous => ({ ...previous, [leadId]: context }));
     } catch (error) { setContractErrorModal({ message: error.message || 'Impossible de charger la fiche.', isNdaMissing: false }); }
   };
-  const checkIntakeBeforeSend = async (leadId) => {
+  const checkIntakeBeforeSend = async (leadId, nextAction) => {
     if (!intakeRollout?.available) return true;
     const context = await apiClient.get(`/api/v1/owner-integration/leads/${leadId}`);
-    if (context.required && !context.ready) { setIntakeDialog(context); return false; }
+    if (context.required) { setIntakeDialog({ ...context, nextAction }); setIntakeReady(previous => ({ ...previous, [leadId]: context.ready })); return false; }
     return true;
   };
 
@@ -896,6 +899,21 @@ export default function TrackingSheet() {
   const [selectedLead, setSelectedLead] = useState(null);
   const [creaPopup, setCreaPopup] = useState(null);
   const leadCreative = useLeadCreative(selectedLead);
+  useEffect(() => {
+    if (!selectedLead || !intakeRollout?.available) return;
+    let alive = true;
+    Promise.all([
+      apiClient.get(`/api/v1/owner-integration/leads/${selectedLead}`),
+      apiClient.get(`/api/v1/owner-integration/leads/${selectedLead}/journey`),
+    ]).then(([context, journey]) => {
+      if (!alive) return;
+      setIntakeContexts(previous => ({ ...previous, [selectedLead]: context }));
+      setIntakeReady(previous => ({ ...previous, [selectedLead]: context.ready }));
+      setIntakeJourneys(previous => ({ ...previous, [selectedLead]: journey }));
+    }).catch(() => { /* Explicit send/declare actions retry and surface errors. */ });
+    return () => { alive = false; };
+  }, [selectedLead, intakeRollout?.available, leads.find(l => l.id === selectedLead)?.contract_signed_at]);
+
   const [copiedField, setCopiedField] = useState(null); // 'phone-{id}' or 'email-{id}'
   const [exitingCards, setExitingCards] = useState(new Set());
   const [animatingBadges, setAnimatingBadges] = useState(new Set());
@@ -2053,7 +2071,7 @@ export default function TrackingSheet() {
     }
   };
 
-  const handleSendContract = async (lead) => {
+  const handleSendContract = async (lead, intakeConfirmed = false) => {
     if (!lead.employee_range) return;
     setSendingContract(lead.id);
     setNavNotif('sending');
@@ -2061,7 +2079,7 @@ export default function TrackingSheet() {
       // Date choisie : envoyée seulement si le commercial l'a saisie. Sans elle,
       // la charge utile est strictement celle d'avant et le contrat porte la
       // date du jour.
-      if (!await checkIntakeBeforeSend(lead.id)) { setNavNotif(null); return; }
+      if (!intakeConfirmed && !await checkIntakeBeforeSend(lead.id, { type: "send" })) { setNavNotif(null); return; }
       const chosenDate = contractDates[lead.id];
       await apiClient.post('/api/v1/contracts/send', {
         lead_id: lead.id,
@@ -2088,7 +2106,7 @@ export default function TrackingSheet() {
     }
   };
 
-  const handleResendContract = (contractId, leadId) => {
+  const handleResendContract = (contractId, leadId, intakeConfirmed = false) => {
     setConfirmModal({
       title: 'Renvoyer le contrat ?',
       message: 'Un nouveau contrat sera créé et envoyé au client. L\'ancien sera annulé.',
@@ -2100,7 +2118,7 @@ export default function TrackingSheet() {
         try {
           // Le renvoi crée un nouveau contrat : on lui transmet le choix courant
           // du commercial. Champ vidé = null = date du jour, choix explicite.
-          if (!await checkIntakeBeforeSend(leadId)) return;
+          if (!intakeConfirmed && !await checkIntakeBeforeSend(leadId, { type: "resend", contractId })) { setNavNotif(null); return; }
           await apiClient.post(`/api/v1/contracts/${contractId}/resend`, {
             contract_display_date: contractDates[leadId] || null,
           });
@@ -2435,6 +2453,7 @@ export default function TrackingSheet() {
       }
       const reps = (data.representatives || []).map(r => ({
         fullName: r.full_name || '',
+        ...(r.first_name && r.last_name ? { firstName: r.first_name, lastName: r.last_name } : {}),
         role: (r.role || 'Gérant').replace(/\s+d[eu']\s+\S+$/i, ''),
       })).filter(r => r.fullName);
       setNdaData(prev => ({ ...prev, ...updates }));
@@ -7745,7 +7764,7 @@ export default function TrackingSheet() {
                 });
                 return (
                   <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {intakeRollout?.available && <IntegrationButton ready={intakeReady[lead.id]} onClick={() => openIntake(lead.id)} />}
+                    {intakeRollout?.available && intakeContexts[lead.id]?.required && <IntegrationButton ready={intakeReady[lead.id]} onClick={() => openIntake(lead.id)} />}
                     {latestContract && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{
@@ -7925,7 +7944,7 @@ export default function TrackingSheet() {
                 const olLabel = _ol ? (OL_LABELS[_ol] || _ol) : (_grouped ? 'Signé (inclus au contrat Owner)' : '—');
                 return (
                   <div style={{ marginBottom: 16 }}>
-                    {intakeRollout?.available && <div style={{ marginBottom: 12 }}><IntegrationButton ready={intakeReady[lead.id]} onClick={() => openIntake(lead.id)} /></div>}
+                    {intakeRollout?.available && intakeContexts[lead.id]?.required && <div style={{ marginBottom: 12 }}><IntegrationButton ready={intakeReady[lead.id]} onClick={() => openIntake(lead.id)} /></div>}
                     {_ownerDone && (
                       <div style={{ marginBottom: 16 }}>
                         <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Contrats</div>
@@ -7967,8 +7986,8 @@ export default function TrackingSheet() {
                       </div>
                     </div>
 
-                    {/* RDV Lancement */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    {/* RDV Lancement : contrats historiques uniquement */}
+                    {!intakeJourneys[lead.id]?.onboarding_only && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <div style={{
                         display: 'flex', alignItems: 'center', gap: 8, flex: 1, padding: '8px 12px', borderRadius: 10,
                         background: darkMode ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)',
@@ -7988,9 +8007,10 @@ export default function TrackingSheet() {
                           </svg>
                         </button>
                       </div>
-                    </div>
+                    </div>}
                     </>)}
 
+                    {intakeJourneys[lead.id]?.onboarding_only && <SalesJourneySteps phase="signed" />}
                     {/* Déclarer une vente button */}
                     <button
                       onClick={async () => {
@@ -7998,6 +8018,7 @@ export default function TrackingSheet() {
                         try {
                           const journey = await apiClient.get(`/api/v1/owner-integration/leads/${lead.id}/journey`);
                           setSaleOnboardingOnly(journey.onboarding_only);
+                          setIntakeJourneys(previous => ({ ...previous, [lead.id]: journey }));
                         } catch (error) {
                           setContractErrorModal({ message: error.message || 'Impossible de vérifier le parcours de ce dossier. Réessayez.', isNdaMissing: false });
                           return;
@@ -8668,7 +8689,7 @@ export default function TrackingSheet() {
                     <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 28px', gap: 6, marginBottom: 6, alignItems: 'center' }}>
                       <input value={rep.fullName} onChange={(e) => {
                         const reps = [...ndaData.representatives];
-                        reps[i] = { ...reps[i], fullName: e.target.value };
+                        reps[i] = { ...reps[i], fullName: e.target.value, firstName: null, lastName: null };
                         setNdaData(prev => ({ ...prev, representatives: reps }));
                       }} style={inputStyle} placeholder="Nom complet"
                         onFocus={(e) => e.target.style.borderColor = C.accent} onBlur={(e) => e.target.style.borderColor = C.border}
@@ -9434,6 +9455,18 @@ export default function TrackingSheet() {
       })(), document.body)}
 
       {intakeDialog && <IntegrationDialog key={intakeDialog.lead_id} context={intakeDialog}
+        contractDetails={{
+          email: leads.find(l => l.id === intakeDialog.lead_id)?.email,
+          employeeRange: leads.find(l => l.id === intakeDialog.lead_id)?.employee_range,
+          displayDate: contractDates[intakeDialog.lead_id],
+        }}
+        onSend={() => {
+          const lead = leads.find(l => l.id === intakeDialog.lead_id);
+          const action = intakeDialog.nextAction;
+          setIntakeDialog(null);
+          if (action?.type === 'resend') handleResendContract(action.contractId, lead.id, true);
+          else if (lead) handleSendContract(lead, true);
+        }}
         onClose={() => setIntakeDialog(null)} onSaved={result => setIntakeReady(previous => ({ ...previous, [intakeDialog.lead_id]: result.ready }))} />}
 
       {showSaleModal && createPortal((() => {
@@ -9455,6 +9488,7 @@ export default function TrackingSheet() {
                   background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted, fontSize: 14,
                   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
 
+              {saleOnboardingOnly && !saleSuccess && <SalesJourneySteps phase={saleStep === 'form' ? 'details' : saleStep === 'questions' ? 'billing' : 'booking'} compact />}
               {saleSuccess ? (
                 <div style={{ textAlign: 'center', padding: '20px 0' }}>
                   <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#10b98120', margin: '0 auto 14px',

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, ArrowLeft, FileCheck2, ShieldCheck } from "lucide-react";
+import { X, ArrowLeft, FileCheck2, ShieldCheck, PenLine, CalendarDays, Check, Send, ReceiptText, ClipboardCheck } from "lucide-react";
 import apiClient from "../../services/apiClient";
 import IntegrationPreviewStudio from "./IntegrationPreviewStudio";
 import "./trackingIntegration.css";
@@ -124,8 +124,24 @@ export function IntegrationButton({ onClick, ready }) {
   );
 }
 
-export function IntegrationDialog({ context, onClose, onSaved }) {
+export function SalesJourneySteps({ phase = "intake", compact = false }) {
+  const declaring = ["details", "booking", "billing"].includes(phase);
+  const steps = declaring
+    ? [["details", "Vente", ClipboardCheck], ["booking", "Rendez-vous", CalendarDays], ["billing", "Facturation", ReceiptText]]
+    : [["intake", "Fiche client", FileCheck2], ["contract", "Contrat", PenLine], ["signed", "Onboarding", CalendarDays]];
+  const current = steps.findIndex(([key]) => key === phase);
+  return <ol className={`ti-journey ${compact ? "is-compact" : ""}`} aria-label="Parcours de vente">
+    {steps.map(([key, label, Icon], index) => <li key={key} className={index < current ? "is-complete" : index === current ? "is-current" : ""} aria-current={index === current ? "step" : undefined}>
+      <span className="ti-step-icon">{index < current ? <Check size={17} /> : <Icon size={17} />}</span>
+      <span>{label}</span>
+    </li>)}
+  </ol>;
+}
+
+export function IntegrationDialog({ context, onClose, onSaved, contractDetails = {}, onSend }) {
+  const [stage, setStage] = useState("intake");
   const [sourceDraft, setSourceDraft] = useState(context.draft);
+  const [validated, setValidated] = useState(context.ready);
   const [sourceReset, setSourceReset] = useState(0);
   const revision = useRef(context.revision);
   const saved = useRef(JSON.stringify(context.draft));
@@ -198,6 +214,8 @@ export function IntegrationDialog({ context, onClose, onSaved }) {
     if (result.saved) {
       revision.current = result.revision;
       saved.current = JSON.stringify(draft);
+      setSourceDraft(draft);
+      setValidated(result.ready);
       onSaved(result);
     }
     return result;
@@ -234,6 +252,7 @@ export function IntegrationDialog({ context, onClose, onSaved }) {
                   directors: context.source_draft.directors,
                 };
                 setSourceDraft(next);
+                setValidated(false);
                 current.current = JSON.stringify(next);
                 setSourceReset((n) => n + 1);
               }}
@@ -242,18 +261,42 @@ export function IntegrationDialog({ context, onClose, onSaved }) {
             </button>
           </p>
         )}
-        <IntegrationPreviewStudio
+        {context.nextAction && <SalesJourneySteps phase={stage} />}
+        {stage === "contract" ? (
+          <section className="ti-contract-review" aria-labelledby="ti-review-title">
+            <div className="ti-review-icon"><FileCheck2 size={32} strokeWidth={1.6} /></div>
+            <span className="ti-review-eyebrow">FICHE CLIENT VALIDÉE</span>
+            <h1 id="ti-review-title" tabIndex={-1}>Prêt pour la signature</h1>
+            <p>Vérifiez les informations du dossier avant l’envoi au client.</p>
+            <dl>
+              <div><dt>Société</dt><dd>{context.client_name}</dd></div>
+              <div><dt>Email du dossier</dt><dd>{contractDetails.email || "À renseigner dans le NDA"}</dd></div>
+              <div><dt>Tranche salariale</dt><dd>{contractDetails.employeeRange || "À renseigner"}</dd></div>
+              <div><dt>Date du contrat</dt><dd>{contractDetails.displayDate ? new Date(`${contractDetails.displayDate}T12:00:00`).toLocaleDateString("fr-FR") : "Date du jour"}</dd></div>
+            </dl>
+            <div className="ti-next-appointment"><CalendarDays size={23} /><span><strong>Après la signature</strong>Un rendez-vous onboarding avec Vincent et la facturation.</span></div>
+            <div className="ti-review-actions">
+              <button className="ip-secondary" onClick={() => setStage("intake")}><ArrowLeft size={17} /> Revoir la fiche</button>
+              <button className="ip-primary" onClick={onSend}><Send size={17} />{context.nextAction.type === "resend" ? "Poursuivre le renvoi" : "Envoyer le contrat"}</button>
+            </div>
+          </section>
+        ) : <IntegrationPreviewStudio
           key={sourceReset}
           embedded
           initialDraft={sourceDraft}
-          initialValidated={context.ready && !sourceReset}
+          initialValidated={validated}
           clientName={context.client_name}
           onDirty={(value) => {
             current.current = value;
           }}
           validateDraft={(draft) => persist(draft, true)}
           saveDraft={(draft) => persist(draft, false)}
-        />
+          onContinue={context.nextAction ? () => {
+            setStage("contract");
+            dialog.current?.scrollTo({ top: 0, behavior: "instant" });
+            requestAnimationFrame(() => document.getElementById("ti-review-title")?.focus());
+          } : onClose}
+        />}
       </section>
     </div>,
     document.body,
