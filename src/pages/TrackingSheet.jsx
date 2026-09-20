@@ -8134,7 +8134,7 @@ export default function TrackingSheet() {
                     </div>}
                     </>)}
 
-                    
+
                     {/* Déclarer une vente button */}
                     <button className={isSignedPilot(lead)?'sj-declare-sale':undefined}
                       onClick={async () => {
