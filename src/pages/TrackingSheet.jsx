@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
+import { presentContractError } from "../utils/contractErrors";
 import { IntegrationRollout, IntegrationButton, IntegrationDialog, SalesJourneySteps } from "../components/integrationPreview/TrackingIntegration";
 import { leadAvatar } from "../utils/leadAvatar";
 import { supabase } from "../lib/supabaseClient";
@@ -476,6 +477,7 @@ export default function TrackingSheet() {
   const [intakeDialog, setIntakeDialog] = useState(null);
   const [intakeReady, setIntakeReady] = useState({});
   const [intakeContexts, setIntakeContexts] = useState({});
+  const [intakeSaved, setIntakeSaved] = useState({});
   const [intakeJourneys, setIntakeJourneys] = useState({});
   const [saleOnboardingOnly, setSaleOnboardingOnly] = useState(false);
   useEffect(() => {
@@ -497,11 +499,34 @@ export default function TrackingSheet() {
       setIntakeContexts(previous => ({ ...previous, [leadId]: context }));
     } catch (error) { setContractErrorModal({ message: error.message || 'Impossible de charger la fiche.', isNdaMissing: false }); }
   };
+  const openSavedIntake = async (leadId) => {
+    try {
+      const saved = await apiClient.get(`/api/v1/owner-integration/leads/${leadId}/saved`);
+      if (!saved.available) { setContractErrorModal({ title: 'Fiche non enregistrée', message: 'Enregistrez la fiche depuis la préparation du contrat pour pouvoir la consulter ici.' }); return; }
+      setIntakeDialog({ ...saved, readOnly: true });
+      setIntakeSaved(previous => ({ ...previous, [leadId]: { available: true, validated: saved.validated, revision: saved.revision } }));
+    } catch (error) { reportContractError(error, leadId, null, { preparation: true }); }
+  };
   const checkIntakeBeforeSend = async (leadId, nextAction) => {
     if (intakeRollout && !intakeRollout.available) return true;
     const context = await apiClient.get(`/api/v1/owner-integration/leads/${leadId}`);
     if (context.required) { const preparation = await apiClient.get(`/api/v1/owner-integration/leads/${leadId}/contract-preparation`); setIntakeDialog({ ...context, preparation, nextAction }); setIntakeReady(previous => ({ ...previous, [leadId]: context.ready })); return false; }
     return true;
+  };
+
+  const reportContractError = (error, leadId, nextAction, options = {}) => {
+    setContractErrorModal({ ...presentContractError(error, { pilot: !!intakeContexts[leadId]?.required, ...options }), leadId, nextAction });
+  };
+  const correctContractInformation = async () => {
+    const issue = contractErrorModal;
+    const lead = leads.find(l => l.id === issue.leadId);
+    if (!lead) return;
+    setContractErrorModal(null);
+    if (issue.action === 'nda') { openNdaPopup(lead); return; }
+    try {
+      if (!await checkIntakeBeforeSend(lead.id, issue.nextAction || { type: 'send' })) return;
+      openNdaPopup(lead);
+    } catch (error) { reportContractError(error, lead.id, issue.nextAction, { preparation: true }); }
   };
 
 
@@ -897,6 +922,14 @@ export default function TrackingSheet() {
   useEffect(() => { leadsRef.current = leads; }, [leads]);
   const [activeTab, setActiveTab] = useState(0);
   const [selectedLead, setSelectedLead] = useState(null);
+  useEffect(() => {
+    if (!selectedLead) return;
+    let alive = true;
+    apiClient.get(`/api/v1/owner-integration/leads/${selectedLead}/saved`).then(saved => {
+      if (alive) setIntakeSaved(previous => (previous[selectedLead]?.revision || 0) > (saved.revision || 0) ? previous : ({ ...previous, [selectedLead]: { available: saved.available, validated: saved.validated, revision: saved.revision } }));
+    }).catch(() => { /* Explicit consultation reports errors and never presents an empty document. */ });
+    return () => { alive = false; };
+  }, [selectedLead]);
   const [creaPopup, setCreaPopup] = useState(null);
   const leadCreative = useLeadCreative(selectedLead);
   useEffect(() => {
@@ -2098,14 +2131,7 @@ export default function TrackingSheet() {
       setTimeout(() => setNavNotif(null), 3000);
     } catch (err) {
       console.error("Erreur envoi contrat:", err);
-      const message = err?.response?.data?.detail || err?.detail || err?.message || '';
-      const isNdaMissing = message.toLowerCase().includes('client data missing') || message.toLowerCase().includes('nda');
-      setContractErrorModal({
-        message: isNdaMissing
-          ? 'Le NDA n\'a pas encore été généré pour ce lead. Veuillez d\'abord générer le NDA via le bouton "Générer NDA" avant d\'envoyer le contrat.'
-          : `Une erreur est survenue lors de l'envoi du contrat. ${message}`,
-        isNdaMissing,
-      });
+      reportContractError(err, lead.id, { type: 'send' });
       setNavNotif(null);
     } finally {
       setSendingContract(null);
@@ -2115,7 +2141,7 @@ export default function TrackingSheet() {
   const handleResendContract = async (contractId, leadId, intakeConfirmed = false) => {
     if (!intakeConfirmed) {
       try { if (!await checkIntakeBeforeSend(leadId, { type: "resend", contractId })) return; }
-      catch (error) { setContractErrorModal({ message: error.message || 'Impossible de préparer le contrat.', isNdaMissing: false }); return; }
+      catch (error) { reportContractError(error, leadId, { type: 'resend', contractId }, { preparation: true }); return; }
     }
     setConfirmModal({
       title: 'Renvoyer le contrat ?',
@@ -2136,8 +2162,7 @@ export default function TrackingSheet() {
         } catch (err) {
           console.error("Erreur renvoi contrat:", err);
           setNavNotif(null);
-          const message = err?.response?.data?.detail || err?.message || '';
-          setContractErrorModal({ message: `Une erreur est survenue lors du renvoi. ${message}`, isNdaMissing: false });
+          reportContractError(err, leadId, { type: 'resend', contractId });
         } finally {
           setResendingContract(null);
         }
@@ -2158,8 +2183,7 @@ export default function TrackingSheet() {
           await fetchLeadContracts(leadId);
         } catch (err) {
           console.error("Erreur annulation contrat:", err);
-          const message = err?.response?.data?.detail || err?.message || '';
-          setContractErrorModal({ message: `Une erreur est survenue lors de l'annulation. ${message}`, isNdaMissing: false });
+          reportContractError(err, leadId, null, { operation: 'cancel' });
         } finally {
           setCancelingContract(null);
         }
@@ -6558,6 +6582,10 @@ export default function TrackingSheet() {
                 ))}
               </div>
 
+              {intakeSaved[lead.id]?.available && <div style={{ marginBottom: 14 }}>
+                <IntegrationButton consult ready={intakeSaved[lead.id].validated} onClick={() => openSavedIntake(lead.id)} />
+              </div>}
+
               {/* ─── INFO DETAILS ─── */}
               <div style={{
                 display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14,
@@ -7486,7 +7514,7 @@ export default function TrackingSheet() {
                                 <button onClick={async () => {
                                   if (isSending) return;
                                   try { if (!await checkIntakeBeforeSend(lead.id, { type: 'send' })) return; }
-                                  catch (error) { setContractErrorModal({ message: error.message || 'Impossible de préparer le contrat.', isNdaMissing: false }); return; }
+                                  catch (error) { reportContractError(error, lead.id, { type: 'send' }, { preparation: true }); return; }
                                   if (!hasRange) return;
                                   setNavNotif('sending'); setSendingContract(lead.id);
                                   try {
@@ -7497,7 +7525,7 @@ export default function TrackingSheet() {
                                     setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, r1: today, r2: today, r1_result: 'done', r2_result: 'done', status: 'r2' } : l));
                                     triggerFlyAnimation(lead.id, lead, 'r2'); triggerLeadMovedNotif(lead, 'r2'); setR1ShortcutContract(null);
                                     setTimeout(() => { const r2TabIdx = CATEGORIES.findIndex(c => c.key === 'r2'); if (r2TabIdx >= 0) handleTabChange(r2TabIdx); setTimeout(() => { setSelectedLead(lead.id); const el = document.getElementById(`lead-card-${lead.id}`); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 300); }, 900);
-                                  } catch (err) { console.error('R1 shortcut contract error:', err); setNavNotif(null); const msg = err?.response?.data?.detail || err?.detail || err?.message || ''; setContractErrorModal({ message: msg.toLowerCase().includes('client data') ? 'Le NDA n\'a pas encore été généré.' : `Erreur : ${msg}`, isNdaMissing: msg.toLowerCase().includes('client data') }); }
+                                  } catch (err) { console.error('R1 shortcut contract error:', err); setNavNotif(null); reportContractError(err, lead.id, { type: 'send' }); }
                                   finally { setSendingContract(null); }
                                 }} disabled={!hasRange || isSending} style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: 'none', background: hasRange && !isSending ? '#10b981' : (darkMode ? '#2a2b36' : '#e2e6ef'), color: hasRange && !isSending ? '#fff' : C.muted, fontSize: 11, fontWeight: 600, cursor: hasRange && !isSending ? 'pointer' : 'not-allowed', fontFamily: 'inherit', opacity: hasRange && !isSending ? 1 : 0.6 }}>{isSending ? 'Envoi...' : 'Envoyer le contrat'}</button>
                               </div>
@@ -7776,7 +7804,7 @@ export default function TrackingSheet() {
                 });
                 return (
                   <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {intakeRollout?.available && intakeContexts[lead.id]?.required && <IntegrationButton ready={intakeReady[lead.id]} onClick={() => openIntake(lead.id)} />}
+                    {intakeRollout?.available && intakeContexts[lead.id]?.required && <IntegrationButton ready={intakeReady[lead.id]} onClick={() => intakeReady[lead.id] ? openSavedIntake(lead.id) : openIntake(lead.id)} />}
                     {latestContract && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{
@@ -7788,7 +7816,7 @@ export default function TrackingSheet() {
                         {status === 'done' && latestContract.signed_at && <span style={{ fontSize: 11, color: C.muted }}>Signé le {formatDate(latestContract.signed_at)}</span>}
                         {status === 'expired' && latestContract.expired_at && <span style={{ fontSize: 11, color: C.muted }}>Expiré le {formatDate(latestContract.expired_at)}</span>}
                         {status === 'canceled' && latestContract.canceled_at && <span style={{ fontSize: 11, color: C.muted }}>Annulé le {formatDate(latestContract.canceled_at)}</span>}
-                        {status === 'failed' && latestContract.yousign_error && <span style={{ fontSize: 11, color: '#ef4444' }}>{latestContract.yousign_error.includes("info[phone_number]") ? (intakeContexts[lead.id]?.required ? "Téléphone du signataire à corriger dans la préparation du contrat." : "Téléphone du signataire à corriger dans le NDA.") : latestContract.yousign_error}</span>}
+                        {status === 'failed' && latestContract.yousign_error && <span style={{ fontSize: 11, color: '#ef4444' }}>{presentContractError(latestContract.yousign_error, { pilot: !!intakeContexts[lead.id]?.required }).message}</span>}
                       </div>
                     )}
                     {/* View contract PDFs */}
@@ -7956,7 +7984,7 @@ export default function TrackingSheet() {
                 const olLabel = _ol ? (OL_LABELS[_ol] || _ol) : (_grouped ? 'Signé (inclus au contrat Owner)' : '—');
                 return (
                   <div style={{ marginBottom: 16 }}>
-                    {intakeRollout?.available && intakeContexts[lead.id]?.required && <div style={{ marginBottom: 12 }}><IntegrationButton ready={intakeReady[lead.id]} onClick={() => openIntake(lead.id)} /></div>}
+                    {intakeRollout?.available && intakeContexts[lead.id]?.required && <div style={{ marginBottom: 12 }}><IntegrationButton ready={intakeReady[lead.id]} onClick={() => intakeReady[lead.id] ? openSavedIntake(lead.id) : openIntake(lead.id)} /></div>}
                     {_ownerDone && (
                       <div style={{ marginBottom: 16 }}>
                         <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Contrats</div>
@@ -9328,7 +9356,7 @@ export default function TrackingSheet() {
           }} />
           <div style={{
             position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
-            width: 380, maxWidth: '90vw', background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`,
+            width: 420, maxWidth: '90vw', maxHeight: '88vh', overflowY: 'auto', background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`,
             boxShadow: darkMode ? '0 24px 48px rgba(0,0,0,0.4)' : '0 24px 48px rgba(0,0,0,0.08), 0 8px 16px rgba(0,0,0,0.04)',
             padding: '32px 28px 26px',
             fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, system-ui, sans-serif',
@@ -9344,7 +9372,7 @@ export default function TrackingSheet() {
               <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 8, letterSpacing: '-0.02em' }}>
                 {confirmModal.title}
               </div>
-              <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6, letterSpacing: '-0.01em', maxWidth: 300, margin: '0 auto' }}>
+              <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6, letterSpacing: '-0.01em', maxWidth: 300, margin: '0 auto', whiteSpace: 'pre-line' }}>
                 {confirmModal.message}
               </div>
             </div>
@@ -9382,9 +9410,9 @@ export default function TrackingSheet() {
             position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
             zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both',
           }} />
-          <div style={{
+          <div role="alertdialog" aria-modal="true" aria-labelledby="contract-error-title" aria-describedby="contract-error-message" style={{
             position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
-            width: 380, maxWidth: '90vw', background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`,
+            width: 420, maxWidth: '90vw', maxHeight: '88vh', overflowY: 'auto', background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`,
             boxShadow: darkMode ? '0 24px 48px rgba(0,0,0,0.4)' : '0 24px 48px rgba(0,0,0,0.08), 0 8px 16px rgba(0,0,0,0.04)',
             padding: '32px 28px 26px',
             fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, system-ui, sans-serif',
@@ -9402,14 +9430,15 @@ export default function TrackingSheet() {
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={darkMode ? '#8b8fa0' : '#9ca3af'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                 )}
               </div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 8, letterSpacing: '-0.02em' }}>
-                {contractErrorModal.isNdaMissing ? 'NDA non généré' : 'Erreur d\'envoi'}
+              <div id="contract-error-title" style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 8, letterSpacing: '-0.02em' }}>
+                {contractErrorModal.title || (contractErrorModal.isNdaMissing ? 'NDA non généré' : 'Action impossible')}
               </div>
-              <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6, letterSpacing: '-0.01em', maxWidth: 300, margin: '0 auto' }}>
+              <div id="contract-error-message" style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6, letterSpacing: '-0.01em', maxWidth: 300, margin: '0 auto', whiteSpace: 'pre-line' }}>
                 {contractErrorModal.message}
               </div>
             </div>
-            <button onClick={() => setContractErrorModal(null)} style={{
+            {contractErrorModal.action && contractErrorModal.leadId && <button autoFocus onClick={correctContractInformation} style={{ width: '100%', padding: '12px 0', marginBottom: 8, borderRadius: 12, border: 'none', background: C.accent, color: '#fff', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}>{contractErrorModal.action === 'nda' ? 'Ouvrir le NDA' : 'Corriger les informations'}</button>}
+            <button autoFocus={!contractErrorModal.action} onClick={() => setContractErrorModal(null)} style={{
               width: '100%', padding: '12px 0', borderRadius: 12, border: 'none', fontSize: 14, fontWeight: 600,
               fontFamily: 'inherit', cursor: 'pointer', letterSpacing: '-0.01em',
               background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
@@ -9418,7 +9447,7 @@ export default function TrackingSheet() {
             }}
               onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'; }}
-            >Compris</button>
+            >Revenir au dossier</button>
           </div>
         </>,
         document.body
@@ -9481,7 +9510,7 @@ export default function TrackingSheet() {
           if (lead && action?.type === 'resend') handleResendContract(action.contractId, lead.id, true);
           else if (lead) handleSendContract(lead, true);
         }}
-        onClose={() => setIntakeDialog(null)} onSaved={result => setIntakeReady(previous => ({ ...previous, [intakeDialog.lead_id]: result.ready }))} />}
+        onClose={() => setIntakeDialog(null)} onSaved={result => { setIntakeReady(previous => ({ ...previous, [intakeDialog.lead_id]: result.ready })); if (result.saved) setIntakeSaved(previous => ({ ...previous, [intakeDialog.lead_id]: { available: true, validated: result.ready, revision: result.revision } })); }} />}
 
       {showSaleModal && createPortal((() => {
         const lead = leads.find(l => l.id === showSaleModal);

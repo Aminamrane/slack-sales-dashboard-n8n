@@ -279,3 +279,61 @@
   .ti-journey li { flex-direction: column; text-align: center; min-width: 0; }
   .ti-journey li:not(:last-child)::after { position: absolute; top: 17px; left: calc(50% + 22px); width: calc(100% - 36px); margin: 0; }
 }
+
+.ti-preparation .ti-field-error { display:block; margin:2px 0 0; color:#a3372a; font-size:12px; font-weight:500; line-height:1.55; text-align:left; }
+.ti-contact-fields input[aria-invalid="true"] { border-color:#bf6459; background:#fffafa; }
+.ti-band-field[aria-invalid="true"] .ti-band-options { border-left:2px solid #bf6459; padding-left:8px; }
+
+/* Compact document dialog: one scroll surface, legible fields and accessible actions. */
+.ti-overlay { padding:12px; }
+.ti-dialog { width:min(1040px,100%); max-height:calc(100dvh - 24px); overscroll-behavior:contain; }
+.ti-dialog-head { padding:10px 16px; }
+.ti-journey { padding:14px 20px; }
+.ip-embedded .ip-shell { padding:18px 20px; }
+.ip-embedded .ip-page-head { margin-bottom:16px; gap:12px; }
+.ip-embedded .ip-page-head h1 { font-size:24px; }
+.ip-embedded .ip-workspace { grid-template-columns:minmax(0,1fr) 228px; gap:18px; }
+.ip-embedded .ip-panel { padding:20px; }
+.ip-embedded .ip-section-head { margin-bottom:20px; }
+.ip-embedded .ip-readiness { padding:16px; }
+.ip-embedded .ip-step-footer { position:sticky; bottom:-20px; z-index:2; padding:12px 0; margin-top:18px; background:#fff; }
+.ti-contract-review { padding:24px 22px; }
+.ti-contract-review h1 { font-size:25px; margin:10px 0; }
+.ti-review-icon { width:44px; height:44px; margin-bottom:12px; }
+.ti-preparation { max-width:700px; }
+.ti-preparation .ti-band-field { margin-top:18px; }
+.ti-saved-view { min-height:0; padding:20px; max-width:900px; margin:auto; }
+.ti-saved-view .ip-summary { overflow-wrap:anywhere; }
+.ti-saved-view .ip-print-button { margin-top:18px; }
+@media (max-width:1100px) {
+  .ip-embedded .ip-workspace { grid-template-columns:minmax(0,1fr); }
+  .ip-embedded .ip-aside { display:block; }
+  .ip-embedded .ip-readiness { margin-bottom:0; }
+}
+@media (max-width:720px) {
+  .ti-overlay { padding:0; }
+  .ti-dialog { width:100%; height:100dvh; max-height:100dvh; border-radius:0; }
+  .ip-embedded .ip-shell,.ti-saved-view { padding:14px; }
+  .ip-embedded .ip-panel { padding:16px; }
+  .ip-embedded .ip-step-footer { bottom:-16px; }
+  .ip-embedded .ip-page-head h1 { font-size:22px; }
+  .ti-contract-review { padding:18px 16px; }
+  .ti-contact-fields input { font-size:16px; min-width:0; }
+  .ti-dialog-head button { min-height:40px; }
+  .ti-band-options button { min-height:40px; }
+}
+@media (max-height:700px) {
+  .ti-journey { padding-top:10px; padding-bottom:10px; }
+  .ti-contract-review { padding-top:16px; padding-bottom:16px; }
+  .ti-review-icon { width:38px; height:38px; margin-bottom:8px; }
+  .ti-contract-review h1 { font-size:22px; }
+  .ip-embedded .ip-page-head { margin-bottom:12px; }
+}
+.ti-preparation .ti-review-actions { position:sticky; bottom:0; padding:12px 0 4px; z-index:2; background:#f5f7f8; box-shadow:0 -10px 14px #f5f7f8; }
+@media print {
+  body:has(.ti-saved-view) #root { display:none; }
+  .ti-overlay:has(.ti-saved-view) { position:static; display:block; background:none; padding:0; backdrop-filter:none; }
+  .ti-dialog:has(.ti-saved-view) { width:100%; height:auto; max-height:none; overflow:visible; box-shadow:none; border-radius:0; animation:none; }
+  .ti-dialog:has(.ti-saved-view) .ti-dialog-head { display:none; }
+  .ti-saved-view { max-width:none; padding:0; }
+}
