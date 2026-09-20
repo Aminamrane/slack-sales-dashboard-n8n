@@ -56,6 +56,8 @@ export const freshDraft = () => ({
   weather: null,
   weather_note: "",
   notes: "",
+  personal_situation: "",
+  professional_situation: "",
   priorities: "",
   missions: [],
   mission_notes: "",

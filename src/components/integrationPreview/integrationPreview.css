@@ -1341,3 +1341,4 @@
     break-after: avoid;
   }
 }
+.ip-handoff-comments{display:grid;gap:24px}.ip-handoff-comments h3{font-size:13px;font-weight:600;margin:0 0 12px;color:var(--ip-muted,#64748b)}.ip-handoff-comments .ip-field>span{font-size:16px;font-weight:650}.ip-handoff-comments textarea{min-height:145px;resize:vertical}.ip-handoff-summary h4{font-size:16px!important}.ip-handoff-summary p{white-space:pre-wrap;overflow-wrap:anywhere}
