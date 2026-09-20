@@ -498,9 +498,9 @@ export default function TrackingSheet() {
     } catch (error) { setContractErrorModal({ message: error.message || 'Impossible de charger la fiche.', isNdaMissing: false }); }
   };
   const checkIntakeBeforeSend = async (leadId, nextAction) => {
-    if (!intakeRollout?.available) return true;
+    if (intakeRollout && !intakeRollout.available) return true;
     const context = await apiClient.get(`/api/v1/owner-integration/leads/${leadId}`);
-    if (context.required) { setIntakeDialog({ ...context, nextAction }); setIntakeReady(previous => ({ ...previous, [leadId]: context.ready })); return false; }
+    if (context.required) { const preparation = await apiClient.get(`/api/v1/owner-integration/leads/${leadId}/contract-preparation`); setIntakeDialog({ ...context, preparation, nextAction }); setIntakeReady(previous => ({ ...previous, [leadId]: context.ready })); return false; }
     return true;
   };
 
@@ -2072,7 +2072,6 @@ export default function TrackingSheet() {
   };
 
   const handleSendContract = async (lead, intakeConfirmed = false) => {
-    if (!lead.employee_range) return;
     setSendingContract(lead.id);
     setNavNotif('sending');
     try {
@@ -2080,6 +2079,7 @@ export default function TrackingSheet() {
       // la charge utile est strictement celle d'avant et le contrat porte la
       // date du jour.
       if (!intakeConfirmed && !await checkIntakeBeforeSend(lead.id, { type: "send" })) { setNavNotif(null); return; }
+      if (!lead.employee_range) { setNavNotif(null); throw new Error('Choisissez le nombre de salariés avant de continuer.'); }
       const chosenDate = contractDates[lead.id];
       await apiClient.post('/api/v1/contracts/send', {
         lead_id: lead.id,
@@ -2087,6 +2087,12 @@ export default function TrackingSheet() {
         ...(chosenDate ? { contract_display_date: chosenDate } : {}),
       });
       await fetchLeadContracts(lead.id);
+      if (intakeConfirmed && lead.status === 'r1') {
+        const today = new Date().toISOString().slice(0, 10);
+        await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { r1_date: today, r2_date: today, r1_result: 'done', r1_completed_at: new Date().toISOString(), r2_result: 'done', r2_completed_at: new Date().toISOString(), status: 'r2' });
+        setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, r1: today, r2: today, r1_result: 'done', r2_result: 'done', status: 'r2' } : l));
+        setR1ShortcutContract(null);
+      }
       setNavNotif('sent'); // triggers check animation → auto-clears after 2.5s in navbar
       // Clear navNotif from parent side after navbar has finished its animation
       setTimeout(() => setNavNotif(null), 3000);
@@ -2106,7 +2112,11 @@ export default function TrackingSheet() {
     }
   };
 
-  const handleResendContract = (contractId, leadId, intakeConfirmed = false) => {
+  const handleResendContract = async (contractId, leadId, intakeConfirmed = false) => {
+    if (!intakeConfirmed) {
+      try { if (!await checkIntakeBeforeSend(leadId, { type: "resend", contractId })) return; }
+      catch (error) { setContractErrorModal({ message: error.message || 'Impossible de préparer le contrat.', isNdaMissing: false }); return; }
+    }
     setConfirmModal({
       title: 'Renvoyer le contrat ?',
       message: 'Un nouveau contrat sera créé et envoyé au client. L\'ancien sera annulé.',
@@ -2118,7 +2128,6 @@ export default function TrackingSheet() {
         try {
           // Le renvoi crée un nouveau contrat : on lui transmet le choix courant
           // du commercial. Champ vidé = null = date du jour, choix explicite.
-          if (!intakeConfirmed && !await checkIntakeBeforeSend(leadId, { type: "resend", contractId })) { setNavNotif(null); return; }
           await apiClient.post(`/api/v1/contracts/${contractId}/resend`, {
             contract_display_date: contractDates[leadId] || null,
           });
@@ -7083,7 +7092,7 @@ export default function TrackingSheet() {
                     )}
 
                     {/* Employee range (only after qualification) */}
-                    {lead.r2_result && (
+                    {lead.r2_result && !intakeContexts[lead.id]?.required && (
                       <div style={{ marginBottom: 12 }}>
                         <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
                           Tranche salariale
@@ -7109,7 +7118,7 @@ export default function TrackingSheet() {
                       </div>
                     )}
                     {/* Company count (only after qualification) */}
-                    {lead.r2_result && (
+                    {lead.r2_result && !intakeContexts[lead.id]?.required && (
                       <div style={{ marginBottom: 12 }}>
                         <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
                           Nbr de sociétés
@@ -7475,7 +7484,10 @@ export default function TrackingSheet() {
                               <div style={{ display: 'flex', gap: 6 }}>
                                 <button onClick={() => openNdaPopup(lead)} style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${ndaDone ? 'rgba(16,185,129,0.25)' : C.border}`, background: ndaDone ? 'rgba(16,185,129,0.04)' : 'transparent', color: ndaDone ? '#10b981' : C.accent, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>{ndaDone ? 'NDA généré ✓' : 'Générer NDA'}</button>
                                 <button onClick={async () => {
-                                  if (!hasRange || isSending) return;
+                                  if (isSending) return;
+                                  try { if (!await checkIntakeBeforeSend(lead.id, { type: 'send' })) return; }
+                                  catch (error) { setContractErrorModal({ message: error.message || 'Impossible de préparer le contrat.', isNdaMissing: false }); return; }
+                                  if (!hasRange) return;
                                   setNavNotif('sending'); setSendingContract(lead.id);
                                   try {
                                     await apiClient.post('/api/v1/contracts/send', { lead_id: lead.id, employee_range: lead.employee_range });
@@ -7494,7 +7506,7 @@ export default function TrackingSheet() {
                             </div>
                           );
                         })() : (
-                          <button onClick={() => setR1ShortcutContract(lead.id)} style={{ width: '100%', padding: '10px 16px', borderRadius: 50, border: `1px solid ${darkMode ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.2)'}`, background: darkMode ? 'rgba(16,185,129,0.06)' : 'rgba(16,185,129,0.03)', color: '#10b981', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)', fontFamily: 'inherit' }}
+                          <button onClick={() => intakeContexts[lead.id]?.required ? handleSendContract(lead) : setR1ShortcutContract(lead.id)} style={{ width: '100%', padding: '10px 16px', borderRadius: 50, border: `1px solid ${darkMode ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.2)'}`, background: darkMode ? 'rgba(16,185,129,0.06)' : 'rgba(16,185,129,0.03)', color: '#10b981', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)', fontFamily: 'inherit' }}
                             onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.06)'; e.currentTarget.style.transform = 'scale(1.02)'; }}
                             onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(16,185,129,0.06)' : 'rgba(16,185,129,0.03)'; e.currentTarget.style.transform = 'scale(1)'; }}
                           >Envoyer le contrat</button>
@@ -7744,7 +7756,7 @@ export default function TrackingSheet() {
 
               {/* ═══ CONTRACT (R2 and R3) ═══ */}
               {(activeCat.key === 'r2' || activeCat.key === 'r3') && (() => {
-                const hasRange = !!lead.employee_range;
+                const hasRange = !!lead.employee_range || !!intakeContexts[lead.id]?.required;
                 const hasCompanyCount = !!lead.company_count;
                 const isSending = sendingContract === lead.id;
                 const isResending = resendingContract === lead.id;
@@ -7776,7 +7788,7 @@ export default function TrackingSheet() {
                         {status === 'done' && latestContract.signed_at && <span style={{ fontSize: 11, color: C.muted }}>Signé le {formatDate(latestContract.signed_at)}</span>}
                         {status === 'expired' && latestContract.expired_at && <span style={{ fontSize: 11, color: C.muted }}>Expiré le {formatDate(latestContract.expired_at)}</span>}
                         {status === 'canceled' && latestContract.canceled_at && <span style={{ fontSize: 11, color: C.muted }}>Annulé le {formatDate(latestContract.canceled_at)}</span>}
-                        {status === 'failed' && latestContract.yousign_error && <span style={{ fontSize: 11, color: '#ef4444' }}>{latestContract.yousign_error}</span>}
+                        {status === 'failed' && latestContract.yousign_error && <span style={{ fontSize: 11, color: '#ef4444' }}>{latestContract.yousign_error.includes("info[phone_number]") ? (intakeContexts[lead.id]?.required ? "Téléphone du signataire à corriger dans la préparation du contrat." : "Téléphone du signataire à corriger dans le NDA.") : latestContract.yousign_error}</span>}
                       </div>
                     )}
                     {/* View contract PDFs */}
@@ -9460,11 +9472,13 @@ export default function TrackingSheet() {
           employeeRange: leads.find(l => l.id === intakeDialog.lead_id)?.employee_range,
           displayDate: contractDates[intakeDialog.lead_id],
         }}
-        onSend={() => {
-          const lead = leads.find(l => l.id === intakeDialog.lead_id);
+        onPrepared={preparation => setLeads(previous => previous.map(l => l.id === intakeDialog.lead_id ? { ...l, employee_range: preparation.employee_range } : l))}
+        onSend={(preparation) => {
+          const existingLead = leads.find(l => l.id === intakeDialog.lead_id);
+          const lead = existingLead && { ...existingLead, employee_range: preparation?.employee_range || existingLead.employee_range };
           const action = intakeDialog.nextAction;
           setIntakeDialog(null);
-          if (action?.type === 'resend') handleResendContract(action.contractId, lead.id, true);
+          if (lead && action?.type === 'resend') handleResendContract(action.contractId, lead.id, true);
           else if (lead) handleSendContract(lead, true);
         }}
         onClose={() => setIntakeDialog(null)} onSaved={result => setIntakeReady(previous => ({ ...previous, [intakeDialog.lead_id]: result.ready }))} />}

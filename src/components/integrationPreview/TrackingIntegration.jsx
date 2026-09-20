@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, ArrowLeft, FileCheck2, ShieldCheck, PenLine, CalendarDays, Check, Send, ReceiptText, ClipboardCheck } from "lucide-react";
+import { X, ArrowLeft, FileCheck2, ShieldCheck, PenLine, CalendarDays, Check, Send, ReceiptText, ClipboardCheck, UsersRound, ArrowRight } from "lucide-react";
 import apiClient from "../../services/apiClient";
 import IntegrationPreviewStudio from "./IntegrationPreviewStudio";
 import "./trackingIntegration.css";
@@ -128,7 +128,7 @@ export function SalesJourneySteps({ phase = "intake", compact = false }) {
   const declaring = ["details", "booking", "billing"].includes(phase);
   const steps = declaring
     ? [["details", "Vente", ClipboardCheck], ["booking", "Rendez-vous", CalendarDays], ["billing", "Facturation", ReceiptText]]
-    : [["intake", "Fiche client", FileCheck2], ["contract", "Contrat", PenLine], ["signed", "Onboarding", CalendarDays]];
+    : [["setup", "Salariés", UsersRound], ["intake", "Fiche client", FileCheck2], ["contract", "Contrat", PenLine], ["signed", "Onboarding", CalendarDays]];
   const current = steps.findIndex(([key]) => key === phase);
   return <ol className={`ti-journey ${compact ? "is-compact" : ""}`} aria-label="Parcours de vente">
     {steps.map(([key, label, Icon], index) => <li key={key} className={index < current ? "is-complete" : index === current ? "is-current" : ""} aria-current={index === current ? "step" : undefined}>
@@ -138,8 +138,27 @@ export function SalesJourneySteps({ phase = "intake", compact = false }) {
   </ol>;
 }
 
-export function IntegrationDialog({ context, onClose, onSaved, contractDetails = {}, onSend }) {
-  const [stage, setStage] = useState("intake");
+export function IntegrationDialog({ context, onClose, onSaved, contractDetails = {}, onSend, onPrepared }) {
+  const [stage, setStage] = useState(context.nextAction ? "setup" : "intake");
+  const [preparation, setPreparation] = useState(context.preparation || {});
+  const [setupBusy, setSetupBusy] = useState(false);
+  const [setupError, setSetupError] = useState("");
+  const preparationSaved = useRef(JSON.stringify(context.preparation || {}));
+  const preparationCurrent = useRef(preparationSaved.current);
+  preparationCurrent.current = JSON.stringify(preparation);
+  const bands = ['1-2','3-5','6-10','11-19','20-29','30-39','40-49','50-74','75-99','100-149','150-199','200-249','250-299','300-349','350-400'];
+  async function prepare(event) {
+    event.preventDefault(); setSetupBusy(true); setSetupError("");
+    try {
+      const result = await apiClient.put(`/api/v1/owner-integration/leads/${context.lead_id}/contract-preparation`, {
+        employee_range: preparation.employee_range, email: preparation.email,
+        phone: preparation.phone || "", fingerprint: preparation.fingerprint,
+      });
+      setPreparation(result); preparationSaved.current = JSON.stringify(result);
+      onPrepared?.(result); setStage("intake"); dialog.current?.scrollTo({ top: 0, behavior: "instant" });
+    } catch (error) { setSetupError(error.message || "Vérifiez les coordonnées du signataire."); }
+    finally { setSetupBusy(false); }
+  }
   const [sourceDraft, setSourceDraft] = useState(context.draft);
   const [validated, setValidated] = useState(context.ready);
   const [sourceReset, setSourceReset] = useState(0);
@@ -149,7 +168,7 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
   const dialog = useRef(null);
   const close = () => {
     if (
-      current.current !== saved.current &&
+      (current.current !== saved.current || preparationCurrent.current !== preparationSaved.current) &&
       !window.confirm("Fermer sans enregistrer les dernières modifications ?")
     )
       return;
@@ -187,7 +206,7 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
       }
     };
     const unload = (e) => {
-      if (current.current !== saved.current) {
+      if (current.current !== saved.current || preparationCurrent.current !== preparationSaved.current) {
         e.preventDefault();
         e.returnValue = "";
       }
@@ -262,7 +281,25 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
           </p>
         )}
         {context.nextAction && <SalesJourneySteps phase={stage} />}
-        {stage === "contract" ? (
+        {stage === "setup" ? (
+          <form className="ti-contract-review ti-preparation" onSubmit={prepare}>
+            <div className="ti-review-icon"><UsersRound size={30} strokeWidth={1.6} /></div>
+            <span className="ti-review-eyebrow">PRÉPARER LE CONTRAT</span>
+            <h1>Commençons par l’essentiel</h1>
+            <p>Confirmez le nombre de salariés et les coordonnées du signataire.</p>
+            <fieldset className="ti-band-field"><legend>Nombre de salariés</legend>
+              <div className="ti-band-options">{bands.map(band => <button type="button" key={band} aria-pressed={preparation.employee_range === band} onClick={() => setPreparation(p => ({ ...p, employee_range: band }))}>{band}</button>)}</div>
+            </fieldset>
+            <div className="ti-contact-fields">
+              <label>Email du signataire<input type="email" required maxLength={254} value={preparation.email || ""} onChange={e => setPreparation(p => ({ ...p, email: e.target.value }))} autoComplete="email" /></label>
+              <label>Téléphone du signataire <small>(facultatif)</small><input type="tel" maxLength={80} value={preparation.phone || ""} onChange={e => setPreparation(p => ({ ...p, phone: e.target.value }))} placeholder="06 12 34 56 78 ou +33 6…" autoComplete="tel" /></label>
+            </div>
+            {preparation.signer_name && <p className="ti-signer-name">Signataire : <strong>{preparation.signer_name}</strong></p>}
+            {!preparation.nda_ready && <p role="alert">Générez d’abord le NDA depuis votre dossier pour préparer le contrat.</p>}
+            {setupError && <p className="ti-setup-error" role="alert">{setupError}</p>}
+            <div className="ti-review-actions"><button className="ip-primary" type="submit" disabled={setupBusy || !preparation.employee_range || !preparation.nda_ready}>{setupBusy ? "Vérification…" : "Continuer vers la fiche"}<ArrowRight size={17} /></button></div>
+          </form>
+        ) : stage === "contract" ? (
           <section className="ti-contract-review" aria-labelledby="ti-review-title">
             <div className="ti-review-icon"><FileCheck2 size={32} strokeWidth={1.6} /></div>
             <span className="ti-review-eyebrow">FICHE CLIENT VALIDÉE</span>
@@ -270,17 +307,20 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
             <p>Vérifiez les informations du dossier avant l’envoi au client.</p>
             <dl>
               <div><dt>Société</dt><dd>{context.client_name}</dd></div>
-              <div><dt>Email du dossier</dt><dd>{contractDetails.email || "À renseigner dans le NDA"}</dd></div>
-              <div><dt>Tranche salariale</dt><dd>{contractDetails.employeeRange || "À renseigner"}</dd></div>
+              <div><dt>Email du signataire</dt><dd>{preparation.email || contractDetails.email || "À renseigner dans le NDA"}</dd></div>
+              <div><dt>Nombre de salariés</dt><dd>{preparation.employee_range || contractDetails.employeeRange || "À renseigner"}</dd></div>
+              <div><dt>Téléphone du signataire</dt><dd>{preparation.phone || "Non renseigné"}</dd></div>
               <div><dt>Date du contrat</dt><dd>{contractDetails.displayDate ? new Date(`${contractDetails.displayDate}T12:00:00`).toLocaleDateString("fr-FR") : "Date du jour"}</dd></div>
             </dl>
             <div className="ti-next-appointment"><CalendarDays size={23} /><span><strong>Après la signature</strong>Un rendez-vous onboarding avec Vincent et la facturation.</span></div>
             <div className="ti-review-actions">
               <button className="ip-secondary" onClick={() => setStage("intake")}><ArrowLeft size={17} /> Revoir la fiche</button>
-              <button className="ip-primary" onClick={onSend}><Send size={17} />{context.nextAction.type === "resend" ? "Poursuivre le renvoi" : "Envoyer le contrat"}</button>
+              <button className="ip-primary" onClick={() => onSend(preparation)}><Send size={17} />{context.nextAction.type === "resend" ? "Poursuivre le renvoi" : "Envoyer le contrat"}</button>
             </div>
           </section>
-        ) : <IntegrationPreviewStudio
+        ) : <>
+        {context.nextAction && <button className="ti-back-setup" onClick={() => { setSourceDraft(JSON.parse(current.current)); setValidated(validated && current.current === saved.current); setStage("setup"); }}><ArrowLeft size={16} /> Salariés et coordonnées</button>}
+        <IntegrationPreviewStudio
           key={sourceReset}
           embedded
           initialDraft={sourceDraft}
@@ -296,7 +336,7 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
             dialog.current?.scrollTo({ top: 0, behavior: "instant" });
             requestAnimationFrame(() => document.getElementById("ti-review-title")?.focus());
           } : onClose}
-        />}
+        /></>}
       </section>
     </div>,
     document.body,
