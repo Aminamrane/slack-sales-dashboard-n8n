@@ -485,6 +485,7 @@ export default function TrackingSheet() {
   const [qualificationDialog, setQualificationDialog] = useState(null);
   const [commentLeadId, setCommentLeadId] = useState(null);
   const [notesError, setNotesError] = useState(null);
+  const isSignedPilot = lead => !!intakeJourneys[lead?.id]?.onboarding_only;
   const isGuidedLead = lead => !!intakeRollout?.available && !!intakeContexts[lead?.id]?.required;
   const saveQualification = async ({result,attended,date,continueContract,followUp}) => {
     const {lead,stage} = qualificationDialog;
@@ -8055,7 +8056,7 @@ export default function TrackingSheet() {
                 const canDeclare = true;
                 // Les pickers date/heure libres n'apparaissent qu'APRÈS déclaration (dates
                 // posées) -> avant, seul le bouton Déclarer (qui ouvre le pop-up créneaux).
-                const rdvDatesSet = !!(lead.rdv_onboarding_date || lead.rdv_lancement_date);
+                const rdvDatesSet = !!(lead.rdv_onboarding_date || (!isSignedPilot(lead) && lead.rdv_lancement_date));
                 // Statut contrats (Owner + Opti'Lex) — depuis la donnée du lead (marche en vue admin, sans fetch user-scopé).
                 const _ownerDone = !!lead.contract_signed_at;   // onglet Signés -> Owner signé
                 const _ol = lead.contract_optilex_status;        // null = contrat groupé (pré-split), pas de statut Opti'Lex séparé
@@ -8133,9 +8134,9 @@ export default function TrackingSheet() {
                     </div>}
                     </>)}
 
-                    {intakeJourneys[lead.id]?.onboarding_only && <SalesJourneySteps phase="signed" />}
+                    {intakeJourneys[lead.id]?.onboarding_only && <p style={{fontSize:12,color:C.secondary,margin:'8px 0 12px'}}>Prochaine étape : confirmer la vente, puis choisir le rendez-vous avec Vincent et la facturation.</p>}
                     {/* Déclarer une vente button */}
-                    <button
+                    <button className={isSignedPilot(lead)?'sj-declare-sale':undefined}
                       onClick={async () => {
                         if (!canDeclare) return;
                         try {
@@ -8154,16 +8155,16 @@ export default function TrackingSheet() {
                       style={{
                         width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                         padding: '10px 16px', borderRadius: 10, border: 'none', cursor: canDeclare ? 'pointer' : 'default',
-                        background: canDeclare ? '#10b981' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
+                        background: canDeclare ? (isSignedPilot(lead)?'#202432':'#10b981') : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
                         color: canDeclare ? '#fff' : C.muted,
                         fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
                         transition: 'all 0.2s ease', opacity: canDeclare ? 1 : 0.6,
                       }}
-                      onMouseEnter={(e) => { if (canDeclare) e.currentTarget.style.background = '#059669'; }}
-                      onMouseLeave={(e) => { if (canDeclare) e.currentTarget.style.background = '#10b981'; }}
+                      onMouseEnter={(e) => { if (canDeclare) e.currentTarget.style.background = isSignedPilot(lead)?'#343b50':'#059669'; }}
+                      onMouseLeave={(e) => { if (canDeclare) e.currentTarget.style.background = isSignedPilot(lead)?'#202432':'#10b981'; }}
                     >
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                      Déclarer une vente
+                      <span>Déclarer une vente{isSignedPilot(lead)&&<small>Confirmer la vente et réserver l’onboarding</small>}</span>{isSignedPilot(lead)&&<ArrowRight size={20}/>}
                     </button>
                     {!canDeclare && (
                       <div style={{ fontSize: 11, color: C.muted, textAlign: 'center', marginTop: 6, fontStyle: 'italic' }}>
@@ -8197,7 +8198,7 @@ export default function TrackingSheet() {
                     Commenter
                   </button>
                 )}
-                {(() => {
+                {!(activeCat.key === 'signed' && isSignedPilot(lead)) && (() => {
                   const ndaDone = !!(lead.has_client_data);
                   const ndaColor = ndaDone ? '#10b981' : '#6366f1';
                   return (
@@ -8286,7 +8287,7 @@ export default function TrackingSheet() {
               )}
 
               {/* ─── OPTIONS (convention v2 : sociétés couvertes / société en création) ─── */}
-              {!isGuidedLead(lead) && <div style={{ marginTop: 18, borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>
+              {!isGuidedLead(lead) && !(activeCat.key === 'signed' && isSignedPilot(lead)) && <div style={{ marginTop: 18, borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>
                 <button
                   onClick={() => {
                     const next = !detailOptionsOpen;
@@ -9606,7 +9607,7 @@ export default function TrackingSheet() {
           <>
             <div onClick={() => { if (!saleSubmitting) { setShowSaleModal(null); setSaleSuccess(false); } }}
               style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both' }} />
-            <div style={{
+            <div className={saleOnboardingOnly?'sj-sale-dialog':undefined} role="dialog" aria-modal="true" aria-label="Déclarer une vente" style={{
               position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
               width: (saleStep === 'form' || saleStep === 'questions') ? 420 : 680, maxWidth: '92vw', background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`,
               boxShadow: '0 24px 48px rgba(0,0,0,0.2)', padding: '28px 28px 24px',
@@ -9634,7 +9635,7 @@ export default function TrackingSheet() {
                   <div style={{ textAlign: 'center', marginBottom: 20 }}>
                     <div style={{ width: 44, height: 44, borderRadius: '50%', background: darkMode ? 'rgba(255,255,255,0.06)' : '#f4f5f7', margin: '0 auto 10px',
                       display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'iconWiggle 3s ease-in-out infinite' }}>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: saleOnboardingOnly ? 'none' : 'iconWiggle 3s ease-in-out infinite' }}>
                         <rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
                       </svg>
                     </div>
@@ -9710,7 +9711,7 @@ export default function TrackingSheet() {
                     <div style={{ width: 44, height: 44, borderRadius: '50%', margin: '0 auto 10px',
                       background: darkMode ? 'rgba(255,255,255,0.06)' : '#f4f5f7',
                       display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'iconWiggle 3s ease-in-out infinite' }}>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: saleOnboardingOnly ? 'none' : 'iconWiggle 3s ease-in-out infinite' }}>
                         <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z" /><path d="M8 7h8M8 11h6M8 15h4" />
                       </svg>
                     </div>
@@ -9802,11 +9803,11 @@ export default function TrackingSheet() {
                       background: darkMode ? 'rgba(255,255,255,0.06)' : '#f4f5f7',
                       display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {saleStep === 'lancement' ? (
-                        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'iconWiggle 3s ease-in-out infinite' }}>
+                        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: saleOnboardingOnly ? 'none' : 'iconWiggle 3s ease-in-out infinite' }}>
                           <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" /><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" /><path d="M7 21h10" /><path d="M12 3v18" /><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2" />
                         </svg>
                       ) : (
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'iconWiggle 3s ease-in-out infinite' }}>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: saleOnboardingOnly ? 'none' : 'iconWiggle 3s ease-in-out infinite' }}>
                           <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z" /><path d="M8 7h8M8 11h6M8 15h4" />
                         </svg>
                       )}
