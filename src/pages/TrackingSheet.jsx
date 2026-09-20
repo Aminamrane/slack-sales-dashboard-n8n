@@ -1,3 +1,5 @@
+import FrenchDateInput from '../components/salesJourney/FrenchDateInput';
+import {parisToday,parisParts} from '../utils/parisDates';
 import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
@@ -66,19 +68,19 @@ import iconCreaEmpty from "../assets/metagris.png";
 import { normalizeSiren, isValidSiren, formatSiren } from "../contracts/schemas.js";
 
 // ── CATEGORIES ────────────────────────────────────────────────────────────────
-// ── CUSTOM DATETIME PICKER (date input + hour/minute selects, 5min step) ────
-const HOURS = Array.from({ length: 13 }, (_, i) => String(i + 8).padStart(2, '0')); // 08-20
-const MINUTES = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
+// ── PARIS WALL-CLOCK PICKER (French date, exact stored hour/minute) ────
+const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+const MINUTES = Array.from({length:60},(_,i)=>String(i).padStart(2,'0'));
 function DateTimePicker({ value, onChange, color = '#3b82f6', C, darkMode, autoSave = false }) {
   const [localDate, setLocalDate] = useState(value ? value.slice(0, 10) : '');
   const [localHour, setLocalHour] = useState(value ? value.slice(11, 13) : '09');
   const [localMin, setLocalMin] = useState(() => {
     const m = value ? value.slice(14, 16) : '00';
-    return MINUTES.reduce((prev, curr) => Math.abs(parseInt(curr) - parseInt(m)) < Math.abs(parseInt(prev) - parseInt(m)) ? curr : prev, '00');
+    return m;
   });
   // Sync from parent when value changes externally (polling, etc.)
   useEffect(() => {
-    if (value) { setLocalDate(value.slice(0, 10)); setLocalHour(value.slice(11, 13)); const m = value.slice(14, 16); setLocalMin(MINUTES.reduce((prev, curr) => Math.abs(parseInt(curr) - parseInt(m)) < Math.abs(parseInt(prev) - parseInt(m)) ? curr : prev, '00')); }
+    if (value) { setLocalDate(value.slice(0, 10)); setLocalHour(value.slice(11, 13)); const m = value.slice(14, 16); setLocalMin(m); }
   }, [value]);
   const currentFull = localDate + 'T' + localHour + ':' + localMin;
   const hasChanged = value && currentFull !== (value.slice(0, 16));
@@ -94,7 +96,7 @@ function DateTimePicker({ value, onChange, color = '#3b82f6', C, darkMode, autoS
   };
   return (
     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-      <input type="date" value={localDate} onChange={(e) => { setLocalDate(e.target.value); if ((isNew || autoSave) && e.target.value) onChange(e.target.value + 'T' + localHour + ':' + localMin); }}
+      <FrenchDateInput aria-label="Date du rendez-vous" value={localDate} onChange={(date) => { setLocalDate(date); if ((isNew || autoSave) && date) onChange(date + 'T' + localHour + ':' + localMin); }}
         style={{
           width: 105, flexShrink: 1, padding: '6px 4px', borderRadius: 8, border: `1px solid ${C.border}`,
           background: darkMode ? C.subtle : '#f9fafb', color: C.text,
@@ -127,7 +129,7 @@ function DateTimePicker({ value, onChange, color = '#3b82f6', C, darkMode, autoS
 function TimeSelect({ value, onChange, C, darkMode }) {
   const h = (value || '09:00').slice(0, 2);
   const m = (value || '09:00').slice(3, 5);
-  const roundedM = MINUTES.reduce((prev, curr) => Math.abs(parseInt(curr) - parseInt(m)) < Math.abs(parseInt(prev) - parseInt(m)) ? curr : prev, '00');
+  const roundedM = m;
   const ss = { padding: '8px 10px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', outline: 'none', appearance: 'none', paddingRight: 22, backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='${darkMode ? '%235e6273' : '%239ca3af'}' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center' };
   return (
     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -282,7 +284,7 @@ const CATEGORIES = [
 ];
 
 // ── TODAY (for dynamic notifications in demo) ────────────────────────────────
-const TODAY = new Date().toISOString().split('T')[0];
+const TODAY = parisToday();
 
 // ── STATUS MAPPING (extra statuses → closest tab) ───────────────────────────
 const EXTRA_STATUS_MAP = {
@@ -312,18 +314,11 @@ const formatNoteDate = (iso) => {
   if (!iso) return null;
   const d = new Date(iso);
   if (isNaN(d)) return null;
-  const now = new Date();
-  const months = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
-  const days = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
-  const sameDay = (a, b) => a.toDateString() === b.toDateString();
-  const yest = new Date(now); yest.setDate(now.getDate() - 1);
-  const time = `${d.getHours()}h${String(d.getMinutes()).padStart(2, '0')}`;
-  if (sameDay(d, now)) return `aujourd'hui à ${time}`;
-  if (sameDay(d, yest)) return `hier à ${time}`;
-  const diffDays = (now - d) / 86400000;
-  if (diffDays > 0 && diffDays < 7) return `${days[d.getDay()]} à ${time}`;
-  const sameY = d.getFullYear() === now.getFullYear();
-  return `le ${d.getDate()} ${months[d.getMonth()]}${sameY ? '' : ' ' + d.getFullYear()} à ${time}`;
+  const parts=parisParts(d);
+  const now=new Date();
+  const time=`${parts.hour}h${parts.minute}`;
+  if(parisToday(d)===parisToday(now))return `aujourd’hui à ${time}`;
+  return `le ${new Intl.DateTimeFormat('fr-FR',{timeZone:'Europe/Paris',day:'numeric',month:'short',year:'numeric'}).format(d)} à ${time}`;
 };
 const formatDateTimeFR = (val) => {
   if (!val) return '';
@@ -497,7 +492,7 @@ export default function TrackingSheet() {
     try {
       const response=await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`,patch);
       for(const field of ['r1_meet_link','r2_meet_link','r1_event_id','r2_event_id']){
-        if(response?.[field])patch[field]=response[field];
+        if(response?.lead?.[field])patch[field]=response.lead[field];
       }
       if(response?.calendar_conflict){
         setCalendarError({leadId:lead.id,message:response.calendar_conflict.message||'Le rendez-vous est enregistré, mais un conflit existe dans votre agenda. Vérifiez le créneau.'});
@@ -1546,6 +1541,7 @@ export default function TrackingSheet() {
   const [sirenEditError, setSirenEditError] = useState('');
 
   // ── NDA POPUP STATE ────────────────────────────────────────────────────
+  const ndaRequest = useRef(0);
   const [ndaPopup, setNdaPopup] = useState(null); // { leadId } or null — which lead's NDA popup is open
   const [ndaData, setNdaData] = useState(null); // AI-prefilled company data for popup
   const [ndaLoading, setNdaLoading] = useState(false); // ai-prefill loading state
@@ -1565,7 +1561,7 @@ export default function TrackingSheet() {
     const card=document.querySelector('.sj-nda-dialog');
     card?.setAttribute('tabindex','-1'); card?.focus();
     const onKey=e=>{
-      if(e.key==='Escape'&&!ndaGenerating){e.preventDefault();setNdaPopup(null);setNdaData(null);}
+      if(e.key==='Escape'&&!ndaGenerating){e.preventDefault();ndaRequest.current++;setNdaPopup(null);setNdaData(null);}
       if(e.key!=='Tab'||!card)return;
       const nodes=[...card.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea')].filter(n=>n.getClientRects().length);
       if(!nodes.length){e.preventDefault();return;}
@@ -1697,14 +1693,14 @@ export default function TrackingSheet() {
     if (filterStatuses.length > 0) {
       result = result.filter(l => {
         return filterStatuses.some(s => {
-          if (s === 'r1_scheduled') { const dp = l.r1 ? l.r1.slice(0,10) < new Date().toISOString().slice(0,10) : false; return (!l.r1_result || l.r1_result === 'rescheduled') && !dp; }
-          if (s === 'r1_waiting') { const dp = l.r1 ? l.r1.slice(0,10) < new Date().toISOString().slice(0,10) : false; return l.r1_result === 'no_show' || ((!l.r1_result || l.r1_result === 'rescheduled') && dp); }
+          if (s === 'r1_scheduled') { const dp = l.r1 ? l.r1.slice(0,10) < parisToday() : false; return (!l.r1_result || l.r1_result === 'rescheduled') && !dp; }
+          if (s === 'r1_waiting') { const dp = l.r1 ? l.r1.slice(0,10) < parisToday() : false; return l.r1_result === 'no_show' || ((!l.r1_result || l.r1_result === 'rescheduled') && dp); }
           if (s === 'r1_done') return l.r1_result === 'done';
           if (s === 'r1_cancelled') return l.r1_result === 'cancelled';
           if (s === 'r1_setter_placed') return l.r1_placed_by_setter_id != null;
           if (s === 'r1_not_done') return !l.r1_result || l.r1_result !== 'done';
-          if (s === 'r2_scheduled') { const dp = l.r2 ? l.r2.slice(0,10) < new Date().toISOString().slice(0,10) : false; return (!l.r2_result || l.r2_result === 'reporte') && !dp; }
-          if (s === 'r2_pending') { const dp = l.r2 ? l.r2.slice(0,10) < new Date().toISOString().slice(0,10) : false; return l.r2_result === 'no_show' || ['comptable', 'associe', 'reflexion', 'relire_contrat', 'pas_decision_jour', 'tresorerie'].includes(l.r2_result) || ((!l.r2_result || l.r2_result === 'reporte') && dp); }
+          if (s === 'r2_scheduled') { const dp = l.r2 ? l.r2.slice(0,10) < parisToday() : false; return (!l.r2_result || l.r2_result === 'reporte') && !dp; }
+          if (s === 'r2_pending') { const dp = l.r2 ? l.r2.slice(0,10) < parisToday() : false; return l.r2_result === 'no_show' || ['comptable', 'associe', 'reflexion', 'relire_contrat', 'pas_decision_jour', 'tresorerie'].includes(l.r2_result) || ((!l.r2_result || l.r2_result === 'reporte') && dp); }
           if (s === 'r2_done') return l.r2_result === 'done';
           if (s === 'r2_cancelled') return l.r2_result === 'pas_interesse' || l.r2_result === 'annule';
           if (s === 'r2_not_done') return !l.r2_result || l.r2_result !== 'done';
@@ -2190,7 +2186,7 @@ export default function TrackingSheet() {
       });
       await fetchLeadContracts(lead.id);
       if (intakeConfirmed && lead.status === 'r1') {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = parisToday();
         await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { r1_date: today, r2_date: today, r1_result: 'done', r1_completed_at: new Date().toISOString(), r2_result: 'done', r2_completed_at: new Date().toISOString(), status: 'r2' });
         setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, r1: today, r2: today, r1_result: 'done', r2_result: 'done', status: 'r2' } : l));
         setR1ShortcutContract(null);
@@ -2373,8 +2369,8 @@ export default function TrackingSheet() {
 
   const formatDate = (d) => {
     if (!d) return null;
-    const date = new Date(d);
-    return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+    const date = new Date(d.slice(0,10)+'T12:00:00Z');
+    return date.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "2-digit", month: "short", year: "numeric" });
   };
 
   // ── SIDEBAR FORM HANDLERS ──────────────────────────────────────────────
@@ -2518,7 +2514,7 @@ export default function TrackingSheet() {
     if (lead.company_in_creation) {
       setNdaStep('form');
     } else if (sirenDigits.length === 9 && isValidSiren(sirenDigits)) {
-      setNdaStep('form');
+      setNdaStep('siren');
       runAutoPrefill(sirenDigits);
     } else {
       setNdaStep('siren');
@@ -2527,13 +2523,15 @@ export default function TrackingSheet() {
 
   // Prefill automatique via SIREN (le bouton manuel n'existe plus). En cas de
   // plusieurs dirigeants, on passe par l'étape de sélection ; sinon direct au
-  // formulaire prérempli. En échec (SIREN inconnu, Pappers down) → formulaire
-  // manuel, avec le message d'erreur affiché.
+  // formulaire prérempli. En échec, rester à l’identification de la société.
   const runAutoPrefill = async (sirenDigits) => {
+    const request=++ndaRequest.current;
     setNdaLoading(true);
     setNdaError('');
     try {
       const data = await apiClient.post('/api/v1/contracts/ai-prefill-by-siren', { siren: sirenDigits });
+      if(request!==ndaRequest.current)return;
+      if (!data?.legal_name?.trim()) throw Object.assign(new Error('Entreprise introuvable'), {status:404});
       const updates = {};
       if (data.legal_name) updates.legalName = data.legal_name;
       if (data.legal_form) {
@@ -2571,14 +2569,17 @@ export default function TrackingSheet() {
         setNdaStep('form');
       }
     } catch (err) {
+      if(request!==ndaRequest.current)return;
       if (err?.status === 404) {
-        setNdaError("Aucune entreprise trouvée pour ce SIREN. Vérifiez le numéro, ou cochez \"En cours d'immatriculation\" et remplissez manuellement.");
+        setNdaError("Aucune entreprise trouvée pour ce SIREN. Vérifiez le numéro, ou choisissez \"En cours d'immatriculation\" si la société est en création.");
       } else {
-        setNdaError('La recherche automatique est indisponible. Vous pouvez renseigner les informations du client manuellement.');
+        setNdaError('La recherche est momentanément indisponible. Réessayez pour vérifier ce SIREN.');
       }
-      setNdaStep('form');
+      setNdaSuccess(false);
+      setNdaSirenInput(sirenDigits);
+      setNdaStep('siren');
     } finally {
-      setNdaLoading(false);
+      if(request===ndaRequest.current)setNdaLoading(false);
     }
   };
 
@@ -2597,7 +2598,7 @@ export default function TrackingSheet() {
       console.warn('Enregistrement SIREN sur le lead échoué (non bloquant):', err);
     }
     setNdaData(prev => ({ ...prev, siren: digits }));
-    setNdaStep('form');
+    setNdaStep('siren');
     runAutoPrefill(digits);
   };
 
@@ -2688,7 +2689,7 @@ export default function TrackingSheet() {
         if (unchanged) throw new Error('Le parcours de ce dossier a changé. Fermez puis rouvrez le dossier avant de continuer.');
       }
       // Success → close popup
-      setNdaPopup(null);
+      ndaRequest.current++;setNdaPopup(null);
       setNdaData(null);
       // Refresh leads to get updated sector
       refreshData().catch(() => {});
@@ -3956,7 +3957,7 @@ export default function TrackingSheet() {
                     {targetUnavailability.map(v => {
                       const fmt = (iso) => {
                         const d = new Date(iso + 'T12:00:00');
-                        return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+                        return d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: 'short', year: 'numeric' });
                       };
                       const daysCount = (() => {
                         const s = new Date(v.start_date); const e = new Date(v.end_date);
@@ -5606,7 +5607,7 @@ export default function TrackingSheet() {
             // lead migre naturellement dans Planifiés/Pending/Effectués/Annulés.
             // Le badge "Traité par {prénom}" reste sur la card via
             // `r1_placed_by_setter_name` peu importe le bucket → trace préservée.
-            const todayDate = new Date().toISOString().slice(0, 10);
+            const todayDate = parisToday();
             const isDatePast = (d) => { if (!d) return false; const ds = typeof d === 'string' ? d.slice(0, 10) : ''; return ds && ds < todayDate; };
             const isSetterPlaced = (l) => l.r1_placed_by_setter_id != null;
             const isSetterPlacedUnqualified = (l) => isSetterPlaced(l) && (!l.r1_result || l.r1_result === 'rescheduled');
@@ -6010,12 +6011,12 @@ export default function TrackingSheet() {
                           needs to know when they last tried — not just the first attempt. */}
                       {(activeCat.key === 'voicemail' || activeCat.key === 'callback') && lead.first_call_at && (() => {
                         const d = new Date(lead.first_call_at);
-                        const dd = String(d.getDate()).padStart(2, '0');
-                        const mo = String(d.getMonth() + 1).padStart(2, '0');
-                        const hh = String(d.getHours()).padStart(2, '0');
-                        const mi = String(d.getMinutes()).padStart(2, '0');
+                        const dd = parisParts(d).day;
+                        const mo = parisParts(d).month;
+                        const hh = parisParts(d).hour;
+                        const mi = parisParts(d).minute;
                         return (
-                          <span title={`Premier appel : ${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à ${hh}h${mi}`} style={{
+                          <span title={`Premier appel : ${d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long' })} à ${hh}h${mi}`} style={{
                             display: 'inline-flex', alignItems: 'center', gap: 4,
                             padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 600, flexShrink: 0,
                             background: darkMode ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.06)',
@@ -6032,12 +6033,12 @@ export default function TrackingSheet() {
                         // where backend set last = first). Absence carries meaning:
                         // no "Dernier" pill ⇒ rep has only called once.
                         const d = new Date(lead.last_call_at);
-                        const dd = String(d.getDate()).padStart(2, '0');
-                        const mo = String(d.getMonth() + 1).padStart(2, '0');
-                        const hh = String(d.getHours()).padStart(2, '0');
-                        const mi = String(d.getMinutes()).padStart(2, '0');
+                        const dd = parisParts(d).day;
+                        const mo = parisParts(d).month;
+                        const hh = parisParts(d).hour;
+                        const mi = parisParts(d).minute;
                         return (
-                          <span title={`Dernier appel : ${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à ${hh}h${mi}`} style={{
+                          <span title={`Dernier appel : ${d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long' })} à ${hh}h${mi}`} style={{
                             display: 'inline-flex', alignItems: 'center', gap: 4,
                             padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 600, flexShrink: 0,
                             background: darkMode ? 'rgba(20,184,166,0.14)' : 'rgba(20,184,166,0.08)',
@@ -6547,18 +6548,18 @@ export default function TrackingSheet() {
                     {lead.call_attempts > 0 && <span>Appelé {lead.call_attempts} fois</span>}
                     {lead.first_call_at && (() => {
                       const d = new Date(lead.first_call_at);
-                      const dateLabel = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-                      const hh = String(d.getHours()).padStart(2,'0');
-                      const mi = String(d.getMinutes()).padStart(2,'0');
+                      const dateLabel = d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long' });
+                      const hh = parisParts(d).hour;
+                      const mi = parisParts(d).minute;
                       return <span style={{ fontStyle: 'normal', fontWeight: 600, color: '#6366f1', fontSize: 11 }}>1er appel : {dateLabel} à {hh}h{mi}</span>;
                     })()}
                     {lead.last_call_at && lead.last_call_at !== lead.first_call_at && (() => {
                       // See note on the compact badge: hide when equal to first_call_at
                       // (single-call leads or backfilled historical rows).
                       const d = new Date(lead.last_call_at);
-                      const dateLabel = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-                      const hh = String(d.getHours()).padStart(2,'0');
-                      const mi = String(d.getMinutes()).padStart(2,'0');
+                      const dateLabel = d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long' });
+                      const hh = parisParts(d).hour;
+                      const mi = parisParts(d).minute;
                       return <span style={{ fontStyle: 'normal', fontWeight: 600, color: '#14b8a6', fontSize: 11 }}>Dernier appel : {dateLabel} à {hh}h{mi}</span>;
                     })()}
                   </div>
@@ -7182,7 +7183,7 @@ export default function TrackingSheet() {
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
-                            <TimeSelect value={wfLocal.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wfLocal.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
+                            <TimeSelect value={wfLocal.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wfLocal.newDate?.slice(0, 10) || parisToday(); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
                           </div>
                         </div>
                         {wfLocal.newDate && wfLocal.newDate.length >= 10 && (
@@ -7263,7 +7264,7 @@ export default function TrackingSheet() {
               {/* ═══ NEW / CALLBACK / VOICEMAIL TAB WORKFLOW ═══ */}
               {(activeCat.key === 'new' || activeCat.key === 'callback' || activeCat.key === 'voicemail') && (() => {
                 const wf = activeWorkflow?.leadId === lead.id && !activeWorkflow?.callFlow ? activeWorkflow : null;
-                const today = new Date().toISOString().split('T')[0];
+                const today = parisToday();
                 // Preserve original first contact date if already set (callback/voicemail leads have been contacted before)
                 const firstContactDate = lead.first_contact_date ? lead.first_contact_date.slice(0, 10) : today;
                 const isReContact = activeCat.key === 'callback' || activeCat.key === 'voicemail';
@@ -7399,7 +7400,7 @@ export default function TrackingSheet() {
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
-                            <TimeSelect value={wf.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wf.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
+                            <TimeSelect value={wf.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wf.newDate?.slice(0, 10) || parisToday(); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
                           </div>
                         </div>
                         {wf.newDate && wf.newDate.length >= 10 && (
@@ -7447,7 +7448,7 @@ export default function TrackingSheet() {
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
-                            <TimeSelect value={wf.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wf.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
+                            <TimeSelect value={wf.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wf.newDate?.slice(0, 10) || parisToday(); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
                           </div>
                         </div>
                         {wf.newDate && wf.newDate.length >= 10 && (
@@ -7516,7 +7517,7 @@ export default function TrackingSheet() {
                         >{isGuidedLead(lead)?<><CalendarCheck2 size={20}/><span>Qualifier le R1<small style={{display:'block',fontSize:11,fontWeight:400,marginTop:4}}>Résultat du rendez-vous et planification du R2</small></span><ChevronRight size={17}/></>:'Qualifier le R1'}</button>
 
                         {/* ── R2 placé: separate standalone button (only after R1 qualified) ── */}
-                        {!lead.r1_result ? null : !wfR2 ? (
+                        {isGuidedLead(lead) || !lead.r1_result ? null : !wfR2 ? (
                           <button
                             onClick={() => setActiveWorkflow({ leadId: lead.id, r1Result: 'r2_set_standalone', newDate: '' })}
                             style={{
@@ -7553,7 +7554,7 @@ export default function TrackingSheet() {
                               </div>
                               <div style={{ flex: 1 }}>
                                 <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
-                                <TimeSelect value={wfR2.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wfR2.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
+                                <TimeSelect value={wfR2.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wfR2.newDate?.slice(0, 10) || parisToday(); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
                               </div>
                             </div>
                             {wfR2.newDate && wfR2.newDate.length >= 10 && (
@@ -7600,7 +7601,7 @@ export default function TrackingSheet() {
                                   try {
                                     await apiClient.post('/api/v1/contracts/send', { lead_id: lead.id, employee_range: lead.employee_range });
                                     setNavNotif('sent');
-                                    const today = new Date().toISOString().slice(0, 10);
+                                    const today = parisToday();
                                     await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { r1_date: today, r2_date: today, r1_result: 'done', r1_completed_at: new Date().toISOString(), r2_result: 'done', r2_completed_at: new Date().toISOString(), status: 'r2' });
                                     setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, r1: today, r2: today, r1_result: 'done', r2_result: 'done', status: 'r2' } : l));
                                     triggerFlyAnimation(lead.id, lead, 'r2'); triggerLeadMovedNotif(lead, 'r2'); setR1ShortcutContract(null);
@@ -7659,7 +7660,7 @@ export default function TrackingSheet() {
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
-                            <TimeSelect value={wf.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wf.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
+                            <TimeSelect value={wf.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wf.newDate?.slice(0, 10) || parisToday(); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
                           </div>
                         </div>
                         {wf.newDate && wf.newDate.length >= 10 && (
@@ -7682,12 +7683,12 @@ export default function TrackingSheet() {
               {/* Dates pipeline (À relancer = recontact futur ; Non pertinent = écarté) */}
               {activeCat.key === 'to_recontact' && lead.recontact_date && (
                 <div style={{ fontSize: 11.5, fontWeight: 600, color: '#0f9b8e', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span>↻</span> Relancer vers le {new Date(lead.recontact_date + 'T00:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  <span>↻</span> Relancer vers le {new Date(lead.recontact_date + 'T12:00:00Z').toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit', year: 'numeric' })}
                 </div>
               )}
               {activeCat.key === 'not_relevant' && lead.not_relevant_at && (
                 <div style={{ fontSize: 11.5, fontWeight: 500, color: C.muted, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ color: '#f87171' }}>✕</span> Non pertinent depuis le {new Date(lead.not_relevant_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  <span style={{ color: '#f87171' }}>✕</span> Non pertinent depuis le {new Date(lead.not_relevant_at).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit', year: 'numeric' })}
                 </div>
               )}
 
@@ -7794,7 +7795,7 @@ export default function TrackingSheet() {
                               <span style={{ fontSize: 11 }}>{smsInfo.icon}</span>
                               <span style={{ fontWeight: 500 }}>{smsInfo.label}</span>
                               <span style={{ flex: 1 }} />
-                              <span style={{ fontSize: 10, color: C.muted }}>{new Date(h.sent_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} {new Date(h.sent_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                              <span style={{ fontSize: 10, color: C.muted }}>{new Date(h.sent_at).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit' })} {new Date(h.sent_at).toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' })}</span>
                             </div>
                           );
                         })}
@@ -7843,7 +7844,7 @@ export default function TrackingSheet() {
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
-                            <TimeSelect value={wfR3.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wfR3.newDate?.slice(0, 10) || new Date().toISOString().slice(0, 10); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
+                            <TimeSelect value={wfR3.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wfR3.newDate?.slice(0, 10) || parisToday(); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
                           </div>
                         </div>
                         {wfR3.newDate && wfR3.newDate.length >= 10 && (
@@ -8566,7 +8567,7 @@ export default function TrackingSheet() {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               animation: 'modalOverlayIn 0.25s ease both',
             }}
-            onClick={(e) => { if (e.target === e.currentTarget && !ndaGenerating) { setNdaPopup(null); setNdaData(null); } }}
+            onClick={(e) => { if (e.target === e.currentTarget && !ndaGenerating) { ndaRequest.current++;setNdaPopup(null); setNdaData(null); } }}
           >
             <div className={isGuidedLead(lead)?"sj-nda-dialog":undefined} role="dialog" aria-modal="true" aria-label="Préparer le NDA" style={{
               width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto',
@@ -8579,7 +8580,7 @@ export default function TrackingSheet() {
                   <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>Générer le NDA</h3>
                   <p style={{ margin: '2px 0 0', fontSize: 12, color: C.muted }}>{lead.full_name} {lead.company_name ? `— ${lead.company_name}` : ''}</p>
                 </div>
-                <button disabled={ndaGenerating} aria-label="Fermer le NDA" onClick={() => { setNdaPopup(null); setNdaData(null); }}
+                <button disabled={ndaGenerating} aria-label="Fermer le NDA" onClick={() => { ndaRequest.current++;setNdaPopup(null); setNdaData(null); }}
                   style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted, fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >✕</button>
               </div>
@@ -8613,9 +8614,9 @@ export default function TrackingSheet() {
               <button className={isGuidedLead(lead)?"sj-nda-primary":undefined} onClick={handleNdaSirenContinue} disabled={ndaLoading}
                 style={{ width: '100%', marginTop: 14, padding: '11px 0', borderRadius: 10, border: 'none', background: C.accent, color: '#fff', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
               >{ndaLoading ? 'Recherche…' : 'Continuer'}{isGuidedLead(lead)&&<ArrowRight size={17}/>}</button>
-              <button className={isGuidedLead(lead)?"sj-nda-secondary":undefined} onClick={handleNdaInCreation}
+              <button className={isGuidedLead(lead)?"sj-nda-secondary":undefined} disabled={ndaLoading} onClick={handleNdaInCreation}
                 style={{ width: '100%', marginTop: 8, padding: '10px 0', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-              >La société est en cours de création (pas encore de SIREN)</button>
+              >En cours d’immatriculation (pas encore de SIREN)</button>
             </>
           );
         }
@@ -8670,7 +8671,7 @@ export default function TrackingSheet() {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               animation: 'modalOverlayIn 0.25s ease both',
             }}
-            onClick={(e) => { if (e.target === e.currentTarget && !ndaGenerating) { setNdaPopup(null); setNdaData(null); } }}
+            onClick={(e) => { if (e.target === e.currentTarget && !ndaGenerating) { ndaRequest.current++;setNdaPopup(null); setNdaData(null); } }}
           >
             <div className={isGuidedLead(lead)?"sj-nda-dialog":undefined} role="dialog" aria-modal="true" aria-label="Préparer le NDA" style={{
               width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto',
@@ -8684,7 +8685,7 @@ export default function TrackingSheet() {
                   <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>Générer le NDA</h3>
                   <p style={{ margin: '2px 0 0', fontSize: 12, color: C.muted }}>{lead.full_name} {lead.company_name ? `— ${lead.company_name}` : ''}</p>
                 </div>
-                <button disabled={ndaGenerating} aria-label="Fermer le NDA" onClick={() => { setNdaPopup(null); setNdaData(null); }}
+                <button disabled={ndaGenerating} aria-label="Fermer le NDA" onClick={() => { ndaRequest.current++;setNdaPopup(null); setNdaData(null); }}
                   style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted, fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >✕</button>
               </div>
@@ -8897,7 +8898,7 @@ export default function TrackingSheet() {
 
               {/* Actions */}
               <div className={isGuidedLead(lead)?'sj-nda-actions':undefined} style={{ display: 'flex', gap: 10, background:C.bg }}>
-                <button disabled={ndaGenerating} aria-label="Fermer le NDA" onClick={() => { setNdaPopup(null); setNdaData(null); }}
+                <button disabled={ndaGenerating} aria-label="Fermer le NDA" onClick={() => { ndaRequest.current++;setNdaPopup(null); setNdaData(null); }}
                   style={{
                     flex: 1, padding: '11px 16px', borderRadius: 10, border: `1px solid ${C.border}`,
                     background: 'transparent', color: C.secondary, fontSize: 13, fontWeight: 500,

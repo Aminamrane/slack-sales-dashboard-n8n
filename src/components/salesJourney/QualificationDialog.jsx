@@ -1,3 +1,4 @@
+import {ParisDateTimeInput} from './FrenchDateInput';
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowRight, CalendarCheck2, CalendarClock, Check, CircleX, Clock3, FileCheck2, Landmark, MessageCircle, Pause, UserRoundX, UsersRound, Wallet, X } from 'lucide-react';
@@ -51,7 +52,7 @@ export default function QualificationDialog({lead,stage='r2',onClose,onSave,dark
       <header className="sj-head"><span className="sj-icon"><CalendarCheck2 size={24}/></span><div><small>RENDEZ-VOUS COMMERCIAL</small><h2 id="sj-title">Qualifier le {label}</h2><p>{lead.company_name || lead.full_name}</p></div><button className="sj-close" aria-label="Fermer la qualification" onClick={onClose} disabled={busy}><X size={20}/></button></header>
       <div className="sj-body"><div className="sj-attendance" role="group" aria-label="Le rendez-vous a-t-il eu lieu ?">{[[true,`${label} effectué`,Check],[false,'Non effectué',Clock3]].map(([value,text,Icon])=><button key={text} disabled={busy} aria-pressed={attended===value} onClick={()=>{setAttended(value);setResult(value?'done':'no_show');setError('');}}><Icon size={18}/>{text}</button>)}</div>
       <h3>{attended?'Quelle est la suite ?':'Que s’est-il passé ?'}</h3><div className="sj-options">{options.map(([value,title,desc,Icon])=><button key={value} disabled={busy} className={result===value?'is-selected':''} aria-pressed={result===value} onClick={()=>{setResult(value);setError('');}}><Icon size={21}/><span><strong>{title}</strong><small>{desc}</small></span>{result===value&&<Check size={16}/>}</button>)}</div>
-      {['reporte','rescheduled'].includes(result)&&<label className="sj-date">Nouveau rendez-vous<input aria-label="Nouveau rendez-vous" type="datetime-local" value={date} disabled={busy} onChange={e=>setDate(e.target.value)}/></label>}
+      {['reporte','rescheduled'].includes(result)&&<ParisDateTimeInput label="Nouveau rendez-vous" value={date} disabled={busy} onChange={setDate}/>}
       {error&&<p className="sj-error" role="alert">{error}</p>}</div>
       <footer className="sj-footer"><button disabled={busy} onClick={()=>save(false)}>Enregistrer</button>{attended&&['done','relire_contrat'].includes(result)&&<button className="sj-primary" disabled={busy} onClick={()=>save(true)}>{busy?'Enregistrement…':'Préparer le contrat'}<ArrowRight size={17}/></button>}</footer>
     </section>

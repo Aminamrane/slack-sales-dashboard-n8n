@@ -42,3 +42,18 @@ test('R1 followed by R2 writes the existing scheduling payload without changing 
  const direct=qualificationPatch({},'r1',{result:'done',attended:true,followUp:'contract'});
  assert.equal(direct.r2_date,undefined);assert.equal(direct.status,undefined);
 });
+
+import {parisToday,parseFrenchDate,frenchDate,validParisAppointment} from './parisDates.js';
+test('French dates reject impossible dates and keep historical wall-clock',()=>{
+ assert.equal(parseFrenchDate('31/02/2026'),'');
+ assert.equal(parseFrenchDate('20/09/2026'),'2026-09-20');
+ assert.equal(frenchDate('2026-08-20T09:00:00+00:00'),'20/08/2026');
+ assert.equal(parisToday(new Date('2026-09-20T22:30:00Z')),'2026-09-21');
+});
+test('Paris appointments validate independently from the browser timezone',()=>{
+ assert.equal(validParisAppointment('2026-03-29T02:30'),false);
+ assert.equal(validParisAppointment('2026-03-29T03:30'),true);
+ assert.equal(validParisAppointment('2026-10-25T02:30'),true);
+ assert.equal(validParisAppointment('2026-02-30T09:00'),false);
+ assert.equal(validParisAppointment('2026-09-25T09:17'),true);
+});
