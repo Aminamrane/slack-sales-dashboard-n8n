@@ -1,5 +1,5 @@
 import FrenchDateInput from '../components/salesJourney/FrenchDateInput';
-import {parisToday,parisParts} from '../utils/parisDates';
+import {parisToday,parisParts,minuteOptions} from '../utils/parisDates';
 import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
@@ -70,7 +70,7 @@ import { normalizeSiren, isValidSiren, formatSiren } from "../contracts/schemas.
 // ── CATEGORIES ────────────────────────────────────────────────────────────────
 // ── PARIS WALL-CLOCK PICKER (French date, exact stored hour/minute) ────
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
-const MINUTES = Array.from({length:60},(_,i)=>String(i).padStart(2,'0'));
+const MINUTES = minuteOptions();
 function DateTimePicker({ value, onChange, color = '#3b82f6', C, darkMode, autoSave = false }) {
   const [localDate, setLocalDate] = useState(value ? value.slice(0, 10) : '');
   const [localHour, setLocalHour] = useState(value ? value.slice(11, 13) : '09');
@@ -108,7 +108,7 @@ function DateTimePicker({ value, onChange, color = '#3b82f6', C, darkMode, autoS
       </select>
       <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>:</span>
       <select value={localMin} onChange={(e) => { setLocalMin(e.target.value); if (isNew || autoSave) onChange(localDate + 'T' + localHour + ':' + e.target.value); }} style={{ ...selectStyle, minWidth: 44, fontSize: 12, padding: '6px 6px 6px 6px', paddingRight: 18 }}>
-        {MINUTES.map(m => <option key={m} value={m}>{m}</option>)}
+        {minuteOptions(localMin).map(m => <option key={m} value={m}>{m}</option>)}
       </select>
       {hasChanged && !autoSave && (
         <button onClick={confirm} style={{
@@ -138,7 +138,7 @@ function TimeSelect({ value, onChange, C, darkMode }) {
       </select>
       <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>:</span>
       <select value={roundedM} onChange={(e) => onChange(h + ':' + e.target.value)} style={{ ...ss, width: 58 }}>
-        {MINUTES.map(mi => <option key={mi} value={mi}>{mi}</option>)}
+        {minuteOptions(roundedM).map(mi => <option key={mi} value={mi}>{mi}</option>)}
       </select>
     </div>
   );

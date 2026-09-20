@@ -26,3 +26,9 @@ export function validParisAppointment(value){
 }
 
 export function parisParts(date){return Object.fromEntries(new Intl.DateTimeFormat('fr-FR',{timeZone:PARIS_ZONE,day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(date).map(p=>[p.type,p.value]));}
+
+export function minuteOptions(current='00'){
+ const steps=Array.from({length:12},(_,i)=>String(i*5).padStart(2,'0'));
+ // Display an existing off-step appointment faithfully, without offering every minute.
+ return /^([0-5][0-9])$/.test(current)&&!steps.includes(current)?[...steps,current].sort():steps;
+}
