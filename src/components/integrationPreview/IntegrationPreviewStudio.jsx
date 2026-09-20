@@ -136,6 +136,12 @@ export function IntegrationSummary({ draft, clientName, validated = false, embed
                           </div>
                         </div>
                       ))}
+                      <div className="ip-handoff-summary">
+                        <h4>Situation personnelle des dirigeants</h4>
+                        <p>{draft.personal_situation || "Non renseignée"}</p>
+                        <h4>Situation professionnelle des dirigeants</h4>
+                        <p>{draft.professional_situation || "Non renseignée"}</p>
+                      </div>
                       {draft.priorities && (
                         <>
                           <h4>Priorité du client</h4>
@@ -456,7 +462,7 @@ export default function IntegrationPreviewStudio({
                         {
                           [
                             "Confirmez les structures et les personnes que nous allons accompagner.",
-                            "Transmettez ce que le client attend et ce qui a été discuté pendant la vente.",
+                            "Deux commentaires pour transmettre le contexte des dirigeants.",
                             "Votre première appréciation de la relation avec le client.",
                             "Les informations essentielles pour Vincent, la facturation et le cabinet.",
                           ][step]
@@ -635,107 +641,22 @@ export default function IntegrationPreviewStudio({
                     </>
                   )}
                   {step === 1 && (
-                    <>
-                      <Field
-                        label="Priorité du client"
-                        value={draft.priorities}
-                        onChange={(v) => change("priorities", v)}
-                        placeholder="Quel problème souhaite-t-il résoudre en premier ?"
-                        multiline
-                      />
-                      <div className="ip-block-title">
-                        <h3>
-                          <BriefcaseBusiness size={19} /> Missions potentielles
-                        </h3>
-                        <span>Recommandations du commercial</span>
-                      </div>
-                      <div className="ip-mission-options">
-                        {MISSION_OPTIONS.map((m) => (
-                          <button
-                            key={m}
-                            aria-pressed={draft.missions.includes(m)}
-                            onClick={() =>
-                              change(
-                                "missions",
-                                draft.missions.includes(m)
-                                  ? draft.missions.filter((x) => x !== m)
-                                  : [...draft.missions, m],
-                              )
-                            }
-                          >
-                            {draft.missions.includes(m) ? (
-                              <Check size={15} />
-                            ) : (
-                              <Plus size={15} />
-                            )}{" "}
-                            {m}
-                          </button>
-                        ))}
-                      </div>
-                      <Field
-                        label="Précisions sur les missions"
-                        multiline
-                        value={draft.mission_notes}
-                        onChange={(v) => change("mission_notes", v)}
-                        placeholder="Contexte, besoin évoqué, point à approfondir…"
-                      />
-                      <div className="ip-fields-two">
-                        <Field
-                          label="Résultat attendu dans les prochains mois"
-                          value={draft.objective}
-                          onChange={(v) => change("objective", v)}
-                          placeholder="Ce qui ferait un démarrage réussi"
-                        />
-                        <Field
-                          label="Échéance importante"
-                          type="date"
-                          value={draft.deadline}
-                          onChange={(v) => change("deadline", v)}
-                        />
-                      </div>
-                      <details className="ip-details">
-                        <summary>
-                          Accompagnement actuel et organisation{" "}
-                          <Plus size={17} />
-                        </summary>
-                        <div className="ip-fields-two">
-                          <Field
-                            label="Expert-comptable"
-                            value={draft.accountant}
-                            onChange={(v) => change("accountant", v)}
-                            placeholder="Nom / cabinet, si connu"
-                          />
-                          <Field
-                            label="Gestion de la paie"
-                            value={draft.payroll}
-                            onChange={(v) => change("payroll", v)}
-                            placeholder="Prestataire ou gestion interne"
-                          />
-                          <Field
-                            label="Conseil juridique actuel"
-                            value={draft.legal}
-                            onChange={(v) => change("legal", v)}
-                            placeholder="Interlocuteur, si connu"
-                          />
-                          <Field
-                            label="Contact privilégié"
-                            value={draft.contact}
-                            onChange={(v) => change("contact", v)}
-                            placeholder="Personne qui suivra les échanges"
-                          />
-                        </div>
-                      </details>
-                      <Field
-                        label="Notes du commercial"
-                        value={draft.notes}
-                        onChange={(v) => change("notes", v)}
-                        multiline
-                        placeholder="Les éléments utiles pour comprendre le client et assurer la continuité de la relation."
-                      />
-                      <p className="ip-field-hint">
-                        Notes internes transmises à l’équipe d’accompagnement.
-                      </p>
-                    </>
+                    <div className="ip-handoff-comments">
+                      <section>
+                        <h3>Informations personnelles</h3>
+                        <Field label="Situation personnelle des dirigeants"
+                          value={draft.personal_situation || ""}
+                          onChange={v => change("personal_situation", v)} multiline
+                          placeholder="Les éléments partagés par les dirigeants qui sont utiles à leur accompagnement…" />
+                      </section>
+                      <section>
+                        <h3>Informations professionnelles</h3>
+                        <Field label="Situation professionnelle des dirigeants"
+                          value={draft.professional_situation || ""}
+                          onChange={v => change("professional_situation", v)} multiline
+                          placeholder="Activité, organisation, projets et besoins évoqués pendant l’échange…" />
+                      </section>
+                    </div>
                   )}
                   {step === 2 && (
                     <>

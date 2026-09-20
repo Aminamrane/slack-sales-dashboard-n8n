@@ -98,7 +98,7 @@ function DateTimePicker({ value, onChange, color = '#3b82f6', C, darkMode, autoS
     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
       <FrenchDateInput aria-label="Date du rendez-vous" value={localDate} onChange={(date) => { setLocalDate(date); if ((isNew || autoSave) && date) onChange(date + 'T' + localHour + ':' + localMin); }}
         style={{
-          width: 105, flexShrink: 1, padding: '6px 4px', borderRadius: 8, border: `1px solid ${C.border}`,
+          width: 136, flexShrink: 0, padding: '6px 4px', borderRadius: 8, border: `1px solid ${C.border}`,
           background: darkMode ? C.subtle : '#f9fafb', color: C.text,
           fontSize: 12, fontWeight: 500, fontFamily: 'inherit', outline: 'none', cursor: 'pointer',
         }}
@@ -8085,7 +8085,7 @@ export default function TrackingSheet() {
                     )}
                     <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Post-signature</div>
 
-                    {rdvDatesSet && (<>
+                    {rdvDatesSet && !isSignedPilot(lead) && (<>
                     {/* RDV Onboarding / Lancement : clic = reprogrammer AVEC dispo agenda (SaleSlotPicker en modale).
                         Le PATCH sur rdv_*_date déplace déjà l'event Google côté back (reschedule_sale_event). */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -8134,7 +8134,7 @@ export default function TrackingSheet() {
                     </div>}
                     </>)}
 
-                    {intakeJourneys[lead.id]?.onboarding_only && <p style={{fontSize:12,color:C.secondary,margin:'8px 0 12px'}}>Prochaine étape : confirmer la vente, puis choisir le rendez-vous avec Vincent et la facturation.</p>}
+                    
                     {/* Déclarer une vente button */}
                     <button className={isSignedPilot(lead)?'sj-declare-sale':undefined}
                       onClick={async () => {
