@@ -20,7 +20,7 @@ export default function PortalAccess({ leadId, choice = false, selected = false,
     setData(null); read();
     return () => { active = false; clearTimeout(timer); };
   }, [leadId, revision]);
-  if (!data?.available) return null;
+  if (!data?.available) return error ? <p className="portal-access" role="alert">{error}</p> : null;
   const operation = data.operations?.at(-1);
   if (!choice && !operation) return null;
   const pending = operation && ['pending', 'sending'].includes(operation.status);
