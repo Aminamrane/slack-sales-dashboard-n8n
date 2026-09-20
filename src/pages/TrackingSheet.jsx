@@ -1045,7 +1045,7 @@ export default function TrackingSheet() {
   };
   const micStartRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: {channelCount:1,echoCancellation:true,noiseSuppression:true} });
       const mimeType = getMicMimeType();
       const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       micChunksRef.current = [];
@@ -1096,6 +1096,7 @@ export default function TrackingSheet() {
       mr.stream.getTracks().forEach(t => t.stop());
     };
     mr.stop();
+    mr.stream.getTracks().forEach(t => t.stop());
   };
   const micCleanup = () => {
     if (micRecorderRef.current?.state === 'recording') { micRecorderRef.current.stream.getTracks().forEach(t => t.stop()); micRecorderRef.current.stop(); }
@@ -7487,16 +7488,17 @@ export default function TrackingSheet() {
                     {!wf ? (
                       <>
                         <button
-                          onClick={() => setActiveWorkflow({ leadId: lead.id, r1Result: '', r1FollowUp: '', newDate: '' })}
+                          onClick={() => isGuidedLead(lead) ? setQualificationDialog({lead,stage:'r1'}) : setActiveWorkflow({ leadId: lead.id, r1Result: '', r1FollowUp: '', newDate: '' })}
                           style={{
                             width: '100%', padding: '10px 16px', borderRadius: 50,
                             border: `1px solid ${C.border}`, background: 'transparent',
+                            ...(isGuidedLead(lead)?{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,borderRadius:13,textAlign:'left'}:{}),
                             color: C.text, fontSize: 13, fontWeight: 600,
                             cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)', fontFamily: 'inherit',
                           }}
                           onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.color = '#3b82f6'; e.currentTarget.style.transform = 'scale(1.02)'; }}
                           onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.text; e.currentTarget.style.transform = 'scale(1)'; }}
-                        >Qualifier le R1</button>
+                        >{isGuidedLead(lead)?<><CalendarCheck2 size={20}/><span>Qualifier le R1<small style={{display:'block',fontSize:11,fontWeight:400,marginTop:4}}>R1 effectué : poursuivez vers la préparation du contrat</small></span><ChevronRight size={17}/></>:'Qualifier le R1'}</button>
 
                         {/* ── R2 placé: separate standalone button (only after R1 qualified) ── */}
                         {!lead.r1_result ? null : !wfR2 ? (
@@ -7553,7 +7555,7 @@ export default function TrackingSheet() {
                         )}
 
                         {/* ── Shortcut: Envoyer le contrat directly from R1 ── */}
-                        {r1ShortcutContract === lead.id ? (() => {
+                        {!isGuidedLead(lead) && (r1ShortcutContract === lead.id ? (() => {
                           const hasRange = !!lead.employee_range;
                           const ndaDone = !!(lead.has_client_data);
                           const isSending = sendingContract === lead.id;
@@ -7601,7 +7603,7 @@ export default function TrackingSheet() {
                             onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.06)'; e.currentTarget.style.transform = 'scale(1.02)'; }}
                             onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(16,185,129,0.06)' : 'rgba(16,185,129,0.03)'; e.currentTarget.style.transform = 'scale(1)'; }}
                           >Envoyer le contrat</button>
-                        )}
+                        ))}
                       </>
                     ) : !wf.r1Result ? (
                       /* ── Step 1: R1 qualification pills ── */

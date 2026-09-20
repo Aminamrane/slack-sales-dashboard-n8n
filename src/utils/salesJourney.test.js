@@ -27,3 +27,10 @@ test('R3 rescheduling cannot overwrite the R2 date or mark an absent client atte
  assert.throws(()=>qualificationPatch({},'r2',{result:'no_show',attended:true}));
  assert.throws(()=>qualificationPatch({},'r2',{result:'reporte',attended:false,date:'2026-09-25T10:30'}));
 });
+test('R1 contract qualification requires attendance and keeps backend status vocabulary',()=>{
+ assert.deepEqual(qualificationPatch({r1_completed_at:'2026-09-19T12:00:00Z'},'r1',{result:'done',attended:true}),{r1_result:'done',r1_completed_at:'2026-09-19T12:00:00Z'});
+ assert.deepEqual(qualificationPatch({},'r1',{result:'no_show',attended:false}),{r1_result:'no_show',r1_completed_at:null});
+ assert.throws(()=>qualificationPatch({},'r1',{result:'done',attended:false}));
+ assert.throws(()=>qualificationPatch({},'r1',{result:'cancelled',attended:true}));
+ assert.deepEqual(qualificationPatch({email:'test@example.com'},'r1',{result:'rescheduled',attended:false,date:'2026-09-25T10:30'}),{r1_result:'rescheduled',r1_completed_at:null,r1_date:'2026-09-25T10:30'});
+});
