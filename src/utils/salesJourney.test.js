@@ -34,3 +34,11 @@ test('R1 contract qualification requires attendance and keeps backend status voc
  assert.throws(()=>qualificationPatch({},'r1',{result:'cancelled',attended:true}));
  assert.deepEqual(qualificationPatch({email:'test@example.com'},'r1',{result:'rescheduled',attended:false,date:'2026-09-25T10:30'}),{r1_result:'rescheduled',r1_completed_at:null,r1_date:'2026-09-25T10:30'});
 });
+test('R1 followed by R2 writes the existing scheduling payload without changing R1 date',()=>{
+ const patch=qualificationPatch({email:'client@example.com',r1_completed_at:'2026-09-20T09:00:00Z'},'r1',{result:'done',attended:true,followUp:'r2_set',date:'2026-09-25T10:30'});
+ assert.deepEqual(patch,{r1_result:'done',r1_completed_at:'2026-09-20T09:00:00Z',r2_date:'2026-09-25T10:30',r1_follow_up:'r2_set',status:'r2'});
+ assert.throws(()=>qualificationPatch({email:'client@example.com'},'r1',{result:'done',attended:true,followUp:'r2_set',date:''}));
+ assert.throws(()=>qualificationPatch({email:'client@example.com'},'r1',{result:'no_show',attended:false,followUp:'r2_set',date:'2026-09-25T10:30'}));
+ const direct=qualificationPatch({},'r1',{result:'done',attended:true,followUp:'contract'});
+ assert.equal(direct.r2_date,undefined);assert.equal(direct.status,undefined);
+});

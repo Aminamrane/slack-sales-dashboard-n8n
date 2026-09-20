@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import { CalendarCheck2, ChevronRight, Building2, UserRoundCheck, ArrowRight } from 'lucide-react';
+import R1QualificationDialog from '../components/salesJourney/R1QualificationDialog';
 import QualificationDialog from '../components/salesJourney/QualificationDialog';
 import NotesDialog from '../components/salesJourney/NotesDialog';
 import NdaProgress from '../components/salesJourney/NdaProgress';
@@ -490,13 +491,27 @@ export default function TrackingSheet() {
   const [commentLeadId, setCommentLeadId] = useState(null);
   const [notesError, setNotesError] = useState(null);
   const isGuidedLead = lead => !!intakeRollout?.available && !!intakeContexts[lead?.id]?.required;
-  const saveQualification = async ({result,attended,date,continueContract}) => {
+  const saveQualification = async ({result,attended,date,continueContract,followUp}) => {
     const {lead,stage} = qualificationDialog;
-    const patch=qualificationPatch(lead,stage,{result,attended,date});
-    try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`,patch); }
+    const patch=qualificationPatch(lead,stage,{result,attended,date,followUp});
+    try {
+      const response=await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`,patch);
+      for(const field of ['r1_meet_link','r2_meet_link','r1_event_id','r2_event_id']){
+        if(response?.[field])patch[field]=response[field];
+      }
+      if(response?.calendar_conflict){
+        setCalendarError({leadId:lead.id,message:response.calendar_conflict.message||'Le rendez-vous est enregistré, mais un conflit existe dans votre agenda. Vérifiez le créneau.'});
+      }
+    }
     catch(error) { throw new Error(error.status===409 ? 'Ce créneau est indisponible. Vérifiez l’agenda avant de choisir une autre date.' : 'La qualification n’a pas pu être enregistrée. Vos choix sont conservés ; réessayez.'); }
-    setLeads(previous=>previous.map(l=>l.id===lead.id?{...l,...patch,...(date?{[stage]:date}:{})}:l));
+    setLeads(previous=>previous.map(l=>l.id===lead.id?{...l,...patch,...(patch.r1_date?{r1:patch.r1_date}:{}),...(patch.r2_date?{r2:patch.r2_date}:{}),...(patch.r3_date?{r3:patch.r3_date}:{})}:l));
     setQualificationDialog(null);
+    if(patch.status==='r2'){
+      triggerLeadMovedNotif(lead,'r2');
+      const index=CATEGORIES.findIndex(c=>c.key==='r2');
+      if(index>=0)handleTabChange(index);
+      setSelectedLead(lead.id);
+    }
     if(continueContract) {
       const latest=leadContracts[lead.id]?.[0];
       if(latest && ['failed','canceled','expired'].includes(latest.yousign_status)) await handleResendContract(latest.id,lead.id);
@@ -7498,7 +7513,7 @@ export default function TrackingSheet() {
                           }}
                           onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.color = '#3b82f6'; e.currentTarget.style.transform = 'scale(1.02)'; }}
                           onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.text; e.currentTarget.style.transform = 'scale(1)'; }}
-                        >{isGuidedLead(lead)?<><CalendarCheck2 size={20}/><span>Qualifier le R1<small style={{display:'block',fontSize:11,fontWeight:400,marginTop:4}}>R1 effectué : poursuivez vers la préparation du contrat</small></span><ChevronRight size={17}/></>:'Qualifier le R1'}</button>
+                        >{isGuidedLead(lead)?<><CalendarCheck2 size={20}/><span>Qualifier le R1<small style={{display:'block',fontSize:11,fontWeight:400,marginTop:4}}>Résultat du rendez-vous et planification du R2</small></span><ChevronRight size={17}/></>:'Qualifier le R1'}</button>
 
                         {/* ── R2 placé: separate standalone button (only after R1 qualified) ── */}
                         {!lead.r1_result ? null : !wfR2 ? (
@@ -9565,7 +9580,7 @@ export default function TrackingSheet() {
       })(), document.body)}
 
       {commentLeadId && <NotesDialog dark={darkMode} lead={leads.find(l=>l.id===commentLeadId)} value={editingNotes[commentLeadId]||''} onChange={value=>setEditingNotes(p=>({...p,[commentLeadId]:value}))} error={notesError?.leadId===commentLeadId?notesError.message:null} onClose={()=>{micCleanup();setCommentLeadId(null);}} onSave={async()=>{if(await handleNotesSave(commentLeadId)){micCleanup();setCommentLeadId(null);}}} recording={micRecording} transcribing={micTranscribing} micError={micError} onDictate={()=>{if(micRecording){const id=commentLeadId;micStopAndTranscribe(text=>setEditingNotes(p=>({...p,[id]:(p[id]?p[id]+' ':'')+text})));}else if(!micTranscribing)micStartRecording();}}/>}
-      {qualificationDialog && <QualificationDialog {...qualificationDialog} dark={darkMode} onClose={()=>setQualificationDialog(null)} onSave={saveQualification}/>}
+      {qualificationDialog && (qualificationDialog.stage==='r1'?<R1QualificationDialog {...qualificationDialog} dark={darkMode} onClose={()=>setQualificationDialog(null)} onSave={saveQualification}/>:<QualificationDialog {...qualificationDialog} dark={darkMode} onClose={()=>setQualificationDialog(null)} onSave={saveQualification}/>)}
       {intakeDialog && <IntegrationDialog key={intakeDialog.lead_id} context={intakeDialog}
         contractDetails={{
           email: leads.find(l => l.id === intakeDialog.lead_id)?.email,
