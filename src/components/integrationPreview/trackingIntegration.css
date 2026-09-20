@@ -218,3 +218,43 @@
     animation: none;
   }
 }
+
+/* A quiet, continuous route from the existing sheet to signature. */
+.ti-journey { display:flex; gap:0; list-style:none; padding:20px 28px; margin:0; color:#667584; font:500 12px/1.4 Inter,sans-serif; }
+.ti-journey li { display:flex; align-items:center; gap:9px; flex:1; position:relative; }
+.ti-journey li:not(:last-child)::after { content:""; height:1px; background:#dce3e9; flex:1; margin:0 16px; }
+.ti-step-icon { display:grid; place-items:center; width:34px; height:34px; flex-shrink:0; border-radius:11px; border:1px solid #dce3e9; background:#fff; transition:background .25s,border-color .25s; }
+.ti-journey .is-current { color:#223347; font-weight:700; }
+.ti-journey .is-current .ti-step-icon { background:#223347; color:#fff; border-color:#223347; box-shadow:0 3px 8px #22334718; }
+.ti-journey .is-complete .ti-step-icon { color:#33735d; background:#edf5f1; border-color:#d4e7de; }
+.ti-journey.is-compact { padding:4px 0 22px; font-size:11px; }
+.ti-journey.is-compact li { flex-direction:column; gap:6px; }
+.ti-journey.is-compact li::after { position:absolute; top:17px; left:calc(50% + 23px); width:calc(100% - 46px); margin:0; }
+.ti-contract-review { max-width:640px; padding:28px 28px 40px; margin:auto; text-align:center; color:#243346; font-family:Inter,sans-serif; animation:tiEnter .28s cubic-bezier(.2,.75,.3,1); }
+.ti-review-icon { display:grid; place-items:center; width:72px; height:72px; background:#eaf2ef; color:#346856; border-radius:22px; margin:0 auto 22px; }
+.ti-review-eyebrow { font-size:10px; letter-spacing:.12em; font-weight:700; color:#547666; }
+.ti-contract-review h1 { font-size:30px; letter-spacing:-.04em; margin:10px 0; outline:none; }
+.ti-contract-review > p { font-size:14px; line-height:1.6; color:#627184; }
+.ti-contract-review dl { text-align:left; background:white; border:1px solid #dee5eb; border-radius:16px; margin:28px 0 18px; padding:8px 20px; }
+.ti-contract-review dl > div { display:flex; justify-content:space-between; gap:20px; padding:15px 0; font-size:13px; line-height:1.5; }
+.ti-contract-review dl > div + div { border-top:1px solid #edf0f3; }
+.ti-contract-review dt { color:#677486; }
+.ti-contract-review dd { margin:0; font-weight:600; text-align:right; overflow-wrap:anywhere; }
+.ti-next-appointment { display:flex; align-items:center; text-align:left; gap:14px; background:#eef2f6; border-radius:13px; padding:17px; color:#647183; font-size:12px; line-height:1.6; }
+.ti-next-appointment svg { flex-shrink:0; color:#506276; }
+.ti-next-appointment strong { display:block; font-size:13px; color:#304255; }
+.ti-review-actions { display:flex; justify-content:space-between; gap:12px; margin-top:28px; }
+.ti-review-actions button { display:inline-flex; align-items:center; justify-content:center; gap:8px; border-radius:10px; padding:13px 17px; font:600 13px Inter,sans-serif; cursor:pointer; border:1px solid #d7e1e6; background:white; color:#324254; transition:transform .18s,box-shadow .18s; }
+.ti-review-actions .ip-primary { background:#243b39; color:white; border-color:#243b39; }
+.ti-review-actions button:hover { transform:translateY(-1px); box-shadow:0 4px 12px #1c2b3612; }
+.ti-review-actions button:focus-visible,.ti-dialog button:focus-visible { outline:2px solid #6274a1; outline-offset:3px; }
+@media(max-width:720px) { .ti-journey { padding:16px; font-size:11px; } .ti-journey li { gap:6px; } .ti-journey li:not(:last-child)::after { margin:0 8px; } .ti-contract-review { padding:24px 18px; } .ti-review-actions { flex-direction:column-reverse; } }
+@media(prefers-reduced-motion:reduce) { .ti-contract-review { animation:none; } .ti-step-icon,.ti-review-actions button { transition:none; } .ti-review-actions button:hover { transform:none; } }
+
+.ti-contract-review { padding-top:12px; padding-bottom:24px; }
+.ti-contract-review .ti-review-icon { width:52px; height:52px; border-radius:16px; margin-bottom:12px; }
+.ti-contract-review h1 { font-size:27px; margin:8px 0; }
+.ti-contract-review > p { margin:8px 0; }
+.ti-contract-review dl { margin:18px 0 14px; padding:4px 20px; }
+.ti-contract-review dl > div { padding:10px 0; }
+.ti-review-actions { margin-top:18px; }

@@ -90,6 +90,7 @@ export default function IntegrationPreviewStudio({
   initialValidated = false,
   clientName = "Atelier Horizon",
   saveDraft,
+  onContinue,
   onDirty = () => {},
 }) {
   const [draft, setDraft] = useState(() => initialDraft || readDraft()),
@@ -151,7 +152,7 @@ export default function IntegrationPreviewStudio({
         setFeedback({
           success: true,
           text: embedded
-            ? "Fiche enregistrée et validée. Vous pouvez revenir au contrat."
+            ? "Fiche enregistrée et validée. Vous pouvez poursuivre vers le contrat."
             : "Fiche validée. Le parcours est prêt à être testé.",
         });
         setStep(3);
@@ -791,14 +792,14 @@ export default function IntegrationPreviewStudio({
                       <button
                         className="ip-primary"
                         disabled={busy}
-                        onClick={validate}
+                        onClick={ready && onContinue ? onContinue : validate}
                       >
                         {busy ? (
                           <LoaderCircle size={18} className="ip-spin" />
                         ) : (
                           <Check size={18} />
                         )}{" "}
-                        Valider la fiche
+                        {ready && onContinue ? "Continuer vers le contrat" : "Valider la fiche"}
                       </button>
                     )}
                   </div>
@@ -911,13 +912,13 @@ export default function IntegrationPreviewStudio({
                   <span>dirigeants</span>
                 </div>
               </div>
-              <button className="ip-primary" disabled={busy} onClick={validate}>
+              <button className="ip-primary" disabled={busy} onClick={ready && onContinue ? onContinue : validate}>
                 {busy ? (
                   <LoaderCircle size={17} className="ip-spin" />
                 ) : (
                   <Check size={17} />
                 )}{" "}
-                Valider la fiche
+                {ready && onContinue ? "Continuer vers le contrat" : "Valider la fiche"}
               </button>
             </section>
             {!embedded && (
