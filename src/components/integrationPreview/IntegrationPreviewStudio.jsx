@@ -29,7 +29,6 @@ import {
 import {
   completeness,
   freshDraft,
-  MISSION_OPTIONS,
   WEATHER_LABELS,
 } from "./model";
 import "./integrationPreview.css";
@@ -452,7 +451,7 @@ export default function IntegrationPreviewStudio({
                         {
                           [
                             "Définir le périmètre",
-                            "Passer le relais",
+                            "Passage de relais",
                             "Prendre la température",
                             "Une vue claire pour démarrer",
                           ][step]
