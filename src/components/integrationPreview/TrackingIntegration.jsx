@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, ArrowLeft, FileCheck2, ShieldCheck, PenLine, CalendarDays, Check, Send, ReceiptText, ClipboardCheck, UsersRound, ArrowRight } from "lucide-react";
 import apiClient from "../../services/apiClient";
-import IntegrationPreviewStudio from "./IntegrationPreviewStudio";
+import { presentContractError, validateContractPreparation } from "../../utils/contractErrors";
+import IntegrationPreviewStudio, { IntegrationSummary } from "./IntegrationPreviewStudio";
 import "./trackingIntegration.css";
 
 export function IntegrationRollout({ state, onChange }) {
@@ -107,16 +108,16 @@ export function IntegrationRollout({ state, onChange }) {
   );
 }
 
-export function IntegrationButton({ onClick, ready }) {
+export function IntegrationButton({ onClick, ready, consult = false }) {
   return (
     <button className="ti-open" onClick={onClick}>
       <FileCheck2 size={17} />
       <span>
-        Fiche d’intégration Owner
+        {consult ? "Consulter la fiche d’intégration" : "Fiche d’intégration Owner"}
         <small>
           {ready
             ? "Validée · consulter"
-            : "Sociétés, dirigeants et météo client"}
+            : consult ? "Brouillon enregistré" : "Sociétés, dirigeants et météo client"}
         </small>
       </span>
       <span>↗</span>
@@ -143,12 +144,24 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
   const [preparation, setPreparation] = useState(context.preparation || {});
   const [setupBusy, setSetupBusy] = useState(false);
   const [setupError, setSetupError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+  const updatePreparation = (key, value) => {
+    setPreparation(p => ({ ...p, [key]: value }));
+    setFieldErrors(errors => { const next = { ...errors }; delete next[key]; return next; });
+    setSetupError("");
+  };
+  const focusError = errors => requestAnimationFrame(() => document.getElementById(`ti-${Object.keys(errors)[0]}`)?.focus());
   const preparationSaved = useRef(JSON.stringify(context.preparation || {}));
   const preparationCurrent = useRef(preparationSaved.current);
   preparationCurrent.current = JSON.stringify(preparation);
   const bands = ['1-2','3-5','6-10','11-19','20-29','30-39','40-49','50-74','75-99','100-149','150-199','200-249','250-299','300-349','350-400'];
   async function prepare(event) {
-    event.preventDefault(); setSetupBusy(true); setSetupError("");
+    event.preventDefault();
+    if (setupBusy) return;
+    const errors = validateContractPreparation(preparation);
+    setFieldErrors(errors); setSetupError("");
+    if (Object.keys(errors).length) { focusError(errors); return; }
+    setSetupBusy(true);
     try {
       const result = await apiClient.put(`/api/v1/owner-integration/leads/${context.lead_id}/contract-preparation`, {
         employee_range: preparation.employee_range, email: preparation.email,
@@ -156,7 +169,12 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
       });
       setPreparation(result); preparationSaved.current = JSON.stringify(result);
       onPrepared?.(result); setStage("intake"); dialog.current?.scrollTo({ top: 0, behavior: "instant" });
-    } catch (error) { setSetupError(error.message || "Vérifiez les coordonnées du signataire."); }
+    } catch (error) {
+      const feedback = presentContractError(error, { preparation: true });
+      setFieldErrors(feedback.fields);
+      setSetupError(Object.keys(feedback.fields).length ? "" : feedback.message);
+      focusError(feedback.fields);
+    }
     finally { setSetupBusy(false); }
   }
   const [sourceDraft, setSourceDraft] = useState(context.draft);
@@ -281,23 +299,24 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
           </p>
         )}
         {context.nextAction && <SalesJourneySteps phase={stage} />}
-        {stage === "setup" ? (
-          <form className="ti-contract-review ti-preparation" onSubmit={prepare}>
+        {context.readOnly ? <div className="integration-preview ti-saved-view"><IntegrationSummary draft={context.draft} clientName={context.client_name} validated={context.validated} /></div> : stage === "setup" ? (
+          <form className="ti-contract-review ti-preparation" onSubmit={prepare} noValidate>
             <div className="ti-review-icon"><UsersRound size={30} strokeWidth={1.6} /></div>
             <span className="ti-review-eyebrow">PRÉPARER LE CONTRAT</span>
             <h1>Commençons par l’essentiel</h1>
             <p>Confirmez le nombre de salariés et les coordonnées du signataire.</p>
-            <fieldset className="ti-band-field"><legend>Nombre de salariés</legend>
-              <div className="ti-band-options">{bands.map(band => <button type="button" key={band} aria-pressed={preparation.employee_range === band} onClick={() => setPreparation(p => ({ ...p, employee_range: band }))}>{band}</button>)}</div>
+            <fieldset className="ti-band-field" id="ti-employee_range" tabIndex={-1} aria-invalid={!!fieldErrors.employee_range} aria-describedby={fieldErrors.employee_range ? "ti-employee_range-error" : undefined}><legend>Nombre de salariés</legend>
+              <div className="ti-band-options">{bands.map(band => <button type="button" key={band} aria-pressed={preparation.employee_range === band} disabled={setupBusy} onClick={() => updatePreparation("employee_range", band)}>{band}</button>)}</div>
+              {fieldErrors.employee_range && <p className="ti-field-error" id="ti-employee_range-error" role="alert">{fieldErrors.employee_range}</p>}
             </fieldset>
             <div className="ti-contact-fields">
-              <label>Email du signataire<input type="email" required maxLength={254} value={preparation.email || ""} onChange={e => setPreparation(p => ({ ...p, email: e.target.value }))} autoComplete="email" /></label>
-              <label>Téléphone du signataire <small>(facultatif)</small><input type="tel" maxLength={80} value={preparation.phone || ""} onChange={e => setPreparation(p => ({ ...p, phone: e.target.value }))} placeholder="06 12 34 56 78 ou +33 6…" autoComplete="tel" /></label>
+              <label htmlFor="ti-email">Email du signataire<input id="ti-email" type="email" required maxLength={254} disabled={setupBusy} aria-invalid={!!fieldErrors.email} aria-describedby={fieldErrors.email ? "ti-email-error" : undefined} value={preparation.email || ""} onChange={e => updatePreparation("email", e.target.value)} autoComplete="email" />{fieldErrors.email && <span className="ti-field-error" id="ti-email-error" role="alert">{fieldErrors.email}</span>}</label>
+              <label htmlFor="ti-phone">Téléphone du signataire <small>(facultatif)</small><input id="ti-phone" type="tel" maxLength={80} disabled={setupBusy} aria-invalid={!!fieldErrors.phone} aria-describedby={fieldErrors.phone ? "ti-phone-error" : undefined} value={preparation.phone || ""} onChange={e => updatePreparation("phone", e.target.value)} placeholder="06 12 34 56 78 ou +33 6…" autoComplete="tel" />{fieldErrors.phone && <span className="ti-field-error" id="ti-phone-error" role="alert">{fieldErrors.phone}</span>}</label>
             </div>
             {preparation.signer_name && <p className="ti-signer-name">Signataire : <strong>{preparation.signer_name}</strong></p>}
             {!preparation.nda_ready && <p role="alert">Générez d’abord le NDA depuis votre dossier pour préparer le contrat.</p>}
             {setupError && <p className="ti-setup-error" role="alert">{setupError}</p>}
-            <div className="ti-review-actions"><button className="ip-primary" type="submit" disabled={setupBusy || !preparation.employee_range || !preparation.nda_ready}>{setupBusy ? "Vérification…" : "Continuer vers la fiche"}<ArrowRight size={17} /></button></div>
+            <div className="ti-review-actions"><button className="ip-primary" type="submit" disabled={setupBusy || !preparation.nda_ready}>{setupBusy ? "Vérification…" : "Continuer vers la fiche"}<ArrowRight size={17} /></button></div>
           </form>
         ) : stage === "contract" ? (
           <section className="ti-contract-review" aria-labelledby="ti-review-title">

@@ -83,6 +83,142 @@ function Field({
     </label>
   );
 }
+export function IntegrationSummary({ draft, clientName, validated = false, embedded = true }) {
+  const { companies, directors } = completeness(draft);
+  const ready = validated;
+  const WeatherIcon = WEATHER_ICONS[(draft.weather || 3) - 1];
+  return (
+<div className="ip-summary">
+                      <div className="ip-summary-title">
+                        <div>
+                          <span>FICHE DE TRANSMISSION</span>
+                          <h3>{clientName}</h3>
+                        </div>
+                        <span className="ip-pill">
+                          {ready ? "Validée" : "Brouillon"}
+                        </span>
+                      </div>
+                      <div className="ip-summary-metrics">
+                        <div>
+                          <strong>{companies.length}</strong>
+                          <span>Sociétés accompagnées</span>
+                        </div>
+                        <div>
+                          <strong>{directors.length}</strong>
+                          <span>Dirigeants accompagnés</span>
+                        </div>
+                        <div>
+                          <strong>
+                            {draft.weather ? (
+                              <>
+                                {draft.weather}
+                                <small>/5</small>
+                              </>
+                            ) : (
+                              "—"
+                            )}
+                          </strong>
+                          <span>Météo initiale</span>
+                        </div>
+                      </div>
+                      <h4>Périmètre d’accompagnement</h4>
+                      {companies.map((c) => (
+                        <div className="ip-summary-row" key={c.id}>
+                          <Building2 size={17} />
+                          <div>
+                            <strong>{c.name || "Nom à renseigner"}</strong>
+                            <p>
+                              {directors
+                                .filter((d) => d.companies.includes(c.id))
+                                .map((d) => d.name)
+                                .join(" · ") || "Dirigeant à renseigner"}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                      {draft.priorities && (
+                        <>
+                          <h4>Priorité du client</h4>
+                          <p>{draft.priorities}</p>
+                        </>
+                      )}
+                      {!!draft.missions.length && (
+                        <>
+                          <h4>Missions recommandées</h4>
+                          <div className="ip-summary-tags">
+                            {draft.missions.map((m) => (
+                              <span key={m}>{m}</span>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                      {draft.mission_notes && <p>{draft.mission_notes}</p>}
+                      {draft.objective && (
+                        <>
+                          <h4>Résultat attendu</h4>
+                          <p>{draft.objective}</p>
+                        </>
+                      )}
+                      {draft.deadline && (
+                        <>
+                          <h4>Échéance importante</h4>
+                          <p>
+                            {new Date(
+                              draft.deadline + "T12:00:00",
+                            ).toLocaleDateString("fr-FR")}
+                          </p>
+                        </>
+                      )}
+                      {[
+                        ["Expert-comptable", draft.accountant],
+                        ["Gestion de la paie", draft.payroll],
+                        ["Conseil juridique", draft.legal],
+                        ["Contact privilégié", draft.contact],
+                      ]
+                        .filter(([, v]) => v)
+                        .map(([k, v]) => (
+                          <div key={k}>
+                            <h4>{k}</h4>
+                            <p>{v}</p>
+                          </div>
+                        ))}
+                      {draft.weather && (
+                        <>
+                          <h4>Météo client</h4>
+                          <div className="ip-summary-weather">
+                            <WeatherIcon size={29} />
+                            <div>
+                              <strong>
+                                {WEATHER_LABELS[draft.weather - 1]}
+                              </strong>
+                              {draft.weather_note && (
+                                <p>{draft.weather_note}</p>
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                      {draft.notes && (
+                        <>
+                          <h4>Notes du commercial</h4>
+                          <p>{draft.notes}</p>
+                        </>
+                      )}
+                      <div className="ip-print-footer">
+                        {embedded
+                          ? "Owner · Fiche de transmission commerciale"
+                          : "Démonstration Owner · Données fictives"}
+                      </div>
+                      <button
+                        className="ip-secondary ip-print-button"
+                        onClick={() => window.print()}
+                      >
+                        <Printer size={17} /> Imprimer la fiche
+                      </button>
+                    </div>
+  );
+}
+
 export default function IntegrationPreviewStudio({
   validateDraft,
   embedded = false,
@@ -643,134 +779,7 @@ export default function IntegrationPreviewStudio({
                     </>
                   )}
                   {step === 3 && (
-                    <div className="ip-summary">
-                      <div className="ip-summary-title">
-                        <div>
-                          <span>FICHE DE TRANSMISSION</span>
-                          <h3>{clientName}</h3>
-                        </div>
-                        <span className="ip-pill">
-                          {ready ? "Validée" : "Brouillon"}
-                        </span>
-                      </div>
-                      <div className="ip-summary-metrics">
-                        <div>
-                          <strong>{companies.length}</strong>
-                          <span>Sociétés accompagnées</span>
-                        </div>
-                        <div>
-                          <strong>{directors.length}</strong>
-                          <span>Dirigeants accompagnés</span>
-                        </div>
-                        <div>
-                          <strong>
-                            {draft.weather ? (
-                              <>
-                                {draft.weather}
-                                <small>/5</small>
-                              </>
-                            ) : (
-                              "—"
-                            )}
-                          </strong>
-                          <span>Météo initiale</span>
-                        </div>
-                      </div>
-                      <h4>Périmètre d’accompagnement</h4>
-                      {companies.map((c) => (
-                        <div className="ip-summary-row" key={c.id}>
-                          <Building2 size={17} />
-                          <div>
-                            <strong>{c.name || "Nom à renseigner"}</strong>
-                            <p>
-                              {directors
-                                .filter((d) => d.companies.includes(c.id))
-                                .map((d) => d.name)
-                                .join(" · ") || "Dirigeant à renseigner"}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                      {draft.priorities && (
-                        <>
-                          <h4>Priorité du client</h4>
-                          <p>{draft.priorities}</p>
-                        </>
-                      )}
-                      {!!draft.missions.length && (
-                        <>
-                          <h4>Missions recommandées</h4>
-                          <div className="ip-summary-tags">
-                            {draft.missions.map((m) => (
-                              <span key={m}>{m}</span>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                      {draft.mission_notes && <p>{draft.mission_notes}</p>}
-                      {draft.objective && (
-                        <>
-                          <h4>Résultat attendu</h4>
-                          <p>{draft.objective}</p>
-                        </>
-                      )}
-                      {draft.deadline && (
-                        <>
-                          <h4>Échéance importante</h4>
-                          <p>
-                            {new Date(
-                              draft.deadline + "T12:00:00",
-                            ).toLocaleDateString("fr-FR")}
-                          </p>
-                        </>
-                      )}
-                      {[
-                        ["Expert-comptable", draft.accountant],
-                        ["Gestion de la paie", draft.payroll],
-                        ["Conseil juridique", draft.legal],
-                        ["Contact privilégié", draft.contact],
-                      ]
-                        .filter(([, v]) => v)
-                        .map(([k, v]) => (
-                          <div key={k}>
-                            <h4>{k}</h4>
-                            <p>{v}</p>
-                          </div>
-                        ))}
-                      {draft.weather && (
-                        <>
-                          <h4>Météo client</h4>
-                          <div className="ip-summary-weather">
-                            <WeatherIcon size={29} />
-                            <div>
-                              <strong>
-                                {WEATHER_LABELS[draft.weather - 1]}
-                              </strong>
-                              {draft.weather_note && (
-                                <p>{draft.weather_note}</p>
-                              )}
-                            </div>
-                          </div>
-                        </>
-                      )}
-                      {draft.notes && (
-                        <>
-                          <h4>Notes du commercial</h4>
-                          <p>{draft.notes}</p>
-                        </>
-                      )}
-                      <div className="ip-print-footer">
-                        {embedded
-                          ? "Owner · Fiche de transmission commerciale"
-                          : "Démonstration Owner · Données fictives"}
-                      </div>
-                      <button
-                        className="ip-secondary ip-print-button"
-                        onClick={() => window.print()}
-                      >
-                        <Printer size={17} /> Imprimer la fiche
-                      </button>
-                    </div>
+                    <IntegrationSummary draft={draft} clientName={clientName} validated={ready} embedded={embedded} />
                   )}
                   <div className="ip-step-footer">
                     <button
