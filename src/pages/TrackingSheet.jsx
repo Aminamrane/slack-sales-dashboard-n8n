@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import { CalendarCheck2, ChevronRight, Building2, UserRoundCheck, ArrowRight } from 'lucide-react';
 import QualificationDialog from '../components/salesJourney/QualificationDialog';
+import NotesDialog from '../components/salesJourney/NotesDialog';
+import NdaProgress from '../components/salesJourney/NdaProgress';
 import SalesNotes, { SalesNotesView } from '../components/salesJourney/SalesNotes';
 import { qualificationPatch } from '../utils/r2Qualification';
 import { presentContractError } from "../utils/contractErrors";
@@ -485,6 +487,7 @@ export default function TrackingSheet() {
   const [intakeJourneys, setIntakeJourneys] = useState({});
   const [saleOnboardingOnly, setSaleOnboardingOnly] = useState(false);
   const [qualificationDialog, setQualificationDialog] = useState(null);
+  const [commentLeadId, setCommentLeadId] = useState(null);
   const [notesError, setNotesError] = useState(null);
   const isGuidedLead = lead => !!intakeRollout?.available && !!intakeContexts[lead?.id]?.required;
   const saveQualification = async ({result,attended,date,continueContract}) => {
@@ -2108,9 +2111,11 @@ export default function TrackingSheet() {
         setNoteJustSaved(leadId);
         setTimeout(() => setNoteJustSaved(null), 800);
       }
+      return true;
     } catch (err) {
       setNotesError({leadId,message:"Le commentaire n’a pas été enregistré. Votre texte est conservé ; réessayez."});
       console.error("Erreur sauvegarde notes:", err);
+      return false;
     }
   };
 
@@ -6957,7 +6962,7 @@ export default function TrackingSheet() {
               )}
 
               {/* ─── NOTES ─── */}
-              {lead.notes && !editingNotes.hasOwnProperty(lead.id) && (
+              {lead.notes && (isGuidedLead(lead) || !editingNotes.hasOwnProperty(lead.id)) && (
                 <div style={{
                   marginBottom: 10, padding: '8px 12px', borderRadius: 8,
                   background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
@@ -6972,7 +6977,7 @@ export default function TrackingSheet() {
                   )}
                 </div>
               )}
-              {editingNotes.hasOwnProperty(lead.id) && (
+              {editingNotes.hasOwnProperty(lead.id) && !isGuidedLead(lead) && (
                 <div style={{ marginBottom: 10 }}>
                   <div style={{ position: 'relative' }}>
                     {isGuidedLead(lead) ? <SalesNotes value={notesVal} onChange={value=>setEditingNotes(prev=>({...prev,[lead.id]:value}))} dark={darkMode}/> : <textarea
@@ -7068,7 +7073,7 @@ export default function TrackingSheet() {
                 };
                 return (
                   <>
-                    {isGuidedLead(lead) ? <button className="sj-qualify" style={{background:C.bg,color:C.text,borderColor:C.border}} onClick={()=>setQualificationDialog({lead,stage:isR3?'r3':'r2'})}><CalendarCheck2 size={22}/><span>{currentResult ? `Qualification du ${isR3?'R3':'R2'}` : `Qualifier le ${isR3?'R3':'R2'}`}<small>{currentResult ? (r2Options.find(o=>o.value===currentResult)?.label || 'Modifier le résultat') : 'Résultat du rendez-vous et prochaine étape'}</small></span><ChevronRight size={18}/></button> : <>
+                    {isGuidedLead(lead) ? <button className="sj-qualify" style={{background:C.bg,color:C.text,borderColor:C.border}} onClick={()=>setQualificationDialog({lead,stage:isR3?'r3':'r2'})}><CalendarCheck2 size={22}/><span>{currentResult ? `Qualification du ${isR3?'R3':'R2'}` : `Qualifier le ${isR3?'R3':'R2'}`}<small>{currentResult ? `${r2Options.find(o=>o.value===currentResult)?.label || 'Modifier le résultat'} · Continuer vers le contrat` : 'Qualifiez le rendez-vous, puis préparez et envoyez le contrat'}</small></span><ChevronRight size={18}/></button> : <>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
                       {/* Docs received toggle */}
                       <button
@@ -7962,7 +7967,7 @@ export default function TrackingSheet() {
                           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#ef4444'; }}
                         >{isCanceling ? 'Annulation...' : 'Annuler'}</button>
                       )}
-                      {(status === 'expired' || status === 'canceled' || status === 'failed') && (
+                      {!isGuidedLead(lead) && (status === 'expired' || status === 'canceled' || status === 'failed') && (
                         <button onClick={() => !isResending && handleResendContract(latestContract.id, lead.id)} disabled={isResending}
                           style={actionBtnStyle('#fb923c')}
                           onMouseEnter={(e) => { e.currentTarget.style.background = '#fb923c'; e.currentTarget.style.color = '#fff'; }}
@@ -7970,7 +7975,7 @@ export default function TrackingSheet() {
                         >{isResending ? 'Renvoi...' : (status === 'failed' ? 'Réessayer' : 'Renvoyer')}</button>
                       )}
                       {/* First time — no contract ever sent */}
-                      {!latestContract && (
+                      {!isGuidedLead(lead) && !latestContract && (
                         <>
                           {!isGuidedLead(lead) && <button onClick={() => openNdaPopup(lead)}
                             style={actionBtnStyle('#6366f1')}
@@ -7995,7 +8000,7 @@ export default function TrackingSheet() {
                         </>
                       )}
                       {/* Draft — treat like no contract */}
-                      {latestContract && status === 'draft' && (
+                      {!isGuidedLead(lead) && latestContract && status === 'draft' && (
                         <>
                           {!isGuidedLead(lead) && <button onClick={() => openNdaPopup(lead)}
                             style={actionBtnStyle('#6366f1')}
@@ -8155,9 +8160,9 @@ export default function TrackingSheet() {
 
               {/* ═══ ACTION BUTTONS ═══ */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {!editingNotes.hasOwnProperty(lead.id) && (
+                {(isGuidedLead(lead) || !editingNotes.hasOwnProperty(lead.id)) && (
                   <button
-                    onClick={() => setEditingNotes(prev => ({ ...prev, [lead.id]: lead.notes || '' }))}
+                    onClick={() => { setNotesError(null); setEditingNotes(prev => ({ ...prev, [lead.id]: prev[lead.id] ?? lead.notes ?? '' })); if(isGuidedLead(lead)) setCommentLeadId(lead.id); }}
                     style={{
                       flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                       padding: '9px 14px', borderRadius: 10, border: `1px solid ${C.border}`,
@@ -8537,7 +8542,7 @@ export default function TrackingSheet() {
         };
         // ── Coquille commune (overlay + carte + header) des étapes du flux ──
         const stepShell = (children) => (
-          <div className={isGuidedLead(lead)?"sj-nda-overlay":undefined}
+          <div className={isGuidedLead(lead)?`sj-nda-overlay ${darkMode?"sj-dark":""}`:undefined}
             style={{
               position: 'fixed', inset: 0, zIndex: 9999,
               background: 'rgba(0,0,0,0.45)',
@@ -8554,14 +8559,14 @@ export default function TrackingSheet() {
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>{isGuidedLead(lead)?"Préparer le NDA":"Générer le NDA"}</h3>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>Générer le NDA</h3>
                   <p style={{ margin: '2px 0 0', fontSize: 12, color: C.muted }}>{lead.full_name} {lead.company_name ? `— ${lead.company_name}` : ''}</p>
                 </div>
                 <button disabled={ndaGenerating} aria-label="Fermer le NDA" onClick={() => { setNdaPopup(null); setNdaData(null); }}
                   style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted, fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >✕</button>
               </div>
-              {isGuidedLead(lead)&&<div className="sj-nda-progress"><Building2 size={24}/><span><strong>{ndaStep==='siren'?'1 · Identifier la société':'2 · Choisir les dirigeants'}</strong>{ndaPopup.nextAction?'NDA → Fiche client → Contrat':'Les informations du client, étape par étape'}</span></div>}
+              {isGuidedLead(lead)&&<NdaProgress step={ndaStep}/>}
               {children}
             </div>
           </div>
@@ -8571,13 +8576,13 @@ export default function TrackingSheet() {
         if (ndaStep === 'siren') {
           return stepShell(
             <>
-              <div style={{
+              <div className={isGuidedLead(lead)?'sj-nda-intro':undefined} style={{
                 padding: '12px 14px', borderRadius: 12, marginBottom: 16, fontSize: 12.5, lineHeight: 1.55,
                 background: darkMode ? 'rgba(251,146,60,0.10)' : 'rgba(251,146,60,0.08)',
                 border: `1px solid ${darkMode ? 'rgba(251,146,60,0.25)' : 'rgba(251,146,60,0.2)'}`, color: C.secondary,
               }}>
-                <b style={{ color: C.text }}>Aucun SIREN renseigné pour ce lead.</b><br />
-                Renseignez-le ici (il sera enregistré dans la fiche du lead) — ou indiquez que la société est en cours de création.
+                <b style={{ color: C.text }}>Identifiez la société</b><br />
+                Renseignez son SIREN pour retrouver ses informations et préremplir le NDA, ou indiquez qu’elle est en cours de création.
               </div>
               <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: C.muted, marginBottom: 5 }}>SIREN (9 chiffres)</label>
               <input
@@ -8588,10 +8593,10 @@ export default function TrackingSheet() {
                 style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.surface, color: C.text, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
               />
               {ndaError && <div style={{ marginTop: 10, fontSize: 12, color: '#ef4444' }}>{ndaError}</div>}
-              <button onClick={handleNdaSirenContinue} disabled={ndaLoading}
+              <button className={isGuidedLead(lead)?"sj-nda-primary":undefined} onClick={handleNdaSirenContinue} disabled={ndaLoading}
                 style={{ width: '100%', marginTop: 14, padding: '11px 0', borderRadius: 10, border: 'none', background: C.accent, color: '#fff', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
-              >{ndaLoading ? 'Recherche…' : 'Continuer'}</button>
-              <button onClick={handleNdaInCreation}
+              >{ndaLoading ? 'Recherche…' : 'Continuer'}{isGuidedLead(lead)&&<ArrowRight size={17}/>}</button>
+              <button className={isGuidedLead(lead)?"sj-nda-secondary":undefined} onClick={handleNdaInCreation}
                 style={{ width: '100%', marginTop: 8, padding: '10px 0', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
               >La société est en cours de création (pas encore de SIREN)</button>
             </>
@@ -8641,7 +8646,7 @@ export default function TrackingSheet() {
         }
 
         return (
-          <div className={isGuidedLead(lead)?"sj-nda-overlay":undefined}
+          <div className={isGuidedLead(lead)?`sj-nda-overlay ${darkMode?"sj-dark":""}`:undefined}
             style={{
               position: 'fixed', inset: 0, zIndex: 9999,
               background: 'rgba(0,0,0,0.45)',
@@ -8659,7 +8664,7 @@ export default function TrackingSheet() {
               {/* Header */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>{isGuidedLead(lead)?"Préparer le NDA":"Générer le NDA"}</h3>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>Générer le NDA</h3>
                   <p style={{ margin: '2px 0 0', fontSize: 12, color: C.muted }}>{lead.full_name} {lead.company_name ? `— ${lead.company_name}` : ''}</p>
                 </div>
                 <button disabled={ndaGenerating} aria-label="Fermer le NDA" onClick={() => { setNdaPopup(null); setNdaData(null); }}
@@ -8667,7 +8672,7 @@ export default function TrackingSheet() {
                 >✕</button>
               </div>
 
-              {isGuidedLead(lead)&&<div className="sj-nda-progress"><UserRoundCheck size={24}/><span><strong>3 · Vérifier les informations</strong>{ndaPopup.nextAction?'Votre NDA sera généré, puis la fiche client s’ouvrira.':'Vérifiez la société et le signataire avant de générer le NDA.'}</span></div>}
+              {isGuidedLead(lead)&&<NdaProgress step={ndaStep}/>}
               {/* Statut du prefill automatique (plus de bouton manuel — 2026-08-20) */}
               <div style={{
                 display: 'flex', gap: 8, marginBottom: 16, padding: '12px 14px', borderRadius: 12,
@@ -9557,6 +9562,7 @@ export default function TrackingSheet() {
         );
       })(), document.body)}
 
+      {commentLeadId && <NotesDialog dark={darkMode} lead={leads.find(l=>l.id===commentLeadId)} value={editingNotes[commentLeadId]||''} onChange={value=>setEditingNotes(p=>({...p,[commentLeadId]:value}))} error={notesError?.leadId===commentLeadId?notesError.message:null} onClose={()=>{micCleanup();setCommentLeadId(null);}} onSave={async()=>{if(await handleNotesSave(commentLeadId)){micCleanup();setCommentLeadId(null);}}} recording={micRecording} transcribing={micTranscribing} micError={micError} onDictate={()=>{if(micRecording){const id=commentLeadId;micStopAndTranscribe(text=>setEditingNotes(p=>({...p,[id]:(p[id]?p[id]+' ':'')+text})));}else if(!micTranscribing)micStartRecording();}}/>}
       {qualificationDialog && <QualificationDialog {...qualificationDialog} dark={darkMode} onClose={()=>setQualificationDialog(null)} onSave={saveQualification}/>}
       {intakeDialog && <IntegrationDialog key={intakeDialog.lead_id} context={intakeDialog}
         contractDetails={{
