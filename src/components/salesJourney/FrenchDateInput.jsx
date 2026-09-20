@@ -1,11 +1,12 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useState,useRef} from 'react';
 import {frenchDate,parseFrenchDate} from '../../utils/parisDates';
 export default function FrenchDateInput({value,onChange,...props}){
  const [text,setText]=useState(frenchDate(value));
- useEffect(()=>setText(frenchDate(value)),[value]);
+ const emitted=useRef(value);
+ useEffect(()=>{if(value!==emitted.current)setText(frenchDate(value));emitted.current=value;},[value]);
  return <input {...props} type="text" inputMode="numeric" placeholder="JJ/MM/AAAA" maxLength={10} value={text} onChange={e=>{
   const raw=e.target.value.replace(/[^0-9/.]/g,'');setText(raw);
-  const iso=parseFrenchDate(raw);e.target.setCustomValidity(raw&&!iso?'Saisissez une date valide au format JJ/MM/AAAA.':'');onChange(iso);
+  const iso=parseFrenchDate(raw);emitted.current=iso;e.target.setCustomValidity(raw&&!iso?'Saisissez une date valide au format JJ/MM/AAAA.':'');onChange(iso);
  }} onBlur={e=>{if(text&&!parseFrenchDate(text))e.target.reportValidity();}}/>;
 }
 export function ParisDateTimeInput({value,onChange,disabled,label}){
