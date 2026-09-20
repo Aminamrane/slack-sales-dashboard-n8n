@@ -2,6 +2,10 @@ import React, { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
+import { CalendarCheck2, ChevronRight, Building2, UserRoundCheck, ArrowRight } from 'lucide-react';
+import QualificationDialog from '../components/salesJourney/QualificationDialog';
+import SalesNotes, { SalesNotesView } from '../components/salesJourney/SalesNotes';
+import { qualificationPatch } from '../utils/r2Qualification';
 import { presentContractError } from "../utils/contractErrors";
 import { IntegrationRollout, IntegrationButton, IntegrationDialog, SalesJourneySteps } from "../components/integrationPreview/TrackingIntegration";
 import { leadAvatar } from "../utils/leadAvatar";
@@ -480,6 +484,22 @@ export default function TrackingSheet() {
   const [intakeSaved, setIntakeSaved] = useState({});
   const [intakeJourneys, setIntakeJourneys] = useState({});
   const [saleOnboardingOnly, setSaleOnboardingOnly] = useState(false);
+  const [qualificationDialog, setQualificationDialog] = useState(null);
+  const [notesError, setNotesError] = useState(null);
+  const isGuidedLead = lead => !!intakeRollout?.available && !!intakeContexts[lead?.id]?.required;
+  const saveQualification = async ({result,attended,date,continueContract}) => {
+    const {lead,stage} = qualificationDialog;
+    const patch=qualificationPatch(lead,stage,{result,attended,date});
+    try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`,patch); }
+    catch(error) { throw new Error(error.status===409 ? 'Ce créneau est indisponible. Vérifiez l’agenda avant de choisir une autre date.' : 'La qualification n’a pas pu être enregistrée. Vos choix sont conservés ; réessayez.'); }
+    setLeads(previous=>previous.map(l=>l.id===lead.id?{...l,...patch,...(date?{[stage]:date}:{})}:l));
+    setQualificationDialog(null);
+    if(continueContract) {
+      const latest=leadContracts[lead.id]?.[0];
+      if(latest && ['failed','canceled','expired'].includes(latest.yousign_status)) await handleResendContract(latest.id,lead.id);
+      else await handleSendContract({...lead,...patch});
+    }
+  };
   useEffect(() => {
     let alive = true;
     const refresh = async () => {
@@ -510,7 +530,16 @@ export default function TrackingSheet() {
   const checkIntakeBeforeSend = async (leadId, nextAction) => {
     if (intakeRollout && !intakeRollout.available) return true;
     const context = await apiClient.get(`/api/v1/owner-integration/leads/${leadId}`);
-    if (context.required) { const preparation = await apiClient.get(`/api/v1/owner-integration/leads/${leadId}/contract-preparation`); setIntakeDialog({ ...context, preparation, nextAction }); setIntakeReady(previous => ({ ...previous, [leadId]: context.ready })); return false; }
+    if (context.required) {
+      setIntakeContexts(previous => ({...previous,[leadId]:context}));
+      const preparation = await apiClient.get(`/api/v1/owner-integration/leads/${leadId}/contract-preparation`);
+      if (!preparation.nda_ready) {
+        const lead=leads.find(l=>l.id===leadId);
+        if (!lead) throw new Error('Rouvrez le dossier avant de préparer le contrat.');
+        openNdaPopup(lead,nextAction); return false;
+      }
+      setIntakeDialog({ ...context, preparation, nextAction }); setIntakeReady(previous => ({ ...previous, [leadId]: context.ready })); return false;
+    }
     return true;
   };
 
@@ -1510,6 +1539,23 @@ export default function TrackingSheet() {
   // (choix de la/des personnes en face) → 'form' (infos préremplies, éditables).
   const [ndaStep, setNdaStep] = useState('form'); // 'siren' | 'dirigeants' | 'form'
   const [ndaSirenInput, setNdaSirenInput] = useState('');
+  useEffect(()=>{
+    if(!ndaPopup || !intakeContexts[ndaPopup.leadId]?.required) return;
+    const previous=document.activeElement, overflow=document.body.style.overflow;
+    document.body.style.overflow='hidden';
+    const card=document.querySelector('.sj-nda-dialog');
+    card?.setAttribute('tabindex','-1'); card?.focus();
+    const onKey=e=>{
+      if(e.key==='Escape'&&!ndaGenerating){e.preventDefault();setNdaPopup(null);setNdaData(null);}
+      if(e.key!=='Tab'||!card)return;
+      const nodes=[...card.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea')].filter(n=>n.getClientRects().length);
+      if(!nodes.length){e.preventDefault();return;}
+      if(e.shiftKey&&(document.activeElement===nodes[0]||document.activeElement===card)){e.preventDefault();nodes.at(-1).focus();}
+      else if(!e.shiftKey&&(document.activeElement===nodes.at(-1)||document.activeElement===card)){e.preventDefault();nodes[0].focus();}
+    };
+    document.addEventListener('keydown',onKey);return()=>{document.removeEventListener('keydown',onKey);document.body.style.overflow=overflow;if(previous?.isConnected)previous.focus();};
+  },[ndaPopup?.leadId,ndaStep,ndaGenerating]);
+
   const [ndaDirigeants, setNdaDirigeants] = useState([]); // [{fullName, role}] renvoyés par Pappers
   const [ndaSelectedDirs, setNdaSelectedDirs] = useState([]); // indices des dirigeants retenus
   // ── Onglet « Options » de la page Détails (sociétés couvertes — Annexe 1
@@ -2049,6 +2095,7 @@ export default function TrackingSheet() {
   };
 
   const handleNotesSave = async (leadId) => {
+    setNotesError(null);
     const newNotes = editingNotes[leadId];
     if (newNotes === undefined) return;
     const hadNotes = leads.find(l => l.id === leadId)?.notes?.trim();
@@ -2062,6 +2109,7 @@ export default function TrackingSheet() {
         setTimeout(() => setNoteJustSaved(null), 800);
       }
     } catch (err) {
+      setNotesError({leadId,message:"Le commentaire n’a pas été enregistré. Votre texte est conservé ; réessayez."});
       console.error("Erreur sauvegarde notes:", err);
     }
   };
@@ -2106,7 +2154,6 @@ export default function TrackingSheet() {
 
   const handleSendContract = async (lead, intakeConfirmed = false) => {
     setSendingContract(lead.id);
-    setNavNotif('sending');
     try {
       // Date choisie : envoyée seulement si le commercial l'a saisie. Sans elle,
       // la charge utile est strictement celle d'avant et le contrat porte la
@@ -2114,6 +2161,7 @@ export default function TrackingSheet() {
       if (!intakeConfirmed && !await checkIntakeBeforeSend(lead.id, { type: "send" })) { setNavNotif(null); return; }
       if (!lead.employee_range) { setNavNotif(null); throw new Error('Choisissez le nombre de salariés avant de continuer.'); }
       const chosenDate = contractDates[lead.id];
+      setNavNotif('sending');
       await apiClient.post('/api/v1/contracts/send', {
         lead_id: lead.id,
         employee_range: lead.employee_range,
@@ -2421,8 +2469,8 @@ export default function TrackingSheet() {
   ];
   const toSchemaLegalForm = (lf) => (lf === "EI" ? "Autre" : lf);
 
-  const openNdaPopup = (lead) => {
-    setNdaPopup({ leadId: lead.id });
+  const openNdaPopup = (lead, nextAction = null) => {
+    setNdaPopup({ leadId: lead.id, nextAction });
     setNdaPappersUrl('');
     setNdaData({
       legalName: lead.company_name || '',
@@ -2491,6 +2539,7 @@ export default function TrackingSheet() {
       })).filter(r => r.fullName);
       setNdaData(prev => ({ ...prev, ...updates }));
       if (data.pappers_url) setNdaPappersUrl(data.pappers_url);
+      setNdaSuccess(true);
       if (reps.length > 1) {
         // Plusieurs dirigeants → le sales choisit qui il a en face de lui.
         setNdaDirigeants(reps);
@@ -2504,7 +2553,7 @@ export default function TrackingSheet() {
       if (err?.status === 404) {
         setNdaError("Aucune entreprise trouvée pour ce SIREN. Vérifiez le numéro, ou cochez \"En cours d'immatriculation\" et remplissez manuellement.");
       } else {
-        setNdaError(err?.data?.detail || err?.message || 'Recherche Pappers indisponible — remplissez manuellement.');
+        setNdaError('La recherche automatique est indisponible. Vous pouvez renseigner les informations du client manuellement.');
       }
       setNdaStep('form');
     } finally {
@@ -2548,7 +2597,7 @@ export default function TrackingSheet() {
   //  automatique — voir runAutoPrefill / nouveau flux NDA.)
 
   const handleNdaGenerate = async () => {
-    if (!ndaData || !ndaPopup) return;
+    if (!ndaData || !ndaPopup || ndaGenerating || ndaLoading) return;
     const lead = leads.find(l => l.id === ndaPopup.leadId);
     if (!lead) return;
     if (!ndaData.legalName.trim()) { setNdaError('La raison sociale est requise'); return; }
@@ -2580,7 +2629,7 @@ export default function TrackingSheet() {
         }),
       });
       if (!resp.ok) {
-        setNdaError('Erreur génération PDF: ' + (await resp.text()));
+        setNdaError('Le PDF n’a pas pu être généré. Vérifiez les informations renseignées puis réessayez.');
         return;
       }
       const blob = await resp.blob();
@@ -2592,7 +2641,7 @@ export default function TrackingSheet() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      // Fire-and-forget: sync client data to backend
+      // The guided flow must persist the NDA before proceeding to intake.
       try {
         await apiClient.post('/api/v1/contracts/client-data', {
           company: payloadCompany,
@@ -2600,7 +2649,7 @@ export default function TrackingSheet() {
           client_info_text: '',
           lead_id: lead.id,
         });
-      } catch (e) { console.warn('Backend client-data sync failed (non-blocking):', e); }
+      } catch (e) { if (ndaPopup.nextAction || isGuidedLead(lead)) throw new Error('Le NDA n’a pas pu être enregistré. Réessayez avant de poursuivre vers le contrat.'); console.warn('Backend client-data sync failed (non-blocking):', e); }
       // Convention v2 : récupère via Pappers TOUTES les sociétés des dirigeants
       // retenus (Annexe 1, tout coché par défaut) — fire-and-forget, décochable
       // ensuite dans l'onglet Options de la page Détails. Pas de fetch pour une
@@ -2608,9 +2657,14 @@ export default function TrackingSheet() {
       if (!ndaData.isInRegistration) {
         const dirs = ndaData.representatives.map(r => (r.fullName || '').trim()).filter(Boolean);
         if (dirs.length) {
-          apiClient.post(`/api/v1/tracking/leads/${lead.id}/covered-companies/fetch`, { dirigeants: dirs })
-            .catch(e => console.warn('Sociétés couvertes (annexe) non récupérées:', e));
+          const discovery = apiClient.post(`/api/v1/tracking/leads/${lead.id}/covered-companies/fetch`, { dirigeants: dirs });
+          if (ndaPopup.nextAction || isGuidedLead(lead)) { try { await discovery; } catch { throw new Error('Les sociétés du client n’ont pas pu être récupérées. Réessayez la préparation du NDA pour compléter la fiche.'); } }
+          else discovery.catch(e => console.warn('Sociétés couvertes (annexe) non récupérées:', e));
         }
+      }
+      if (ndaPopup.nextAction) {
+        const unchanged = await checkIntakeBeforeSend(lead.id,ndaPopup.nextAction);
+        if (unchanged) throw new Error('Le parcours de ce dossier a changé. Fermez puis rouvrez le dossier avant de continuer.');
       }
       // Success → close popup
       setNdaPopup(null);
@@ -6910,7 +6964,7 @@ export default function TrackingSheet() {
                   border: `1px solid ${darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'}`,
                 }}>
                   <span style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Note</span>
-                  <p style={{ fontSize: 13, color: C.secondary, margin: '4px 0 0', lineHeight: 1.5, fontStyle: 'italic', whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>{lead.notes}</p>
+                  <SalesNotesView value={lead.notes}/>
                   {lead.notes_updated_at && formatNoteDate(lead.notes_updated_at) && (
                     <div style={{ fontSize: 10, color: C.muted, marginTop: 6, textAlign: 'right', fontStyle: 'normal' }}>
                       Modifié {formatNoteDate(lead.notes_updated_at)}
@@ -6921,7 +6975,7 @@ export default function TrackingSheet() {
               {editingNotes.hasOwnProperty(lead.id) && (
                 <div style={{ marginBottom: 10 }}>
                   <div style={{ position: 'relative' }}>
-                    <textarea
+                    {isGuidedLead(lead) ? <SalesNotes value={notesVal} onChange={value=>setEditingNotes(prev=>({...prev,[lead.id]:value}))} dark={darkMode}/> : <textarea
                       value={notesVal}
                       onChange={(e) => setEditingNotes(prev => ({ ...prev, [lead.id]: e.target.value }))}
                       placeholder="Ajouter un commentaire..."
@@ -6933,7 +6987,8 @@ export default function TrackingSheet() {
                       }}
                       onFocus={(e) => e.target.style.borderColor = C.accent}
                       onBlur={(e) => e.target.style.borderColor = C.border}
-                    />
+                    />}
+
                     <button type="button" onClick={() => {
                       if (micRecording) {
                         const lid = lead.id;
@@ -6979,6 +7034,7 @@ export default function TrackingSheet() {
                 </div>
               )}
 
+              {notesError?.leadId===lead.id && <p className="sj-error" role="alert">{notesError.message}</p>}
               {/* ─── SEPARATOR ─── */}
               <div style={{ height: 1, background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', margin: '2px 0 12px' }} />
 
@@ -7012,6 +7068,7 @@ export default function TrackingSheet() {
                 };
                 return (
                   <>
+                    {isGuidedLead(lead) ? <button className="sj-qualify" style={{background:C.bg,color:C.text,borderColor:C.border}} onClick={()=>setQualificationDialog({lead,stage:isR3?'r3':'r2'})}><CalendarCheck2 size={22}/><span>{currentResult ? `Qualification du ${isR3?'R3':'R2'}` : `Qualifier le ${isR3?'R3':'R2'}`}<small>{currentResult ? (r2Options.find(o=>o.value===currentResult)?.label || 'Modifier le résultat') : 'Résultat du rendez-vous et prochaine étape'}</small></span><ChevronRight size={18}/></button> : <>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
                       {/* Docs received toggle */}
                       <button
@@ -7080,6 +7137,7 @@ export default function TrackingSheet() {
                       )}
                     </div>
 
+                    </>}
                     {/* Reschedule date picker (when R2 reporté selected) */}
                     {wfLocal?.r2Result === 'reporte' && (
                       <div style={{
@@ -7804,7 +7862,7 @@ export default function TrackingSheet() {
                 });
                 return (
                   <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {intakeRollout?.available && intakeContexts[lead.id]?.required && <IntegrationButton ready={intakeReady[lead.id]} onClick={() => intakeReady[lead.id] ? openSavedIntake(lead.id) : openIntake(lead.id)} />}
+
                     {latestContract && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{
@@ -7856,7 +7914,7 @@ export default function TrackingSheet() {
                         avant. Remplie, c'est elle qui s'imprime dans le bloc de
                         signature des deux documents. Elle ne touche que le papier :
                         la date de signature CRM et les commissions restent réelles. */}
-                    {(!latestContract || ['draft', 'expired', 'canceled', 'failed'].includes(status)) && (() => {
+                    {!isGuidedLead(lead) && (!latestContract || ['draft', 'expired', 'canceled', 'failed'].includes(status)) && (() => {
                       const iso = contractDates[lead.id] || '';
                       // Date saisie à la main : on découpe la chaîne, jamais de
                       // new Date() qui décalerait d'un jour selon le fuseau.
@@ -7914,11 +7972,11 @@ export default function TrackingSheet() {
                       {/* First time — no contract ever sent */}
                       {!latestContract && (
                         <>
-                          <button onClick={() => openNdaPopup(lead)}
+                          {!isGuidedLead(lead) && <button onClick={() => openNdaPopup(lead)}
                             style={actionBtnStyle('#6366f1')}
                             onMouseEnter={(e) => { e.currentTarget.style.background = '#6366f1'; e.currentTarget.style.color = '#fff'; }}
                             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6366f1'; }}
-                          >Générer NDA</button>
+                          >Générer NDA</button>}
                           <button
                             onClick={() => hasRange && !isSending ? handleSendContract(lead) : null}
                             disabled={!hasRange || isSending}
@@ -7931,18 +7989,19 @@ export default function TrackingSheet() {
                               cursor: hasRange && !isSending ? 'pointer' : 'not-allowed',
                               transition: 'all 0.15s', fontFamily: 'inherit',
                               opacity: hasRange && !isSending ? 1 : 0.6,
+                              ...(isGuidedLead(lead)?{width:'100%',padding:'13px 16px',borderRadius:12,fontSize:13,background:'#254b44',display:'flex',alignItems:'center',justifyContent:'center',gap:8}:{}),
                             }}
-                          >{isSending ? 'Envoi...' : 'Envoyer le contrat'}</button>
+                          >{isSending ? 'Préparation…' : isGuidedLead(lead) ? 'Préparer le contrat' : 'Envoyer le contrat'}{isGuidedLead(lead)&&<ArrowRight size={17}/>}</button>
                         </>
                       )}
                       {/* Draft — treat like no contract */}
                       {latestContract && status === 'draft' && (
                         <>
-                          <button onClick={() => openNdaPopup(lead)}
+                          {!isGuidedLead(lead) && <button onClick={() => openNdaPopup(lead)}
                             style={actionBtnStyle('#6366f1')}
                             onMouseEnter={(e) => { e.currentTarget.style.background = '#6366f1'; e.currentTarget.style.color = '#fff'; }}
                             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6366f1'; }}
-                          >Générer NDA</button>
+                          >Générer NDA</button>}
                           <button
                             onClick={() => hasRange && !isSending ? handleSendContract(lead) : null}
                             disabled={!hasRange || isSending}
@@ -7954,8 +8013,9 @@ export default function TrackingSheet() {
                               cursor: hasRange && !isSending ? 'pointer' : 'not-allowed',
                               transition: 'all 0.15s', fontFamily: 'inherit',
                               opacity: hasRange && !isSending ? 1 : 0.6,
+                              ...(isGuidedLead(lead)?{width:'100%',padding:'13px 16px',borderRadius:12,fontSize:13,background:'#254b44',display:'flex',alignItems:'center',justifyContent:'center',gap:8}:{}),
                             }}
-                          >{isSending ? 'Envoi...' : 'Envoyer le contrat'}</button>
+                          >{isSending ? 'Préparation…' : isGuidedLead(lead) ? 'Préparer le contrat' : 'Envoyer le contrat'}{isGuidedLead(lead)&&<ArrowRight size={17}/>}</button>
                         </>
                       )}
                     </div>
@@ -7984,7 +8044,7 @@ export default function TrackingSheet() {
                 const olLabel = _ol ? (OL_LABELS[_ol] || _ol) : (_grouped ? 'Signé (inclus au contrat Owner)' : '—');
                 return (
                   <div style={{ marginBottom: 16 }}>
-                    {intakeRollout?.available && intakeContexts[lead.id]?.required && <div style={{ marginBottom: 12 }}><IntegrationButton ready={intakeReady[lead.id]} onClick={() => intakeReady[lead.id] ? openSavedIntake(lead.id) : openIntake(lead.id)} /></div>}
+
                     {_ownerDone && (
                       <div style={{ marginBottom: 16 }}>
                         <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Contrats</div>
@@ -8203,7 +8263,7 @@ export default function TrackingSheet() {
               )}
 
               {/* ─── OPTIONS (convention v2 : sociétés couvertes / société en création) ─── */}
-              <div style={{ marginTop: 18, borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>
+              {!isGuidedLead(lead) && <div style={{ marginTop: 18, borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>
                 <button
                   onClick={() => {
                     const next = !detailOptionsOpen;
@@ -8271,7 +8331,7 @@ export default function TrackingSheet() {
                     </div>
                   </div>
                 )}
-              </div>
+              </div>}
 
             </div>{/* end detail padding */}
           </div>,
@@ -8469,7 +8529,7 @@ export default function TrackingSheet() {
           color: C.text, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
           transition: 'border-color 0.2s',
         };
-        const labelStyle = { fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 };
+        const labelStyle = { fontSize: isGuidedLead(lead) ? 11 : 9.5, fontWeight: 600, color: isGuidedLead(lead) ? C.secondary : C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 };
         const selectStyle = {
           ...inputStyle, appearance: 'none', WebkitAppearance: 'none', cursor: 'pointer',
           backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='${encodeURIComponent(C.muted)}' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
@@ -8477,16 +8537,16 @@ export default function TrackingSheet() {
         };
         // ── Coquille commune (overlay + carte + header) des étapes du flux ──
         const stepShell = (children) => (
-          <div
+          <div className={isGuidedLead(lead)?"sj-nda-overlay":undefined}
             style={{
               position: 'fixed', inset: 0, zIndex: 9999,
               background: 'rgba(0,0,0,0.45)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               animation: 'modalOverlayIn 0.25s ease both',
             }}
-            onClick={(e) => { if (e.target === e.currentTarget) { setNdaPopup(null); setNdaData(null); } }}
+            onClick={(e) => { if (e.target === e.currentTarget && !ndaGenerating) { setNdaPopup(null); setNdaData(null); } }}
           >
-            <div style={{
+            <div className={isGuidedLead(lead)?"sj-nda-dialog":undefined} role="dialog" aria-modal="true" aria-label="Préparer le NDA" style={{
               width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto',
               background: C.bg, borderRadius: 16, border: `1px solid ${C.border}`,
               boxShadow: '0 20px 60px rgba(0,0,0,0.25)', padding: '24px 28px',
@@ -8494,13 +8554,14 @@ export default function TrackingSheet() {
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>Générer le NDA</h3>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>{isGuidedLead(lead)?"Préparer le NDA":"Générer le NDA"}</h3>
                   <p style={{ margin: '2px 0 0', fontSize: 12, color: C.muted }}>{lead.full_name} {lead.company_name ? `— ${lead.company_name}` : ''}</p>
                 </div>
-                <button onClick={() => { setNdaPopup(null); setNdaData(null); }}
+                <button disabled={ndaGenerating} aria-label="Fermer le NDA" onClick={() => { setNdaPopup(null); setNdaData(null); }}
                   style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted, fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >✕</button>
               </div>
+              {isGuidedLead(lead)&&<div className="sj-nda-progress"><Building2 size={24}/><span><strong>{ndaStep==='siren'?'1 · Identifier la société':'2 · Choisir les dirigeants'}</strong>{ndaPopup.nextAction?'NDA → Fiche client → Contrat':'Les informations du client, étape par étape'}</span></div>}
               {children}
             </div>
           </div>
@@ -8580,16 +8641,16 @@ export default function TrackingSheet() {
         }
 
         return (
-          <div
+          <div className={isGuidedLead(lead)?"sj-nda-overlay":undefined}
             style={{
               position: 'fixed', inset: 0, zIndex: 9999,
               background: 'rgba(0,0,0,0.45)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               animation: 'modalOverlayIn 0.25s ease both',
             }}
-            onClick={(e) => { if (e.target === e.currentTarget) { setNdaPopup(null); setNdaData(null); } }}
+            onClick={(e) => { if (e.target === e.currentTarget && !ndaGenerating) { setNdaPopup(null); setNdaData(null); } }}
           >
-            <div style={{
+            <div className={isGuidedLead(lead)?"sj-nda-dialog":undefined} role="dialog" aria-modal="true" aria-label="Préparer le NDA" style={{
               width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto',
               background: C.bg, borderRadius: 16, border: `1px solid ${C.border}`,
               boxShadow: '0 20px 60px rgba(0,0,0,0.25)', padding: '24px 28px',
@@ -8598,14 +8659,15 @@ export default function TrackingSheet() {
               {/* Header */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>Générer le NDA</h3>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>{isGuidedLead(lead)?"Préparer le NDA":"Générer le NDA"}</h3>
                   <p style={{ margin: '2px 0 0', fontSize: 12, color: C.muted }}>{lead.full_name} {lead.company_name ? `— ${lead.company_name}` : ''}</p>
                 </div>
-                <button onClick={() => { setNdaPopup(null); setNdaData(null); }}
+                <button disabled={ndaGenerating} aria-label="Fermer le NDA" onClick={() => { setNdaPopup(null); setNdaData(null); }}
                   style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted, fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >✕</button>
               </div>
 
+              {isGuidedLead(lead)&&<div className="sj-nda-progress"><UserRoundCheck size={24}/><span><strong>3 · Vérifier les informations</strong>{ndaPopup.nextAction?'Votre NDA sera généré, puis la fiche client s’ouvrira.':'Vérifiez la société et le signataire avant de générer le NDA.'}</span></div>}
               {/* Statut du prefill automatique (plus de bouton manuel — 2026-08-20) */}
               <div style={{
                 display: 'flex', gap: 8, marginBottom: 16, padding: '12px 14px', borderRadius: 12,
@@ -8617,7 +8679,7 @@ export default function TrackingSheet() {
                     ? <span><span style={{ fontWeight: 600, color: C.accent }}>Recherche Pappers en cours…</span> les informations vont se préremplir.</span>
                     : ndaData.isInRegistration
                       ? <span><span style={{ fontWeight: 600, color: C.accent }}>Société en création</span> — pas de SIREN, remplissez les informations manuellement.</span>
-                      : ndaPappersUrl
+                      : ndaSuccess
                         ? <span><span style={{ fontWeight: 600, color: '#34d399' }}>✓ Informations préremplies via Pappers</span> — vérifiez et ajustez si besoin avant de générer.</span>
                         : <span><span style={{ fontWeight: 600, color: C.accent }}>Saisie manuelle</span> — le préremplissage automatique n'a pas abouti.</span>}
                 </div>
@@ -8641,13 +8703,13 @@ export default function TrackingSheet() {
               )}
 
               {/* Success / Error messages */}
-              {ndaSuccess && (
+              {ndaSuccess && !isGuidedLead(lead) && (
                 <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 8, background: darkMode ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)', border: `1px solid rgba(16,185,129,0.15)`, fontSize: 12, color: '#10b981', fontWeight: 600, animation: 'toastSlideIn 0.3s ease both' }}>
                   Informations pré-remplies avec succès
                 </div>
               )}
               {ndaError && (
-                <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 8, background: darkMode ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.06)', border: `1px solid rgba(239,68,68,0.15)`, fontSize: 12, color: '#ef4444', fontWeight: 600 }}>
+                <div role="alert" style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 8, background: darkMode ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.06)', border: `1px solid rgba(239,68,68,0.15)`, fontSize: 12, color: '#ef4444', fontWeight: 600 }}>
                   {ndaError}
                 </div>
               )}
@@ -8812,8 +8874,8 @@ export default function TrackingSheet() {
               <div style={{ height: 1, background: C.border, margin: '18px 0' }} />
 
               {/* Actions */}
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={() => { setNdaPopup(null); setNdaData(null); }}
+              <div className={isGuidedLead(lead)?'sj-nda-actions':undefined} style={{ display: 'flex', gap: 10, background:C.bg }}>
+                <button disabled={ndaGenerating} aria-label="Fermer le NDA" onClick={() => { setNdaPopup(null); setNdaData(null); }}
                   style={{
                     flex: 1, padding: '11px 16px', borderRadius: 10, border: `1px solid ${C.border}`,
                     background: 'transparent', color: C.secondary, fontSize: 13, fontWeight: 500,
@@ -8822,7 +8884,7 @@ export default function TrackingSheet() {
                   onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                 >Annuler</button>
-                <button onClick={handleNdaGenerate} disabled={ndaGenerating}
+                <button onClick={handleNdaGenerate} disabled={ndaGenerating || ndaLoading}
                   style={{
                     flex: 2, padding: '11px 16px', borderRadius: 10, border: 'none',
                     background: ndaGenerating ? C.muted : (darkMode ? '#fff' : '#1e2330'),
@@ -8832,7 +8894,7 @@ export default function TrackingSheet() {
                   }}
                   onMouseEnter={(e) => { if (!ndaGenerating) { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,0,0,0.2)'; } }}
                   onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
-                >{ndaGenerating ? 'Génération en cours...' : 'Confirmer la génération'}</button>
+                >{ndaGenerating ? 'Préparation en cours…' : ndaPopup.nextAction ? 'Générer et continuer' : 'Générer le NDA'}</button>
               </div>
             </div>
           </div>
@@ -9495,12 +9557,14 @@ export default function TrackingSheet() {
         );
       })(), document.body)}
 
+      {qualificationDialog && <QualificationDialog {...qualificationDialog} dark={darkMode} onClose={()=>setQualificationDialog(null)} onSave={saveQualification}/>}
       {intakeDialog && <IntegrationDialog key={intakeDialog.lead_id} context={intakeDialog}
         contractDetails={{
           email: leads.find(l => l.id === intakeDialog.lead_id)?.email,
           employeeRange: leads.find(l => l.id === intakeDialog.lead_id)?.employee_range,
           displayDate: contractDates[intakeDialog.lead_id],
         }}
+        onContractDateChange={value=>setContractDates(previous=>({...previous,[intakeDialog.lead_id]:value}))}
         onPrepared={preparation => setLeads(previous => previous.map(l => l.id === intakeDialog.lead_id ? { ...l, employee_range: preparation.employee_range } : l))}
         onSend={(preparation) => {
           const existingLead = leads.find(l => l.id === intakeDialog.lead_id);
