@@ -11,7 +11,7 @@ import thirdPlace from "../assets/3st-place.png";
 import iconGlobal from "../assets/global.png";
 import iconFinance from "../assets/finance.png";
 import "../index.css";
-import { performanceRows, ratio } from "../utils/performanceSales.js";
+import { performanceRows, ratio, isPerformanceSalesPerson, visibleHeadcount } from "../utils/performanceSales.js";
 import RdvHeatmap from "../components/RdvHeatmap.jsx";
 
 const percent = (value, digits=1) => value == null ? '—' : value.toLocaleString('fr-FR', {minimumFractionDigits:digits, maximumFractionDigits:digits}) + '%';
@@ -61,7 +61,7 @@ const CANONICAL_DISPLAY_NAMES = {
 
 const getCanonicalKey = (rawName) => { const n = normalizeSalesKey(rawName); return NAME_VARIANTS_TO_CANONICAL[n] || n; };
 const displaySalesName = (rawName) => { const k = getCanonicalKey(rawName); return CANONICAL_DISPLAY_NAMES[k] || (rawName ? rawName.trim() : "Unknown"); };
-const EXCLUDED_KEYS = new Set();
+const EXCLUDED_KEYS = new Set(['youcef amrane']);
 const VENTES_BRACKETS = ['1-2', '3-5', '6-10', '11-19', '20+', 'autre'];
 const VENTES_BRACKET_LABEL = { '1-2': '1-2', '3-5': '3-5', '6-10': '6-10', '11-19': '11-19', '20+': '20+', 'autre': 'Autre' };
 
@@ -170,7 +170,7 @@ export default function MonitoringPerf() {
   };
   useEffect(() => { ++detailRequest.current; setDetailModal(null); setSetterModal(null); setAutreModal(null); setHeatmapSales('global'); }, [range, canal]);
 
-  useEffect(() => { if (!adsDetailView || canal !== "ads") return; let c = false; (async () => { setHeadcountLoading(true); try { const res = await apiClient.get('/api/v1/monitoring/performance/detail/ads/headcount?period=' + range); if (!c) setHeadcountData(res); } catch { if (!c) setHeadcountData(null); } finally { if (!c) setHeadcountLoading(false); } })(); return () => { c = true; }; }, [adsDetailView, range, canal, refreshKey]);
+  useEffect(() => { if (!adsDetailView || canal !== "ads") return; let c = false; (async () => { setHeadcountLoading(true); try { const res = await apiClient.get('/api/v1/monitoring/performance/detail/ads/headcount?period=' + range); if (!c) setHeadcountData(visibleHeadcount(res)); } catch { if (!c) setHeadcountData(null); } finally { if (!c) setHeadcountLoading(false); } })(); return () => { c = true; }; }, [adsDetailView, range, canal, refreshKey]);
 
   useEffect(() => {
     if (!hasAccess) return;
@@ -478,7 +478,7 @@ export default function MonitoringPerf() {
                             <table style={{width:'100%',fontSize:13,borderCollapse:'collapse'}}>
                               <thead><tr>{['Commercial','Appels','Répondu','Non aboutis','R1 placés','R2 placés'].map((h,i)=><th key={h} style={{textAlign:i===0?'left':'center',color:C.muted,fontWeight:600,padding:'4px 8px',borderBottom:'1px solid '+C.border}}>{h}</th>)}</tr></thead>
                               <tbody>
-                                {setterModal.detail.map((d,i)=>(<tr key={i}><td style={{padding:'7px 8px',color:C.text,borderBottom:'1px solid '+C.subtle}}>{displaySalesName(d.sales)}</td><td style={{padding:'7px 8px',textAlign:'center',color:C.text,fontWeight:600,borderBottom:'1px solid '+C.subtle}}>{d.appels}</td><td style={{padding:'7px 8px',textAlign:'center',color:COLORS.tertiary,fontWeight:600,borderBottom:'1px solid '+C.subtle}}>{d.repondu}</td><td style={{padding:'7px 8px',textAlign:'center',color:C.muted,borderBottom:'1px solid '+C.subtle}}>{d.repondeur}</td><td style={{padding:'7px 8px',textAlign:'center',color:C.text,borderBottom:'1px solid '+C.subtle}}>{d.r1_places||'—'}</td><td style={{padding:'7px 8px',textAlign:'center',color:C.text,borderBottom:'1px solid '+C.subtle}}>{d.r2_places||'—'}</td></tr>))}
+                                {setterModal.detail.filter(d=>isPerformanceSalesPerson(displaySalesName(d.sales))).map((d,i)=>(<tr key={i}><td style={{padding:'7px 8px',color:C.text,borderBottom:'1px solid '+C.subtle}}>{displaySalesName(d.sales)}</td><td style={{padding:'7px 8px',textAlign:'center',color:C.text,fontWeight:600,borderBottom:'1px solid '+C.subtle}}>{d.appels}</td><td style={{padding:'7px 8px',textAlign:'center',color:COLORS.tertiary,fontWeight:600,borderBottom:'1px solid '+C.subtle}}>{d.repondu}</td><td style={{padding:'7px 8px',textAlign:'center',color:C.muted,borderBottom:'1px solid '+C.subtle}}>{d.repondeur}</td><td style={{padding:'7px 8px',textAlign:'center',color:C.text,borderBottom:'1px solid '+C.subtle}}>{d.r1_places||'—'}</td><td style={{padding:'7px 8px',textAlign:'center',color:C.text,borderBottom:'1px solid '+C.subtle}}>{d.r2_places||'—'}</td></tr>))}
                               </tbody>
                             </table>
                             <button onClick={()=>setSetterModal(null)} style={{marginTop:16,padding:'7px 16px',borderRadius:8,border:'1px solid '+C.border,background:C.surface,color:C.text,cursor:'pointer',fontSize:13,fontWeight:600,fontFamily:'inherit'}}>Fermer</button>
@@ -502,7 +502,6 @@ export default function MonitoringPerf() {
                     ].map((k,i,arr)=>(<div key={k.l} onMouseEnter={e=>setTip({t:k.f,r:e.currentTarget.getBoundingClientRect()})} onMouseLeave={()=>setTip(null)} style={{flex:1,textAlign:'center',padding:'10px 16px',borderRight:i<arr.length-1?'1px solid '+C.border:'none',cursor:'help'}}><div style={{fontSize:12,fontWeight:500,color:C.muted,marginBottom:2}}>{k.l}</div><div style={{fontSize:17,fontWeight:700,color:C.text,fontVariantNumeric:'tabular-nums',letterSpacing:'-0.01em'}}>{dataLoading || dataError ? '—' : k.v}</div></div>))}
                   </div>
 
-                  {!dataLoading && !dataError && !callsAvailable && <p role="status" style={{fontSize:13,color:C.secondary,lineHeight:1.6,padding:'12px 16px',background:C.bg,border:`1px solid ${C.border}`,borderRadius:12}}>Le volume d’appels est indisponible sur cette période. Les contacts renseignés dans le suivi restent consultables.</p>}
                   {sectionErrors.rdv && <p role="alert" style={{fontSize:13,color:C.secondary}}>Les statistiques de rendez-vous n’ont pas pu être chargées.</p>}
                   {dataLoading && <div style={{textAlign:'center',padding:60,color:C.muted}}>Chargement...</div>}
 
@@ -566,7 +565,7 @@ export default function MonitoringPerf() {
                             <div style={{fontSize:13,color:darkMode?'#e6cf8f':'#92700e',marginTop:8,padding:'14px 16px',background:darkMode?'#2e2614':'#fffbeb',border:'1px solid '+(darkMode?'#4d3f1a':'#fde68a'),borderRadius:10,lineHeight:1.5}}>Donn&eacute;es fiables &agrave; partir d'avril 2026. En mars, le champ d'horodatage d'affectation a &eacute;t&eacute; rempli r&eacute;troactivement, donc le d&eacute;lai n'est pas repr&eacute;sentatif.</div>
                           </div>
                         );
-                        const td=rdvAnalytics.treatment_delay, g=td.global||{}, sales=td.by_sales||[];
+                        const td=rdvAnalytics.treatment_delay, g=td.global||{}, sales=(td.by_sales||[]).filter(s=>isPerformanceSalesPerson(s.sales));
                         const fmtMin=(m)=> m==null?'—': m<60?`${m} min`:`${Math.floor(m/60)}h${String(Math.round(m%60)).padStart(2,'0')}`;
                         const pct=(a,b)=> b?Math.round(100*a/b):0;
                         const sdColor=(p)=> p==null?C.muted: p>=70?'#10b981': p>=50?'#fbbf24':'#ef4444';
@@ -639,7 +638,7 @@ export default function MonitoringPerf() {
                         );
                       })()}
                       {(()=>{
-                        const hbs=rdvAnalytics.heatmap_by_sales||[];
+                        const hbs=(rdvAnalytics.heatmap_by_sales||[]).filter(s=>isPerformanceSalesPerson(s.sales));
                         const sel=heatmapSales==='global'?null:hbs.find(s=>s.sales===heatmapSales);
                         return (<>
                           <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,flexWrap:'wrap'}}>

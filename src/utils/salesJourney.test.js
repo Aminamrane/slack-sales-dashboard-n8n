@@ -57,3 +57,14 @@ test('Paris appointments validate independently from the browser timezone',()=>{
  assert.equal(validParisAppointment('2026-02-30T09:00'),false);
  assert.equal(validParisAppointment('2026-09-25T09:17'),true);
 });
+
+import {hasGuidedSalesJourney} from './guidedSalesJourney.js';
+test('old contracts do not hide qualification or R2 planning for the private pilot',()=>{
+ const rollout={available:true,can_manage:true,pilot_enabled:true,enabled:false};
+ const lead={id:11873,assigned_to:'y.amrane@ownertechnology.com'};
+ assert.equal(hasGuidedSalesJourney(rollout,lead,{required:false,ready:true}),true);
+ assert.equal(hasGuidedSalesJourney(rollout,lead,undefined),true);
+ assert.equal(hasGuidedSalesJourney(rollout,{...lead,assigned_to:'another@ownertechnology.com'},{required:false}),false);
+ assert.equal(hasGuidedSalesJourney({...rollout,available:false},lead,{required:false}),false);
+ assert.equal(hasGuidedSalesJourney({...rollout,can_manage:false},lead,{required:false}),false);
+});

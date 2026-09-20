@@ -1,3 +1,4 @@
+import {hasGuidedSalesJourney} from '../utils/guidedSalesJourney';
 import FrenchDateInput from '../components/salesJourney/FrenchDateInput';
 import {parisToday,parisParts,minuteOptions} from '../utils/parisDates';
 import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
@@ -487,7 +488,7 @@ export default function TrackingSheet() {
   const [commentLeadId, setCommentLeadId] = useState(null);
   const [notesError, setNotesError] = useState(null);
   const isSignedPilot = lead => !!intakeJourneys[lead?.id]?.onboarding_only;
-  const isGuidedLead = lead => !!intakeRollout?.available && !!intakeContexts[lead?.id]?.required;
+  const isGuidedLead = lead => hasGuidedSalesJourney(intakeRollout, lead, intakeContexts[lead?.id]);
   const saveQualification = async ({result,attended,date,continueContract,followUp}) => {
     const {lead,stage} = qualificationDialog;
     const patch=qualificationPatch(lead,stage,{result,attended,date,followUp});
@@ -8209,7 +8210,7 @@ export default function TrackingSheet() {
                     Commenter
                   </button>
                 )}
-                {!(activeCat.key === 'signed' && isSignedPilot(lead)) && (() => {
+                {!isGuidedLead(lead) && !(activeCat.key === 'signed' && isSignedPilot(lead)) && (() => {
                   const ndaDone = !!(lead.has_client_data);
                   const ndaColor = ndaDone ? '#10b981' : '#6366f1';
                   return (
