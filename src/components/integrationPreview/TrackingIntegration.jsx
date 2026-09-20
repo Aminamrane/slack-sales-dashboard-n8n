@@ -139,7 +139,7 @@ export function SalesJourneySteps({ phase = "intake", compact = false }) {
   </ol>;
 }
 
-export function IntegrationDialog({ context, onClose, onSaved, contractDetails = {}, onSend, onPrepared }) {
+export function IntegrationDialog({ context, onClose, onSaved, contractDetails = {}, onSend, onPrepared, onContractDateChange }) {
   const [stage, setStage] = useState(context.nextAction ? "setup" : "intake");
   const [preparation, setPreparation] = useState(context.preparation || {});
   const [setupBusy, setSetupBusy] = useState(false);
@@ -313,6 +313,7 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
               <label htmlFor="ti-email">Email du signataire<input id="ti-email" type="email" required maxLength={254} disabled={setupBusy} aria-invalid={!!fieldErrors.email} aria-describedby={fieldErrors.email ? "ti-email-error" : undefined} value={preparation.email || ""} onChange={e => updatePreparation("email", e.target.value)} autoComplete="email" />{fieldErrors.email && <span className="ti-field-error" id="ti-email-error" role="alert">{fieldErrors.email}</span>}</label>
               <label htmlFor="ti-phone">Téléphone du signataire <small>(facultatif)</small><input id="ti-phone" type="tel" maxLength={80} disabled={setupBusy} aria-invalid={!!fieldErrors.phone} aria-describedby={fieldErrors.phone ? "ti-phone-error" : undefined} value={preparation.phone || ""} onChange={e => updatePreparation("phone", e.target.value)} placeholder="06 12 34 56 78 ou +33 6…" autoComplete="tel" />{fieldErrors.phone && <span className="ti-field-error" id="ti-phone-error" role="alert">{fieldErrors.phone}</span>}</label>
             </div>
+            <details style={{textAlign:'left',marginTop:14,fontSize:12,color:'#617083'}}><summary style={{cursor:'pointer'}}>Date du contrat · facultatif</summary><label style={{display:'grid',gap:6,marginTop:8}}>Date figurant sur le contrat<input type="date" value={contractDetails.displayDate||''} onChange={e=>onContractDateChange?.(e.target.value)} disabled={setupBusy}/></label><p>Sans date choisie, le contrat porte la date du jour.</p></details>
             {preparation.signer_name && <p className="ti-signer-name">Signataire : <strong>{preparation.signer_name}</strong></p>}
             {!preparation.nda_ready && <p role="alert">Générez d’abord le NDA depuis votre dossier pour préparer le contrat.</p>}
             {setupError && <p className="ti-setup-error" role="alert">{setupError}</p>}
