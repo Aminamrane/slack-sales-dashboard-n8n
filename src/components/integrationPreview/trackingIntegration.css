@@ -258,3 +258,19 @@
 .ti-contract-review dl { margin:18px 0 14px; padding:4px 20px; }
 .ti-contract-review dl > div { padding:10px 0; }
 .ti-review-actions { margin-top:18px; }
+
+.ti-preparation { max-width: 780px; }
+.ti-band-field { border: 0; padding: 0; margin: 22px 0; text-align: left; }
+.ti-band-field legend, .ti-contact-fields label { color: #293447; font-size: 14px; font-weight: 600; }
+.ti-band-options { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 12px; }
+.ti-band-options button { border: 1px solid #dfe4ec; background: #fff; color: #475569; border-radius: 10px; padding: 11px 6px; font: inherit; font-size: 14px; cursor: pointer; transition: background .18s ease, border-color .18s ease; }
+.ti-band-options button[aria-pressed="true"] { color: #fff; background: #243449; border-color: #243449; }
+.ti-band-options button:focus-visible, .ti-contact-fields input:focus-visible { outline: 3px solid #a9bfd8; outline-offset: 2px; }
+.ti-contact-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; text-align: left; }
+.ti-contact-fields label { display: flex; flex-direction: column; gap: 8px; }
+.ti-contact-fields small { font-weight: 400; display: contents; }
+.ti-contact-fields input { width: 100%; box-sizing: border-box; border: 1px solid #dfe4ec; border-radius: 10px; padding: 12px; font: inherit; font-weight: 400; background: #fff; color: #243449; }
+.ti-preparation .ti-signer-name { text-align: left; font-size: 13px; margin: 12px 0; }
+.ti-preparation .ti-setup-error { background: #fff3f1; color: #9b352c; padding: 12px 16px; border-radius: 10px; font-size: 14px; text-align: left; }
+.ti-back-setup { display: flex; align-items: center; gap: 8px; margin: 0 24px; border: 0; background: transparent; color: #475569; font: inherit; font-size: 13px; cursor: pointer; padding: 10px 0; }
+@media (max-width: 600px) { .ti-contact-fields { grid-template-columns: 1fr; } .ti-band-options { grid-template-columns: repeat(3, 1fr); } .ti-journey { gap: 8px; } .ti-journey li { font-size: 11px; } }
