@@ -2678,7 +2678,7 @@ export default function TrackingSheet() {
           client_info_text: '',
           lead_id: lead.id,
         });
-      } catch (e) { if (ndaPopup.nextAction || isGuidedLead(lead)) throw new Error('Le NDA n’a pas pu être enregistré. Réessayez avant de poursuivre vers le contrat.'); console.warn('Backend client-data sync failed (non-blocking):', e); }
+      } catch (e) { if (ndaPopup.nextAction || isGuidedLead(lead) || portalOptIn) throw new Error('Le NDA n’a pas pu être enregistré. Réessayez avant de poursuivre vers le contrat.'); console.warn('Backend client-data sync failed (non-blocking):', e); }
       // Convention v2 : récupère via Pappers TOUTES les sociétés des dirigeants
       // retenus (Annexe 1, tout coché par défaut) — fire-and-forget, décochable
       // ensuite dans l'onglet Options de la page Détails. Pas de fetch pour une
@@ -2687,7 +2687,7 @@ export default function TrackingSheet() {
         const dirs = ndaData.representatives.map(r => (r.fullName || '').trim()).filter(Boolean);
         if (dirs.length) {
           const discovery = apiClient.post(`/api/v1/tracking/leads/${lead.id}/covered-companies/fetch`, { dirigeants: dirs });
-          if (ndaPopup.nextAction || isGuidedLead(lead)) { try { await discovery; } catch { throw new Error('Les sociétés du client n’ont pas pu être récupérées. Réessayez la préparation du NDA pour compléter la fiche.'); } }
+          if (ndaPopup.nextAction || isGuidedLead(lead) || portalOptIn) { try { await discovery; } catch { throw new Error('Les sociétés du client n’ont pas pu être récupérées. Réessayez la préparation du NDA pour compléter la fiche.'); } }
           else discovery.catch(e => console.warn('Sociétés couvertes (annexe) non récupérées:', e));
         }
       }
