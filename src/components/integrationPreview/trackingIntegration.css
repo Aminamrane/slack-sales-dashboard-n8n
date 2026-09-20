@@ -274,3 +274,8 @@
 .ti-preparation .ti-setup-error { background: #fff3f1; color: #9b352c; padding: 12px 16px; border-radius: 10px; font-size: 14px; text-align: left; }
 .ti-back-setup { display: flex; align-items: center; gap: 8px; margin: 0 24px; border: 0; background: transparent; color: #475569; font: inherit; font-size: 13px; cursor: pointer; padding: 10px 0; }
 @media (max-width: 600px) { .ti-contact-fields { grid-template-columns: 1fr; } .ti-band-options { grid-template-columns: repeat(3, 1fr); } .ti-journey { gap: 8px; } .ti-journey li { font-size: 11px; } }
+
+@media (max-width: 600px) {
+  .ti-journey li { flex-direction: column; text-align: center; min-width: 0; }
+  .ti-journey li:not(:last-child)::after { position: absolute; top: 17px; left: calc(50% + 22px); width: calc(100% - 36px); margin: 0; }
+}

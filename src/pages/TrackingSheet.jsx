@@ -2089,8 +2089,8 @@ export default function TrackingSheet() {
       await fetchLeadContracts(lead.id);
       if (intakeConfirmed && lead.status === 'r1') {
         const today = new Date().toISOString().slice(0, 10);
-        await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { r1_result: 'done', r1_completed_at: new Date().toISOString(), r2_date: new Date().toISOString(), status: 'r2' });
-        setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, r1: today, r2: today, r1_result: 'done', status: 'r2' } : l));
+        await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { r1_date: today, r2_date: today, r1_result: 'done', r1_completed_at: new Date().toISOString(), r2_result: 'done', r2_completed_at: new Date().toISOString(), status: 'r2' });
+        setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, r1: today, r2: today, r1_result: 'done', r2_result: 'done', status: 'r2' } : l));
         setR1ShortcutContract(null);
       }
       setNavNotif('sent'); // triggers check animation → auto-clears after 2.5s in navbar
@@ -7485,7 +7485,8 @@ export default function TrackingSheet() {
                                 <button onClick={() => openNdaPopup(lead)} style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${ndaDone ? 'rgba(16,185,129,0.25)' : C.border}`, background: ndaDone ? 'rgba(16,185,129,0.04)' : 'transparent', color: ndaDone ? '#10b981' : C.accent, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>{ndaDone ? 'NDA généré ✓' : 'Générer NDA'}</button>
                                 <button onClick={async () => {
                                   if (isSending) return;
-                                  if (!await checkIntakeBeforeSend(lead.id, { type: 'send' })) return;
+                                  try { if (!await checkIntakeBeforeSend(lead.id, { type: 'send' })) return; }
+                                  catch (error) { setContractErrorModal({ message: error.message || 'Impossible de préparer le contrat.', isNdaMissing: false }); return; }
                                   if (!hasRange) return;
                                   setNavNotif('sending'); setSendingContract(lead.id);
                                   try {
@@ -7787,7 +7788,7 @@ export default function TrackingSheet() {
                         {status === 'done' && latestContract.signed_at && <span style={{ fontSize: 11, color: C.muted }}>Signé le {formatDate(latestContract.signed_at)}</span>}
                         {status === 'expired' && latestContract.expired_at && <span style={{ fontSize: 11, color: C.muted }}>Expiré le {formatDate(latestContract.expired_at)}</span>}
                         {status === 'canceled' && latestContract.canceled_at && <span style={{ fontSize: 11, color: C.muted }}>Annulé le {formatDate(latestContract.canceled_at)}</span>}
-                        {status === 'failed' && latestContract.yousign_error && <span style={{ fontSize: 11, color: '#ef4444' }}>{latestContract.yousign_error.includes("info[phone_number]") ? "Téléphone du signataire à corriger dans la préparation du contrat." : latestContract.yousign_error}</span>}
+                        {status === 'failed' && latestContract.yousign_error && <span style={{ fontSize: 11, color: '#ef4444' }}>{latestContract.yousign_error.includes("info[phone_number]") ? (intakeContexts[lead.id]?.required ? "Téléphone du signataire à corriger dans la préparation du contrat." : "Téléphone du signataire à corriger dans le NDA.") : latestContract.yousign_error}</span>}
                       </div>
                     )}
                     {/* View contract PDFs */}
