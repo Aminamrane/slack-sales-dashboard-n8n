@@ -3105,7 +3105,7 @@ function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingE
   const entries = [
     ...comments.map(c => ({ ...c, kind: "comment", key: `comment-${c.id}` })),
     ...ratings.map(c => ({ ...c, kind: "rating", key: `rating-${c.id}` })),
-  ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at) || a.key.localeCompare(b.key));
+  ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at) || (a.kind === b.kind ? b.id - a.id : a.kind.localeCompare(b.kind)));
   const shown = expanded ? entries : entries.slice(0, 3);
 
   return (

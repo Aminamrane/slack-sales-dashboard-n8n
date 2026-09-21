@@ -57,7 +57,7 @@ export function ClientMissions({ numero }) {
     : data?.status === 'available' && <>
       <div className="ob-mission-kpis">{['total', 'completed', 'in_progress', 'paused'].map(key => <button type="button" key={key} aria-pressed={filter === key} onClick={() => select(key)}><strong>{data.counts[key]}</strong><span>{labels[key]}</span></button>)}</div>
       <div className="ob-mission-filters">{['waiting', 'upcoming', 'cancelled', 'other'].filter(key => data.counts[key] > 0).map(key => <button type="button" key={key} aria-pressed={filter === key} onClick={() => select(key)}>{labels[key]} <strong>{data.counts[key]}</strong></button>)}</div>
-      {data.counts.total > 0 && <button type="button" className="ob-detail-link" aria-expanded={historyOpen} onClick={() => setHistoryOpen(v => !v)}>{historyOpen ? "Masquer les missions" : `Voir les ${data.counts.total} missions`}</button>}
+      {data.counts.total > 0 && <button type="button" className="ob-detail-link" aria-expanded={historyOpen} onClick={() => setHistoryOpen(v => !v)}>{historyOpen ? "Masquer les missions" : `Voir les missions (${items.length})`}</button>}
       {historyOpen && <>
       <div className="ob-mission-history-heading"><strong>{filter === 'total' ? 'Dernières missions' : labels[filter]}</strong><span>{items.length}</span></div>
       {!items.length && <p className="ob-mission-message">{data.counts.total === 0 ? 'Aucune mission client enregistrée chez Opti’Lex à ce jour.' : 'Aucune mission dans ce statut.'}</p>}
@@ -68,7 +68,7 @@ export function ClientMissions({ numero }) {
       {items.length > limit && <button type="button" className="ob-detail-link" onClick={() => setLimit(v => v + 20)}>Voir plus de missions ({items.length - limit})</button>}
       {limit > 4 && <button type="button" className="ob-detail-link" onClick={() => setLimit(4)}>Réduire l’historique</button>}
       </>}
-      {data.counts.total === 0 && <p className="ob-mission-message">Aucune mission client enregistrée chez Opti’Lex à ce jour.</p>}
+      {data.counts.total === 0 && !historyOpen && <p className="ob-mission-message">Aucune mission client enregistrée chez Opti’Lex à ce jour.</p>}
       <p className={`ob-mission-sync ${data.stale ? 'is-stale' : ''}`}>{data.stale ? 'Dernières données disponibles · ' : 'Synchronisé · '}{date(data.checked_at)} à {new Date(data.checked_at).toLocaleTimeString('fr-FR', {timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit'})}{data.stale && ' · Actualisation temporairement indisponible'}</p>
     </>}
   </section>;
