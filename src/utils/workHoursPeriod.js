@@ -42,7 +42,7 @@ const mondaysCovering = (y, m) => {
   const last = new Date(y, m + 1, 0);
   const out = [];
   let d = mondayOf(new Date(y, m, 1));
-  while (d <= last) { out.push(iso(d)); d = new Date(d.getTime() + 7 * 864e5); }
+  while (d <= last) { out.push(iso(d)); d = new Date(d); d.setDate(d.getDate() + 7); }
   return out;
 };
 const fmtH = (h) => {

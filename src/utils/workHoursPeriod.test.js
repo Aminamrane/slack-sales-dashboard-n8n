@@ -153,3 +153,9 @@ test('le mois additionne les demi-journées sans neutraliser leur autre moitié'
   assert.equal(row.expectedFull, 36);
   assert.equal(row.cells[0].vacAll, false);
 });
+
+
+test('les semaines restent des lundis au changement d’heure', () => {
+  assert.deepEqual(mondaysCovering(2026, 9), ['2026-09-28','2026-10-05','2026-10-12','2026-10-19','2026-10-26']);
+  assert.deepEqual(mondaysCovering(2026, 2), ['2026-02-23','2026-03-02','2026-03-09','2026-03-16','2026-03-23','2026-03-30']);
+});
