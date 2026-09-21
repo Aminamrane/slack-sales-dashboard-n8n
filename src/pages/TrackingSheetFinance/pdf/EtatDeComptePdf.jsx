@@ -222,7 +222,7 @@ function PartyLine({ label, value, bold = false }) {
   );
 }
 
-function EtatDeComptePdf({ issuer, recipient, rows, issueDate }) {
+function EtatDeComptePdf({ issuer, recipient, rows, issueDate, paymentsOnly = false }) {
   // « Restant dû » = SOLDE CUMULÉ après chaque période (logique comptable,
   // retour dev ZILWA n°637 2026-08-21) : solde += facturé − payé ligne à
   // ligne. Un paiement excédentaire régularise les mois précédents (le solde
@@ -230,7 +230,7 @@ function EtatDeComptePdf({ issuer, recipient, rows, issueDate }) {
   // réellement négatif = trop-perçu global, affiché en négatif (vert).
   let running = 0;
   const computed = rows.map((r) => {
-    running += r.billed - r.paid;
+    running += paymentsOnly ? r.paid : r.billed - r.paid;
     return { ...r, solde: running };
   });
   // Total = solde final (= Σ facturé − Σ payé du périmètre) : c'est par
@@ -238,7 +238,7 @@ function EtatDeComptePdf({ issuer, recipient, rows, issueDate }) {
   const totalRemaining = running;
   if (import.meta.env?.DEV) {
     // Assertion de cohérence (dev only) : les deux calculs doivent coïncider.
-    const check = rows.reduce((acc, r) => acc + r.billed - r.paid, 0);
+    const check = rows.reduce((acc, r) => acc + (paymentsOnly ? r.paid : r.billed - r.paid), 0);
     if (Math.abs(check - totalRemaining) > 0.005) {
       console.warn('[EtatDeComptePdf] incohérence solde final', { check, totalRemaining });
     }
@@ -256,7 +256,8 @@ function EtatDeComptePdf({ issuer, recipient, rows, issueDate }) {
         </View>
 
         {/* 2. Titre — orthographe verbatim de la référence */}
-        <Text style={styles.title}>Etat de compte</Text>
+        <Text style={styles.title}>{paymentsOnly ? 'Relevé des règlements par société' : 'Etat de compte'}</Text>
+        {paymentsOnly && <Text style={{ fontSize: 8, color: MUTED, marginBottom: 8 }}>Règlements attribués à cette société uniquement. Les factures et remboursements globaux ne sont pas ventilés : ce document ne détermine pas un solde dû.</Text>}
 
         {/* 3. Date d'émission */}
         <Text style={styles.issueDate}>{pdfSafe(issueDate)}</Text>
@@ -302,7 +303,7 @@ function EtatDeComptePdf({ issuer, recipient, rows, issueDate }) {
             <Text style={[styles.th, { width: COLW.offre }]}>Offre</Text>
             <Text style={[styles.th, { width: COLW.billed }]}>Montant facturé</Text>
             <Text style={[styles.th, { width: COLW.paid }]}>Montant payé</Text>
-            <Text style={[styles.th, styles.thLast, { width: COLW.remaining }]}>Restant dû</Text>
+            <Text style={[styles.th, styles.thLast, { width: COLW.remaining }]}>{paymentsOnly ? 'Cumul réglé' : 'Restant dû'}</Text>
           </View>
 
           {/* Aucune échéance facturée sur le périmètre : le document sort
@@ -312,7 +313,7 @@ function EtatDeComptePdf({ issuer, recipient, rows, issueDate }) {
           {computed.length === 0 && (
             <View style={styles.tr} wrap={false}>
               <Text style={[styles.td, styles.tdFirst, { width: '100%', color: MUTED }]}>
-                Aucune échéance sur la période
+                {paymentsOnly ? 'Aucun règlement attribué sur la période' : 'Aucune échéance sur la période'}
               </Text>
             </View>
           )}
@@ -323,7 +324,7 @@ function EtatDeComptePdf({ issuer, recipient, rows, issueDate }) {
                 {pdfSafe(r.periodLabel)}
               </Text>
               <Text style={[styles.td, styles.tdBold, { width: COLW.offre }]}>{pdfSafe(r.offre)}</Text>
-              <Text style={[styles.td, { width: COLW.billed }]}>{eur(r.billed)}</Text>
+              <Text style={[styles.td, { width: COLW.billed }]}>{paymentsOnly ? 'Non ventilé' : eur(r.billed)}</Text>
               <Text style={[styles.td, { width: COLW.paid }]}>{eur(r.paid)}</Text>
               <Text style={[styles.td, { width: COLW.remaining, color: r.solde < 0 ? GREEN : INK }]}>
                 {r.solde < 0 ? `-${eur(-r.solde)}` : eur(r.solde)}
@@ -339,7 +340,7 @@ function EtatDeComptePdf({ issuer, recipient, rows, issueDate }) {
             <View style={[styles.totalCell, { width: COLW.remaining }]}>
               <Text style={[
                 styles.totalCellText,
-                { color: totalRemaining > 0 ? RED : totalRemaining < 0 ? GREEN : INK },
+                { color: paymentsOnly ? INK : totalRemaining > 0 ? RED : totalRemaining < 0 ? GREEN : INK },
               ]}>
                 {totalRemaining < 0 ? `-${eur(-totalRemaining)}` : eur(totalRemaining)}
               </Text>
