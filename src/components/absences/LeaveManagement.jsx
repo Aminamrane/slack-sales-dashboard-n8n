@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Plus, ShieldCheck, RefreshCw } from "lucide-react";
+import { CalendarDays, Plus, RefreshCw } from "lucide-react";
 import apiClient from "../../services/apiClient";
 import { AbsenceDialog, AbsenceForm, StatusBadge } from "./AbsencePanel";
 import {
@@ -143,17 +143,6 @@ export default function LeaveManagement({ dark = false }) {
           Déclarer une absence
         </button>
       </header>
-      <div className="abs-notice">
-        <ShieldCheck size={19} />
-        <div>
-          <strong>Finance · des périodes protégées</strong>
-          <p>
-            Congés vacances exclus du 1er au 5 et les 5 derniers jours du mois.
-            Les demandes exceptionnelles restent sans effet jusqu’à validation
-            direction/RH. Une demi-journée compte pour 0,5 jour.
-          </p>
-        </div>
-      </div>
       <div className="abs-toolbar">
         <label>
           Rechercher
