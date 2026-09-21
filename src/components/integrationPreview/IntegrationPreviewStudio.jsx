@@ -268,7 +268,10 @@ export default function IntegrationPreviewStudio({
       setDraft(current => applyCompanyLookup(current, company.id, siren, data, () => crypto.randomUUID()));
       setValidated(null);
     } catch (error) {
-      if (alive.current) setCompanyError({ id: company.id, message: error?.status === 404 ? 'Aucune société trouvée pour ce SIREN. Vérifiez le numéro.' : 'Recherche Pappers indisponible. Vos informations sont conservées ; réessayez.' });
+      if (alive.current) setCompanyError({ id: company.id, message:
+        error?.status === 404 ? 'Aucune société trouvée pour ce SIREN. Vérifiez le numéro.' :
+        [400, 422].includes(error?.status) ? 'Ce SIREN est invalide. Vérifiez les 9 chiffres de la société.' :
+        'Recherche Pappers indisponible. Vos informations sont conservées ; réessayez.' });
     } finally {
       lookupPending.current = false;
       if (alive.current) setCompanyLookup(null);
