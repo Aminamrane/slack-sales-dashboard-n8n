@@ -713,3 +713,16 @@
     max-width: 115px;
   }
 }
+
+.hr-dashboard.abs-dark .abs-status-pending {
+  color: #e8c47d;
+}
+.hr-dashboard.abs-dark .abs-status-declared {
+  color: #b7b7f2;
+}
+.hr-dashboard.abs-dark .abs-status-approved {
+  color: #82c6a7;
+}
+.hr-dashboard.abs-dark .hr-review-clear {
+  color: #82c6a7;
+}

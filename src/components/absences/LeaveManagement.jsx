@@ -207,6 +207,7 @@ export default function LeaveManagement({ dark = false }) {
   };
 
   function renderRow(row, review = false) {
+    const placement = (review ? "review:" : "detail:") + rowKey(row);
     return (
       <article
         className={"hr-record " + (review ? "hr-record-review" : "")}
@@ -282,7 +283,7 @@ export default function LeaveManagement({ dark = false }) {
                 : "Absence déjà prise en compte · visa RH attendu."}
             </small>
           )}
-          {rejecting === rowKey(row) && (
+          {rejecting === placement && (
             <form
               className="abs-review-form"
               onSubmit={(e) => {
@@ -311,7 +312,7 @@ export default function LeaveManagement({ dark = false }) {
               </button>
             </form>
           )}
-          {editing && rowKey(editing) === rowKey(row) && (
+          {editing && editing.viewKey === placement && (
             <AbsenceForm
               userId={row.user_id}
               initial={row}
@@ -339,7 +340,7 @@ export default function LeaveManagement({ dark = false }) {
                   className="abs-button"
                   disabled={!!busy || loading}
                   onClick={() => {
-                    setRejecting(rowKey(row));
+                    setRejecting(placement);
                     setReason("");
                   }}
                 >
@@ -366,7 +367,7 @@ export default function LeaveManagement({ dark = false }) {
               <button
                 className="abs-button"
                 disabled={!!busy || loading}
-                onClick={() => setEditing(row)}
+                onClick={() => setEditing({ ...row, viewKey: placement })}
               >
                 Modifier
               </button>
