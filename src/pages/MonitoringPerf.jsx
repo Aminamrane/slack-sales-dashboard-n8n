@@ -11,7 +11,7 @@ import thirdPlace from "../assets/3st-place.png";
 import iconGlobal from "../assets/global.png";
 import iconFinance from "../assets/finance.png";
 import "../index.css";
-import { performanceRows, ratio, isPerformanceSalesPerson, visibleHeadcount } from "../utils/performanceSales.js";
+import { performanceRows, performanceTotals, ratio, isPerformanceSalesPerson, visibleHeadcount } from "../utils/performanceSales.js";
 import RdvHeatmap from "../components/RdvHeatmap.jsx";
 
 const percent = (value, digits=1) => value == null ? '—' : value.toLocaleString('fr-FR', {minimumFractionDigits:digits, maximumFractionDigits:digits}) + '%';
@@ -156,6 +156,17 @@ export default function MonitoringPerf() {
   const [setterModal, setSetterModal] = useState(null); // détail d'un setter (par sales)
   const [heatmapSales, setHeatmapSales] = useState('global'); // taux de présence : global | nom d'un sales
 
+  const [appointmentDetail, setAppointmentDetail] = useState(null);
+  const appointmentRequest = useRef(0);
+  const openAppointments = async (person, stage) => {
+    const request = ++appointmentRequest.current;
+    setAppointmentDetail({person,stage,loading:true});
+    try {
+      const data = await apiClient.get(`/api/v1/monitoring/performance/appointments?person_name=${encodeURIComponent(person)}&period=${range}&channel=${canal}&stage=${stage}`);
+      if(request===appointmentRequest.current)setAppointmentDetail({person,stage,data});
+    } catch {if(request===appointmentRequest.current)setAppointmentDetail({person,stage,error:true});}
+  };
+  useEffect(()=>{++appointmentRequest.current;setAppointmentDetail(null);},[range,canal]);
   const detailRequest = useRef(0);
   const openDetail = async (personName) => {
     if (!['ads', 'cc'].includes(canal)) return;
@@ -216,11 +227,7 @@ export default function MonitoringPerf() {
   const perfRows = useMemo(() => performanceRows(perfData, callsCrm, canal, getCanonicalKey), [perfData, callsCrm, canal]);
   const callsAvailable = perfData?.calls_available !== false && perfRows.every(r => r.calls_available);
 
-  const totals = useMemo(() => {
-    if (!perfRows.length) return { calls:0, answered:0, repondeur:0, qualif:0, signatures:0, revenue:0, cashCollected:0, r1_placed:0, r1_done:0, r2_placed:0, r2_done:0, leads_assigned:0, unique_attempted:0, unique_answered:0, conv_global:0, lead_qualifie:0, closing_r1:0, closing_r2:0, closing_audit:0, conv_calls_to_answered:0, conv_answered_to_r1p:0, conv_r1p_to_r1r:0, conv_r2p_to_r2r:0, conv_sales:0 };
-    const t = perfRows.reduce((a,s) => ({ calls:a.calls+s.calls_total, answered:a.answered+s.calls_answered, repondeur:a.repondeur+(s.repondeur||0), qualif:a.qualif+(s.qualif||0), r1_placed:a.r1_placed+s.r1_placed, r1_done:a.r1_done+s.r1_done, r2_placed:a.r2_placed+s.r2_placed, r2_done:a.r2_done+s.r2_done, signatures:a.signatures+s.signatures, revenue:a.revenue+s.revenue, cashCollected:a.cashCollected+s.cashCollected, leads_assigned:a.leads_assigned+s.leads_assigned, unique_attempted:a.unique_attempted+s.unique_attempted, unique_answered:a.unique_answered+s.unique_answered }), { calls:0, answered:0, repondeur:0, qualif:0, r1_placed:0, r1_done:0, r2_placed:0, r2_done:0, signatures:0, revenue:0, cashCollected:0, leads_assigned:0, unique_attempted:0, unique_answered:0 });
-    return { ...t, lead_qualifie:isCrmMonth?(t.answered>0?(t.qualif/t.answered)*100:0):(t.leads_assigned>0?(t.unique_answered/t.leads_assigned)*100:0), closing_r1:ratio(t.r1_done,t.r1_placed), closing_r2:ratio(t.r2_done,t.r2_placed), closing_audit:ratio(t.signatures,t.r2_done), conv_global:ratio(t.signatures,t.leads_assigned), conv_calls_to_answered:t.calls>0?(t.answered/t.calls)*100:0, conv_answered_to_r1p:t.unique_answered>0?(t.r1_placed/t.unique_answered)*100:0, conv_r1p_to_r1r:t.r1_placed>0?(t.r1_done/t.r1_placed)*100:0, conv_r2p_to_r2r:t.r2_placed>0?(t.r2_done/t.r2_placed)*100:0, conv_sales:ratio(t.signatures,t.r2_done) };
-  }, [perfRows, isCrmMonth]);
+  const totals = useMemo(() => {const t=performanceTotals(perfRows); return {...t,lead_qualifie:isCrmMonth?t.lead_qualifie:ratio(t.unique_answered,t.leads_assigned)};}, [perfRows,isCrmMonth]);
 
   // Vue Ventes : fusionne les rapporteurs bruts par clé canonique (mêmes
   // exclusions/affichage que le tableau Perf Sales), somme tranches & paiement.
@@ -279,6 +286,7 @@ export default function MonitoringPerf() {
   };
   const kpiIcon = (n) => { const a=KPI_ICONS[n]; return a ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">{a.map((d,i)=><path key={i} d={d} />)}</svg> : null; };
 
+  const metricButton = {border:0,background:'none',color:C.accent,font:'inherit',cursor:'pointer',padding:'4px 6px',textDecoration:'underline',textUnderlineOffset:3};
   const perfColumns = [
     { key:'rank', label:'#', tip:'Classement par ventes', always:true, cell:(s,i,k)=><td key={k} style={tdS}>{medal(i)}</td> },
     { key:'sales', label:'Sales', tip:'Commercial', always:true, cell:(s,i,k)=>{const meta=avatarMap[s.salesKey]||{};const av=meta.av;const rl={sales:'Sales',head_of_sales:'Head of Sales',head_of_sales_manager:'Manager',admin:'Admin'}[meta.role]||'';return <td key={k} style={{...tdS,textAlign:'left',paddingLeft:8}}><div style={{display:'flex',alignItems:'center',gap:11}}>{av?<img src={av} alt="" style={{width:36,height:36,borderRadius:'50%',objectFit:'cover',flexShrink:0,border:'1px solid '+C.border}} />:<div style={{width:36,height:36,borderRadius:'50%',background:i===0?COLORS.tertiary:i===1?COLORS.secondary:COLORS.primary,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,color:'#fff',fontWeight:600,flexShrink:0}}>{s.salesName.charAt(0).toUpperCase()}</div>}<div style={{minWidth:0}}><div style={{fontWeight:650,fontSize:13.5,color:C.text,whiteSpace:'nowrap',letterSpacing:'-0.01em',...(canal!=='global'?{cursor:'pointer'}:{})}} onClick={()=>canal!=='global'&&openDetail(s.salesName)}>{s.salesName}</div>{rl&&<div style={{fontSize:11,color:C.muted,marginTop:1}}>{rl}</div>}</div></div></td>;} },
@@ -289,25 +297,42 @@ export default function MonitoringPerf() {
     { key:'repondeur', label:'Répondeur', tip:'Tombés sur répondeur / messagerie', crmOnly:true, cell:(s,i,k)=><td key={k} style={{...tdS,color:C.muted}}>{s.repondeur!=null?s.repondeur.toLocaleString('fr-FR'):'—'}</td> },
     { key:'txrep', label:isCrmMonth?'Tx Rép.':'Tx Décr.', tip:isCrmMonth?'Répondu ÷ Appels':'Décrochés ÷ Appels', cell:(s,i,k)=><td key={k} style={tdS}>{s.calls_available?pctPill(percent(s.conv_calls_to_answered,1),dcColor(s.conv_calls_to_answered)):'—'}</td> },
     { key:'r1rep', label:isCrmMonth?'R1/Rép':'R1/Décr', tip:isCrmMonth?'Parmi les contacts atteints dans la période : part ayant un R1 planifié dans cette même période':'R1 placés ÷ Décrochés', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_answered_to_r1p,1),r1pColor(s.conv_answered_to_r1p))}</td> },
-    { key:'r1p', label:'R1p', tip:'R1 planifiés dans la période, par le sales lui-même', cell:(s,i,k)=><td key={k} style={tdS}>{isCrmMonth?s.r1p_self:s.r1_placed}</td> },
-    { key:'r1s', label:'R1(S)', tip:'R1 placés par le setter', crmOnly:true, cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.primary,fontWeight:600}}>{s.r1p_s||'—'}</td> },
-    { key:'r1e', label:'R1E', tip:'R1 planifiés dans la période et qualifiés comme effectués', cell:(s,i,k)=><td key={k} style={tdS}>{s.r1_done}</td> },
+    { key:'r1p', label:'R1 placés', tip:'Tous les R1 planifiés dans la période, sales et setters inclus. Cliquer pour voir les dossiers.', cell:(s,i,k)=><td key={k} style={tdS}><button onClick={()=>openAppointments(s.salesName,'r1')} style={metricButton}>{s.r1_placed}</button></td> },
+    { key:'r1s', label:'Dont setter', tip:'R1 placés par le setter', crmOnly:true, cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.primary,fontWeight:600}}>{s.r1p_s}</td> },
+    { key:'r1e', label:'R1 effectués', tip:'R1 planifiés dans la période et qualifiés comme effectués', cell:(s,i,k)=><td key={k} style={tdS}>{s.r1_done}</td> },
+    { key:'r1se', label:'Dont setter effectués', tip:'R1 placés par un setter et réellement effectués ; sous-ensemble des R1 effectués', crmOnly:true, cell:(s,i,k)=><td key={k} style={tdS}>{s.r1r_s}</td> },
     { key:'txr1', label:'Tx R1', tip:'R1 effectués ÷ R1 placés', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_r1p_to_r1r,0),rxColor(s.conv_r1p_to_r1r))}</td> },
-    { key:'r2p', label:'R2p', tip:'R2 placés par le sales', cell:(s,i,k)=><td key={k} style={tdS}>{isCrmMonth?s.r2p_self:s.r2_placed}</td> },
-    { key:'r2s', label:'R2(S)', tip:'R2 placés par le setter', crmOnly:true, cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.primary,fontWeight:600}}>{s.r2p_s||'—'}</td> },
-    { key:'r2e', label:'R2E', tip:'R2 planifiés dans la période et qualifiés comme effectués, y compris réflexion ou refus après rendez-vous', cell:(s,i,k)=><td key={k} style={tdS}>{s.r2_done}</td> },
+    { key:'r2p', label:'R2 placés', tip:'Tous les R2 planifiés dans la période, sales et setters inclus. Cliquer pour voir les dossiers.', cell:(s,i,k)=><td key={k} style={tdS}><button onClick={()=>openAppointments(s.salesName,'r2')} style={metricButton}>{s.r2_placed}</button></td> },
+    { key:'r2s', label:'Dont setter', tip:'R2 placés par le setter', crmOnly:true, cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.primary,fontWeight:600}}>{s.r2p_s}</td> },
+    { key:'r2e', label:'R2 effectués', tip:'R2 planifiés dans la période et qualifiés comme effectués, y compris réflexion ou refus après rendez-vous', cell:(s,i,k)=><td key={k} style={tdS}>{s.r2_done}</td> },
+    { key:'r2se', label:'Dont setter effectués', tip:'R2 placés par un setter et réellement effectués ; sous-ensemble des R2 effectués', crmOnly:true, cell:(s,i,k)=><td key={k} style={tdS}>{s.r2r_s}</td> },
     { key:'txr2', label:'Tx R2', tip:'R2 effectués ÷ R2 placés', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_r2p_to_r2r,0),rxColor(s.conv_r2p_to_r2r))}</td> },
+    ...((canal!=='ads'&&isCrmMonth)?[{key:'ccs1',label:'CC setter R1 effectués',tip:'R1 effectués du canal CC, issus du setter ; inclus dans R1 effectués',cell:(s,i,k)=><td key={k} style={tdS}>{s.r1_cc_setter_done}</td>},{key:'ccs2',label:'CC setter R2 effectués',tip:'R2 effectués issus du CC setter, même si le sales a placé le R2 ; inclus dans R2 effectués',cell:(s,i,k)=><td key={k} style={tdS}>{s.r2_cc_setter_done}</td>}]:[]),
     { key:'ventes', label:'Ventes', tip:'Nombre de ventes', cell:(s,i,k)=><td key={k} style={{...tdS,fontWeight:800,fontSize:15,color:COLORS.tertiary}}>{s.signatures}</td> },
     { key:'convv', label:'Conv.V.', tip:'Conversion ventes : Ventes ÷ R2 effectués', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_sales,1),cvColor(s.conv_sales))}</td> },
     { key:'revenue', label:'Revenu', tip:'Revenu enregistré dans les déclarations de vente', cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.secondary}}>{s.revenue.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})}</td> },
     { key:'cash', label:'Cash déclaré', tip:'Cash déclaré à la vente ; ce montant ne constitue pas un encaissement bancaire', cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.tertiary}}>{s.cashCollected.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})}</td> },
   ];
 
+  const appointmentDialog = appointmentDetail && createPortal(
+    <div onClick={()=>{++appointmentRequest.current;setAppointmentDetail(null);}} style={{position:'fixed',inset:0,zIndex:12000,background:'rgba(20,25,35,.35)',backdropFilter:'blur(5px)',display:'grid',placeItems:'center',padding:20}}>
+      <motion.section role="dialog" aria-modal="true" aria-label="Détail des rendez-vous" initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} onClick={e=>e.stopPropagation()} style={{background:C.bg,color:C.text,borderRadius:20,width:'min(900px,100%)',maxHeight:'85dvh',overflow:'auto',padding:24,boxShadow:'0 20px 60px #0002'}}>
+        <div style={{display:'flex',justifyContent:'space-between',gap:20}}><div><h2 style={{margin:0,fontSize:20}}>{appointmentDetail.stage.toUpperCase()} · {appointmentDetail.person}</h2><p style={{color:C.secondary}}>{monthLabelFR(range)} · {canal.toUpperCase()} · heure de Paris</p></div><button aria-label="Fermer" onClick={()=>{++appointmentRequest.current;setAppointmentDetail(null);}} style={metricButton}>Fermer</button></div>
+        {appointmentDetail.loading?<p>Chargement des rendez-vous…</p>:appointmentDetail.error?<p>Le détail n’a pas pu être chargé.</p>:<>
+          <p><strong>{appointmentDetail.data.total} placés · {appointmentDetail.data.done} effectués · {appointmentDetail.data.setter} placés par un setter</strong></p>
+          {appointmentDetail.data.historical_partial&&<p>Le détail des rendez-vous est disponible depuis avril 2026 ; les agrégats antérieurs ne contiennent pas de dossiers individuels.</p>}
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}><thead><tr>{['Dossier','Date prévue','Origine','Placement','Résultat'].map(t=><th key={t} style={{textAlign:'left',padding:10,borderBottom:'1px solid '+C.border}}>{t}</th>)}</tr></thead><tbody>{appointmentDetail.data.appointments.map(r=><tr key={r.lead_id}><td style={{padding:10}}>{r.name||'Dossier'} <small>#{r.lead_id}</small></td><td style={{padding:10,whiteSpace:'nowrap'}}>{r.scheduled_at.slice(0,10).split('-').reverse().join('/')} à {r.scheduled_at.slice(11,16)}</td><td style={{padding:10}}>{r.origin||'—'}</td><td style={{padding:10}}>{r.setter?'Setter':'Sales'}</td><td style={{padding:10}}>{r.done?'Effectué':({no_show:'Absent',rescheduled:'Reporté',cancelled:'Annulé',annule:'Annulé',reporte:'Reporté'}[r.result]||'Non effectué')}</td></tr>)}</tbody></table>
+          {!appointmentDetail.data.total&&<p>Aucun rendez-vous dans cette sélection.</p>}
+        </>}
+      </motion.section>
+    </div>,document.body);
+
   if (loading) return <div style={{minHeight:'100vh',background:C.surface}} />;
   if (!hasAccess) return null;
 
   return (
     <>
+      {appointmentDialog}
       {!embedMode && <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />}
       {tip && <CalcTip text={tip.t} rect={tip.r} darkMode={darkMode} />}
       <style>{`@keyframes pageReveal{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@keyframes sidebarReveal{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:none}}@keyframes rowIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}html,body{background:${darkMode?'#13141b':'#ffffff'}}.perfv2{border-collapse:separate;border-spacing:0;background:${C.bg};border-radius:14px}.perfv2 th{padding:14px 12px;font-size:12px;font-weight:600;color:${C.secondary};border-bottom:1px solid ${C.border}}.perfv2 td{padding:13px 12px;font-size:13px;border-bottom:1px solid ${C.border};white-space:nowrap}.perfv2 tbody tr:hover{background:${C.subtle}}.mp-scroll::-webkit-scrollbar{width:3px;height:3px}.mp-scroll::-webkit-scrollbar-track{background:transparent}.mp-scroll::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:4px}`}</style>
@@ -379,7 +404,7 @@ export default function MonitoringPerf() {
 
                 {viewMode==='perf_sales' && (<div style={{padding:'20px 20px 28px'}}>
                   <h2 style={{fontSize:20,fontWeight:700,color:C.text,margin:'0 0 4px'}}>Performance Sales</h2>
-                  <p style={{color:C.secondary,fontSize:13,margin:"8px 0 20px"}}>Les ventes déclarées et l’activité commerciale de la période sélectionnée.</p>
+                  <p style={{color:C.secondary,fontSize:13,margin:"8px 0 20px"}}>Les ventes déclarées et les rendez-vous planifiés dans la période sélectionnée.</p>
                   {dataError && <div role="alert" style={{padding:16,color:C.text,border:`1px solid ${C.border}`,borderRadius:12}}>{dataError} <button onClick={()=>setRefreshKey(k=>k+1)} style={selS}>Réessayer</button></div>}
                   {sectionErrors.extra && <p role="alert" style={{color:C.secondary}}>Cette vue n’a pas pu être chargée. Utilisez « Actualiser » pour réessayer.</p>}
 
@@ -489,7 +514,7 @@ export default function MonitoringPerf() {
                   ) : (<>
 
                   <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(165px, 1fr))',gap:10,marginBottom:16}}>
-                    {[{l:'Appels',v:callsAvailable?totals.calls.toLocaleString('fr-FR'):'—',ic:'phone'},...(isCrmMonth?[{l:'Répondu',v:totals.answered.toLocaleString('fr-FR'),a:COLORS.tertiary,ic:'check'},{l:'Répondeur',v:totals.repondeur.toLocaleString('fr-FR'),ic:'voicemail'}]:[{l:'Décrochés',v:totals.answered.toLocaleString('fr-FR'),ic:'check'}]),{l:'R1 placé',v:totals.r1_placed.toLocaleString('fr-FR'),ic:'calendar'},{l:'R1 effectué',v:totals.r1_done.toLocaleString('fr-FR'),ic:'calcheck'},{l:'R2 placé',v:totals.r2_placed.toLocaleString('fr-FR'),ic:'calendar'},{l:'R2 effectué',v:totals.r2_done.toLocaleString('fr-FR'),ic:'calcheck'},{l:'Leads',v:totals.leads_assigned.toLocaleString('fr-FR'),ic:'users'},{l:'Ventes',v:totals.signatures.toLocaleString('fr-FR'),a:COLORS.tertiary,ic:'trophy'},{l:'Revenu',v:totals.revenue.toLocaleString('fr-FR',{style:'currency',currency:'EUR'}),a:COLORS.secondary,ic:'trending'},{l:'Cash déclaré',v:totals.cashCollected.toLocaleString('fr-FR',{style:'currency',currency:'EUR'}),a:COLORS.tertiary,ic:'card'}].map(k=>(<div key={k.l} style={{padding:'14px 16px',borderRadius:14,background:C.bg,border:'1px solid '+C.border,boxShadow:darkMode?'none':'0 1px 2px rgba(0,0,0,0.03)'}}><div style={{display:'flex',alignItems:'center',gap:6,marginBottom:9,color:C.muted}}>{kpiIcon(k.ic)}<span style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.07em'}}>{k.l}</span></div><div style={{fontSize:22,fontWeight:700,color:k.a||C.text,letterSpacing:'-0.02em',fontVariantNumeric:'tabular-nums'}}>{dataLoading || dataError ? '—' : k.v}</div></div>))}
+                    {[{l:'Appels',v:callsAvailable?totals.calls.toLocaleString('fr-FR'):'—',ic:'phone'},...(isCrmMonth?[{l:'Répondu',v:totals.answered.toLocaleString('fr-FR'),a:COLORS.tertiary,ic:'check'},{l:'Répondeur',v:totals.repondeur.toLocaleString('fr-FR'),ic:'voicemail'}]:[{l:'Décrochés',v:totals.answered.toLocaleString('fr-FR'),ic:'check'}]),{l:'R1 placé',v:totals.r1_placed.toLocaleString('fr-FR'),ic:'calendar'},{l:'R1 effectué',v:totals.r1_done.toLocaleString('fr-FR'),ic:'calcheck'},{l:'R2 placé',v:totals.r2_placed.toLocaleString('fr-FR'),ic:'calendar'},{l:'R2 effectué',v:totals.r2_done.toLocaleString('fr-FR'),ic:'calcheck'},...(canal!=='ads'&&isCrmMonth?[{l:'CC setter · R1 effectués',v:totals.r1_cc_setter_done.toLocaleString('fr-FR'),ic:'calcheck'},{l:'CC setter · R2 effectués',v:totals.r2_cc_setter_done.toLocaleString('fr-FR'),ic:'calcheck'}]:[]),{l:'Leads',v:totals.leads_assigned.toLocaleString('fr-FR'),ic:'users'},{l:'Ventes',v:totals.signatures.toLocaleString('fr-FR'),a:COLORS.tertiary,ic:'trophy'},{l:'Revenu',v:totals.revenue.toLocaleString('fr-FR',{style:'currency',currency:'EUR'}),a:COLORS.secondary,ic:'trending'},{l:'Cash déclaré',v:totals.cashCollected.toLocaleString('fr-FR',{style:'currency',currency:'EUR'}),a:COLORS.tertiary,ic:'card'}].map(k=>(<div key={k.l} style={{padding:'14px 16px',borderRadius:14,background:C.bg,border:'1px solid '+C.border,boxShadow:darkMode?'none':'0 1px 2px rgba(0,0,0,0.03)'}}><div style={{display:'flex',alignItems:'center',gap:6,marginBottom:9,color:C.muted}}>{kpiIcon(k.ic)}<span style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.07em'}}>{k.l}</span></div><div style={{fontSize:22,fontWeight:700,color:k.a||C.text,letterSpacing:'-0.02em',fontVariantNumeric:'tabular-nums'}}>{dataLoading || dataError ? '—' : k.v}</div></div>))}
                   </div>
 
                   <div style={{display:'flex',justifyContent:'center',flexWrap:'wrap',gap:0,marginBottom:20,borderRadius:10,border:'1px solid '+C.border,overflow:'hidden',background:darkMode?C.subtle:'#fff'}}>
@@ -510,6 +535,7 @@ export default function MonitoringPerf() {
                     {headcountData.totals && <tr style={{borderTop:'2px solid '+C.border,fontWeight:700,background:darkMode?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.02)'}}><td style={tdS}></td><td style={{...tdS,textAlign:'left',paddingLeft:12}}>Total</td><td style={tdS}>{(headcountData.totals.leads_assigned||0).toLocaleString('fr-FR')}</td>{['1-2','3-4','5-6','7-10','11-19','20+'].map(b=><td key={b} style={tdS}>{(headcountData.totals.headcount_breakdown||{})[b]||0}</td>)}<td style={{...tdS,color:C.muted}}>{headcountData.totals.unknown||0}</td></tr>}
                   </tbody></table>)}
 
+                  <p style={{fontSize:12,color:C.secondary,lineHeight:1.6,margin:'14px 0'}}>Les colonnes « Dont setter » sont incluses dans les totaux R1/R2. Les rendez-vous sont comptés à leur date prévue, en heure de Paris. Les leads correspondent aux contacts reçus dans la période, y compris ceux revenus au pool. CC regroupe le cold call sales et setter ; les rendez-vous ADS pris par un setter restent en ADS.</p>
                   {!dataLoading && perfRows.length>0 && !(canal==='ads'&&adsDetailView) && (()=>{
                     const visCols = perfColumns.filter(c=>(!c.crmOnly||isCrmMonth)).filter(c=>c.always||!hiddenCols.has(c.key));
                     const toggleable = perfColumns.filter(c=>!c.always && (!c.crmOnly||isCrmMonth));
@@ -535,6 +561,7 @@ export default function MonitoringPerf() {
                     </div>
                     <div style={{overflowX:'auto'}}><table className="perfv2" style={{width:'100%',minWidth:Math.max(700,visCols.length*82)}}><thead><tr>{visCols.map(c=><th key={c.key} style={{...thS,cursor:'help'}} onMouseEnter={e=>setTip({t:c.tip,r:e.currentTarget.getBoundingClientRect()})} onMouseLeave={()=>setTip(null)}>{c.label}</th>)}</tr></thead><tbody>
                     {perfRows.map((s,i)=>(<tr key={canal+'-'+i+'-'+s.salesKey} style={{animation:'rowIn 0.3s cubic-bezier(0.16,1,0.3,1) '+(i*40)+'ms both'}}>{visCols.map(c=>c.cell(s,i,c.key))}</tr>))}
+                    <tr style={{fontWeight:750,background:C.subtle,borderTop:'2px solid '+C.border}}>{visCols.map(c=>c.key==='rank'?<td key={c.key} style={tdS}>Σ</td>:c.key==='sales'?<td key={c.key} style={{...tdS,textAlign:'left'}}>Total · {perfRows.length} lignes</td>:['r1p','r2p'].includes(c.key)?<td key={c.key} style={tdS}>{totals[c.key==='r1p'?'r1_placed':'r2_placed']}</td>:c.cell(totals,-1,c.key))}</tr>
                     </tbody></table></div>
                     </>);
                   })()}
