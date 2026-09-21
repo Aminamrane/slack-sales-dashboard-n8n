@@ -156,7 +156,7 @@ function buildCols(scope) {
     // ── Bloc entité (Owner / Opti'lex / Global selon la vision) ───────────
     expected:        { w: 110, group: entityGroup,   shortLabel: 'Attendu',            fullLabel: stripEntitySuffix(COLUMN_LABELS.expectedOwner),         kind: 'amount', sticky: false, splitVisible: true,  align: 'right',  editable: false },
     received:        { w: 150, group: entityGroup,   shortLabel: 'Récupéré',           fullLabel: stripEntitySuffix(COLUMN_LABELS.receivedOwner),         kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: !isGlobal && amounts },
-    overdueCum:      { w: 125, group: entityGroup,   shortLabel: 'Retard antérieur',   fullLabel: stripEntitySuffix(COLUMN_LABELS.overdueOwnerCum),       kind: 'amount', sticky: false, splitVisible: false, align: 'right',  editable: false },
+    overdueCum:      { w: 125, group: entityGroup,   shortLabel: 'Créance initiale',   fullLabel: stripEntitySuffix(COLUMN_LABELS.overdueOwnerCum),       kind: 'amount', sticky: false, splitVisible: false, align: 'right',  editable: false },
     receivedOverdue: { w: 150, group: entityGroup,   shortLabel: 'Récupéré antérieur', fullLabel: stripEntitySuffix(COLUMN_LABELS.receivedOverdueOwner),  kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: !isGlobal && amounts },
     // Ce que le client doit VRAIMENT à cet instant : retard du mois +
     // créances antérieures, encaissements du mois déduits. C'est la colonne
@@ -933,7 +933,12 @@ const RowRenderer = React.memo(function RowRenderer({
       {/* Retard sur les mois précédents (cumul, entité active). Sans
           créance mais avec un trop-perçu reporté : montant vert négatif. */}
       {keys.includes('overdueCum') && C('overdueCum', (
-        <OverduePill amount={overdueCum} />
+        <div style={{ textAlign: 'right' }}>
+          <AnimatedAmount value={scopedOpeningDebt(row, scope)} style={{ fontWeight: 600, color: N.text }} />
+          {scopedOpeningDebt(row, scope) > 0 && overdueCum <= 0 && (
+            <div style={{ fontSize: 10, color: '#0f7b6c', marginTop: 2 }}>Réglée</div>
+          )}
+        </div>
       ))}
 
       {/* Récupéré sur créances passées — montant seul : le reste dû se lit
@@ -959,7 +964,7 @@ const RowRenderer = React.memo(function RowRenderer({
             placeholderItalic
             valueBold
             // Même logique sur les arriérés : on propose la créance à solder.
-            suggestion={scopedOpeningDebt(row, scope)}
+            suggestion={(recoveredOverdue || 0) + overdueCum}
             suggestionTitle="Créances antérieures — cliquer pour solder"
           />
         )

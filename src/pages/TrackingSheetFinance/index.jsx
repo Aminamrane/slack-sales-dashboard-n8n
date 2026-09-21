@@ -73,13 +73,12 @@ import {
   scopedOverdueCurrent,
   scopedOverdueCum,
   computeKpis,
-  creanceAgeMonths,
+  matchesPriorDebt,
   scopedCredit,
   normalizeSearch,
   matchesClientSearch,
   isLiquidationEtat,
   canFilterMeteo, onboardingPhaseOf, hasEverPaid,
-  scopedOpeningDebt,
   PENDING_OPTILEX_LABEL, pendingFinanceRow,
   canUseGlobalScope,
 } from './constants.js';
@@ -465,26 +464,9 @@ export default function TrackingSheetFinance() {
         // celle-ci : les deux vues sont disjointes (dev 2026-09-18, n°164 :
         // 2 400 € d'antérieur, sortait encore en « retard du mois »).
         return scopedOverdueCurrent(r, scope) > 0 && scopedOverdueCum(r, scope) <= 0;
-      case 'creances': {
-        // Population = les clients qui AVAIENT des créances antérieures au
-        // début du mois affiché, qu'elles soient soldées ou non depuis. Ne
-        // garder que ceux à qui il en reste faisait disparaître les clients
-        // qui ont tout réglé, donc leur « reçu » : le taux recouvré du
-        // bandeau, sur lequel reposent les variables de l'équipe finance,
-        // était faussé (précision dev 2026-09-18).
-        // Créance au 1er du mois (à date), OU créance antérieure restante
-        // aujourd'hui : une dette qui n'existait pas au 1er mais apparaît par
-        // correction en cours de mois (n°363, 288 € le 08/09) reste visible
-        // ici — « les créances antérieures ne sont jamais invisibilisées ».
-        if (scopedOpeningDebt(r, scope) <= 0 && scopedOverdueCum(r, scope) <= 0) return false;
-        if (creanceAge === 'all') return true;
-        // Les sous-filtres d'ancienneté servent la relance : un client qui a
-        // tout soldé n'y a plus sa place.
-        if (scopedOverdueCum(r, scope) <= 0) return false;
-        const mois = creanceAgeMonths(r, scope);
-        if (mois === null) return creanceAge === 'recent';
-        return creanceAge === 'old' ? mois >= 2 : mois < 2;
-      }
+      case 'creances':
+        // Les dossiers réglés restent dans leur cohorte et leur tranche d’ancienneté.
+        return matchesPriorDebt(r, scope, creanceAge, period);
       case 'trop_percu':
         return scopedCredit(r, scope) > 0;
       case 'onboarding': {
@@ -523,7 +505,7 @@ export default function TrackingSheetFinance() {
       default:
         return true; // 'all'
     }
-  }, [scope, boardMap, boardEtatOf, relanceMonths, creanceAge, onboardingPhase]);
+  }, [scope, boardMap, boardEtatOf, relanceMonths, creanceAge, onboardingPhase, period]);
 
   // Filtre « Météo client » (menu Filtre), réservé à deux personnes : les
   // bandes du board avec leur volume, plus « Sans météo ».
