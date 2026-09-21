@@ -1342,3 +1342,14 @@
   }
 }
 .ip-handoff-comments{display:grid;gap:24px}.ip-handoff-comments h3{font-size:13px;font-weight:600;margin:0 0 12px;color:var(--ip-muted,#64748b)}.ip-handoff-comments .ip-field>span{font-size:16px;font-weight:650}.ip-handoff-comments textarea{min-height:145px;resize:vertical}.ip-handoff-summary h4{font-size:16px!important}.ip-handoff-summary p{white-space:pre-wrap;overflow-wrap:anywhere}
+
+.ip-company-lookup { margin-top: 8px; display: grid; gap: 6px; }
+.ip-company-lookup button {
+  display: inline-flex; align-items: center; gap: 6px; justify-self: start;
+  padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px;
+  font: inherit; font-size: 11px; background: #fff; color: var(--ink);
+  transition: background .18s, border-color .18s;
+}
+.ip-company-lookup button:hover:not(:disabled) { background: var(--wash); border-color: #a1a9b5; }
+.ip-company-lookup button:disabled { opacity: .6; cursor: wait; }
+.ip-company-lookup [role="alert"] { color: #b42318; font-size: 11px; line-height: 1.5; }
