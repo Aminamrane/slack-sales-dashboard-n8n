@@ -536,7 +536,7 @@ export default function WorkHours({ embed = false }) {
                             <span style={{ width: 6, height: 6, borderRadius: "50%", background: pc }} />{r.pole}
                           </span>
                           {partTime && <span style={{ color: VIOLET, fontWeight: 700 }}>· {r.workingDays.length} j/sem</span>}
-                          {r.vacCount > 0 && <span style={{ color: "#b45309", fontWeight: 600 }}>· {r.vacCount} j. d'absence</span>}
+                          {r.vacCount > 0 && <span style={{ color: "#b45309", fontWeight: 600 }}>· {r.vacCount.toLocaleString("fr-FR")} j. d'absence</span>}
                         </span>
                       </span>
                     </span>
@@ -560,7 +560,7 @@ export default function WorkHours({ embed = false }) {
                               background: c.future ? "transparent" : h > 0 ? tone + alpha : c.weekend ? "#f6f7fa" : "#f3f4f6",
                               border: c.future ? "1px dashed #e0e4ec" : "none",
                               color: c.future ? FAINT : h > 0 ? (c.weekend ? "#4c1d95" : "#1d4a33") : "#c3cad6" }}>
-                            {c.future ? "—" : h > 0 ? fmtH(h) : "·"}
+                            {c.future ? "—" : h > 0 ? fmtH(h) : "·"}{c.absenceDays === 0.5 && <small style={{ display: "block", color: "#b45309" }}>½ abs.</small>}
                           </span>
                         );
                       })}

@@ -42,7 +42,7 @@ const mondaysCovering = (y, m) => {
   const last = new Date(y, m + 1, 0);
   const out = [];
   let d = mondayOf(new Date(y, m, 1));
-  while (d <= last) { out.push(iso(d)); d = new Date(d.getTime() + 7 * 864e5); }
+  while (d <= last) { out.push(iso(d)); d = new Date(d); d.setDate(d.getDate() + 7); }
   return out;
 };
 const fmtH = (h) => {
@@ -123,7 +123,7 @@ function buildPeriod({ mode, weeks, y, m, prevWeek }) {
     const workingDays = workingDaysOf(p);
     const perDay = hoursPerDayOf(p, workingDays);
     const working = new Set(workingDays);
-    const vac = new Set();
+    const vac = new Map();
     let total = 0;
 
     const values = cells.map((cell) => {
@@ -134,14 +134,19 @@ function buildPeriod({ mode, weeks, y, m, prevWeek }) {
       for (const seen of p.weeksSeen) {
         (seen.week.days || []).forEach((day, i) => {
           if (!cell.days.includes(day)) return;
-          if ((seen.person.vacation_days || []).includes(day)) { vac.add(day); vacDays += 1; }
+          const period = seen.person.vacation_periods?.[day] || ((seen.person.vacation_days || []).includes(day) ? 'full' : null);
+          if (period) {
+            const weight = period === 'full' ? 1 : 0.5;
+            vac.set(day, weight);
+            if (working.has(isoWeekday(day))) vacDays += weight;
+          }
           if (!counted(day)) return;
           h += seen.person.daily?.[i] ?? 0;
         });
       }
       total += h;
       const workDaysInCell = cell.days.filter((d) => working.has(isoWeekday(d))).length;
-      return { ...cell, hours: h, vac: vacDays > 0, vacAll: vacDays > 0 && vacDays >= Math.max(1, workDaysInCell) };
+      return { ...cell, hours: h, absenceDays: vacDays, vac: vacDays > 0, vacAll: vacDays > 0 && vacDays >= Math.max(1, workDaysInCell) };
     });
 
     // Attendu : heures/jour × jours travaillés disponibles de la période
@@ -151,10 +156,11 @@ function buildPeriod({ mode, weeks, y, m, prevWeek }) {
     const seenDays = new Set();
     for (const seen of p.weeksSeen) {
       for (const day of seen.week.days || []) {
-        if (seenDays.has(day) || !inPeriod(day) || !working.has(isoWeekday(day)) || vac.has(day)) continue;
+        if (seenDays.has(day) || !inPeriod(day) || !working.has(isoWeekday(day))) continue;
         seenDays.add(day);
-        availableDays += 1;
-        if (counted(day)) elapsedDays += 1;
+        const fraction = 1 - (vac.get(day) || 0);
+        availableDays += fraction;
+        if (counted(day)) elapsedDays += fraction;
       }
     }
     const expectedFull = perDay * availableDays;
@@ -182,7 +188,7 @@ function buildPeriod({ mode, weeks, y, m, prevWeek }) {
       workingDays, perDay, base: perDay * workingDays.length,
       cells: values, total,
       expectedFull, expectedNow, availableDays, elapsedDays,
-      vacCount: [...vac].filter((d) => working.has(isoWeekday(d))).length,
+      vacCount: [...vac].reduce((sum, [d, weight]) => sum + (working.has(isoWeekday(d)) ? weight : 0), 0),
       avgDay, avgWeek, delta,
     });
   }

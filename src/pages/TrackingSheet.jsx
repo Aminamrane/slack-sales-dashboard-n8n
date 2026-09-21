@@ -1,3 +1,5 @@
+import { AbsenceDialog } from "../components/absences/AbsencePanel";
+import { periodOnDay } from "../components/absences/absenceDates";
 import {hasGuidedSalesJourney} from '../utils/guidedSalesJourney';
 import FrenchDateInput from '../components/salesJourney/FrenchDateInput';
 import {parisToday,parisParts,minuteOptions} from '../utils/parisDates';
@@ -1447,74 +1449,18 @@ export default function TrackingSheet() {
   // Vacances/absences : declarees par le sales lui-meme, visibles dans le calendrier
   const [myUnavailability, setMyUnavailability] = useState([]);
   const [showVacationModal, setShowVacationModal] = useState(false);
-  const [newVacStart, setNewVacStart] = useState('');
-  const [newVacEnd, setNewVacEnd] = useState('');
-  const [newVacType, setNewVacType] = useState('conge');
-  const [newVacDesc, setNewVacDesc] = useState('');
-  const ABSENCE_TYPE_META = { conge: { label: 'Congé', color: '#f59e0b' }, maladie: { label: 'Maladie', color: '#ef4444' }, absence: { label: 'Absence', color: '#ec4899' }, autre: { label: 'Autre', color: '#6366f1' } };
-  const [vacError, setVacError] = useState('');
-  // Cross-user : HoS/HoSM/admin peuvent gerer les absences des membres de leur equipe
-  const [manageableUsers, setManageableUsers] = useState([]); // [{id, full_name, email, role, is_self}]
-  const [targetManageUserId, setTargetManageUserId] = useState(null); // null = self
-  const [targetUnavailability, setTargetUnavailability] = useState([]); // absences du target
   const fetchMyUnavailability = async () => {
     try {
       const data = await apiClient.get('/api/v1/users/me/unavailability');
-      const list = Array.isArray(data) ? data : [];
-      setMyUnavailability(list);
-      // Si modal sur self, sync aussi targetUnavailability
-      if (!targetManageUserId) setTargetUnavailability(list);
+      setMyUnavailability(Array.isArray(data) ? data : []);
     } catch (e) { console.warn('Failed to fetch unavailability:', e); }
   };
-  const fetchTargetUnavailability = async (uid) => {
-    if (!uid) {
-      // self
-      setTargetUnavailability(myUnavailability);
-      return;
-    }
-    try {
-      const data = await apiClient.get(`/api/v1/users/${uid}/unavailability`);
-      setTargetUnavailability(Array.isArray(data) ? data : []);
-    } catch (e) { console.warn('Failed to fetch target unavailability:', e); setTargetUnavailability([]); }
+  useEffect(() => { fetchMyUnavailability(); }, []);
+  const vacationPeriod = (date) => {
+    const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    return periodOnDay(myUnavailability, day);
   };
-  const fetchManageableUsers = async () => {
-    try {
-      const data = await apiClient.get('/api/v1/users/manageable');
-      setManageableUsers(Array.isArray(data) ? data : []);
-    } catch (e) { console.warn('Failed to fetch manageable:', e); }
-  };
-  useEffect(() => { fetchMyUnavailability(); fetchManageableUsers(); }, []);
-  useEffect(() => { if (showVacationModal) fetchTargetUnavailability(targetManageUserId); }, [showVacationModal, targetManageUserId]);
-  const handleAddVacation = async () => {
-    setVacError('');
-    if (!newVacStart || !newVacEnd) { setVacError('Sélectionne une date de début et de fin'); return; }
-    if (newVacEnd < newVacStart) { setVacError('La fin doit être après le début'); return; }
-    const targetUrl = targetManageUserId
-      ? `/api/v1/users/${targetManageUserId}/unavailability`
-      : '/api/v1/users/me/unavailability';
-    try {
-      await apiClient.post(targetUrl, { start_date: newVacStart, end_date: newVacEnd, absence_type: newVacType, description: newVacDesc.trim() || null });
-      setNewVacStart(''); setNewVacEnd(''); setNewVacType('conge'); setNewVacDesc('');
-      await fetchTargetUnavailability(targetManageUserId);
-      if (!targetManageUserId) await fetchMyUnavailability();
-    } catch (e) {
-      setVacError(e?.message?.includes('409') ? 'Cette période chevauche une absence déjà déclarée' : 'Erreur lors de la création');
-    }
-  };
-  const handleDeleteVacation = async (id) => {
-    const targetUrl = targetManageUserId
-      ? `/api/v1/users/${targetManageUserId}/unavailability/${id}`
-      : `/api/v1/users/me/unavailability/${id}`;
-    try {
-      await apiClient.delete(targetUrl);
-      await fetchTargetUnavailability(targetManageUserId);
-      if (!targetManageUserId) await fetchMyUnavailability();
-    } catch (e) { console.warn('Failed to delete unavailability:', e); }
-  };
-  const isDayInVacation = (date) => {
-    const iso = date.toISOString().split('T')[0];
-    return myUnavailability.some(v => iso >= v.start_date && iso <= v.end_date);
-  };
+  const isDayInVacation = (date) => Boolean(vacationPeriod(date));
   const [formData, setFormData] = useState({ full_name: '', phone: '', email: '', sector: '', company_type: '' });
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formSuccess, setFormSuccess] = useState(false);
@@ -3790,7 +3736,7 @@ export default function TrackingSheet() {
                         }}>
                           {d.getDate()}
                         </div>
-                        {onVacation && <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, marginTop: 2, letterSpacing: '0.04em' }}>absent</div>}
+                        {onVacation && <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, marginTop: 2, letterSpacing: '0.04em' }}>{vacationPeriod(d) === 'am' ? 'Absent le matin' : vacationPeriod(d) === 'pm' ? 'Absent l’après-midi' : 'Absent'}</div>}
                       </div>
                     );
                   })}
@@ -3894,206 +3840,7 @@ export default function TrackingSheet() {
         })()}
 
         {/* ════ MODAL: Mes absences (declaration vacances) ═══════════════ */}
-        {showVacationModal && createPortal(
-          <div
-            onClick={() => setShowVacationModal(false)}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(15,15,20,0.55)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, animation: 'tabFadeIn 0.18s ease-out both' }}
-          >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              style={{ background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`, boxShadow: '0 24px 60px rgba(0,0,0,0.25)', width: 540, maxWidth: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'solarFadeIn 0.25s cubic-bezier(0.16,1,0.3,1) both' }}
-            >
-              {/* Header neutre (navy de la charte, plus de violet) */}
-              <div style={{ padding: '22px 28px 18px', background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.015)', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: darkMode ? '#eef0f6' : '#1e2330', display: 'flex', alignItems: 'center', justifyContent: 'center', color: darkMode ? '#1e2330' : '#fff', boxShadow: darkMode ? 'none' : '0 4px 12px rgba(0,0,0,0.18)' }}>
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="4" width="18" height="18" rx="2" />
-                      <line x1="16" y1="2" x2="16" y2="6" />
-                      <line x1="8" y1="2" x2="8" y2="6" />
-                      <line x1="3" y1="10" x2="21" y2="10" />
-                      <line x1="10" y1="14" x2="14" y2="18" />
-                      <line x1="14" y1="14" x2="10" y2="18" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0, letterSpacing: '-0.01em' }}>
-                      {targetManageUserId
-                        ? `Absences de ${manageableUsers.find(u => u.id === targetManageUserId)?.full_name || '...'}`
-                        : 'Mes absences'}
-                    </h3>
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
-                      {targetUnavailability.length === 0 ? 'Aucune absence à venir' : `${targetUnavailability.length} période${targetUnavailability.length > 1 ? 's' : ''} déclarée${targetUnavailability.length > 1 ? 's' : ''}`}
-                    </div>
-                  </div>
-                </div>
-                <button onClick={() => setShowVacationModal(false)}
-                  style={{ width: 34, height: 34, border: 'none', background: 'transparent', color: C.muted, cursor: 'pointer', fontSize: 20, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s' }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                  aria-label="Fermer"
-                >&times;</button>
-              </div>
-
-              <div style={{ padding: '20px 28px 24px', overflowY: 'auto', flex: 1 }}>
-                {/* Dropdown "Pour qui ?" : visible uniquement si current peut gerer au moins 1 autre user */}
-                {manageableUsers.filter(u => !u.is_self).length > 0 && (
-                  <div style={{ marginBottom: 18 }}>
-                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pour qui ?</label>
-                    <select
-                      value={targetManageUserId || ''}
-                      onChange={(e) => { setTargetManageUserId(e.target.value || null); setVacError(''); setNewVacStart(''); setNewVacEnd(''); setNewVacType('conge'); setNewVacDesc(''); }}
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', cursor: 'pointer', boxSizing: 'border-box' }}
-                    >
-                      <option value="">Moi-même</option>
-                      {manageableUsers.filter(u => !u.is_self).map(u => (
-                        <option key={u.id} value={u.id}>{u.full_name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                {/* Liste des periodes existantes */}
-                {targetUnavailability.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '20px 0 24px', color: C.muted }}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 56, height: 56, borderRadius: 14, background: darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', color: C.muted, marginBottom: 8 }}>
-                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="4" width="18" height="18" rx="2" />
-                        <line x1="16" y1="2" x2="16" y2="6" />
-                        <line x1="8" y1="2" x2="8" y2="6" />
-                        <line x1="3" y1="10" x2="21" y2="10" />
-                        <line x1="10" y1="14" x2="14" y2="18" />
-                        <line x1="14" y1="14" x2="10" y2="18" />
-                      </svg>
-                    </div>
-                    <div style={{ fontSize: 13, fontWeight: 500 }}>Aucune absence à venir</div>
-                    <div style={{ fontSize: 11.5, marginTop: 4, opacity: 0.7 }}>
-                      {targetManageUserId ? 'Déclare ci-dessous une absence' : 'Déclare ci-dessous tes prochaines absences'}
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
-                    {targetUnavailability.map(v => {
-                      const fmt = (iso) => {
-                        const d = new Date(iso + 'T12:00:00');
-                        return d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: 'short', year: 'numeric' });
-                      };
-                      const daysCount = (() => {
-                        const s = new Date(v.start_date); const e = new Date(v.end_date);
-                        return Math.round((e - s) / 86400000) + 1;
-                      })();
-                      return (
-                        <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: C.subtle, border: `1px solid ${C.border}`, borderRadius: 12, transition: 'transform 0.15s' }}
-                          onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-1px)'}
-                          onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-                        >
-                          <div style={{ width: 38, height: 38, borderRadius: 10, background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', color: C.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <rect x="3" y="4" width="18" height="18" rx="2" />
-                              <line x1="16" y1="2" x2="16" y2="6" />
-                              <line x1="8" y1="2" x2="8" y2="6" />
-                              <line x1="3" y1="10" x2="21" y2="10" />
-                              <line x1="10" y1="14" x2="14" y2="18" />
-                              <line x1="14" y1="14" x2="10" y2="18" />
-                            </svg>
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13.5, fontWeight: 600, color: C.text, lineHeight: 1.3, display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-                              {v.start_date === v.end_date ? fmt(v.start_date) : `${fmt(v.start_date)} → ${fmt(v.end_date)}`}
-                              {(() => { const m = ABSENCE_TYPE_META[v.absence_type] || ABSENCE_TYPE_META.conge; return <span style={{ fontSize: 10, fontWeight: 700, color: m.color, background: m.color + '1e', borderRadius: 5, padding: '1px 7px' }}>{m.label}</span>; })()}
-                            </div>
-                            <div style={{ fontSize: 11, color: C.muted, marginTop: 2, fontWeight: 500 }}>
-                              {daysCount} jour{daysCount > 1 ? 's' : ''}{v.description ? ` · ${v.description}` : ''}
-                            </div>
-                          </div>
-                          <button onClick={() => handleDeleteVacation(v.id)}
-                            style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${darkMode ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.18)'}`, background: 'transparent', color: '#ef4444', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.15s' }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.08)'}
-                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                            title="Supprimer cette période"
-                            aria-label="Supprimer"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="3 6 5 6 21 6" />
-                              <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />
-                              <path d="M10 11v6M14 11v6" />
-                              <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
-                            </svg>
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Separator + label */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                  <div style={{ flex: 1, height: 1, background: C.border }} />
-                  <span style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Nouvelle absence</span>
-                  <div style={{ flex: 1, height: 1, background: C.border }} />
-                </div>
-
-                {/* Formulaire d'ajout */}
-                <div style={{ padding: 16, background: darkMode ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.018)', borderRadius: 14, border: `1px solid ${C.border}` }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Du</label>
-                      <input type="date" value={newVacStart} min={TODAY} onChange={(e) => setNewVacStart(e.target.value)}
-                        style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', transition: 'border-color 0.15s', boxSizing: 'border-box' }}
-                        onFocus={(e) => e.currentTarget.style.borderColor = '#6366f1'}
-                        onBlur={(e) => e.currentTarget.style.borderColor = C.border}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Au</label>
-                      <input type="date" value={newVacEnd} min={newVacStart || TODAY} onChange={(e) => setNewVacEnd(e.target.value)}
-                        style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', transition: 'border-color 0.15s', boxSizing: 'border-box' }}
-                        onFocus={(e) => e.currentTarget.style.borderColor = '#6366f1'}
-                        onBlur={(e) => e.currentTarget.style.borderColor = C.border}
-                      />
-                    </div>
-                  </div>
-                  <div style={{ marginBottom: 12 }}>
-                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Type</label>
-                    <select value={newVacType} onChange={(e) => setNewVacType(e.target.value)}
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', cursor: 'pointer' }}>
-                      {Object.entries(ABSENCE_TYPE_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
-                    </select>
-                  </div>
-                  <div style={{ marginBottom: 12 }}>
-                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Description <span style={{ textTransform: 'none', fontWeight: 500, opacity: 0.7 }}>(optionnel)</span></label>
-                    <input value={newVacDesc} onChange={(e) => setNewVacDesc(e.target.value)} placeholder="Ex : rdv médical, formation…"
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
-                      onFocus={(e) => e.currentTarget.style.borderColor = '#6366f1'}
-                      onBlur={(e) => e.currentTarget.style.borderColor = C.border}
-                    />
-                  </div>
-                  <button onClick={handleAddVacation}
-                    style={{ width: '100%', padding: '11px 16px', borderRadius: 10, border: 'none', background: darkMode ? '#fff' : '#1e2330', color: darkMode ? '#1e2330' : '#fff', cursor: 'pointer', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap', boxShadow: darkMode ? 'none' : '0 4px 12px rgba(0,0,0,0.18)', letterSpacing: '0.01em', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'transform 0.15s, box-shadow 0.15s' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = darkMode ? 'none' : '0 6px 16px rgba(0,0,0,0.26)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = darkMode ? 'none' : '0 4px 12px rgba(0,0,0,0.18)'; }}
-                  >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
-                    Ajouter cette période
-                  </button>
-                  {vacError && (
-                    <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, fontSize: 12, color: '#ef4444', fontWeight: 500 }}>
-                      {vacError}
-                    </div>
-                  )}
-                </div>
-
-                {/* Tip box */}
-                <div style={{ marginTop: 16, padding: '12px 14px', background: darkMode ? 'rgba(59,130,246,0.08)' : 'rgba(59,130,246,0.06)', border: `1px solid ${darkMode ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.15)'}`, borderRadius: 10, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                  <span style={{ fontSize: 14, lineHeight: 1.4 }}>💡</span>
-                  <div style={{ fontSize: 11.5, color: C.text, lineHeight: 1.5, opacity: 0.85 }}>
-                    Pense à traiter tes leads en cours <strong>avant ton départ</strong> : ils restent attribués à ton compte pendant ton absence, donc autant les finaliser pour ne pas impacter tes statistiques du mois.
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
+        {showVacationModal && <AbsenceDialog dark={darkMode} onClose={() => setShowVacationModal(false)} onChanged={fetchMyUnavailability} />}
 
         {/* ════ VIEW: NOTIFICATIONS ═══════════════════════════════════════ */}
         {sidebarView === 'notifications' && (() => {
