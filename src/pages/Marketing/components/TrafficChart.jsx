@@ -13,8 +13,9 @@ import { fmtInt, fmtEur, fmtShortDate } from '../theme';
  * tooltip handler) so we can style it exactly like the SaaS refs
  * (image 4 "New Customers / Returning" — clean white pill with shadow).
  */
-export default function TrafficChart({ pageviews = [], leadsByDay = [], budgetByDay = [], C, darkMode }) {
-  const [tab, setTab] = useState('traffic'); // 'traffic' | 'budget'
+export default function TrafficChart({ pageviews = [], leadsByDay = [], budgetByDay = [], budgetAvailable = true, C, darkMode }) {
+  const [selectedTab, setTab] = useState('traffic');
+  const tab = budgetAvailable ? selectedTab : 'traffic'; // 'traffic' | 'budget'
   const [tooltip, setTooltip] = useState(null);
   const containerRef = useRef(null);
 
@@ -191,7 +192,7 @@ export default function TrafficChart({ pageviews = [], leadsByDay = [], budgetBy
         yAxisID: 'y',
       },
       {
-        label: 'CPL',
+        label: 'Coût / inscrit reçu',
         data: merged.map((r) => r.cpl),
         borderColor: C.amber.strong,
         backgroundColor: (ctx) => {
@@ -262,7 +263,7 @@ export default function TrafficChart({ pageviews = [], leadsByDay = [], budgetBy
   // ── Tabs (segmented control top-right) ───────────────────────────
   const tabs = [
     { key: 'traffic', label: 'Trafic & inscrits' },
-    { key: 'budget', label: 'Budget & CPL' },
+    ...(budgetAvailable ? [{ key: 'budget', label: 'Budget & coût / inscrit' }] : []),
   ];
 
   const TabsControl = (
@@ -345,7 +346,7 @@ export default function TrafficChart({ pageviews = [], leadsByDay = [], budgetBy
             C={C}
             rows={[
               { label: 'Budget', value: fmtEur(tooltip.row.budget), color: C.violet.strong },
-              { label: 'CPL', value: tooltip.row.cpl !== null ? fmtEur(tooltip.row.cpl, { decimals: 2 }) : '—', color: C.amber.strong },
+              { label: 'Coût / inscrit reçu', value: tooltip.row.cpl !== null ? fmtEur(tooltip.row.cpl, { decimals: 2 }) : '—', color: C.amber.strong },
               { label: 'Inscrits', value: fmtInt(tooltip.row.leads), color: C.muted, faded: true },
             ]}
             label={fmtShortDate(tooltip.row.date)}
