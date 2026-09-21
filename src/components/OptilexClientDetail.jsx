@@ -63,7 +63,7 @@ export function ClientMissions({ numero }) {
       {!items.length && <p className="ob-mission-message">{data.counts.total === 0 ? 'Aucune mission client enregistrée chez Opti’Lex à ce jour.' : 'Aucune mission dans ce statut.'}</p>}
       <ul className="ob-mission-history">{items.slice(0, limit).map(m => <li key={m.id}><div className="ob-mission-title"><strong>{m.title}</strong><span className={`ob-mission-status is-${m.category}`}>{m.statusLabel || 'Statut non renseigné'}</span></div>
         {(m.companyName || m.departmentLabel) && <p>{[m.companyName, m.departmentLabel].filter(Boolean).join(' · ')}</p>}
-        <p>{m.completedAt ? `Terminée le ${date(m.completedAt)}` : m.deadline ? `Échéance : ${date(m.deadline)}` : m.createdAt ? `Créée le ${date(m.createdAt)}` : ''}</p>
+        <p>{m.category === 'completed' && m.completedAt ? `Terminée le ${date(m.completedAt)}` : m.deadline ? `Échéance : ${date(m.deadline)}` : m.createdAt ? `Créée le ${date(m.createdAt)}` : ''}</p>
       </li>)}</ul>
       {items.length > limit && <button type="button" className="ob-detail-link" onClick={() => setLimit(v => v + 20)}>Voir plus de missions ({items.length - limit})</button>}
       {limit > 4 && <button type="button" className="ob-detail-link" onClick={() => setLimit(4)}>Réduire l’historique</button>}
