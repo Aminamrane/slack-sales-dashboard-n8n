@@ -345,6 +345,7 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
           embedded
           initialDraft={sourceDraft}
           initialValidated={validated}
+          lookupCompany={(siren) => apiClient.post('/api/v1/contracts/ai-prefill-by-siren', { siren })}
           clientName={context.client_name}
           onDirty={(value) => {
             current.current = value;

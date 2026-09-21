@@ -32,6 +32,7 @@ import {
   WEATHER_LABELS,
 } from "./model";
 import "./integrationPreview.css";
+import { uniqueCompanies, applyCompanyLookup, companySiren } from './companies';
 
 const STORAGE = "owner-integration-preview-v1";
 const STEPS = ["Périmètre", "Transmission", "Météo client", "Synthèse"];
@@ -233,8 +234,9 @@ export default function IntegrationPreviewStudio({
   saveDraft,
   onContinue,
   onDirty = () => {},
+  lookupCompany,
 }) {
-  const [draft, setDraft] = useState(() => initialDraft || readDraft()),
+  const [draft, setDraft] = useState(() => uniqueCompanies(initialDraft || readDraft())),
     [step, setStep] = useState(0),
     [future, setFuture] = useState(false),
     [view, setView] = useState("form");
@@ -245,6 +247,33 @@ export default function IntegrationPreviewStudio({
     [feedback, setFeedback] = useState(null),
     [booking, setBooking] = useState("");
   const heading = useRef(null);
+  const lookupPending = useRef(false);
+  const alive = useRef(true);
+  const [companyLookup, setCompanyLookup] = useState(null);
+  const [companyError, setCompanyError] = useState(null);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  async function retrieveCompany(company) {
+    if (!lookupCompany || lookupPending.current) return;
+    const siren = companySiren(company.siren);
+    if (!siren || String(company.siren).replace(/\s/g, '').length !== 9) {
+      setCompanyError({ id: company.id, message: 'Saisissez le SIREN à 9 chiffres de la société, pas le SIRET d’un établissement.' });
+      return;
+    }
+    lookupPending.current = true;
+    setCompanyLookup(company.id); setCompanyError(null);
+    try {
+      const data = await lookupCompany(siren);
+      if (!alive.current) return;
+      if (companySiren(data?.siren) !== siren || !data?.legal_name?.trim()) throw new Error('Aucune société trouvée pour ce SIREN. Vérifiez le numéro.');
+      setDraft(current => applyCompanyLookup(current, company.id, siren, data, () => crypto.randomUUID()));
+      setValidated(null);
+    } catch (error) {
+      if (alive.current) setCompanyError({ id: company.id, message: error?.status === 404 ? 'Aucune société trouvée pour ce SIREN. Vérifiez le numéro.' : 'Recherche Pappers indisponible. Vos informations sont conservées ; réessayez.' });
+    } finally {
+      lookupPending.current = false;
+      if (alive.current) setCompanyLookup(null);
+    }
+  }
   const { companies, directors, checks } = completeness(draft);
   const count = checks.filter((c) => c.done).length;
   const ready = validated === JSON.stringify(draft);
@@ -477,7 +506,7 @@ export default function IntegrationPreviewStudio({
                         </h3>
                         <span>
                           {embedded
-                            ? "Préremplies depuis le NDA"
+                            ? "Une société par SIREN · établissements regroupés"
                             : "Préremplies depuis le NDA de démonstration"}
                         </span>
                       </div>
@@ -516,12 +545,19 @@ export default function IntegrationPreviewStudio({
                                 className="ip-inline-meta"
                                 aria-label={`SIREN ${c.name}`}
                                 maxLength={20}
-                                placeholder="SIREN — non renseigné dans cet exemple"
+                                placeholder={embedded ? "SIREN de la société · 9 chiffres" : "SIREN — non renseigné dans cet exemple"}
                                 value={c.siren}
                                 onChange={(e) =>
                                   updateCompany(c.id, "siren", e.target.value)
                                 }
                               />
+                              {lookupCompany && <div className="ip-company-lookup">
+                                <button type="button" disabled={!!companyLookup} onClick={() => retrieveCompany(c)}>
+                                  {companyLookup === c.id ? <LoaderCircle size={14} className="ip-spin" /> : <Building2 size={14} />}
+                                  {companyLookup === c.id ? 'Recherche…' : 'Récupérer depuis Pappers'}
+                                </button>
+                                {companyError?.id === c.id && <span role="alert">{companyError.message}</span>}
+                              </div>}
                             </div>
                             <span className="ip-pill">
                               {c.selected ? "Accompagnée" : "Hors périmètre"}

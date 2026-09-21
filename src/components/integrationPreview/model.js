@@ -80,7 +80,9 @@ export function completeness(draft) {
     checks: [
       {
         label: "Sociétés à accompagner",
-        done: companies.length > 0 && companies.every((c) => c.name.trim()),
+        done: companies.length > 0 && companies.every((c) => c.name.trim())
+          && draft.companies.every(c => !c.siren.trim() || /^\d{9}$/.test(c.siren.replace(/\s/g, '')))
+          && new Set(draft.companies.filter(c => c.siren.trim()).map(c => c.siren.replace(/\s/g, ''))).size === draft.companies.filter(c => c.siren.trim()).length,
       },
       {
         label: "Dirigeants identifiés",
