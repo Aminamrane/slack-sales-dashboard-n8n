@@ -134,3 +134,22 @@ test('fmtH : heures et minutes lisibles', () => {
   assert.equal(fmtH(-1.25), '−1h15');
   assert.equal(fmtH(7.999), '8h');
 });
+
+test('une demi-journée réduit l’attendu de 4 h et conserve le travail réalisé', () => {
+  const w = week('2026-09-21', [person('half@example.test', [4,8,8,8,8,0,0], { vacation_days: ['2026-09-21'], vacation_periods: { '2026-09-21': 'am' } })]);
+  const row = buildPeriod({ mode: 'week', weeks: [w] }).rows[0];
+  assert.equal(row.vacCount, 0.5);
+  assert.equal(row.expectedFull, 36);
+  assert.equal(row.total, 36);
+  assert.equal(row.avgDay, 8);
+  assert.equal(row.cells[0].vacAll, false);
+  assert.equal(row.cells[0].absenceDays, 0.5);
+});
+
+test('le mois additionne les demi-journées sans neutraliser leur autre moitié', () => {
+  const w = week('2026-09-21', [person('half@example.test', [4,8,8,8,8,0,0], { vacation_periods: { '2026-09-21': 'pm', '2026-09-27': 'am' } })]);
+  const row = buildPeriod({ mode: 'month', weeks: [w], y: 2026, m: 8 }).rows[0];
+  assert.equal(row.vacCount, 0.5);
+  assert.equal(row.expectedFull, 36);
+  assert.equal(row.cells[0].vacAll, false);
+});

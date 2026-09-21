@@ -1,3 +1,4 @@
+import AbsencePanel from "../components/absences/AbsencePanel";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
@@ -15,15 +16,6 @@ const DAY_LABELS = [
 
 const DEFAULT_WORKING_DAYS = [1, 2, 3, 4, 5];
 
-// Types d'absence — alignés sur TeamAbsences / TrackingSheet (mêmes clés/couleurs
-// pour que les pastilles soient cohérentes côté RH).
-const ABSENCE_TYPE_META = {
-  conge: { label: "Congé", color: "#f59e0b" },
-  maladie: { label: "Maladie", color: "#ef4444" },
-  absence: { label: "Absence", color: "#ec4899" },
-  autre: { label: "Autre", color: "#6366f1" },
-};
-
 const ROLE_LABELS = {
   admin: "Admin", ceo: "CEO", sales: "Sales", setter: "Setter", hr: "RH",
   head_of_sales: "Head of Sales", head_of_sales_manager: "Manager Sales",
@@ -32,7 +24,6 @@ const ROLE_LABELS = {
   tech: "Tech", marketing: "Marketing", customer_success_manager: "CSM",
 };
 
-const TODAY_ISO = new Date().toISOString().slice(0, 10);
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -57,15 +48,6 @@ export default function Profile() {
   const [wdSuccess, setWdSuccess] = useState("");
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-  // Absences (auto-déclaration, tous rôles) — endpoint générique /me/unavailability
-  const [myUnavailability, setMyUnavailability] = useState([]);
-  const [newVacStart, setNewVacStart] = useState("");
-  const [newVacEnd, setNewVacEnd] = useState("");
-  const [newVacType, setNewVacType] = useState("conge");
-  const [newVacDesc, setNewVacDesc] = useState("");
-  const [vacError, setVacError] = useState("");
-  const [vacLoading, setVacLoading] = useState(false);
-
   // Partage des nouveaux leads PAR-SETTER : liste des setters rattachés + flag immédiat
   const [setters, setSetters] = useState([]);
   const [savingSetterId, setSavingSetterId] = useState(null);
@@ -83,15 +65,6 @@ export default function Profile() {
   useEffect(() => {
     localStorage.setItem("darkMode", darkMode);
   }, [darkMode]);
-
-  const fetchMyUnavailability = async () => {
-    try {
-      const data = await apiClient.get("/api/v1/users/me/unavailability");
-      setMyUnavailability(Array.isArray(data) ? data : []);
-    } catch {
-      setMyUnavailability([]);
-    }
-  };
 
   useEffect(() => {
     const init = async () => {
@@ -114,9 +87,6 @@ export default function Profile() {
       } catch {
         // Backend not ready yet — keep defaults
       }
-
-      // Load my absences (tous rôles)
-      fetchMyUnavailability();
 
       // Load setters rattachés + leur flag immédiat (partage par-setter)
       try {
@@ -217,43 +187,6 @@ export default function Profile() {
       setShareError(e?.message || "Erreur lors de la mise à jour.");
     } finally {
       setSavingManualId(null);
-    }
-  };
-
-  // ── Absences handlers ──
-  const handleAddVacation = async () => {
-    setVacError("");
-    if (!newVacStart || !newVacEnd) { setVacError("Renseigne les deux dates."); return; }
-    if (newVacEnd < newVacStart) { setVacError("La date de fin doit être après le début."); return; }
-    setVacLoading(true);
-    try {
-      await apiClient.post("/api/v1/users/me/unavailability", {
-        start_date: newVacStart,
-        end_date: newVacEnd,
-        absence_type: newVacType,
-        description: newVacDesc.trim() || null,
-      });
-      setNewVacStart("");
-      setNewVacEnd("");
-      setNewVacType("conge");
-      setNewVacDesc("");
-      await fetchMyUnavailability();
-    } catch (e) {
-      const msg = e?.message || "";
-      setVacError(/409|chevauch/i.test(msg) || e?.status === 409
-        ? "Cette période chevauche une absence déjà déclarée."
-        : (msg || "Erreur lors de l'ajout de l'absence."));
-    } finally {
-      setVacLoading(false);
-    }
-  };
-
-  const handleDeleteVacation = async (id) => {
-    try {
-      await apiClient.delete(`/api/v1/users/me/unavailability/${id}`);
-      setMyUnavailability((list) => list.filter((v) => v.id !== id));
-    } catch (e) {
-      setVacError(e?.message || "Erreur lors de la suppression.");
     }
   };
 
@@ -376,146 +309,12 @@ export default function Profile() {
     return d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
   };
 
-  // Absences : formatage période + nb de jours
-  const fmtVacRange = (a) => {
-    const f = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
-    return a.start_date === a.end_date ? `Le ${f(a.start_date)}` : `${f(a.start_date)} → ${f(a.end_date)}`;
-  };
-  // Jours OUVRÉS (lun→ven) : on ne décompte que les jours travaillés, samedi/dimanche exclus.
-  const vacDays = (a) => {
-    let n = 0;
-    const end = new Date(a.end_date + "T00:00:00");
-    for (let d = new Date(a.start_date + "T00:00:00"); d <= end; d.setDate(d.getDate() + 1)) {
-      const dow = d.getDay(); // 0 = dimanche, 6 = samedi
-      if (dow !== 0 && dow !== 6) n++;
-    }
-    return n;
-  };
-
   const isCloser = ['sales', 'head_of_sales', 'head_of_sales_manager', 'admin'].includes(session?.role);
   const roleLabel = ROLE_LABELS[session?.role] || session?.role || "";
   const displayName = session?.name || session?.full_name || (session?.email || "").split("@")[0];
 
   // ── Cartes (réutilisées dans la grille 2 colonnes) ──
-  const absencesCard = (
-    <div style={cardStyle}>
-      <h2 style={{ fontSize: "20px", fontWeight: 700, margin: "0 0 6px", color: C.text }}>
-        Absences
-      </h2>
-      <p style={{ fontSize: "13px", color: C.muted, margin: "0 0 24px", lineHeight: 1.5 }}>
-        Déclarez vos congés, arrêts ou indisponibilités. Votre équipe RH les voit automatiquement.
-      </p>
-
-      {/* Liste des absences déclarées */}
-      {myUnavailability.length === 0 ? (
-        <div style={{
-          padding: "18px", borderRadius: "12px", textAlign: "center",
-          background: C.subtle, border: `1px dashed ${C.border}`,
-          color: C.muted, fontSize: "13px", marginBottom: "20px",
-        }}>
-          Aucune absence déclarée.
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: "22px" }}>
-          {myUnavailability.map((a) => {
-            const meta = ABSENCE_TYPE_META[a.absence_type] || ABSENCE_TYPE_META.absence;
-            return (
-              <div key={a.id} style={{
-                display: "flex", alignItems: "center", gap: 12,
-                padding: "12px 14px", borderRadius: "12px",
-                border: `1px solid ${C.border}`, background: C.subtle,
-              }}>
-                <div style={{ width: 6, height: 36, borderRadius: 4, background: meta.color, flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 600, color: C.text, display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-                    {fmtVacRange(a)}
-                    <span style={{ fontSize: 10, fontWeight: 700, color: meta.color, background: meta.color + "1e", borderRadius: 5, padding: "1px 6px" }}>{meta.label}</span>
-                  </div>
-                  <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
-                    {vacDays(a)} j{a.description && a.description.trim() ? ` · ${a.description.trim()}` : ""}
-                  </div>
-                </div>
-                <button
-                  onClick={() => handleDeleteVacation(a.id)}
-                  title="Supprimer cette absence"
-                  style={{
-                    flexShrink: 0, width: 30, height: 30, borderRadius: 8,
-                    border: `1px solid ${C.border}`, background: "transparent",
-                    color: "#ef4444", cursor: "pointer", display: "flex",
-                    alignItems: "center", justifyContent: "center", transition: "all 0.15s",
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? "rgba(239,68,68,0.12)" : "#fef2f2"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Formulaire d'ajout */}
-      <div style={{ fontSize: 12, fontWeight: 700, color: C.secondary, textTransform: "uppercase", letterSpacing: "0.05em", margin: "4px 0 14px" }}>
-        Nouvelle absence
-      </div>
-
-      {vacError && <div style={errBox}>{vacError}</div>}
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-        <div>
-          <label style={{ display: "block", fontSize: 12.5, fontWeight: 600, color: C.secondary, marginBottom: 6 }}>Du</label>
-          <input type="date" value={newVacStart} min={TODAY_ISO}
-            onChange={(e) => setNewVacStart(e.target.value)}
-            style={inputStyle}
-            onFocus={(e) => (e.target.style.borderColor = C.accent)}
-            onBlur={(e) => (e.target.style.borderColor = C.border)} />
-        </div>
-        <div>
-          <label style={{ display: "block", fontSize: 12.5, fontWeight: 600, color: C.secondary, marginBottom: 6 }}>Au</label>
-          <input type="date" value={newVacEnd} min={newVacStart || TODAY_ISO}
-            onChange={(e) => setNewVacEnd(e.target.value)}
-            style={inputStyle}
-            onFocus={(e) => (e.target.style.borderColor = C.accent)}
-            onBlur={(e) => (e.target.style.borderColor = C.border)} />
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <label style={{ display: "block", fontSize: 12.5, fontWeight: 600, color: C.secondary, marginBottom: 6 }}>Type</label>
-        <select value={newVacType} onChange={(e) => setNewVacType(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
-          {Object.entries(ABSENCE_TYPE_META).map(([k, m]) => (
-            <option key={k} value={k}>{m.label}</option>
-          ))}
-        </select>
-      </div>
-
-      <div style={{ marginBottom: 18 }}>
-        <label style={{ display: "block", fontSize: 12.5, fontWeight: 600, color: C.secondary, marginBottom: 6 }}>Description (optionnel)</label>
-        <input type="text" value={newVacDesc} maxLength={200}
-          placeholder="Ex : rdv médical, formation…"
-          onChange={(e) => setNewVacDesc(e.target.value)}
-          style={inputStyle}
-          onFocus={(e) => (e.target.style.borderColor = C.accent)}
-          onBlur={(e) => (e.target.style.borderColor = C.border)} />
-      </div>
-
-      <button
-        onClick={handleAddVacation}
-        disabled={vacLoading}
-        style={{
-          width: "100%", padding: "13px 0", borderRadius: "12px", border: "none",
-          background: vacLoading ? C.muted : C.accent, color: "#fff", fontSize: "15px",
-          fontWeight: 600, fontFamily: "Inter, sans-serif",
-          cursor: vacLoading ? "not-allowed" : "pointer", transition: "background 0.2s",
-        }}
-        onMouseEnter={(e) => { if (!vacLoading) e.currentTarget.style.filter = "brightness(1.1)"; }}
-        onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}
-      >
-        {vacLoading ? "Ajout..." : "Ajouter cette période"}
-      </button>
-    </div>
-  );
+  const absencesCard = <AbsencePanel dark={darkMode} />;
 
   const workingDaysCard = (
     <div style={cardStyle}>

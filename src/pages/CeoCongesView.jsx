@@ -1,6 +1,6 @@
 // src/pages/CeoCongesView.jsx
 //
-// Route /ceo/conges — embed <TeamAbsences embed /> dans le shell CEO/RH
+// Route /ceo/conges — embed <LeaveManagement dark={darkMode} /> dans le shell CEO/RH
 // (sidebar shared + SharedNavbar conservés). Calque de CeoVariablesView.
 //
 // Objectif : que "Congés" reste DANS le dashboard (la sidebar ne disparaît
@@ -15,13 +15,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import { navigateBackToDashboard } from "../utils/dashboardNavigation";
-import TeamAbsences from "./TeamAbsences.jsx";
+import LeaveManagement from "../components/absences/LeaveManagement.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "finance_director"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo", "hr"]);
 
 export default function CeoCongesView() {
   const navigate = useNavigate();
@@ -147,7 +147,7 @@ export default function CeoCongesView() {
 
       <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 64 }}>
         <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
-        <TeamAbsences embed />
+        <LeaveManagement dark={darkMode} />
       </div>
     </div>
   );
