@@ -77,7 +77,7 @@ export const meteoBandOf = (score) => (score == null ? null : score <= 2 ? "roug
 const meteoStyle = (score) => { const b = meteoBandOf(score); return b ? METEO_BANDS[b] : null; };
 // Commentaire OBLIGATOIRE quand on signale un client Critique (1-2) ou Mécontent (3) : on
 // n'enregistre pas une alerte de risque sans contexte écrit (motif de la dégradation).
-const meteoNoteRequired = (score) => score != null && score <= 3;
+const meteoNoteRequired = (score) => score != null;
 // Sens de chaque note (affiché dans le sélecteur) + action implicite (automatisable via CSV).
 const METEO_MEANING = {
   1: { txt: "Situation critique, fort risque de résiliation", action: "Plan de rétention (Owner)" },
@@ -597,11 +597,11 @@ function MeteoPicker({ score, onSave, disabled }) {
               </div>
             )}
             <textarea value={note} onChange={(e) => setNote(e.target.value)}
-              placeholder={noteRequired ? "Commentaire obligatoire : motif de l'alerte…" : "Note d'interaction (optionnel)…"} rows={2}
+              placeholder="Commentaire obligatoire : expliquez la situation du client…" rows={2}
               style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.45, marginBottom: noteRequired && !note.trim() ? 6 : 10, ...(noteRequired && !note.trim() ? { border: "1px solid #dc2626" } : {}) }} />
             {noteRequired && !note.trim() && (
               <div style={{ fontSize: 11, color: "#dc2626", fontWeight: 600, marginBottom: 10 }}>
-                Commentaire obligatoire pour un client {meteoBandOf(sel) === "rouge" ? "critique" : "mécontent"}.
+                Ajoutez un commentaire pour enregistrer cette météo.
               </div>
             )}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
@@ -1771,7 +1771,7 @@ const INFO_FIELDS = [
   { ovr: "phone_ovr", orig: "contact_phone", label: "Téléphone" },
   { ovr: "siren_ovr", orig: "siren", label: "SIREN" },
 ];
-function ClientInfoSection({ row, num, patch, onEmailSaved }) {
+function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({});
   const startEdit = () => {
@@ -1828,6 +1828,7 @@ function ClientInfoSection({ row, num, patch, onEmailSaved }) {
           <EmailSelect row={row} patch={patch} onSaved={onEmailSaved} />
           <InfoField label="Téléphone" value={ov(row, "phone_ovr", "contact_phone")} />
           <InfoField label="SIREN" value={ov(row, "siren_ovr", "siren")} />
+          <EtatSection row={row} num={num} changeEtat={changeEtat} compact />
           {companyName(row) && companyName(row) !== name && <InfoField label="Société" value={companyName(row)} full />}
         </div>
       )}
@@ -1895,7 +1896,7 @@ function TableDateEdit({ value, onSave, disabled }) {
 
 // Ligne RDV : date (planifiée ou saisie manuellement) + toggle "effectué" + lien (optionnel).
 // onDate présent -> crayon pour saisir/modifier la date à la main (antériorité).
-function RdvRow({ label, date, done, editable, onToggle, link, onDate, meetLink }) {
+function RdvRow({ label, date, done, editable, onToggle, link, onDate, meetLink, onReschedule }) {
   const [editing, setEditing] = useState(false);
   const cancelRef = useRef(false);
   return (
@@ -1919,6 +1920,7 @@ function RdvRow({ label, date, done, editable, onToggle, link, onDate, meetLink 
           </div>
         )}
         {link && <RdvLink url={link} />}
+        {onReschedule && <button type="button" className="ob-detail-link" onClick={onReschedule}>Reprogrammer ce rendez-vous</button>}
         {meetLink && (
           <a href={meetLink} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
             style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 6, padding: "4px 10px", borderRadius: 8, background: GREEN + "14", border: `1px solid ${GREEN}44`, color: GREEN, fontSize: 11.5, fontWeight: 700, textDecoration: "none" }}>
@@ -2170,7 +2172,7 @@ const etatAuthor = (h) => {
 
 // Bloc "État du client" (détail, sous le SIREN) : sélecteur d'état + date(s) selon l'état
 // (fiscaliste), révélation animée. Toute pose passe par changeEtat -> trace l'historique.
-function EtatSection({ row, num, changeEtat }) {
+function EtatSection({ row, num, changeEtat, compact = false }) {
   const etat = row.etat_manuel || displayEtat(row);  // le détail montre l'état POSÉ (pour éditer sa date d'effet, même s'il est encore prévu)
   const cfg = ETAT_DATE_CONFIG[etat];
   // Mode fin de pause : connue (date de fin) vs indéterminée (date de relance). Dérivé des
@@ -2187,8 +2189,8 @@ function EtatSection({ row, num, changeEtat }) {
     pause_relance_date: row.pause_relance_date, ...chg,
   });
   return (
-    <div style={{ marginBottom: 22 }}>
-      <SecTitle icon="etat">État du client</SecTitle>
+    <div style={{ marginBottom: compact ? 0 : 22, minWidth: 0, ...(compact && (cfg || isEtatPending(row)) ? { gridColumn: "1 / -1" } : {}) }}>
+      {compact ? <div style={{ fontSize: 12, color: MUTED, marginBottom: 5 }}>Situation du client</div> : <SecTitle icon="etat">État du client</SecTitle>}
       <EtatPicker etat={etat} disabled={!num} onPick={(v) => changeEtat(num, { etat: v })} />
       {num && isEtatPending(row) && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 9, padding: "6px 10px", borderRadius: 8, background: "#fff3e3", color: "#b45309", fontSize: 12, fontWeight: 600, lineHeight: 1.45 }}>
@@ -2493,6 +2495,52 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
   // séparé) : un contrat groupé (inclus à l'Owner) n'a pas d'emails cabinet dédiés.
   const [emailsOpen, setEmailsOpen] = useState(false);
   const hasOptilexTrack = row.optilex_status != null || !!row.rdv_lancement_date || !!row.optilex_welcome_email_at || !!row.optilex_livret_email_at || !!row.optilex_docs_email_at || !!row.optilex_contract_forms_email_at;
+  const appointments = <>
+          {/* RDV + statut "effectué" */}
+          <div className="ob-sec" style={{ animationDelay: "0.2s" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <SecTitle icon="rdv" style={{ marginBottom: 0 }}>Rendez-vous</SecTitle>
+            {num && (
+              <motion.button type="button" whileTap={{ scale: 0.96 }} onClick={() => setAgendaOpen(true)}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#f7f8fa"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = CARD; }}
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+                Voir l'agenda
+              </motion.button>
+            )}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
+            <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date_manual || row.rdv_onboarding_date} done={row.rdv_onboarding_done}
+              editable={!!num && ["customer_success_manager", "admin", "ceo"].includes((apiClient.getUser() || {}).role)}
+              meetLink={row.onboarding_meet_link}
+              onToggle={(v) => patch(num, { rdv_onboarding_done: v })} />
+            {/* Recalage direct du RDV onboarding (Vincent / facturation / admin) : déplace la
+                date CRM ET les 2 événements Google (Vincent + facturation), client notifié. */}
+            {!!num && !!(row.rdv_onboarding_date_manual || row.rdv_onboarding_date)
+              && ["admin", "ceo", "customer_success_manager", "finance_team"].includes((apiClient.getUser() || {}).role) && (
+              <motion.button type="button" whileTap={{ scale: 0.97 }} onClick={() => setReschedOpen("onboarding")}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#f7f8fa"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = CARD; }}
+                style={{ alignSelf: "flex-start", marginTop: -2, display: "flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg>
+                Recaler le RDV onboarding
+              </motion.button>
+            )}
+            <RdvRow label="Rendez-vous Intégration Opti'Lex" date={row.rdv_lancement_date} done={row.rdv_lancement_done} editable={!!num && !isFinanceTeam()} meetLink={row.lancement_meet_link}
+              onToggle={(v) => patch(num, { rdv_lancement_done: v })} />
+            <RdvRow label="Rendez-vous lancement fiscal" date={row.rdv_fiscal_date_manual || row.rdv_fiscal_date} done={row.rdv_fiscal_done} editable={!!num && !isFinanceTeam() && !!(row.rdv_fiscal_date_manual || row.rdv_fiscal_date)}
+              link={row.fiscal_url || null}
+              onReschedule={num && !isFinanceTeam() && (row.rdv_fiscal_date_manual || row.rdv_fiscal_date) ? () => setReschedOpen("fiscal") : undefined}
+              onToggle={(v) => patch(num, { rdv_fiscal_done: v })} />
+            <RdvRow label="Rendez-vous lancement social" date={row.rdv_social_date_manual || row.rdv_social_date} done={row.rdv_social_done} editable={!!num && !isFinanceTeam() && !!(row.rdv_social_date_manual || row.rdv_social_date)}
+              link={row.social_url || null}
+              onReschedule={num && !isFinanceTeam() && (row.rdv_social_date_manual || row.rdv_social_date) ? () => setReschedOpen("social") : undefined}
+              onToggle={(v) => patch(num, { rdv_social_done: v })} />
+          </div>
+          </div>
+
+  </>;
   return (
     <>
       <motion.div onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
@@ -2501,7 +2549,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
         initial={{ x: 36, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
         exit={{ x: 56, opacity: 0, transition: { duration: 0.18, ease: [0.4, 0, 1, 1] } }}
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-        className="ob-detail-panel" role="dialog" aria-modal="true" aria-label="Détails du client" style={{ position: "fixed", top: 0, right: 0, height: "100dvh", width: 520, maxWidth: "100vw", background: CARD, zIndex: 9999, boxShadow: "-12px 0 40px rgba(0,0,0,0.12)", overflowY: "auto", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+        className="ob-detail-panel" role="dialog" aria-modal="true" aria-hidden={agendaOpen || !!reschedOpen || undefined} aria-label="Détails du client" style={{ position: "fixed", top: 0, right: 0, height: "100dvh", width: 520, maxWidth: "100vw", background: CARD, zIndex: 9999, boxShadow: "-12px 0 40px rgba(0,0,0,0.12)", overflowY: "auto", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
         {/* Header */}
         <div style={{ padding: "20px 22px 16px", borderBottom: `1px solid ${BORDER}`, position: "sticky", top: 0, background: CARD, zIndex: 1 }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
@@ -2525,84 +2573,6 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
         </div>
 
         <div style={{ padding: "18px 22px 40px" }}>
-          <ClientMissions key={num || row.id} numero={num} />
-          {/* Sections en révélation douce (stagger léger, une seule fois à l'ouverture). */}
-          {/* Informations client (override cabinet ?? original Owner, antériorité préservée) */}
-          <div className="ob-sec" style={{ animationDelay: "0.05s" }}>
-            <ClientInfoSection row={row} num={num} patch={patch} onEmailSaved={() => setSigRefresh((v) => v + 1)} />
-          </div>
-
-          {/* Météo client : note courante + saisie (score + note d'interaction) + historique */}
-          {row.numero_client && (
-            <div className="ob-sec" style={{ animationDelay: "0.075s" }}>
-              <SecTitle icon="comments">Échanges et notations</SecTitle>
-              <MeteoSection key={num} row={row} num={num} recordMeteo={recordMeteo} version={meteoHistVersion} onChanged={reloadRatings} />
-            </div>
-          )}
-
-          <DetailFold title="Ambassadeur et parrainage">
-          {/* Programme ambassadeur : client à valoriser / à solliciter pour un témoignage (case à cocher). */}
-          {row.numero_client && (
-            <div className="ob-sec" style={{ animationDelay: "0.085s" }}>
-              <SecTitle icon="ambassador">Programme ambassadeur</SecTitle>
-              {(() => {
-                const on = !!row.ambassador_eligible;
-                const editable = meteoSettable() && !isFinanceTeam();
-                return (
-                  <div style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${BORDER}`, background: "#fafbfc", marginBottom: 22 }}>
-                    <motion.button type="button" disabled={!editable} whileTap={editable ? { scale: 0.99 } : undefined}
-                      onClick={() => { if (editable) patch(num, { ambassador_eligible: !on }); }}
-                      style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: 0, border: "none", background: "none", cursor: editable ? "pointer" : "default", textAlign: "left", fontFamily: "inherit" }}>
-                      <span style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${on ? GREEN : "#cbd2e0"}`, background: on ? GREEN : "transparent", transition: "background .15s ease, border-color .15s ease" }}>
-                        {on && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
-                      </span>
-                      <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>Éligible au programme ambassadeur</span>
-                        <span style={{ fontSize: 11.5, color: MUTED, lineHeight: 1.4 }}>Client à valoriser, à solliciter pour un témoignage / une recommandation.</span>
-                      </span>
-                    </motion.button>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-
-          {/* Programme de parrainage : parrains générant des opportunités qualifiées (case à cocher). */}
-          {row.numero_client && (
-            <div className="ob-sec" style={{ animationDelay: "0.09s" }}>
-              <SecTitle icon="ambassador">Programme de parrainage</SecTitle>
-              {(() => {
-                const on = !!row.parrainage_eligible;
-                const editable = meteoSettable() && !isFinanceTeam();
-                return (
-                  <div style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${BORDER}`, background: "#fafbfc", marginBottom: 22 }}>
-                    <motion.button type="button" disabled={!editable} whileTap={editable ? { scale: 0.99 } : undefined}
-                      onClick={() => { if (editable) patch(num, { parrainage_eligible: !on }); }}
-                      style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: 0, border: "none", background: "none", cursor: editable ? "pointer" : "default", textAlign: "left", fontFamily: "inherit" }}>
-                      <span style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${on ? GREEN : "#cbd2e0"}`, background: on ? GREEN : "transparent", transition: "background .15s ease, border-color .15s ease" }}>
-                        {on && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
-                      </span>
-                      <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>Éligible au programme de parrainage</span>
-                        <span style={{ fontSize: 11.5, color: MUTED, lineHeight: 1.4 }}>Le programme vise à encourager les parrains à générer régulièrement de nouvelles opportunités commerciales qualifiées.</span>
-                      </span>
-                    </motion.button>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-
-          </DetailFold>
-          <DetailFold title="Situation du client">
-          {/* État du client (éditable, sous le SIREN) + dates fiscalistes + historique */}
-          <div className="ob-sec" style={{ animationDelay: "0.1s" }}>
-            <EtatSection row={row} num={num} changeEtat={changeEtat} />
-            <EtatHistory num={num} version={etatHistVersion} />
-          </div>
-
-          </DetailFold>
-          <DetailFold title="Contrats et emails">
           {/* Signatures */}
           <div className="ob-sec" style={{ animationDelay: "0.15s" }}>
           <SecTitle icon="contrats">Contrats</SecTitle>
@@ -2658,57 +2628,81 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
           )}
 
           </div>
-          </DetailFold>
 
-          <DetailFold title="Rendez-vous">
-          {/* RDV + statut "effectué" */}
-          <div className="ob-sec" style={{ animationDelay: "0.2s" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-            <SecTitle icon="rdv" style={{ marginBottom: 0 }}>Rendez-vous</SecTitle>
-            {num && (
-              <motion.button type="button" whileTap={{ scale: 0.96 }} onClick={() => setAgendaOpen(true)}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "#f7f8fa"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = CARD; }}
-                style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
-                Voir l'agenda
-              </motion.button>
-            )}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
-            <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date_manual || row.rdv_onboarding_date} done={row.rdv_onboarding_done}
-              editable={!!num && ["customer_success_manager", "admin", "ceo"].includes((apiClient.getUser() || {}).role)}
-              meetLink={row.onboarding_meet_link}
-              onDate={num && !isFinanceTeam() ? (d) => patch(num, { rdv_onboarding_date_manual: d }) : undefined}
-              onToggle={(v) => patch(num, { rdv_onboarding_done: v })} />
-            {/* Recalage direct du RDV onboarding (Vincent / facturation / admin) : déplace la
-                date CRM ET les 2 événements Google (Vincent + facturation), client notifié. */}
-            {!!num && !!row.rdv_onboarding_date && !row.rdv_onboarding_done
-              && ["admin", "ceo", "customer_success_manager", "finance_team"].includes((apiClient.getUser() || {}).role) && (
-              <motion.button type="button" whileTap={{ scale: 0.97 }} onClick={() => setReschedOpen(true)}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "#f7f8fa"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = CARD; }}
-                style={{ alignSelf: "flex-start", marginTop: -2, display: "flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg>
-                Recaler le RDV onboarding
-              </motion.button>
-            )}
-            <RdvRow label="Rendez-vous Intégration Opti'Lex" date={row.rdv_lancement_date} done={row.rdv_lancement_done} editable={!!num && !isFinanceTeam()} meetLink={row.lancement_meet_link}
-              onToggle={(v) => patch(num, { rdv_lancement_done: v })} />
-            <RdvRow label="Rendez-vous lancement fiscal" date={row.rdv_fiscal_date_manual || row.rdv_fiscal_date} done={row.rdv_fiscal_done} editable={!!num && !isFinanceTeam() && !!(row.rdv_fiscal_date_manual || row.rdv_fiscal_date)}
-              link={row.fiscal_url || null}
-              onDate={num ? (d) => patch(num, { rdv_fiscal_date_manual: d }) : undefined}
-              onToggle={(v) => patch(num, { rdv_fiscal_done: v })} />
-            <RdvRow label="Rendez-vous lancement social" date={row.rdv_social_date_manual || row.rdv_social_date} done={row.rdv_social_done} editable={!!num && !isFinanceTeam() && !!(row.rdv_social_date_manual || row.rdv_social_date)}
-              link={row.social_url || null}
-              onDate={num ? (d) => patch(num, { rdv_social_date_manual: d }) : undefined}
-              onToggle={(v) => patch(num, { rdv_social_done: v })} />
-          </div>
+          <ClientMissions key={num || row.id} numero={num} />
+          {/* Sections en révélation douce (stagger léger, une seule fois à l'ouverture). */}
+          {/* Informations client (override cabinet ?? original Owner, antériorité préservée) */}
+          <div className="ob-sec" style={{ animationDelay: "0.05s" }}>
+            <ClientInfoSection row={row} num={num} patch={patch} onEmailSaved={() => setSigRefresh((v) => v + 1)} changeEtat={changeEtat} />
           </div>
 
+          {/* Météo client : note courante + saisie (score + note d'interaction) + historique */}
+          {row.numero_client && (
+            <div className="ob-sec" style={{ animationDelay: "0.075s" }}>
+              <SecTitle icon="meteo">Météo client</SecTitle>
+              <MeteoSection key={num} row={row} num={num} recordMeteo={recordMeteo} version={meteoHistVersion} onChanged={reloadRatings} appointments={appointments} />
+            </div>
+          )}
+
+          {!row.numero_client && appointments}
+          <DetailFold title="Historique de la situation"><EtatHistory num={num} version={etatHistVersion} /></DetailFold>
+          <DetailFold title="Ambassadeur et parrainage">
+          {/* Programme ambassadeur : client à valoriser / à solliciter pour un témoignage (case à cocher). */}
+          {row.numero_client && (
+            <div className="ob-sec" style={{ animationDelay: "0.085s" }}>
+              <SecTitle icon="ambassador">Programme ambassadeur</SecTitle>
+              {(() => {
+                const on = !!row.ambassador_eligible;
+                const editable = meteoSettable() && !isFinanceTeam();
+                return (
+                  <div style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${BORDER}`, background: "#fafbfc", marginBottom: 22 }}>
+                    <motion.button type="button" disabled={!editable} whileTap={editable ? { scale: 0.99 } : undefined}
+                      onClick={() => { if (editable) patch(num, { ambassador_eligible: !on }); }}
+                      style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: 0, border: "none", background: "none", cursor: editable ? "pointer" : "default", textAlign: "left", fontFamily: "inherit" }}>
+                      <span style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${on ? GREEN : "#cbd2e0"}`, background: on ? GREEN : "transparent", transition: "background .15s ease, border-color .15s ease" }}>
+                        {on && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
+                      </span>
+                      <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>Éligible au programme ambassadeur</span>
+                        <span style={{ fontSize: 11.5, color: MUTED, lineHeight: 1.4 }}>Client à valoriser, à solliciter pour un témoignage / une recommandation.</span>
+                      </span>
+                    </motion.button>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Programme de parrainage : parrains générant des opportunités qualifiées (case à cocher). */}
+          {row.numero_client && (
+            <div className="ob-sec" style={{ animationDelay: "0.09s" }}>
+              <SecTitle icon="ambassador">Programme de parrainage</SecTitle>
+              {(() => {
+                const on = !!row.parrainage_eligible;
+                const editable = meteoSettable() && !isFinanceTeam();
+                return (
+                  <div style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${BORDER}`, background: "#fafbfc", marginBottom: 22 }}>
+                    <motion.button type="button" disabled={!editable} whileTap={editable ? { scale: 0.99 } : undefined}
+                      onClick={() => { if (editable) patch(num, { parrainage_eligible: !on }); }}
+                      style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: 0, border: "none", background: "none", cursor: editable ? "pointer" : "default", textAlign: "left", fontFamily: "inherit" }}>
+                      <span style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${on ? GREEN : "#cbd2e0"}`, background: on ? GREEN : "transparent", transition: "background .15s ease, border-color .15s ease" }}>
+                        {on && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
+                      </span>
+                      <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>Éligible au programme de parrainage</span>
+                        <span style={{ fontSize: 11.5, color: MUTED, lineHeight: 1.4 }}>Le programme vise à encourager les parrains à générer régulièrement de nouvelles opportunités commerciales qualifiées.</span>
+                      </span>
+                    </motion.button>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
           </DetailFold>
+
           {agendaOpen && <ClientAgendaModal row={row} num={num} onClose={() => setAgendaOpen(false)} />}
-          {reschedOpen && <ReschedOnboardingModal row={row} num={num} onClose={() => setReschedOpen(false)} onDone={() => { setReschedOpen(false); reload(); }} />}
+          {reschedOpen && <ReschedOnboardingModal kind={reschedOpen} row={row} num={num} onClose={() => { setReschedOpen(false); reload(); }} onDone={() => { setReschedOpen(false); reload(); }} />}
 
           <DetailFold title="Facturation et suivi">
           {/* Jalons éditables (indisponibles tant que le client n'est pas établi) */}
@@ -2746,7 +2740,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
 // Recalage du RDV Onboarding Owner depuis le board (chantier Vincent 2026-08-25).
 // Créneaux libres = API de la déclaration de vente (freebusy Vincent + facturation,
 // heures-mur Paris). La confirmation déplace la date CRM et les événements agenda.
-function ReschedOnboardingModal({ row, num, onClose, onDone }) {
+function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding" }) {
   const todayIso = () => new Date().toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" });
   const [start, setStart] = useState(todayIso());
   const [days, setDays] = useState(null);
@@ -2758,9 +2752,9 @@ function ReschedOnboardingModal({ row, num, onClose, onDone }) {
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    apiClient.get(`/api/v1/tracking/sale-slots?kind=onboarding&start=${start}&days=7`)
+    apiClient.get(`/api/v1/optilex/board-reschedule-slots?kind=${kind}&start=${start}`)
       .then((r) => { if (alive) { setDays(r.days || []); setLoading(false); } })
-      .catch(() => { if (alive) { setDays([]); setLoading(false); } });
+      .catch(() => { if (alive) { setDays([]); setError("Impossible de charger les disponibilités. Réessayez."); setLoading(false); } });
     return () => { alive = false; };
   }, [start]);
 
@@ -2776,7 +2770,8 @@ function ReschedOnboardingModal({ row, num, onClose, onDone }) {
     if (!sel || saving) return;
     setSaving(true); setError(null);
     try {
-      await apiClient.post("/api/v1/optilex/board-reschedule-onboarding", { numero_client: num, new_dt: `${sel.date}T${sel.slot}` });
+      const result = await apiClient.post("/api/v1/optilex/board-reschedule", { numero_client: num, kind, new_dt: `${sel.date}T${sel.slot}` });
+      if (result.notification_sent === false) { setError("Le rendez-vous est déplacé, mais la notification n’a pas pu être confirmée. Fermez cette fenêtre et vérifiez l’invitation."); setSaving(false); setSel(null); return; }
       onDone();
     } catch (e) {
       const d = e.data && e.data.detail;
@@ -2788,24 +2783,24 @@ function ReschedOnboardingModal({ row, num, onClose, onDone }) {
   const dayLabel = (iso) => { try { return new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }); } catch { return iso; } };
 
   return createPortal(
-    <div style={{ position: "fixed", inset: 0, zIndex: 10070, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={onClose}
+    <div className="ob-reschedule-modal" role="dialog" aria-modal="true" aria-label="Reprogrammer le rendez-vous" style={{ position: "fixed", inset: 0, zIndex: 10070, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={() => { if (!saving) onClose(); }}
         style={{ position: "absolute", inset: 0, background: "rgba(17,24,39,0.42)" }} />
       <motion.div initial={{ opacity: 0, scale: 0.97, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
         style={{ position: "relative", width: "min(640px, 100%)", maxHeight: "82vh", display: "flex", flexDirection: "column", background: CARD, borderRadius: 16, border: `1px solid ${BORDER}`, boxShadow: "0 24px 60px rgba(17,24,39,0.28)", overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${BORDER}` }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>Recaler le RDV onboarding</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>Reprogrammer le rendez-vous {kind === "onboarding" ? "onboarding" : kind}</div>
             <div style={{ fontSize: 12, color: MUTED, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {ov(row, "contact_name_ovr", "contact_name") || row.crm_societe || num} · le client sera notifié du nouveau créneau
             </div>
           </div>
-          <button type="button" onClick={onClose} style={{ border: "none", background: "none", cursor: "pointer", color: MUTED, fontSize: 17, lineHeight: 1, padding: 4, flexShrink: 0 }}>✕</button>
+          <button type="button" aria-label="Fermer la reprogrammation" disabled={saving} onClick={() => { if (!saving) onClose(); }} style={{ border: "none", background: "none", cursor: "pointer", color: MUTED, fontSize: 17, lineHeight: 1, padding: 4, flexShrink: 0 }}>✕</button>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 20px", borderBottom: `1px solid ${BORDER}` }}>
           <button type="button" onClick={() => shiftWeek(-1)} disabled={start <= todayIso()}
             style={{ border: `1px solid ${BORDER}`, background: CARD, borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, color: start <= todayIso() ? MUTED : NAVY, cursor: start <= todayIso() ? "default" : "pointer", fontFamily: "inherit" }}>← Sem. préc.</button>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>Créneaux libres (Vincent + facturation)</span>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>Créneaux libres · {kind === "onboarding" ? "Vincent + facturation" : kind} · heure de Paris</span>
           <button type="button" onClick={() => shiftWeek(1)}
             style={{ border: `1px solid ${BORDER}`, background: CARD, borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, color: NAVY, cursor: "pointer", fontFamily: "inherit" }}>Sem. suiv. →</button>
         </div>
@@ -2845,7 +2840,7 @@ function ReschedOnboardingModal({ row, num, onClose, onDone }) {
           })()}
         </div>
         <div style={{ padding: "14px 20px", borderTop: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <span style={{ fontSize: 12, color: error ? "#b42318" : MUTED, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+          <span role={error ? "alert" : undefined} style={{ fontSize: 12, color: error ? "#b42318" : MUTED, minWidth: 0, overflowWrap: "anywhere", lineHeight: 1.5 }}>
             {error || (sel ? `Nouveau créneau : ${dayLabel(sel.date)} à ${sel.slot}` : "Sélectionne un créneau")}
           </span>
           <motion.button type="button" whileTap={sel ? { scale: 0.97 } : undefined} disabled={!sel || saving} onClick={confirm}
@@ -2893,7 +2888,7 @@ function JalonRow({ label, done, date, onToggle, onDate, alwaysDate = false, tog
 
 // Section météo de la fiche : note courante (badge + qui/quand), saisie inline (Owner
 // uniquement pour l'instant : score + note d'interaction), et historique des notations.
-function MeteoSection({ row, num, recordMeteo, version, onChanged }) {
+function MeteoSection({ row, num, recordMeteo, version, onChanged, appointments }) {
   const [hist, setHist] = useState([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyError, setHistoryError] = useState("");
@@ -2933,27 +2928,27 @@ function MeteoSection({ row, num, recordMeteo, version, onChanged }) {
     <div>
       {/* Météo courante */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: settable ? 16 : (hist.length ? 16 : 4) }}>
-        <MeteoBadge score={current ? current.score : null} />
+        <button type="button" className="ob-weather-current" disabled={!settable} onClick={() => { setComposerOpen(true); setSel(current?.score || null); }} aria-label="Modifier la météo client"><MeteoBadge score={current ? current.score : null} /></button>
         {current
           ? <span style={{ fontSize: 12, color: MUTED }}>dernière notation{current.author_name ? ` par ${current.author_name}` : ""} · {timeAgo(current.created_at)}</span>
           : <span style={{ fontSize: 12.5, color: "#b6bdc9" }}>Aucune notation pour l'instant.</span>}
       </div>
 
       {/* Saisie (Owner uniquement pour l'instant) */}
-      {settable && <button type="button" className="ob-detail-action" onClick={() => setComposerOpen(v => !v)} aria-expanded={composerOpen}>{composerOpen ? "Fermer la notation" : "Noter une interaction"}</button>}
-      {settable && composerOpen && (
+      {settable && (
         <div style={{ background: "#f7f8fa", border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, marginBottom: hist.length ? 18 : 4 }}>
           <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
             {[1, 2, 3, 4, 5].map((n) => {
               const st = METEO_BANDS[meteoBandOf(n)];
               const on = sel === n;
               return (
-                <button key={n} type="button" onClick={() => setSel(n)}
+                <button key={n} type="button" aria-label={`Météo ${n} : ${METEO_MEANING[n].txt}`} aria-pressed={sel === n} onClick={() => { setSel(n); setComposerOpen(true); }}
                   style={{ flex: 1, padding: "9px 0", borderRadius: 9, border: on ? `2px solid ${st.color}` : `1px solid ${BORDER}`, background: on ? st.bg : CARD, color: on ? st.color : TEXT, fontSize: 15, fontWeight: 800, cursor: "pointer", fontFamily: "inherit", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                   <MeteoIcon score={n} size={19} color={on ? st.color : "#9aa0ab"} />{n}</button>
               );
             })}
           </div>
+          {composerOpen && <>
           {sel && (
             <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 10, lineHeight: 1.45 }}>
               <span style={{ fontWeight: 700, color: METEO_BANDS[meteoBandOf(sel)].color }}>{METEO_MEANING[sel].txt}.</span>
@@ -2961,17 +2956,18 @@ function MeteoSection({ row, num, recordMeteo, version, onChanged }) {
             </div>
           )}
           <textarea value={note} onChange={(e) => setNote(e.target.value)}
-            placeholder={noteRequired ? "Commentaire obligatoire : motif de l'alerte…" : "Note d'interaction (optionnel)…"} rows={2}
+            aria-label="Commentaire de la météo" placeholder="Commentaire obligatoire : expliquez la situation du client…" rows={3} maxLength={4000} required
             style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.45, ...(noteRequired && !note.trim() ? { border: "1px solid #dc2626" } : {}) }} />
           {noteRequired && !note.trim() && (
             <div style={{ fontSize: 11.5, color: "#dc2626", fontWeight: 600, marginTop: 6 }}>
-              Commentaire obligatoire pour un client {meteoBandOf(sel) === "rouge" ? "critique" : "mécontent"}.
+              Ajoutez un commentaire pour enregistrer cette météo.
             </div>
           )}
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
             <button type="button" onClick={save} disabled={!canSave}
               style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: canSave ? NAVY : "#e5e7eb", color: canSave ? "#fff" : MUTED, fontSize: 13, fontWeight: 600, cursor: canSave ? "pointer" : "default", fontFamily: "inherit" }}>{saving ? "…" : "Enregistrer la note"}</button>
           </div>
+          </>}
         </div>
       )}
 
@@ -2979,6 +2975,8 @@ function MeteoSection({ row, num, recordMeteo, version, onChanged }) {
       {historyError && <div role="alert" style={{ color: "#b91c1c", marginBottom: 10 }}>
         {historyError} <button type="button" onClick={refreshHistory}>Réessayer</button>
       </div>}
+      {appointments}
+      <SecTitle icon="comments">Échanges et notations</SecTitle>
       <CommentThread numero={num} ratings={hist} ratingsLoading={!historyLoaded && !historyError}
         onRatingEdited={(updated) => { setHist(items => items.map(item => item.id === updated.id ? updated : item)); onChanged(); }}
         onRatingDeleted={() => { refreshHistory(); onChanged(); }} onRatingConflict={refreshHistory} />
