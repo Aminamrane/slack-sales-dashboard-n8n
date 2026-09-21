@@ -2784,7 +2784,7 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
 
   return createPortal(
     <div className="ob-reschedule-modal" role="dialog" aria-modal="true" aria-label="Reprogrammer le rendez-vous" style={{ position: "fixed", inset: 0, zIndex: 10070, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={onClose}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={() => { if (!saving) onClose(); }}
         style={{ position: "absolute", inset: 0, background: "rgba(17,24,39,0.42)" }} />
       <motion.div initial={{ opacity: 0, scale: 0.97, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
         style={{ position: "relative", width: "min(640px, 100%)", maxHeight: "82vh", display: "flex", flexDirection: "column", background: CARD, borderRadius: 16, border: `1px solid ${BORDER}`, boxShadow: "0 24px 60px rgba(17,24,39,0.28)", overflow: "hidden" }}>
@@ -2795,7 +2795,7 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
               {ov(row, "contact_name_ovr", "contact_name") || row.crm_societe || num} · le client sera notifié du nouveau créneau
             </div>
           </div>
-          <button type="button" aria-label="Fermer la reprogrammation" onClick={onClose} style={{ border: "none", background: "none", cursor: "pointer", color: MUTED, fontSize: 17, lineHeight: 1, padding: 4, flexShrink: 0 }}>✕</button>
+          <button type="button" aria-label="Fermer la reprogrammation" disabled={saving} onClick={() => { if (!saving) onClose(); }} style={{ border: "none", background: "none", cursor: "pointer", color: MUTED, fontSize: 17, lineHeight: 1, padding: 4, flexShrink: 0 }}>✕</button>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 20px", borderBottom: `1px solid ${BORDER}` }}>
           <button type="button" onClick={() => shiftWeek(-1)} disabled={start <= todayIso()}
