@@ -980,17 +980,23 @@ export default function TrackingSheet() {
   useEffect(() => {
     if (!selectedLead || !intakeRollout?.available) return;
     let alive = true;
-    Promise.all([
-      apiClient.get(`/api/v1/owner-integration/leads/${selectedLead}`),
-      apiClient.get(`/api/v1/owner-integration/leads/${selectedLead}/journey`),
-    ]).then(([context, journey]) => {
+    apiClient.get(`/api/v1/owner-integration/leads/${selectedLead}`).then(context => {
       if (!alive) return;
       setIntakeContexts(previous => ({ ...previous, [selectedLead]: context }));
       setIntakeReady(previous => ({ ...previous, [selectedLead]: context.ready }));
-      setIntakeJourneys(previous => ({ ...previous, [selectedLead]: journey }));
     }).catch(() => { /* Explicit send/declare actions retry and surface errors. */ });
     return () => { alive = false; };
   }, [selectedLead, intakeRollout?.available, leads.find(l => l.id === selectedLead)?.contract_signed_at]);
+
+  // Sale booking is shared by every sales account, independently of intake rollout.
+  useEffect(() => {
+    if (!selectedLead) return;
+    let alive = true;
+    apiClient.get(`/api/v1/owner-integration/leads/${selectedLead}/journey`).then(journey => {
+      if (alive) setIntakeJourneys(previous => ({ ...previous, [selectedLead]: journey }));
+    }).catch(() => { /* Declaration retries and surfaces errors before booking. */ });
+    return () => { alive = false; };
+  }, [selectedLead, leads.find(l => l.id === selectedLead)?.contract_signed_at]);
 
   const [copiedField, setCopiedField] = useState(null); // 'phone-{id}' or 'email-{id}'
   const [exitingCards, setExitingCards] = useState(new Set());
@@ -1161,7 +1167,7 @@ export default function TrackingSheet() {
         clientNumero = res.client_numero || null;
       } catch (err) {
         const msg = err?.message || err?.detail || '';
-        if (err?.status === 400) { alert(msg || 'Les dates Onboarding et Lancement doivent être remplies.'); setSaleSubmitting(false); return; }
+        if (err?.status === 400) { alert(msg || 'Choisissez le rendez-vous Vincent + facturation avant de déclarer la vente.'); setSaleSubmitting(false); return; }
         if (err?.status === 409) { alert(msg || 'Un client avec cet email existe déjà.'); setSaleSubmitting(false); return; }
         if (err?.status === 403 || err?.status === 404) { alert(msg || 'Lead introuvable ou accès refusé.'); setSaleSubmitting(false); return; }
         console.error('declare-sale failed:', err);
@@ -8123,7 +8129,7 @@ export default function TrackingSheet() {
                     </div>
 
                     {/* RDV Lancement : contrats historiques uniquement */}
-                    {!intakeJourneys[lead.id]?.onboarding_only && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    {intakeJourneys[lead.id]?.onboarding_only === false && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <div style={{
                         display: 'flex', alignItems: 'center', gap: 8, flex: 1, padding: '8px 12px', borderRadius: 10,
                         background: darkMode ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)',
