@@ -51,3 +51,11 @@
 .ob-mission-refresh { margin-left:auto; display:grid; place-items:center; padding:8px; color:#667084; background:transparent; border:0; border-radius:8px; cursor:pointer; }
 .ob-mission-refresh:hover { background:#eef0f5; }
 .ob-mission-refresh:disabled { opacity:.4; cursor:default; }
+
+.ob-weather-current { border:0; background:transparent; padding:0; cursor:pointer; text-align:left; border-radius:8px; }
+.ob-weather-current:disabled { cursor:default; }
+.ob-client-missions { padding:12px; margin-bottom:20px; }
+.ob-mission-heading { margin-bottom:10px; }
+.ob-mission-kpis button { padding:8px 3px; }
+.ob-mission-kpis strong { font-size:20px; }
+.ob-mission-sync { margin-top:8px; }
