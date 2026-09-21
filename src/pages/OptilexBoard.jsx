@@ -1,3 +1,4 @@
+import { ClientMissions, DetailFold, DetailText } from "../components/OptilexClientDetail";
 import { matchesUpcomingIntegration, matchesUpcomingOnboarding, matchesOverdueOnboarding, parisWallTime } from "../utils/boardIntegration.js";
 import { matchesSignedClient, resolvePendingExit } from "../utils/boardClientState.js";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
@@ -1221,10 +1222,12 @@ export default function OptilexBoard({ embed = false }) {
     try {
       await apiClient.post("/api/v1/optilex/meteo", { numero_client: numero, score, note: note || null });
       setMeteoHistVersion((v) => v + 1);
+      return true;
     } catch (e) {
       console.error("meteo failed", e);
       if (snapshot) setRows((prev) => prev.map((r) => (r.numero_client === numero ? snapshot : r)));
       flagSaveError();
+      return false;
     }
   }, [flagSaveError]);
 
@@ -2421,7 +2424,7 @@ function ClientAgendaModal({ row, num, onClose }) {
   );
 }
 
-function DetailPanel({ row, onClose, reload, reloadRatings, patch, changeEtat, etatHistVersion, recordMeteo, meteoHistVersion }) {
+export function DetailPanel({ row, onClose, reload, reloadRatings, patch, changeEtat, etatHistVersion, recordMeteo, meteoHistVersion }) {
   const num = row.numero_client;
   // Rafraîchit le bloc signature Opti'Lex après un changement d'email (le destinataire du
   // rappel Yousign est re-résolu côté backend) : bumpé par EmailSelect après le patch commité.
@@ -2498,7 +2501,7 @@ function DetailPanel({ row, onClose, reload, reloadRatings, patch, changeEtat, e
         initial={{ x: 36, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
         exit={{ x: 56, opacity: 0, transition: { duration: 0.18, ease: [0.4, 0, 1, 1] } }}
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-        style={{ position: "fixed", top: 0, right: 0, height: "100vh", width: 460, maxWidth: "94vw", background: CARD, zIndex: 9999, boxShadow: "-12px 0 40px rgba(0,0,0,0.12)", overflowY: "auto", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+        className="ob-detail-panel" role="dialog" aria-modal="true" aria-label="Détails du client" style={{ position: "fixed", top: 0, right: 0, height: "100dvh", width: 520, maxWidth: "100vw", background: CARD, zIndex: 9999, boxShadow: "-12px 0 40px rgba(0,0,0,0.12)", overflowY: "auto", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
         {/* Header */}
         <div style={{ padding: "20px 22px 16px", borderBottom: `1px solid ${BORDER}`, position: "sticky", top: 0, background: CARD, zIndex: 1 }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
@@ -2506,6 +2509,7 @@ function DetailPanel({ row, onClose, reload, reloadRatings, patch, changeEtat, e
               <Avatar name={primaryName(row)} n={row.sheet_num} />
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{primaryName(row)}</div>
+                <div style={{ marginTop: 5, marginBottom: 5 }}><EtatBadge etat={displayEtat(row)} /></div>
                 <div style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{[companyName(row) !== primaryName(row) ? companyName(row) : null, row.numero_client, row.periodicite].filter(Boolean).join(" · ") || row.email || "—"}</div>
               </div>
             </div>
@@ -2521,6 +2525,7 @@ function DetailPanel({ row, onClose, reload, reloadRatings, patch, changeEtat, e
         </div>
 
         <div style={{ padding: "18px 22px 40px" }}>
+          <ClientMissions key={num || row.id} numero={num} />
           {/* Sections en révélation douce (stagger léger, une seule fois à l'ouverture). */}
           {/* Informations client (override cabinet ?? original Owner, antériorité préservée) */}
           <div className="ob-sec" style={{ animationDelay: "0.05s" }}>
@@ -2530,11 +2535,12 @@ function DetailPanel({ row, onClose, reload, reloadRatings, patch, changeEtat, e
           {/* Météo client : note courante + saisie (score + note d'interaction) + historique */}
           {row.numero_client && (
             <div className="ob-sec" style={{ animationDelay: "0.075s" }}>
-              <SecTitle icon="meteo">Météo client</SecTitle>
+              <SecTitle icon="comments">Échanges et notations</SecTitle>
               <MeteoSection key={num} row={row} num={num} recordMeteo={recordMeteo} version={meteoHistVersion} onChanged={reloadRatings} />
             </div>
           )}
 
+          <DetailFold title="Ambassadeur et parrainage">
           {/* Programme ambassadeur : client à valoriser / à solliciter pour un témoignage (case à cocher). */}
           {row.numero_client && (
             <div className="ob-sec" style={{ animationDelay: "0.085s" }}>
@@ -2587,12 +2593,16 @@ function DetailPanel({ row, onClose, reload, reloadRatings, patch, changeEtat, e
             </div>
           )}
 
+          </DetailFold>
+          <DetailFold title="Situation du client">
           {/* État du client (éditable, sous le SIREN) + dates fiscalistes + historique */}
           <div className="ob-sec" style={{ animationDelay: "0.1s" }}>
             <EtatSection row={row} num={num} changeEtat={changeEtat} />
             <EtatHistory num={num} version={etatHistVersion} />
           </div>
 
+          </DetailFold>
+          <DetailFold title="Contrats et emails">
           {/* Signatures */}
           <div className="ob-sec" style={{ animationDelay: "0.15s" }}>
           <SecTitle icon="contrats">Contrats</SecTitle>
@@ -2647,28 +2657,10 @@ function DetailPanel({ row, onClose, reload, reloadRatings, patch, changeEtat, e
             </>
           )}
 
-          {/* Activité mission : client cabinet sans mission suivie depuis 60 j (churn silencieux). */}
-          {isInactif(row) && (
-            <>
-              <SecTitle icon="activity">Activité mission</SecTitle>
-              <div style={{ padding: "12px 14px", borderRadius: 10, border: "1px solid #f5deba", background: "#fff8ec", marginBottom: 22 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13.5, fontWeight: 700, color: "#b45309" }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-                  </svg>
-                  Client inactif côté cabinet
-                </div>
-                <div style={{ fontSize: 12.5, color: "#8a6a35", marginTop: 5, lineHeight: 1.5 }}>
-                  {row.last_mission_at
-                    ? <>Dernière activité mission le <strong>{fmt(row.last_mission_at)}</strong>{row.days_since_last_mission != null ? <> ({row.days_since_last_mission} jours)</> : null}.</>
-                    : <>Aucune mission suivie par le cabinet à ce jour.</>}
-                  {row.mission_count_total != null && <> {row.mission_count_total} mission{row.mission_count_total > 1 ? "s" : ""} au total.</>}
-                </div>
-              </div>
-            </>
-          )}
           </div>
+          </DetailFold>
 
+          <DetailFold title="Rendez-vous">
           {/* RDV + statut "effectué" */}
           <div className="ob-sec" style={{ animationDelay: "0.2s" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
@@ -2714,9 +2706,11 @@ function DetailPanel({ row, onClose, reload, reloadRatings, patch, changeEtat, e
           </div>
           </div>
 
+          </DetailFold>
           {agendaOpen && <ClientAgendaModal row={row} num={num} onClose={() => setAgendaOpen(false)} />}
           {reschedOpen && <ReschedOnboardingModal row={row} num={num} onClose={() => setReschedOpen(false)} onDone={() => { setReschedOpen(false); reload(); }} />}
 
+          <DetailFold title="Facturation et suivi">
           {/* Jalons éditables (indisponibles tant que le client n'est pas établi) */}
           <div className="ob-sec" style={{ animationDelay: "0.25s" }}>
           {num ? (
@@ -2735,9 +2729,6 @@ function DetailPanel({ row, onClose, reload, reloadRatings, patch, changeEtat, e
                 onDate={num ? (d) => patch(num, { rdv_plus1mois_date: d }) : undefined}
                 onToggle={(v) => patch(num, { rdv_plus1mois_done: v })} />
 
-              {/* Commentaires (fil façon YouTube) */}
-              <SecTitle icon="comments" style={{ margin: "22px 0 12px" }}>Commentaires{row.comment_count ? ` · ${row.comment_count}` : ""}</SecTitle>
-              <CommentThread numero={num} />
             </>
           ) : (
             <div style={{ padding: "14px 16px", borderRadius: 10, border: `1px dashed ${BORDER}`, background: "#fafbfc", fontSize: 13, color: MUTED, lineHeight: 1.5 }}>
@@ -2745,6 +2736,7 @@ function DetailPanel({ row, onClose, reload, reloadRatings, patch, changeEtat, e
             </div>
           )}
           </div>
+          </DetailFold>
         </div>
       </motion.div>
     </>
@@ -2910,6 +2902,8 @@ function MeteoSection({ row, num, recordMeteo, version, onChanged }) {
   const [sel, setSel] = useState(null);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const settable = meteoSettable();
   useEffect(() => {
     let alive = true;
@@ -2927,7 +2921,12 @@ function MeteoSection({ row, num, recordMeteo, version, onChanged }) {
   const save = async () => {
     if (!canSave) return;
     setSaving(true);
-    try { await recordMeteo(num, sel, note.trim() || null); setSel(null); setNote(""); }
+    try {
+      setSaveError("");
+      const saved = await recordMeteo(num, sel, note.trim() || null);
+      if (saved === false) { setSaveError("La notation n’a pas pu être enregistrée. Votre texte est conservé."); return; }
+      setSel(null); setNote(""); setComposerOpen(false); refreshHistory();
+    } catch { setSaveError("La notation n’a pas pu être enregistrée. Réessayez."); }
     finally { setSaving(false); }
   };
   return (
@@ -2941,7 +2940,8 @@ function MeteoSection({ row, num, recordMeteo, version, onChanged }) {
       </div>
 
       {/* Saisie (Owner uniquement pour l'instant) */}
-      {settable && (
+      {settable && <button type="button" className="ob-detail-action" onClick={() => setComposerOpen(v => !v)} aria-expanded={composerOpen}>{composerOpen ? "Fermer la notation" : "Noter une interaction"}</button>}
+      {settable && composerOpen && (
         <div style={{ background: "#f7f8fa", border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, marginBottom: hist.length ? 18 : 4 }}>
           <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
             {[1, 2, 3, 4, 5].map((n) => {
@@ -2975,42 +2975,13 @@ function MeteoSection({ row, num, recordMeteo, version, onChanged }) {
         </div>
       )}
 
+      {saveError && <p role="alert" style={{ color: "#b91c1c", fontSize: 12 }}>{saveError}</p>}
       {historyError && <div role="alert" style={{ color: "#b91c1c", marginBottom: 10 }}>
         {historyError} <button type="button" onClick={refreshHistory}>Réessayer</button>
       </div>}
-      {/* Historique des notations (plus récent d'abord) */}
-      {hist.length > 0 && (
-        <div>
-          <div style={{ fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Historique des notations</div>
-          <AnimatePresence initial={false}>
-            {hist.map((h) => {
-              const st = meteoStyle(h.score) || { bg: "#eef1f6", color: MUTED };
-              return (
-                <motion.div key={h.id} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }} style={{ display: "flex", gap: 10, marginBottom: 14 }}>
-                  <span style={{ width: 26, height: 26, borderRadius: 8, background: st.bg, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <MeteoIcon score={h.score} size={15} color={st.color} />
-                  </span>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>{h.author_name || h.author_email || "—"}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: st.color }}>Note {h.score}</span>
-                      <span style={{ fontSize: 11, color: MUTED }}>{timeAgo(h.created_at)}</span>
-                    </div>
-                    <RatingHistoryActions rating={h} numero={num}
-                      onEdited={(updated) => {
-                        setHist((items) => items.map((item) => item.id === updated.id ? updated : item));
-                        onChanged();
-                      }}
-                      onDeleted={() => { setHist((items) => items.filter((item) => item.id !== h.id)); refreshHistory(); onChanged(); }}
-                      onConflict={refreshHistory} />
-                  </div>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        </div>
-      )}
+      <CommentThread numero={num} ratings={hist} ratingsLoading={!historyLoaded && !historyError}
+        onRatingEdited={(updated) => { setHist(items => items.map(item => item.id === updated.id ? updated : item)); onChanged(); }}
+        onRatingDeleted={() => { refreshHistory(); onChanged(); }} onRatingConflict={refreshHistory} />
     </div>
   );
 }
@@ -3048,7 +3019,7 @@ function RatingHistoryActions({ rating, numero, onEdited, onDeleted, onConflict 
   };
   const actionStyle = { border: "none", background: "transparent", padding: "5px 0", fontSize: 12, color: MUTED, cursor: "pointer", fontFamily: "inherit" };
   return <div>
-    {rating.note && <div style={{ fontSize: 13.5, color: TEXT, lineHeight: 1.45, marginTop: 2, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{rating.note}</div>}
+    {rating.note && <DetailText text={rating.note} />}
     {rating.note_updated_at && <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>
       Commentaire modifié{rating.note_updated_by_name ? ` par ${rating.note_updated_by_name}` : ""} · {timeAgo(rating.note_updated_at)}
     </div>}
@@ -3077,12 +3048,16 @@ function RatingHistoryActions({ rating, numero, onEdited, onDeleted, onConflict 
   </div>;
 }
 
-function CommentThread({ numero }) {
+function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingEdited, onRatingDeleted, onRatingConflict }) {
   const me = useMemo(() => apiClient.getUser() || {}, []);
   const meName = me.name || me.full_name || me.first_name || me.email || "Moi";
   const [comments, setComments] = useState([]);
   const [draft, setDraft] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [refresh, setRefresh] = useState(0);
   const [posting, setPosting] = useState(false);
   // Édition en place (demande dev 2026-09-03 : Paul corrige un commentaire au
   // lieu d'en rempiler). Autorisé : l'AUTEUR sur le sien, admin/ceo sur tous —
@@ -3101,18 +3076,19 @@ function CommentThread({ numero }) {
       const updated = await apiClient.patch(`/api/v1/optilex/comments/${editingId}`, { body });
       setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
       setEditingId(null); setEditDraft("");
-    } catch (e) { console.error("comment edit failed", e); }
+    } catch (e) { setError("Le commentaire n’a pas pu être modifié. Réessayez."); }
     finally { setSavingEdit(false); }
   };
 
   useEffect(() => {
     let alive = true;
-    setComments([]); setExpanded(false);
+    setLoading(true); setError("");
     apiClient.get(`/api/v1/optilex/comments?numero_client=${encodeURIComponent(numero)}`)
       .then((r) => { if (alive) setComments(r.comments || []); })
-      .catch(() => {});
+      .catch(() => { if (alive) setError("Les commentaires n’ont pas pu être chargés."); })
+      .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [numero]);
+  }, [numero, refresh]);
 
   const submit = async () => {
     const body = draft.trim();
@@ -3121,17 +3097,25 @@ function CommentThread({ numero }) {
     try {
       const created = await apiClient.post("/api/v1/optilex/comments", { numero_client: numero, body });
       setComments((prev) => [created, ...prev]);
-      setDraft("");
-    } catch (e) { console.error("comment failed", e); }
+      setDraft(""); setComposerOpen(false);
+    } catch (e) { setError("Le commentaire n’a pas pu être publié. Votre texte est conservé."); }
     finally { setPosting(false); }
   };
 
-  const shown = expanded ? comments : comments.slice(0, 3);
+  const entries = [
+    ...comments.map(c => ({ ...c, kind: "comment", key: `comment-${c.id}` })),
+    ...ratings.map(c => ({ ...c, kind: "rating", key: `rating-${c.id}` })),
+  ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at) || (a.kind === b.kind ? b.id - a.id : a.kind.localeCompare(b.kind)));
+  const shown = expanded ? entries : entries.slice(0, 3);
 
   return (
     <div>
+      {!isFinanceTeam() && <button type="button" className="ob-detail-action" onClick={() => setComposerOpen(v => !v)} aria-expanded={composerOpen}>{composerOpen ? "Fermer le commentaire" : "Ajouter un commentaire"}</button>}
+      {error && <p role="alert" style={{ color: "#b91c1c", fontSize: 12 }}>{error} <button type="button" onClick={() => setRefresh(v => v + 1)}>Réessayer</button></p>}
+      {(loading || ratingsLoading) && <p role="status" style={{ color: MUTED, fontSize: 12 }}>Chargement de l’historique…</p>}
+      {!loading && !ratingsLoading && !error && !entries.length && <p style={{ color: MUTED, fontSize: 12 }}>Aucun échange pour le moment.</p>}
       {/* Nouveau commentaire (masqué pour finance_team = lecture seule) */}
-      {!isFinanceTeam() && (
+      {!isFinanceTeam() && composerOpen && (
       <div style={{ display: "flex", gap: 10, marginBottom: comments.length ? 18 : 4 }}>
         <Avatar name={meName} src={me.avatar_url} size={32} />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -3153,9 +3137,21 @@ function CommentThread({ numero }) {
 
       {/* Fil */}
       <AnimatePresence initial={false}>
-        {shown.map((c) => (
-          <motion.div key={c.id} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }} style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+        {shown.map((c) => c.kind === "rating" ? (
+          <motion.div key={c.key} initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: "flex", gap: 10, padding: "14px 0", borderBottom: `1px solid ${BORDER}` }}>
+            <span style={{ width: 32, height: 32, borderRadius: 10, background: (meteoStyle(c.score) || {}).bg, display: "grid", placeItems: "center", flexShrink: 0 }}><MeteoIcon score={c.score} size={18} /></span>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ display: "flex", gap: 7, alignItems: "baseline", flexWrap: "wrap", fontSize: 12 }}>
+                <strong>{c.author_name || c.author_email || "—"}</strong>
+                <span style={{ color: (meteoStyle(c.score) || {}).color, fontWeight: 600 }}>Météo · {c.score}/5</span>
+                <span title={fmt(c.created_at)} style={{ color: MUTED }}>{timeAgo(c.created_at)}</span>
+              </div>
+              <RatingHistoryActions rating={c} numero={numero} onEdited={onRatingEdited} onDeleted={onRatingDeleted} onConflict={onRatingConflict} />
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div key={c.key} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }} style={{ display: "flex", gap: 10, padding: "14px 0", borderBottom: `1px solid ${BORDER}` }}>
             <Avatar name={c.author_name || c.author_email} size={32} />
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
@@ -3193,20 +3189,20 @@ function CommentThread({ numero }) {
                   </div>
                 </div>
               ) : (
-                <div style={{ fontSize: 13.5, color: TEXT, lineHeight: 1.45, marginTop: 2, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{c.body}</div>
+                <DetailText text={c.body} />
               )}
             </div>
           </motion.div>
         ))}
       </AnimatePresence>
 
-      {comments.length > 3 && (
+      {entries.length > 3 && (
         <button onClick={() => setExpanded((v) => !v)}
           style={{ border: "none", background: "transparent", color: NAVY, fontSize: 13, fontWeight: 600, cursor: "pointer", padding: "2px 0", fontFamily: "inherit" }}>
-          {expanded ? "Voir moins" : `Voir plus (${comments.length - 3})`}
+          {expanded ? "Réduire l’historique" : `Voir plus (${entries.length - 3})`}
         </button>
       )}
-      {comments.length === 0 && <div style={{ fontSize: 13, color: "#cbd2e0", marginTop: 6 }}>Aucun commentaire pour l'instant.</div>}
+
     </div>
   );
 }
