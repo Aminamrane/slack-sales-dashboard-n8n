@@ -14,6 +14,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import apiClient from "../services/apiClient";
 import { leadAvatar } from "../utils/leadAvatar";
+import { poolBusinessDetails, sortByMyLastCall } from "../utils/commonPoolPresentation";
 
 const ORIGIN_TONE = { bg: "rgba(100,116,139,0.12)", text: "#64748b" };
 
@@ -174,8 +175,7 @@ function LeadFace({ lead }) {
   );
 }
 
-// Barre de pages : « Précédent · page X / Y · Suivant ». Masquée s'il n'y a
-// qu'une page. Changer de page remonte en haut de la liste.
+// Accès direct à une page, en plus de précédent / suivant.
 function Pager({ page, pages, total, onPage, C, darkMode }) {
   if (pages <= 1) return null;
   const chev = (d) => (
@@ -193,21 +193,30 @@ function Pager({ page, pages, total, onPage, C, darkMode }) {
   });
   const go = (n) => { onPage(n); window.scrollTo({ top: 0, behavior: "smooth" }); };
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 14 }}>
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 14 }}>
       <button disabled={page <= 1} onClick={() => go(page - 1)} style={btn(page <= 1)}>{chev("l")} Précédent</button>
-      <span style={{ fontSize: 12.5, color: C.muted, whiteSpace: "nowrap" }}>
-        page <b style={{ color: C.text }}>{page}</b> / {pages} · {total} leads
-      </span>
+      <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: C.muted, whiteSpace: "nowrap" }}>
+        Page
+        <select aria-label="Aller à la page" value={page} onChange={(e) => go(Number(e.target.value))}
+          style={{ ...btn(false), padding: "6px 8px", fontWeight: 700 }}>
+          {Array.from({ length: pages }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}
+        </select>
+        / {pages} · {total} leads
+      </label>
       <button disabled={page >= pages} onClick={() => go(page + 1)} style={btn(page >= pages)}>Suivant {chev("r")}</button>
     </div>
   );
 }
 
-// Cellule « taille » : la tranche d'effectif seule (décision dev : pas de CA).
-function SizeCell({ lead, C }) {
-  const head = clean(lead.headcount || lead.employee_range);
-  if (!head) return <span style={{ color: C.muted }}>—</span>;
-  return <b style={{ fontSize: 12, color: C.text, fontWeight: 600, whiteSpace: "nowrap" }}>{head}</b>;
+function LeadBusinessDetails({ lead, C }) {
+  const { revenue, headcount } = poolBusinessDetails(lead);
+  if (!revenue && !headcount) return null;
+  return (
+    <div style={{ display: "grid", gap: 3, marginTop: 5, fontSize: 11.5, lineHeight: 1.4, color: C.text, maxWidth: 300, overflowWrap: "anywhere" }}>
+      {revenue && <strong style={{ fontWeight: 700 }}>CA : {revenue}</strong>}
+      {headcount && <strong style={{ fontWeight: 700 }}>Salariés : {headcount}</strong>}
+    </div>
+  );
 }
 
 // Bouton « ne souhaite pas être rappelé » — corbeille discrète, rouge au survol.
@@ -276,7 +285,7 @@ function MyCallsBadge({ lead, C, darkMode }) {
     <span title="Vos appels à vous sur ce lead" style={{
       display: "inline-flex", alignItems: "center", gap: 5,
       fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", padding: "2px 9px", borderRadius: 20,
-      color: "#1d4ed8",
+      color: darkMode ? "#93c5fd" : "#1d4ed8",
       background: darkMode ? "rgba(29,78,216,0.18)" : "#e8effd",
     }}>
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -502,16 +511,16 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
   const [q, setQ] = useState("");
   // Un seul pool affiché à la fois : le sales choisit son mode de travail.
   const [pool, setPool] = useState("traitement");
-  // Filtre « mes appels » : appliqué à l'affichage, le tri global (dernier
-  // appel de l'équipe, du plus récent) reste celui du serveur.
+  // Seul « Appelés par moi » trie par dernier appel personnel.
   const [mine, setMine] = useState("all");
+  const [callOrder, setCallOrder] = useState("oldest");
   // Pagination : 100 leads par page, les plus récents d'abord (ordre serveur).
   // Toutes les pages découpent le MÊME instantané chargé en une fois : l'ordre
-  // est figé pendant la navigation, un lead ne change pas de page en cours de
-  // route. Changer de pool, de filtre ou de recherche ramène à la page 1.
+  // est partagé entre les pages. Le tri personnel précède le découpage.
+  // Changer de pool, filtre, tri ou recherche ramène à la page 1.
   const PAGE_SIZE = 100;
   const [page, setPage] = useState(1);
-  useEffect(() => { setPage(1); }, [pool, q, mine]);
+  useEffect(() => { setPage(1); }, [pool, q, mine, callOrder]);
   useEffect(() => { if (pool !== "traitement") setMine("all"); }, [pool]);
 
   const fetchPools = async (search) => {
@@ -533,11 +542,13 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
     return () => clearTimeout(t);
   }, [q]);
 
-  const keepMine = (l) => mine === "all" ? true
-    : mine === "mine" ? (l.my_calls || 0) > 0
-    : (l.my_calls || 0) === 0;
-  const reaAll = (data?.reactivite || []).filter(keepMine);
-  const trtAll = (data?.traitement || []).filter(keepMine);
+  const reaAll = data?.reactivite || [];
+  const trtAll = useMemo(() => {
+    const rows = data?.traitement || [];
+    if (mine === "mine") return sortByMyLastCall(rows.filter((lead) => (lead.my_calls || 0) > 0), callOrder);
+    if (mine === "not_mine") return rows.filter((lead) => (lead.my_calls || 0) === 0);
+    return rows;
+  }, [data, mine, callOrder]);
   const activeAll = pool === "reactivite" ? reaAll : trtAll;
   const pages = Math.max(1, Math.ceil(activeAll.length / PAGE_SIZE));
   const cur = Math.min(page, pages);
@@ -722,6 +733,16 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
             );
           })}
         </div>
+        {pool === "traitement" && mine === "mine" && (
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12, color: C.muted }}>
+            Mon dernier appel
+            <select aria-label="Trier par mon dernier appel" value={callOrder} onChange={(e) => setCallOrder(e.target.value)}
+              style={{ padding: "9px 11px", borderRadius: 9, border: `1px solid ${C.border}`, background: darkMode ? "#23262d" : "#fff", color: C.text, fontSize: 12.5, fontFamily: "inherit" }}>
+              <option value="oldest">Plus anciens d’abord</option>
+              <option value="newest">Plus récents d’abord</option>
+            </select>
+          </label>
+        )}
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher (nom, société, téléphone)…"
           style={{ flex: 1, minWidth: 240, maxWidth: 420, padding: "10px 14px", borderRadius: 10, border: `1px solid ${C.border}`, background: darkMode ? "rgba(255,255,255,0.04)" : "#fff", color: C.text, fontSize: 13, fontFamily: "inherit", outline: "none" }} />
       </div>
@@ -741,7 +762,6 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                   <th style={thT}>Secteur</th>
                   <th style={thT}>Téléphone</th>
                   <th style={thT}>Email</th>
-                  <th style={thT}>Taille</th>
                   {canClaim && <th style={thActions} aria-label="Actions" />}
                 </tr></thead>
                 <tbody>
@@ -755,13 +775,14 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontWeight: 650, color: C.text, whiteSpace: "nowrap" }}>{lead.full_name || lead.company_name || "Sans nom"}</div>
                             {lead.pool_entered_at && <div style={{ fontSize: 10.5, color: "#ef4444", fontWeight: 600 }}>arrivé {fmtAge(lead.pool_entered_at)}</div>}
+                            {fmtDate(lead.created_at) && <div style={{ fontSize: 10.5, color: C.muted }}>entré le {fmtDate(lead.created_at)}</div>}
+                            <LeadBusinessDetails lead={lead} C={C} />
                           </div>
                         </div>
                       </td>
                       <td style={tdT}><OriginTag origin={lead.origin} darkMode={darkMode} /></td>
                       <td style={tdT}><CopyChip kind="phone" value={lead.phone} C={C} darkMode={darkMode} /></td>
                       <td style={tdT}><CopyChip kind="email" value={lead.email} C={C} darkMode={darkMode} /></td>
-                      <td style={tdT}><SizeCell lead={lead} C={C} /></td>
                       {canClaim && (
                         <td style={tdActions}>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
@@ -799,7 +820,6 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                   <th style={thT}>Secteur</th>
                   <th style={thT}>Téléphone</th>
                   <th style={thT}>Email</th>
-                  <th style={thT}>Taille</th>
                   {canClaim && <th style={thActions} aria-label="Actions" />}
                 </tr></thead>
                 <tbody>
@@ -823,15 +843,17 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                             </span>
                           </div>
                           <div style={{ fontSize: 10.5, color: C.muted }}>
-                            {lead.company_name && lead.full_name ? lead.company_name : (fmtDate(lead.created_at) ? `entré le ${fmtDate(lead.created_at)}` : "")}
+                            {lead.company_name && lead.full_name && <div>{lead.company_name}</div>}
+                            {fmtDate(lead.created_at) && <div>entré le {fmtDate(lead.created_at)}</div>}
                           </div>
+                          <LeadBusinessDetails lead={lead} C={C} />
+                          {mine === "mine" && <div style={{ marginTop: 5 }}><MyCallsBadge lead={lead} C={C} darkMode={darkMode} /></div>}
                           </div>
                           </div>
                         </td>
                         <td style={tdT}><OriginTag origin={lead.origin} darkMode={darkMode} /></td>
                         <td style={tdT}><CopyChip kind="phone" value={lead.phone} C={C} darkMode={darkMode} /></td>
                         <td style={tdT}><CopyChip kind="email" value={lead.email} C={C} darkMode={darkMode} /></td>
-                        <td style={tdT}><SizeCell lead={lead} C={C} /></td>
                         {canClaim && (
                           <td style={tdActions}>
                             <div style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
@@ -864,7 +886,7 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                       </tr>
                       {rdvFor === lead.id && (
                         <tr>
-                          <td colSpan={canClaim ? 6 : 5} style={{ padding: "0 14px 12px", borderBottom: `1px solid ${darkMode ? "rgba(255,255,255,0.06)" : "#f2f4f7"}`, background: darkMode ? "rgba(255,255,255,0.02)" : "#fafbfc" }}>
+                          <td colSpan={canClaim ? 5 : 4} style={{ padding: "0 14px 12px", borderBottom: `1px solid ${darkMode ? "rgba(255,255,255,0.06)" : "#f2f4f7"}`, background: darkMode ? "rgba(255,255,255,0.02)" : "#fafbfc" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", paddingTop: 10 }}>
                               <div style={{ display: "inline-flex", gap: 3, padding: 3, borderRadius: 8, background: darkMode ? "rgba(255,255,255,0.05)" : "#eef1f5" }}>
                                 {["r1", "r2"].map((k) => (
