@@ -9,12 +9,13 @@
 // son auteur) et la détection par le sync du classeur (sans auteur), fondues
 // en un seul journal, du plus récent au plus ancien.
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { RefreshCw } from 'lucide-react';
 
 import apiClient from '../../../services/apiClient.js';
-import { formatEUR, formatDateFR, formatMonthLabel } from '../constants.js';
+import { orderedReceipts } from '../receipts.js';
+import { formatEUR, formatDateFR, formatMonthLabel, PSP_COLORS, PSP_FALLBACK } from '../constants.js';
 
 const N = {
   text: '#37352f',
@@ -47,12 +48,13 @@ const KIND_LABEL = {
   overdue: 'Créance antérieure',
 };
 
-const GRID = '150px minmax(200px, 2fr) 96px 150px 120px 130px minmax(140px, 1fr)';
+const GRID = '150px minmax(180px, 2fr) 86px 132px 110px 110px 125px minmax(125px, 1fr)';
 
 const whenLabel = (iso) => {
   if (!iso) return '—';
   const s = String(iso);
-  const day = formatDateFR(s);
+  const date = new Date(s);
+  const day = Number.isNaN(date.getTime()) ? formatDateFR(s) : date.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' });
   if (!/T\d\d:\d\d/.test(s)) return day;
   try {
     const time = new Date(s).toLocaleTimeString('fr-FR', {
@@ -70,31 +72,45 @@ export default function ReceiptsView({ scope, onOpenClient }) {
   const [error, setError] = useState(null);
   const [reloading, setReloading] = useState(false);
 
-  const load = useCallback(async () => {
-    setReloading(true);
+  const [refresh, setRefresh] = useState(0);
+  const load = () => setRefresh((n) => n + 1);
+
+  useEffect(() => {
+    setItems(null);
     setError(null);
-    try {
-      const d = await apiClient.get(`/api/v1/finance-periods/receipts?days=${days}&limit=500`);
-      // Garde-fou : une saisie n'apparaît qu'une fois, même si l'API la
-      // renvoie en double (deux enfants React avec la même clé = ligne
-      // fantôme possible au changement de vision, constaté le 2026-09-18
-      // sur n°241). La cause est corrigée côté requête ; ceci protège l'écran.
-      const seen = new Set();
-      setItems((d?.items || []).filter((r) => !seen.has(r.id) && seen.add(r.id)));
-    } catch (e) {
-      setError(e?.data?.detail || e?.message || 'chargement impossible');
-    } finally {
-      setReloading(false);
-    }
-  }, [days]);
+    let cancelled = false;
+    let pending = false;
+    const fetchItems = async (silent = false) => {
+      if (pending) return;
+      pending = true;
+      if (!silent) setReloading(true);
+      try {
+        const d = await apiClient.get(`/api/v1/finance-periods/receipts?days=${days}&limit=500&scope=${scope}`);
+        if (!cancelled) {
+          setItems(orderedReceipts(d?.items || [], scope));
+          setError(null);
+        }
+      } catch (e) {
+        if (!cancelled) setError(e?.data?.detail || e?.message || 'chargement impossible');
+      } finally {
+        pending = false;
+        if (!cancelled) setReloading(false);
+      }
+    };
+    fetchItems();
+    const refreshVisible = () => { if (!document.hidden) fetchItems(true); };
+    const timer = setInterval(refreshVisible, 15000);
+    window.addEventListener('focus', refreshVisible);
+    document.addEventListener('visibilitychange', refreshVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      window.removeEventListener('focus', refreshVisible);
+      document.removeEventListener('visibilitychange', refreshVisible);
+    };
+  }, [days, scope, refresh]);
 
-  useEffect(() => { load(); }, [load]);
-
-  // La vision active filtre les entités, comme partout sur la page.
-  const visible = useMemo(() => {
-    if (!items) return [];
-    return scope === 'global' ? items : items.filter((r) => r.entity === scope);
-  }, [items, scope]);
+  const visible = useMemo(() => orderedReceipts(items || [], scope), [items, scope]);
 
   const totaux = useMemo(() => {
     const t = { total: 0, n: visible.length, owner: 0, optilex: 0, overdue: 0 };
@@ -106,7 +122,7 @@ export default function ReceiptsView({ scope, onOpenClient }) {
     return t;
   }, [visible]);
 
-  if (error) return <Message texte={`Encaissements indisponibles — ${error}`} />;
+  if (error && items === null) return <Message texte={`Encaissements indisponibles — ${error}`} />;
   if (items === null) return <Message texte="Chargement des encaissements…" />;
 
   return (
@@ -195,15 +211,16 @@ export default function ReceiptsView({ scope, onOpenClient }) {
         </div>
       </motion.div>
 
+      <div style={{ color: N.textMuted, fontSize: 11.5, marginBottom: 10 }}>Dernières saisies en premier · heure de Paris{error ? ' · Actualisation indisponible, réessayez.' : ''}</div>
       {visible.length === 0 ? (
         <Message texte="Aucun encaissement sur la période." />
       ) : (
         <div style={{
-          border: `1px solid ${N.borderSft}`, borderRadius: 10, overflow: 'hidden',
+          border: `1px solid ${N.borderSft}`, borderRadius: 10, overflowX: 'auto',
           background: '#fff',
         }}>
           <div style={{
-            display: 'grid', gridTemplateColumns: GRID,
+            display: 'grid', gridTemplateColumns: GRID, minWidth: 1080,
             gap: 10, padding: '9px 14px', background: N.sideBg,
             borderBottom: `1px solid ${N.borderSft}`,
             fontSize: 10.5, fontWeight: 600, color: N.textMuted,
@@ -214,6 +231,7 @@ export default function ReceiptsView({ scope, onOpenClient }) {
             <span>Entité</span>
             <span>Nature</span>
             <span style={{ textAlign: 'right' }}>Montant</span>
+            <span>Prestataire</span>
             <span>Mois concerné</span>
             <span>Saisi par</span>
           </div>
@@ -228,7 +246,7 @@ export default function ReceiptsView({ scope, onOpenClient }) {
                 transition={{ duration: 0.2, delay: Math.min(i, 12) * 0.02, ease: [0.4, 0, 0.2, 1] }}
                 onClick={() => onOpenClient?.(r.client_id)}
                 style={{
-                  display: 'grid', gridTemplateColumns: GRID,
+                  display: 'grid', gridTemplateColumns: GRID, minWidth: 1080,
                   gap: 10, padding: '10px 14px', fontSize: 12.5, alignItems: 'center',
                   borderTop: i === 0 ? 'none' : `1px solid ${N.borderSft}`,
                   cursor: onOpenClient ? 'pointer' : 'default',
@@ -264,6 +282,13 @@ export default function ReceiptsView({ scope, onOpenClient }) {
                   color: N.green,
                 }}>
                   {formatEUR(r.amount)}
+                </span>
+                <span title="Prestataire renseigné pour cette échéance">
+                  <span style={{ display: 'inline-block', padding: '2px 7px', borderRadius: 4,
+                    fontSize: 11.5, background: (PSP_COLORS[r.psp] || PSP_FALLBACK).bg,
+                    color: (PSP_COLORS[r.psp] || PSP_FALLBACK).fg }}>
+                    {r.psp || 'Non renseigné'}
+                  </span>
                 </span>
                 <span style={{ color: N.textMuted }}>
                   {r.period ? formatMonthLabel(String(r.period).slice(0, 7)) : '—'}

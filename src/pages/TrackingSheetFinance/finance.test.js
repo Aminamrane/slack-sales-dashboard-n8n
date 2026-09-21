@@ -330,3 +330,38 @@ test('la vision Globale reste fermée à finance_team, sauf Aurélie B', async (
   assert.equal(canUseGlobalScope({ id: '6dfc7435-c938-4bd3-b143-a6516b2981bd', role: 'finance_team' }), true);
   assert.equal(canUseGlobalScope(null), true, 'sans utilisateur, la garde de rôle de la page a déjà redirigé');
 });
+
+import { matchesPriorDebt, scopedOpeningDebt } from './constants.js';
+import { orderedReceipts } from './receipts.js';
+
+test('créance réglée : attendu, population et ancienneté conservés dans les trois visions', () => {
+  for (const scope of ['owner', 'optilex', 'global']) {
+    const before = { opening_owner_since: '2026-07-01', opening_optilex_since: '2026-07-01',
+      balance_owner: { opening_debt: 100, prior_remaining: 100, recovered_prior: 0 },
+      balance_optilex: { opening_debt: 50, prior_remaining: 50, recovered_prior: 0 } };
+    const after = { ...before,
+      balance_owner: { opening_debt: 100, prior_remaining: 0, recovered_prior: 100 },
+      balance_optilex: { opening_debt: 50, prior_remaining: 0, recovered_prior: 50 } };
+    assert.equal(scopedOpeningDebt(before, scope), scopedOpeningDebt(after, scope));
+    assert.equal(matchesPriorDebt(after, scope, 'all', '2026-09'), true);
+    assert.equal(matchesPriorDebt(after, scope, 'old', '2026-09'), true);
+    assert.equal(matchesPriorDebt(after, scope, 'recent', '2026-09'), false);
+    const initial = computeKpis([before], scope), settled = computeKpis([after], scope);
+    assert.equal(initial.openingDebt, settled.openingDebt);
+    assert.equal(settled.recoveredPrior, settled.openingDebt);
+    assert.equal(settled.overdueCumTotal, 0);
+  }
+});
+
+test('encaissements : dernière saisie en premier, fuseaux comparés et doublons exclus', () => {
+  const items = [
+    { id: 'old', entity: 'optilex', at: '2026-09-19T20:17:00+02:00', psp: 'IFX' },
+    { id: 'new', entity: 'owner', at: '2026-09-21T08:29:00+02:00', psp: 'Learnypay' },
+    { id: 'latest', entity: 'optilex', at: '2026-09-21T11:54:00Z', psp: 'IFX' },
+  ];
+  assert.deepEqual(orderedReceipts([...items, items[1]]).map(r => r.id), ['latest', 'new', 'old']);
+  assert.deepEqual(orderedReceipts(items, 'owner').map(r => r.id), ['new']);
+  assert.deepEqual(orderedReceipts(items, 'optilex').map(r => r.id), ['latest', 'old']);
+  assert.equal(orderedReceipts(items)[0].psp, 'IFX');
+  assert.equal(items[0].id, 'old');
+});

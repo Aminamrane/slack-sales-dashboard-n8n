@@ -138,8 +138,8 @@ export const COLUMN_LABELS = {
   receivedOwner:        'Montant Récupéré Owner',
   receivedOptilex:      'Montant Récupéré Opti\'lex',
   overdueCurrent:       'Retard de paiement',
-  overdueOwnerCum:      'Retard de paiement sur les mois précédents Owner',
-  overdueOptilexCum:    'Retard de paiement sur les mois précédents Opti\'lex',
+  overdueOwnerCum:      'Créances antérieures attendues au début du mois Owner',
+  overdueOptilexCum:    'Créances antérieures attendues au début du mois Opti\'lex',
   receivedOverdueOwner: 'Montant récupéré sur les créances des mois précédents Owner',
   receivedOverdueOpti:  'Montant récupéré sur les créances des mois précédents Opti\'lex',
   pspOwner:             'Check Owner',
@@ -303,15 +303,26 @@ export const scopedCredit = (r, scope) => scopedPosition(r, scope, 'credit');
 //
 // En vision Globale, on retient la dette la PLUS ANCIENNE des deux entités :
 // c'est celle qui commande la relance.
-export const creanceAgeMonths = (r, scope) => {
+export const creanceAgeMonths = (r, scope, period = null) => {
   const dates = [];
-  if (scope !== 'optilex' && entityPosition(r, 'owner').prior_remaining > 0 && r.overdue_owner_since) dates.push(r.overdue_owner_since);
-  if (scope !== 'owner' && entityPosition(r, 'optilex').prior_remaining > 0 && r.overdue_optilex_since) dates.push(r.overdue_optilex_since);
+  for (const entity of ['owner', 'optilex']) {
+    if (scope !== 'global' && scope !== entity) continue;
+    const position = entityPosition(r, entity);
+    const since = r[`opening_${entity}_since`] || r[`overdue_${entity}_since`];
+    if ((position.opening_debt > 0 || position.prior_remaining > 0) && since) dates.push(since);
+  }
   if (!dates.length) return null;
-  const plusAncienne = dates.sort()[0];
-  const [y, m] = String(plusAncienne).slice(0, 7).split('-').map(Number);
+  const [y, m] = String(dates.sort()[0]).slice(0, 7).split('-').map(Number);
   const now = new Date();
-  return (now.getFullYear() - y) * 12 + (now.getMonth() + 1 - m);
+  const [cy, cm] = period ? period.slice(0, 7).split('-').map(Number) : [now.getFullYear(), now.getMonth() + 1];
+  return (cy - y) * 12 + cm - m;
+};
+
+export const matchesPriorDebt = (r, scope, age = 'all', period = null) => {
+  if (scopedOpeningDebt(r, scope) <= 0 && scopedOverdueCum(r, scope) <= 0) return false;
+  if (age === 'all') return true;
+  const months = creanceAgeMonths(r, scope, period);
+  return months === null ? age === 'recent' : age === 'old' ? months >= 2 : months < 2;
 };
 
 // Totaux du bandeau, calculés sur les lignes RÉELLEMENT AFFICHÉES.
