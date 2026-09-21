@@ -2,7 +2,7 @@
 .sales-recordings-ui.is-dark {--rec-ink:#edf1f7;--rec-muted:#b5bfd0;--rec-line:#394253;--rec-bg:#222834;--rec-soft:#2b3240;}
 .sales-recordings-ui button,.sales-recordings-ui input,.sales-recordings-ui select {font:inherit;color:inherit;}
 .sales-recordings-ui button {cursor:pointer;}
-.recordings-summary {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:24px;}
+.recordings-summary {display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;margin-bottom:24px;}
 .recordings-stat {display:flex;align-items:center;gap:14px;border:1px solid var(--rec-line);background:var(--rec-bg);padding:20px;border-radius:18px;min-width:0;}
 .recordings-icon {display:grid;place-items:center;width:44px;height:44px;border-radius:13px;background:var(--rec-soft);color:var(--rec-muted);flex-shrink:0;}
 .recordings-stat strong {display:block;font-size:28px;line-height:1.2;font-weight:700;font-variant-numeric:tabular-nums;}
@@ -23,6 +23,9 @@
 .recordings-person-heading strong {font-size:14px;line-height:1.5;flex:1;overflow-wrap:anywhere;}
 .recordings-person-heading>svg {color:var(--rec-muted);flex-shrink:0;}
 .recordings-actions {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--rec-line);padding-top:14px;gap:8px;}
+.recordings-actions.is-four {grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}
+.recordings-actions.is-four button {padding:12px 2px;}
+.recordings-actions.is-four span {text-align:center;overflow-wrap:anywhere;}
 .recordings-actions button {border:0;background:var(--rec-soft);padding:12px 4px;border-radius:11px;display:flex;align-items:center;flex-direction:column;gap:6px;min-width:0;transition:background .2s ease,transform .2s ease;}
 .recordings-actions svg {color:var(--rec-muted);}
 .recordings-actions strong {font-size:20px;font-weight:650;line-height:1.2;font-variant-numeric:tabular-nums;}
@@ -33,7 +36,8 @@
 .recordings-empty {padding:28px;text-align:center;border:1px solid var(--rec-line);background:var(--rec-bg);border-radius:16px;font-size:13px;color:var(--rec-muted);}
 .sales-recordings-ui button:focus-visible,.sales-recordings-ui select:focus-visible,.recordings-search:focus-within {outline:2px solid #7284a6;outline-offset:3px;}
 @media(hover:hover) and (prefers-reduced-motion:no-preference) {.recordings-actions button:hover {transform:translateY(-2px);background:color-mix(in srgb,var(--rec-line) 55%,var(--rec-soft));}.recordings-person-heading:hover>svg {transform:translate(1px,-1px);}}
-@media(max-width:1200px) {.recordings-grid {grid-template-columns:repeat(2,minmax(0,1fr));}.recordings-summary {grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:1500px) {.recordings-summary {grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media(max-width:1200px) {.recordings-grid {grid-template-columns:repeat(2,minmax(0,1fr));}.recordings-summary {grid-template-columns:repeat(2,minmax(0,1fr));}.recordings-actions.is-four {grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:620px) {.recordings-grid {grid-template-columns:1fr;}.recordings-stat {padding:14px;gap:10px;}.recordings-icon {width:34px;height:34px;}.recordings-stat strong {font-size:23px;}.recordings-summary {gap:10px;}.recordings-toolbar select,.recordings-refresh {flex:1;}.recordings-search {flex-basis:100%;}.recordings-analysis-layout {grid-template-columns:1fr!important;}}
 @keyframes recordings-spin {to {transform:rotate(360deg);}}
 .sales-recordings-ui .is-spinning {animation:recordings-spin 1.2s linear infinite;}

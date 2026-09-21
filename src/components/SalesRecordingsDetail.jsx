@@ -9,7 +9,7 @@
 //   · Vidéos               → enregistrements Meet (proxy stream)
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Video, FileText, ChartNoAxesCombined, BookOpen, Share2, ArrowUpRight } from "lucide-react";
+import { ArrowLeft, Video, FileText, Captions, ChartNoAxesCombined, BookOpen, Share2, ArrowUpRight } from "lucide-react";
 import "./SalesRecordings.css";
 import apiClient from "../services/apiClient";
 import ScorecardView from "./ScorecardView.jsx";
@@ -104,14 +104,20 @@ export default function SalesRecordingsDetail({ sales, onBack, C, darkMode, init
   }, [selId]);
 
   const videos = useMemo(() => (sales.recordings || []).filter((r) => r.kind === "video" && !r.shared), [sales]);
-  const notes = useMemo(() => (sales.recordings || []).filter((r) => (r.kind === "note" || r.kind === "transcript") && !r.shared), [sales]);
+  // Un document Gemini ne contient le verbatim que s'il porte un onglet
+  // « Transcription » : le backend le vérifie et renvoie `has_verbatim`. Les deux
+  // familles sont présentées séparément, une note n'étant pas une transcription.
+  const documents = useMemo(() => (sales.recordings || []).filter((r) => (r.kind === "note" || r.kind === "transcript") && !r.shared), [sales]);
+  const transcriptions = useMemo(() => documents.filter((r) => r.has_verbatim === true), [documents]);
+  const notes = useMemo(() => documents.filter((r) => r.has_verbatim !== true), [documents]);
 
   const shared = useMemo(() => (sales.recordings || []).filter((r) => r.shared), [sales]);
 
   const TABS = [
     { key: "analyses", label: "Analyses", icon: ChartNoAxesCombined, n: scList?.length ?? sales.nb_scored ?? 0 },
     { key: "videos", label: "Vidéos", icon: Video, n: videos.length },
-    { key: "transcriptions", label: "Notes & transcriptions", icon: FileText, n: notes.length },
+    { key: "transcriptions", label: "Transcriptions", icon: Captions, n: transcriptions.length },
+    { key: "notes", label: "Notes Gemini", icon: FileText, n: notes.length },
     ...(shared.length ? [{ key: "shared", label: "Partagés avec ce sales", icon: Share2, n: shared.length }] : []),
     { key: "bilan", label: "Bilan de la semaine", icon: BookOpen },
   ];
@@ -210,16 +216,23 @@ export default function SalesRecordingsDetail({ sales, onBack, C, darkMode, init
         )
       )}
 
-      {["videos", "transcriptions", "shared"].includes(tab) && (() => {
-        const files = tab === "videos" ? videos : tab === "shared" ? shared : notes;
+      {["videos", "transcriptions", "notes", "shared"].includes(tab) && (() => {
+        const files = tab === "videos" ? videos : tab === "shared" ? shared : tab === "notes" ? notes : transcriptions;
         if ((sales.files_loading ?? loadingFiles) && !files.length) return <Loading label="Chargement des fichiers…" />;
-        if (!files.length) return <div className="recordings-empty">{tab === "videos" ? "Aucune vidéo disponible pour le moment." : "Aucun document disponible pour le moment."}</div>;
+        if (!files.length) return <div className="recordings-empty">{
+          tab === "videos" ? "Aucune vidéo disponible pour le moment."
+          : tab === "transcriptions" ? "Aucune transcription : la transcription Meet n’est pas activée sur ce compte, seules les notes Gemini sont produites."
+          : "Aucun document disponible pour le moment."}</div>;
         return <div className="recordings-files">{files.map((r) => {
           const isVideo = r.kind === "video";
-          const Icon = isVideo ? Video : FileText;
+          const Icon = isVideo ? Video : r.has_verbatim === true ? Captions : FileText;
+          // Ce que contient vraiment le document : verbatim, résumé seul, ou pas encore vérifié.
+          const nature = isVideo ? "" : r.has_verbatim === true
+            ? ` · Transcription${r.verbatim_words ? ` (${new Intl.NumberFormat("fr-FR").format(r.verbatim_words)} mots)` : ""}`
+            : r.has_verbatim === false ? " · Notes seules, pas de transcription" : " · Contenu en cours de vérification";
           return <button type="button" key={r.id} className="recordings-file" onClick={() => setViewing({ rec: r, mode: isVideo ? "video" : "transcription" })}>
             <span className="recordings-icon"><Icon size={22} strokeWidth={1.8} aria-hidden="true" /></span>
-            <span className="recordings-file-copy"><strong>{r.name}</strong><span>{fmtDate(r.created)}{r.rdv ? ` · ${r.rdv}` : ""}{r.shared ? " · Document partagé" : ""}</span></span>
+            <span className="recordings-file-copy"><strong>{r.name}</strong><span>{fmtDate(r.created)}{r.rdv ? ` · ${r.rdv}` : ""}{nature}{r.shared ? " · Document partagé" : ""}</span></span>
             <span className="recordings-file-open">{isVideo ? "Voir la vidéo" : "Ouvrir"}<ArrowUpRight size={16} aria-hidden="true" /></span>
           </button>;
         })}</div>;
