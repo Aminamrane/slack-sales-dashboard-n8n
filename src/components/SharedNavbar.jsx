@@ -24,6 +24,8 @@ const ROLE_LABELS = {
   sales: "Sales",
   head_of_sales: "Head of Sales",
   head_of_sales_manager: "Head of Sales Manager",
+  setter: "Setter",
+  setter_manager: "Setter Manager",
   ceo: "CEO",
   tech: "Tech",
   marketing: "Marketing",
