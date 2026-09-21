@@ -82,6 +82,7 @@ import {
   isExitCandidate,
   deferralsByMonth,
 } from './constants.js';
+import { statementRows } from './pdf/statementRows.js';
 import { describeAction } from './actionLabel.js';
 import {
   EditableNumber, EditableDate, EditableSelect, EditableText, CopyButton,
@@ -488,6 +489,11 @@ export default function DetailPanel({
 
   // `entity` : 'owner' | 'optilex' — pilote émetteur ET champs de montants.
   const [pdfGenerating, setPdfGenerating] = useState(null); // null | 'owner' | 'optilex'
+  const [statementDownload, setStatementDownload] = useState(null);
+  useEffect(() => () => {
+    if (statementDownload?.url) URL.revokeObjectURL(statementDownload.url);
+  }, [statementDownload]);
+  useEffect(() => { setStatementDownload(null); }, [clientId, open]);
   // `structure` (optionnel) : n'inclut que ce qui a été ventilé sur cette
   // société, et le dit dans le document. Demande dev 2026-09-01 — un client
   // qui règle pour cinq structures a besoin d'un état de compte par société.
@@ -495,6 +501,15 @@ export default function DetailPanel({
     if (pdfGenerating) return;
     setPdfGenerating(structure ? `st-${structure.id}` : entity);
     try {
+      const [statementTimeline, statementProfile, statementSplits] = await Promise.all([
+        apiClient.get(`/api/v1/finance-periods/client/${clientId}/timeline`),
+        apiClient.get(`/api/v1/finance-periods/client/${clientId}/profile`),
+        structure ? apiClient.get(`/api/v1/finance-periods/client/${clientId}/splits`) : Promise.resolve(null),
+      ]);
+      if (!Array.isArray(statementTimeline?.periods) || !statementProfile || (structure && !Array.isArray(statementSplits?.items))) {
+        throw new Error('Les données de l’état de compte n’ont pas pu être chargées. Fermez puis rouvrez la fiche et réessayez.');
+      }
+      const statementPeriods = statementTimeline.periods;
       const { generateEtatDeCompte } = await import('./pdf/EtatDeComptePdf.jsx');
 
       // Société découpée + personne(s) (source unique splitSocieteRep) ;
@@ -503,94 +518,32 @@ export default function DetailPanel({
       const { societeName, representant: repFromSociete } = splitClientIdentity(client);
       const personne = client?.representative_name || repFromSociete;
 
-      // Lignes de l'entité demandée. Périmètre comptable (retour dev ZILWA
-      // n°637, 2026-08-21) : de la signature au mois de la date d'émission
-      // INCLUS — les mois futurs ne sont pas facturés, ils sortent du
-      // document ET du total. Les mois vides (ni facturé ni payé) sautés.
       const nowMonth = currentPeriod();
-      const sorted = [...visiblePeriods]
-        .sort((a, b) => String(a.period).localeCompare(String(b.period)));
-      const entityRows = [];
-      let latestExpected = null;
-      for (const p of sorted) {
-        const month = String(p.period).slice(0, 7);
-        if (month > nowMonth) continue; // mois futur — hors périmètre
-        const a = scopedPeriodAmounts(p, entity);
-        if (a.expected <= 0 && a.received <= 0) continue;
-        if (a.expected > 0) latestExpected = a.expected;
-        // « Payé » inclut le récupéré sur créances passées du mois : le
-        // solde cumulé (calculé dans le PDF) régularise ainsi les mois
-        // précédents au fil des lignes.
-        entityRows.push({
-          month,
-          billed: a.expected,
-          paid: a.received + a.receivedOverdue,
-        });
-      }
+      const latestExpected = [...statementPeriods].sort((a,b) => String(b.period).localeCompare(String(a.period)))
+        .filter(p => String(p.period).slice(0,7) <= nowMonth)
+        .map(p => scopedPeriodAmounts(p, entity).expected).find(amount => amount > 0);
 
       // Offre = libellé de la Formule : tranche, sinon forfait (tarif client
       // prioritaire côté Owner, sinon dernier attendu de l'entité).
-      const range = profile?.employee_range || focusedRow?.employee_range || client?.employee_range;
+      const range = statementProfile?.employee_range || focusedRow?.employee_range || client?.employee_range;
       const tarif = entity === 'owner' ? toNumber(client?.tarif) : null;
       const price = (tarif && tarif > 0) ? tarif : latestExpected;
       const offre = range ? `${range} salariés` : (price ? formatEUR(price) : '—');
 
-      // Ventilation par structure : si une société est demandée, le document
-      // ne retient QUE ce qui lui a été attribué. On ne répartit rien au
-      // prorata — un montant non ventilé n'appartient à personne, et
-      // l'inventer donnerait un document faux.
-      if (structure) {
-        const parMois = new Map();
-        for (const sp of (structureSplits || [])) {
-          if (sp.structure_id !== structure.id || sp.entity !== entity) continue;
-          const k = String(sp.period || '').slice(0, 7);
-          parMois.set(k, (parMois.get(k) || 0) + Number(sp.amount || 0));
-        }
-        for (const r of entityRows) {
-          r.paid = parMois.get(r.month) || 0;
-          r.billed = 0;            // l'attendu n'est pas ventilé par société
-        }
-      }
-
-      // Remboursements de trop-perçu de CETTE entité : ce sont des mouvements
-      // d'argent, ils doivent figurer au document (demande dev 2026-08-28).
-      // Un remboursement s'écrit en « payé » NÉGATIF : l'argent est ressorti.
-      // Le solde cumulé du PDF (`solde += facturé − payé`) le régularise donc
-      // tout seul — un crédit de 192,50 revient exactement à zéro.
-      const refundRows = (profile?.refunds || [])
-        .filter((r) => r.entity === entity && Number(r.amount) > 0)
-        .map((r) => ({
-          month: String(r.period || '').slice(0, 7),
-          billed: 0,
-          paid: -Number(r.amount),
-          refund: true,
-          reason: r.reason || '',
-        }));
-
-      // Fusion chronologique : un remboursement se lit APRÈS le mois qu'il
-      // solde, comme sur un relevé bancaire.
-      const rows = [...entityRows.map((r) => ({ ...r, refund: false })), ...refundRows]
-        .sort((a, b) => (a.month === b.month
-          ? Number(a.refund) - Number(b.refund)
-          : String(a.month).localeCompare(String(b.month))))
-        .map((r) => ({
-          periodLabel: formatMonthLabel(r.month),
-          offre: r.refund
-            ? `Remboursement de trop-perçu${r.reason ? ` — ${r.reason}` : ''}`
-            : offre,
-          billed: r.billed,
-          paid: r.paid,
-        }));
+      const rows = statementRows({ periods: statementPeriods, entity, month: nowMonth, offer: offre,
+        structure, splits: statementSplits?.items || [], refunds: statementProfile?.refunds || [],
+        priorDebts: statementProfile?.prior_debts || [] });
 
       // Adresse client : exposée par le profil (backend 2026-08-25) —
       // code défensif, les champs peuvent ne pas encore être présents.
       const addressLine = [
-        profile?.address_line1 || null,
-        [profile?.postal_code, profile?.city].filter(Boolean).join(' ') || null,
+        statementProfile?.address_line1 || null,
+        [statementProfile?.postal_code, statementProfile?.city].filter(Boolean).join(' ') || null,
       ].filter(Boolean).join(', ');
 
       const blob = await generateEtatDeCompte({
         entity,
+        paymentsOnly: !!structure,
         recipient: {
           company: structure ? `${societeName} — ${structure.name}` : societeName,
           person: personne || '',
@@ -602,7 +555,7 @@ export default function DetailPanel({
           // Siret du modèle : `profile.siret` (14 chiffres, backend
           // 2026-08-25) → repli sur le SIREN connu → vide (libellé
           // conservé, comme le modèle).
-          siret: profile?.siret || profile?.siren || '',
+          siret: statementProfile?.siret || statementProfile?.siren || '',
         },
         rows,
         // Date courte DD/MM/YY — format de la référence.
@@ -619,14 +572,15 @@ export default function DetailPanel({
       document.body.appendChild(a);
       a.click();
       a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setStatementDownload({ url, filename: a.download, clientId });
+      onShowToast?.('État de compte prêt. Le lien reste disponible sous le bouton.', 'success');
     } catch (e) {
       console.error('[DetailPanel pdf]', e);
-      onShowToast?.('Erreur lors de la génération du PDF', 'error');
+      onShowToast?.('Impossible de télécharger l’état de compte. Vérifiez la connexion puis réessayez ; si le problème persiste, actualisez la page.', 'error');
     } finally {
       setPdfGenerating(null);
     }
-  }, [pdfGenerating, visiblePeriods, profile, focusedRow, client, structureSplits, onShowToast]);
+  }, [pdfGenerating, clientId, focusedRow, client, onShowToast]);
 
   // Bouton Modifier : déplie le détail complet puis scrolle dessus (léger
   // délai pour laisser l'accordéon commencer son expansion).
@@ -934,12 +888,19 @@ export default function DetailPanel({
               title="État de compte"
               delay={0.11}
               action={(
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
                 <StatementMenu
                   scope={scope}
                   structures={structures}
                   busy={pdfGenerating}
                   onDownload={downloadStatement}
                 />
+                {statementDownload?.clientId === clientId && (
+                  <a href={statementDownload.url} download={statementDownload.filename} style={{ fontSize: 12, color: N.text }}>
+                    PDF prêt · Télécharger à nouveau
+                  </a>
+                )}
+                </div>
               )}
             >
               <InstallmentsList
