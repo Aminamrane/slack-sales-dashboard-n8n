@@ -191,7 +191,7 @@ export default function TrafficChart({ pageviews = [], leadsByDay = [], budgetBy
         yAxisID: 'y',
       },
       {
-        label: 'CPL',
+        label: 'Coût / inscrit reçu',
         data: merged.map((r) => r.cpl),
         borderColor: C.amber.strong,
         backgroundColor: (ctx) => {
@@ -262,7 +262,7 @@ export default function TrafficChart({ pageviews = [], leadsByDay = [], budgetBy
   // ── Tabs (segmented control top-right) ───────────────────────────
   const tabs = [
     { key: 'traffic', label: 'Trafic & inscrits' },
-    { key: 'budget', label: 'Budget & CPL' },
+    { key: 'budget', label: 'Budget & coût / inscrit' },
   ];
 
   const TabsControl = (
@@ -345,7 +345,7 @@ export default function TrafficChart({ pageviews = [], leadsByDay = [], budgetBy
             C={C}
             rows={[
               { label: 'Budget', value: fmtEur(tooltip.row.budget), color: C.violet.strong },
-              { label: 'CPL', value: tooltip.row.cpl !== null ? fmtEur(tooltip.row.cpl, { decimals: 2 }) : '—', color: C.amber.strong },
+              { label: 'Coût / inscrit reçu', value: tooltip.row.cpl !== null ? fmtEur(tooltip.row.cpl, { decimals: 2 }) : '—', color: C.amber.strong },
               { label: 'Inscrits', value: fmtInt(tooltip.row.leads), color: C.muted, faded: true },
             ]}
             label={fmtShortDate(tooltip.row.date)}

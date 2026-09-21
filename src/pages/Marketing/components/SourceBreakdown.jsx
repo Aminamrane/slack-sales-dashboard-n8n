@@ -110,6 +110,16 @@ export default function SourceBreakdown({ summary, C }) {
           <div style={{ marginTop: 8, fontSize: 12, color: C.muted, fontWeight: 500 }}>
             {fmtPct(card.pct)} des inscrits · {card.sub}
           </div>
+          {card.key === 'landing' && summary.budgetSource === 'meta' && (
+            <div style={{ marginTop: 10, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
+              Budget et CPL LP : non isolables. Les dépenses de campagne ne sont pas ventilées entre formulaires Meta, LP et LP V2.
+            </div>
+          )}
+          {card.key === 'meta' && summary.metaBudgetStatus === 'available' && (
+            <div style={{ marginTop: 10, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
+              {fmtInt(summary.metaLeads)} leads déclarés par Meta, toutes destinations confondues. Attribution et déduplication peuvent différer des inscriptions reçues.
+            </div>
+          )}
         </motion.div>
       ))}
     </div>

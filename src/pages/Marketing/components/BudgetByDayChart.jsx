@@ -100,7 +100,7 @@ export default function BudgetByDayChart({ budgetByDay = [], C, darkMode }) {
         C={C}
       >
         <div style={{ padding: '32px 0', textAlign: 'center', color: C.muted, fontSize: 13 }}>
-          Saisis les budgets quotidiens plus bas pour activer la courbe.
+          La courbe apparaîtra lorsque des dépenses seront disponibles sur cette période.
         </div>
       </Card>
     );

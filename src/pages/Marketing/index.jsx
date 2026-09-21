@@ -208,7 +208,9 @@ export default function Marketing() {
   const webinarIdRef = useRef(webinarId);
   useEffect(() => { webinarIdRef.current = webinarId; }, [webinarId]);
 
+  const overviewRequestRef = useRef(0);
   const loadOverview = useCallback(async () => {
+    const requestId = ++overviewRequestRef.current;
     const requestedWebinarId = webinarId;
     setOverviewLoading(true);
     try {
@@ -216,14 +218,14 @@ export default function Marketing() {
       const json = await apiClient.get(`/api/v1/marketing/webinars/${webinarId}/overview?${qs}`);
       // Ignore une réponse obsolète : l'utilisateur a déjà switché de
       // webinaire entre le départ du fetch et son retour.
-      if (webinarIdRef.current !== requestedWebinarId) return;
+      if (webinarIdRef.current !== requestedWebinarId || overviewRequestRef.current !== requestId) return;
       setOverview(json);
       setOverviewError(null);
     } catch (e) {
-      if (webinarIdRef.current !== requestedWebinarId) return;
+      if (webinarIdRef.current !== requestedWebinarId || overviewRequestRef.current !== requestId) return;
       setOverviewError(e?.message || 'Erreur de chargement');
     } finally {
-      if (webinarIdRef.current === requestedWebinarId) setOverviewLoading(false);
+      if (webinarIdRef.current === requestedWebinarId && overviewRequestRef.current === requestId) setOverviewLoading(false);
     }
   }, [queryString, webinarId]);
 
@@ -788,8 +790,8 @@ export default function Marketing() {
           />
         </section>
 
-        {/* ── BUDGET EDITOR ── */}
-        <section style={{ marginBottom: 16 }}>
+        {/* Saisie manuelle uniquement pour les cohortes sans dépenses Meta. */}
+        {summary?.budgetSource !== 'meta' && <section style={{ marginBottom: 16 }}>
           <BudgetEditor
             webinarId={webinarId}
             C={C}
@@ -798,7 +800,7 @@ export default function Marketing() {
             dateFrom={webinar?.date_start}
             dateTo={webinar?.date_end}
           />
-        </section>
+        </section>}
 
         <footer style={{
           marginTop: 32,

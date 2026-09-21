@@ -317,13 +317,20 @@ export default function HeroKpiStrip({ webinar, summary, realtimeLeads, rankingP
       };
     })(),
     {
-      label: 'Budget engagé',
-      value: fmtEur(summary.budgetEur),
+      label: summary.budgetSource === 'meta' ? 'Budget engagé · Meta' : 'Budget engagé',
+      value: fmtEur(summary.budgetEur, { decimals: 2 }),
+      hint: summary.budgetSource === 'meta'
+        ? summary.metaBudgetStatus === 'available' ? 'Dépenses réelles · période sélectionnée · actualisation 20 min' : 'Dépenses Meta indisponibles pour le moment'
+        : 'Budget saisi par le marketing',
     },
     {
-      label: 'Coût par lead',
+      label: summary.budgetSource === 'meta' ? 'Coût par lead · Meta' : 'Coût par lead',
       value: fmtEur(summary.cplEur, { decimals: 2 }),
-      hint: 'Budget ÷ Inscrits',
+      hint: summary.budgetSource === 'meta'
+        ? summary.metaBudgetStatus === 'available'
+          ? `${fmtInt(summary.metaLeads)} leads Meta · ${fmtEur(summary.costPerSignupEur, { decimals: 2 })} / inscrit reçu`
+          : 'Indisponible · aucun coût estimé'
+        : 'Budget ÷ Inscrits',
     },
     {
       label: "Taux d'ouverture",
