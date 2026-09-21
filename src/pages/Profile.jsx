@@ -314,7 +314,7 @@ export default function Profile() {
   const displayName = session?.name || session?.full_name || (session?.email || "").split("@")[0];
 
   // ── Cartes (réutilisées dans la grille 2 colonnes) ──
-  const absencesCard = <AbsencePanel dark={darkMode} />;
+  const absencesCard = session?.id ? <AbsencePanel key={serverDays.join(",")} dark={darkMode} /> : null;
 
   const workingDaysCard = (
     <div style={cardStyle}>
