@@ -13,6 +13,11 @@ import CreateColdLeadModal from "../components/setter/CreateColdLeadModal.jsx";
 import SetterOnboarding from "../components/SetterOnboarding.jsx";
 import "../index.css";
 
+// Rôles qui travaillent cette sheet comme un setter : `setter` (historique) et
+// `setter_manager` (2026-09-21, encadrant, même périmètre pour l'instant).
+// Miroir de SETTER_ROLES côté backend (app/core/roles.py).
+const SETTER_ROLES = ['setter', 'setter_manager'];
+
 // ── SIDEBAR ICONS ────────────────────────────────────────────────────────────
 import iconMyLead from "../assets/global.png";
 import iconPlus from "../assets/plus.png";
@@ -295,7 +300,7 @@ export default function TrackingSheetSetter() {
   // `has_active_setter_assignment`). Cas Sébastien ITEMA. Admin reste
   // exclu pour conserver sa vue sales-like sur la route.
   const userMeta = apiClient.getUser();
-  const isSetter = (userMeta?.role || '') === 'setter'
+  const isSetter = SETTER_ROLES.includes(userMeta?.role)
     || (apiClient.hasAccess('tracking_sheet_setter') && (userMeta?.role || '') !== 'admin');
   const [teamSales, setTeamSales] = useState([]);
   // Setter modales state — ouvertes via setter actions dans panel détail
@@ -427,7 +432,7 @@ export default function TrackingSheetSetter() {
         // backend renvoie 403 sur /api/v1/tracking/setter/* pour les autres.)
         const hasPermission =
           user.role === 'admin'
-          || user.role === 'setter'
+          || SETTER_ROLES.includes(user.role)
           || apiClient.hasAccess('tracking_sheet_setter');
         if (!isAdminView && !hasPermission) {
           navigate("/");
@@ -5127,7 +5132,7 @@ export default function TrackingSheetSetter() {
                           <span style={{ fontSize: 10, fontWeight: 700, color: '#10b981', fontFamily: 'inherit', animation: 'copiedToastIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both' }}>Copié</span>
                         ) : lead.phone}
                       </span>
-                      {lead.headcount && currentUser?.role !== 'setter' && (
+                      {lead.headcount && !SETTER_ROLES.includes(currentUser?.role) && (
                         <>
                           <span style={{ width: '1px', height: '14px', background: C.border, flexShrink: 0 }} />
                           <span style={{ fontSize: '11px', color: C.muted, flexShrink: 0 }}>
@@ -5919,7 +5924,7 @@ export default function TrackingSheetSetter() {
 
               {/* ─── STATS ROW ─── */}
               {(() => {
-                const isSetter = currentUser?.role === 'setter';
+                const isSetter = SETTER_ROLES.includes(currentUser?.role);
                 const statsRow = [
                   ...(isSetter ? [] : [
                     { label: 'Salariés', value: lead.headcount || '—' },
