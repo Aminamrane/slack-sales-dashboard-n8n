@@ -253,14 +253,14 @@ export default function IntegrationPreviewStudio({
   const [companyError, setCompanyError] = useState(null);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   async function retrieveCompany(company) {
-    if (!lookupCompany || lookupPending.current) return;
+    if (!lookupCompany || lookupPending.current || busy) return;
     const siren = companySiren(company.siren);
     if (!siren || String(company.siren).replace(/\s/g, '').length !== 9) {
       setCompanyError({ id: company.id, message: 'Saisissez le SIREN à 9 chiffres de la société, pas le SIRET d’un établissement.' });
       return;
     }
     lookupPending.current = true;
-    setCompanyLookup(company.id); setCompanyError(null);
+    setCompanyLookup(company.id); setCompanyError(null); setValidated(null);
     try {
       const data = await lookupCompany(siren);
       if (!alive.current) return;
@@ -313,6 +313,7 @@ export default function IntegrationPreviewStudio({
     setView("form");
   };
   const validate = async () => {
+    if (lookupPending.current || busy) return;
     setBusy(true);
     setFeedback(null);
     try {
@@ -552,7 +553,7 @@ export default function IntegrationPreviewStudio({
                                 }
                               />
                               {lookupCompany && <div className="ip-company-lookup">
-                                <button type="button" disabled={!!companyLookup} onClick={() => retrieveCompany(c)}>
+                                <button type="button" disabled={busy || !!companyLookup} onClick={() => retrieveCompany(c)}>
                                   {companyLookup === c.id ? <LoaderCircle size={14} className="ip-spin" /> : <Building2 size={14} />}
                                   {companyLookup === c.id ? 'Recherche…' : 'Récupérer depuis Pappers'}
                                 </button>
@@ -756,7 +757,7 @@ export default function IntegrationPreviewStudio({
                     ) : (
                       <button
                         className="ip-primary"
-                        disabled={busy}
+                        disabled={busy || !!companyLookup}
                         onClick={ready && onContinue ? onContinue : validate}
                       >
                         {busy ? (
@@ -877,7 +878,7 @@ export default function IntegrationPreviewStudio({
                   <span>dirigeants</span>
                 </div>
               </div>
-              <button className="ip-primary" disabled={busy} onClick={ready && onContinue ? onContinue : validate}>
+              <button className="ip-primary" disabled={busy || !!companyLookup} onClick={ready && onContinue ? onContinue : validate}>
                 {busy ? (
                   <LoaderCircle size={17} className="ip-spin" />
                 ) : (
@@ -930,7 +931,7 @@ export default function IntegrationPreviewStudio({
             {embedded && saveDraft && (
               <button
                 className="ip-secondary"
-                disabled={busy}
+                disabled={busy || !!companyLookup}
                 onClick={async () => {
                   setBusy(true);
                   try {
