@@ -1,3 +1,4 @@
+import { WEBINAR_CAMPAIGNS, acquisitionPeriod, withAcquisition } from './acquisition';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 // eslint-disable-next-line no-unused-vars -- motion used via JSX (false positive)
@@ -219,7 +220,24 @@ export default function Marketing() {
       // Ignore une réponse obsolète : l'utilisateur a déjà switché de
       // webinaire entre le départ du fetch et son retour.
       if (webinarIdRef.current !== requestedWebinarId || overviewRequestRef.current !== requestId) return;
-      setOverview(json);
+      let enriched = json;
+      if (WEBINAR_CAMPAIGNS[requestedWebinarId] && json?.stats?.summary) {
+        const period = acquisitionPeriod(json.stats, webinar);
+        let meta = null;
+        try {
+          if (period && period.since <= period.until) {
+            const params = new URLSearchParams({ level: 'campaign', ...period });
+            meta = await apiClient.get(`/api/v1/marketing/meta-ads?${params}`);
+          } else if (period) {
+            meta = { ...period, rows: [] };
+          }
+        } catch {
+          // Keep the rest of the dashboard usable; unavailable is not zero.
+        }
+        enriched = { ...json, stats: withAcquisition(json.stats, requestedWebinarId, period, meta) };
+      }
+      if (webinarIdRef.current !== requestedWebinarId || overviewRequestRef.current !== requestId) return;
+      setOverview(enriched);
       setOverviewError(null);
     } catch (e) {
       if (webinarIdRef.current !== requestedWebinarId || overviewRequestRef.current !== requestId) return;
@@ -227,7 +245,7 @@ export default function Marketing() {
     } finally {
       if (webinarIdRef.current === requestedWebinarId && overviewRequestRef.current === requestId) setOverviewLoading(false);
     }
-  }, [queryString, webinarId]);
+  }, [queryString, webinarId, webinar]);
 
   // Premier fetch + refetch sur changement de filtres / webinarId.
   // Garde anti-race : on attend que `webinarsList` soit chargée pour que
@@ -604,6 +622,7 @@ export default function Marketing() {
             pageviews={pageviews}
             leadsByDay={leadsByDay}
             budgetByDay={budgetByDay}
+            budgetAvailable={stats?.metaDailyBudgetAvailable !== false}
             C={C}
             darkMode={darkMode}
             loading={initialLoading}
@@ -612,7 +631,7 @@ export default function Marketing() {
 
         {/* ── BUDGET PAR JOUR (graph dédié, lecture rapide) ── */}
         <section style={{ marginBottom: 24 }}>
-          <BudgetByDayChart budgetByDay={budgetByDay} C={C} darkMode={darkMode} loading={initialLoading} />
+          {stats?.metaDailyBudgetAvailable !== false && <BudgetByDayChart budgetByDay={budgetByDay} C={C} darkMode={darkMode} loading={initialLoading} />}
         </section>
 
         {/* ── SATISFACTION GAUGE + HEATMAP (side by side) ── */}

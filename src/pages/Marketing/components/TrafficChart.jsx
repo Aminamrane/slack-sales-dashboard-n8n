@@ -13,8 +13,9 @@ import { fmtInt, fmtEur, fmtShortDate } from '../theme';
  * tooltip handler) so we can style it exactly like the SaaS refs
  * (image 4 "New Customers / Returning" — clean white pill with shadow).
  */
-export default function TrafficChart({ pageviews = [], leadsByDay = [], budgetByDay = [], C, darkMode }) {
-  const [tab, setTab] = useState('traffic'); // 'traffic' | 'budget'
+export default function TrafficChart({ pageviews = [], leadsByDay = [], budgetByDay = [], budgetAvailable = true, C, darkMode }) {
+  const [selectedTab, setTab] = useState('traffic');
+  const tab = budgetAvailable ? selectedTab : 'traffic'; // 'traffic' | 'budget'
   const [tooltip, setTooltip] = useState(null);
   const containerRef = useRef(null);
 
@@ -262,7 +263,7 @@ export default function TrafficChart({ pageviews = [], leadsByDay = [], budgetBy
   // ── Tabs (segmented control top-right) ───────────────────────────
   const tabs = [
     { key: 'traffic', label: 'Trafic & inscrits' },
-    { key: 'budget', label: 'Budget & coût / inscrit' },
+    ...(budgetAvailable ? [{ key: 'budget', label: 'Budget & coût / inscrit' }] : []),
   ];
 
   const TabsControl = (
