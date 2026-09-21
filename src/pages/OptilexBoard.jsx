@@ -2189,7 +2189,7 @@ function EtatSection({ row, num, changeEtat, compact = false }) {
     pause_relance_date: row.pause_relance_date, ...chg,
   });
   return (
-    <div style={{ marginBottom: 22 }}>
+    <div style={{ marginBottom: compact ? 0 : 22, minWidth: 0, ...(compact && (cfg || isEtatPending(row)) ? { gridColumn: "1 / -1" } : {}) }}>
       {compact ? <div style={{ fontSize: 12, color: MUTED, marginBottom: 5 }}>Situation du client</div> : <SecTitle icon="etat">État du client</SecTitle>}
       <EtatPicker etat={etat} disabled={!num} onPick={(v) => changeEtat(num, { etat: v })} />
       {num && isEtatPending(row) && (
