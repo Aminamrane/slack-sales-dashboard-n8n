@@ -1,4 +1,5 @@
 import AppointmentConfirmation from "../components/booking/AppointmentConfirmation";
+import BoardIntegrationSheet from "../components/BoardIntegrationSheet";
 import { appointmentConfirmation, appointmentFailure } from "../utils/appointmentConfirmation";
 import { ClientMissions, DetailFold, DetailText } from "../components/OptilexClientDetail";
 import { matchesUpcomingIntegration, matchesUpcomingOnboarding, matchesOverdueOnboarding, parisWallTime } from "../utils/boardIntegration.js";
@@ -2631,6 +2632,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
 
           </div>
 
+          <BoardIntegrationSheet key={`sheet-${num || row.id}`} numero={num} />
           <ClientMissions key={num || row.id} numero={num} />
           {/* Sections en révélation douce (stagger léger, une seule fois à l'ouverture). */}
           {/* Informations client (override cabinet ?? original Owner, antériorité préservée) */}
