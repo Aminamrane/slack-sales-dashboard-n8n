@@ -16,7 +16,6 @@ import {
   CalendarDays,
   ShieldCheck,
   RotateCcw,
-  Printer,
   CheckCircle2,
   LockKeyhole,
   LoaderCircle,
@@ -216,12 +215,6 @@ export function IntegrationSummary({ draft, clientName, validated = false, embed
                           ? "Owner · Fiche de transmission commerciale"
                           : "Démonstration Owner · Données fictives"}
                       </div>
-                      <button
-                        className="ip-secondary ip-print-button"
-                        onClick={() => window.print()}
-                      >
-                        <Printer size={17} /> Imprimer la fiche
-                      </button>
                     </div>
   );
 }
