@@ -822,7 +822,15 @@ export default function TrackingSheet() {
             }
             break;
           }
+          case 'setter_placed_r1':
+          case 'setter_placed_r2':
           case 'setter_called': {
+            if (msg.assigned_to && msg.assigned_to.toLowerCase() !== sheetId.toLowerCase()) {
+              const transferredId = String(msg.lead_id);
+              setLeads(prev => prev.filter(l => String(l.id) !== transferredId));
+              setSelectedLead(prev => String(prev) === transferredId ? null : prev);
+              break;
+            }
             // Un setter vient d'appeler un lead du sales propriétaire de la sheet.
             // Refetch le lead pour récupérer les valeurs serveur officielles
             // (`setter_called_by_name`, `setter_called_at`, `setter_call_count`)
