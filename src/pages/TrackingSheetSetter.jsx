@@ -8750,7 +8750,7 @@ export default function TrackingSheetSetter() {
       {showSetterAvailability && <SetterJourneyDialog browseOnly dark={darkMode} asSetter={urlParams.get('ghost') === 'true' ? viewingSheetId : null} onClose={() => setShowSetterAvailability(false)}/>}
       {isSetter && (
         <>
-          {setterModal?.kind === 'qualify' && <SetterJourneyDialog key={setterModal.lead.id} lead={setterModal.lead} currentEmail={userMeta?.email} dark={darkMode} onClose={() => setSetterModal(null)} onSaved={message => {showSetterToast(message);refreshData().catch(() => {});}}/>}
+          {setterModal?.kind === 'qualify' && <SetterJourneyDialog key={setterModal.lead.id} lead={setterModal.lead} teamSales={teamSales} currentEmail={userMeta?.email} dark={darkMode} onClose={() => setSetterModal(null)} onSaved={message => {showSetterToast(message);refreshData().catch(() => {});}}/>}
           <CreateColdLeadModal
             open={setterModal?.kind === 'createCold'}
             onClose={() => !setterSubmitting && setSetterModal(null)}
