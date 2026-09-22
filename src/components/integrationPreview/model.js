@@ -81,6 +81,7 @@ export function completeness(draft) {
       {
         label: "Sociétés à accompagner",
         done: companies.length > 0 && companies.every((c) => c.name.trim())
+          && (draft.flow_version < 2 || draft.flow_version == null || companies.every(c => (c.in_registration && !c.siren.trim()) || (!c.in_registration && c.siren.trim())))
           && draft.companies.every(c => !c.siren.trim() || /^\d{9}$/.test(c.siren.replace(/\s/g, '')))
           && new Set(draft.companies.filter(c => c.siren.trim()).map(c => c.siren.replace(/\s/g, ''))).size === draft.companies.filter(c => c.siren.trim()).length,
       },
@@ -93,13 +94,19 @@ export function completeness(draft) {
             directors.some((d) => d.companies.includes(c.id)),
           ),
       },
-      {
+      ...(draft.flow_version >= 2 ? [{
+        label: "Accès des dirigeants",
+        done: draft.directors.filter(d => d.provisional_access).every(d =>
+          /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((d.email || '').trim()) && d.name.trim().split(/\s+/).length >= 2
+          && d.companies.some(id => companies.some(c => c.id === id)))
+          && new Set(draft.directors.filter(d => d.provisional_access).map(d => (d.email || '').trim().toLowerCase())).size === draft.directors.filter(d => d.provisional_access).length,
+      }] : [{
         label: "Première météo client",
         done:
           Number.isInteger(draft.weather) &&
           draft.weather >= 1 &&
           draft.weather <= 5,
-      },
+      }]),
     ],
   };
 }

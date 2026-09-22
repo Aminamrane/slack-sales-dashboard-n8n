@@ -1353,3 +1353,28 @@
 .ip-company-lookup button:hover:not(:disabled) { background: var(--wash); border-color: #a1a9b5; }
 .ip-company-lookup button:disabled { opacity: .6; cursor: wait; }
 .ip-company-lookup [role="alert"] { color: #b42318; font-size: 11px; line-height: 1.5; }
+
+.ip-registration { display:flex; align-items:center; gap:8px; font-size:12px; color:#566174; margin:8px 0; }
+.ip-director-access { margin:12px 0; padding:12px; border:1px solid #e2e5eb; border-radius:14px; background:#f7f8fa; }
+.ip-director-access.is-active { border-color:#272c38; background:#f1f2f5; }
+.ip-director-access > label:first-child { display:flex; align-items:center; gap:10px; cursor:pointer; }
+.ip-director-access small { display:block; font-size:11px; color:#657084; line-height:1.5; margin-top:4px; }
+.ip-director-access .ip-field { margin-top:12px; }
+.ip-director-access input[type=checkbox], .ip-registration input { accent-color:#202432; }
+.si-title { display:flex; align-items:center; gap:14px; margin:12px 0 20px; }
+.si-title h2 { font-size:21px; line-height:1.25; margin:0 0 5px; }
+.si-title p { font-size:13px; color:#657084; margin:0; }
+.si-handoff fieldset { border:0; padding:0; margin:0; display:grid; gap:16px; min-width:0; }
+.si-handoff .ip-weather-options { margin:0; gap:6px; }
+.si-handoff .ip-weather-options button { padding:10px 4px; min-height:95px; }
+.si-handoff .ip-weather-options span { font-size:10px; }
+.si-actions { display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-top:22px; }
+.si-director-documents { border:1px solid #e1e5ed; padding:14px; border-radius:16px; margin-top:14px; }
+.si-director-documents h3 { display:flex; align-items:center; gap:9px; font-size:15px; margin:0 0 12px; }
+.si-document-slots { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+.si-document-slot { display:flex; flex-direction:column; gap:7px; border:1px dashed #ccd2dd; border-radius:10px; padding:12px; color:#737e91; font-size:12px; }
+.si-document-slot small { font-size:10px; }
+.si-handoff, .si-documents { animation:si-enter .22s ease-out; }
+@keyframes si-enter { from {opacity:0; transform:translateY(7px);} to {opacity:1; transform:translateY(0);} }
+@media(max-width:600px) { .si-document-slots {grid-template-columns:1fr;} .si-title h2 {font-size:18px;} .si-actions > button {flex:1; justify-content:center;} }
+@media(prefers-reduced-motion:reduce) { .si-handoff, .si-documents {animation:none;} }
