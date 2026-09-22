@@ -33,3 +33,12 @@ test('a missing, unavailable or stale slot cannot be confirmed', () => {
  assert.equal(availableSelection(data,slot),false);
  assert.equal(availableSelection(null,slot),false);
 });
+
+test('manual appointments preserve exact Paris time without requiring an available slot', () => {
+ const manual={...slot,date:'2026-10-04',time:'20:35'};
+ assert.equal(availableSelection({sales:[]},manual),false);
+ assert.equal(setterAction({lead:owned,outcome:'r1',slot:manual}).body.r1_date,'2026-10-04T20:35');
+ assert.equal(setterAction({lead:owned,outcome:'r2',slot:manual,email:owned.email}).body.r2_date,'2026-10-04T20:35');
+ assert.throws(()=>setterAction({lead:owned,outcome:'r1',slot:{...manual,date:'2026-02-30'}}),/heure de Paris/);
+ assert.throws(()=>setterAction({lead:owned,outcome:'r1',slot:{...manual,date:'2027-03-28',time:'02:30'}}),/heure de Paris/);
+});

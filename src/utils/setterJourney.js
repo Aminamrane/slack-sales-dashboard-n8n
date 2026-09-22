@@ -1,3 +1,4 @@
+import { validParisAppointment } from './parisDates.js';
 export const setterOutcomes = ['r1', 'r2', 'voicemail', 'callback', 'disqualify'];
 export const canChooseSales = (lead, email) => Boolean(lead?.created_by_setter && lead.created_by_setter.toLowerCase() === (email || '').toLowerCase());
 export function availableSelection(data, selection) {
@@ -16,7 +17,8 @@ export function setterAction({ lead, outcome, slot, note = '', email = '', callb
     method: 'post', path: `${root}/${outcome === 'callback' ? 'mark-callback' : 'mark-called'}`,
     body: { note: note.trim() || undefined, ...(outcome === 'callback' ? { callback_at: callback } : {}) },
   };
-  if (!slot?.email || !slot.date || !slot.time) throw new Error('Choisissez un créneau disponible.');
+  if (!slot?.email || !slot.date || !slot.time) throw new Error('Choisissez un commercial, une date et une heure.');
+  if (!validParisAppointment(`${slot.date}T${slot.time}`)) throw new Error('Choisissez une date et une heure valides en heure de Paris.');
   const choose = canChooseSales(lead, currentEmail);
   if (!choose && slot.email.toLowerCase() !== (lead.assigned_to || '').toLowerCase()) throw new Error('Le rendez-vous doit rester chez le commercial propriétaire.');
   const mail = email.trim();
