@@ -1497,13 +1497,15 @@ export default function TrackingSheetSetter() {
     }
   };
 
-  // Fetch contracts for all R2/R3 leads when R2 or R3 tab is active
+  // Fetch contracts from R1 too: sending a contract does not create an R2.
   // Auto-move leads with signed contracts to "signed" tab
+  const r1CatIndex = CATEGORIES.findIndex(c => c.key === 'r1');
   const r2CatIndex = CATEGORIES.findIndex(c => c.key === 'r2');
   const r3CatIndex = CATEGORIES.findIndex(c => c.key === 'r3');
   useEffect(() => {
-    if (activeTab !== r2CatIndex && activeTab !== r3CatIndex) return;
-    const contractLeads = leads.filter(l => l.status === 'r2' || l.status === 'r3');
+    if (activeTab === r1CatIndex && isSetter) return;
+    if (activeTab !== r1CatIndex && activeTab !== r2CatIndex && activeTab !== r3CatIndex) return;
+    const contractLeads = leads.filter(l => activeTab === r1CatIndex ? l.status === 'r1' : l.status === 'r2' || l.status === 'r3');
     if (contractLeads.length === 0) return;
     setLoadingContracts(true);
     Promise.all(contractLeads.map(async (l) => {
@@ -1516,10 +1518,11 @@ export default function TrackingSheetSetter() {
     })).finally(() => setLoadingContracts(false));
   }, [activeTab, leads.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── SUPABASE REALTIME: contract status updates (R2 + R3) ─────────────────
+  // ── SUPABASE REALTIME: contract status updates (R1 + R2 + R3) ─────────────────
   useEffect(() => {
-    if (activeTab !== r2CatIndex && activeTab !== r3CatIndex) return;
-    const contractLeads = leads.filter(l => l.status === 'r2' || l.status === 'r3');
+    if (activeTab === r1CatIndex && isSetter) return;
+    if (activeTab !== r1CatIndex && activeTab !== r2CatIndex && activeTab !== r3CatIndex) return;
+    const contractLeads = leads.filter(l => activeTab === r1CatIndex ? l.status === 'r1' : l.status === 'r2' || l.status === 'r3');
     if (contractLeads.length === 0) return;
 
     const contractLeadIds = contractLeads.map(l => l.id);
@@ -1732,6 +1735,7 @@ export default function TrackingSheetSetter() {
         employee_range: lead.employee_range,
       });
       await fetchLeadContracts(lead.id);
+      setR1ShortcutContract(null);
       setNavNotif('sent'); // triggers check animation → auto-clears after 2.5s in navbar
       // Clear navNotif from parent side after navbar has finished its animation
       setTimeout(() => setNavNotif(null), 3000);
@@ -6826,7 +6830,7 @@ export default function TrackingSheetSetter() {
                           return (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 16px', borderRadius: 14, border: `1px solid ${darkMode ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.15)'}`, background: darkMode ? 'rgba(16,185,129,0.04)' : 'rgba(16,185,129,0.02)', animation: 'wfDateCardIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both' }}>
                               <div style={{ fontSize: 12, fontWeight: 700, color: '#10b981' }}>Envoi rapide du contrat</div>
-                              <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>R1 et R2 seront marqués effectués. Pas de rendez-vous Calendar.</div>
+                              <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>Envoyez le contrat directement à l’issue du R1.</div>
                               <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tranche salariale</div>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                                 {EMPLOYEE_RANGES.map(range => {
@@ -6836,20 +6840,7 @@ export default function TrackingSheetSetter() {
                               </div>
                               <div style={{ display: 'flex', gap: 6 }}>
                                 <button onClick={() => openNdaPopup(lead)} style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${ndaDone ? 'rgba(16,185,129,0.25)' : C.border}`, background: ndaDone ? 'rgba(16,185,129,0.04)' : 'transparent', color: ndaDone ? '#10b981' : C.accent, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>{ndaDone ? 'NDA généré ✓' : 'Générer NDA'}</button>
-                                <button onClick={async () => {
-                                  if (!hasRange || isSending) return;
-                                  setNavNotif('sending'); setSendingContract(lead.id);
-                                  try {
-                                    await apiClient.post('/api/v1/contracts/send', { lead_id: lead.id, employee_range: lead.employee_range });
-                                    setNavNotif('sent');
-                                    const today = new Date().toISOString().slice(0, 10);
-                                    await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { r1_date: today, r2_date: today, r1_result: 'done', r1_completed_at: new Date().toISOString(), r2_result: 'done', r2_completed_at: new Date().toISOString(), status: 'r2' });
-                                    setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, r1: today, r2: today, r1_result: 'done', r2_result: 'done', status: 'r2' } : l));
-                                    triggerFlyAnimation(lead.id, lead, 'r2'); triggerLeadMovedNotif(lead, 'r2'); setR1ShortcutContract(null);
-                                    setTimeout(() => { const r2TabIdx = CATEGORIES.findIndex(c => c.key === 'r2'); if (r2TabIdx >= 0) handleTabChange(r2TabIdx); setTimeout(() => { setSelectedLead(lead.id); const el = document.getElementById(`lead-card-${lead.id}`); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 300); }, 900);
-                                  } catch (err) { console.error('R1 shortcut contract error:', err); setNavNotif(null); const msg = err?.response?.data?.detail || err?.detail || err?.message || ''; setContractErrorModal({ message: msg.toLowerCase().includes('client data') ? 'Le NDA n\'a pas encore été généré.' : `Erreur : ${msg}`, isNdaMissing: msg.toLowerCase().includes('client data') }); }
-                                  finally { setSendingContract(null); }
-                                }} disabled={!hasRange || isSending} style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: 'none', background: hasRange && !isSending ? '#10b981' : (darkMode ? '#2a2b36' : '#e2e6ef'), color: hasRange && !isSending ? '#fff' : C.muted, fontSize: 11, fontWeight: 600, cursor: hasRange && !isSending ? 'pointer' : 'not-allowed', fontFamily: 'inherit', opacity: hasRange && !isSending ? 1 : 0.6 }}>{isSending ? 'Envoi...' : 'Envoyer le contrat'}</button>
+                                <button onClick={() => { if (!isSending && hasRange) handleSendContract(lead); }} disabled={!hasRange || isSending} style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: 'none', background: hasRange && !isSending ? '#10b981' : (darkMode ? '#2a2b36' : '#e2e6ef'), color: hasRange && !isSending ? '#fff' : C.muted, fontSize: 11, fontWeight: 600, cursor: hasRange && !isSending ? 'pointer' : 'not-allowed', fontFamily: 'inherit', opacity: hasRange && !isSending ? 1 : 0.6 }}>{isSending ? 'Envoi...' : 'Envoyer le contrat'}</button>
                               </div>
                               {latestContract && <div style={{ fontSize: 11, color: cStatus === 'ongoing' ? '#3b82f6' : cStatus === 'done' ? '#10b981' : C.muted, fontWeight: 600 }}>{cStatus === 'ongoing' ? 'En attente de signature' : cStatus === 'done' ? 'Signé ✓' : cStatus}</div>}
                               <button onClick={() => setR1ShortcutContract(null)} style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', opacity: 0.7 }}>← Fermer</button>
@@ -7097,7 +7088,7 @@ export default function TrackingSheetSetter() {
               {/* ═══ CONTRACT (R2 and R3) ═══ */}
               {/* Garde Option B : caché côté setter — touche /api/v1/contracts/*
                   (sacred zone). Setter n'a aucune action contract. */}
-              {!isSetter && (activeCat.key === 'r2' || activeCat.key === 'r3') && (() => {
+              {!isSetter && (activeCat.key === 'r2' || activeCat.key === 'r3' || (activeCat.key === 'r1' && leadContracts[lead.id]?.length > 0)) && (() => {
                 const hasRange = !!lead.employee_range;
                 const hasCompanyCount = !!lead.company_count;
                 const isSending = sendingContract === lead.id;
