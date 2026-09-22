@@ -7,7 +7,10 @@ test('document formats and sizes follow the partner contract before any upload',
 });
 test('upload acceptance is never presented as completed OCR or a lost failed document', () => {
   assert.equal(documentStatus({status:'waiting'}),'Enregistré · en attente de transmission');
-  assert.equal(documentStatus({status:'sent',analysis:'started'}),'Transmis · analyse en cours');
+  assert.equal(documentStatus({status:'sent',analysis:'started'}),'Transmis · analyse demandée');
+  assert.equal(documentStatus({status:'sent',analysis:'started'}, {status:'completed'}),'Transmis · analysé');
+  assert.equal(documentStatus({status:'sent'}, {status:'processing'}),'Transmis · analyse en cours');
+  assert.equal(documentStatus({status:'sent'}, {needsReview:true}),'Transmis · classement à vérifier');
   assert.equal(documentStatus({status:'sent',analysis:'not_analyzed'}),'Transmis à la plateforme');
   assert.match(documentStatus({status:'rejected'}),/conservé dans le CRM/);
 });
