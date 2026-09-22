@@ -7,9 +7,11 @@ import React, { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
-import { CalendarCheck2, ChevronRight, Building2, UserRoundCheck, ArrowRight } from 'lucide-react';
+import { CalendarCheck2, ChevronRight, Building2, UserRoundCheck, ArrowRight, PhoneCall } from 'lucide-react';
 import R1QualificationDialog from '../components/salesJourney/R1QualificationDialog';
 import QualificationDialog from '../components/salesJourney/QualificationDialog';
+import ContactQualificationDialog from '../components/salesJourney/ContactQualificationDialog';
+import {contactQualificationPatch} from '../utils/contactQualification';
 import NotesDialog from '../components/salesJourney/NotesDialog';
 import { SaleIntake, SaleDocuments } from "../components/integrationPreview/SaleIntake";
 import PortalAccess from '../components/salesJourney/PortalAccess';
@@ -488,6 +490,7 @@ export default function TrackingSheet() {
   const [intakeJourneys, setIntakeJourneys] = useState({});
   const [saleOnboardingOnly, setSaleOnboardingOnly] = useState(false);
   const [qualificationDialog, setQualificationDialog] = useState(null);
+  const [contactDialog, setContactDialog] = useState(null);
   const [commentLeadId, setCommentLeadId] = useState(null);
   const [notesError, setNotesError] = useState(null);
   const isSignedPilot = lead => !!intakeJourneys[lead?.id]?.onboarding_only;
@@ -2224,9 +2227,12 @@ export default function TrackingSheet() {
 
   // ── WORKFLOW HANDLER ─────────────────────────────────────────────────────
   const workflowSubmittingRef = useRef(false);
-  const handleWorkflowSubmit = async (leadId, patchData) => {
+  const handleWorkflowSubmit = async (leadId, patchData, {strict = false} = {}) => {
     // Prevent double-submit (double-click, etc.)
-    if (workflowSubmittingRef.current) return;
+    if (workflowSubmittingRef.current) {
+      if (strict) throw new Error("Un enregistrement est en cours. Réessayez dans un instant.");
+      return;
+    }
     workflowSubmittingRef.current = true;
     setTimeout(() => { workflowSubmittingRef.current = false; }, 2000);
     const currentStatus = CATEGORIES[activeTab].key;
@@ -2235,6 +2241,7 @@ export default function TrackingSheet() {
     if (patchData.r1_date || patchData.r2_date) {
       const lead = leads.find(l => l.id === leadId);
       if (lead && !lead.email) {
+        if (strict) { workflowSubmittingRef.current = false; throw new Error("Ajoutez l’email du prospect dans sa fiche avant de fixer un rendez-vous."); }
         setCalendarError({ leadId, message: "Remplissez l'email du prospect avant de fixer un rendez-vous" });
         setTimeout(() => setCalendarError(null), 5000);
         return;
@@ -2245,6 +2252,10 @@ export default function TrackingSheet() {
       resp = await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, patchData);
     } catch (err) {
       console.error("Erreur workflow:", err);
+      if (strict) {
+        workflowSubmittingRef.current = false;
+        throw new Error(err.status === 409 ? 'Le créneau n’a pas pu être confirmé. Vérifiez l’agenda avant de réessayer.' : 'La qualification n’a pas pu être enregistrée. Vos choix sont conservés ; réessayez.');
+      }
       // Handle 409 — commercial is busy on this slot
       if (err.status === 409) {
         const detail = err.data?.detail;
@@ -7031,6 +7042,7 @@ export default function TrackingSheet() {
 
               {/* ═══ NEW / CALLBACK / VOICEMAIL TAB WORKFLOW ═══ */}
               {(activeCat.key === 'new' || activeCat.key === 'callback' || activeCat.key === 'voicemail') && (() => {
+                if (isGuidedLead(lead)) return <button className="sj-qualify" style={{background:C.bg,color:C.text,borderColor:C.border,marginBottom:16}} onClick={() => {setActiveWorkflow(null);setContactDialog({lead,category:activeCat.key});}}><PhoneCall size={22}/><span>Qualifier le contact<small>Résultat de l’appel et planification du R1 ou du R2</small></span><ChevronRight size={18}/></button>;
                 const wf = activeWorkflow?.leadId === lead.id && !activeWorkflow?.callFlow ? activeWorkflow : null;
                 const today = parisToday();
                 // Preserve original first contact date if already set (callback/voicemail leads have been contacted before)
@@ -9334,6 +9346,13 @@ export default function TrackingSheet() {
       })(), document.body)}
 
       {commentLeadId && <NotesDialog dark={darkMode} lead={leads.find(l=>l.id===commentLeadId)} value={editingNotes[commentLeadId]||''} onChange={value=>setEditingNotes(p=>({...p,[commentLeadId]:value}))} error={notesError?.leadId===commentLeadId?notesError.message:null} onClose={()=>{micCleanup();setCommentLeadId(null);}} onSave={async()=>{if(await handleNotesSave(commentLeadId)){micCleanup();setCommentLeadId(null);}}} recording={micRecording} transcribing={micTranscribing} micError={micError} onDictate={()=>{if(micRecording){const id=commentLeadId;micStopAndTranscribe(text=>setEditingNotes(p=>({...p,[id]:(p[id]?p[id]+' ':'')+text})));}else if(!micTranscribing)micStartRecording();}}/>}
+      {contactDialog && <ContactQualificationDialog key={contactDialog.lead.id} {...contactDialog} dark={darkMode} onClose={() => setContactDialog(null)} onSave={async values => {
+        const current = leads.find(l => l.id === contactDialog.lead.id);
+        if (!current || !isGuidedLead(current) || current.status !== contactDialog.category) throw new Error('Le dossier a changé. Fermez cette fenêtre et rouvrez le contact.');
+        const patch = contactQualificationPatch(current, contactDialog.category, values);
+        await handleWorkflowSubmit(current.id, patch, {strict:true});
+        setContactDialog(null);
+      }}/>}
       {qualificationDialog && (qualificationDialog.stage==='r1'?<R1QualificationDialog {...qualificationDialog} dark={darkMode} onClose={()=>setQualificationDialog(null)} onSave={saveQualification}/>:<QualificationDialog {...qualificationDialog} dark={darkMode} onClose={()=>setQualificationDialog(null)} onSave={saveQualification}/>)}
       {intakeDialog && <IntegrationDialog key={intakeDialog.lead_id} context={intakeDialog}
         contractDetails={{
