@@ -9379,7 +9379,7 @@ export default function TrackingSheet() {
             <div onClick={() => { if (!saleSubmitting) { setShowSaleModal(null); setSaleSuccess(false); } }}
               style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both' }} />
             <div className={saleOnboardingOnly?'sj-sale-dialog':undefined} role="dialog" aria-modal="true" aria-label="Déclarer une vente" style={{
-              boxSizing: 'border-box',
+              boxSizing: saleOnboardingOnly ? 'border-box' : undefined,
               position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
               width: (saleStep === 'form' || saleStep === 'questions') ? 420 : 720, maxWidth: '92vw', maxHeight: '90dvh', overflowY: 'auto', background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`,
               boxShadow: '0 24px 48px rgba(0,0,0,0.2)', padding: '28px 28px 24px',
