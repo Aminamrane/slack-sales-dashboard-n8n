@@ -236,6 +236,8 @@ export default function IntegrationPreviewStudio({
   onContinue,
   onDirty = () => {},
   lookupCompany,
+  signerName = "",
+  scopeNotice = "",
   phase = "full",
   accessLocked = false,
   continueLabel,
@@ -273,10 +275,11 @@ export default function IntegrationPreviewStudio({
       if (companySiren(data?.siren) !== siren || !data?.legal_name?.trim()) throw new Error('Aucune société trouvée pour ce SIREN. Vérifiez le numéro.');
       setDraft(current => applyCompanyLookup(current, company.id, siren, data, () => crypto.randomUUID()));
       setValidated(null);
+      if (data.signer_linked === false) setCompanyError({ id: company.id, message: `Société laissée hors périmètre : Pappers ne confirme pas de lien avec ${data.signer_name || signerName}.` });
     } catch (error) {
       if (alive.current) setCompanyError({ id: company.id, message:
         error?.status === 404 ? 'Aucune société trouvée pour ce SIREN. Vérifiez le numéro.' :
-        [400, 422].includes(error?.status) ? 'Ce SIREN est invalide. Vérifiez les 9 chiffres de la société.' :
+        [400, 422].includes(error?.status) ? (typeof error?.data?.detail === 'string' ? error.data.detail : 'Ce SIREN est invalide. Vérifiez les 9 chiffres de la société.') :
         'Recherche Pappers indisponible. Vos informations sont conservées ; réessayez.' });
     } finally {
       lookupPending.current = false;
@@ -527,6 +530,7 @@ export default function IntegrationPreviewStudio({
                             : "Préremplies depuis le NDA de démonstration"}
                         </span>
                       </div>
+                      {phase === "contract" && signerName && <div className="ip-soft-note"><Users size={20} /><p>Signataire du contrat : <strong>{signerName}</strong>. Conservez uniquement les sociétés qui lui sont liées. Une société détenue uniquement par un autre associé reste hors périmètre.{scopeNotice && <><br />{scopeNotice}</>}</p></div>}
                       <div className="ip-company-list">
                         {draft.companies.map((c) => (
                           <div

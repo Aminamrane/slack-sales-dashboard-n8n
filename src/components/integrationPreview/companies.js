@@ -31,17 +31,22 @@ export function applyCompanyLookup(draft, id, requestedSiren, data, makeId) {
   const targetId = same?.id || id;
   const result = uniqueCompanies({ ...draft, companies: draft.companies
     .filter(c => !same || c.id !== id).map(c =>
-      c.id === targetId ? { ...c, siren: requestedSiren, name: data.legal_name.trim(), selected: c.selected || current.selected } : c),
+      c.id === targetId ? { ...c, siren: requestedSiren, name: data.legal_name.trim(), selected: data.signer_linked === false ? false : c.selected || current.selected } : c),
     directors: draft.directors.map(d => ({ ...d, companies: d.companies.map(cid => cid === id ? targetId : cid) })),
   });
-  // The existing company keeps its identity, and all director links survive merging.
+  // Scoped lookups rebuild registry links so an edited SIREN cannot retain the previous company’s signatory.
   const target = result.companies.find(c => c.siren === requestedSiren);
-  const directors = result.directors.map(d => ({ ...d, companies: [...d.companies] }));
+  const directors = result.directors.map(d => ({ ...d, companies: typeof data.signer_linked === "boolean" ? d.companies.filter(cid => cid !== target.id) : [...d.companies] }));
   const key = name => name.trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr-FR');
   for (const rep of data.representatives || []) {
     const name = (rep.full_name || '').trim();
     if (!name) continue;
-    const existing = directors.find(d => key(d.name) === key(name));
+    const names = new Set([key(name)]);
+    if (rep.first_name && rep.last_name) {
+      names.add(key(`${rep.first_name} ${rep.last_name}`));
+      names.add(key(`${rep.last_name} ${rep.first_name}`));
+    }
+    const existing = directors.find(d => names.has(key(d.name)));
     if (existing) {
       if (!existing.companies.includes(target.id)) existing.companies.push(target.id);
     } else if (directors.length < 40) {
