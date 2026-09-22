@@ -23,7 +23,7 @@ export function uniqueCompanies(draft) {
 }
 export function applyCompanyLookup(draft, id, requestedSiren, data, makeId) {
   const current = draft.companies.find(c => c.id === id);
-  if (!current || companySiren(current.siren) !== requestedSiren) return draft;
+  if (!current || current.in_registration || companySiren(current.siren) !== requestedSiren) return draft;
   if (companySiren(data.siren) !== requestedSiren || !data.legal_name?.trim()) {
     throw new Error('La société retournée ne correspond pas au SIREN demandé.');
   }

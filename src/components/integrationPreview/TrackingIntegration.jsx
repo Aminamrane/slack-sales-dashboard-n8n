@@ -5,6 +5,7 @@ import apiClient from "../../services/apiClient";
 import { presentContractError, validateContractPreparation } from "../../utils/contractErrors";
 import IntegrationPreviewStudio, { IntegrationSummary } from "./IntegrationPreviewStudio";
 import "./trackingIntegration.css";
+import PortalAccess from "../salesJourney/PortalAccess";
 
 export function IntegrationRollout({ state, onChange }) {
   const [confirming, setConfirming] = useState(false);
@@ -126,9 +127,9 @@ export function IntegrationButton({ onClick, ready, consult = false }) {
 }
 
 export function SalesJourneySteps({ phase = "intake", compact = false }) {
-  const declaring = ["details", "booking", "billing"].includes(phase);
+  const declaring = ["details", "booking", "handoff", "documents", "billing"].includes(phase);
   const steps = declaring
-    ? [["details", "Vente", ClipboardCheck], ["booking", "Rendez-vous", CalendarDays], ["billing", "Facturation", ReceiptText]]
+    ? [["details", "Vente", ClipboardCheck], ["booking", "Rendez-vous", CalendarDays], ["handoff", "Finalisation", FileCheck2], ["documents", "Documents", ClipboardCheck], ["billing", "Facturation", ReceiptText]]
     : [["setup", "Salariés", UsersRound], ["intake", "Fiche client", FileCheck2], ["contract", "Contrat", PenLine], ["signed", "Onboarding", CalendarDays]];
   const current = steps.findIndex(([key]) => key === phase);
   return <ol className={`ti-journey ${compact ? "is-compact" : ""}`} aria-label="Parcours de vente">
@@ -177,11 +178,38 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
     }
     finally { setSetupBusy(false); }
   }
-  const [sourceDraft, setSourceDraft] = useState(context.draft);
-  const [validated, setValidated] = useState(context.ready);
+  const initial = context.readOnly ? context.draft : { ...context.draft, flow_version: 2,
+    companies: context.draft.companies.map(c => ({...c, in_registration: c.in_registration || context.source_draft?.companies.find(row => row.id === c.id)?.in_registration || false})),
+    directors: context.draft.directors.map(d => ({...d, email: d.email || context.source_draft?.directors.find(row => row.id === d.id)?.email || ""})),
+  };
+  const [sourceDraft, setSourceDraft] = useState(initial);
+  const [portalState, setPortalState] = useState(null);
+  const [portalError, setPortalError] = useState("");
+  const [portalRevision, setPortalRevision] = useState(0);
+  useEffect(() => {
+    if (context.readOnly) return;
+    let alive = true;
+    apiClient.get(`/api/v1/owner-integration/leads/${context.lead_id}/portal`).then(state => {
+      if (!alive) return;
+      setPortalState(state);
+      const accesses = state.operations?.find(o => o.stage === "prospect")?.accesses;
+      if (accesses?.length) {
+        setSourceDraft(previous => {
+          const next = {...previous, directors: previous.directors.map(d => {
+            const access = accesses.find(a => (a.email && a.email.toLowerCase() === d.email?.toLowerCase()) || `${a.firstName || ''} ${a.lastName || ''}`.trim().toLowerCase() === d.name.trim().toLowerCase());
+            return {...d, provisional_access: !!access, email: access?.email || d.email || ""};
+          })};
+          current.current = JSON.stringify(next); setSourceReset(n => n + 1); setValidated(false);
+          return next;
+        });
+      }
+    }).catch(() => { if (alive) setPortalError("Impossible de vérifier les accès existants. Fermez puis rouvrez la fiche avant de poursuivre."); });
+    return () => { alive = false; };
+  }, [context.lead_id]);
+  const [validated, setValidated] = useState(context.ready && context.draft.flow_version === 2);
   const [sourceReset, setSourceReset] = useState(0);
   const revision = useRef(context.revision);
-  const saved = useRef(JSON.stringify(context.draft));
+  const saved = useRef(JSON.stringify(initial));
   const current = useRef(saved.current);
   const dialog = useRef(null);
   const close = () => {
@@ -311,7 +339,7 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
             </fieldset>
             <div className="ti-contact-fields">
               <label htmlFor="ti-email">Email du signataire<input id="ti-email" type="email" required maxLength={254} disabled={setupBusy} aria-invalid={!!fieldErrors.email} aria-describedby={fieldErrors.email ? "ti-email-error" : undefined} value={preparation.email || ""} onChange={e => updatePreparation("email", e.target.value)} autoComplete="email" />{fieldErrors.email && <span className="ti-field-error" id="ti-email-error" role="alert">{fieldErrors.email}</span>}</label>
-              <label htmlFor="ti-phone">Téléphone du signataire <small>(facultatif)</small><input id="ti-phone" type="tel" maxLength={80} disabled={setupBusy} aria-invalid={!!fieldErrors.phone} aria-describedby={fieldErrors.phone ? "ti-phone-error" : undefined} value={preparation.phone || ""} onChange={e => updatePreparation("phone", e.target.value)} placeholder="06 12 34 56 78 ou +33 6…" autoComplete="tel" />{fieldErrors.phone && <span className="ti-field-error" id="ti-phone-error" role="alert">{fieldErrors.phone}</span>}</label>
+              <label htmlFor="ti-phone">Téléphone du signataire <small>obligatoire</small><input id="ti-phone" type="tel" required maxLength={80} disabled={setupBusy} aria-invalid={!!fieldErrors.phone} aria-describedby={fieldErrors.phone ? "ti-phone-error" : undefined} value={preparation.phone || ""} onChange={e => updatePreparation("phone", e.target.value)} placeholder="06 12 34 56 78 ou +33 6…" autoComplete="tel" />{fieldErrors.phone && <span className="ti-field-error" id="ti-phone-error" role="alert">{fieldErrors.phone}</span>}</label>
             </div>
             <details style={{textAlign:'left',marginTop:14,fontSize:12,color:'#617083'}}><summary style={{cursor:'pointer'}}>Date du contrat · facultatif</summary><label style={{display:'grid',gap:6,marginTop:8}}>Date figurant sur le contrat<input type="date" value={contractDetails.displayDate||''} onChange={e=>onContractDateChange?.(e.target.value)} disabled={setupBusy}/></label><p>Sans date choisie, le contrat porte la date du jour.</p></details>
             {preparation.signer_name && <p className="ti-signer-name">Signataire : <strong>{preparation.signer_name}</strong></p>}
@@ -322,7 +350,7 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
         ) : stage === "contract" ? (
           <section className="ti-contract-review" aria-labelledby="ti-review-title">
             <div className="ti-review-icon"><FileCheck2 size={32} strokeWidth={1.6} /></div>
-            <span className="ti-review-eyebrow">FICHE CLIENT VALIDÉE</span>
+            <span className="ti-review-eyebrow">PÉRIMÈTRE CLIENT VALIDÉ</span>
             <h1 id="ti-review-title" tabIndex={-1}>Prêt pour la signature</h1>
             <p>Vérifiez les informations du dossier avant l’envoi au client.</p>
             <dl>
@@ -340,7 +368,12 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
           </section>
         ) : <>
         {context.nextAction && <button className="ti-back-setup" onClick={() => { setSourceDraft(JSON.parse(current.current)); setValidated(validated && current.current === saved.current); setStage("setup"); }}><ArrowLeft size={16} /> Salariés et coordonnées</button>}
+        {portalError && <p role="alert" className="ti-setup-error">{portalError}</p>}
+        <PortalAccess leadId={context.lead_id} revision={portalRevision} />
         <IntegrationPreviewStudio
+          phase="contract"
+          accessLocked={!!portalState?.operations?.find(o => o.stage === "prospect")}
+          continueLabel={portalState?.operations?.length || !sourceDraft.directors.some(d => d.provisional_access) ? "Continuer vers le contrat" : "Activer les accès et continuer"}
           key={sourceReset}
           embedded
           initialDraft={sourceDraft}
@@ -352,7 +385,13 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
           }}
           validateDraft={(draft) => persist(draft, true)}
           saveDraft={(draft) => persist(draft, false)}
-          onContinue={context.nextAction ? () => {
+          onContinue={context.nextAction ? async () => {
+            if (portalError || !portalState) throw new Error(portalError || "Vérification des accès en cours. Réessayez dans un instant.");
+            const chosen = JSON.parse(current.current).directors.filter(d => d.provisional_access);
+            if (chosen.length && !portalState.operations?.some(o => o.stage === "prospect")) {
+              const state = await apiClient.post(`/api/v1/owner-integration/leads/${context.lead_id}/portal/provisional`, {});
+              setPortalState(state); setPortalRevision(n => n + 1);
+            }
             setStage("contract");
             dialog.current?.scrollTo({ top: 0, behavior: "instant" });
             requestAnimationFrame(() => document.getElementById("ti-review-title")?.focus());

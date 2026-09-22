@@ -31,7 +31,8 @@ export function validateContractPreparation(values) {
   if (!values.employee_range) fields.employee_range = help.employee_range;
   const email = String(values.email || '').trim();
   if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fields.email = help.email;
-  if (/[^0-9+().\s-]/.test(values.phone || '')) fields.phone = help.phone;
+  if (!String(values.phone || '').trim()) fields.phone = 'Le téléphone du signataire est obligatoire.';
+  else if (/[^0-9+().\s-]/.test(values.phone || '')) fields.phone = help.phone;
   return fields;
 }
 export function presentContractError(error, options = {}) {
@@ -48,7 +49,7 @@ export function presentContractError(error, options = {}) {
   for (const name of ['phone_number', 'email', 'first_name', 'last_name']) {
     if (raw.includes(`info[${name}]`)) fields[fieldName(name)] = help[fieldName(name)];
   }
-  if (/téléphone du signataire.*invalide/i.test(raw)) fields.phone = help.phone;
+  if (/téléphone du signataire.*(?:invalide|obligatoire)/i.test(raw)) fields.phone = help.phone;
   if (/prénom.*nom.*signataire|identité du signataire.*incompl/i.test(raw)) fields.representative_name = help.representative_name;
   if (Object.keys(fields).length) return fieldResult(fields, options);
   const result = (title, message, extra = {}) => ({ title, message, fields: {}, action: null, isNdaMissing: false, ...extra });

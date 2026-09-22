@@ -84,3 +84,32 @@ test('Pappers enrichit la société par SIREN sans importer ses établissements'
   assert.equal(applyCompanyLookup(draft,'new','987654321',data,()=>''),draft);
   assert.throws(()=>applyCompanyLookup(draft,'new','123456789',{...data,siren:'987654321'},()=>''));
 });
+
+test('le périmètre avant contrat ne demande pas le passage de relais', () => {
+  const d = freshDraft();
+  d.flow_version = 2;
+  d.companies.forEach(c => { c.in_registration = true; });
+  assert.equal(completeness(d).checks.every(c => c.done), true);
+  d.companies[0].in_registration = false;
+  assert.equal(completeness(d).checks[0].done, false);
+  d.companies[0].siren = '123456789';
+  assert.equal(completeness(d).checks.every(c => c.done), true);
+  d.directors[0].provisional_access = true;
+  assert.equal(completeness(d).checks[2].done, false);
+  d.directors[0].email = 'camille@example.com';
+  assert.equal(completeness(d).checks[2].done, true);
+  d.directors[1].provisional_access = true;
+  d.directors[1].email = 'CAMILLE@example.com';
+  assert.equal(completeness(d).checks[2].done, false);
+  d.directors[1].email = 'alex@example.com';
+  assert.equal(completeness(d).checks[2].done, true);
+});
+
+test('une réponse Pappers tardive ne remplace pas une société passée en immatriculation', () => {
+  const d = freshDraft();
+  d.companies[0].siren = '123456789';
+  d.companies[0].in_registration = true;
+  assert.equal(applyCompanyLookup(d, d.companies[0].id, '123456789', {
+    siren: '123456789', legal_name: 'Ancien résultat', representatives: [],
+  }, () => 'unused'), d);
+});
