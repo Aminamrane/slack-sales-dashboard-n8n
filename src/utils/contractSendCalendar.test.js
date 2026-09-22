@@ -71,3 +71,42 @@ test('legacy R1 shortcut delegates to the same tested handler', () => {
   assert.ok(shortcut.includes('if (!isSending && hasRange) handleSendContract(lead)'));
   assert.ok(!shortcut.includes('apiClient.post') && !shortcut.includes('apiClient.patch'));
 });
+
+test('admin contract shortcut on the setter page also preserves appointments', async () => {
+  const setterSource = readFileSync(new URL('../pages/TrackingSheetSetter.jsx', import.meta.url), 'utf8');
+  const calls = [];
+  const context = {
+    apiClient: {post: async (...args) => calls.push(['post', ...args]), patch: async (...args) => calls.push(['patch', ...args])},
+    fetchLeadContracts: async id => calls.push(['refresh', id]),
+    setSendingContract() {}, setNavNotif() {}, setR1ShortcutContract() {}, setTimeout() {},
+  };
+  vm.runInNewContext(`${setterSource.slice(setterSource.indexOf('  const handleSendContract ='), setterSource.indexOf('  const handleResendContract ='))}\nthis.send = handleSendContract;`, context);
+  await context.send({id:42, status:'r1', employee_range:'1 à 2 salariés'});
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [['post','/api/v1/contracts/send',{lead_id:42,employee_range:'1 à 2 salariés'}],['refresh',42]]);
+  const shortcut = setterSource.slice(setterSource.indexOf('{/* ── Shortcut: Envoyer le contrat'), setterSource.indexOf('/* ── Step 1: R1 qualification pills'));
+  assert.ok(shortcut.includes('if (!isSending && hasRange) handleSendContract(lead)'));
+  assert.ok(!shortcut.includes('apiClient.post(') && !shortcut.includes('apiClient.patch('));
+});
+
+for (const page of ['TrackingSheet', 'TrackingSheetSetter']) {
+  test(`${page}: an R1 contract is fetched again after reloading the sheet`, async () => {
+    const pageSource = readFileSync(new URL(`../pages/${page}.jsx`, import.meta.url), 'utf8');
+    const start = pageSource.indexOf('  const r1CatIndex =');
+    const end = pageSource.indexOf('  // ── SUPABASE REALTIME: contract', start);
+    const calls = [], effects = [];
+    const lead = {id:42,status:'r1'};
+    const context = {
+      isSetter:false,CATEGORIES:[{key:'r1'},{key:'r2'},{key:'r3'}],activeTab:0,leads:[lead,{id:43,status:'r2'}],
+      useEffect: callback => effects.push(callback), setLoadingContracts() {},
+      fetchLeadContracts: async id => {calls.push(['fetch',id]);return [{yousign_status:'ongoing'}];},
+      apiClient:{patch:async (...args) => calls.push(['patch',...args])},
+      setLeads() {},
+    };
+    assert.ok(start > 0 && end > start);
+    vm.runInNewContext(pageSource.slice(start,end),context);
+    effects[0]();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(calls,[['fetch',42]]);
+    assert.equal(lead.status,'r1');
+  });
+}

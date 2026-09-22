@@ -1910,13 +1910,14 @@ export default function TrackingSheet() {
     }
   };
 
-  // Fetch contracts for all R2/R3 leads when R2 or R3 tab is active
+  // Fetch contracts from R1 too: sending a contract does not create an R2.
   // Auto-move leads with signed contracts to "signed" tab
+  const r1CatIndex = CATEGORIES.findIndex(c => c.key === 'r1');
   const r2CatIndex = CATEGORIES.findIndex(c => c.key === 'r2');
   const r3CatIndex = CATEGORIES.findIndex(c => c.key === 'r3');
   useEffect(() => {
-    if (activeTab !== r2CatIndex && activeTab !== r3CatIndex) return;
-    const contractLeads = leads.filter(l => l.status === 'r2' || l.status === 'r3');
+    if (activeTab !== r1CatIndex && activeTab !== r2CatIndex && activeTab !== r3CatIndex) return;
+    const contractLeads = leads.filter(l => activeTab === r1CatIndex ? l.status === 'r1' : l.status === 'r2' || l.status === 'r3');
     if (contractLeads.length === 0) return;
     setLoadingContracts(true);
     Promise.all(contractLeads.map(async (l) => {
@@ -1929,10 +1930,10 @@ export default function TrackingSheet() {
     })).finally(() => setLoadingContracts(false));
   }, [activeTab, leads.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── SUPABASE REALTIME: contract status updates (R2 + R3) ─────────────────
+  // ── SUPABASE REALTIME: contract status updates (R1 + R2 + R3) ─────────────────
   useEffect(() => {
-    if (activeTab !== r2CatIndex && activeTab !== r3CatIndex) return;
-    const contractLeads = leads.filter(l => l.status === 'r2' || l.status === 'r3');
+    if (activeTab !== r1CatIndex && activeTab !== r2CatIndex && activeTab !== r3CatIndex) return;
+    const contractLeads = leads.filter(l => activeTab === r1CatIndex ? l.status === 'r1' : l.status === 'r2' || l.status === 'r3');
     if (contractLeads.length === 0) return;
 
     const contractLeadIds = contractLeads.map(l => l.id);
