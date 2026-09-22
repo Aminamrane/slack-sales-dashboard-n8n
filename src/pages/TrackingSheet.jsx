@@ -6440,7 +6440,7 @@ export default function TrackingSheet() {
                 <IntegrationButton consult ready={intakeSaved[lead.id].validated} onClick={() => openSavedIntake(lead.id)} />
               </div>}
 
-              {intakeRollout?.can_manage && <PortalAccess key={lead.id} leadId={lead.id} revision={portalRevision} />}
+              {intakeRollout?.available && <PortalAccess key={lead.id} leadId={lead.id} revision={portalRevision} />}
               {/* ─── INFO DETAILS ─── */}
               <div style={{
                 display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14,
