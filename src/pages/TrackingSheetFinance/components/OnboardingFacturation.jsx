@@ -1,3 +1,5 @@
+import AppointmentConfirmation from "../../../components/booking/AppointmentConfirmation";
+import { appointmentConfirmation, appointmentFailure } from "../../../utils/appointmentConfirmation";
 // src/pages/TrackingSheetFinance/components/OnboardingFacturation.jsx
 //
 // Validation FACTURATION du RDV d'onboarding Owner + recalage, pour l'équipe
@@ -59,6 +61,8 @@ function ReschedModal({ numeroClient, label, onClose, onDone }) {
   const [loading, setLoading] = useState(true);
   const [sel, setSel] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [completed, setCompleted] = useState(null);
+  const [uncertain, setUncertain] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -79,27 +83,32 @@ function ReschedModal({ numeroClient, label, onClose, onDone }) {
   };
 
   const confirm = async () => {
-    if (!sel || saving) return;
+    if (!sel || saving || completed) return;
     setSaving(true); setError(null);
     try {
-      await apiClient.post("/api/v1/optilex/board-reschedule-onboarding", {
+      const result = await apiClient.post("/api/v1/optilex/board-reschedule-onboarding", {
         numero_client: numeroClient, new_dt: `${sel.date}T${sel.slot}`,
       });
-      onDone(`${sel.date}T${sel.slot}`);
+      appointmentConfirmation(result, sel);
+      setCompleted(result);
+      setSaving(false);
     } catch (e) {
-      const d = e.data && e.data.detail;
-      setError(typeof d === "string" ? d : e.message || "Erreur");
+      const failure = appointmentFailure(e);
+      setError(failure.message);
+      setUncertain(failure.uncertain);
       setSaving(false);
     }
   };
 
   const shown = (days || []).filter((d) => d.slots && d.slots.length > 0);
 
+  if (completed) return createPortal(<AppointmentConfirmation result={completed} selected={sel} label={label} onClose={() => onDone(appointmentConfirmation(completed, sel).dateTime)} />, document.body);
+
   return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 10080, display: "flex",
       alignItems: "center", justifyContent: "center", padding: 20,
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={onClose}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={() => { if (!saving) onClose(); }}
         style={{ position: "absolute", inset: 0, background: "rgba(17,24,39,0.42)" }} />
       <motion.div initial={{ opacity: 0, scale: 0.97, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
@@ -116,18 +125,18 @@ function ReschedModal({ numeroClient, label, onClose, onDone }) {
               {label} : le créneau change aussi pour Vincent et pour le sales sur le lead
             </div>
           </div>
-          <button type="button" onClick={onClose} style={{ border: "none", background: "none",
+          <button type="button" disabled={saving} onClick={() => { if (!saving) onClose(); }} style={{ border: "none", background: "none",
             cursor: "pointer", color: MUTED, fontSize: 17, lineHeight: 1, padding: 4, flexShrink: 0 }}>✕</button>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "10px 20px", borderBottom: `1px solid ${BORDER}` }}>
-          <button type="button" onClick={() => shiftWeek(-1)} disabled={start <= todayIso()}
+          <button type="button" onClick={() => shiftWeek(-1)} disabled={saving || uncertain || start <= todayIso()}
             style={{ border: `1px solid ${BORDER}`, background: CARD, borderRadius: 8, padding: "5px 11px",
               fontSize: 12, fontWeight: 600, color: start <= todayIso() ? MUTED : NAVY,
               cursor: start <= todayIso() ? "default" : "pointer", fontFamily: "inherit" }}>← Sem. préc.</button>
           <span style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>Créneaux libres (Vincent + facturation)</span>
-          <button type="button" onClick={() => shiftWeek(1)}
+          <button type="button" disabled={saving || uncertain} onClick={() => shiftWeek(1)}
             style={{ border: `1px solid ${BORDER}`, background: CARD, borderRadius: 8, padding: "5px 11px",
               fontSize: 12, fontWeight: 600, color: NAVY, cursor: "pointer", fontFamily: "inherit" }}>Sem. suiv. →</button>
         </div>
@@ -145,7 +154,7 @@ function ReschedModal({ numeroClient, label, onClose, onDone }) {
                 {d.slots.map((s) => {
                   const on = sel && sel.date === d.date && sel.slot === s.t;
                   return (
-                    <button key={s.t} type="button" disabled={!s.free}
+                    <button key={s.t} type="button" disabled={saving || uncertain || !s.free}
                       onClick={() => s.free && setSel({ date: d.date, slot: s.t })}
                       style={{ padding: "6px 12px", borderRadius: 8,
                         border: `1px solid ${on ? GREEN : (s.free ? BORDER : "transparent")}`,
@@ -163,7 +172,7 @@ function ReschedModal({ numeroClient, label, onClose, onDone }) {
 
         <div style={{ padding: "14px 20px", borderTop: `1px solid ${BORDER}`, display: "flex",
           alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <span style={{ fontSize: 12, color: error ? "#b42318" : MUTED, minWidth: 0,
+          <span role={error ? "alert" : undefined} style={{ fontSize: 12, color: error ? "#b42318" : MUTED, minWidth: 0,
             overflow: "hidden", textOverflow: "ellipsis" }}>
             {error || (sel ? `Nouveau créneau : ${dayLabel(sel.date)} à ${sel.slot}` : "Sélectionne un créneau")}
           </span>
@@ -173,7 +182,7 @@ function ReschedModal({ numeroClient, label, onClose, onDone }) {
               background: sel ? GREEN : "#e5e8ee", color: sel ? "#fff" : MUTED,
               fontSize: 13, fontWeight: 700, cursor: sel && !saving ? "pointer" : "default",
               fontFamily: "inherit", flexShrink: 0 }}>
-            {saving ? "Reprogrammation…" : "Confirmer"}
+            {saving ? "Reprogrammation…" : (uncertain ? "Vérifier ce créneau" : "Confirmer")}
           </motion.button>
         </div>
       </motion.div>
