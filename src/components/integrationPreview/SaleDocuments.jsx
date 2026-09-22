@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, FileUp, FileText, UsersRound, Building2, Check, Clock3, LoaderCircle, RefreshCw, Trash2, CircleAlert } from 'lucide-react';
 import apiClient from '../../services/apiClient';
-import { validateIntakeFile, documentStatus } from '../../utils/intakeDocuments';
+import { validateIntakeFile, documentStatus, hasRequiredSaleDocuments } from '../../utils/intakeDocuments';
 
 export default function SaleDocuments({ leadId, draft, onBack, onContinue }) {
   const [files, setFiles] = useState([]), [platform, setPlatform] = useState(null);
@@ -43,6 +43,17 @@ export default function SaleDocuments({ leadId, draft, onBack, onContinue }) {
     try {const result = await apiClient.delete(`${root}/${id}`);setFiles(result.documents);}
     catch(e) {setError(e.message);} finally {setBusy('');}
   }
+  async function continueToBilling() {
+    if (busy || loading) return;
+    setBusy('Vérification des documents'); setError('');
+    try {
+      const result = await apiClient.get(root);
+      setFiles(result.documents);
+      if (!hasRequiredSaleDocuments(result.documents)) {setError('Ajoutez au moins un document avant de poursuivre la déclaration de vente.'); return;}
+      onContinue();
+    } catch(e) {setError(e.message || 'Impossible de vérifier les documents. Réessayez.');}
+    finally {setBusy('');}
+  }
   function drop(label, meta, icon) {
     const Icon = icon;
     return <label className={`si-drop ${busy ? 'is-busy' : ''}`} onDragOver={e => e.preventDefault()} onDrop={e => {e.preventDefault();if(!busy) upload(e.dataTransfer.files, meta);}}>
@@ -51,7 +62,7 @@ export default function SaleDocuments({ leadId, draft, onBack, onContinue }) {
     </label>;
   }
   return <section className="integration-preview ip-embedded si-documents">
-    <header className="si-title"><span className="si-title-icon"><FileUp size={26}/></span><div><small>PIÈCES DU DOSSIER</small><h2>Ajouter les documents</h2><p>Déposez les pièces disponibles. Vous pourrez compléter le dossier ensuite.</p></div></header>
+    <header className="si-title"><span className="si-title-icon"><FileUp size={26}/></span><div><small>PIÈCES DU DOSSIER</small><h2>Ajouter les documents</h2><p>Étape obligatoire : ajoutez au moins un document pour poursuivre la déclaration de vente.</p></div></header>
     {account && <div className="si-account-state"><UsersRound size={20}/><div><strong>{account.label}</strong><p>{account.detail}</p></div></div>}
     <div className="si-section-title"><UsersRound size={19}/><h3>Pour chaque dirigeant</h3></div>
     <div className="si-upload-grid">{directors.map(d => <article key={d.id}><h4>{d.name}</h4>{drop('Avis d’imposition', {document_type:'tax_notice', director_id:d.id}, FileText)}</article>)}</div>
@@ -69,8 +80,9 @@ export default function SaleDocuments({ leadId, draft, onBack, onContinue }) {
       {platform?.reason && <p className="si-delivery-note">{platform.reason}</p>}
     </section>
     {platform?.available && <details className="si-other-docs"><summary>État dans l’espace client · {platform.documents?.total || 0} document(s)</summary><p>Une pièce est complète lorsque son analyse est terminée.</p>{platform.expected?.map((piece,i) => <div className="si-checklist" key={`${piece.key}-${i}`}><span>{piece.label}{piece.company?.name ? ` · ${piece.company.name}` : ''}</span><small>{piece.status==='received' ? 'Analysé' : 'À compléter / analyse en attente'}</small></div>)}</details>}
+    {!loading && !hasRequiredSaleDocuments(files) && <p role="status">Un document doit être enregistré avant de continuer. Les dépôts refusés doivent être corrigés.</p>}
     {error && <div className="si-error" role="alert">{error}</div>}
-    <footer className="si-actions"><button className="ip-secondary" disabled={!!busy} onClick={onBack}><ArrowLeft size={16}/> Fiche</button><button className="ip-primary" disabled={!!busy} onClick={onContinue}>Continuer vers la facturation<ArrowRight size={17}/></button></footer>
+    <footer className="si-actions"><button className="ip-secondary" disabled={!!busy} onClick={onBack}><ArrowLeft size={16}/> Fiche</button><button className="ip-primary" disabled={!!busy || loading || !hasRequiredSaleDocuments(files)} onClick={continueToBilling}>Continuer vers la facturation<ArrowRight size={17}/></button></footer>
   </section>;
 }
 function FileCheckIcon(){return <FileText size={19}/>;}

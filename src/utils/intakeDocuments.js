@@ -16,3 +16,7 @@ export function documentStatus(file, remote) {
   if (file.status === 'rejected') return 'À corriger · conservé dans le CRM';
   return 'Enregistré · en attente de transmission';
 }
+
+export function hasRequiredSaleDocuments(files) {
+  return Array.isArray(files) && files.some(file => ['waiting', 'sending', 'sent'].includes(file.status));
+}
