@@ -279,7 +279,7 @@ export default function IntegrationPreviewStudio({
     } catch (error) {
       if (alive.current) setCompanyError({ id: company.id, message:
         error?.status === 404 ? 'Aucune société trouvée pour ce SIREN. Vérifiez le numéro.' :
-        [400, 422].includes(error?.status) ? 'Ce SIREN est invalide. Vérifiez les 9 chiffres de la société.' :
+        [400, 422].includes(error?.status) ? (typeof error?.data?.detail === 'string' ? error.data.detail : 'Ce SIREN est invalide. Vérifiez les 9 chiffres de la société.') :
         'Recherche Pappers indisponible. Vos informations sont conservées ; réessayez.' });
     } finally {
       lookupPending.current = false;
