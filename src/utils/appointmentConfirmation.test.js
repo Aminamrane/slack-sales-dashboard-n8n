@@ -1,4 +1,5 @@
 import test from 'node:test';
+import process from 'node:process';
 import assert from 'node:assert/strict';
 import { appointmentConfirmation, appointmentFailure } from './appointmentConfirmation.js';
 const slot = { date: '2026-10-26', slot: '12:00' };

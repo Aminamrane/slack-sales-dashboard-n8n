@@ -2760,7 +2760,7 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
       .then((r) => { if (alive) { setDays(r.days || []); setLoading(false); } })
       .catch(() => { if (alive) { setDays([]); setError("Impossible de charger les disponibilités. Réessayez."); setLoading(false); } });
     return () => { alive = false; };
-  }, [start]);
+  }, [start, kind]);
 
   const shiftWeek = (dir) => {
     const d = new Date(start + "T00:00:00");
