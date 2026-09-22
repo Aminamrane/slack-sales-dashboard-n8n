@@ -11,6 +11,7 @@ import { CalendarCheck2, ChevronRight, Building2, UserRoundCheck, ArrowRight } f
 import R1QualificationDialog from '../components/salesJourney/R1QualificationDialog';
 import QualificationDialog from '../components/salesJourney/QualificationDialog';
 import NotesDialog from '../components/salesJourney/NotesDialog';
+import { SaleIntake, SaleDocuments } from "../components/integrationPreview/SaleIntake";
 import PortalAccess from '../components/salesJourney/PortalAccess';
 import NdaProgress from '../components/salesJourney/NdaProgress';
 import SalesNotes, { SalesNotesView } from '../components/salesJourney/SalesNotes';
@@ -1137,6 +1138,7 @@ export default function TrackingSheet() {
   const [saleSubmitting, setSaleSubmitting] = useState(false);
   // Déclaration en 3 étapes : 'form' -> 'lancement' (créneau Opti'Lex : L. Gentaire, ou H. Moraru si 20+) -> 'onboarding' (créneau facturation@)
   const [saleStep, setSaleStep] = useState('form');
+  const [saleIntake, setSaleIntake] = useState(null);
   const [saleSlots, setSaleSlots] = useState({ onboarding: null, lancement: null }); // "YYYY-MM-DDTHH:MM"
   const [saleSuccess, setSaleSuccess] = useState(false);
   const EMPLOYEE_RANGES = [
@@ -1161,6 +1163,7 @@ export default function TrackingSheet() {
           email: emailVal,
           payment_mode: paymentMode,
           employee_band: saleForm.employeeRange,
+          ...(saleOnboardingOnly ? {integration_revision: saleIntake?.revision} : {}),
           // Questions facturation (étape 'questions') -> description de l'event Onboarding.
           billing_structures: saleForm.billingStructures || null,
           structures_count: saleForm.billingStructures === 'plusieurs' ? (saleForm.structuresCount || null) : null,
@@ -1504,9 +1507,7 @@ export default function TrackingSheet() {
   const [ndaPappersUrl, setNdaPappersUrl] = useState(''); // pappers URL after prefill
   const [ndaError, setNdaError] = useState('');
   const [ndaSuccess, setNdaSuccess] = useState(false);
-  const [portalOptIn, setPortalOptIn] = useState(false);
   const [portalRevision, setPortalRevision] = useState(0);
-  useEffect(() => { setPortalOptIn(false); }, [ndaPopup?.leadId]);
 
   const [ndaGenerating, setNdaGenerating] = useState(false); // PDF generation in progress
   // ── Nouveau flux NDA (convention v2, 2026-08-20) : le prefill n'est plus
@@ -2631,7 +2632,7 @@ export default function TrackingSheet() {
           client_info_text: '',
           lead_id: lead.id,
         });
-      } catch (e) { if (ndaPopup.nextAction || isGuidedLead(lead) || portalOptIn) throw new Error('Le NDA n’a pas pu être enregistré. Réessayez avant de poursuivre vers le contrat.'); console.warn('Backend client-data sync failed (non-blocking):', e); }
+      } catch (e) { if (ndaPopup.nextAction || isGuidedLead(lead)) throw new Error('Le NDA n’a pas pu être enregistré. Réessayez avant de poursuivre vers le contrat.'); console.warn('Backend client-data sync failed (non-blocking):', e); }
       // Convention v2 : récupère via Pappers TOUTES les sociétés des dirigeants
       // retenus (Annexe 1, tout coché par défaut) — fire-and-forget, décochable
       // ensuite dans l'onglet Options de la page Détails. Pas de fetch pour une
@@ -2640,13 +2641,9 @@ export default function TrackingSheet() {
         const dirs = ndaData.representatives.map(r => (r.fullName || '').trim()).filter(Boolean);
         if (dirs.length) {
           const discovery = apiClient.post(`/api/v1/tracking/leads/${lead.id}/covered-companies/fetch`, { dirigeants: dirs });
-          if (ndaPopup.nextAction || isGuidedLead(lead) || portalOptIn) { try { await discovery; } catch { throw new Error('Les sociétés du client n’ont pas pu être récupérées. Réessayez la préparation du NDA pour compléter la fiche.'); } }
+          if (ndaPopup.nextAction || isGuidedLead(lead)) { try { await discovery; } catch { throw new Error('Les sociétés du client n’ont pas pu être récupérées. Réessayez la préparation du NDA pour compléter la fiche.'); } }
           else discovery.catch(e => console.warn('Sociétés couvertes (annexe) non récupérées:', e));
         }
-      }
-      if (portalOptIn) {
-        await apiClient.post(`/api/v1/owner-integration/leads/${lead.id}/portal/provisional`, {});
-        setPortalRevision(value => value + 1);
       }
       if (ndaPopup.nextAction) {
         const unchanged = await checkIntakeBeforeSend(lead.id,ndaPopup.nextAction);
@@ -7913,7 +7910,7 @@ export default function TrackingSheet() {
                           return;
                         }
                         setSaleForm({ email: lead.email || '', paymentModality: 'M', employeeRange: lead.employee_range || '', billingStructures: '', structuresCount: '', discount: null, discountValue: '' });
-                        setSaleStep('form'); setSaleSlots({ onboarding: null, lancement: null });
+                        setSaleIntake(null); setSaleStep('form'); setSaleSlots({ onboarding: null, lancement: null });
                         setShowSaleModal(lead.id);
                       }}
                       disabled={!canDeclare}
@@ -8474,7 +8471,7 @@ export default function TrackingSheet() {
                 </div>
               </div>
 
-              {intakeRollout?.can_manage && <PortalAccess key={lead.id} leadId={lead.id} choice selected={portalOptIn} onSelect={setPortalOptIn} revision={portalRevision} />}
+
               {/* Pappers link */}
               {ndaPappersUrl && (
                 <a href={ndaPappersUrl} target="_blank" rel="noopener noreferrer" style={{
@@ -9375,7 +9372,7 @@ export default function TrackingSheet() {
               style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both' }} />
             <div className={saleOnboardingOnly?'sj-sale-dialog':undefined} role="dialog" aria-modal="true" aria-label="Déclarer une vente" style={{
               position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
-              width: (saleStep === 'form' || saleStep === 'questions') ? 420 : 680, maxWidth: '92vw', background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`,
+              width: (saleStep === 'form' || saleStep === 'questions') ? 420 : 720, maxWidth: '92vw', maxHeight: '90dvh', overflowY: 'auto', background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`,
               boxShadow: '0 24px 48px rgba(0,0,0,0.2)', padding: '28px 28px 24px',
               animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
               fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
@@ -9386,7 +9383,7 @@ export default function TrackingSheet() {
                   background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted, fontSize: 14,
                   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
 
-              {saleOnboardingOnly && !saleSuccess && <SalesJourneySteps phase={saleStep === 'form' ? 'details' : saleStep === 'questions' ? 'billing' : 'booking'} compact />}
+              {saleOnboardingOnly && !saleSuccess && <SalesJourneySteps phase={saleStep === 'form' ? 'details' : saleStep === 'questions' ? 'billing' : ['handoff', 'documents'].includes(saleStep) ? saleStep : 'booking'} compact />}
               {saleSuccess ? (
                 <div style={{ textAlign: 'center', padding: '20px 0' }}>
                   <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#10b98120', margin: '0 auto 14px',
@@ -9467,6 +9464,10 @@ export default function TrackingSheet() {
                     }}
                   >Continuer</button>
                 </>
+              ) : saleStep === 'handoff' ? (
+                <SaleIntake key={showSaleModal} leadId={showSaleModal} onBack={() => setSaleStep('onboarding')} onSaved={value => {setSaleIntake(value); setSaleStep('documents');}} />
+              ) : saleStep === 'documents' ? (
+                <SaleDocuments draft={saleIntake?.draft} onBack={() => setSaleStep('handoff')} onContinue={() => setSaleStep('questions')} />
               ) : saleStep === 'questions' ? (
                 <>
                   {/* Étape questions facturation (après les créneaux, avant la déclaration).
@@ -9549,7 +9550,7 @@ export default function TrackingSheet() {
                       && (saleForm.discount === false || (saleForm.discount === true && (saleForm.discountValue || '').trim()));
                     return (
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => setSaleStep('onboarding')} disabled={saleSubmitting}
+                        <button onClick={() => setSaleStep(saleOnboardingOnly ? 'documents' : 'onboarding')} disabled={saleSubmitting}
                           style={{ padding: '11px 16px', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent',
                             color: C.muted, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', cursor: saleSubmitting ? 'default' : 'pointer' }}>Retour</button>
                         <button onClick={() => handleSaleSubmitWithSlots(showSaleModal)} disabled={!qReady || saleSubmitting}
@@ -9597,11 +9598,11 @@ export default function TrackingSheet() {
                           background: saleSlots.lancement ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
                           color: saleSlots.lancement ? '#fff' : C.muted, transition: 'all 0.2s' }}>Suivant → Onboarding</button>
                     ) : (
-                      <button onClick={() => setSaleStep('questions')} disabled={!saleSlots.onboarding}
+                      <button onClick={() => setSaleStep(saleOnboardingOnly ? 'handoff' : 'questions')} disabled={!saleSlots.onboarding}
                         style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
                           cursor: saleSlots.onboarding ? 'pointer' : 'default',
                           background: saleSlots.onboarding ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
-                          color: saleSlots.onboarding ? '#fff' : C.muted, transition: 'all 0.2s' }}>Suivant → Questions</button>
+                          color: saleSlots.onboarding ? '#fff' : C.muted, transition: 'all 0.2s' }}>{saleOnboardingOnly ? "Suivant → Finaliser la fiche" : "Suivant → Questions"}</button>
                     )}
                   </div>
                 </>

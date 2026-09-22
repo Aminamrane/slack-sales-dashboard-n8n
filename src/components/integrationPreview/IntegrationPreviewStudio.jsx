@@ -83,7 +83,7 @@ function Field({
     </label>
   );
 }
-export function IntegrationSummary({ draft, clientName, validated = false, embedded = true }) {
+export function IntegrationSummary({ draft, clientName, validated = false, embedded = true, phase = "full" }) {
   const { companies, directors } = completeness(draft);
   const ready = validated;
   const WeatherIcon = WEATHER_ICONS[(draft.weather || 3) - 1];
@@ -109,7 +109,7 @@ export function IntegrationSummary({ draft, clientName, validated = false, embed
                         </div>
                         <div>
                           <strong>
-                            {draft.weather ? (
+                            {phase === "contract" ? directors.filter(d => d.provisional_access).length : draft.weather ? (
                               <>
                                 {draft.weather}
                                 <small>/5</small>
@@ -118,7 +118,7 @@ export function IntegrationSummary({ draft, clientName, validated = false, embed
                               "—"
                             )}
                           </strong>
-                          <span>Météo initiale</span>
+                          <span>{phase === "contract" ? "Accès sélectionnés" : "Météo initiale"}</span>
                         </div>
                       </div>
                       <h4>Périmètre d’accompagnement</h4>
@@ -136,19 +136,20 @@ export function IntegrationSummary({ draft, clientName, validated = false, embed
                           </div>
                         </div>
                       ))}
-                      <div className="ip-handoff-summary">
+                      {phase !== "contract" && <div className="ip-handoff-summary">
                         <h4>Situation personnelle des dirigeants</h4>
                         <p>{draft.personal_situation || "Non renseignée"}</p>
                         <h4>Situation professionnelle des dirigeants</h4>
                         <p>{draft.professional_situation || "Non renseignée"}</p>
-                      </div>
+                      </div>}
+                      {phase === "contract" && <div className="ip-soft-note"><LockKeyhole size={20} /><p>{directors.filter(d => d.provisional_access).length} accès provisoire(s) sélectionné(s). Les dirigeants non sélectionnés restent associés au dossier, sans compte. Le passage de relais et la météo seront complétés à la déclaration.</p></div>}
                       {draft.priorities && (
                         <>
                           <h4>Priorité du client</h4>
                           <p>{draft.priorities}</p>
                         </>
                       )}
-                      {!!draft.missions.length && (
+                      {!!draft.missions?.length && (
                         <>
                           <h4>Missions recommandées</h4>
                           <div className="ip-summary-tags">
@@ -188,7 +189,7 @@ export function IntegrationSummary({ draft, clientName, validated = false, embed
                             <p>{v}</p>
                           </div>
                         ))}
-                      {draft.weather && (
+                      {phase !== "contract" && draft.weather && (
                         <>
                           <h4>Météo client</h4>
                           <div className="ip-summary-weather">
@@ -235,7 +236,11 @@ export default function IntegrationPreviewStudio({
   onContinue,
   onDirty = () => {},
   lookupCompany,
+  phase = "full",
+  accessLocked = false,
+  continueLabel,
 }) {
+  const stepIds = phase === "contract" ? [0, 3] : [0, 1, 2, 3];
   const [draft, setDraft] = useState(() => uniqueCompanies(initialDraft || readDraft())),
     [step, setStep] = useState(0),
     [future, setFuture] = useState(false),
@@ -254,6 +259,7 @@ export default function IntegrationPreviewStudio({
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   async function retrieveCompany(company) {
     if (!lookupCompany || lookupPending.current || busy) return;
+    if (company.in_registration) return;
     const siren = companySiren(company.siren);
     if (!siren || String(company.siren).replace(/\s/g, '').length !== 9) {
       setCompanyError({ id: company.id, message: 'Saisissez le SIREN à 9 chiffres de la société, pas le SIRET d’un établissement.' });
@@ -326,7 +332,7 @@ export default function IntegrationPreviewStudio({
         setFeedback({
           success: true,
           text: embedded
-            ? "Fiche enregistrée et validée. Vous pouvez poursuivre vers le contrat."
+            ? "Périmètre enregistré. Vous pouvez poursuivre vers le contrat ; le passage de relais sera complété à la déclaration."
             : "Fiche validée. Le parcours est prêt à être testé.",
         });
         setStep(3);
@@ -341,6 +347,13 @@ export default function IntegrationPreviewStudio({
     } finally {
       setBusy(false);
     }
+  };
+  const advance = async () => {
+    if (busy) return;
+    setBusy(true);
+    try { await onContinue(); }
+    catch (error) { setFeedback({success: false, text: error.message || "Impossible de poursuivre. Réessayez."}); }
+    finally { setBusy(false); }
   };
   const send = () => {
     if (future && !ready) {
@@ -465,20 +478,20 @@ export default function IntegrationPreviewStudio({
             {view === "form" ? (
               <>
                 <nav className="ip-steps" aria-label="Étapes de la fiche">
-                  {STEPS.map((s, i) => (
+                  {stepIds.map((i, index) => (
                     <button
-                      key={s}
+                      key={i}
                       aria-current={step === i ? "step" : undefined}
                       onClick={() => goStep(i)}
                     >
-                      <span>{i + 1}</span>
-                      {s}
+                      <span>{index + 1}</span>
+                      {STEPS[i]}
                     </button>
                   ))}
                 </nav>
                 <section className="ip-panel" key={step}>
                   <div className="ip-section-head">
-                    <span className="ip-section-number">0{step + 1}</span>
+                    <span className="ip-section-number">0{stepIds.indexOf(step) + 1}</span>
                     <div>
                       <h2 ref={heading} tabIndex={-1}>
                         {
@@ -550,12 +563,14 @@ export default function IntegrationPreviewStudio({
                                 aria-label={`SIREN ${c.name}`}
                                 maxLength={20}
                                 placeholder={embedded ? "SIREN de la société · 9 chiffres" : "SIREN — non renseigné dans cet exemple"}
+                                disabled={!!c.in_registration}
                                 value={c.siren}
                                 onChange={(e) =>
                                   updateCompany(c.id, "siren", e.target.value)
                                 }
                               />
-                              {lookupCompany && <div className="ip-company-lookup">
+                              {phase === "contract" && <label className="ip-registration"><input type="checkbox" checked={!!c.in_registration} onChange={e => change("companies", draft.companies.map(row => row.id === c.id ? {...row, in_registration: e.target.checked, siren: e.target.checked ? "" : row.siren} : row))} />En cours d’immatriculation</label>}
+                              {lookupCompany && !c.in_registration && <div className="ip-company-lookup">
                                 <button type="button" disabled={busy || !!companyLookup} onClick={() => retrieveCompany(c)}>
                                   {companyLookup === c.id ? <LoaderCircle size={14} className="ip-spin" /> : <Building2 size={14} />}
                                   {companyLookup === c.id ? 'Recherche…' : 'Récupérer depuis Pappers'}
@@ -626,6 +641,7 @@ export default function IntegrationPreviewStudio({
                             <button
                               className="ip-icon-button"
                               aria-label={`Retirer ${d.name || "ce dirigeant"}`}
+                              disabled={accessLocked && d.provisional_access}
                               onClick={() =>
                                 change(
                                   "directors",
@@ -636,6 +652,11 @@ export default function IntegrationPreviewStudio({
                               <Trash2 size={17} />
                             </button>
                           </div>
+                          {phase === "contract" && <section className={`ip-director-access ${d.provisional_access ? "is-active" : ""}`}>
+                            <label><input type="checkbox" checked={!!d.provisional_access} disabled={accessLocked} onChange={e => updateDirector(d.id, "provisional_access", e.target.checked)} /><LockKeyhole size={18} /><span><strong>Ouvrir un compte provisoire · 15 jours</strong><small>{d.provisional_access ? "Accès nominatif, conservé à la déclaration de vente." : "Dirigeant associé au dossier, sans accès à l’espace client."}</small></span></label>
+                            {d.provisional_access && <label className="ip-field"><span>Email personnel de connexion · obligatoire</span><input type="email" autoComplete="off" maxLength={254} value={d.email || ""} disabled={accessLocked} placeholder="prenom.nom@entreprise.fr" onChange={e => updateDirector(d.id, "email", e.target.value)} /></label>}
+                            {accessLocked && <small>Demande d’accès déjà enregistrée. Le choix est conservé pour éviter tout doublon.</small>}
+                          </section>}
                           <div className="ip-company-tags">
                             {companies.map((c) => (
                               <label key={c.id}>
@@ -669,7 +690,7 @@ export default function IntegrationPreviewStudio({
                             {
                               id: crypto.randomUUID(),
                               name: "",
-                              role: "",
+                              role: "", email: "", provisional_access: false,
                               companies: [],
                             },
                           ])
@@ -739,20 +760,20 @@ export default function IntegrationPreviewStudio({
                     </>
                   )}
                   {step === 3 && (
-                    <IntegrationSummary draft={draft} clientName={clientName} validated={ready} embedded={embedded} />
+                    <IntegrationSummary draft={draft} clientName={clientName} validated={ready} embedded={embedded} phase={phase} />
                   )}
                   <div className="ip-step-footer">
                     <button
                       className="ip-text-button"
                       disabled={step === 0}
-                      onClick={() => goStep(step - 1)}
+                      onClick={() => goStep(stepIds[stepIds.indexOf(step) - 1])}
                     >
                       <ArrowLeft size={16} /> Retour
                     </button>
                     {step < 3 ? (
                       <button
                         className="ip-primary"
-                        onClick={() => goStep(step + 1)}
+                        onClick={() => goStep(stepIds[stepIds.indexOf(step) + 1])}
                       >
                         Continuer
                         <ArrowRight size={17} />
@@ -761,14 +782,14 @@ export default function IntegrationPreviewStudio({
                       <button
                         className="ip-primary"
                         disabled={busy || !!companyLookup}
-                        onClick={ready && onContinue ? onContinue : validate}
+                        onClick={ready && onContinue ? advance : validate}
                       >
                         {busy ? (
                           <LoaderCircle size={18} className="ip-spin" />
                         ) : (
                           <Check size={18} />
                         )}{" "}
-                        {ready && onContinue ? "Continuer vers le contrat" : "Valider la fiche"}
+                        {ready && onContinue ? (continueLabel || "Continuer vers le contrat") : (phase === "contract" ? "Valider le périmètre" : "Valider la fiche")}
                       </button>
                     )}
                   </div>
@@ -847,10 +868,10 @@ export default function IntegrationPreviewStudio({
                 <FileCheck2 size={21} />
               </div>
               <div className="ip-readiness-value">
-                {ready ? "Fiche validée" : `${count} sur 3`}
+                {ready ? (phase === "contract" ? "Périmètre validé" : "Fiche validée") : `${count} sur 3`}
                 <span>
                   {ready
-                    ? "Le relais est prêt."
+                    ? (phase === "contract" ? "Le contrat peut être préparé." : "Le relais est prêt.")
                     : "informations essentielles renseignées"}
                 </span>
               </div>
@@ -881,13 +902,13 @@ export default function IntegrationPreviewStudio({
                   <span>dirigeants</span>
                 </div>
               </div>
-              <button className="ip-primary" disabled={busy || !!companyLookup} onClick={ready && onContinue ? onContinue : validate}>
+              <button className="ip-primary" disabled={busy || !!companyLookup} onClick={ready && onContinue ? advance : validate}>
                 {busy ? (
                   <LoaderCircle size={17} className="ip-spin" />
                 ) : (
                   <Check size={17} />
                 )}{" "}
-                {ready && onContinue ? "Continuer vers le contrat" : "Valider la fiche"}
+                {ready && onContinue ? (continueLabel || "Continuer vers le contrat") : (phase === "contract" ? "Valider le périmètre" : "Valider la fiche")}
               </button>
             </section>
             {!embedded && (

@@ -49,8 +49,9 @@ test('stale preparation tells users to reopen without replacing their edits', ()
   assert.equal(error.title,'Informations mises à jour');
   assert.equal(error.action,null);
 });
-test('local preparation reports missing fields together and leaves optional phone empty', () => {
-  assert.deepEqual(Object.keys(validateContractPreparation({})),['employee_range','email']);
-  assert.deepEqual(validateContractPreparation({employee_range:'3-5',email:'valid@example.com',phone:''}),{});
+test('local preparation requires the signer phone and accepts local formatting', () => {
+  assert.deepEqual(Object.keys(validateContractPreparation({})),['employee_range','email','phone']);
+  assert.deepEqual(Object.keys(validateContractPreparation({employee_range:'3-5',email:'valid@example.com',phone:''})),['phone']);
+  for (const phone of ['06 12 34 56 78', '07 66 55 69 19', '+33 7 66 55 69 19']) assert.deepEqual(validateContractPreparation({employee_range:'3-5',email:'valid@example.com',phone}),{});
   assert.deepEqual(Object.keys(validateContractPreparation({employee_range:'3-5',email:'invalid email',phone:'appel moi'})),['email','phone']);
 });
