@@ -17,6 +17,8 @@ import {
 import apiClient from '../../services/apiClient.js';
 import SharedNavbar from '../../components/SharedNavbar.jsx';
 import Leaderboard from './Leaderboard.jsx';
+import CreativeThumb from './CreativeThumb.jsx';
+import KpiBar from './KpiBar.jsx';
 
 const ALLOWED_ROLES = ['admin', 'ceo', 'marketing', 'acquisition_director', 'head_of_acquisition'];
 const ACCENT = '#f0653e'; // coral, comme la réf
@@ -24,11 +26,11 @@ const ACCENT = '#f0653e'; // coral, comme la réf
 // ── theme (light / dark, palette CRM) ──────────────────────────────────────
 function getTheme(dark) {
   return dark
-    ? { pageBg:'#13141b', surface:'#1e1f28', surfaceAlt:'#181922', border:'#2a2b36',
+    ? { isDark:true, pageBg:'#13141b', surface:'#1e1f28', surfaceAlt:'#181922', border:'#2a2b36',
         borderSoft:'#23242f', text:'#eef0f6', textMuted:'#8b8fa0', textFaint:'#6b6f7e',
         accent:ACCENT, accentBg:'rgba(240,101,62,0.14)', green:'#32d74b', amber:'#ff9f0a',
         red:'#ff453a', rowHover:'#23242f', shadow:'0 2px 8px rgba(0,0,0,0.3)' }
-    : { pageBg:'#f6f7f9', surface:'#ffffff', surfaceAlt:'#f6f7fb', border:'#e7e9ef',
+    : { isDark:false, pageBg:'#f6f7f9', surface:'#ffffff', surfaceAlt:'#f6f7fb', border:'#e7e9ef',
         borderSoft:'#f1f1ef', text:'#1e2330', textMuted:'#787880', textFaint:'#9b9aa2',
         accent:ACCENT, accentBg:'#fdeae4', green:'#0f9d58', amber:'#e09112',
         red:'#d23a2c', rowHover:'#fbf6f4', shadow:'0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.05)' };
@@ -74,6 +76,21 @@ function presets() {
   ];
 }
 
+// Période précédente de même durée, collée à la période affichée : c'est la
+// seule comparaison honnête (comparer un mois plein à sept jours n'a pas de
+// sens). Renvoie des bornes au format attendu par l'API.
+function previousWindow(since, until) {
+  const a = new Date(`${since}T00:00:00Z`);
+  const b = new Date(`${until}T00:00:00Z`);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
+  const days = Math.round((b - a) / 86400000) + 1;
+  if (days < 1) return null;
+  const prevUntil = new Date(a); prevUntil.setUTCDate(prevUntil.getUTCDate() - 1);
+  const prevSince = new Date(prevUntil); prevSince.setUTCDate(prevSince.getUTCDate() - (days - 1));
+  const iso10 = (d) => d.toISOString().slice(0, 10);
+  return { since: iso10(prevSince), until: iso10(prevUntil) };
+}
+
 const TABS = [
   { key: 'leaderboard', label: 'Leaderboard', icon: Trophy },
   { key: 'campaign', label: 'Campagnes', icon: Layers },
@@ -111,6 +128,10 @@ export default function MetaAds() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Totaux de la période précédente : chargés à part, jamais bloquants. Si
+  // l'appel échoue, le bandeau affiche simplement « pas de comparable ».
+  const [prevTotals, setPrevTotals] = useState(null);
+  const [prevLoading, setPrevLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
     // L'onglet Leaderboard fait son propre fetch (endpoint dédié) — le
@@ -129,6 +150,20 @@ export default function MetaAds() {
   }, [level, period]);
 
   useEffect(() => { if (authChecked) fetchData(); }, [authChecked, fetchData]);
+
+  useEffect(() => {
+    if (!authChecked || level === 'leaderboard') { setPrevTotals(null); return undefined; }
+    const win = previousWindow(period.since, period.until);
+    if (!win) { setPrevTotals(null); return undefined; }
+    let alive = true;
+    setPrevLoading(true); setPrevTotals(null);
+    apiClient
+      .get(`/api/v1/marketing/meta-ads?level=${level}&since=${win.since}&until=${win.until}`)
+      .then((r) => { if (alive) setPrevTotals(r?.totals || null); })
+      .catch(() => { if (alive) setPrevTotals(null); })
+      .finally(() => { if (alive) setPrevLoading(false); });
+    return () => { alive = false; };
+  }, [authChecked, level, period]);
 
   const rows = useMemo(() => {
     let r = data?.rows || [];
@@ -213,6 +248,11 @@ export default function MetaAds() {
           <Leaderboard T={T} period={period} />
         ) : (
         <>
+        {/* ── synthèse comparée ── */}
+        {!loading && !error && data?.totals && (
+          <KpiBar totals={data.totals} previous={prevTotals} T={T} loading={prevLoading} />
+        )}
+
         {/* ── card : toolbar + table ── */}
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 18, boxShadow: T.shadow, overflow: 'hidden' }}>
           {/* toolbar */}
@@ -265,17 +305,6 @@ export default function MetaAds() {
           )}
         </div>
 
-        {/* totals */}
-        {data?.totals && !loading && !error && (
-          <div style={{ marginTop: 16, display: 'flex', gap: 22, flexWrap: 'wrap', fontSize: 13, color: T.textMuted }}>
-            <span>Dépense : <b style={{ color: T.text }}>{fmtEur(data.totals.spend)}</b></span>
-            <span>Leads : <b style={{ color: T.text }}>{fmtInt(data.totals.leads)}</b></span>
-            <span>CPL moyen : <b style={{ color: T.text }}>{fmtEur(data.totals.cpl)}</b></span>
-            <span>Ventes : <b style={{ color: T.green }}>{fmtInt(data.totals.ventes)}</b></span>
-            <span>CA : <b style={{ color: T.text }}>{fmtEur(data.totals.ca)}</b></span>
-            <span>ROAS : <b style={{ color: (data.totals.roas || 0) >= 1 ? T.green : T.red }}>{fmtRoas(data.totals.roas)}</b></span>
-          </div>
-        )}
         </>
         )}
       </div>
@@ -294,8 +323,9 @@ function Row({ T, r }) {
       style={{ background: hover ? T.rowHover : 'transparent', borderTop: `1px solid ${T.borderSoft}`, transition: 'background 0.12s' }}>
       <td style={{ ...td, textAlign: 'left', position: 'sticky', left: 0, background: hover ? T.rowHover : T.surface, transition: 'background 0.12s' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, maxWidth: 280 }}>
-          <div style={{ width: 30, height: 30, borderRadius: 7, background: T.surfaceAlt, border: `1px solid ${T.border}`, flexShrink: 0 }} />
-          <span style={{ width: 7, height: 7, borderRadius: 99, background: active ? T.green : T.textFaint, flexShrink: 0 }} />
+          <CreativeThumb creative={r.creative} name={r.name} size={34} radius={9} T={T} interactive />
+          <span style={{ width: 7, height: 7, borderRadius: 99, background: active ? T.green : T.textFaint, flexShrink: 0 }}
+            title={active ? 'Active' : 'Inactive'} />
           <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name || '—'}</span>
         </div>
       </td>

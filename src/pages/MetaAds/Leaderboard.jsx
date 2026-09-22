@@ -12,6 +12,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Lightbulb, Info, AlertCircle, ChevronDown } from 'lucide-react';
 import apiClient from '../../services/apiClient.js';
+import CreativeThumb from './CreativeThumb.jsx';
 
 const nf = new Intl.NumberFormat('fr-FR');
 const eur = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
@@ -100,18 +101,35 @@ function Podium({ rows, T }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.06 * i, ease: [0.22, 1, 0.36, 1] }}
           style={{
-            position: 'relative', padding: '18px 18px 16px', borderRadius: 16,
+            position: 'relative', padding: '14px 14px 16px', borderRadius: 16,
             background: T.surface, border: `1px solid ${i === 0 ? `${medals[0]}66` : T.border}`,
             boxShadow: T.shadow, overflow: 'hidden',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          {/* Le visuel d'abord : sur un podium de créas, c'est lui qu'on
+              reconnaît avant de lire le nom. */}
+          <div style={{ position: 'relative', marginBottom: 12 }}>
+            <CreativeThumb
+              creative={r.creative}
+              name={r.name}
+              size="100%"
+              radius={12}
+              T={T}
+              interactive
+              aspect="4 / 3"
+            />
             <div style={{
-              width: 30, height: 30, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: `${medals[i]}26`, color: medals[i], fontWeight: 800, fontSize: 14,
+              position: 'absolute', left: 9, top: 9, width: 27, height: 27, borderRadius: 9,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(8,10,16,0.55)', backdropFilter: 'blur(4px)',
+              color: medals[i], fontWeight: 800, fontSize: 13,
+              boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
             }}>
               {i + 1}
             </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.name}>
                 {r.name}
@@ -298,8 +316,10 @@ function LeaderRow({ r, T, td }) {
       style={{ background: hover ? T.rowHover : 'transparent', borderTop: `1px solid ${T.borderSoft}`, transition: 'background 0.12s' }}>
       <td style={{ ...td, textAlign: 'left', fontWeight: 800, color: r.rank <= 3 ? T.accent : T.textMuted, width: 34 }}>{r.rank}</td>
       <td style={{ ...td, textAlign: 'left', position: 'sticky', left: 0, background: hover ? T.rowHover : T.surface, transition: 'background 0.12s' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9, maxWidth: 280 }}>
-          <span style={{ width: 7, height: 7, borderRadius: 99, background: r.status === 'active' ? T.green : T.textFaint, flexShrink: 0 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, maxWidth: 300 }}>
+          <CreativeThumb creative={r.creative} name={r.name} size={32} radius={8} T={T} interactive />
+          <span style={{ width: 7, height: 7, borderRadius: 99, background: r.status === 'active' ? T.green : T.textFaint, flexShrink: 0 }}
+            title={r.status === 'active' ? 'Active' : 'Inactive'} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.name}>{r.name}</div>
             <div style={{ fontSize: 11, color: T.textFaint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.campaign_name || ''}</div>
