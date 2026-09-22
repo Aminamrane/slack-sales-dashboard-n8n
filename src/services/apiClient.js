@@ -449,9 +449,10 @@ class ApiClient {
   }
 
   // ============ FILE UPLOADS ============
-  async uploadFile(endpoint, file, fieldName = 'file') {
+  async uploadFile(endpoint, file, fieldName = 'file', fields = {}) {
     const formData = new FormData();
     formData.append(fieldName, file);
+    for (const [key, value] of Object.entries(fields)) if (value != null) formData.append(key, String(value));
     const response = await this._authenticatedFetch(`${this.baseUrl}${endpoint}`, {
       method: 'POST',
       body: formData,
