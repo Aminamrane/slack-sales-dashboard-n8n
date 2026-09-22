@@ -1,16 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setterAction, availableSelection, canChooseSales } from './setterJourney.js';
+import { setterAction, availableSelection, bookingSalesChoices } from './setterJourney.js';
 const owned = { id: 7, assigned_to: 'a@example.com', email: 'client@example.com' };
 const mine = { ...owned, created_by_setter: 'setter@example.com' };
 const slot = { email: 'a@example.com', date: '2026-09-24', time: '10:30' };
-test('owned leads retain their owner; newly created leads can select a sales', () => {
- assert.equal(canChooseSales(owned, 'setter@example.com'), false);
- assert.equal(canChooseSales(mine, 'SETTER@example.com'), true);
- assert.throws(() => setterAction({lead:owned,outcome:'r1',slot:{...slot,email:'other@example.com'}}), /propriétaire/);
- const action = setterAction({lead:mine,currentEmail:'setter@example.com',outcome:'r1',slot:{...slot,email:'other@example.com'}});
- assert.equal(action.body.target_sales_email,'other@example.com');
- assert.equal(action.body.r1_date,'2026-09-24T10:30');
+test('existing and setter-created leads both send the explicitly selected sales', () => {
+ for (const lead of [owned,mine]) {
+  const action=setterAction({lead,outcome:'r1',slot:{...slot,email:'other@example.com'}});
+  assert.equal(action.body.target_sales_email,'other@example.com');
+  assert.equal(action.body.r1_date,'2026-09-24T10:30');
+  assert.equal(setterAction({lead,outcome:'r2',slot:{...slot,email:'other@example.com'},email:owned.email}).body.target_sales_email,'other@example.com');
+ }
+});
+test('manual choices preserve assigned sales and a handed owner without listing the setter as sales', () => {
+ const sales=[{email:'b@example.com',full_name:'B'}];
+ assert.deepEqual(bookingSalesChoices(owned,sales).map(s=>s.email),['b@example.com','a@example.com']);
+ assert.equal(bookingSalesChoices(owned,[...sales,{email:owned.assigned_to}]).length,2);
+ assert.deepEqual(bookingSalesChoices({...mine,assigned_to:mine.created_by_setter},sales).map(s=>s.email),['b@example.com']);
 });
 test('voicemail, callback and disqualification keep their dedicated endpoints', () => {
  assert.equal(setterAction({lead:owned,outcome:'voicemail',note:'test'}).path,'/api/v1/tracking/setter/leads/7/mark-called');
