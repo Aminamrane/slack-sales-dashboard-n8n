@@ -378,7 +378,9 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
           embedded
           initialDraft={sourceDraft}
           initialValidated={validated}
-          lookupCompany={(siren) => apiClient.post('/api/v1/contracts/ai-prefill-by-siren', { siren })}
+          signerName={context.signer_name || preparation.signer_name}
+          scopeNotice={context.scope_notice}
+          lookupCompany={(siren) => apiClient.post(`/api/v1/owner-integration/leads/${context.lead_id}/company-lookup`, { siren })}
           clientName={context.client_name}
           onDirty={(value) => {
             current.current = value;

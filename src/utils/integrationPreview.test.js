@@ -113,3 +113,18 @@ test('une réponse Pappers tardive ne remplace pas une société passée en imma
     siren: '123456789', legal_name: 'Ancien résultat', representatives: [],
   }, () => 'unused'), d);
 });
+
+
+test('une société d’un autre associé est décochée et perd les anciens liens du signataire', () => {
+  const draft={companies:[{id:'a',name:'Société',siren:'123456789',selected:true}],
+    directors:[{id:'p',name:'Camille Martin',companies:['a','other'],provisional_access:true,email:'camille@example.com'},
+      {id:'q',name:'Alex Dupont',companies:['a']}]};
+  const result=applyCompanyLookup(draft,'a','123456789',{siren:'123456789',legal_name:'Société Alex',signer_linked:false,
+    representatives:[{full_name:'DUPONT Alex',first_name:'Alex',last_name:'Dupont',role:'Gérant'}]},()=> 'unused');
+  assert.equal(result.companies[0].selected,false);
+  assert.equal(result.directors.length,2);
+  assert.deepEqual(result.directors[0].companies,['other']);
+  assert.deepEqual(result.directors[1].companies,['a']);
+  assert.equal(result.directors[0].provisional_access,true);
+  assert.equal(draft.companies[0].selected,true);
+});
