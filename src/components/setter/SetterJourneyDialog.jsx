@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, ArrowRight, CalendarCheck2, CalendarDays, Check, ChevronRight, Clock3, LoaderCircle, Phone, PhoneMissed, RefreshCw, UserRoundX, UsersRound, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarCheck2, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, LoaderCircle, Phone, PhoneMissed, RefreshCw, UserRoundX, UsersRound, X } from 'lucide-react';
 import apiClient from '../../services/apiClient';
 import { useDialogFocus } from '../salesJourney/QualificationDialog';
 import { ParisDateTimeInput } from '../salesJourney/FrenchDateInput';
@@ -21,6 +21,7 @@ export default function SetterJourneyDialog({ lead, currentEmail, onClose, onSav
   const [slot, setSlot] = useState(null), [note, setNote] = useState(''), [email, setEmail] = useState(lead?.email || '');
   const [callback, setCallback] = useState(''), [targetCalendar, setTargetCalendar] = useState('sales');
   const [data, setData] = useState(null), [loading, setLoading] = useState(false), [reload, setReload] = useState(0);
+  const [dayPage, setDayPage] = useState(0);
   const [day, setDay] = useState(''), [salesFilter, setSalesFilter] = useState('');
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const submitting = useRef(false), ref = useRef(null);
@@ -30,14 +31,14 @@ export default function SetterJourneyDialog({ lead, currentEmail, onClose, onSav
   const lockedEmail = chooseSales ? '' : lead?.assigned_to || '';
   const query = () => {
     const params = new URLSearchParams({ kind: outcome });
-    if (lockedEmail) params.set('sales_email', lockedEmail);
+    if (lockedEmail) { params.set('sales_email', lockedEmail); params.set('lead_id', String(lead.id)); }
     if (asSetter) params.set('as_setter', asSetter);
     return `/api/v1/tracking/setter/availability?${params}`;
   };
   useEffect(() => {
     if (!booking) return;
     let disposed = false;
-    setLoading(true); setError(''); setData(null); setSlot(null); setDay('');
+    setLoading(true); setError(''); setData(null); setSlot(null); setDay(''); setDayPage(0);
     apiClient.get(query()).then(result => { if (!disposed) setData(result); })
       .catch(e => { if (!disposed) setError(e.message || 'Impossible de consulter les agendas. Réessayez.'); })
       .finally(() => { if (!disposed) setLoading(false); });
@@ -45,7 +46,9 @@ export default function SetterJourneyDialog({ lead, currentEmail, onClose, onSav
   }, [outcome, lockedEmail, asSetter, reload]);
   const sales = (data?.sales || []).filter(s => !salesFilter || s.email === salesFilter);
   const days = [...new Set(sales.flatMap(s => s.days?.map(d => d.date) || []))].sort();
-  const chosenDay = days.includes(day) ? day : days[0];
+  const page = Math.min(dayPage, Math.max(0, Math.ceil(days.length / 5) - 1));
+  const shownDays = days.slice(page * 5, page * 5 + 5);
+  const chosenDay = days.includes(day) ? day : shownDays[0];
   function selectOutcome(value) { setOutcome(value); setSlot(null); setError(''); setNote(''); }
   async function save() {
     if (submitting.current || browseOnly) return;
@@ -73,11 +76,11 @@ export default function SetterJourneyDialog({ lead, currentEmail, onClose, onSav
           {browseOnly ? <div className="sj-attendance" aria-label="Type de rendez-vous">{['r1', 'r2'].map(k => <button key={k} disabled={busy} aria-pressed={outcome === k} onClick={() => selectOutcome(k)}>{k.toUpperCase()} · {k === 'r1' ? 'Premier rendez-vous' : 'Audit'}</button>)}</div> : <div className="stj-step"><button disabled={busy} onClick={() => selectOutcome('')}><ArrowLeft size={16}/> Résultat de l’appel</button><strong>{outcomes.find(o => o[0] === outcome)?.[1]}</strong></div>}
           {booking && <div className="stj-calendar">
             <div className="stj-calendar-bar"><div><CalendarDays size={17}/><strong>Créneaux disponibles</strong><span>Heure de Paris</span></div><button aria-label="Actualiser les disponibilités" disabled={loading || busy} onClick={() => setReload(v => v + 1)}><RefreshCw size={16} className={loading ? 'stj-spin' : ''}/></button></div>
-            {chooseSales && data?.sales?.length > 1 && <label className="stj-sales-filter">Commercial<select disabled={busy} value={salesFilter} onChange={e => { setSalesFilter(e.target.value); setSlot(null); }}>{<option value="">Tous mes commerciaux</option>}{data.sales.map(s => <option key={s.email} value={s.email}>{s.full_name || s.email}</option>)}</select></label>}
+            {chooseSales && data?.sales?.length > 1 && <label className="stj-sales-filter">Commercial<select disabled={busy} value={salesFilter} onChange={e => { setSalesFilter(e.target.value); setSlot(null); setDay(''); setDayPage(0); }}>{<option value="">Tous mes commerciaux</option>}{data.sales.map(s => <option key={s.email} value={s.email}>{s.full_name || s.email}</option>)}</select></label>}
             {loading && <div className="stj-empty" role="status"><LoaderCircle className="stj-spin" size={22}/> Consultation des agendas…</div>}
             {!loading && data?.sales?.length === 0 && <p className="stj-empty">Aucun commercial rattaché à votre compte.</p>}
-            {!!days.length && <div className="stj-days" aria-label="Jours disponibles">{days.map(d => <button key={d} disabled={busy} aria-pressed={chosenDay === d} onClick={() => { setDay(d); setSlot(null); }}><small>{dateLabel(d, { weekday: 'long', day: undefined, month: undefined })}</small><strong>{dateLabel(d, { weekday: undefined })}</strong></button>)}</div>}
-            <div className="stj-sales-grid">{sales.map(s => { const times = s.days?.find(d => d.date === chosenDay)?.slots || []; return <article key={s.email} className="stj-sales-card"><div className="stj-sales-name"><span>{(s.full_name || s.email).slice(0, 1)}</span><div><strong>{s.full_name || s.email}</strong><small>{s.available ? `${s.duration} min · ${chosenDay ? dateLabel(chosenDay) : '21 prochains jours'}` : 'Disponibilité non vérifiée'}</small></div></div>{!s.available ? <p className="stj-unavailable">{s.reason}</p> : times.length === 0 ? <p className="stj-muted">Aucun créneau disponible{chosenDay ? ' ce jour' : ' sur cette période'}.</p> : <div className="stj-slots">{times.map(t => <button key={t} disabled={busy} aria-pressed={slot?.email === s.email && slot?.date === chosenDay && slot?.time === t} onClick={() => setSlot({ email: s.email, name: s.full_name, date: chosenDay, time: t })}>{t.replace(':', ' h ')}{slot?.email === s.email && slot?.date === chosenDay && slot?.time === t && <Check size={13}/>}</button>)}</div>}</article>; })}</div>
+            {!!days.length && <><div className="stj-week-nav"><button aria-label="Dates précédentes" disabled={busy || page === 0} onClick={() => {setDayPage(page - 1);setDay('');setSlot(null);}}><ChevronLeft size={17}/></button><span>6 semaines de disponibilités<small>{dateLabel(days[0])} – {dateLabel(days.at(-1))}</small></span><button aria-label="Dates suivantes" disabled={busy || (page + 1) * 5 >= days.length} onClick={() => {setDayPage(page + 1);setDay('');setSlot(null);}}><ChevronRight size={17}/></button></div><div className="stj-days" aria-label="Jours disponibles">{shownDays.map(d => <button key={d} disabled={busy} aria-pressed={chosenDay === d} onClick={() => { setDay(d); setSlot(null); }}><small>{dateLabel(d, { weekday: 'long', day: undefined, month: undefined })}</small><strong>{dateLabel(d, { weekday: undefined })}</strong></button>)}</div></>}
+            <div className="stj-sales-grid">{sales.map(s => { const times = s.days?.find(d => d.date === chosenDay)?.slots || []; return <article key={s.email} className="stj-sales-card"><div className="stj-sales-name"><span>{(s.full_name || s.email).slice(0, 1)}</span><div><strong>{s.full_name || s.email}</strong><small>{s.available ? `${s.duration} min · ${chosenDay ? dateLabel(chosenDay) : '6 prochaines semaines'}` : 'Disponibilité non vérifiée'}</small></div></div>{!s.available ? <p className="stj-unavailable">{s.reason}</p> : times.length === 0 ? <p className="stj-muted">Aucun créneau disponible{chosenDay ? ' ce jour' : ' sur cette période'}.</p> : <div className="stj-slots">{times.map(t => <button key={t} disabled={busy} aria-pressed={slot?.email === s.email && slot?.date === chosenDay && slot?.time === t} onClick={() => setSlot({ email: s.email, name: s.full_name, date: chosenDay, time: t })}>{t.replace(':', ' h ')}{slot?.email === s.email && slot?.date === chosenDay && slot?.time === t && <Check size={13}/>}</button>)}</div>}</article>; })}</div>
             {browseOnly && <p className="stj-muted">Consultation uniquement · Aucun rendez-vous n’est réservé ici.</p>}
           </div>}
           {!browseOnly && <>
