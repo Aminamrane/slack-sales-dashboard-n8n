@@ -1,5 +1,6 @@
 import AppointmentConfirmation from "../components/booking/AppointmentConfirmation";
 import BoardIntegrationSheet from "../components/BoardIntegrationSheet";
+import BoardOnboardingDateCorrection from "../components/BoardOnboardingDateCorrection";
 import { appointmentConfirmation, appointmentFailure } from "../utils/appointmentConfirmation";
 import { ClientMissions, DetailFold, DetailText } from "../components/OptilexClientDetail";
 import { matchesUpcomingIntegration, matchesUpcomingOnboarding, matchesOverdueOnboarding, parisWallTime } from "../utils/boardIntegration.js";
@@ -2518,6 +2519,10 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
               editable={!!num && ["customer_success_manager", "admin", "ceo"].includes((apiClient.getUser() || {}).role)}
               meetLink={row.onboarding_meet_link}
               onToggle={(v) => patch(num, { rdv_onboarding_done: v })} />
+            {!!num && ["customer_success_manager", "admin", "ceo"].includes((apiClient.getUser() || {}).role) && (
+              <BoardOnboardingDateCorrection key={num} numero={num}
+                initialDate={toDateInput(row.rdv_onboarding_date_manual || row.rdv_onboarding_date)} onSaved={reload} />
+            )}
             {/* Recalage direct du RDV onboarding (Vincent / facturation / admin) : déplace la
                 date CRM ET les 2 événements Google (Vincent + facturation), client notifié. */}
             {!!num && !!(row.rdv_onboarding_date_manual || row.rdv_onboarding_date)
