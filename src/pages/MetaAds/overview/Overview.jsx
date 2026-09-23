@@ -140,7 +140,7 @@ function GeoCard({ T, geo, index }) {
 function FormatsCard({ T, formats, index }) {
   const rows = (formats || []).filter((f) => f.ads > 0);
   return (
-    <Card T={T} index={index} title="Formats" subtitle="Nombre de publicités par format, et part de la dépense qu'elles ont reçue">
+    <Card T={T} index={index} title="Formats" subtitle="Publicités par format dans les comptes, et part de la dépense de la période qu'elles ont reçue">
       {rows.length === 0 ? <Empty T={T}>Aucune publicité sur cette période.</Empty> : rows.map((f, i) => (
         <RankedRow key={f.format} T={T} index={i} label={FORMAT_LABEL[f.format] || humanize(f.format)} sub={`${fmtInt(f.ads)} pub${f.ads > 1 ? 's' : ''} · ${fmtInt(f.active)} active${f.active > 1 ? 's' : ''} · ${fmtInt(f.leads)} leads`}
           value={fmtEur(f.spend)} share={f.share_spend} color={f.format === 'video' ? T.green : T.navy} />
@@ -243,7 +243,7 @@ export default function Overview({ T, period, portfolio }) {
           <Tile T={T} index={4} label="Portée" value={fmtCompact(t.reach)} sub={t.frequency ? `vue ${Number(t.frequency).toFixed(1)} fois par personne` : null} delta={<Delta T={T} current={t.reach} previous={p.reach} />} />
           <Tile T={T} index={5} label="Impressions" value={fmtCompact(t.impressions)} sub={t.cpm != null ? `${fmtEur2(t.cpm)} CPM` : null} delta={<Delta T={T} current={t.impressions} previous={p.impressions} />} />
           <Tile T={T} index={6} label="Clics" value={fmtInt(t.clicks)} sub={t.ctr != null ? `${fmtPct(t.ctr, 2)} de taux de clic` : null} delta={<Delta T={T} current={t.clicks} previous={p.clicks} />} />
-          <Tile T={T} index={7} label="Publicités" value={fmtInt(t.ads_count)} sub={`${fmtInt(t.ads_active)} active${t.ads_active > 1 ? 's' : ''}`} />
+          <Tile T={T} index={7} label="Publicités en compte" value={fmtInt(t.ads_count)} sub={`${fmtInt(t.ads_active)} active${t.ads_active > 1 ? 's' : ''} aujourd'hui`} />
         </div>
         <div style={{ marginTop: 14 }}><SpendLeadsChart T={T} daily={data.daily} sales={data.sales} index={0} /></div>
       </Section>
