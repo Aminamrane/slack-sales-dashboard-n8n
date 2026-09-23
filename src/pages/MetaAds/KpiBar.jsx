@@ -1,7 +1,8 @@
 // src/pages/MetaAds/KpiBar.jsx — bandeau de synthèse en tête de /meta-ads.
 //
 // Six indicateurs, chacun comparé à la période précédente de même durée, pour
-// qu'on sache en un regard si le compte se tient. Les pictogrammes sont
+// qu'on sache en un regard si le compte se tient. Les ventes sont celles du
+// Suivi des ventes (déclarations de la période), ventilées par origine. Les pictogrammes sont
 // dessinés ici, dans un trait unique (1.6 px, extrémités rondes), plutôt que
 // pris dans une librairie : ils doivent parler du métier acquisition, pas
 // ressembler à une barre d'outils générique.
@@ -134,10 +135,11 @@ function Tile({ shape, label, value, hint, current, previous, goodWhenDown, T, i
 
 /**
  * @param totals    totaux de la période affichée
+ * @param sales     bloc `sales` de l'API (ventilation des ventes de la période)
  * @param previous  totaux de la période précédente de même durée (ou null)
  * @param loading   la comparaison est encore en vol
  */
-export default function KpiBar({ totals, previous, T, loading = false }) {
+export default function KpiBar({ totals, sales, previous, T, loading = false }) {
   if (!totals) return null;
   const p = previous || {};
   const fmtI = (n) => (n == null ? '—' : nf.format(Math.round(n)));
@@ -150,9 +152,10 @@ export default function KpiBar({ totals, previous, T, loading = false }) {
     { shape: 'cpl', label: 'Coût par lead', value: fmtE2(totals.cpl), current: totals.cpl, previous: p.cpl, goodWhenDown: true },
     { shape: 'rdv', label: 'Leads retrouvés au CRM', value: fmtI(totals.match), current: totals.match, previous: p.match,
       hint: totals.leads ? `${Math.round((totals.match / totals.leads) * 100)} % des leads` : null },
-    { shape: 'ventes', label: 'Ventes', value: fmtI(totals.ventes), current: totals.ventes, previous: p.ventes },
+    { shape: 'ventes', label: 'Ventes', value: fmtI(totals.ventes), current: totals.ventes, previous: p.ventes,
+      hint: sales ? `${fmtI(sales.meta)} créa · ${fmtI(sales.webinaire)} webinaire · ${fmtI(sales.hors_meta)} hors Meta${sales.sans_client ? ` · ${fmtI(sales.sans_client)} sans client` : ''}` : null },
     { shape: 'roas', label: 'Retour sur dépense', value: totals.roas == null ? '—' : `${Number(totals.roas).toFixed(2)}x`,
-      current: totals.roas, previous: p.roas, hint: totals.ca ? fmtE(totals.ca) + ' de CA' : null },
+      current: totals.roas, previous: p.roas, hint: totals.ca ? fmtE(totals.ca) + ' de CA rattaché' : null },
   ];
 
   return (

@@ -12,6 +12,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Lightbulb, Info, AlertCircle, ChevronDown } from 'lucide-react';
 import apiClient from '../../services/apiClient.js';
+import SalesList, { SalesSummaryLine } from './SalesList.jsx';
 import CreativeThumb from './CreativeThumb.jsx';
 
 const nf = new Intl.NumberFormat('fr-FR');
@@ -271,6 +272,12 @@ export default function Leaderboard({ T, period }) {
           <Trophy size={15} style={{ color: T.accent }} />
           <span style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>Classement complet</span>
           <span style={{ fontSize: 12.5, color: T.textFaint, fontWeight: 600 }}>{rows.length} créas</span>
+          {data?.sales && (
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12.5, color: T.textFaint }}>{new Intl.NumberFormat('fr-FR').format(data.sales.total || 0)} ventes sur la période :</span>
+              <SalesSummaryLine sales={data.sales} T={T} />
+            </div>
+          )}
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1280 }}>
@@ -294,6 +301,8 @@ export default function Leaderboard({ T, period }) {
         </div>
       </div>
 
+      {data?.sales && <SalesList sales={data.sales} level="ad" T={T} />}
+
       <VariantSuggestions rows={rows} T={T} />
 
       {/* Méthodologie */}
@@ -302,7 +311,7 @@ export default function Leaderboard({ T, period }) {
         <span>
           Score composite 0-100 : 25 % coût (CPL vs médiane) · 30 % lead → R1 tenu · 15 % R1 → R2 · 20 % close (ventes/lead) · 10 % volume.
           Les taux sont lissés vers la moyenne de la période (bayésien) pour ne pas surclasser les créas à faible volume — la confiance (points) reflète le volume.
-          R1/R2 et ventes proviennent du CRM (leads_realtime / clients), rattachés par nom de créa.
+          R1/R2 proviennent des leads de la période ; les ventes sont les déclarations de la période (mêmes chiffres que le Suivi des ventes), rattachées à la créa d'origine du lead de chaque client.
         </span>
       </div>
     </div>
