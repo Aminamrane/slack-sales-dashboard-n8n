@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, FileUp, FileText, UsersRound, Building2, Check, 
 import apiClient from '../../services/apiClient';
 import { validateIntakeFile, documentStatus, hasRequiredSaleDocuments } from '../../utils/intakeDocuments';
 
-export default function SaleDocuments({ leadId, draft, onBack, onContinue }) {
+export default function SaleDocuments({ leadId, draft, onBack, onContinue, continueLabel = "Continuer vers la facturation", submitting = false }) {
   const [files, setFiles] = useState([]), [platform, setPlatform] = useState(null);
   const [account, setAccount] = useState(null);
   const uploading = useRef(false);
@@ -44,13 +44,13 @@ export default function SaleDocuments({ leadId, draft, onBack, onContinue }) {
     catch(e) {setError(e.message);} finally {setBusy('');}
   }
   async function continueToBilling() {
-    if (busy || loading) return;
+    if (busy || loading || submitting) return;
     setBusy('Vérification des documents'); setError('');
     try {
       const result = await apiClient.get(root);
       setFiles(result.documents);
       if (!hasRequiredSaleDocuments(result.documents)) {setError('Ajoutez au moins un document avant de poursuivre la déclaration de vente.'); return;}
-      onContinue();
+      await onContinue();
     } catch(e) {setError(e.message || 'Impossible de vérifier les documents. Réessayez.');}
     finally {setBusy('');}
   }
@@ -58,7 +58,7 @@ export default function SaleDocuments({ leadId, draft, onBack, onContinue }) {
     const Icon = icon;
     return <label className={`si-drop ${busy ? 'is-busy' : ''}`} onDragOver={e => e.preventDefault()} onDrop={e => {e.preventDefault();if(!busy) upload(e.dataTransfer.files, meta);}}>
       <Icon size={23}/><strong>{label}</strong><span>Glisser vos fichiers ou <b>parcourir</b></span><small>PDF, JPG, PNG · 20 Mo par fichier</small>
-      <input type="file" multiple accept="application/pdf,image/png,image/jpeg" aria-label={label} disabled={!!busy} onChange={e => {upload(e.target.files, meta);e.target.value = '';}}/>
+      <input type="file" multiple accept="application/pdf,image/png,image/jpeg" aria-label={label} disabled={!!busy || submitting} onChange={e => {upload(e.target.files, meta);e.target.value = '';}}/>
     </label>;
   }
   return <section className="integration-preview ip-embedded si-documents">
@@ -69,20 +69,20 @@ export default function SaleDocuments({ leadId, draft, onBack, onContinue }) {
     <div className="si-section-title"><Building2 size={19}/><h3>Pour chaque société</h3></div>
     <div className="si-upload-grid">{companies.map(c => <article key={c.id}><h4>{c.name}</h4>{drop('Dernier bilan', {document_type:'balance_sheet', company_id:c.id}, FileText)}</article>)}</div>
     <details className="si-other-docs"><summary>Ajouter d’autres pièces</summary><div className="si-context-grid">
-      <label className="ip-field"><span>Type de pièce</span><select value={otherType} disabled={!!busy} onChange={e => setOtherType(e.target.value)}>{[['other','Autre document'],['payslip','Bulletin de paie'],['dsn','DSN'],['employment_contract','Contrat de travail'],['duerp','DUERP']].map(([v,l]) => <option value={v} key={v}>{l}</option>)}</select></label>
-      <label className="ip-field"><span>Société concernée</span><select disabled={!!busy} value={otherCompany || (companies.length===1 ? companies[0].id : '')} onChange={e => setOtherCompany(e.target.value)}><option value="">Choisir une société</option>{companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+      <label className="ip-field"><span>Type de pièce</span><select value={otherType} disabled={!!busy || submitting} onChange={e => setOtherType(e.target.value)}>{[['other','Autre document'],['payslip','Bulletin de paie'],['dsn','DSN'],['employment_contract','Contrat de travail'],['duerp','DUERP']].map(([v,l]) => <option value={v} key={v}>{l}</option>)}</select></label>
+      <label className="ip-field"><span>Société concernée</span><select disabled={!!busy || submitting} value={otherCompany || (companies.length===1 ? companies[0].id : '')} onChange={e => setOtherCompany(e.target.value)}><option value="">Choisir une société</option>{companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
     </div>{drop('Pièces complémentaires', {document_type:otherType, company_id:otherCompany || (companies.length===1 ? companies[0].id : '')}, FileUp)}</details>
     <section className="si-files"><div className="si-section-title"><FileCheckIcon/><h3>Vos dépôts</h3><button type="button" className="si-refresh" disabled={loading || !!busy} onClick={refresh}><RefreshCw size={15} className={loading ? 'ip-spin' : ''}/> Actualiser</button></div>
       {files.length === 0 && <p>{loading ? 'Chargement…' : 'Aucun fichier ajouté pour le moment.'}</p>}
       {files.map(file => {const status = documentStatus(file, platform?.items?.find(item => item.id === file.document_id));const Icon = file.status === 'sent' ? Check : file.status === 'rejected' ? CircleAlert : Clock3;
-        return <div className="si-file" key={file.id}><FileText size={21}/><div><strong>{file.file_name}</strong><small>{directors.find(d=>d.id===file.director_id)?.name || companies.find(c=>c.siren===file.company_siren)?.name || 'Dossier client'}</small><span className={`si-file-status is-${file.status}`}><Icon size={13}/>{status}</span>{file.last_error && <small role="status">{file.last_error}</small>}</div>{!['sent','sending'].includes(file.status) && <button className="si-remove" aria-label={`Retirer ${file.file_name}`} disabled={!!busy} onClick={()=>remove(file.id)}><Trash2 size={16}/></button>}</div>;})}
+        return <div className="si-file" key={file.id}><FileText size={21}/><div><strong>{file.file_name}</strong><small>{directors.find(d=>d.id===file.director_id)?.name || companies.find(c=>c.siren===file.company_siren)?.name || 'Dossier client'}</small><span className={`si-file-status is-${file.status}`}><Icon size={13}/>{status}</span>{file.last_error && <small role="status">{file.last_error}</small>}</div>{!['sent','sending'].includes(file.status) && <button className="si-remove" aria-label={`Retirer ${file.file_name}`} disabled={!!busy || submitting} onClick={()=>remove(file.id)}><Trash2 size={16}/></button>}</div>;})}
       {busy && <p className="si-uploading" role="status"><LoaderCircle size={17} className="ip-spin"/> Enregistrement : {busy}</p>}
       {platform?.reason && <p className="si-delivery-note">{platform.reason}</p>}
     </section>
     {platform?.available && <details className="si-other-docs"><summary>État dans l’espace client · {platform.documents?.total || 0} document(s)</summary><p>Une pièce est complète lorsque son analyse est terminée.</p>{platform.expected?.map((piece,i) => <div className="si-checklist" key={`${piece.key}-${i}`}><span>{piece.label}{piece.company?.name ? ` · ${piece.company.name}` : ''}</span><small>{piece.status==='received' ? 'Analysé' : 'À compléter / analyse en attente'}</small></div>)}</details>}
     {!loading && !hasRequiredSaleDocuments(files) && <p role="status">Un document doit être enregistré avant de continuer. Les dépôts refusés doivent être corrigés.</p>}
     {error && <div className="si-error" role="alert">{error}</div>}
-    <footer className="si-actions"><button className="ip-secondary" disabled={!!busy} onClick={onBack}><ArrowLeft size={16}/> Fiche</button><button className="ip-primary" disabled={!!busy || loading || !hasRequiredSaleDocuments(files)} onClick={continueToBilling}>Continuer vers la facturation<ArrowRight size={17}/></button></footer>
+    <footer className="si-actions"><button className="ip-secondary" disabled={!!busy || submitting} onClick={onBack}><ArrowLeft size={16}/> Fiche</button><button className="ip-primary" disabled={!!busy || submitting || loading || !hasRequiredSaleDocuments(files)} onClick={continueToBilling}>{submitting ? "Déclaration…" : continueLabel}<ArrowRight size={17}/></button></footer>
   </section>;
 }
 function FileCheckIcon(){return <FileText size={19}/>;}

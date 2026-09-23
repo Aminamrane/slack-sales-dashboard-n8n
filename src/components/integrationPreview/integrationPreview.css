@@ -1416,3 +1416,9 @@
 .si-account-state {display:flex;gap:10px;border:1px solid #e3e6ed;border-radius:12px;padding:12px;margin:0 0 20px;background:#f7f8fb;}
 .si-account-state>svg {flex-shrink:0;margin-top:2px;}.si-account-state strong {font-size:12px;}.si-account-state p {font-size:12px;margin:4px 0 0;color:#657084;}
 @media(max-width:600px) {.si-context-grid,.si-upload-grid {grid-template-columns:minmax(0,1fr);}.si-client-caption {flex-wrap:wrap;}.si-title h2 {font-size:18px;}.si-title-icon {flex-basis:40px;height:40px;border-radius:12px;}.si-actions {bottom:-24px;}.si-handoff .ip-weather-options span {font-size:9px;overflow-wrap:anywhere;}.sj-sale-dialog .ti-journey {gap:4px;}.sj-sale-dialog .ti-journey li:not(.is-current)>span:last-child {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);}.sj-sale-dialog .ti-journey li.is-current>span:last-child {font-size:10px;}}
+
+/* A confirmed appointment is a durable checkpoint, before sale declaration. */
+.si-reservation-date,.si-reservation-next{display:flex;align-items:flex-start;gap:14px;padding:20px;border:1px solid #dfe4e9;border-radius:16px;margin:20px 0;background:#f8fafb;color:#253b3a}
+.si-reservation-date strong,.si-reservation-date span{display:block}.si-reservation-date span{font-size:13px;margin-top:7px;color:#62716f}
+.si-reservation-next{background:transparent}.si-reservation-next p{font-size:14px;line-height:1.6;color:#62716f;margin-bottom:0}
+.sj-sale-part{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:#65746f;font-weight:700;margin:0 34px 16px 0}
