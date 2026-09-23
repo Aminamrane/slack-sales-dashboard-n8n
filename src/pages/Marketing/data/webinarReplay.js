@@ -67,7 +67,7 @@ export const WEBINAR_REPLAY = {
   },
 
     "webinar-2026-09-21": {
-      "title": "Webinaire 21 septembre 2026 · cohorte broad",
+      "title": "Webinaire 21 septembre 2026 · dirigeants de TPE/PME",
       "videoUrl": null,
       "verdict": "Un live qui retient bien mais qui convertit moins fort que le 20/07 : 77 présents une fois le staff retiré, une médiane de 77 minutes sur 126 et seulement 6,5 % de départs précoces, donc le contenu tient la salle. En face, 28 RDV d'audit pour 77 présents (36,4 %) contre 40 % en juillet, et 12 RDV seulement pendant le live : la moitié de la récolte se fait après, sur les relances. Le chat éclaire le reste. Les deux premières réservations tombent avant que le moindre lien soit écrit, le pic d'engagement est un sondage sur la forme juridique qui précède six réservations, et deux fuites nettes apparaissent : une question de holding à forte valeur laissée sans réponse, et un participant qui annonce « rdv pris » sans qu'aucune trace existe. Le vrai trou reste en amont : 352 inscrits pour 77 présents, soit 22 % de présence.",
       "score": "72 / 100",
