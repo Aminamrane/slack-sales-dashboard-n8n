@@ -7,7 +7,9 @@
 import React, { useState } from 'react';
 import Pict from './icons.jsx';
 
-function iso(d) { return d.toISOString().slice(0, 10); }
+// Date locale (Europe/Paris) en YYYY-MM-DD : `toISOString()` passe en UTC et, à
+// minuit à Paris, renvoie encore la veille (« Ce mois-ci » commençait le 31 août).
+function iso(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 const today = () => new Date();
 const daysAgo = (n) => { const d = today(); d.setDate(d.getDate() - n); return d; };
 
