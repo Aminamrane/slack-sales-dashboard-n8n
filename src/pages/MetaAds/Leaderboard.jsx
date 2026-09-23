@@ -12,7 +12,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Lightbulb, Info, AlertCircle, ChevronDown } from 'lucide-react';
 import apiClient from '../../services/apiClient.js';
-import SalesList, { SalesSummaryLine } from './SalesList.jsx';
+import SalesList from './SalesList.jsx';
 import CreativeThumb from './CreativeThumb.jsx';
 
 const nf = new Intl.NumberFormat('fr-FR');
@@ -262,8 +262,18 @@ export default function Leaderboard({ T, period }) {
     return <Centered T={T}>Aucune créa sur cette période.</Centered>;
   }
 
+  const s = data?.sales;
   return (
     <div>
+      {s && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', padding: '14px 18px', marginBottom: 16, borderRadius: 16,
+          background: T.navy, color: '#eef1f8', boxShadow: T.shadow }}>
+          <div style={{ fontSize: 26, fontWeight: 750, letterSpacing: '-0.025em', fontVariantNumeric: 'tabular-nums' }}>{new Intl.NumberFormat('fr-FR').format(s.total || 0)}</div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>ventes déclarées sur la période</div>
+          <div style={{ fontSize: 12.5, color: 'rgba(238,241,248,0.75)' }}>{new Intl.NumberFormat('fr-FR').format(s.meta || 0)} via une créa · {new Intl.NumberFormat('fr-FR').format(s.webinaire || 0)} webinaire · {new Intl.NumberFormat('fr-FR').format(s.hors_meta || 0)} hors Meta{s.sans_client ? ` · ${s.sans_client} sans client` : ''}</div>
+          <div style={{ marginLeft: 'auto', fontSize: 12, color: 'rgba(238,241,248,0.6)' }}>même total que le Suivi des ventes</div>
+        </div>
+      )}
       <Podium rows={rows} T={T} />
 
       {/* Table complète */}
@@ -272,12 +282,6 @@ export default function Leaderboard({ T, period }) {
           <Trophy size={15} style={{ color: T.accent }} />
           <span style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>Classement complet</span>
           <span style={{ fontSize: 12.5, color: T.textFaint, fontWeight: 600 }}>{rows.length} créas</span>
-          {data?.sales && (
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12.5, color: T.textFaint }}>{new Intl.NumberFormat('fr-FR').format(data.sales.total || 0)} ventes sur la période :</span>
-              <SalesSummaryLine sales={data.sales} T={T} />
-            </div>
-          )}
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1280 }}>
