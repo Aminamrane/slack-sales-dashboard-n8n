@@ -1,6 +1,6 @@
 import React from 'react';
 import Card from './Card';
-import { fmtInt } from '../theme';
+import { fmtInt, fmtParisTime } from '../theme';
 import { useCampaignPolling } from '../hooks';
 
 // Hard-coded metadata per nurture kind, indexed by cohort (webinarId). Matches
@@ -29,18 +29,37 @@ const LABELS_BY_COHORT = {
     email_post_attended_no_rdv_d3:   { day: '25/06 · 10h', subject: 'Vous développez votre activité… mais en profitez-vous ?' },
     email_post_attended_no_rdv_d4:   { day: '26/06 · 10h', subject: 'Dernière relance' },
   },
+  // 21 septembre (TPE/PME) : une seule séquence J+1 → J+4 pour les inscrits,
+  // sans découpage présents / absents (kinds email_post21_*).
+  'webinar-2026-09-21': {
+    email_post21_j1: { day: 'Mar 22/09 · 11h', subject: 'Payez-vous trop de charges ? Voici comment le savoir' },
+    email_post21_j2: { day: 'Mer 23/09 · 11h', subject: '3 façons de garantir que vous perdez de l\'argent' },
+    email_post21_j3: { day: 'Jeu 24/09 · 11h', subject: 'Combien votre entreprise sort pour vous payer ?' },
+    email_post21_j4: { day: 'Ven 25/09 · 11h', subject: 'Dernier mail sur le sujet' },
+  },
 };
 
-// Fallback = cohorte historique 26 mai (préserve le comportement existant si un
-// webinarId inconnu était passé : on ne casse jamais l'affichage).
-const FALLBACK_LABELS = LABELS_BY_COHORT['webinar-2026-05-26'];
+// Cohorte sans jeu d'étiquettes (20/07, 07/09…) : le sujet retombe sur le kind
+// brut et la date sur l'horodatage réel renvoyé par la landing. Surtout pas les
+// étiquettes d'une autre cohorte, qui afficheraient de fausses dates.
+const FALLBACK_LABELS = {};
 
-const segment = (kind) => (kind.includes('attended') ? 'attended' : 'missed');
+const segment = (kind) => {
+  if (kind.includes('attended')) return 'attended';
+  if (kind.includes('missed')) return 'missed';
+  return 'all';
+};
+const SEGMENT_BADGE = {
+  attended: { label: 'Présents', tone: 'emerald' },
+  missed: { label: 'Pas venus', tone: 'amber' },
+  all: { label: 'Inscrits', tone: 'blue' },
+};
 
 /**
- * Nurture campaign : 8 emails over 4 days, split between "missed" (pas
- * venus) and "attended" (présents) segments. Rendered as a clean table
- * with segment badges + sent/pending/opens/clics columns.
+ * Nurture campaign : emails programmés dans les jours qui suivent le live,
+ * par segment ("missed" = pas venus, "attended" = présents, ou une séquence
+ * unique pour tous les inscrits). Rendered as a clean table with segment
+ * badges + sent/pending/opens/clics columns.
  *
  * Polls every 30s like the broad campaign.
  */
@@ -53,7 +72,7 @@ export default function NurtureTable({ webinarId, C }) {
     return (
       <Card
         title="Relances post-webinaire · séquence 4 jours"
-        subtitle="8 emails programmés sur 2 segments (pas venus + présents)"
+        subtitle="Emails programmés après le live, par segment"
         C={C}
       >
         <div style={{
@@ -87,10 +106,26 @@ export default function NurtureTable({ webinarId, C }) {
     );
   }
 
-  const rows = data?.rows || [];
+  // Une cohorte n'affiche que les emails qu'elle a réellement programmés :
+  // un kind sans ligne ni étiquette pour cette cohorte n'apparaît pas.
+  const rows = (data?.rows || []).filter((r) => r.total > 0 || labels[r.kind]);
   const grandSent = rows.reduce((s, r) => s + r.sent, 0);
   const grandPending = rows.reduce((s, r) => s + r.pending, 0);
   const grandTotal = rows.reduce((s, r) => s + r.total, 0);
+
+  if (rows.length === 0) {
+    return (
+      <Card
+        title="Relances post-webinaire · séquence 4 jours"
+        subtitle="Aucun email post-webinaire remonté pour cette cohorte"
+        C={C}
+      >
+        <div style={{ padding: '14px 0', fontSize: 13, color: C.muted }}>
+          La landing n&apos;a renvoyé aucune ligne de séquence post-webinaire pour cette cohorte.
+        </div>
+      </Card>
+    );
+  }
 
   const HEADER_CELL = {
     padding: '14px 16px',
@@ -115,7 +150,7 @@ export default function NurtureTable({ webinarId, C }) {
   return (
     <Card
       title="Relances post-webinaire · séquence 4 jours"
-      subtitle={`${fmtInt(grandSent)} envoyés · ${fmtInt(grandPending)} en attente · ${fmtInt(grandTotal)} total sur 8 emails programmés`}
+      subtitle={`${fmtInt(grandSent)} envoyés · ${fmtInt(grandPending)} en attente · ${fmtInt(grandTotal)} total sur ${rows.length} emails programmés`}
       C={C}
       noPadding
     >
@@ -134,8 +169,10 @@ export default function NurtureTable({ webinarId, C }) {
           </thead>
           <tbody>
             {rows.map((r) => {
-              const meta = labels[r.kind] || { day: '—', subject: r.kind };
-              const seg = segment(r.kind);
+              const meta = labels[r.kind];
+              const badge = SEGMENT_BADGE[segment(r.kind)];
+              const when = meta?.day || fmtParisTime(r.last_sent || r.first_pending);
+              const subject = meta?.subject || r.kind;
               const openRate = r.sent > 0 ? Math.round((r.opened / r.sent) * 100) : null;
               return (
                 <tr key={r.kind}>
@@ -149,16 +186,16 @@ export default function NurtureTable({ webinarId, C }) {
                       fontWeight: 700,
                       textTransform: 'uppercase',
                       letterSpacing: '0.06em',
-                      background: seg === 'missed' ? C.amber.bg : C.emerald.bg,
-                      color: seg === 'missed' ? C.amber.fg : C.emerald.fg,
+                      background: C[badge.tone].bg,
+                      color: C[badge.tone].fg,
                     }}>
-                      {seg === 'missed' ? 'Pas venus' : 'Présents'}
+                      {badge.label}
                     </span>
                   </td>
                   <td style={{ ...CELL, fontFamily: 'ui-monospace, SF Mono, Menlo, monospace', fontSize: 11, color: C.muted }}>
-                    {meta.day}
+                    {when}
                   </td>
-                  <td style={{ ...CELL, fontWeight: 500 }}>{meta.subject}</td>
+                  <td style={{ ...CELL, fontWeight: 500 }}>{subject}</td>
                   <td style={{ ...CELL, textAlign: 'right', color: C.emerald.fg, fontWeight: 700 }}>
                     {fmtInt(r.sent)}
                   </td>

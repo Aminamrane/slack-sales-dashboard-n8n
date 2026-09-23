@@ -53,6 +53,8 @@ const COHORTS_WITH_NURTURE = new Set([
   'webinar-2026-05-26',
   'webinar-2026-06-22',
   'webinar-2026-07-20',
+  'webinar-2026-09-07',
+  'webinar-2026-09-21',
 ]);
 
 function readWebinarFromUrl() {
