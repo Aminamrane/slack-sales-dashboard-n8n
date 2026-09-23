@@ -66,6 +66,7 @@ import {
   ALLOWED_ROLES,
   canEditAmounts,
   canEditContract,
+  canProposeAmounts,
   toNumber,
   currentPeriod,
   parseDateFR,
@@ -178,6 +179,9 @@ export default function DetailPanel({
   const role = apiClient.getUser()?.role;
   const canEdit = canEditContract(role);
   const canEditMoney = canEditAmounts(role);
+  // Équipe finance : le même poste de pilotage, mais chaque geste part en
+  // demande à valider par la direction (dev 2026-09-23).
+  const canProposeMoney = canProposeAmounts(role);
 
   // Reset on close
   useEffect(() => {
@@ -791,6 +795,7 @@ export default function DetailPanel({
             />
             <ActionsBar
               canManageMoney={canEditMoney}
+              canProposeMoney={canProposeMoney}
               canEdit={canEdit}
               promise={!!focusedRow?.client?.payment_promise}
               onTogglePromise={togglePromise}
@@ -973,12 +978,15 @@ export default function DetailPanel({
               2026-08-28). Le dialogue est portalisé : il passe au-dessus du
               panneau, pas dedans. */}
           <ExpectedManager
-            open={expectedOpen && canEditMoney}
+            open={expectedOpen && (canEditMoney || canProposeMoney)}
+            canApply={canEditMoney}
+            currentUserId={apiClient.getUser()?.id || null}
             onClose={() => setExpectedOpen(false)}
             clientId={clientId}
             client={client}
             periods={periods}
             deferrals={profile?.deferrals || []}
+            outstanding={profile?.outstanding_corrections || []}
             scope={scope}
             onDone={reloadAfterExit}
             onShowToast={onShowToast}
@@ -3079,13 +3087,15 @@ function FactsRow({ profile, boardRow, loss = null, promise = false }) {
 // sortie client (direction). Le bouton de sortie passe en avant quand elle
 // est DUE : fin de relation avec des créances antérieures non soldées.
 function ActionsBar({
-  canManageMoney, canEdit, promise, onTogglePromise, onOpenExpected, exitDue, onOpenExit,
+  canManageMoney, canProposeMoney = false, canEdit, promise, onTogglePromise, onOpenExpected, exitDue, onOpenExit,
 }) {
   const items = [];
-  if (canManageMoney) {
+  if (canManageMoney || canProposeMoney) {
     items.push({
       key: 'expected', Icon: SlidersHorizontal, label: 'Gérer les attendus', onClick: onOpenExpected,
-      title: 'Modifier, réduire, reporter ou mettre en pause les attendus',
+      title: canManageMoney
+        ? 'Modifier, réduire, reporter ou mettre en pause les attendus, corriger un reste dû'
+        : 'Proposer une modification des attendus, du reçu ou du reste dû : la direction valide',
     });
   }
   if (canEdit) {

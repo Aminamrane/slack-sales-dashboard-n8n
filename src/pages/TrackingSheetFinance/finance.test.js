@@ -372,3 +372,21 @@ test('encaissements : dernière saisie en premier, fuseaux comparés et doublons
   assert.equal(orderedReceipts(items)[0].psp, 'IFX');
   assert.equal(items[0].id, 'old');
 });
+
+// ── Équipe finance : proposer, et corriger un reste dû (dev 2026-09-23) ──
+test('proposer : réservé au rôle finance_team ; les corrections de reste dû se ramènent au mois corrigé', async () => {
+  const { canProposeAmounts, outstandingByMonth } = await import('./constants.js');
+  assert.equal(canProposeAmounts('finance_team'), true);
+  assert.equal(canProposeAmounts('finance_director'), false);
+  assert.equal(canProposeAmounts('admin'), false);
+  // Un ajustement 'outstanding' daté d'août corrige le reste dû de JUILLET, quel que soit son signe.
+  const corrections = [
+    { entity: 'owner', amount: -35, period: '2026-08-01' },
+    { entity: 'owner', amount: 10, period: '2026-08-01' },
+    { entity: 'optilex', amount: -12, period: '2026-10-01' },
+  ];
+  assert.deepEqual(outstandingByMonth(corrections, 'owner'), { '2026-07': -25 });
+  assert.deepEqual(outstandingByMonth(corrections, 'optilex'), { '2026-09': -12 });
+  assert.deepEqual(outstandingByMonth(corrections, 'global'), { '2026-07': -25, '2026-09': -12 });
+  assert.deepEqual(outstandingByMonth([], 'owner'), {});
+});
