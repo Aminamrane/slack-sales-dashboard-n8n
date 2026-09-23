@@ -23,6 +23,9 @@ function baseOptions(T) {
     interaction: { mode: 'index', intersect: false },
     plugins: {
       legend: { display: false },
+      // Le CRM enregistre un plugin d'étiquettes global : il rendrait chaque
+      // valeur sur chaque barre. Ici les axes et l'infobulle suffisent.
+      datalabels: { display: false },
       tooltip: {
         backgroundColor: T.isDark ? '#0d1327' : '#121b35', titleColor: '#eef1f8', bodyColor: '#c9d0e3',
         padding: 10, cornerRadius: 10, displayColors: true, boxPadding: 4, titleFont: { weight: '600' },
@@ -34,12 +37,7 @@ function baseOptions(T) {
   };
 }
 
-export function SpendLeadsChart({ T, daily, sales, index }) {
-  const salesByDay = useMemo(() => {
-    const m = {};
-    (sales?.detail || []).forEach((s) => { if (s.date) m[s.date] = (m[s.date] || 0) + 1; });
-    return m;
-  }, [sales]);
+export function SpendLeadsChart({ T, daily, index }) {
   const labels = (daily || []).map((d) => d.date);
   const data = useMemo(() => ({
     labels,
@@ -49,11 +47,8 @@ export function SpendLeadsChart({ T, daily, sales, index }) {
         fill: true, tension: 0.35, pointRadius: 0, pointHoverRadius: 4, borderWidth: 2, order: 2 },
       { type: 'bar', label: 'Leads', data: (daily || []).map((d) => d.leads), yAxisID: 'y1',
         backgroundColor: hexToRgba(T.green, 0.75), hoverBackgroundColor: T.green, borderRadius: 4, maxBarThickness: 18, order: 3 },
-      { type: 'line', label: 'Ventes déclarées', data: labels.map((d) => salesByDay[d] || null), yAxisID: 'y1',
-        showLine: false, pointRadius: (ctx) => (ctx.raw ? 5 : 0), pointHoverRadius: 6, pointBackgroundColor: T.green,
-        pointBorderColor: T.surface, pointBorderWidth: 2, order: 1 },
     ],
-  }), [daily, labels, salesByDay, T]);
+  }), [daily, labels, T]);
   const options = useMemo(() => {
     const o = baseOptions(T);
     o.scales.x.ticks.callback = (v, i) => fmtShortDay(labels[i]);
@@ -66,8 +61,8 @@ export function SpendLeadsChart({ T, daily, sales, index }) {
     return o;
   }, [T, labels]);
   return (
-    <Card T={T} index={index} title="Dépense et leads jour par jour" subtitle="Dépense Meta en aire, leads reçus en barres, ventes déclarées en points"
-      right={<Legend T={T} items={[{ label: 'Dépense', color: T.navy }, { label: 'Leads', color: T.green }, { label: 'Ventes', color: T.green, round: true }]} />}>
+    <Card T={T} index={index} title="Dépense et leads jour par jour"
+      right={<Legend T={T} items={[{ label: 'Dépense', color: T.navy }, { label: 'Leads', color: T.green }]} />}>
       {labels.length === 0 ? <Empty T={T}>Aucune donnée quotidienne sur cette période.</Empty> : (
         <div style={{ height: 250 }}><Bar data={data} options={options} /></div>
       )}
@@ -92,7 +87,7 @@ export function LaunchesChart({ T, launches, index }) {
   }, [T, labels]);
   const total = (launches || []).reduce((s, w) => s + (w.ads || 0), 0);
   return (
-    <Card T={T} index={index} title="Publicités lancées" subtitle="Nouvelles publicités créées par semaine sur la période"
+    <Card T={T} index={index} title="Publicités lancées par semaine"
       right={<span style={{ fontSize: 22, fontWeight: 750, color: T.text, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(total)}</span>}>
       {labels.length === 0 ? <Empty T={T}>Aucune publicité créée sur cette période.</Empty> : (
         <div style={{ height: 200 }}><Line data={data} options={options} /></div>

@@ -141,7 +141,7 @@ export default function Structure({ T, period }) {
       {!loading && !error && data?.totals && <KpiBar totals={data.totals} sales={data.sales} previous={prev} T={T} loading={false} />}
 
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 18, boxShadow: T.shadow, overflow: 'hidden' }}>
-        {loading && <Centered T={T}><Pict name="structure" size={24} color={T.accent} /><div style={{ marginTop: 10, fontWeight: 600, color: T.text }}>Lecture de Meta</div><div style={{ marginTop: 4, fontSize: 13 }}>Une minute la première fois, puis instantané.</div></Centered>}
+        {loading && <Centered T={T}><Pict name="structure" size={24} color={T.accent} /><div style={{ marginTop: 10, fontWeight: 600, color: T.text }}>Lecture de Meta…</div></Centered>}
         {!loading && error?.kind === 'config' && <Centered T={T}><div style={{ fontWeight: 600, color: T.text }}>Configuration Meta en attente</div><div style={{ marginTop: 4, fontSize: 13 }}>{error.msg}</div></Centered>}
         {!loading && error?.kind === 'err' && <Centered T={T}><span style={{ color: T.red }}>{error.msg}</span></Centered>}
         {!loading && !error && rows.length === 0 && <Centered T={T}>Aucune donnée sur cette période.</Centered>}

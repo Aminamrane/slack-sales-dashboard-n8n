@@ -17,7 +17,7 @@ import { CountUp, Ring, EASE } from '../motion.jsx';
 import { Card, RankedRow, ShareBar, Legend, Empty } from './Card.jsx';
 import { SpendLeadsChart, LaunchesChart } from './charts.jsx';
 import SalesList from '../SalesList.jsx';
-import { fmtInt, fmtCompact, fmtEur, fmtEur2, fmtPct, fmtShare, fmtRoas, fmtShortDay } from '../theme.js';
+import { fmtInt, fmtCompact, fmtEur, fmtEur2, fmtPct, fmtShare, fmtShortDay } from '../theme.js';
 
 const nf = new Intl.NumberFormat('fr-FR');
 const GENDER_LABEL = { female: 'Femmes', male: 'Hommes', unknown: 'Non renseigné' };
@@ -31,7 +31,7 @@ const POSITION_LABEL = {
 const humanize = (v) => String(v || '').replace(/_/g, ' ');
 
 // ── section : pictogramme + titre + phrase de lecture ───────────────────────
-function Section({ T, kicker, icon, title, lead, children }) {
+function Section({ T, kicker, icon, title, children }) {
   const reduce = useReducedMotion();
   return (
     <motion.div initial={reduce ? false : { opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.4, ease: EASE }} style={{ marginTop: 34 }}>
@@ -42,7 +42,7 @@ function Section({ T, kicker, icon, title, lead, children }) {
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 750, letterSpacing: '-0.02em', color: T.text }}>{title}</h2>
         </div>
       </div>
-      <p style={{ margin: '8px 0 16px 46px', fontSize: 13.5, color: T.textMuted, maxWidth: 760, lineHeight: 1.5 }}>{lead}</p>
+      <div style={{ height: 14 }} />
       {children}
     </motion.div>
   );
@@ -92,19 +92,18 @@ function Tile({ T, icon, label, value, format, sub, delta, index = 0, hero = fal
 // ── flux de leads : Meta → CRM ─────────────────────────────────────────────
 function FlowCard({ T, period, index }) {
   const [rec, setRec] = useState(null);
-  const [match, setMatch] = useState(null);
   const [state, setState] = useState('loading');
   useEffect(() => {
     let alive = true;
     setState('loading');
     apiClient.get(`/api/v1/marketing/meta-ads?level=campaign&since=${period.since}&until=${period.until}`)
-      .then((r) => { if (!alive) return; setRec(r?.reconciliation || null); setMatch(r?.totals?.match ?? null); setState('ok'); })
+      .then((r) => { if (!alive) return; setRec(r?.reconciliation || null); setState('ok'); })
       .catch(() => { if (alive) setState('error'); });
     return () => { alive = false; };
   }, [period]);
   const rate = rec?.recovery_rate;
   return (
-    <Card T={T} index={index} title="Flux de leads : de Meta au CRM" subtitle="Ce que Meta facture, ce qui est arrivé chez nous, et ce qui manque">
+    <Card T={T} index={index} title="Flux de leads : de Meta au CRM">
       {state === 'loading' ? <Empty T={T}>Rapprochement en cours…</Empty> : state === 'error' || !rec ? <Empty T={T}>Rapprochement indisponible.</Empty> : (
         <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
           <Ring value={rate || 0} size={84} stroke={7} color={rate != null && rate >= 0.9 ? T.green : rate != null && rate >= 0.75 ? T.amber : T.red} label={rate == null ? '—' : `${Math.round(rate * 100)} %`} sub="reçus" T={T} />
@@ -116,11 +115,7 @@ function FlowCard({ T, period, index }) {
               </div>
             ))}
           </div>
-          <div style={{ flexBasis: '100%', fontSize: 11.5, color: T.textFaint }}>
-            {match != null && <span>{fmtInt(match)} leads de la période retrouvés au CRM par nom de campagne. </span>}
-            {rec.fresh_day && <span>La période inclut aujourd'hui : les chiffres Meta du jour sont encore incomplets. </span>}
-            Les inscriptions webinaire ont leur propre tunnel et ne pèsent pas sur ce taux.
-          </div>
+          {rec.fresh_day && <div style={{ flexBasis: '100%', fontSize: 11.5, color: T.textFaint }}>Aujourd'hui inclus : chiffres Meta du jour incomplets.</div>}
         </div>
       )}
     </Card>
@@ -139,9 +134,8 @@ function LeadsCalendar({ T, daily, index }) {
     return [...Array(lead).fill(null), ...days];
   }, [days]);
   const total = days.reduce((s, d) => s + (d.leads || 0), 0);
-  const best = days.reduce((b, d) => (d.leads > (b?.leads || 0) ? d : b), null);
   return (
-    <Card T={T} index={index} title="Leads jour par jour" subtitle="Plus la case est verte, plus la journée a apporté de leads"
+    <Card T={T} index={index} title="Leads jour par jour"
       right={<span style={{ fontSize: 22, fontWeight: 750, color: T.text, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}><CountUp value={total} format={(v) => nf.format(Math.round(v))} /></span>}>
       {days.length === 0 ? <Empty T={T}>Aucune donnée quotidienne.</Empty> : (
         <>
@@ -158,7 +152,6 @@ function LeadsCalendar({ T, daily, index }) {
               </motion.div>
             ) : <div key={`pad-${i}`} />)}
           </div>
-          {best && <div style={{ marginTop: 10, fontSize: 11.5, color: T.textFaint }}>Meilleure journée : {fmtShortDay(best.date)} avec {fmtInt(best.leads)} leads.</div>}
         </>
       )}
     </Card>
@@ -175,14 +168,14 @@ function AudienceCard({ T, audience, index }) {
       a.total += r.impressions || 0; a[r.gender in a ? r.gender : 'unknown'] += r.impressions || 0; m.set(r.age, a);
     });
     const total = [...m.values()].reduce((s, a) => s + a.total, 0);
-    return [...m.values()].filter((a) => a.total > 0).sort((x, y) => x.age.localeCompare(y.age)).map((a) => ({ ...a, share: total ? a.total / total : 0 }));
+    return [...m.values()].filter((a) => a.total > 0).sort((x, y) => x.age.localeCompare(y.age)).map((a) => ({ ...a, share: total ? a.total / total : 0 })).filter((a) => a.share >= 0.005);
   }, [rows]);
   const genders = (audience?.gender || []).filter((g) => g.share > 0.001);
   const colors = { female: T.green, male: T.navy, unknown: T.textFaint };
   return (
-    <Card T={T} index={index} title="Âge et genre" subtitle="Part des impressions par tranche d'âge, et répartition femmes / hommes dans chaque tranche"
+    <Card T={T} index={index} title="Âge et genre"
       right={<Legend T={T} items={[{ label: 'Femmes', color: colors.female }, { label: 'Hommes', color: colors.male }]} />}>
-      {ages.length === 0 ? <Empty T={T}>Répartition par âge indisponible sur cette période.</Empty> : (
+      {ages.length === 0 ? <Empty T={T}>Indisponible sur cette période.</Empty> : (
         <>
           <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
             {genders.map((g) => (
@@ -191,7 +184,7 @@ function AudienceCard({ T, audience, index }) {
                 <div>
                   <div style={{ fontSize: 11.5, color: T.textFaint, fontWeight: 600 }}>{GENDER_LABEL[g.gender] || humanize(g.gender)}</div>
                   <div style={{ fontSize: 18, fontWeight: 750, color: T.text, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>{fmtShare(g.share, 0)}</div>
-                  <div style={{ fontSize: 11, color: T.textMuted }}>{fmtInt(g.leads)} leads</div>
+                  {genders.some((x) => x.leads > 0) && <div style={{ fontSize: 11, color: T.textMuted }}>{fmtInt(g.leads)} leads</div>}
                 </div>
               </div>
             ))}
@@ -199,7 +192,7 @@ function AudienceCard({ T, audience, index }) {
           <div style={{ display: 'grid', gridTemplateColumns: '58px minmax(0, 1fr) 52px', gap: '10px 12px', alignItems: 'center' }}>
             {ages.map((a, i) => (
               <React.Fragment key={a.age}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{a.age}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{/^unknown$/i.test(a.age) ? 'Non renseigné' : a.age}</span>
                 <div style={{ display: 'flex', height: 14, borderRadius: 99, overflow: 'hidden', background: T.navySoft }}>
                   {['female', 'male', 'unknown'].map((g) => a.total && a[g] ? (
                     <motion.div key={g} initial={{ width: 0 }} whileInView={{ width: `${(a[g] / a.total) * 100}%` }} viewport={{ once: true }} transition={{ duration: 0.7, delay: 0.05 * i, ease: EASE }}
@@ -216,12 +209,17 @@ function AudienceCard({ T, audience, index }) {
   );
 }
 
+// Un chiffre n'apparaît que si Meta le donne : les leads par segment sont
+// souvent absents des ventilations (région, placement), on ne montre alors
+// que les personnes touchées et la part.
+const leadsSub = (rows, r) => (rows.some((x) => x.leads > 0) ? `${fmtInt(r.leads)} leads` : null);
+
 function GeoCard({ T, geo, index }) {
   const rows = (geo?.rows || []).slice(0, 10);
   return (
-    <Card T={T} index={index} title={geo?.level === 'country' ? 'Pays' : 'Régions'} subtitle="Où les publicités sont vues, en part des impressions, avec les leads reçus">
-      {rows.length === 0 ? <Empty T={T}>Répartition géographique indisponible sur cette période.</Empty> : rows.map((r, i) => (
-        <RankedRow key={r.name} T={T} index={i} label={r.name} sub={`${fmtInt(r.leads)} leads`} value={fmtCompact(r.impressions)} share={r.share} color={i === 0 ? T.green : T.navy} />
+    <Card T={T} index={index} title={geo?.level === 'country' ? 'Pays' : 'Régions'} right={<span style={{ fontSize: 11.5, color: T.textFaint }}>personnes touchées</span>}>
+      {rows.length === 0 ? <Empty T={T}>Indisponible sur cette période.</Empty> : rows.map((r, i) => (
+        <RankedRow key={r.name} T={T} index={i} label={r.name} sub={leadsSub(rows, r)} value={fmtCompact(r.reach || r.impressions)} share={r.share} color={i === 0 ? T.green : T.navy} />
       ))}
     </Card>
   );
@@ -230,7 +228,7 @@ function GeoCard({ T, geo, index }) {
 function FormatsCard({ T, formats, index }) {
   const rows = (formats || []).filter((f) => f.ads > 0);
   return (
-    <Card T={T} index={index} title="Formats" subtitle="Publicités par format dans les comptes, et part de la dépense de la période qu'elles ont reçue">
+    <Card T={T} index={index} title="Formats">
       {rows.length === 0 ? <Empty T={T}>Aucune publicité sur cette période.</Empty> : rows.map((f, i) => (
         <RankedRow key={f.format} T={T} index={i} label={FORMAT_LABEL[f.format] || humanize(f.format)} sub={`${fmtInt(f.ads)} pub${f.ads > 1 ? 's' : ''} · ${fmtInt(f.active)} active${f.active > 1 ? 's' : ''} · ${fmtInt(f.leads)} leads`}
           value={fmtEur(f.spend)} share={f.share_spend} color={f.format === 'video' ? T.green : T.navy} />
@@ -242,10 +240,10 @@ function FormatsCard({ T, formats, index }) {
 function PlacementsCard({ T, placements, index }) {
   const rows = (placements || []).slice(0, 8);
   return (
-    <Card T={T} index={index} title="Placements" subtitle="Fil, Reels, Stories… sur Facebook et Instagram, en part des impressions">
-      {rows.length === 0 ? <Empty T={T}>Répartition par placement indisponible sur cette période.</Empty> : rows.map((p, i) => (
+    <Card T={T} index={index} title="Placements">
+      {rows.length === 0 ? <Empty T={T}>Indisponible sur cette période.</Empty> : rows.map((p, i) => (
         <RankedRow key={`${p.platform}-${p.position}`} T={T} index={i} label={`${PLATFORM_LABEL[p.platform] || humanize(p.platform)} · ${POSITION_LABEL[p.position] || humanize(p.position)}`}
-          sub={`${fmtInt(p.leads)} leads`} value={fmtEur(p.spend)} share={p.share} color={p.platform === 'instagram' ? T.green : T.navy} />
+          sub={leadsSub(rows, p)} value={fmtEur(p.spend)} share={p.share} color={p.platform === 'instagram' ? T.green : T.navy} />
       ))}
     </Card>
   );
@@ -255,7 +253,7 @@ function PortfoliosCard({ T, portfolios, index }) {
   const rows = portfolios || [];
   const totalSpend = rows.reduce((s, p) => s + (p.spend || 0), 0);
   return (
-    <Card T={T} index={index} title="Par portefeuille" subtitle="Les deux comptes publicitaires Meta, côte à côte">
+    <Card T={T} index={index} title="Par portefeuille">
       {rows.length === 0 ? <Empty T={T}>Aucun portefeuille.</Empty> : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
           {rows.map((p, i) => (
@@ -306,7 +304,7 @@ export default function Overview({ T, period, portfolio }) {
     return () => { alive = false; };
   }, [period, portfolio]);
 
-  if (loading) return <Centered T={T}><Pict name="overview" size={26} color={T.accent} /><div style={{ marginTop: 10, fontWeight: 600, color: T.text }}>Lecture des deux portefeuilles Meta et de nos ventes</div><div style={{ marginTop: 4, fontSize: 13 }}>Une minute la première fois, puis instantané pendant 20 minutes.</div></Centered>;
+  if (loading) return <Centered T={T}><Pict name="overview" size={26} color={T.accent} /><div style={{ marginTop: 10, fontWeight: 600, color: T.text }}>Lecture de Meta…</div></Centered>;
   if (error?.kind === 'config') return <Centered T={T}><div style={{ fontWeight: 600, color: T.text }}>Configuration Meta en attente</div><div style={{ marginTop: 4, fontSize: 13 }}>{error.msg || 'Les tokens Meta ne sont pas encore configurés sur le serveur.'}</div></Centered>;
   if (error) return <Centered T={T}><span style={{ color: T.red }}>{error.msg}</span></Centered>;
   if (!data) return null;
@@ -323,7 +321,7 @@ export default function Overview({ T, period, portfolio }) {
   return (
     <div>
       {/* ── 1. L'essentiel ── */}
-      <Section T={T} kicker="1 · L'essentiel" icon="overview" title="Ce que la période a donné" lead="Ce qu'on a dépensé sur Meta, combien de personnes on a touchées, combien de leads sont arrivés au CRM et combien de ventes ont été déclarées sur la période (le même total que le Suivi des ventes).">
+      <Section T={T} kicker="1 · L'essentiel" icon="overview" title="Ce que la période a donné">
         <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
           <Tile T={T} hero index={0} icon="sales" label="Ventes déclarées" value={s.total ?? null} sub={salesLine} delta={<Delta T={T} light current={s.total} previous={ps.total} />} />
           <Tile T={T} index={1} icon="spend" label="Dépense" value={t.spend ?? null} format={eur0} delta={<Delta T={T} current={t.spend} previous={p.spend} />} />
@@ -335,14 +333,14 @@ export default function Overview({ T, period, portfolio }) {
           <Tile T={T} index={7} icon="ads" label="Publicités en compte" value={t.ads_count ?? null} sub={`${fmtInt(t.ads_active)} active${t.ads_active > 1 ? 's' : ''} aujourd'hui`} />
         </div>
         <div style={{ marginTop: 14, display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))' }}>
-          <div style={{ gridColumn: 'span 2', minWidth: 0 }}><SpendLeadsChart T={T} daily={data.daily} sales={data.sales} index={0} /></div>
+          <div style={{ gridColumn: 'span 2', minWidth: 0 }}><SpendLeadsChart T={T} daily={data.daily} index={0} /></div>
           <LeadsCalendar T={T} daily={data.daily} index={1} />
         </div>
         <div style={{ marginTop: 14 }}><FlowCard T={T} period={period} index={2} /></div>
       </Section>
 
       {/* ── 2. Ce qu'on diffuse ── */}
-      <Section T={T} kicker="2 · Ce qu'on diffuse" icon="format" title="Formats, placements et rythme de lancement" lead="Quels formats reçoivent la dépense, où les publicités sont montrées, combien de nouvelles publicités partent chaque semaine, et le partage entre les deux portefeuilles.">
+      <Section T={T} kicker="2 · Ce qu'on diffuse" icon="format" title="Formats, placements et rythme de lancement">
         <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
           <FormatsCard T={T} formats={data.formats} index={0} />
           <PlacementsCard T={T} placements={data.placements} index={1} />
@@ -352,7 +350,7 @@ export default function Overview({ T, period, portfolio }) {
       </Section>
 
       {/* ── 3. À qui on parle ── */}
-      <Section T={T} kicker="3 · À qui on parle" icon="audience" title="Audience touchée" lead="Qui voit les publicités : tranches d'âge, femmes et hommes, et régions. À lire avec les leads reçus pour chaque segment.">
+      <Section T={T} kicker="3 · À qui on parle" icon="audience" title="Audience touchée">
         <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))' }}>
           <AudienceCard T={T} audience={data.audience} index={0} />
           <GeoCard T={T} geo={data.geo} index={1} />
@@ -360,7 +358,7 @@ export default function Overview({ T, period, portfolio }) {
       </Section>
 
       {/* ── 4. Les ventes, une par une ── */}
-      <Section T={T} kicker="4 · Vérification" icon="match" title="Les ventes de la période, une par une" lead="Chaque vente déclarée, avec son origine et la créa à laquelle elle est rattachée : le total se vérifie ici contre le Suivi des ventes.">
+      <Section T={T} kicker="4 · Vérification" icon="match" title="Les ventes de la période, une par une">
         <SalesList sales={data.sales} level="ad" T={T} />
       </Section>
 
