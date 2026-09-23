@@ -2,7 +2,8 @@
 //
 // Lit l'endpoint additif `GET /api/v1/marketing/meta-ads` (api-owner) qui
 // agrège les Insights Meta des 2 portefeuilles + croise le CRM
-// (leads_realtime → match, clients → ventes/CA/ROAS).
+// (leads_realtime → match, déclarations de vente → ventes/CA/ROAS, rattachées
+// à la créa d'origine du lead de chaque client : mêmes chiffres que le Suivi des ventes).
 //
 // 100 % additif : nouvelle route + nouvelle page. Rien de l'existant touché.
 // Rôles : admin / ceo / marketing / acquisition_director (mêmes que le backend).
@@ -19,6 +20,7 @@ import SharedNavbar from '../../components/SharedNavbar.jsx';
 import Leaderboard from './Leaderboard.jsx';
 import CreativeThumb from './CreativeThumb.jsx';
 import KpiBar from './KpiBar.jsx';
+import SalesList from './SalesList.jsx';
 
 const ALLOWED_ROLES = ['admin', 'ceo', 'marketing', 'acquisition_director', 'head_of_acquisition'];
 const ACCENT = '#f0653e'; // coral, comme la réf
@@ -250,7 +252,7 @@ export default function MetaAds() {
         <>
         {/* ── synthèse comparée ── */}
         {!loading && !error && data?.totals && (
-          <KpiBar totals={data.totals} previous={prevTotals} T={T} loading={prevLoading} />
+          <KpiBar totals={data.totals} sales={data.sales} previous={prevTotals} T={T} loading={prevLoading} />
         )}
 
         {/* ── card : toolbar + table ── */}
@@ -304,6 +306,9 @@ export default function MetaAds() {
             </div>
           )}
         </div>
+
+        {/* ── les ventes, une par une : la page se vérifie contre le Suivi des ventes ── */}
+        {!loading && !error && data?.sales && <SalesList sales={data.sales} level={level} T={T} />}
 
         </>
         )}
