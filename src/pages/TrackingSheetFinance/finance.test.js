@@ -322,13 +322,20 @@ test('un contrat en attente Opti’lex devient une ligne finance flaguée, sans 
   assert.equal(computeKpis([r].filter((x) => !x.pending), 'owner', 1).total, 0);
 });
 
-test('la vision Globale reste fermée à finance_team, sauf Aurélie B', async () => {
-  const { canUseGlobalScope } = await import('./constants.js');
-  assert.equal(canUseGlobalScope({ id: 'x', role: 'finance_director' }), true);
-  assert.equal(canUseGlobalScope({ id: 'x', role: 'admin' }), true);
-  assert.equal(canUseGlobalScope({ id: 'x', role: 'finance_team' }), false);
-  assert.equal(canUseGlobalScope({ id: '6dfc7435-c938-4bd3-b143-a6516b2981bd', role: 'finance_team' }), true);
+test('la vision Globale est ouverte à toute la page, équipe finance comprise (dev 2026-09-23)', async () => {
+  const { canUseGlobalScope, displayedPayDate, SCOPE_FIELDS } = await import('./constants.js');
+  for (const role of ['finance_director', 'admin', 'finance_team', 'ceo']) {
+    assert.equal(canUseGlobalScope({ id: 'x', role }), true, role);
+  }
   assert.equal(canUseGlobalScope(null), true, 'sans utilisateur, la garde de rôle de la page a déjà redirigé');
+  // « Date paie. » : la date saisie fait foi ; sinon l'échéance du moteur,
+  // jamais la projection du classeur (qui dérive dans le mois précédent).
+  const f = SCOPE_FIELDS.owner;
+  assert.deepEqual(displayedPayDate({ payment_date_owner: '2026-09-15', payment_date_owner_projected: false, due_date_owner: '2026-09-20' }, f),
+    { value: '2026-09-15', projected: false });
+  assert.deepEqual(displayedPayDate({ payment_date_owner: '2026-08-31', payment_date_owner_projected: true, due_date_owner: '2026-09-27' }, f),
+    { value: '2026-09-27', projected: true });
+  assert.deepEqual(displayedPayDate({ payment_date_owner: null, due_date_owner: null }, f), { value: null, projected: true });
 });
 
 import { matchesPriorDebt, scopedOpeningDebt } from './constants.js';

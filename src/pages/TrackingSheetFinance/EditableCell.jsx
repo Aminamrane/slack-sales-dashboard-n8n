@@ -443,7 +443,7 @@ export const EditableDate = React.memo(function EditableDate({
   onCommit,
   width = '100%',
   disabled = false,
-  // Date PROJETÉE par le classeur (mois précédent + 30 j), pas un
+  // Échéance ATTENDUE (jour du dernier paiement reporté sur le mois), pas un
   // encaissement : affichée en retrait, jamais comme une date réelle.
   projected = false,
 }) {
@@ -511,7 +511,7 @@ export const EditableDate = React.memo(function EditableDate({
     <span
       onClick={(e) => { e.stopPropagation(); startEdit(); }}
       title={isProjected
-        ? 'Date prévue par le classeur (mois précédent + 30 jours), pas un encaissement. Cliquer pour saisir la date réelle.'
+        ? 'Échéance attendue : le jour du dernier paiement, reporté sur ce mois. Pas un encaissement. Cliquer pour saisir la date réelle.'
         : disabled ? '' : 'Cliquer pour modifier'}
       style={{
         ...cellStyle(state),

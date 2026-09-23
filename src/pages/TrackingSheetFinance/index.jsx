@@ -267,7 +267,7 @@ const VIEW_ICONS = {
 // ─────────────────────────────────────────────────────────────────────────────
 // Vision (scope) + vues-filtres — phase 2 condensation (2026-08-18).
 // ─────────────────────────────────────────────────────────────────────────────
-const SCOPE_LS_KEY = 'tsf-finance-scope';
+const SCOPE_LS_KEY = 'tsf-finance-scope-v2';
 
 // Retard courant / cumulé selon la vision active : helpers factorisés dans
 // constants.js depuis la phase 3 (partagés avec le DetailPanel). Les sommes
@@ -401,9 +401,10 @@ export default function TrackingSheetFinance() {
   const onHiddenColsChange = useCallback((cols, colLabels) => setHiddenColsInfo({ count: cols.size, keys: [...cols], labels: colLabels || {} }), []);
 
   // ── Vision Owner / Opti'lex / Global (phase 2, 2026-08-18) ───────────
-  // finance_team n'a pas accès à la vision Globale (sauf exception nominative,
-  // cf. canUseGlobalScope) ; admin, finance_director (et ceo en mode embed)
-  // ont les trois. Choix persisté en localStorage.
+  // Les trois visions sont ouvertes à tous (dev 2026-09-23 : « il faut qu'on
+  // voie tous la même chose »), Globale par défaut pour tout le monde. Le
+  // choix reste mémorisé par poste ; la clé a changé ce jour-là pour que
+  // chacun reparte de la Globale une fois.
   const canGlobalScope = useMemo(() => canUseGlobalScope(apiClient.getUser()), []);
   const [scope, setScope] = useState(() => {
     const canGlobal = canUseGlobalScope(apiClient.getUser());
@@ -1778,15 +1779,17 @@ function kpiTiles(kpis, loading, view, pendingCount = 0) {
       subTitle: 'Reçu affecté au mois ÷ attendu du mois. Les règlements des anciennes créances sont suivis séparément.',
     },
     {
-      // Dette totale à date (mois + antérieur) — la colonne « Retard de
-      // paiement » du classeur, celle que la finance lit en premier.
+      // Retard du MOIS seul : la part de l'attendu du mois dont la date de
+      // paiement est passée et qui n'est pas réglée. Les créances des mois
+      // précédents ont leur propre tuile ; les additionner ici les comptait
+      // deux fois dans le bandeau (demande dev 2026-09-23).
       label: 'Retard',
-      value: loading ? '…' : formatEUR(kpis.overdueTotalWithCum),
-      color: kpis.overdueTotalWithCum > 0 ? N.red : N.text,
-      dot: kpis.overdueTotalWithCum > 0 ? N.red : N.textFaint,
-      sub: loading ? null : `${formatEUR(kpis.overdueTotal)} du mois`,
+      value: loading ? '…' : formatEUR(kpis.overdueTotal),
+      color: kpis.overdueTotal > 0 ? N.red : N.text,
+      dot: kpis.overdueTotal > 0 ? N.red : N.textFaint,
+      sub: loading ? null : `sur ${formatEUR(Math.max(kpis.expectedGlobal - kpis.notDue, 0))} exigibles`,
       subColor: N.textMuted,
-      subTitle: 'Retard du mois + anciennes créances encore dues. Les trop-perçus restent séparés.',
+      subTitle: 'Reste dû sur les échéances du mois dont la date de paiement est passée. Les créances des mois précédents sont dans la tuile suivante, les trop-perçus restent séparés.',
     },
     {
       // « Retard de paiement sur les mois précédents » du classeur.

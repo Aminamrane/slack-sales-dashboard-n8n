@@ -87,9 +87,11 @@ export function CeoFinanceMetrics({ onOpenFinance, darkMode }) {
   const [period, setPeriod] = useState(todayMonth);
   const finance = useDashboardData(`/api/v1/finance-periods?period=${period}`);
   const sales = useDashboardData(`/api/v1/ceo-dashboard/sales?period=${period}`);
-  const k = useMemo(() => finance.data ? computeKpis(finance.data.periods, 'owner') : null, [finance.data]);
-  return <section className={`ceo-metrics-section${darkMode ? ' is-dark' : ''}`} aria-label="Finance Owner">
-    <div className="ceo-metrics-title"><h2>Finance <small>Owner uniquement</small></h2><PeriodSelect value={period} onChange={setPeriod} label="Mois des indicateurs finance" /></div>
+  // Même vision que la page finance par défaut (Globale = Owner + Opti'lex) :
+  // le CEO et l'équipe finance lisent les mêmes totaux (demande dev 2026-09-23).
+  const k = useMemo(() => finance.data ? computeKpis(finance.data.periods, 'global') : null, [finance.data]);
+  return <section className={`ceo-metrics-section${darkMode ? ' is-dark' : ''}`} aria-label="Finance">
+    <div className="ceo-metrics-title"><h2>Finance <small>Owner + Opti'lex</small></h2><PeriodSelect value={period} onChange={setPeriod} label="Mois des indicateurs finance" /></div>
     <div className="ceo-metrics-grid">
       <Card title="Récupération du mois" Icon={Wallet} {...finance} footer="Reçu affecté au mois / attendu du mois" onClick={() => onOpenFinance(period)}>
         <Ratio received={k?.receivedTotal} expected={k?.expectedGlobal} period={period} />
