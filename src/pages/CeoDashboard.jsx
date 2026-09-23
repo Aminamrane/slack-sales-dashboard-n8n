@@ -1916,7 +1916,7 @@ export default function CeoDashboard() {
                 ))}
               </div>
 
-              <CeoFinanceMetrics darkMode={darkMode} onOpenFinance={(period) => navigate(`/ceo/dispatch?period=${period}&scope=owner`)} />
+              <CeoFinanceMetrics darkMode={darkMode} onOpenFinance={(period) => navigate(`/ceo/dispatch?period=${period}`)} />
               <CeoProductMetrics boardRows={boardRows} darkMode={darkMode} />
               <CeoDelayMetrics darkMode={darkMode} />
               <div style={{ display: 'flex', gap: 20, marginBottom: 28, alignItems: 'stretch', flexWrap: 'wrap' }}>

@@ -35,14 +35,12 @@ const METEO_FILTER_USER_IDS = new Set([
 ]);
 export const canFilterMeteo = (user) => METEO_FILTER_USER_IDS.has(user?.id);
 
-// Vision « Global » (Owner + Opti'lex) : ouverte à admin, direction financière
-// et ceo ; fermée au rôle finance_team, sauf Aurélie B (demande dev
-// 2026-09-18). Porte purement front : la liste renvoie déjà les deux entités.
-const GLOBAL_SCOPE_USER_IDS = new Set([
-  '6dfc7435-c938-4bd3-b143-a6516b2981bd', // Aurélie B
-]);
-export const canUseGlobalScope = (user) =>
-  (user?.role || null) !== 'finance_team' || GLOBAL_SCOPE_USER_IDS.has(user?.id);
+// Vision « Global » (Owner + Opti'lex) : ouverte à tous ceux qui ont accès à
+// la page. Demande dev 2026-09-23 : « il faut qu'on voie tous la même chose »,
+// la vision n'est pas une question de droits (l'équipe finance était limitée
+// à Owner, et lisait donc d'autres totaux que la direction). Porte purement
+// front : la liste renvoie déjà les deux entités.
+export const canUseGlobalScope = () => true;
 
 // Clients « Attente Opti'Lex » du board : Owner signé, contrat Opti'Lex encore
 // en vol, pas de numéro client ni d'attendu. La finance doit les voir, avec un
@@ -257,6 +255,7 @@ export const SCOPE_FIELDS = {
     receivedOverdue: 'received_overdue_owner',
     psp:             'psp_owner',
     payDate:         'payment_date_owner',
+    dueDate:         'due_date_owner',
   },
   optilex: {
     expected:        'expected_optilex_ttc',
@@ -265,7 +264,19 @@ export const SCOPE_FIELDS = {
     receivedOverdue: 'received_overdue_optilex_ttc',
     psp:             'psp_optilex',
     payDate:         'payment_date_optilex',
+    dueDate:         'due_date_optilex',
   },
+};
+
+// Date à montrer dans « Date paie. » pour un mois : la date RÉELLE saisie si
+// elle existe, sinon l'échéance calculée par le moteur (jour du dernier
+// paiement reporté sur le mois). Plus jamais la projection du classeur, dont
+// la formule « +30 jours » dérive d'un jour par mois et finit dans le mois
+// précédent (règle dev 2026-09-23).
+export const displayedPayDate = (row, fields) => {
+  const actual = row?.[fields.payDate];
+  if (actual && !row?.[`${fields.payDate}_projected`]) return { value: actual, projected: false };
+  return { value: row?.[fields.dueDate] || null, projected: true };
 };
 
 // Each entity is allocated separately: credits never offset another client's

@@ -65,6 +65,7 @@ import {
   COLUMN_LABELS,
   SCOPED_COMMENT_FIELDS,
   SCOPE_FIELDS,
+  displayedPayDate,
   stripEntitySuffix,
   parsePaymentSpecCount,
   normalizeSearch,
@@ -996,8 +997,8 @@ const RowRenderer = React.memo(function RowRenderer({
       {/* Date paiement (entité active — absente en vision Globale) */}
       {keys.includes('payDate') && !isGlobal && C('payDate', (
         <EditableDate
-          value={row[fields.payDate]}
-          projected={Boolean(row[`${fields.payDate}_projected`])}
+          value={displayedPayDate(row, fields).value}
+          projected={displayedPayDate(row, fields).projected}
           onCommit={patch(fields.payDate)}
         />
       ))}

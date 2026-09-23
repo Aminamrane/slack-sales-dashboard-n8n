@@ -1794,9 +1794,9 @@ function ContractInfoList({
             maxWidth: '100%', fontFamily: 'inherit', color: N.text, background: '#fff' }}
         >
           {PAYMENT_DAY_OPTIONS.map((day) => <option key={day} value={day}>
-            {day ? PAYMENT_DAY_LABELS[day] : profile?.first_payment_date
-              ? `Premier paiement (le ${Number(String(profile.first_payment_date).slice(8, 10))})`
-              : 'Automatique au premier paiement'}
+            {day ? PAYMENT_DAY_LABELS[day] : profile?.payment_day_source === 'last_payment' && profile?.payment_day_effective
+              ? `Dernier paiement (le ${profile.payment_day_effective})`
+              : 'Automatique : jour du dernier paiement'}
           </option>)}
         </select>
       ) : (
@@ -1806,15 +1806,15 @@ function ContractInfoList({
               le {profile.payment_day_effective} de chaque mois
             </span>
           ) : (
-            <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }} title="Sans jour connu, le mois est dû dès le 1er. Le jour se fixera au premier paiement daté, ou à la main.">Dès le 1er, jusqu'au premier paiement</span>
+            <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }} title="Sans jour connu, le mois est dû dès le 1er. Le jour suivra la date du dernier paiement saisi, ou sera fixé à la main.">Dès le 1er, jusqu'au premier paiement</span>
           )}
           {profile?.payment_day_source === 'finance' && (
             <span title={profile.payment_day_by ? `fixé par ${profile.payment_day_by}` : undefined} style={{ fontSize: 10.5, color: N.textFaint }}>
               fixé par la finance
             </span>
           )}
-          {profile?.payment_day_source === 'first_payment' && (
-            <span style={{ fontSize: 10.5, color: N.textFaint }}>premier paiement réel</span>
+          {profile?.payment_day_source === 'last_payment' && (
+            <span style={{ fontSize: 10.5, color: N.textFaint }} title="Le jour du dernier paiement saisi : il suit le client de mois en mois.">dernier paiement réel</span>
           )}
         </span>
       ),
@@ -1981,7 +1981,7 @@ function ContractInfoList({
   );
 }
 
-// Jour de paiement : '' = premier paiement réel, sinon 1 à 31.
+// Jour de paiement : '' = automatique (jour du dernier paiement réel), sinon 1 à 31.
 const PAYMENT_DAY_OPTIONS = ['', ...Array.from({ length: 31 }, (_, i) => String(i + 1))];
 const PAYMENT_DAY_LABELS = Object.fromEntries(
   Array.from({ length: 31 }, (_, i) => [String(i + 1), `le ${i + 1}${i === 0 ? 'er' : ''} du mois`]),
