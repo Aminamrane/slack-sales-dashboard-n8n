@@ -22,7 +22,7 @@ export const RECO_TONE = {
 };
 export const toneColors = (T, tone) => ({
   green: { color: T.green, bg: T.accentBg },
-  navy: { color: T.text, bg: T.navySoft },
+  navy: { color: T.text, bg: T.track },
   amber: { color: T.amber, bg: T.isDark ? 'rgba(217,163,92,0.16)' : 'rgba(185,138,58,0.12)' },
   red: { color: T.red, bg: T.isDark ? 'rgba(217,123,108,0.16)' : 'rgba(181,84,74,0.10)' },
   muted: { color: T.textMuted, bg: T.surfaceAlt },
@@ -31,7 +31,7 @@ export const toneColors = (T, tone) => ({
 export function scoreColor(score, T) {
   if (score == null) return T.textFaint;
   if (score >= 65) return T.green;
-  if (score >= 40) return T.navy;
+  if (score >= 40) return T.primary;
   return T.red;
 }
 
@@ -40,7 +40,7 @@ function Block({ T, icon, title, children, sub }) {
     <section style={{ marginTop: 22 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <Pict name={icon} size={16} color={T.accent} />
-        <h4 style={{ margin: 0, fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: T.textMuted }}>{title}</h4>
+        <h4 style={{ margin: 0, fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: T.textMuted }}>{title}</h4>
         {sub && <span style={{ fontSize: 11.5, color: T.textFaint }}>{sub}</span>}
       </div>
       {children}
@@ -50,9 +50,9 @@ function Block({ T, icon, title, children, sub }) {
 
 function Stat({ T, label, value, strong }) {
   return (
-    <div style={{ padding: '10px 12px', borderRadius: 12, background: T.surfaceAlt }}>
+    <div style={{ padding: '10px 12px', borderRadius: T.radiusSm, background: T.surfaceAlt }}>
       <div style={{ fontSize: 11, color: T.textFaint, fontWeight: 600 }}>{label}</div>
-      <div style={{ marginTop: 3, fontSize: 16, fontWeight: 750, letterSpacing: '-0.02em', color: strong || T.text, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+      <div style={{ marginTop: 3, fontSize: 16, fontWeight: 500, color: strong || T.text, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
     </div>
   );
 }
@@ -105,16 +105,16 @@ export default function CreativePanel({ row, sales, period, T, onClose }) {
         style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(460px, 100vw)', zIndex: 81, background: T.surface, color: T.text,
           boxShadow: '-12px 0 40px rgba(18,27,53,0.18)', overflowY: 'auto', padding: '18px 22px 32px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-          <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.accent }}>Créa</span>
-          <button onClick={onClose} aria-label="Fermer" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 10, border: `1px solid ${T.border}`, background: T.surface, color: T.textMuted, cursor: 'pointer' }}>
+          <span style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.accent }}>Créa</span>
+          <button onClick={onClose} aria-label="Fermer" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: T.radiusSm, border: `1px solid ${T.border}`, background: T.surface, color: T.textMuted, cursor: 'pointer' }}>
             <Pict name="close" size={16} />
           </button>
         </div>
 
         <div style={{ marginTop: 14 }}>
-          <CreativeThumb creative={r.creative} name={r.name} size="fluid" aspect="4 / 3" radius={16} T={T} />
+          <CreativeThumb creative={r.creative} name={r.name} size="fluid" aspect="4 / 3" radius={T.radius} T={T} />
         </div>
-        <h3 style={{ margin: '14px 0 4px', fontSize: 19, fontWeight: 750, letterSpacing: '-0.02em', lineHeight: 1.2 }}>{r.name}</h3>
+        <h3 style={{ margin: '14px 0 4px', fontSize: 19, fontWeight: 500, lineHeight: 1.2 }}>{r.name}</h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12.5, color: T.textMuted }}>
           {r.campaign_name && <span>{r.campaign_name}</span>}
           <Pill T={T} color={active ? T.green : T.textMuted} bg={active ? T.accentBg : T.surfaceAlt}>
@@ -132,11 +132,11 @@ export default function CreativePanel({ row, sales, period, T, onClose }) {
                   {subs.map(([label, v]) => (
                     <div key={label} style={{ display: 'grid', gridTemplateColumns: '92px 1fr 34px', gap: 8, alignItems: 'center', fontSize: 11.5 }}>
                       <span style={{ color: T.textMuted }}>{label}</span>
-                      <div style={{ height: 6, borderRadius: 99, background: T.navySoft, overflow: 'hidden' }}>
+                      <div style={{ height: 6, borderRadius: 99, background: T.track, overflow: 'hidden' }}>
                         <motion.div initial={reduce ? { scaleX: v } : { scaleX: 0 }} animate={{ scaleX: Math.max(0.02, v || 0) }} transition={{ duration: 0.7, ease: EASE }}
                           style={{ height: '100%', transformOrigin: 'left center', background: T.green, borderRadius: 99 }} />
                       </div>
-                      <span style={{ textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{Math.round((v || 0) * 100)}</span>
+                      <span style={{ textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{Math.round((v || 0) * 100)}</span>
                     </div>
                   ))}
                 </div>
@@ -169,8 +169,8 @@ export default function CreativePanel({ row, sales, period, T, onClose }) {
 
         {r.reco && (
           <Block T={T} icon="info" title="Recommandation">
-            <div style={{ padding: '12px 14px', borderRadius: 12, background: tone.bg }}>
-              <div style={{ fontSize: 13.5, fontWeight: 700, color: tone.color }}>{r.reco.label}</div>
+            <div style={{ padding: '12px 14px', borderRadius: T.radiusSm, background: tone.bg }}>
+              <div style={{ fontSize: 13.5, fontWeight: 600, color: tone.color }}>{r.reco.label}</div>
               {r.reco.detail && <div style={{ marginTop: 4, fontSize: 12.5, color: T.textMuted, lineHeight: 1.45 }}>{r.reco.detail}</div>}
               {r.reco.suggestions?.length > 0 && (
                 <ul style={{ margin: '8px 0 0', paddingLeft: 16, display: 'grid', gap: 4 }}>
@@ -185,9 +185,9 @@ export default function CreativePanel({ row, sales, period, T, onClose }) {
           {mine.length === 0 ? <div style={{ fontSize: 12.5, color: T.textFaint }}>Aucune vente déclarée rattachée à cette créa sur la période.</div> : (
             <div style={{ display: 'grid', gap: 6 }}>
               {mine.map((s) => (
-                <div key={s.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '2px 10px', padding: '9px 12px', borderRadius: 12, background: T.surfaceAlt }}>
-                  <span style={{ fontSize: 13, fontWeight: 650, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.client || '—'} <span style={{ color: T.textFaint, fontWeight: 500 }}>{s.numero_client || ''}</span></span>
-                  <span style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: T.green }}>{fmtEur(s.amount)}</span>
+                <div key={s.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '2px 10px', padding: '9px 12px', borderRadius: T.radiusSm, background: T.surfaceAlt }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.client || '—'} <span style={{ color: T.textFaint, fontWeight: 500 }}>{s.numero_client || ''}</span></span>
+                  <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: T.green }}>{fmtEur(s.amount)}</span>
                   <span style={{ fontSize: 11.5, color: T.textFaint }}>{fmtDay(s.date)} · {s.seller || 'vendeur inconnu'}</span>
                 </div>
               ))}
