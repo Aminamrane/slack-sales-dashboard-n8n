@@ -1,3 +1,4 @@
+import SaleReservation from '../components/integrationPreview/SaleReservation';
 import { AbsenceDialog } from "../components/absences/AbsencePanel";
 import { periodOnDay } from "../components/absences/absenceDates";
 import {hasGuidedSalesJourney} from '../utils/guidedSalesJourney';
@@ -1150,6 +1151,9 @@ export default function TrackingSheet() {
   // Déclaration en 3 étapes : 'form' -> 'lancement' (créneau Opti'Lex : L. Gentaire, ou H. Moraru si 20+) -> 'onboarding' (créneau facturation@)
   const [saleStep, setSaleStep] = useState('form');
   const [saleIntake, setSaleIntake] = useState(null);
+  const [salePreparation, setSalePreparation] = useState(null);
+  const [saleReservationError, setSaleReservationError] = useState('');
+  const saleRequestBusy = useRef(false);
   const [saleSlots, setSaleSlots] = useState({ onboarding: null, lancement: null }); // "YYYY-MM-DDTHH:MM"
   const [saleSuccess, setSaleSuccess] = useState(false);
   const EMPLOYEE_RANGES = [
@@ -1159,7 +1163,42 @@ export default function TrackingSheet() {
 
   const [saleClientNumero, setSaleClientNumero] = useState(null);
 
+  const applySalePreparation = (leadId, preparation) => {
+    setSalePreparation(preparation);
+    if (!preparation) return;
+    const p = preparation.payload;
+    setSaleForm({email:p.email, paymentModality:p.payment_mode === 'MONTHLY' ? 'M' : 'A', employeeRange:p.employee_band,
+      billingStructures:p.billing_structures, structuresCount:p.structures_count || '', discount:p.discount !== 'Non', discountValue:p.discount === 'Non' ? '' : p.discount});
+    setSaleSlots({onboarding:preparation.slot, lancement:null});
+    setIntakeJourneys(previous => ({...previous, [leadId]:{...previous[leadId], preparation}}));
+    setSaleStep('reserved');
+  };
+  const reserveSaleAppointment = async (leadId) => {
+    if (saleRequestBusy.current) return;
+    saleRequestBusy.current = true; setSaleSubmitting(true); setSaleReservationError('');
+    try {
+      const payload = salePreparation?.payload || {
+        email:saleForm.email.trim().toLowerCase(), payment_mode:saleForm.paymentModality === 'M' ? 'MONTHLY' : 'YEARLY',
+        employee_band:saleForm.employeeRange, billing_structures:saleForm.billingStructures,
+        structures_count:saleForm.billingStructures === 'plusieurs' ? saleForm.structuresCount : null,
+        discount:saleForm.discount ? saleForm.discountValue.trim() : 'Non',
+      };
+      const result = await apiClient.post(`/api/v1/owner-integration/leads/${leadId}/sale-preparation`, {...payload, slot:salePreparation?.slot || saleSlots.onboarding});
+      applySalePreparation(leadId, result.preparation);
+    } catch (error) {
+      // The server may have saved the reservation even if the HTTP response was lost.
+      try {
+        const saved = await apiClient.get(`/api/v1/owner-integration/leads/${leadId}/sale-preparation`);
+        if (saved.preparation) applySalePreparation(leadId, saved.preparation);
+        else {setSalePreparation(null); setSaleStep('onboarding');}
+      } catch { /* Leave the form intact; repeating POST uses the same durable intent. */ }
+      setSaleReservationError(error.message || 'Impossible de confirmer la réservation. Vérifiez son état avant de continuer.');
+    } finally {saleRequestBusy.current = false; setSaleSubmitting(false);}
+  };
+
   const handleSaleSubmit = async (leadId) => {
+    if (saleRequestBusy.current) return;
+    saleRequestBusy.current = true;
     setSaleSubmitting(true);
     try {
       const user = apiClient.getUser();
@@ -1183,22 +1222,23 @@ export default function TrackingSheet() {
         clientNumero = res.client_numero || null;
       } catch (err) {
         const msg = err?.message || err?.detail || '';
-        if (err?.status === 400) { alert(msg || 'Choisissez le rendez-vous Vincent + facturation avant de déclarer la vente.'); setSaleSubmitting(false); return; }
-        if (err?.status === 409) { alert(msg || 'Un client avec cet email existe déjà.'); setSaleSubmitting(false); return; }
-        if (err?.status === 403 || err?.status === 404) { alert(msg || 'Lead introuvable ou accès refusé.'); setSaleSubmitting(false); return; }
+        if (err?.status === 400) { alert(msg || 'Choisissez le rendez-vous Vincent + facturation avant de déclarer la vente.'); setSaleSubmitting(false); saleRequestBusy.current = false; return; }
+        if (err?.status === 409) { alert(msg || 'Un client avec cet email existe déjà.'); setSaleSubmitting(false); saleRequestBusy.current = false; return; }
+        if (err?.status === 403 || err?.status === 404) { alert(msg || 'Lead introuvable ou accès refusé.'); setSaleSubmitting(false); saleRequestBusy.current = false; return; }
         console.error('declare-sale failed:', err);
         alert(msg || 'Erreur lors de la déclaration de vente.');
-        setSaleSubmitting(false);
+        setSaleSubmitting(false); saleRequestBusy.current = false;
         return;
       }
 
       // Success
       setSaleClientNumero(clientNumero);
       setSaleSuccess(true);
+      if (salePreparation) setIntakeJourneys(previous => ({...previous, [leadId]:{...previous[leadId], preparation:{...salePreparation, status:'finalized'}}}));
       setPortalRevision(value => value + 1);
       setTimeout(() => { setSaleSuccess(false); setSaleClientNumero(null); setShowSaleModal(null); setSaleForm({ email: '', paymentModality: 'M', employeeRange: '', billingStructures: '', structuresCount: '', discount: null, discountValue: '' }); setSaleStep('form'); setSaleSlots({ onboarding: null, lancement: null }); }, 2500);
     } catch (e) { console.error('Sale submit error:', e); }
-    setSaleSubmitting(false);
+    setSaleSubmitting(false); saleRequestBusy.current = false;
   };
 
   // Étape finale : pose les 2 créneaux choisis sur le lead (même convention naïve que le
@@ -7819,7 +7859,7 @@ export default function TrackingSheet() {
                 const canDeclare = true;
                 // Les pickers date/heure libres n'apparaissent qu'APRÈS déclaration (dates
                 // posées) -> avant, seul le bouton Déclarer (qui ouvre le pop-up créneaux).
-                const rdvDatesSet = !!(lead.rdv_onboarding_date || (!isSignedPilot(lead) && lead.rdv_lancement_date));
+                const rdvDatesSet = (!intakeJourneys[lead.id]?.preparation || intakeJourneys[lead.id]?.preparation.status === 'finalized') && !!(lead.rdv_onboarding_date || (!isSignedPilot(lead) && lead.rdv_lancement_date));
                 // Statut contrats (Owner + Opti'Lex) — depuis la donnée du lead (marche en vue admin, sans fetch user-scopé).
                 const _ownerDone = !!lead.contract_signed_at;   // onglet Signés -> Owner signé
                 const _ol = lead.contract_optilex_status;        // null = contrat groupé (pré-split), pas de statut Opti'Lex séparé
@@ -7905,6 +7945,12 @@ export default function TrackingSheet() {
                         try {
                           const journey = await apiClient.get(`/api/v1/owner-integration/leads/${lead.id}/journey`);
                           setSaleOnboardingOnly(journey.onboarding_only);
+                          setSaleReservationError('');
+                          const saved = journey.onboarding_only ? await apiClient.get(`/api/v1/owner-integration/leads/${lead.id}/sale-preparation`) : {preparation:null};
+                          setSalePreparation(saved.preparation);
+                          if (saved.preparation) {
+                            setSaleIntake(null); applySalePreparation(lead.id, saved.preparation); setShowSaleModal(lead.id); return;
+                          }
                           setIntakeJourneys(previous => ({ ...previous, [lead.id]: journey }));
                         } catch (error) {
                           setContractErrorModal({ message: error.message || 'Impossible de vérifier le parcours de ce dossier. Réessayez.', isNdaMissing: false });
@@ -7927,7 +7973,7 @@ export default function TrackingSheet() {
                       onMouseLeave={(e) => { if (canDeclare) e.currentTarget.style.background = isSignedPilot(lead)?'#202432':'#10b981'; }}
                     >
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                      <span>Déclarer une vente{isSignedPilot(lead)&&<small>Confirmer la vente et réserver l’onboarding</small>}</span>{isSignedPilot(lead)&&<ArrowRight size={20}/>}
+                      <span>{intakeJourneys[lead.id]?.preparation?.status === 'finalized' ? 'Vente déclarée' : intakeJourneys[lead.id]?.preparation ? 'Finaliser la déclaration' : 'Déclarer une vente'}{isSignedPilot(lead)&&<small>{intakeJourneys[lead.id]?.preparation?.status === 'finalized' ? 'Consulter la confirmation' : intakeJourneys[lead.id]?.preparation ? 'Reprendre le dossier enregistré' : 'Réserver le rendez-vous, puis finaliser le dossier'}</small>}</span>{isSignedPilot(lead)&&<ArrowRight size={20}/>}
                     </button>
                     {!canDeclare && (
                       <div style={{ fontSize: 11, color: C.muted, textAlign: 'center', marginTop: 6, fontStyle: 'italic' }}>
@@ -9381,7 +9427,7 @@ export default function TrackingSheet() {
             <div className={saleOnboardingOnly?'sj-sale-dialog':undefined} role="dialog" aria-modal="true" aria-label="Déclarer une vente" style={{
               boxSizing: saleOnboardingOnly ? 'border-box' : undefined,
               position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
-              width: (saleStep === 'form' || saleStep === 'questions') ? 420 : 720, maxWidth: '92vw', maxHeight: '90dvh', overflowY: 'auto', background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`,
+              width: !saleOnboardingOnly && (saleStep === 'form' || saleStep === 'questions') ? 420 : 720, maxWidth: '92vw', maxHeight: '90dvh', overflowY: 'auto', background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`,
               boxShadow: '0 24px 48px rgba(0,0,0,0.2)', padding: '28px 28px 24px',
               animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
               fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
@@ -9392,7 +9438,11 @@ export default function TrackingSheet() {
                   background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted, fontSize: 14,
                   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
 
-              {saleOnboardingOnly && !saleSuccess && <SalesJourneySteps phase={saleStep === 'form' ? 'details' : saleStep === 'questions' ? 'billing' : ['handoff', 'documents'].includes(saleStep) ? saleStep : 'booking'} compact />}
+              {saleOnboardingOnly && !saleSuccess && <>
+                <p className="sj-sale-part">{['handoff','documents'].includes(saleStep) ? 'Partie 2 sur 2 · Finaliser et déclarer la vente' : 'Partie 1 sur 2 · Sécuriser le rendez-vous'}</p>
+                {saleStep !== 'reserved' && <SalesJourneySteps salePart={['handoff','documents'].includes(saleStep) ? 2 : 1} phase={saleStep === 'form' ? 'details' : saleStep === 'questions' ? 'billing' : ['handoff','documents'].includes(saleStep) ? saleStep : 'booking'} compact />}
+              </>}
+              {saleReservationError && saleStep !== 'reserved' && <div className="si-error" role="alert">{saleReservationError}</div>}
               {saleSuccess ? (
                 <div style={{ textAlign: 'center', padding: '20px 0' }}>
                   <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#10b98120', margin: '0 auto 14px',
@@ -9401,6 +9451,8 @@ export default function TrackingSheet() {
                   {saleClientNumero && <div style={{ fontSize: 14, fontWeight: 600, color: '#10b981', marginBottom: 4 }}>{saleClientNumero}</div>}
                   <div style={{ fontSize: 13, color: C.muted }}>La vente a été enregistrée avec succès</div>
                 </div>
+              ) : saleStep === 'reserved' ? (
+                <SaleReservation preparation={salePreparation} busy={saleSubmitting} error={saleReservationError} onRetry={() => reserveSaleAppointment(showSaleModal)} onContinue={() => setSaleStep('handoff')} onClose={() => setShowSaleModal(null)} />
               ) : saleStep === 'form' ? (
                 <>
                   {/* Header */}
@@ -9463,7 +9515,7 @@ export default function TrackingSheet() {
                   </div>
 
                   {/* Continuer -> choix des créneaux (dispo agenda). Ordre : Lancement d'abord. */}
-                  <button onClick={() => setSaleStep(saleOnboardingOnly ? 'onboarding' : 'lancement')}
+                  <button onClick={() => setSaleStep(saleOnboardingOnly ? 'questions' : 'lancement')}
                     disabled={!saleForm.email.trim() || !saleForm.employeeRange}
                     style={{
                       width: '100%', padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600,
@@ -9474,9 +9526,9 @@ export default function TrackingSheet() {
                   >Continuer</button>
                 </>
               ) : saleStep === 'handoff' ? (
-                <SaleIntake key={showSaleModal} leadId={showSaleModal} onBack={() => setSaleStep('onboarding')} onSaved={value => {setSaleIntake(value); setSaleStep('documents');}} />
+                <SaleIntake key={showSaleModal} leadId={showSaleModal} backLabel="Rendez-vous réservé" onBack={() => setSaleStep('reserved')} onSaved={value => {setSaleIntake(value); setSaleStep('documents');}} />
               ) : saleStep === 'documents' ? (
-                <SaleDocuments leadId={showSaleModal} draft={saleIntake?.draft} onBack={() => setSaleStep('handoff')} onContinue={() => setSaleStep('questions')} />
+                <SaleDocuments leadId={showSaleModal} draft={saleIntake?.draft} submitting={saleSubmitting} continueLabel="Déclarer la vente" onBack={() => setSaleStep('handoff')} onContinue={() => handleSaleSubmit(showSaleModal)} />
               ) : saleStep === 'questions' ? (
                 <>
                   {/* Étape questions facturation (après les créneaux, avant la déclaration).
@@ -9559,14 +9611,14 @@ export default function TrackingSheet() {
                       && (saleForm.discount === false || (saleForm.discount === true && (saleForm.discountValue || '').trim()));
                     return (
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => setSaleStep(saleOnboardingOnly ? 'documents' : 'onboarding')} disabled={saleSubmitting}
+                        <button onClick={() => setSaleStep(saleOnboardingOnly ? 'form' : 'onboarding')} disabled={saleSubmitting}
                           style={{ padding: '11px 16px', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent',
                             color: C.muted, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', cursor: saleSubmitting ? 'default' : 'pointer' }}>Retour</button>
-                        <button onClick={() => handleSaleSubmitWithSlots(showSaleModal)} disabled={!qReady || saleSubmitting}
+                        <button onClick={() => saleOnboardingOnly ? setSaleStep('onboarding') : handleSaleSubmitWithSlots(showSaleModal)} disabled={!qReady || saleSubmitting}
                           style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
                             cursor: qReady && !saleSubmitting ? 'pointer' : 'default',
                             background: qReady ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
-                            color: qReady ? '#fff' : C.muted, opacity: saleSubmitting ? 0.7 : 1, transition: 'all 0.2s' }}>{saleSubmitting ? 'Déclaration...' : 'Déclarer la vente'}</button>
+                            color: qReady ? '#fff' : C.muted, opacity: saleSubmitting ? 0.7 : 1, transition: 'all 0.2s' }}>{saleSubmitting ? 'Déclaration...' : saleOnboardingOnly ? 'Choisir le rendez-vous' : 'Déclarer la vente'}</button>
                       </div>
                     );
                   })()}
@@ -9597,7 +9649,7 @@ export default function TrackingSheet() {
 
                   {/* Navigation : d'abord Lancement (cabinet Opti'Lex), puis Onboarding (facturation) */}
                   <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
-                    <button onClick={() => setSaleStep(saleStep === 'onboarding' && !saleOnboardingOnly ? 'lancement' : 'form')} disabled={saleSubmitting}
+                    <button onClick={() => setSaleStep(saleOnboardingOnly ? 'questions' : saleStep === 'onboarding' ? 'lancement' : 'form')} disabled={saleSubmitting}
                       style={{ padding: '11px 16px', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent',
                         color: C.muted, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', cursor: saleSubmitting ? 'default' : 'pointer' }}>Retour</button>
                     {saleStep === 'lancement' ? (
@@ -9607,11 +9659,11 @@ export default function TrackingSheet() {
                           background: saleSlots.lancement ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
                           color: saleSlots.lancement ? '#fff' : C.muted, transition: 'all 0.2s' }}>Suivant → Onboarding</button>
                     ) : (
-                      <button onClick={() => setSaleStep(saleOnboardingOnly ? 'handoff' : 'questions')} disabled={!saleSlots.onboarding}
+                      <button onClick={() => saleOnboardingOnly ? reserveSaleAppointment(showSaleModal) : setSaleStep('questions')} disabled={!saleSlots.onboarding || saleSubmitting}
                         style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
                           cursor: saleSlots.onboarding ? 'pointer' : 'default',
                           background: saleSlots.onboarding ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
-                          color: saleSlots.onboarding ? '#fff' : C.muted, transition: 'all 0.2s' }}>{saleOnboardingOnly ? "Suivant → Finaliser la fiche" : "Suivant → Questions"}</button>
+                          color: saleSlots.onboarding ? '#fff' : C.muted, transition: 'all 0.2s' }}>{saleSubmitting ? "Réservation…" : saleOnboardingOnly ? "Confirmer et réserver le rendez-vous" : "Suivant → Questions"}</button>
                     )}
                   </div>
                 </>

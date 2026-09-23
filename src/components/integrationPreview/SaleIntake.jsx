@@ -6,7 +6,7 @@ import './integrationPreview.css';
 export { default as SaleDocuments } from './SaleDocuments';
 
 const ICONS = [CloudLightning, CloudRain, Cloud, CloudSun, Sun];
-export function SaleIntake({ leadId, onBack, onSaved }) {
+export function SaleIntake({ leadId, onBack, onSaved, backLabel = "Rendez-vous" }) {
   const [context, setContext] = useState(null), [draft, setDraft] = useState(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [reload, setReload] = useState(0);
   useEffect(() => {
@@ -55,6 +55,6 @@ export function SaleIntake({ leadId, onBack, onSaved }) {
       </section>
     </fieldset>}
     {error && <div className="si-error" role="alert">{error}{!draft && <button onClick={() => setReload(v => v + 1)}>Réessayer</button>}</div>}
-    <footer className="si-actions"><button className="ip-secondary" disabled={busy} onClick={onBack}><ArrowLeft size={16}/> Rendez-vous</button><button className="ip-primary" disabled={!draft || busy} onClick={save}>{busy ? 'Enregistrement…' : 'Continuer vers les documents'}<ArrowRight size={17}/></button></footer>
+    <footer className="si-actions"><button className="ip-secondary" disabled={busy} onClick={onBack}><ArrowLeft size={16}/> {backLabel}</button><button className="ip-primary" disabled={!draft || busy} onClick={save}>{busy ? 'Enregistrement…' : 'Continuer vers les documents'}<ArrowRight size={17}/></button></footer>
   </section>;
 }

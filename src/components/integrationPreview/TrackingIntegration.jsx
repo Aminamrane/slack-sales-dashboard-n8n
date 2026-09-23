@@ -126,9 +126,12 @@ export function IntegrationButton({ onClick, ready, consult = false }) {
   );
 }
 
-export function SalesJourneySteps({ phase = "intake", compact = false }) {
+export function SalesJourneySteps({ phase = "intake", compact = false, salePart }) {
   const declaring = ["details", "booking", "handoff", "documents", "billing"].includes(phase);
-  const steps = declaring
+  const steps = salePart === 1
+    ? [["details", "Vente", ClipboardCheck], ["billing", "Facturation", ReceiptText], ["booking", "Rendez-vous", CalendarDays]]
+    : salePart === 2 ? [["handoff", "Finalisation du dossier", FileCheck2], ["documents", "Documents et déclaration", ClipboardCheck]]
+    : declaring
     ? [["details", "Vente", ClipboardCheck], ["booking", "Rendez-vous", CalendarDays], ["handoff", "Finalisation", FileCheck2], ["documents", "Documents", ClipboardCheck], ["billing", "Facturation", ReceiptText]]
     : [["setup", "Salariés", UsersRound], ["intake", "Fiche client", FileCheck2], ["contract", "Contrat", PenLine], ["signed", "Onboarding", CalendarDays]];
   const current = steps.findIndex(([key]) => key === phase);
