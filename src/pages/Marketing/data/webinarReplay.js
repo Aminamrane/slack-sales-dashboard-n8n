@@ -65,4 +65,106 @@ export const WEBINAR_REPLAY = {
       { at: 7718, clock: "21:47:41", kind: "cta", title: "CTA #4 urgence maximale (chat uniquement)", insight: "« Ne quittez pas le webinaire sans votre rendez-vous ! » (lien /rdv semaine +1, 21:48 puis 21:57). Bonne urgence écrite, mais jamais dite à l'oral." },
     ],
   },
+
+    "webinar-2026-09-21": {
+      "title": "Webinaire 21 septembre 2026 · cohorte broad",
+      "videoUrl": null,
+      "verdict": "Un live qui retient bien mais qui convertit moins fort que le 20/07 : 81 présents, une médiane de 74 minutes sur 126 et seulement 7,4 % de départs précoces, donc le contenu tient la salle. En face, 28 RDV d'audit pour 81 présents (34,6 %) contre 40 % en juillet, et surtout 12 RDV seulement pendant le live : la moitié de la récolte se fait après, sur les relances. Le vrai trou est en amont, pas sur scène : 352 inscrits pour 81 présents, soit 23 % de taux de présence. Les 3 signatures en 48 h confirment que la qualité des RDV produits est là.",
+      "score": "72 / 100",
+      "scoreNote": "Note PROVISOIRE, calculée sur les seuls chiffres (conversion présents vers RDV 34,6 %, rétention médiane 59 % du live, bounce 7,4 %, 3 signés à 48 h). La performance d'animation n'est pas encore jugée : elle demande la vidéo, qui sera ajoutée ensuite.",
+      "funnel": [
+        {
+          "label": "Inscrits",
+          "value": "352",
+          "sub": "23 % de présence"
+        },
+        {
+          "label": "Présents au live (internes exclus)",
+          "value": "81",
+          "sub": "53 le 20/07"
+        },
+        {
+          "label": "RDV audit pris",
+          "value": "28",
+          "sub": "34,6 % des présents · 40 % le 20/07"
+        },
+        {
+          "label": "Signés à 48h",
+          "value": "3",
+          "sub": "4 536 € déclarés sur 2 des 3"
+        }
+      ],
+      "positives": [
+        {
+          "title": "Répétition technique avant l'ouverture au public",
+          "detail": "La salle est ouverte à 19h32 pour une session d'entraînement, le public entre à 20h01. Le live tourne donc sur un dispositif déjà vérifié, ce qui explique l'absence d'incident technique et le très faible taux de départs précoces. À retenir : la durée facturée par Zoom, 155 minutes, part de cette ouverture ; le live public réel dure 126 minutes, et c'est cette base qu'il faut utiliser pour tous les taux de rétention."
+        },
+        {
+          "title": "La salle tient jusqu'au bout",
+          "detail": "Médiane de présence à 74 minutes sur 126, moyenne 73, et 45,7 % des participants restent au-delà de 90 minutes. Un tiers suit l'intégralité. Sur un format de deux heures un dimanche soir, c'est un contenu qui porte."
+        },
+        {
+          "title": "Presque aucun départ précoce",
+          "detail": "7,4 % seulement quittent en moins de cinq minutes. L'accroche et le cadrage initial ne font pas fuir, contrairement au 20/07 où le bounce était à 21 %."
+        },
+        {
+          "title": "Le pic d'audience arrive vite et se maintient",
+          "detail": "58 spectateurs simultanés à 20h19, soit 18 minutes après l'arrivée du public, puis un plateau au-dessus de 50 jusqu'à 21h00. La première demi-heure est la fenêtre à exploiter."
+        },
+        {
+          "title": "Les questions posées sont traitées en direct",
+          "detail": "5 des 7 questions ont reçu une réponse pendant le live, toutes par le même intervenant. Les trois questions de la même participante portent sur la redevance de marque et le risque de contrôle : c'est le sujet qui fait vendre."
+        },
+        {
+          "title": "Le funnel ne meurt pas à la fin du live",
+          "detail": "12 RDV pris pendant le live, 9 de plus le lendemain. Un tiers de la récolte arrive après, ce qui valide les relances du J+1."
+        }
+      ],
+      "negatives": [
+        {
+          "title": "Le trou est en amont : 23 % de présence",
+          "time": "avant le live",
+          "detail": "352 inscrits pour 81 présents. C'est la première perte du funnel, et de loin la plus grosse. Aucun rappel ne rattrape un écart de cette taille une fois le live commencé."
+        },
+        {
+          "title": "Deux questions laissées sans réponse",
+          "time": "21:26 et 22:05",
+          "detail": "La question sur le rachat des parts d'un associé partant à la retraite, posée à 21h26, n'a jamais reçu de réponse. C'est un cas de holding à forte valeur, posé par quelqu'un qui était encore là. La seconde, à 22h05, est une intention de contact directe."
+        },
+        {
+          "title": "Décrochage marqué autour de 20h55",
+          "time": "20:51 vers 20:58",
+          "detail": "Perte de 7 spectateurs simultanés en cinq minutes, la plus forte chute hors fin de session. À recouper avec le contenu de ce créneau une fois la vidéo disponible."
+        },
+        {
+          "title": "Aucun présent identifié par son lien Zoom",
+          "time": "structurel",
+          "detail": "L'inscription Zoom était désactivée : l'export ne contient aucune adresse. Le rattachement entre inscrits et présents se fait au nom saisi, et 47 participants sur 81 restent impossibles à relier à un inscrit."
+        }
+      ],
+      "axes": [
+        {
+          "priority": "P1",
+          "title": "Traiter le taux de présence avant de retoucher le live",
+          "detail": "23 % de présence sur 352 inscrits est le premier poste de perte. Séquence de rappel le jour J, SMS à H-1 et à l'ouverture, et test d'un créneau différent pèseront plus que n'importe quelle amélioration de contenu."
+        },
+        {
+          "priority": "P1",
+          "title": "Réactiver l'inscription Zoom",
+          "detail": "Sans elle, on ne sait pas qui était là. Toute l'analyse présents contre absents repose sur un rattachement au nom, et 58 % des participants restent non identifiés. C'est un réglage, pas un chantier."
+        },
+        {
+          "priority": "P2",
+          "title": "Concentrer les appels à l'action sur la fenêtre 20h15 vers 21h00",
+          "detail": "C'est le plateau d'audience, au-dessus de 50 simultanés. Les 12 RDV du live se répartissent après 20h34, avec une reprise à 21h45 : deux fenêtres à exploiter explicitement plutôt qu'un CTA diffus."
+        },
+        {
+          "priority": "P2",
+          "title": "Reprendre les questions non traitées en relance nominative",
+          "detail": "Deux questions sans réponse, dont une sur un rachat de parts. Ce sont des intentions identifiées et nominatives : elles valent un appel, pas un e-mail de masse."
+        }
+      ],
+      "closing": "Le live fait son travail de rétention : la salle reste, le bounce est faible, le contenu tient deux heures. La conversion, elle, se joue ailleurs : 23 % de taux de présence en amont, et une récolte de RDV dont un tiers arrive après le live. Avant de retoucher le déroulé, c'est la venue au live et l'identification des présents qu'il faut réparer. Les 3 signatures à 48 h montrent que les RDV produits sont de bonne qualité.",
+      "segments": []
+    }
 };
