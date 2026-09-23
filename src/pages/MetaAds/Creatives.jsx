@@ -137,7 +137,6 @@ function VariantSuggestions({ rows, T }) {
         <span style={{ width: 32, height: 32, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T.accentBg, color: T.accent }}><Pict name="launch" size={17} /></span>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 14.5, fontWeight: 700 }}>Variantes à décliner <span style={{ color: T.textMuted, fontWeight: 600 }}>· {candidates.length} créa{candidates.length > 1 ? 's' : ''}</span></div>
-          <div style={{ fontSize: 12, color: T.textFaint }}>Pistes de déclinaison pour les créas qui marchent. Rien n'est créé automatiquement.</div>
         </div>
         <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }} style={{ display: 'flex', color: T.textMuted }}><Pict name="back" size={16} style={{ transform: 'rotate(-90deg)' }} /></motion.span>
       </button>
@@ -161,7 +160,7 @@ function VariantSuggestions({ rows, T }) {
   );
 }
 
-export function SalesBanner({ sales, T, icon = 'sales', note = 'même total que le Suivi des ventes' }) {
+export function SalesBanner({ sales, T, icon = 'sales', note = '= Suivi des ventes' }) {
   if (!sales) return null;
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: EASE }}
@@ -212,7 +211,7 @@ export default function Creatives({ T, period }) {
   const onOpen = useCallback((r) => setSelected(r), []);
   const onClose = useCallback(() => setSelected(null), []);
 
-  if (loading) return <Centered T={T}><Pict name="creatives" size={26} color={T.accent} /><div style={{ marginTop: 10, fontWeight: 600, color: T.text }}>Lecture des créas</div><div style={{ marginTop: 4, fontSize: 13 }}>Meta et le CRM sont interrogés, une minute la première fois.</div></Centered>;
+  if (loading) return <Centered T={T}><Pict name="creatives" size={26} color={T.accent} /><div style={{ marginTop: 10, fontWeight: 600, color: T.text }}>Lecture des créas…</div></Centered>;
   if (error?.kind === 'config') return <Centered T={T}><div style={{ fontWeight: 600, color: T.text }}>Configuration Meta en attente</div><div style={{ marginTop: 4, fontSize: 13 }}>{error.msg}</div></Centered>;
   if (error) return <Centered T={T}><span style={{ color: T.red }}>{error.msg}</span></Centered>;
 
@@ -248,8 +247,7 @@ export default function Creatives({ T, period }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px' }}>
                 <Pict name="creatives" size={16} color={T.accent} />
                 <span style={{ fontSize: 13.5, fontWeight: 700, color: T.text }}>Toutes les créas</span>
-                <span style={{ fontSize: 12, color: T.textFaint }}>cliquer une ligne pour creuser</span>
-              </div>
+                      </div>
               <div style={{ overflowX: 'auto' }}>
                 <div style={{ minWidth: 1120 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '28px 52px minmax(180px, 1.4fr) 44px minmax(220px, 1.6fr) 110px 110px 74px minmax(130px, 0.9fr)', gap: 14, padding: '6px 16px 8px', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', color: T.textFaint, textTransform: 'uppercase' }}>
@@ -263,9 +261,9 @@ export default function Creatives({ T, period }) {
 
           <VariantSuggestions rows={rows} T={T} />
 
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 14, padding: '0 4px', color: T.textFaint, fontSize: 12, lineHeight: 1.5 }}>
-            <Pict name="info" size={14} style={{ marginTop: 2 }} />
-            <span>Score 0 à 100 : 25 % coût par lead face à la médiane, 30 % lead → R1 tenu, 15 % R1 → R2, 20 % closing, 10 % volume ; taux lissés vers la moyenne de la période pour ne pas surclasser les petites créas (les points = confiance). R1 et R2 viennent des leads de la période ; les ventes sont les déclarations de la période rattachées à la créa d'origine du lead.</span>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12, padding: '0 4px' }}>
+            <span title="Score 0 à 100 : 25 % coût par lead face à la médiane, 30 % lead → R1 tenu, 15 % R1 → R2, 20 % closing, 10 % volume. Taux lissés vers la moyenne de la période ; les points indiquent la confiance (volume de leads). R1 et R2 = leads de la période ; ventes = déclarations de la période rattachées à la créa d'origine du lead."
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: T.textFaint, cursor: 'help' }}><Pict name="info" size={14} /> score</span>
           </div>
         </>
       )}

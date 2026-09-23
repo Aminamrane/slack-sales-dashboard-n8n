@@ -89,7 +89,6 @@ export default function MetaAds() {
             </div>
             <div>
               <h1 style={{ fontSize: 24, fontWeight: 750, letterSpacing: '-0.02em', margin: 0, color: T.text }}>Meta Ads</h1>
-              <div style={{ fontSize: 12.5, color: T.textFaint, marginTop: 2 }}>Les deux portefeuilles Meta, croisés avec les ventes du CRM</div>
             </div>
           </div>
 
@@ -142,7 +141,6 @@ export default function MetaAds() {
                 <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                   <Pict name={t.icon} size={16} color={active ? '#8fd1ad' : T.textFaint} />
                   <span style={{ fontSize: 13.5, fontWeight: 700 }}>{t.label}</span>
-                  <span style={{ fontSize: 11.5, fontWeight: 500, color: active ? 'rgba(238,241,248,0.7)' : T.textFaint }}>{t.hint}</span>
                 </span>
               </button>
             );

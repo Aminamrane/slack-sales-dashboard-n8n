@@ -80,9 +80,6 @@ export default function SalesList({ sales, level, T }) {
             </span>
             <span style={{ fontSize: 12.5, color: T.textFaint }}>{eur.format(sales.ca || 0)} déclarés</span>
           </div>
-          <div style={{ fontSize: 12.5, color: T.textFaint, marginTop: 3 }}>
-            Mêmes déclarations que le Suivi des ventes, rattachées à l'origine du lead de chaque client.
-          </div>
           <SalesSummaryLine sales={sales} T={T} style={{ marginTop: 8 }} />
         </div>
         <ChevronDown size={17} style={{ color: T.textMuted, flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s ease' }} />
