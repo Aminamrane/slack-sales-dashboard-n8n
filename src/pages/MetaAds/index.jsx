@@ -13,7 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   TrendingUp, RefreshCw, Calendar, ChevronDown, Search, Layers,
-  LayoutGrid, Megaphone, AlertCircle, Trophy,
+  LayoutGrid, Megaphone, AlertCircle, Trophy, LayoutDashboard, Briefcase,
 } from 'lucide-react';
 import apiClient from '../../services/apiClient.js';
 import SharedNavbar from '../../components/SharedNavbar.jsx';
@@ -21,22 +21,10 @@ import Leaderboard from './Leaderboard.jsx';
 import CreativeThumb from './CreativeThumb.jsx';
 import KpiBar from './KpiBar.jsx';
 import SalesList from './SalesList.jsx';
+import Overview from './overview/Overview.jsx';
+import { getTheme } from './theme.js';
 
 const ALLOWED_ROLES = ['admin', 'ceo', 'marketing', 'acquisition_director', 'head_of_acquisition'];
-const ACCENT = '#f0653e'; // coral, comme la réf
-
-// ── theme (light / dark, palette CRM) ──────────────────────────────────────
-function getTheme(dark) {
-  return dark
-    ? { isDark:true, pageBg:'#13141b', surface:'#1e1f28', surfaceAlt:'#181922', border:'#2a2b36',
-        borderSoft:'#23242f', text:'#eef0f6', textMuted:'#8b8fa0', textFaint:'#6b6f7e',
-        accent:ACCENT, accentBg:'rgba(240,101,62,0.14)', green:'#32d74b', amber:'#ff9f0a',
-        red:'#ff453a', rowHover:'#23242f', shadow:'0 2px 8px rgba(0,0,0,0.3)' }
-    : { isDark:false, pageBg:'#f6f7f9', surface:'#ffffff', surfaceAlt:'#f6f7fb', border:'#e7e9ef',
-        borderSoft:'#f1f1ef', text:'#1e2330', textMuted:'#787880', textFaint:'#9b9aa2',
-        accent:ACCENT, accentBg:'#fdeae4', green:'#0f9d58', amber:'#e09112',
-        red:'#d23a2c', rowHover:'#fbf6f4', shadow:'0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.05)' };
-}
 
 // ── formatters (fr-FR) ─────────────────────────────────────────────────────
 const nf = new Intl.NumberFormat('fr-FR');
@@ -64,11 +52,12 @@ function presets() {
   const d30 = new Date(now); d30.setDate(d30.getDate() - 29);
   const d90 = new Date(now); d90.setDate(d90.getDate() - 89);
   const fmtFr = (d) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  // Le mois en cours d'abord : c'est la période par défaut de la page.
   return [
-    { key: 'last_month', short: 'Le mois dernier', since: iso(lastMonthStart), until: iso(lastMonthEnd),
-      label: `Le mois dernier : ${fmtFr(lastMonthStart)} – ${fmtFr(lastMonthEnd)}` },
     { key: 'this_month', short: 'Ce mois-ci', since: iso(thisMonthStart), until: iso(now),
-      label: `Ce mois-ci : ${fmtFr(thisMonthStart)} – ${fmtFr(now)}` },
+      label: `Ce mois-ci : ${fmtFr(thisMonthStart)} au ${fmtFr(now)}` },
+    { key: 'last_month', short: 'Le mois dernier', since: iso(lastMonthStart), until: iso(lastMonthEnd),
+      label: `Le mois dernier : ${fmtFr(lastMonthStart)} au ${fmtFr(lastMonthEnd)}` },
     { key: 'd30', short: '30 derniers jours', since: iso(d30), until: iso(now),
       label: `30 derniers jours` },
     { key: 'd90', short: '90 derniers jours', since: iso(d90), until: iso(now),
@@ -94,6 +83,7 @@ function previousWindow(since, until) {
 }
 
 const TABS = [
+  { key: 'overview', label: "Vue d'ensemble", icon: LayoutDashboard },
   { key: 'leaderboard', label: 'Leaderboard', icon: Trophy },
   { key: 'campaign', label: 'Campagnes', icon: Layers },
   { key: 'adset', label: 'Ensembles de pub', icon: LayoutGrid },
@@ -122,8 +112,10 @@ export default function MetaAds() {
   const PRESETS = useMemo(() => presets(), []);
   const [period, setPeriod] = useState(PRESETS[0]);
   const [periodOpen, setPeriodOpen] = useState(false);
-  // Onglet par défaut : le leaderboard (la vue "jugement des créas").
-  const [level, setLevel] = useState('leaderboard');
+  // Onglet par défaut : la vue d'ensemble (l'essentiel de la période en premier).
+  const [level, setLevel] = useState('overview');
+  // Portefeuille Meta affiché dans la vue d'ensemble (les deux comptes par défaut).
+  const [portfolio, setPortfolio] = useState('all');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // all | active | inactive
 
@@ -136,9 +128,9 @@ export default function MetaAds() {
   const [prevLoading, setPrevLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
-    // L'onglet Leaderboard fait son propre fetch (endpoint dédié) — le
-    // tableau standard n'a rien à charger dans ce mode.
-    if (level === 'leaderboard') { setLoading(false); return; }
+    // Les onglets Vue d'ensemble et Leaderboard font leur propre fetch
+    // (endpoints dédiés) : le tableau standard n'a rien à charger.
+    if (level === 'leaderboard' || level === 'overview') { setLoading(false); return; }
     setLoading(true); setError(null);
     try {
       const q = `?level=${level}&since=${period.since}&until=${period.until}`;
@@ -154,7 +146,7 @@ export default function MetaAds() {
   useEffect(() => { if (authChecked) fetchData(); }, [authChecked, fetchData]);
 
   useEffect(() => {
-    if (!authChecked || level === 'leaderboard') { setPrevTotals(null); return undefined; }
+    if (!authChecked || level === 'leaderboard' || level === 'overview') { setPrevTotals(null); return undefined; }
     const win = previousWindow(period.since, period.until);
     if (!win) { setPrevTotals(null); return undefined; }
     let alive = true;
@@ -203,6 +195,21 @@ export default function MetaAds() {
             </div>
           </div>
 
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {level === 'overview' && (
+            <div style={{ display: 'inline-flex', padding: 3, borderRadius: 12, background: T.surface, border: `1px solid ${T.border}`, boxShadow: T.shadow }}>
+              {[['all', 'Les deux portefeuilles'], ['owner_technology', 'Owner Technology'], ['portefeuille2', 'Portefeuille 2']].map(([k, l]) => {
+                const on = portfolio === k;
+                return (
+                  <button key={k} onClick={() => setPortfolio(k)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 9, border: 'none', cursor: 'pointer',
+                      background: on ? T.accentBg : 'transparent', color: on ? T.accent : T.textMuted, fontSize: 12.5, fontWeight: 600 }}>
+                    {k === 'all' && <Briefcase size={13} />}{l}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {/* date range */}
           <div style={{ position: 'relative' }}>
             <button onClick={() => setPeriodOpen((v) => !v)}
@@ -228,6 +235,7 @@ export default function MetaAds() {
               )}
             </AnimatePresence>
           </div>
+          </div>
         </div>
 
         {/* ── tabs ── */}
@@ -246,7 +254,9 @@ export default function MetaAds() {
           })}
         </div>
 
-        {level === 'leaderboard' ? (
+        {level === 'overview' ? (
+          <Overview T={T} period={period} portfolio={portfolio} />
+        ) : level === 'leaderboard' ? (
           <Leaderboard T={T} period={period} />
         ) : (
         <>
