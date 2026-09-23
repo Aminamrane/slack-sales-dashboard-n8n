@@ -1,47 +1,27 @@
-// src/pages/MetaAds/index.jsx — Meta Ads Performance (page interne CRM).
+// src/pages/MetaAds/index.jsx — Meta Ads (page interne CRM).
 //
-// Lit l'endpoint additif `GET /api/v1/marketing/meta-ads` (api-owner) qui
-// agrège les Insights Meta des 2 portefeuilles + croise le CRM
-// (leads_realtime → match, déclarations de vente → ventes/CA/ROAS, rattachées
-// à la créa d'origine du lead de chaque client : mêmes chiffres que le Suivi des ventes).
-//
-// 100 % additif : nouvelle route + nouvelle page. Rien de l'existant touché.
-// Rôles : admin / ceo / marketing / acquisition_director (mêmes que le backend).
+// Trois onglets qui suivent les questions de celui qui ouvre la page :
+//   « Vue d'ensemble » : est-ce que l'acquisition est rentable sur la période ?
+//   « Créas »          : qu'est-ce qui vend, qu'est-ce qui brûle du budget ?
+//   « Campagnes »      : où part l'argent (campagnes, ensembles, publicités) ?
+// Les ventes sont celles du Suivi des ventes (déclarations de la période),
+// rattachées à la créa d'origine du lead de chaque client. Charte Owner.
+// Rôles : admin / ceo / marketing / acquisition_director / head_of_acquisition.
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  TrendingUp, RefreshCw, Calendar, ChevronDown, Search, Layers,
-  LayoutGrid, Megaphone, AlertCircle, Trophy, LayoutDashboard, Briefcase,
-} from 'lucide-react';
 import apiClient from '../../services/apiClient.js';
 import SharedNavbar from '../../components/SharedNavbar.jsx';
-import Leaderboard from './Leaderboard.jsx';
-import CreativeThumb from './CreativeThumb.jsx';
-import KpiBar from './KpiBar.jsx';
-import SalesList from './SalesList.jsx';
 import Overview from './overview/Overview.jsx';
+import Creatives from './Creatives.jsx';
+import Structure from './Structure.jsx';
+import Pict from './icons.jsx';
 import { getTheme } from './theme.js';
 
 const ALLOWED_ROLES = ['admin', 'ceo', 'marketing', 'acquisition_director', 'head_of_acquisition'];
 
-// ── formatters (fr-FR) ─────────────────────────────────────────────────────
-const nf = new Intl.NumberFormat('fr-FR');
-const eur = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
-const fmtInt = (n) => (n == null ? '—' : nf.format(Math.round(n)));
-const fmtEur = (n) => (n == null ? '—' : eur.format(n));
-const fmtPct = (n) => (n == null ? '—' : `${Number(n).toFixed(2)} %`);
-const fmtRoas = (n) => (n == null ? '—' : `${Number(n).toFixed(2)}x`);
-function syncLabel(iso) {
-  if (!iso) return '—';
-  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
-  if (mins < 1) return "à l'instant";
-  if (mins < 60) return `il y a ${mins} min`;
-  return `il y a ${Math.floor(mins / 60)} h`;
-}
-
-// ── date presets ───────────────────────────────────────────────────────────
+// ── périodes ───────────────────────────────────────────────────────────────
 function iso(d) { return d.toISOString().slice(0, 10); }
 function presets() {
   const now = new Date();
@@ -54,41 +34,20 @@ function presets() {
   const fmtFr = (d) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
   // Le mois en cours d'abord : c'est la période par défaut de la page.
   return [
-    { key: 'this_month', short: 'Ce mois-ci', since: iso(thisMonthStart), until: iso(now),
-      label: `Ce mois-ci : ${fmtFr(thisMonthStart)} au ${fmtFr(now)}` },
-    { key: 'last_month', short: 'Le mois dernier', since: iso(lastMonthStart), until: iso(lastMonthEnd),
-      label: `Le mois dernier : ${fmtFr(lastMonthStart)} au ${fmtFr(lastMonthEnd)}` },
-    { key: 'd30', short: '30 derniers jours', since: iso(d30), until: iso(now),
-      label: `30 derniers jours` },
-    { key: 'd90', short: '90 derniers jours', since: iso(d90), until: iso(now),
-      label: `90 derniers jours` },
-    { key: 'max', short: 'Maximum', since: '2024-01-01', until: iso(now),
-      label: `Maximum (depuis 2024)` },
+    { key: 'this_month', short: 'Ce mois-ci', since: iso(thisMonthStart), until: iso(now), label: `Ce mois-ci : ${fmtFr(thisMonthStart)} au ${fmtFr(now)}` },
+    { key: 'last_month', short: 'Le mois dernier', since: iso(lastMonthStart), until: iso(lastMonthEnd), label: `Le mois dernier : ${fmtFr(lastMonthStart)} au ${fmtFr(lastMonthEnd)}` },
+    { key: 'd30', short: '30 derniers jours', since: iso(d30), until: iso(now), label: '30 derniers jours' },
+    { key: 'd90', short: '90 derniers jours', since: iso(d90), until: iso(now), label: '90 derniers jours' },
+    { key: 'max', short: 'Depuis 2024', since: '2024-01-01', until: iso(now), label: 'Tout, depuis 2024' },
   ];
 }
 
-// Période précédente de même durée, collée à la période affichée : c'est la
-// seule comparaison honnête (comparer un mois plein à sept jours n'a pas de
-// sens). Renvoie des bornes au format attendu par l'API.
-function previousWindow(since, until) {
-  const a = new Date(`${since}T00:00:00Z`);
-  const b = new Date(`${until}T00:00:00Z`);
-  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
-  const days = Math.round((b - a) / 86400000) + 1;
-  if (days < 1) return null;
-  const prevUntil = new Date(a); prevUntil.setUTCDate(prevUntil.getUTCDate() - 1);
-  const prevSince = new Date(prevUntil); prevSince.setUTCDate(prevSince.getUTCDate() - (days - 1));
-  const iso10 = (d) => d.toISOString().slice(0, 10);
-  return { since: iso10(prevSince), until: iso10(prevUntil) };
-}
-
 const TABS = [
-  { key: 'overview', label: "Vue d'ensemble", icon: LayoutDashboard },
-  { key: 'leaderboard', label: 'Leaderboard', icon: Trophy },
-  { key: 'campaign', label: 'Campagnes', icon: Layers },
-  { key: 'adset', label: 'Ensembles de pub', icon: LayoutGrid },
-  { key: 'ad', label: 'Publicités', icon: Megaphone },
+  { key: 'overview', label: "Vue d'ensemble", icon: 'overview', hint: 'Est-ce rentable ?' },
+  { key: 'creatives', label: 'Créas', icon: 'creatives', hint: 'Qu\'est-ce qui vend ?' },
+  { key: 'structure', label: 'Campagnes', icon: 'structure', hint: 'Où part l\'argent ?' },
 ];
+const PORTFOLIOS = [['all', 'Les deux portefeuilles'], ['owner_technology', 'Owner Technology'], ['portefeuille2', 'Portefeuille 2']];
 
 export default function MetaAds() {
   const navigate = useNavigate();
@@ -112,278 +71,88 @@ export default function MetaAds() {
   const PRESETS = useMemo(() => presets(), []);
   const [period, setPeriod] = useState(PRESETS[0]);
   const [periodOpen, setPeriodOpen] = useState(false);
-  // Onglet par défaut : la vue d'ensemble (l'essentiel de la période en premier).
-  const [level, setLevel] = useState('overview');
-  // Portefeuille Meta affiché dans la vue d'ensemble (les deux comptes par défaut).
+  const [tab, setTab] = useState('overview');
   const [portfolio, setPortfolio] = useState('all');
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all'); // all | active | inactive
-
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  // Totaux de la période précédente : chargés à part, jamais bloquants. Si
-  // l'appel échoue, le bandeau affiche simplement « pas de comparable ».
-  const [prevTotals, setPrevTotals] = useState(null);
-  const [prevLoading, setPrevLoading] = useState(false);
-
-  const fetchData = useCallback(async () => {
-    // Les onglets Vue d'ensemble et Leaderboard font leur propre fetch
-    // (endpoints dédiés) : le tableau standard n'a rien à charger.
-    if (level === 'leaderboard' || level === 'overview') { setLoading(false); return; }
-    setLoading(true); setError(null);
-    try {
-      const q = `?level=${level}&since=${period.since}&until=${period.until}`;
-      const r = await apiClient.get(`/api/v1/marketing/meta-ads${q}`);
-      setData(r);
-    } catch (e) {
-      setData(null);
-      if (e?.status === 503) setError({ kind: 'config', msg: e?.data?.detail || 'Configuration Meta en attente (tokens .env).' });
-      else setError({ kind: 'err', msg: e?.data?.detail || e?.message || 'Erreur de chargement' });
-    } finally { setLoading(false); }
-  }, [level, period]);
-
-  useEffect(() => { if (authChecked) fetchData(); }, [authChecked, fetchData]);
-
-  useEffect(() => {
-    if (!authChecked || level === 'leaderboard' || level === 'overview') { setPrevTotals(null); return undefined; }
-    const win = previousWindow(period.since, period.until);
-    if (!win) { setPrevTotals(null); return undefined; }
-    let alive = true;
-    setPrevLoading(true); setPrevTotals(null);
-    apiClient
-      .get(`/api/v1/marketing/meta-ads?level=${level}&since=${win.since}&until=${win.until}`)
-      .then((r) => { if (alive) setPrevTotals(r?.totals || null); })
-      .catch(() => { if (alive) setPrevTotals(null); })
-      .finally(() => { if (alive) setPrevLoading(false); });
-    return () => { alive = false; };
-  }, [authChecked, level, period]);
-
-  const rows = useMemo(() => {
-    let r = data?.rows || [];
-    if (statusFilter !== 'all') r = r.filter((x) => (x.status || 'active') === statusFilter);
-    const s = search.trim().toLowerCase();
-    if (s) r = r.filter((x) => (x.name || '').toLowerCase().includes(s));
-    return r;
-  }, [data, search, statusFilter]);
 
   if (!authChecked) return null;
 
   return (
-    <div style={{ minHeight: '100vh', background: T.pageBg, color: T.text,
-      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: T.pageBg, color: T.text, fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif' }}>
       <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
 
       <div style={{ maxWidth: 1480, margin: '0 auto', padding: '92px 24px 64px' }}>
-        {/* ── header ── */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 22 }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-              <div style={{ width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T.accentBg, color: T.accent }}>
-                <TrendingUp size={19} />
-              </div>
-              <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', margin: 0 }}>Meta Ads Performance</h1>
+        {/* ── en-tête ── */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: T.navy, color: '#8fd1ad' }}>
+              <Pict name="ads" size={21} />
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 6, marginLeft: 45, fontSize: 12.5, color: T.textFaint }}>
-              <span>Synchro {syncLabel(data?.synced_at)} · cache</span>
-              <button onClick={fetchData} title="Rafraîchir"
-                style={{ display: 'inline-flex', border: 'none', background: 'transparent', color: T.textMuted, cursor: 'pointer', padding: 2 }}>
-                <motion.span animate={loading ? { rotate: 360 } : { rotate: 0 }} transition={loading ? { duration: 0.9, repeat: Infinity, ease: 'linear' } : { duration: 0.2 }} style={{ display: 'flex' }}>
-                  <RefreshCw size={13} />
-                </motion.span>
-              </button>
+            <div>
+              <h1 style={{ fontSize: 24, fontWeight: 750, letterSpacing: '-0.02em', margin: 0, color: T.text }}>Meta Ads</h1>
+              <div style={{ fontSize: 12.5, color: T.textFaint, marginTop: 2 }}>Les deux portefeuilles Meta, croisés avec les ventes du CRM</div>
             </div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          {level === 'overview' && (
-            <div style={{ display: 'inline-flex', padding: 3, borderRadius: 12, background: T.surface, border: `1px solid ${T.border}`, boxShadow: T.shadow }}>
-              {[['all', 'Les deux portefeuilles'], ['owner_technology', 'Owner Technology'], ['portefeuille2', 'Portefeuille 2']].map(([k, l]) => {
-                const on = portfolio === k;
-                return (
-                  <button key={k} onClick={() => setPortfolio(k)}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 9, border: 'none', cursor: 'pointer',
-                      background: on ? T.accentBg : 'transparent', color: on ? T.accent : T.textMuted, fontSize: 12.5, fontWeight: 600 }}>
-                    {k === 'all' && <Briefcase size={13} />}{l}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {/* date range */}
-          <div style={{ position: 'relative' }}>
-            <button onClick={() => setPeriodOpen((v) => !v)}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 9, padding: '9px 15px', borderRadius: 12,
-                border: `1px solid ${T.border}`, background: T.surface, color: T.text, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', boxShadow: T.shadow }}>
-              <Calendar size={15} style={{ color: T.textMuted }} /> {period.label}
-              <ChevronDown size={15} style={{ color: T.textMuted }} />
-            </button>
-            <AnimatePresence>
-              {periodOpen && (
-                <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.15 }}
-                  style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 50, minWidth: 240, padding: 6, borderRadius: 12,
-                    background: T.surface, border: `1px solid ${T.border}`, boxShadow: T.shadow }}>
-                  {PRESETS.map((p) => (
-                    <button key={p.key} onClick={() => { setPeriod(p); setPeriodOpen(false); }}
-                      style={{ display: 'flex', width: '100%', alignItems: 'center', padding: '9px 11px', borderRadius: 8, border: 'none',
-                        background: period.key === p.key ? T.accentBg : 'transparent', color: period.key === p.key ? T.accent : T.text,
-                        fontSize: 13.5, fontWeight: 600, cursor: 'pointer', textAlign: 'left' }}>
-                      {p.short}
+            {tab === 'overview' && (
+              <div style={{ display: 'inline-flex', padding: 3, borderRadius: 12, background: T.surface, border: `1px solid ${T.border}`, boxShadow: T.shadow }}>
+                {PORTFOLIOS.map(([k, l]) => {
+                  const on = portfolio === k;
+                  return (
+                    <button key={k} onClick={() => setPortfolio(k)}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 9, border: 'none', cursor: 'pointer',
+                        background: on ? T.accentBg : 'transparent', color: on ? T.accent : T.textMuted, fontSize: 12.5, fontWeight: 650 }}>
+                      {k === 'all' && <Pict name="portfolio" size={13} />}{l}
                     </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                  );
+                })}
+              </div>
+            )}
+            <div style={{ position: 'relative' }}>
+              <button onClick={() => setPeriodOpen((v) => !v)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 9, padding: '9px 15px', borderRadius: 12, border: `1px solid ${T.border}`, background: T.surface, color: T.text, fontSize: 13.5, fontWeight: 650, cursor: 'pointer', boxShadow: T.shadow }}>
+                <Pict name="calendar" size={15} color={T.textMuted} /> {period.label}
+                <Pict name="back" size={14} color={T.textMuted} style={{ transform: 'rotate(-90deg)' }} />
+              </button>
+              <AnimatePresence>
+                {periodOpen && (
+                  <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.15 }}
+                    style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 50, minWidth: 240, padding: 6, borderRadius: 12, background: T.surface, border: `1px solid ${T.border}`, boxShadow: T.shadow }}>
+                    {PRESETS.map((p) => (
+                      <button key={p.key} onClick={() => { setPeriod(p); setPeriodOpen(false); }}
+                        style={{ display: 'flex', width: '100%', alignItems: 'center', padding: '9px 11px', borderRadius: 8, border: 'none', background: period.key === p.key ? T.accentBg : 'transparent', color: period.key === p.key ? T.accent : T.text, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', textAlign: 'left' }}>
+                        {p.short}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
 
-        {/* ── tabs ── */}
-        <div style={{ display: 'flex', gap: 26, borderBottom: `1px solid ${T.border}`, marginBottom: 18 }}>
+        {/* ── onglets ── */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 22, padding: 4, borderRadius: 14, background: T.surface, border: `1px solid ${T.border}`, width: 'fit-content', maxWidth: '100%', overflowX: 'auto' }}>
           {TABS.map((t) => {
-            const active = level === t.key;
+            const active = tab === t.key;
             return (
-              <button key={t.key} onClick={() => setLevel(t.key)}
-                style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 2px 13px',
-                  border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14, fontWeight: 600,
-                  color: active ? T.accent : T.textMuted }}>
-                <t.icon size={16} /> {t.label}
-                {active && <motion.span layoutId="metaTab" style={{ position: 'absolute', left: 0, right: 0, bottom: -1, height: 2.5, borderRadius: 2, background: T.accent }} />}
+              <button key={t.key} onClick={() => setTab(t.key)}
+                style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 9, padding: '9px 14px', borderRadius: 10, border: 'none', background: 'transparent', cursor: 'pointer', color: active ? '#eef1f8' : T.textMuted, whiteSpace: 'nowrap' }}>
+                {active && <motion.span layoutId="metaTab" transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }} style={{ position: 'absolute', inset: 0, borderRadius: 10, background: T.navy }} />}
+                <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <Pict name={t.icon} size={16} color={active ? '#8fd1ad' : T.textFaint} />
+                  <span style={{ fontSize: 13.5, fontWeight: 700 }}>{t.label}</span>
+                  <span style={{ fontSize: 11.5, fontWeight: 500, color: active ? 'rgba(238,241,248,0.7)' : T.textFaint }}>{t.hint}</span>
+                </span>
               </button>
             );
           })}
         </div>
 
-        {level === 'overview' ? (
-          <Overview T={T} period={period} portfolio={portfolio} />
-        ) : level === 'leaderboard' ? (
-          <Leaderboard T={T} period={period} />
-        ) : (
-        <>
-        {/* ── synthèse comparée ── */}
-        {!loading && !error && data?.totals && (
-          <KpiBar totals={data.totals} sales={data.sales} previous={prevTotals} T={T} loading={prevLoading} />
-        )}
-
-        {/* ── card : toolbar + table ── */}
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 18, boxShadow: T.shadow, overflow: 'hidden' }}>
-          {/* toolbar */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderBottom: `1px solid ${T.borderSoft}`, flexWrap: 'wrap' }}>
-            <div style={{ position: 'relative', flex: 1, minWidth: 200, maxWidth: 360 }}>
-              <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: T.textFaint }} />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Rechercher ${level === 'campaign' ? 'une campagne' : level === 'adset' ? 'un adset' : 'une créa'}…`}
-                style={{ width: '100%', padding: '9px 12px 9px 34px', borderRadius: 10, fontSize: 13.5, color: T.text,
-                  background: T.surfaceAlt, border: `1px solid ${T.border}`, outline: 'none' }} />
-            </div>
-            <div style={{ flex: 1 }} />
-            <SegFilter T={T} value={statusFilter} onChange={setStatusFilter} />
-            <span style={{ fontSize: 13, color: T.textFaint, fontWeight: 600 }}>{rows.length} {level === 'campaign' ? 'campagnes' : level === 'adset' ? 'adsets' : 'publicités'}</span>
-          </div>
-
-          {/* states */}
-          {loading && <Centered T={T}>Chargement…</Centered>}
-          {!loading && error?.kind === 'config' && (
-            <Centered T={T}>
-              <AlertCircle size={26} style={{ color: T.amber, marginBottom: 10 }} />
-              <div style={{ fontWeight: 600, color: T.text }}>Configuration Meta en attente</div>
-              <div style={{ marginTop: 4, fontSize: 13, color: T.textMuted, maxWidth: 420 }}>
-                Les tokens Meta ne sont pas encore dans le `.env` du serveur. Dès qu'ils sont ajoutés, les données s'affichent ici.
-              </div>
-            </Centered>
-          )}
-          {!loading && error?.kind === 'err' && (
-            <Centered T={T}><span style={{ color: T.red }}>{error.msg}</span></Centered>
-          )}
-          {!loading && !error && rows.length === 0 && <Centered T={T}>Aucune donnée sur cette période.</Centered>}
-
-          {/* table */}
-          {!loading && !error && rows.length > 0 && (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1100 }}>
-                <thead>
-                  <tr>
-                    {['NOM','IMPRESSIONS','PORTÉE','CLICS','CTR','CPC','CPM','LEADS','CPL','VENTES','MATCH','CA','ROAS'].map((h, i) => (
-                      <th key={h} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '11px 16px', fontSize: 10.5, fontWeight: 700,
-                        letterSpacing: '0.06em', color: T.textFaint, whiteSpace: 'nowrap', position: i === 0 ? 'sticky' : 'static', left: 0,
-                        background: T.surface }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r, idx) => <Row key={(r.name || '') + idx} T={T} r={r} />)}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* ── les ventes, une par une : la page se vérifie contre le Suivi des ventes ── */}
-        {!loading && !error && data?.sales && <SalesList sales={data.sales} level={level} T={T} />}
-
-        </>
-        )}
+        {tab === 'overview' && <Overview T={T} period={period} portfolio={portfolio} />}
+        {tab === 'creatives' && <Creatives T={T} period={period} />}
+        {tab === 'structure' && <Structure T={T} period={period} />}
       </div>
-    </div>
-  );
-}
-
-function Row({ T, r }) {
-  const [hover, setHover] = useState(false);
-  const active = (r.status || 'active') === 'active';
-  const roas = r.roas;
-  const roasColor = roas == null ? T.textFaint : roas >= 1 ? T.green : T.red;
-  const td = { padding: '12px 16px', fontSize: 13.5, textAlign: 'right', color: T.text, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' };
-  return (
-    <tr onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      style={{ background: hover ? T.rowHover : 'transparent', borderTop: `1px solid ${T.borderSoft}`, transition: 'background 0.12s' }}>
-      <td style={{ ...td, textAlign: 'left', position: 'sticky', left: 0, background: hover ? T.rowHover : T.surface, transition: 'background 0.12s' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, maxWidth: 280 }}>
-          <CreativeThumb creative={r.creative} name={r.name} size={34} radius={9} T={T} interactive />
-          <span style={{ width: 7, height: 7, borderRadius: 99, background: active ? T.green : T.textFaint, flexShrink: 0 }}
-            title={active ? 'Active' : 'Inactive'} />
-          <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name || '—'}</span>
-        </div>
-      </td>
-      <td style={td}>{fmtInt(r.impressions)}</td>
-      <td style={td}>{fmtInt(r.reach)}</td>
-      <td style={td}>{fmtInt(r.clicks)}</td>
-      <td style={td}>{fmtPct(r.ctr)}</td>
-      <td style={td}>{fmtEur(r.cpc)}</td>
-      <td style={td}>{fmtEur(r.cpm)}</td>
-      <td style={{ ...td, fontWeight: 700 }}>{fmtInt(r.leads)}</td>
-      <td style={{ ...td, fontWeight: 700 }}>{fmtEur(r.cpl)}</td>
-      <td style={{ ...td, color: r.ventes ? T.green : T.textFaint, fontWeight: 700 }}>{fmtInt(r.ventes)}</td>
-      <td style={{ ...td, color: r.match ? T.amber : T.textFaint, fontWeight: 600 }}>{fmtInt(r.match)}</td>
-      <td style={td}>{fmtEur(r.ca)}</td>
-      <td style={{ ...td, color: roasColor, fontWeight: 700 }}>{fmtRoas(roas)}</td>
-    </tr>
-  );
-}
-
-function SegFilter({ T, value, onChange }) {
-  const opts = [{ k: 'all', l: 'Toutes' }, { k: 'active', l: 'Actives', dot: T.green }, { k: 'inactive', l: 'Inactives', dot: T.amber }];
-  return (
-    <div style={{ display: 'inline-flex', padding: 3, borderRadius: 10, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
-      {opts.map((o) => {
-        const on = value === o.k;
-        return (
-          <button key={o.k} onClick={() => onChange(o.k)}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 7, border: 'none',
-              background: on ? T.surface : 'transparent', color: on ? T.text : T.textMuted, boxShadow: on ? T.shadow : 'none',
-              fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
-            {o.dot && <span style={{ width: 7, height: 7, borderRadius: 99, background: o.dot }} />}
-            {o.l}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function Centered({ T, children }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '56px 20px', color: T.textMuted, fontSize: 14 }}>
-      {children}
     </div>
   );
 }
