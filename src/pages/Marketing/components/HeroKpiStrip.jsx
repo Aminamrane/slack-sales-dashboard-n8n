@@ -266,14 +266,31 @@ export default function HeroKpiStrip({ webinar, summary, realtimeLeads, rankingP
         : 'Leads avec R2 planifié',
       tone: realtimeLeads?.rdv_taken > 0 ? 'emerald' : undefined,
     },
-    {
-      label: 'Prospects 4+ salariés',
-      value: fmtInt(summary.leadsLargeCompany),
-      hint: summary.leadsDb > 0
-        ? `${fmtPct((summary.leadsLargeCompany / summary.leadsDb) * 100)} des inscrits`
-        : undefined,
-      tone: summary.leadsLargeCompany > 0 ? 'emerald' : undefined,
-    },
+    (() => {
+      // L'effectif est une donnée optionnelle, parfois absente de toute une
+      // cohorte (formulaire Meta du 21/09 : 0 inscrit renseigné). Un « 1 »
+      // nu se lit alors comme un chiffre faux : on dit sur combien
+      // d'inscrits la donnée existe, et « non collecté » quand elle manque
+      // (retour dev 2026-09-23). `leadsHeadcountKnown` vient de la landing.
+      const known = summary.leadsHeadcountKnown;
+      const total = summary.leadsDb || 0;
+      const label = 'Prospects 4+ salariés';
+      if (known === 0) {
+        return { label, value: '—', tone: 'amber',
+          hint: total > 0 ? `Effectif non collecté sur les ${fmtInt(total)} inscrits` : 'Effectif non collecté' };
+      }
+      if (known == null) {
+        // Landing pas encore à jour : lecture historique, sans dénominateur.
+        return { label, value: fmtInt(summary.leadsLargeCompany),
+          hint: total > 0 ? `${fmtPct((summary.leadsLargeCompany / total) * 100)} des inscrits` : undefined,
+          tone: summary.leadsLargeCompany > 0 ? 'emerald' : undefined };
+      }
+      const unknown = Math.max(total - known, 0);
+      return { label, value: fmtInt(summary.leadsLargeCompany),
+        hint: `${fmtPct((summary.leadsLargeCompany / known) * 100)} des ${fmtInt(known)} effectifs renseignés`
+          + (unknown > 0 ? ` · ${fmtInt(unknown)} non renseignés` : ''),
+        tone: unknown > known ? 'amber' : summary.leadsLargeCompany > 0 ? 'emerald' : undefined };
+    })(),
     (() => {
       // Séparation A/B des deux landing pages (cohorte 20 juillet+) :
       // `summary.lpComparison` vient de la landing (/api/admin/stats) et
