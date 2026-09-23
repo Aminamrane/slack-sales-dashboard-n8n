@@ -45,6 +45,7 @@ import LossesView from './components/LossesView.jsx';
 import ReceiptsView from './components/ReceiptsView.jsx';
 import CreancesExitBanner from './components/CreancesExitBanner.jsx';
 import CallsView from './components/CallsView.jsx';
+import ValidationsView from './components/ValidationsView.jsx';
 // Icônes de navigation dessinées pour la page (barre latérale, onglets,
 // filtre responsable) : filaires, monochromes, dans l'esprit de la référence
 // donnée par le dev (2026-09-03). Pas de bibliothèque : le trait est le nôtre.
@@ -368,6 +369,26 @@ export default function TrackingSheetFinance() {
       .catch(() => { if (live) { setCanViewCalls(false); setCallsOperators([]); } });
     return () => { live = false; };
   }, [authChecked]);
+
+  // ── Validations (dev 2026-09-23) : les demandes de l'équipe finance, à
+  // valider par la direction. Onglet réservé à admin / finance_director ; le
+  // compteur se rafraîchit toutes les 30 s et au retour sur l'onglet.
+  const canValidate = ['admin', 'finance_director'].includes(apiClient.getUser()?.role);
+  const [pendingValidations, setPendingValidations] = useState(0);
+  const refreshPendingValidations = useCallback(() => {
+    if (!canValidate) return;
+    apiClient.get('/api/v1/finance-periods/client/requests/pending-count')
+      .then((d) => setPendingValidations(Number(d?.pending) || 0))
+      .catch(() => {});
+  }, [canValidate]);
+  useEffect(() => {
+    if (!authChecked || !canValidate) return;
+    refreshPendingValidations();
+    const id = setInterval(() => { if (document.visibilityState !== 'hidden') refreshPendingValidations(); }, 30000);
+    const onFocus = () => refreshPendingValidations();
+    window.addEventListener('focus', onFocus);
+    return () => { clearInterval(id); window.removeEventListener('focus', onFocus); };
+  }, [authChecked, canValidate, refreshPendingValidations]);
   useEffect(() => {
     const token = apiClient.getToken();
     const user = apiClient.getUser();
@@ -1026,6 +1047,7 @@ export default function TrackingSheetFinance() {
           { id: 'receipts', label: 'Encaissements', Icon: InboxIcon,   active: activeTab === 'receipts', action: () => setActiveTab('receipts') },
           { id: 'losses',   label: 'Pertes',        Icon: LossIcon,    active: activeTab === 'losses',   action: () => setActiveTab('losses') },
           ...(canViewCalls ? [{ id: 'calls', label: 'Tracking des appels', Icon: Phone, active: activeTab === 'calls', action: () => setActiveTab('calls') }] : []),
+          ...(canValidate ? [{ id: 'validations', label: 'Validations', Icon: CheckCircle2, active: activeTab === 'validations', action: () => setActiveTab('validations'), count: pendingValidations || undefined }] : []),
         ],
       },
       {
@@ -1049,7 +1071,7 @@ export default function TrackingSheetFinance() {
         ],
       },
     ];
-  }, [activeTab, viewFilter, viewCounts, exportToExcel, exportedRows.length, canViewCalls]);
+  }, [activeTab, viewFilter, viewCounts, exportToExcel, exportedRows.length, canViewCalls, canValidate, pendingValidations]);
 
   if (!authChecked) {
     return null;
@@ -1121,7 +1143,7 @@ export default function TrackingSheetFinance() {
           <TitleBlock
             kpis={kpis}
             loading={loading}
-            showKpis={activeTab !== 'calls'}
+            showKpis={activeTab !== 'calls' && activeTab !== 'validations'}
             view={activeTab === 'all' ? viewFilter : 'all'}
             pendingCount={exportedRows.filter((r) => r.pending).length}
           />
@@ -1131,6 +1153,8 @@ export default function TrackingSheetFinance() {
             activeTab={activeTab}
             setActiveTab={setActiveTab}
             canViewCalls={canViewCalls}
+            canValidate={canValidate}
+            pendingValidations={pendingValidations}
             period={period}
             setPeriod={setPeriod}
             searchQuery={searchQuery}
@@ -1183,7 +1207,7 @@ export default function TrackingSheetFinance() {
             </>
           )}
 
-          {error && activeTab !== 'calls' && (
+          {error && activeTab !== 'calls' && activeTab !== 'validations' && (
             <div style={{
               margin: '12px 0',
               padding: 14,
@@ -1219,6 +1243,12 @@ export default function TrackingSheetFinance() {
             >
               {activeTab === 'calls' && canViewCalls ? (
                 <CallsView operators={callsOperators} />
+              ) : activeTab === 'validations' && canValidate ? (
+                <ValidationsView
+                  onOpenClient={openClientById}
+                  onChanged={() => { refreshPendingValidations(); onRefresh?.(); }}
+                  showToast={showToast}
+                />
               ) : activeTab === 'losses' ? (
                 <LossesView
                   boardMap={boardMap}
@@ -2702,7 +2732,7 @@ function HiddenColsPill({ hiddenKeys, labels, onShowCol, onShowAll }) {
 }
 
 function TabRow({
-  activeTab, setActiveTab, canViewCalls = false,
+  activeTab, setActiveTab, canViewCalls = false, canValidate = false, pendingValidations = 0,
   period, setPeriod,
   searchQuery, setSearchQuery, searchResultCount,
   onRefresh, refreshing, onExport, exportCount = 0,
@@ -2722,6 +2752,8 @@ function TabRow({
     // Quantifier ce qui a été abandonné (demande dev 2026-09-01).
     { key: 'losses',   label: 'Pertes',              Icon: LossIcon },
     ...(canViewCalls ? [{ key: 'calls', label: 'Tracking des appels', Icon: Phone }] : []),
+    // Les demandes de l'équipe finance à valider (dev 2026-09-23).
+    ...(canValidate ? [{ key: 'validations', label: 'Validations', Icon: CheckCircle2, count: pendingValidations }] : []),
   ];
 
   return (
@@ -2758,6 +2790,16 @@ function TabRow({
             >
               <t.Icon size={14} strokeWidth={1.75} style={{ color: active ? N.text : N.textFaint }} />
               {t.label}
+              {t.count > 0 && (
+                <span title={`${t.count} demande${t.count > 1 ? 's' : ''} en attente`} style={{
+                  minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999,
+                  background: '#fff8ed', color: '#b45309', border: '1px solid #f5dcb5',
+                  fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  fontVariantNumeric: 'tabular-nums',
+                }}>
+                  {t.count}
+                </span>
+              )}
             </button>
           );
         })}
@@ -2781,7 +2823,7 @@ function TabRow({
       <div style={{ flex: 1 }} />
 
       {/* Vision Owner / Opti'lex / Global (segmented control) */}
-      {activeTab !== 'calls' && <>
+      {activeTab !== 'calls' && activeTab !== 'validations' && <>
       <ScopeSelector scope={scope} setScope={setScope} canGlobal={canGlobalScope} />
 
       {/* Hidden columns dropdown — left of month nav */}

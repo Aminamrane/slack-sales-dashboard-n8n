@@ -27,7 +27,15 @@
 //                  l'annuler et l'état d'avant revient au centime.
 //
 // Chaque geste laisse une trace (audit + fil du client) côté serveur ; ici on
-// ne fait que présenter et envoyer. Direction financière seulement.
+// ne fait que présenter et envoyer.
+//
+// 2026-09-23 (dev) : trois leviers indépendants, « la flexibilité de vraiment
+// tout faire » : l'attendu (un mois, N mois, ou définitif à partir d'un mois),
+// le reçu, et le RESTE DÛ d'un mois passé, corrigé directement (c'est un
+// ajustement de créance, l'attendu et le reçu ne bougent pas). Et deux modes :
+// la direction (`canApply`) applique tout de suite ; l'équipe finance envoie
+// exactement le même geste en DEMANDE, que la direction valide dans l'onglet
+// « Validations ». Même écran, mêmes colonnes : seul le bouton change.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -38,7 +46,7 @@ import {
 } from 'lucide-react';
 
 import apiClient from '../../../services/apiClient.js';
-import { formatEUR, formatMonthLabel, formatDateFR, currentPeriod, deferralsByMonth } from '../constants.js';
+import { formatEUR, formatMonthLabel, formatDateFR, currentPeriod, deferralsByMonth, outstandingByMonth } from '../constants.js';
 
 const N = {
   text: '#37352f',
@@ -71,7 +79,7 @@ const fmtWhen = (iso) => {
 };
 
 const MODES = [
-  { key: 'edit',     label: 'Modifier',   Icon: Pencil,          hint: 'Fixer l’attendu ou le reçu d’un mois. La valeur fait foi : ni la grille ni le classeur ne la réécriront.' },
+  { key: 'edit',     label: 'Modifier',   Icon: Pencil,          hint: 'Fixer l’attendu, le reçu ou le reste dû d’un mois. La valeur fait foi : ni la grille ni le classeur ne la réécriront. Un reste dû corrigé devient un ajustement de créance : l’attendu et le reçu du mois ne bougent pas.' },
   { key: 'discount', label: 'Réduire',    Icon: Percent,         hint: 'Appliquer une réduction du catalogue à des mois. Réutilisable d’un client à l’autre.' },
   { key: 'defer',    label: 'Reporter',   Icon: CornerDownRight, hint: 'Déplacer la créance : cocher les mois à décharger, puis choisir le mois qui la reçoit. L’attendu ne change pas. Supprimer en perte est une option à part.' },
   { key: 'pause',    label: 'Pause',      Icon: PauseCircle,     hint: 'Suspendre l’exigibilité : les mois restent comptés, sans retard ni créance tant que la pause dure.' },
@@ -115,12 +123,25 @@ const input = {
 
 export default function ExpectedManager({
   open, onClose, clientId, client, periods, deferrals, scope, onDone, onShowToast,
+  // Direction : les gestes s'appliquent. Équipe finance : ils partent en demande.
+  canApply = true,
+  // Corrections du reste dû déjà posées (profil, kind 'outstanding').
+  outstanding = [],
+  currentUserId = null,
 }) {
   const [entity, setEntity] = useState(scope === 'optilex' ? 'optilex' : 'owner');
   const [mode, setMode] = useState('edit');
   const [selected, setSelected] = useState(() => new Set());
   const [drafts, setDrafts] = useState({});        // period_id -> attendu saisi (Modifier / Reporter)
   const [recDrafts, setRecDrafts] = useState({});  // period_id -> reçu saisi (Modifier)
+  const [resteDrafts, setResteDrafts] = useState({}); // period_id -> reste dû saisi (Modifier, mois passés)
+  // Plan sur plusieurs mois : pré-remplit « Nouvel attendu » sur N mois à
+  // partir d'un mois, ou jusqu'à la fin de l'échéancier (nouvel attendu
+  // définitif). La personne voit chaque mois pré-rempli avant d'enregistrer.
+  const [plan, setPlan] = useState({ amount: '', months: '3', from: '', toEnd: false });
+  // Demandes de modification sur ce client (équipe → direction).
+  const [requests, setRequests] = useState(null);
+  const [lastRequest, setLastRequest] = useState(null);
   const [deferTo, setDeferTo] = useState('');
   const [pauseUntil, setPauseUntil] = useState('');
   // Ce que le client doit sur les mois en pause : 'later' (à rattraper) ou
@@ -152,6 +173,8 @@ export default function ExpectedManager({
     setSelected(new Set());
     setDrafts({});
     setRecDrafts({});
+    setResteDrafts({});
+    setPlan({ amount: '', months: '3', from: '', toEnd: false });
     setDeferTo('');
     setPauseUntil('');
     setPauseOwed('later');
@@ -160,6 +183,8 @@ export default function ExpectedManager({
     setOps(null);
     setConfirmId(null);
     setLastOps([]);
+    setLastRequest(null);
+    setRequests(null);
   }, [open, scope]);
 
   const loadDiscounts = useCallback(() => {
@@ -177,11 +202,39 @@ export default function ExpectedManager({
   }, [base, clientId]);
   useEffect(() => { if (open && mode === 'history') { setConfirmId(null); loadOps(); } }, [open, mode, loadOps]);
 
+  const loadRequests = useCallback(() => {
+    if (!clientId) return;
+    apiClient.get(`${base}/requests?status=all&limit=50`)
+      .then((d) => setRequests(Array.isArray(d?.items) ? d.items : []))
+      .catch(() => setRequests([]));
+  }, [base, clientId]);
+  useEffect(() => { if (open && requests === null) loadRequests(); }, [open, requests, loadRequests]);
+  const pendingRequests = useMemo(() => (requests || []).filter((r) => r.status === 'pending'), [requests]);
+  // Mois (clé 'YYYY-MM') sur lesquels une demande attend déjà la direction.
+  const pendingMonths = useMemo(() => {
+    const set = new Set();
+    for (const r of pendingRequests) for (const p of r.periods || []) set.add(String(p).slice(0, 7));
+    return set;
+  }, [pendingRequests]);
+
+  const withdrawRequest = useCallback(async (id) => {
+    try {
+      await apiClient.post(`/api/v1/finance-periods/client/requests/${id}/withdraw`, {});
+      onShowToast?.('Demande retirée', 'success');
+      setLastRequest(null);
+      loadRequests();
+    } catch (e) {
+      onShowToast?.(e?.data?.detail || 'Retrait impossible', 'error');
+    }
+  }, [loadRequests, onShowToast]);
+
   // ── Les mois, dans l'entité choisie ──────────────────────────────────
   const f = ENTITY_FIELDS[entity];
   const nowKey = currentPeriod();
   // Reports de créance, ramenés au mois déchargé (out) et au mois receveur (in).
   const deferred = useMemo(() => deferralsByMonth(deferrals, entity), [deferrals, entity]);
+  // Corrections du reste dû, ramenées au mois corrigé.
+  const corrections = useMemo(() => outstandingByMonth(outstanding, entity), [outstanding, entity]);
   const rows = useMemo(() => (periods || [])
     .map((p) => {
       const key = String(p.period).slice(0, 7);
@@ -191,9 +244,11 @@ export default function ExpectedManager({
       const recu = round2(recuMois + recuCreances);
       const deferredOut = round2(deferred[key]?.out || 0);
       const deferredIn = round2(deferred[key]?.in || 0);
+      const corrected = round2(corrections[key] || 0);
       // Ce qui reste dû sur le mois : l'attendu, moins ce qui a été reçu,
-      // moins ce qui a été reporté ailleurs, plus ce qui a été reporté ici.
-      const reste = round2(Math.max(attendu + deferredIn - recu - deferredOut, 0));
+      // moins ce qui a été reporté ailleurs, plus ce qui a été reporté ici,
+      // plus les corrections de reste dû posées à la main sur ce mois.
+      const reste = round2(Math.max(attendu + deferredIn - recu - deferredOut + corrected, 0));
       const pauseActive = !!p.expected_pause_active;
       let status = 'none';
       if (attendu > 0 || recu > 0 || deferredIn > 0) {
@@ -208,7 +263,8 @@ export default function ExpectedManager({
       }
       return {
         id: p.id, key, label: formatMonthLabel(key),
-        attendu, recu, recuMois, recuCreances, reste, status, deferredOut, deferredIn,
+        attendu, recu, recuMois, recuCreances, reste, status, deferredOut, deferredIn, corrected,
+        pendingRequest: pendingMonths.has(key),
         manual: !!p.expected_manual,
         paused: !!p.expected_paused,
         pauseActive,
@@ -216,7 +272,7 @@ export default function ExpectedManager({
         passe: key < nowKey, courant: key === nowKey, futur: key > nowKey,
       };
     })
-    .sort((a, b) => a.key.localeCompare(b.key)), [periods, f, nowKey, deferred]);
+    .sort((a, b) => a.key.localeCompare(b.key)), [periods, f, nowKey, deferred, corrections, pendingMonths]);
 
   const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
 
@@ -239,6 +295,7 @@ export default function ExpectedManager({
     setSelected(next);
     setDrafts({});
     setRecDrafts({});
+    setResteDrafts({});
     // Le mois de destination d'un report se choisit toujours à la main.
     if (mode === 'defer') setDeferTo('');
   }, [open, mode, entity]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -304,10 +361,41 @@ export default function ExpectedManager({
     .map(([id, v]) => ({ row: byId.get(id), value: v }))
     .filter(({ row, value }) => row && value !== '' && round2(value) !== row.recuMois),
   [recDrafts, byId]);
+  // Reste dû : seulement un mois passé ou en cours, et seulement si la valeur change.
+  const resteEdits = useMemo(() => Object.entries(resteDrafts)
+    .map(([id, v]) => ({ row: byId.get(id), value: v }))
+    .filter(({ row, value }) => row && !row.futur && value !== '' && round2(value) !== row.reste),
+  [resteDrafts, byId]);
   const picked = useMemo(() => rows.filter((r) => selected.has(r.id)), [rows, selected]);
   const deferTotal = round2(picked.reduce((s, r) => s + round2(drafts[r.id] ?? r.reste), 0));
   const pausedRows = rows.filter((r) => r.pauseActive);
-  const editCount = edits.length + recEdits.length;
+  const editCount = edits.length + recEdits.length + resteEdits.length;
+
+  // L'impact, lisible avant d'enregistrer : ce que ça change, au total.
+  const impact = useMemo(() => {
+    if (mode !== 'edit' || !editCount) return null;
+    const sum = (list, key) => list.reduce((acc, { row, value }) => ({
+      before: acc.before + row[key], after: acc.after + round2(value),
+    }), { before: 0, after: 0 });
+    return {
+      attendu: edits.length ? sum(edits, 'attendu') : null,
+      recu: recEdits.length ? sum(recEdits, 'recuMois') : null,
+      reste: resteEdits.length ? sum(resteEdits, 'reste') : null,
+    };
+  }, [mode, editCount, edits, recEdits, resteEdits]);
+
+  // Pré-remplir un plan : montant sur N mois à partir d'un mois, ou jusqu'à la
+  // fin de l'échéancier. Rien n'est envoyé : la personne relit et enregistre.
+  const applyPlan = useCallback(() => {
+    const amount = Number(String(plan.amount).replace(',', '.'));
+    if (!Number.isFinite(amount) || amount < 0 || !plan.from) return;
+    const start = rows.findIndex((r) => r.id === plan.from);
+    if (start < 0) return;
+    const n = plan.toEnd ? rows.length - start : Math.max(1, Math.min(60, Number(plan.months) || 1));
+    const next = {};
+    for (const r of rows.slice(start, start + n)) next[r.id] = round2(amount);
+    setDrafts((d) => ({ ...d, ...next }));
+  }, [plan, rows]);
 
   const ready = (() => {
     if (mode === 'edit') return editCount > 0;
@@ -318,27 +406,42 @@ export default function ExpectedManager({
   })();
 
   const primaryLabel = (() => {
-    if (mode === 'edit') return editCount ? `Enregistrer ${editCount} modification${editCount > 1 ? 's' : ''}` : 'Modifier un montant';
+    const p = canApply ? '' : 'Proposer : ';
+    if (mode === 'edit') return editCount
+      ? (canApply ? `Enregistrer ${editCount} modification${editCount > 1 ? 's' : ''}` : `Proposer ${editCount} modification${editCount > 1 ? 's' : ''}`)
+      : 'Modifier un montant';
     if (mode === 'discount') return discount && picked.length
-      ? `Appliquer −${discount.percent} % sur ${picked.length} mois` : 'Choisir une réduction';
+      ? `${p}appliquer −${discount.percent} % sur ${picked.length} mois` : 'Choisir une réduction';
     if (mode === 'defer') {
       if (!deferTotal) return 'Cocher des mois';
       if (!deferTo) return 'Choisir le mois de destination';
-      return deferIsLoss ? `Supprimer ${formatEUR(deferTotal)} (perte)` : `Reporter ${formatEUR(deferTotal)} sur ${deferTarget?.label || '…'}`;
+      return deferIsLoss ? `${p}supprimer ${formatEUR(deferTotal)} (perte)` : `${p}reporter ${formatEUR(deferTotal)} sur ${deferTarget?.label || '…'}`;
     }
     if (mode === 'pause') return picked.length
-      ? (pauseOwed === 'never' ? `Mettre en pause ${picked.length} mois, rien dû` : `Mettre en pause ${picked.length} mois`)
+      ? (pauseOwed === 'never' ? `${p}mettre en pause ${picked.length} mois, rien dû` : `${p}mettre en pause ${picked.length} mois`)
       : 'Choisir des mois';
     return '';
   })();
 
-  const afterSuccess = (msg, opIds = []) => {
-    onShowToast?.(msg, 'success');
+  // Après un geste : en direction, l'annulation immédiate ; en équipe, la
+  // confirmation que la demande est partie, et vers qui.
+  const afterSuccess = (msg, results = []) => {
+    const list = results.filter(Boolean);
+    const pending = list.filter((r) => r?.pending);
+    const opIds = list.map((r) => r?.operation_id).filter(Boolean);
+    if (pending.length) {
+      onShowToast?.(pending.length > 1 ? `${pending.length} demandes envoyées à la direction` : 'Demande envoyée à la direction', 'success');
+      setLastRequest(pending.length > 1 ? `${pending.length} demandes` : (pending[0].label || 'demande'));
+      setRequests(null);
+    } else {
+      onShowToast?.(msg, 'success');
+    }
     setDrafts({});
     setRecDrafts({});
+    setResteDrafts({});
     setSelected(new Set());
     setReason('');
-    setLastOps(opIds.filter(Boolean));
+    setLastOps(opIds);
     setOps(null);
     onDone?.();
   };
@@ -349,25 +452,30 @@ export default function ExpectedManager({
     const note = reason.trim() || null;
     try {
       if (mode === 'edit') {
-        const ids = [];
+        const results = [];
         if (edits.length) {
-          const r = await apiClient.post(`${base}/expected`, {
+          results.push(await apiClient.post(`${base}/expected`, {
             entries: edits.map(({ row, value }) => ({ period: row.key, [entity]: round2(value) })),
             reason: note,
-          });
-          ids.push(r?.operation_id);
+          }));
         }
         if (recEdits.length) {
-          const r = await apiClient.post(`${base}/received`, {
+          results.push(await apiClient.post(`${base}/received`, {
             entries: recEdits.map(({ row, value }) => ({ period: row.key, [entity]: round2(value) })),
             reason: note,
-          });
-          ids.push(r?.operation_id);
+          }));
+        }
+        // Un reste dû corrigé = un ajustement de créance par mois, dans l'ordre.
+        for (const { row, value } of resteEdits) {
+          results.push(await apiClient.post(`${base}/outstanding`, {
+            entity, period: row.key, remaining: round2(value), reason: note,
+          }));
         }
         const parts = [];
         if (edits.length) parts.push(`${edits.length} attendu${edits.length > 1 ? 's' : ''}`);
         if (recEdits.length) parts.push(`${recEdits.length} reçu${recEdits.length > 1 ? 's' : ''}`);
-        afterSuccess(`${parts.join(' et ')} fixé${editCount > 1 ? 's' : ''} à la main`, ids);
+        if (resteEdits.length) parts.push(`${resteEdits.length} reste${resteEdits.length > 1 ? 's' : ''} dû${resteEdits.length > 1 ? 's' : ''}`);
+        afterSuccess(`${parts.join(', ')} fixé${editCount > 1 ? 's' : ''} à la main`, results);
       } else if (mode === 'discount') {
         const r = await apiClient.post(`${base}/expected`, {
           entries: picked.map((row) => ({ period: row.key, [entity]: reduced(row) })),
@@ -376,7 +484,7 @@ export default function ExpectedManager({
           discount_label: discount.label,
           discount_percent: discount.percent,
         });
-        afterSuccess(`Réduction « ${discount.label} » appliquée sur ${picked.length} mois`, [r?.operation_id]);
+        afterSuccess(`Réduction « ${discount.label} » appliquée sur ${picked.length} mois`, [r]);
       } else if (mode === 'defer') {
         const r = await apiClient.post(`${base}/expected-correction`, {
           entity,
@@ -388,25 +496,31 @@ export default function ExpectedManager({
         });
         afterSuccess(deferIsLoss
           ? `${formatEUR(r?.retire ?? deferTotal)} supprimé (perte)`
-          : `${formatEUR(r?.retire ?? deferTotal)} reporté sur ${deferTarget?.label || 'le mois choisi'}`, [r?.operation_id]);
+          : `${formatEUR(r?.retire ?? deferTotal)} reporté sur ${deferTarget?.label || 'le mois choisi'}`, [r]);
       } else if (mode === 'pause') {
         const r = await apiClient.post(`${base}/expected/pause`, {
           periods: picked.map((row) => row.key), until: pauseUntil || null, reason: note, owed: pauseOwed,
         });
-        afterSuccess(`${picked.length} mois en pause${pauseUntil ? ` jusqu'au ${formatDateFR(pauseUntil)}` : ''}${pauseOwed === 'never' ? ' · rien dû, passé en perte' : ' · à rattraper'}`, [r?.operation_id]);
+        afterSuccess(`${picked.length} mois en pause${pauseUntil ? ` jusqu'au ${formatDateFR(pauseUntil)}` : ''}${pauseOwed === 'never' ? ' · rien dû, passé en perte' : ' · à rattraper'}`, [r]);
       }
     } catch (e) {
       onShowToast?.(e?.data?.detail || 'Enregistrement impossible', 'error');
     } finally {
       setSaving(false);
     }
-  }, [ready, saving, base, reason, mode, edits, recEdits, editCount, entity, picked, discount, deferTo, deferIsLoss, deferTarget, drafts, deferTotal, pauseUntil, pauseOwed, onShowToast]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, saving, base, reason, mode, edits, recEdits, resteEdits, editCount, entity, picked, discount, deferTo, deferIsLoss, deferTarget, drafts, deferTotal, pauseUntil, pauseOwed, onShowToast]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const resume = useCallback(async (keys) => {
     try {
       const r = await apiClient.post(`${base}/expected/resume`, { periods: keys });
-      onShowToast?.(`Pause levée sur ${r?.count ?? keys?.length ?? ''} mois`, 'success');
-      setLastOps(r?.operation_id ? [r.operation_id] : []);
+      if (r?.pending) {
+        onShowToast?.('Demande de reprise envoyée à la direction', 'success');
+        setLastRequest(r.label || 'demande');
+        setRequests(null);
+      } else {
+        onShowToast?.(`Pause levée sur ${r?.count ?? keys?.length ?? ''} mois`, 'success');
+        setLastOps(r?.operation_id ? [r.operation_id] : []);
+      }
       setOps(null);
       onDone?.();
     } catch (e) {
@@ -444,7 +558,7 @@ export default function ExpectedManager({
   const entityLabel = entity === 'owner' ? 'Owner' : "Opti'lex";
   const showCheck = mode !== 'edit' && mode !== 'history';
   const gridCols = mode === 'edit'
-    ? 'minmax(110px, 1.1fr) 96px 100px 88px 96px 118px 118px'
+    ? 'minmax(104px, 1fr) 84px 88px 84px 86px 104px 104px 104px'
     : `${showCheck ? '28px ' : ''}minmax(120px, 1.2fr) 110px 100px 100px 110px minmax(120px, 1fr)`;
 
   return createPortal(
@@ -469,7 +583,7 @@ export default function ExpectedManager({
           transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
           onClick={(e) => e.stopPropagation()}
           style={{
-            width: 'min(860px, 100%)', maxHeight: '90vh',
+            width: 'min(920px, 100%)', maxHeight: '90vh',
             display: 'flex', flexDirection: 'column',
             background: '#fff', borderRadius: 14,
             boxShadow: '0 24px 64px rgba(17,24,39,0.22)',
@@ -540,6 +654,49 @@ export default function ExpectedManager({
             </div>
 
             {/* Panneau propre au geste */}
+            {mode === 'edit' && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                padding: '8px 12px', marginBottom: 12, borderRadius: 9, background: N.sideBg,
+              }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: N.text }}>Plan</span>
+                <span style={{ fontSize: 12, color: N.textMuted }}>attendu de</span>
+                <AmountInput value={plan.amount} onChange={(v) => setPlan((p) => ({ ...p, amount: v }))} placeholder="0,00" />
+                <span style={{ fontSize: 12, color: N.textMuted }}>à partir de</span>
+                <select value={plan.from} onChange={(e) => setPlan((p) => ({ ...p, from: e.target.value }))} style={{ ...input, minWidth: 170 }}>
+                  <option value="">Choisir le mois…</option>
+                  {rows.filter((r) => r.courant || r.futur).map((r) => (
+                    <option key={r.id} value={r.id}>{r.label}{r.courant ? ' (ce mois-ci)' : ''}</option>
+                  ))}
+                </select>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: N.textMuted }}>
+                  <span>sur</span>
+                  <input
+                    type="number" min={1} max={60}
+                    value={plan.months}
+                    disabled={plan.toEnd}
+                    onChange={(e) => setPlan((p) => ({ ...p, months: e.target.value }))}
+                    style={{ ...input, width: 58, textAlign: 'right', opacity: plan.toEnd ? 0.5 : 1 }}
+                  />
+                  <span>mois</span>
+                </label>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: N.text, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={plan.toEnd} onChange={(e) => setPlan((p) => ({ ...p, toEnd: e.target.checked }))} style={{ accentColor: N.text }} />
+                  définitif, jusqu’à la fin de l’échéancier
+                </label>
+                <button
+                  type="button"
+                  onClick={applyPlan}
+                  disabled={!plan.from || plan.amount === ''}
+                  style={{ ...btn('solid'), marginLeft: 'auto', opacity: !plan.from || plan.amount === '' ? 0.5 : 1 }}
+                >
+                  Pré-remplir
+                </button>
+                <span style={{ flexBasis: '100%', fontSize: 11, color: N.textFaint, lineHeight: 1.5 }}>
+                  Rien n’est envoyé : les mois se pré-remplissent ci-dessous, vous relisez, puis vous enregistrez. Après le plan, les mois suivants gardent leur attendu de base.
+                </span>
+              </div>
+            )}
             {mode === 'discount' && (
               <DiscountPicker
                 discounts={discounts}
@@ -643,13 +800,22 @@ export default function ExpectedManager({
           {/* Le corps : le tableau des mois, ou l'historique des opérations */}
           <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
             {mode === 'history' ? (
-              <OperationsList
-                ops={ops}
-                confirmId={confirmId}
-                onConfirm={setConfirmId}
-                reverting={reverting}
-                onRevert={(id) => revert([id])}
-              />
+              <>
+                <RequestsList
+                  requests={requests}
+                  currentUserId={currentUserId}
+                  canApply={canApply}
+                  onWithdraw={withdrawRequest}
+                />
+                <OperationsList
+                  ops={ops}
+                  confirmId={confirmId}
+                  onConfirm={setConfirmId}
+                  reverting={reverting}
+                  onRevert={(id) => revert([id])}
+                  canRevert={canApply}
+                />
+              </>
             ) : (
               <>
                 <div style={{
@@ -667,6 +833,7 @@ export default function ExpectedManager({
                     <>
                       <span style={{ textAlign: 'right' }}>Nouvel attendu</span>
                       <span style={{ textAlign: 'right' }}>Nouveau reçu</span>
+                      <span style={{ textAlign: 'right' }} title="Mois passés et mois en cours : la différence devient un ajustement de créance">Nouveau reste dû</span>
                     </>
                   ) : (
                     <span style={{ textAlign: 'right' }}>
@@ -727,6 +894,14 @@ export default function ExpectedManager({
                             manuel
                           </span>
                         )}
+                        {r.pendingRequest && (
+                          <span title="Une demande de modification attend la validation de la direction sur ce mois" style={{
+                            display: 'inline-block', marginTop: 3, fontSize: 10, fontWeight: 700, color: N.amber, background: N.amberBg,
+                            borderRadius: 3, padding: '1px 5px', whiteSpace: 'nowrap',
+                          }}>
+                            demande en attente
+                          </span>
+                        )}
                       </span>
                       <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: N.text, fontWeight: 600 }}>
                         {formatEUR(r.attendu)}
@@ -754,6 +929,11 @@ export default function ExpectedManager({
                             +{formatEUR(r.deferredIn)} reporté ici
                           </span>
                         )}
+                        {r.corrected !== 0 && (
+                          <span title="Reste dû corrigé à la main : ajustement de créance, attendu et reçu inchangés" style={{ display: 'block', fontSize: 10.5, color: N.amber, whiteSpace: 'nowrap' }}>
+                            {r.corrected > 0 ? '+' : '−'}{formatEUR(Math.abs(r.corrected))} corrigé
+                          </span>
+                        )}
                       </span>
                       <span>
                         <span style={{
@@ -772,6 +952,7 @@ export default function ExpectedManager({
                         <>
                           <span style={{ textAlign: 'right' }}>
                             <AmountInput
+                              width={82}
                               value={drafts[r.id] ?? ''}
                               placeholder={formatEUR(r.attendu, { withSymbol: false })}
                               onChange={(v) => setDrafts((d) => ({ ...d, [r.id]: v }))}
@@ -779,10 +960,23 @@ export default function ExpectedManager({
                           </span>
                           <span style={{ textAlign: 'right' }}>
                             <AmountInput
+                              width={82}
                               value={recDrafts[r.id] ?? ''}
                               placeholder={formatEUR(r.recuMois, { withSymbol: false })}
                               onChange={(v) => setRecDrafts((d) => ({ ...d, [r.id]: v }))}
                             />
+                          </span>
+                          <span style={{ textAlign: 'right' }}>
+                            {r.futur ? (
+                              <span title="Un mois à venir n’a pas encore de reste dû : modifiez son attendu" style={{ fontSize: 11.5, color: N.textFaint }}>—</span>
+                            ) : (
+                              <AmountInput
+                                width={82}
+                                value={resteDrafts[r.id] ?? ''}
+                                placeholder={formatEUR(r.reste, { withSymbol: false })}
+                                onChange={(v) => setResteDrafts((d) => ({ ...d, [r.id]: v }))}
+                              />
+                            )}
                           </span>
                         </>
                       ) : (
@@ -818,6 +1012,24 @@ export default function ExpectedManager({
             display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
             padding: '12px 20px', borderTop: `1px solid ${N.borderSft}`, background: '#fff',
           }}>
+            {impact && (
+              <span style={{ flexBasis: '100%', fontSize: 12, color: N.textMuted, lineHeight: 1.5 }}>
+                <strong style={{ color: N.text }}>Avant d’enregistrer :</strong>
+                {impact.attendu && <> attendu {formatEUR(impact.attendu.before)} → <strong style={{ color: N.text }}>{formatEUR(impact.attendu.after)}</strong> sur {edits.length} mois</>}
+                {impact.recu && <>{impact.attendu ? ' · ' : ' '}reçu {formatEUR(impact.recu.before)} → <strong style={{ color: N.text }}>{formatEUR(impact.recu.after)}</strong> sur {recEdits.length} mois</>}
+                {impact.reste && <>{impact.attendu || impact.recu ? ' · ' : ' '}reste dû {formatEUR(impact.reste.before)} → <strong style={{ color: N.text }}>{formatEUR(impact.reste.after)}</strong> sur {resteEdits.length} mois (créances antérieures {impact.reste.after - impact.reste.before >= 0 ? '+' : '−'}{formatEUR(Math.abs(round2(impact.reste.after - impact.reste.before)))})</>}
+                {!canApply && <> · envoyé à la direction pour validation</>}
+              </span>
+            )}
+            {lastRequest && (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                padding: '6px 10px', borderRadius: 8, background: N.amberBg, color: N.amber,
+                fontSize: 12, fontWeight: 600,
+              }}>
+                <Check size={13} /> Envoyé à la direction · en attente de validation
+              </span>
+            )}
             {lastOps.length > 0 && (
               <span style={{
                 display: 'inline-flex', alignItems: 'center', gap: 8,
@@ -843,7 +1055,7 @@ export default function ExpectedManager({
               <input
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder="Motif (visible dans l’historique et le fil du client)"
+                placeholder={canApply ? 'Motif (visible dans l’historique et le fil du client)' : 'Motif pour la direction (visible dans la demande et le fil du client)'}
                 style={{ ...input, flex: '1 1 220px' }}
               />
             )}
@@ -878,7 +1090,7 @@ export default function ExpectedManager({
 // L'historique des gestes, du plus récent au plus ancien. Annuler se fait en
 // deux temps sur la ligne (pas de boîte de dialogue du navigateur) : la
 // directrice voit ce qu'elle annule, et confirme au même endroit.
-function OperationsList({ ops, confirmId, onConfirm, reverting, onRevert }) {
+function OperationsList({ ops, confirmId, onConfirm, reverting, onRevert, canRevert = true }) {
   if (ops === null) {
     return <div style={{ padding: 30, textAlign: 'center', color: N.textMuted, fontSize: 13 }}>Chargement…</div>;
   }
@@ -921,7 +1133,7 @@ function OperationsList({ ops, confirmId, onConfirm, reverting, onRevert }) {
             <div style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               {done ? (
                 <Tag>Annulée</Tag>
-              ) : !o.revertible ? (
+              ) : !canRevert ? null : !o.revertible ? (
                 <Tag title={o.blocked_reason || ''}>Non annulable</Tag>
               ) : asking ? (
                 <>
@@ -951,6 +1163,59 @@ function OperationsList({ ops, confirmId, onConfirm, reverting, onRevert }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// Les demandes de l'équipe sur ce client : en attente d'abord, puis traitées.
+// L'auteur peut retirer une demande tant qu'elle attend ; la direction la
+// traite dans l'onglet « Validations » de la page, où elle voit tous les clients.
+const REQUEST_STATUS = {
+  pending:   { label: 'En attente de validation', bg: N.amberBg, fg: N.amber },
+  approved:  { label: 'Validée',                  bg: N.greenBg, fg: N.green },
+  rejected:  { label: 'Refusée',                  bg: N.redBg,   fg: N.red },
+  withdrawn: { label: 'Retirée',                  bg: N.sideBg,  fg: N.textMuted },
+};
+
+function RequestsList({ requests, currentUserId, canApply, onWithdraw }) {
+  if (!requests || requests.length === 0) return null;
+  const ordered = [...requests].sort((a, b) => (a.status === 'pending' ? 0 : 1) - (b.status === 'pending' ? 0 : 1));
+  return (
+    <div style={{ padding: '10px 20px 0' }}>
+      <div style={{ fontSize: 10.5, fontWeight: 600, color: N.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
+        Demandes de modification
+      </div>
+      {ordered.map((r) => {
+        const st = REQUEST_STATUS[r.status] || REQUEST_STATUS.pending;
+        const mine = currentUserId && String(r.requested_by) === String(currentUserId);
+        return (
+          <div key={r.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '9px 0', borderTop: `1px solid ${N.borderSft}` }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, lineHeight: 1.45, color: r.status === 'pending' ? N.text : N.textMuted }}>
+                <strong>{r.requested_by_name || 'Quelqu’un'}</strong> demande de {r.label}.
+              </div>
+              {r.reason && <div style={{ fontSize: 11.5, color: N.textMuted, fontStyle: 'italic', marginTop: 2 }}>« {r.reason} »</div>}
+              <div style={{ fontSize: 11, color: N.textFaint, marginTop: 3 }}>
+                {fmtWhen(r.requested_at)}
+                {r.status === 'approved' && r.decided_by_name && ` · validée par ${r.decided_by_name} le ${fmtWhen(r.decided_at)}`}
+                {r.status === 'rejected' && ` · refusée${r.decided_by_name ? ` par ${r.decided_by_name}` : ''}${r.decision_note ? ` : ${r.decision_note}` : ''}`}
+                {r.status === 'pending' && r.drift && ` · ${r.drift}`}
+              </div>
+            </div>
+            <div style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: 999, background: st.bg, color: st.fg, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                {st.label}
+              </span>
+              {r.status === 'pending' && (mine || canApply) && (
+                <button type="button" onClick={() => onWithdraw(r.id)} style={{ ...btn('ghost'), padding: '4px 8px', fontSize: 12 }}>
+                  Retirer
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      <div style={{ height: 8 }} />
     </div>
   );
 }
@@ -1003,7 +1268,7 @@ function Segmented({ value, onChange, options }) {
   );
 }
 
-function AmountInput({ value, onChange, max, placeholder }) {
+function AmountInput({ value, onChange, max, placeholder, width = 96 }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
       <input
@@ -1023,7 +1288,7 @@ function AmountInput({ value, onChange, max, placeholder }) {
           onChange(v);
         }}
         style={{
-          ...input, width: 96, padding: '5px 8px', textAlign: 'right',
+          ...input, width, padding: '5px 8px', textAlign: 'right',
           fontWeight: 600, fontVariantNumeric: 'tabular-nums',
         }}
       />

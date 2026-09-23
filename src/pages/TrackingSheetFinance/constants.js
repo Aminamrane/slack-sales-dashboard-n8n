@@ -25,6 +25,11 @@ export const canEditAmounts = (role) => AMOUNT_EDIT_ROLES.includes(role);
 // Modalités, sociétés, associés, contacts.
 export const canEditContract = (role) => ALLOWED_ROLES.includes(role);
 
+// Équipe finance (Lény, Aurélie, Ingrid) : mêmes leviers que la direction
+// dans « Gérer les attendus », mais chaque geste part en DEMANDE à valider
+// par Ismahane (dev 2026-09-23). Le serveur fait la même distinction.
+export const canProposeAmounts = (role) => role === 'finance_team';
+
 // Filtre « Météo client » du menu Filtre : réservé à deux personnes, pas à
 // un rôle (décision dev 2026-09-18) — Ismahane (direction financière) et
 // Aurélie B (équipe finance). Même mécanique que l'onglet des appels.
@@ -434,6 +439,21 @@ export const deferralsByMonth = (deferrals, scope) => {
     const month = amount < 0 ? shiftMonth(key, -1) : key;
     const cell = out[month] || (out[month] = { out: 0, in: 0 });
     if (amount < 0) cell.out += -amount; else cell.in += amount;
+  }
+  return out;
+};
+
+// Corrections du reste dû (kind 'outstanding', dev 2026-09-23) : un ajustement
+// de créance daté du mois SUIVANT le mois corrigé, quel que soit son signe.
+// Renvoie { 'YYYY-MM': delta } ramené au mois corrigé, dans la vision demandée.
+export const outstandingByMonth = (corrections, scope) => {
+  const out = {};
+  for (const c of corrections || []) {
+    if (scope !== 'global' && c.entity !== scope) continue;
+    const amount = toNumber(c.amount) || 0;
+    if (!amount) continue;
+    const month = shiftMonth(String(c.period).slice(0, 7), -1);
+    out[month] = (out[month] || 0) + amount;
   }
   return out;
 };
