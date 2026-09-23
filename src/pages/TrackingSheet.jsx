@@ -1190,6 +1190,7 @@ export default function TrackingSheet() {
       try {
         const saved = await apiClient.get(`/api/v1/owner-integration/leads/${leadId}/sale-preparation`);
         if (saved.preparation) applySalePreparation(leadId, saved.preparation);
+        else {setSalePreparation(null); setSaleStep('onboarding');}
       } catch { /* Leave the form intact; repeating POST uses the same durable intent. */ }
       setSaleReservationError(error.message || 'Impossible de confirmer la réservation. Vérifiez son état avant de continuer.');
     } finally {saleRequestBusy.current = false; setSaleSubmitting(false);}
