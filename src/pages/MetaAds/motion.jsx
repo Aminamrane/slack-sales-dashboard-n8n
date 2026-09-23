@@ -20,9 +20,12 @@ export function CountUp({ value, format = (v) => String(Math.round(v)), duration
   const inView = useInView(ref, { once: true, amount: 0.4 });
   const [shown, setShown] = useState(reduce ? value : 0);
   const from = useRef(0);
+  const [armed, setArmed] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setArmed(true), 400); return () => clearTimeout(t); }, []);
   useEffect(() => {
     if (value == null || !Number.isFinite(Number(value))) return undefined;
-    if (reduce || !inView) { if (reduce) setShown(value); return undefined; }
+    if (reduce) { setShown(value); return undefined; }
+    if (!inView && !armed) return undefined;
     const start = performance.now();
     const a = from.current;
     const b = Number(value);
@@ -34,8 +37,11 @@ export function CountUp({ value, format = (v) => String(Math.round(v)), duration
       else from.current = b;
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [value, inView, reduce, duration]);
+    // Filet : si les images d'animation ne sont pas rendues (onglet caché, rendu
+    // sans écran), la valeur finale s'affiche quand même à la fin de la durée.
+    const settle = setTimeout(() => { setShown(b); from.current = b; }, duration * 1000 + 80);
+    return () => { cancelAnimationFrame(raf); clearTimeout(settle); };
+  }, [value, inView, armed, reduce, duration]);
   if (value == null || !Number.isFinite(Number(value))) return <span ref={ref} style={style} className={className}>—</span>;
   return <span ref={ref} style={style} className={className}>{format(shown)}</span>;
 }
@@ -56,7 +62,7 @@ export function Ring({ value = 0, size = 44, stroke = 4, color, track, label, su
       </svg>
       {(label != null) && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
-          <span style={{ fontSize: size >= 60 ? 16 : 11.5, fontWeight: 750, color: T?.text, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>{label}</span>
+          <span style={{ fontSize: size >= 60 ? 16 : 11.5, fontWeight: 500, color: T?.text, fontVariantNumeric: 'tabular-nums' }}>{label}</span>
           {sub && <span style={{ fontSize: 9.5, color: T?.textFaint, marginTop: 2 }}>{sub}</span>}
         </div>
       )}
@@ -80,12 +86,12 @@ export function Funnel({ steps, T, compact = false, delay = 0 }) {
         return (
           <React.Fragment key={s.label}>
             <span style={{ fontSize: compact ? 11 : 12, color: T.textMuted, whiteSpace: 'nowrap' }}>{s.label}</span>
-            <div style={{ height: compact ? 8 : 10, borderRadius: 99, background: T.navySoft, overflow: 'hidden' }}>
+            <div style={{ height: compact ? 8 : 10, borderRadius: 99, background: T.track, overflow: 'hidden' }}>
               <motion.div initial={reduce ? { scaleX: w } : { scaleX: 0 }} whileInView={{ scaleX: w }} viewport={{ once: true }}
                 transition={{ duration: 0.7, delay: delay + i * 0.06, ease: EASE }}
-                style={{ height: '100%', borderRadius: 99, transformOrigin: 'left center', background: i === steps.length - 1 ? T.green : T.navy, opacity: i === steps.length - 1 ? 1 : 1 - i * 0.18 }} />
+                style={{ height: '100%', borderRadius: 99, transformOrigin: 'left center', background: i === steps.length - 1 ? T.green : T.primary, opacity: i === steps.length - 1 ? 1 : 1 - i * 0.18 }} />
             </div>
-            <span style={{ fontSize: compact ? 11.5 : 12.5, fontWeight: 700, color: T.text, textAlign: 'right', fontVariantNumeric: 'tabular-nums', minWidth: 26 }}>{s.value ?? '—'}</span>
+            <span style={{ fontSize: compact ? 11.5 : 12.5, fontWeight: 600, color: T.text, textAlign: 'right', fontVariantNumeric: 'tabular-nums', minWidth: 26 }}>{s.value ?? '—'}</span>
             {!compact && <span style={{ fontSize: 11, color: T.textFaint, textAlign: 'right', minWidth: 38, fontVariantNumeric: 'tabular-nums' }}>{rate == null ? '' : `${Math.round(rate * 100)} %`}</span>}
           </React.Fragment>
         );
@@ -117,7 +123,7 @@ export function Spark({ values, width = 120, height = 32, color, T, fill = true 
 export function Pill({ children, color, bg, T, size = 'sm', style }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: size === 'sm' ? '3px 9px' : '5px 11px', borderRadius: 99,
-      fontSize: size === 'sm' ? 11.5 : 12.5, fontWeight: 650, color: color || T?.textMuted, background: bg || T?.surfaceAlt, whiteSpace: 'nowrap', ...style }}>
+      fontSize: size === 'sm' ? 11.5 : 12.5, fontWeight: 500, color: color || T?.textMuted, background: bg || T?.surfaceAlt, whiteSpace: 'nowrap', ...style }}>
       {children}
     </span>
   );

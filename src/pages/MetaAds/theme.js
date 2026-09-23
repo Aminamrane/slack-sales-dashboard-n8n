@@ -1,40 +1,48 @@
-// src/pages/MetaAds/theme.js — charte Owner pour la page Meta Ads.
+// src/pages/MetaAds/theme.js — thème « outil de données » de la page Meta Ads.
 //
-// Navy #121b35 pour les titres et les valeurs, vert #3e7d5a comme seul accent
-// (actif, positif, sélection), bleu clair #e9eef6 pour le fond de page et les
-// surfaces discrètes, blanc pour les cartes. Aucune couleur hors charte : les
-// variations se font par opacité du navy et du vert. Le mode sombre garde les
-// mêmes rôles sur un fond navy profond.
+// Référence : les interfaces de Google Analytics et de Meta Ads Manager
+// (relevées le 2026-09-23) : une toile gris très clair, des cartes blanches à
+// bordure fine et coins peu arrondis, une seule couleur d'action (le bleu),
+// une hiérarchie de gris pour le texte, le vert et le rouge réservés au sens
+// (mieux / moins bien), des séries de graphiques bleu / orange / vert. Les
+// chiffres sont grands mais en graisse moyenne, les libellés petits et gris.
 
-export const OWNER = {
-  navy: '#121b35',
-  green: '#3e7d5a',
-  sky: '#e9eef6',
-  white: '#ffffff',
-};
+// bleu, orange, vert, violet, cyan, jaune, rose, sarcelle : la palette de séries de Google
+export const SERIES_LIGHT = ['#1a73e8', '#e8710a', '#188038', '#9334e6', '#12b5cb', '#f9ab00', '#e52592', '#00796b'];
+export const SERIES_DARK = ['#8ab4f8', '#fcad70', '#81c995', '#c58af9', '#78d9ec', '#fdd663', '#ff8bcb', '#5ed2c6'];
 
 export function getTheme(dark) {
-  return dark
+  const series = dark ? SERIES_DARK : SERIES_LIGHT;
+  const base = dark
     ? {
         isDark: true,
-        pageBg: '#0d1327', surface: '#151d38', surfaceAlt: '#1b2444', border: '#243057', borderSoft: '#1f2a4d',
-        text: '#eef1f8', textMuted: '#9aa4c2', textFaint: '#6b7699',
-        accent: '#5fa37e', accentBg: 'rgba(95,163,126,0.16)', accentSoft: 'rgba(95,163,126,0.32)',
-        navy: '#eef1f8', navySoft: 'rgba(238,241,248,0.14)', sky: '#1b2444',
-        green: '#5fa37e', red: '#d97b6c', amber: '#d9a35c',
-        rowHover: '#1b2444', shadow: '0 2px 10px rgba(0,0,0,0.35)',
-        grid: 'rgba(238,241,248,0.08)',
+        pageBg: '#202124', surface: '#292a2d', surfaceAlt: '#303134', border: '#3c4043', borderSoft: '#35363a',
+        text: '#e8eaed', textMuted: '#9aa0a6', textFaint: '#80868b',
+        primary: '#8ab4f8', primaryStrong: '#aecbfa', accentBg: 'rgba(138,180,248,0.16)', accentSoft: 'rgba(138,180,248,0.40)',
+        track: '#3c4043', grid: 'rgba(232,234,237,0.10)',
+        green: '#81c995', red: '#f28b82', amber: '#fdd663',
+        rowHover: '#303134', shadow: '0 1px 2px rgba(0,0,0,0.3)',
+        tooltipBg: '#3c4043', tooltipText: '#e8eaed', tooltipMuted: '#bdc1c6',
       }
     : {
         isDark: false,
-        pageBg: OWNER.sky, surface: OWNER.white, surfaceAlt: '#f3f6fb', border: '#d9e0ee', borderSoft: '#e7ecf5',
-        text: OWNER.navy, textMuted: '#5b6584', textFaint: '#8a93ad',
-        accent: OWNER.green, accentBg: 'rgba(62,125,90,0.10)', accentSoft: 'rgba(62,125,90,0.28)',
-        navy: OWNER.navy, navySoft: 'rgba(18,27,53,0.08)', sky: OWNER.sky,
-        green: OWNER.green, red: '#b5544a', amber: '#b98a3a',
-        rowHover: '#f3f6fb', shadow: '0 1px 2px rgba(18,27,53,0.04), 0 6px 18px rgba(18,27,53,0.06)',
-        grid: 'rgba(18,27,53,0.08)',
+        pageBg: '#f8f9fa', surface: '#ffffff', surfaceAlt: '#f1f3f4', border: '#dadce0', borderSoft: '#e8eaed',
+        text: '#202124', textMuted: '#5f6368', textFaint: '#80868b',
+        primary: '#1a73e8', primaryStrong: '#1967d2', accentBg: '#e8f0fe', accentSoft: '#aecbfa',
+        track: '#e8eaed', grid: '#e8eaed',
+        green: '#188038', red: '#d93025', amber: '#e37400',
+        rowHover: '#f8f9fa', shadow: '0 1px 2px rgba(60,64,67,0.10)',
+        tooltipBg: '#ffffff', tooltipText: '#202124', tooltipMuted: '#5f6368',
       };
+  return {
+    ...base,
+    series,
+    accent: base.primary,
+    radius: 8,      // cartes, panneaux (Google Analytics : 8 px)
+    radiusSm: 6,    // champs, puces, vignettes
+    radiusPill: 999,
+    font: 'Inter, Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+  };
 }
 
 // ── formats fr-FR partagés par la page ─────────────────────────────────────
