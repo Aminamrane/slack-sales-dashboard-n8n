@@ -18,6 +18,8 @@ test('panel centres on actual islands regardless of Mes pages width and stays on
 test('rating notification opens the exact client board; existing invitation routing retained',()=>{
   assert.equal(notificationTarget({type:'owner_rating_regression',data:{numero_client:278}}),'/ceo/optilex-board?client=278');
   assert.equal(notificationTarget({type:'sheet_invitation'}),'/tracking-sheet?view=notifications');
+  assert.equal(notificationTarget({type:'board_mention',data:{path:'/ceo/optilex-board?client=n%C2%B01&focus=comments'}}),'/ceo/optilex-board?client=n%C2%B01&focus=comments');
+  assert.equal(notificationTarget({type:'board_mention'}),'/optilex-board');
   assert.equal(notificationTarget({type:'other'}),null);
 });
 test('poll and websocket duplicates never produce repeated notification previews',()=>{

@@ -3,6 +3,8 @@ import BoardIntegrationSheet from "../components/BoardIntegrationSheet";
 import BoardOnboardingDateCorrection from "../components/BoardOnboardingDateCorrection";
 import { appointmentConfirmation, appointmentFailure } from "../utils/appointmentConfirmation";
 import { ClientMissions, DetailFold, DetailText } from "../components/OptilexClientDetail";
+import MentionTextarea, { MentionedText } from "../components/MentionTextarea";
+import { mentionedIds, notifiedSummary } from "../utils/mentions.js";
 import { matchesUpcomingIntegration, matchesUpcomingOnboarding, matchesOverdueOnboarding, parisWallTime } from "../utils/boardIntegration.js";
 import { matchesSignedClient, resolvePendingExit } from "../utils/boardClientState.js";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
@@ -3067,7 +3069,6 @@ function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingE
   const [comments, setComments] = useState([]);
   const [draft, setDraft] = useState("");
   const [expanded, setExpanded] = useState(false);
-  const [composerOpen, setComposerOpen] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
@@ -3078,17 +3079,44 @@ function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingE
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
-  const canEdit = (c) => !isFinanceTeam()
-    && (((me.email || "").toLowerCase() === (c.author_email || "").toLowerCase())
+  // Mentions @ (espace commun Owner / Opti'Lex / finance, demande dev 2026-09-24) : annuaire des
+  // personnes taguables, confirmation « prévenu(e) » après publication, ouverture directe sur le fil
+  // depuis une notification ou un e-mail (?focus=comments).
+  const [people, setPeople] = useState([]);
+  const [notice, setNotice] = useState("");
+  const [searchParams] = useSearchParams();
+  const focusComments = searchParams.get("focus") === "comments";
+  const rootRef = useRef(null);
+  useEffect(() => {
+    let alive = true;
+    apiClient.get("/api/v1/optilex/comments/mentionables")
+      .then((r) => { if (alive) setPeople(r.people || []); })
+      .catch(() => { /* sans annuaire, le fil reste utilisable sans complétion */ });
+    return () => { alive = false; };
+  }, []);
+  useEffect(() => {
+    if (!focusComments || loading) return undefined;
+    setExpanded(true);
+    const timer = setTimeout(() => rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
+    return () => clearTimeout(timer);
+  }, [focusComments, loading]);
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timer = setTimeout(() => setNotice(""), 8000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  // finance_team écrit dans l'espace commun depuis le 25/09 (demande dev) ; le backend reste le juge.
+  const canEdit = (c) => (((me.email || "").toLowerCase() === (c.author_email || "").toLowerCase())
       || ["admin", "ceo"].includes(me.role));
   const saveEdit = async () => {
     const body = editDraft.trim();
     if (!body || savingEdit) return;
     setSavingEdit(true);
     try {
-      const updated = await apiClient.patch(`/api/v1/optilex/comments/${editingId}`, { body });
-      setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      const updated = await apiClient.patch(`/api/v1/optilex/comments/${editingId}`, { body, mentions: mentionedIds(body, people) });
+      setComments((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
       setEditingId(null); setEditDraft("");
+      setNotice(notifiedSummary(updated.notified));
     } catch (e) { setError("Le commentaire n’a pas pu être modifié. Réessayez."); }
     finally { setSavingEdit(false); }
   };
@@ -3108,9 +3136,10 @@ function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingE
     if (!body || posting) return;
     setPosting(true);
     try {
-      const created = await apiClient.post("/api/v1/optilex/comments", { numero_client: numero, body });
+      const created = await apiClient.post("/api/v1/optilex/comments", { numero_client: numero, body, mentions: mentionedIds(body, people) });
       setComments((prev) => [created, ...prev]);
-      setDraft(""); setComposerOpen(false);
+      setDraft("");
+      setNotice(notifiedSummary(created.notified));
     } catch (e) { setError("Le commentaire n’a pas pu être publié. Votre texte est conservé."); }
     finally { setPosting(false); }
   };
@@ -3122,19 +3151,22 @@ function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingE
   const shown = expanded ? entries : entries.slice(0, 3);
 
   return (
-    <div>
-      {!isFinanceTeam() && <button type="button" className="ob-detail-action" onClick={() => setComposerOpen(v => !v)} aria-expanded={composerOpen}>{composerOpen ? "Fermer le commentaire" : "Ajouter un commentaire"}</button>}
+    <div ref={rootRef} id="ob-comments" style={{ scrollMarginTop: 16 }}>
       {error && <p role="alert" style={{ color: "#b91c1c", fontSize: 12 }}>{error} <button type="button" onClick={() => setRefresh(v => v + 1)}>Réessayer</button></p>}
+      {notice && <p role="status" style={{ color: "#3e7d5a", fontSize: 12, margin: "6px 0 10px" }}>{notice}</p>}
       {(loading || ratingsLoading) && <p role="status" style={{ color: MUTED, fontSize: 12 }}>Chargement de l’historique…</p>}
       {!loading && !ratingsLoading && !error && !entries.length && <p style={{ color: MUTED, fontSize: 12 }}>Aucun échange pour le moment.</p>}
-      {/* Nouveau commentaire (masqué pour finance_team = lecture seule) */}
-      {!isFinanceTeam() && composerOpen && (
-      <div style={{ display: "flex", gap: 10, marginBottom: comments.length ? 18 : 4 }}>
+      {/* Espace commun : le composer est toujours visible et nommé, pour que chacun sache où écrire
+          (retour dev 25/09). Ouvert à tous les rôles du board, finance_team comprise. */}
+      <div style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: "12px 14px", marginBottom: comments.length ? 18 : 4, background: "#fafbfc" }}>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: TEXT }}>Écrire dans l’espace commun</div>
+        <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8, lineHeight: 1.45 }}>Visible par Owner, Opti’Lex et la finance. Tapez @ pour prévenir quelqu’un : il reçoit un e-mail et une notification.</div>
+      <div style={{ display: "flex", gap: 10 }}>
         <Avatar name={meName} src={me.avatar_url} size={32} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <textarea value={draft} onChange={(e) => setDraft(e.target.value)}
+          <MentionTextarea value={draft} onChange={setDraft} people={people}
             onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); } }}
-            placeholder="Ajouter un commentaire…" rows={2}
+            placeholder="Ajouter un commentaire… (@ pour mentionner quelqu’un)" rows={2}
             style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.45 }} />
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
             <button onClick={submit} disabled={!draft.trim() || posting}
@@ -3146,7 +3178,7 @@ function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingE
           </div>
         </div>
       </div>
-      )}
+      </div>
 
       {/* Fil */}
       <AnimatePresence initial={false}>
@@ -3182,7 +3214,7 @@ function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingE
               </div>
               {editingId === c.id ? (
                 <div style={{ marginTop: 6 }}>
-                  <textarea value={editDraft} onChange={(e) => setEditDraft(e.target.value)} rows={2} autoFocus
+                  <MentionTextarea value={editDraft} onChange={setEditDraft} people={people} rows={2} autoFocus
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveEdit(); }
                       if (e.key === "Escape") { setEditingId(null); setEditDraft(""); }
@@ -3202,7 +3234,7 @@ function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingE
                   </div>
                 </div>
               ) : (
-                <DetailText text={c.body} />
+                <DetailText text={<MentionedText text={c.body} mentions={c.mentions} />} measureKey={c.body} />
               )}
             </div>
           </motion.div>
