@@ -1,0 +1,74 @@
+/* Habillage propre au mockup — aucun style de la page d'origine n'est modifié.
+   Tout est préfixé `.otmk-` pour ne pouvoir entrer en collision avec Tailwind. */
+
+.otmk-banner {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 16px;
+  background: repeating-linear-gradient(
+    135deg, #b45309 0 12px, #92400e 12px 24px
+  );
+  color: #fff;
+  font: 600 12.5px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  letter-spacing: 0.01em;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 0.35);
+}
+
+.otmk-banner strong {
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.otmk-banner span {
+  opacity: 0.92;
+}
+
+.otmk-banner button {
+  margin-left: 4px;
+  padding: 3px 10px;
+  border: 1px solid rgb(255 255 255 / 0.45);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.otmk-banner button:hover {
+  background: rgb(255 255 255 / 0.16);
+}
+
+/* Le bandeau est en position fixed : on décale la page pour ne rien masquer. */
+body.otmk-shifted {
+  padding-top: var(--otmk-banner-h, 36px);
+}
+
+/* Confirmation affichée à la place de l'envoi réseau. */
+.otmk-fakeconfirm {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #16a34a;
+  border-radius: 10px;
+  background: #f0fdf4;
+  color: #14532d;
+  font: 500 13px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.otmk-fakeconfirm b {
+  display: block;
+  margin-bottom: 2px;
+  font-weight: 800;
+}
+
+@media print {
+  .otmk-banner { display: none; }
+  body.otmk-shifted { padding-top: 0; }
+}

@@ -1,0 +1,57 @@
+# Mockup /book — conteneur cloisonné.
+#
+# Le point important n'est pas seulement que le conteneur soit séparé, c'est
+# qu'il soit INCAPABLE de toucher la production :
+#   - réseau dédié, sans lien vers les réseaux applicatifs existants ;
+#   - aucun volume vers les données de prod, aucune variable d'environnement ;
+#   - système de fichiers en lecture seule ;
+#   - nginx sert des fichiers statiques, il ne fait aucun proxy sortant.
+#
+# Démarrer :  docker compose up -d --build
+# Ouvrir   :  http://localhost:8088/book/
+# Arrêter  :  docker compose down
+
+services:
+  webinaire-book-mockup:
+    build:
+      context: .
+    image: webinaire-book-mockup:latest
+    container_name: webinaire-book-mockup
+    restart: unless-stopped
+
+    ports:
+      # Port hôte volontairement décalé pour ne croiser aucun service existant.
+      - "127.0.0.1:8088:8080"
+
+    networks:
+      - mockup-isole
+
+    # Rien à écrire : le disque est en lecture seule, et nginx reçoit des tmpfs
+    # pour ses fichiers temporaires. Un processus compromis n'aurait nulle part
+    # où déposer quoi que ce soit.
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=16m
+      - /var/run:size=1m
+      - /tmp:size=8m
+
+    security_opt:
+      - no-new-privileges:true
+    # Aucune capacité : nginx tourne en utilisateur non privilégié sur 8080,
+    # il n'a même pas besoin de NET_BIND_SERVICE.
+    cap_drop:
+      - ALL
+
+    mem_limit: 128m
+    pids_limit: 64
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+networks:
+  mockup-isole:
+    name: webinaire-book-mockup
+    driver: bridge
