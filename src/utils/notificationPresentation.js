@@ -7,6 +7,7 @@ export function notificationDate(value) {
 }
 export function notificationTarget(notif) {
   if (notif.type === 'owner_rating_regression') return '/ceo/optilex-board' + (notif.data?.numero_client ? `?client=${encodeURIComponent(notif.data.numero_client)}` : '');
+  if (notif.type === 'board_mention') return notif.data?.path || '/optilex-board';   // chemin choisi par le serveur selon le rôle
   if (notif.type === 'sheet_invitation') return '/tracking-sheet?view=notifications';
   if (['setter_placed_r1','setter_placed_r2'].includes(notif.type)) return '/tracking-sheet';
   return null;

@@ -100,6 +100,8 @@ import ExpectedManager from './components/ExpectedManager.jsx';
 import PortalDropdown from './components/PortalDropdown.jsx';
 import OnboardingFacturation from './components/OnboardingFacturation.jsx';
 import SignedContracts from './components/SignedContracts.jsx';
+// Espace commun Owner / Opti'Lex / finance : le fil du board, pour répondre depuis la page finance.
+import CommonSpaceThread from '../../components/CommonSpaceThread.jsx';
 
 // Notion palette (sync with index.jsx N).
 const N = {
@@ -953,6 +955,11 @@ export default function DetailPanel({
               changes={profile?.changes}
               etatHistory={etatHistory}
             />
+
+            {/* Espace commun Owner / Opti'Lex / finance : le fil du board pour ce client, pour que la
+                finance réponde d'ici quand elle est mentionnée (demande dev 2026-09-25). Distinct du
+                fil interne ci-dessous, qui reste invisible pour le cabinet. */}
+            <CommonSpaceThread numero={client?.numero_client} onShowToast={onShowToast} />
 
             <ClientComments clientId={clientId} onShowToast={onShowToast} />
 
@@ -3348,7 +3355,7 @@ function ClientComments({ clientId, onShowToast }) {
   if (!available) return null;
 
   return (
-    <Section title="Commentaires" delay={0.14}>
+    <Section title="Commentaires internes finance" delay={0.14}>
       {/* Composer */}
       <div style={{
         border: `1px solid ${N.borderSft}`,

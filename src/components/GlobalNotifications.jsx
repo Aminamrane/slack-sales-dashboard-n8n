@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Bell, TrendingDown, Mail, CheckCheck, X, ArrowUpRight } from 'lucide-react';
+import { Bell, TrendingDown, Mail, CheckCheck, X, ArrowUpRight, AtSign } from 'lucide-react';
 import { notificationDate } from '../utils/notificationPresentation.js';
 import './GlobalNotifications.css';
 
 function Icon({ notification }) {
-  const Glyph = notification.type === 'owner_rating_regression' ? TrendingDown : notification.type === 'sheet_invitation' ? Mail : Bell;
+  const Glyph = notification.type === 'owner_rating_regression' ? TrendingDown : notification.type === 'sheet_invitation' ? Mail : notification.type === 'board_mention' ? AtSign : Bell;
   return <span className="owner-notif-icon"><Glyph size={19} strokeWidth={1.8} aria-hidden="true" /></span>;
 }
 export function GlobalNotificationPanel({ notifications, tab, setTab, unreadCount, onReadAll, onOpen, onClose, darkMode, position, panelRef }) {
@@ -36,6 +36,6 @@ export function GlobalNotificationPreview({ notification, onOpen, onClose, onPau
   const reduceMotion=useReducedMotion();
   return <motion.aside className={`owner-notif-preview${darkMode?' is-dark':''}`} style={position} initial={reduceMotion?false:{opacity:0,y:-10,scale:.97}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:reduceMotion?0:-8,scale:reduceMotion?1:.98}} transition={{duration:reduceMotion?0:.32,ease:[.16,1,.3,1]}} onMouseEnter={()=>onPause(true)} onMouseLeave={()=>onPause(false)} onFocus={()=>onPause(true)} onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))onPause(false);}}>
     <div className="owner-notif-preview-top"><span role="status">Nouvelle notification</span><button onClick={onClose} aria-label="Fermer l’aperçu"><X size={16}/></button></div>
-    <button className="owner-notif-preview-open" onClick={()=>onOpen(notification)}><Icon notification={notification}/><span><strong>{notification.title||'Notification'}</strong><span className="owner-notif-preview-text">{notification.message}</span><span className="owner-notif-preview-link">{notification.type==='owner_rating_regression'?'Voir le client dans le board':'Voir la notification'} <ArrowUpRight size={14}/></span></span></button>
+    <button className="owner-notif-preview-open" onClick={()=>onOpen(notification)}><Icon notification={notification}/><span><strong>{notification.title||'Notification'}</strong><span className="owner-notif-preview-text">{notification.message}</span><span className="owner-notif-preview-link">{notification.type==='owner_rating_regression'?'Voir le client dans le board':notification.type==='board_mention'?'Ouvrir l’espace commun':'Voir la notification'} <ArrowUpRight size={14}/></span></span></button>
   </motion.aside>;
 }
