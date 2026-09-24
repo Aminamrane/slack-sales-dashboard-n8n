@@ -25,6 +25,7 @@ const TrackingSheetAdmin = lazy(() => import("./pages/TrackingSheetAdmin.jsx"));
 const TrackingSheetSetter = lazy(() => import("./pages/TrackingSheetSetter.jsx"));
 const TrackingSheetFinance = lazy(() => import("./pages/TrackingSheetFinance/index.jsx"));
 const CeoDashboard = lazy(() => import("./pages/CeoDashboard.jsx"));
+const CeoBotIaView = lazy(() => import("./pages/CeoBotIaView.jsx"));
 const CeoSheetView = lazy(() => import("./pages/CeoSheetView.jsx"));
 const CeoSetterSheetView = lazy(() => import("./pages/CeoSetterSheetView.jsx"));
 const CeoDispatchView = lazy(() => import("./pages/CeoDispatchView.jsx"));
@@ -226,6 +227,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['admin', 'ceo', 'customer_success_manager', 'finance_director']}>
               <CeoOptilexBoardView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ceo/Sub-Tickets"
+          element={
+            <ProtectedRoute>
+              <CeoBotIaView />
             </ProtectedRoute>
           }
         />

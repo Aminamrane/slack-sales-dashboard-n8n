@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
-import { setNavScope } from "../utils/sidebarPermissions";
+import { setNavScope, filterEmailGatedItems } from "../utils/sidebarPermissions";
 import Sidebar from "../components/shared/Sidebar";
 import ceo5 from "../assets/ceo5.svg";
 import medal1 from "../assets/1st-place.png";
@@ -89,6 +89,13 @@ const SIDEBAR_TABS = [
   )},
   { key: 'sequences', label: 'Séquences email', icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+  )},
+  /**
+   * @brief Onglet additif « Sub Tickets » — page /ceo/Sub-Tickets (icône clavier).
+   * @note Visible uniquement pour les emails de ITEM_EMAIL_GATE (cf. sidebarPermissions).
+   */
+  { key: 'bot_ia', label: 'Sub Tickets', icon: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01"/><path d="M10 8h.01"/><path d="M14 8h.01"/><path d="M18 8h.01"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M7 16h10"/></svg>
   )},
   { section: 'FINANCE' },
   { key: 'dispatch', label: 'Finance', icon: (
@@ -1530,7 +1537,7 @@ export default function CeoDashboard() {
         width={sideCollapsed ? 56 : 260}
         collapsed={sideCollapsed}
         onToggle={() => setSideCollapsed((v) => !v)}
-        sections={SIDEBAR_SECTIONS}
+        sections={filterEmailGatedItems(SIDEBAR_SECTIONS)}
         activeTab={activeTab}
         setActiveTab={(tabId) => {
           // "dispatch" et "leaderboard" sont des wrappers de route
@@ -1553,6 +1560,7 @@ export default function CeoDashboard() {
           if (tabId === 'campaigns') { navigate('/ceo/campaigns'); return; }
           if (tabId === 'optilex_board') { navigate('/ceo/optilex-board'); return; }
           if (tabId === 'sales_recordings') { navigate('/ceo/sales-recordings'); return; }
+          if (tabId === 'bot_ia') { navigate('/ceo/Sub-Tickets'); return; }
           setActiveTab(tabId);
         }}
         C={C}

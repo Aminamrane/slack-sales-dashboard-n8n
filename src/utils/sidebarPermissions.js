@@ -9,6 +9,8 @@
 // Pattern hardcoded — quand `role_permissions` devient la source de
 // vérité pour la nav, remplacer par un fetch ou un lookup.
 
+import { BOT_IA_ALLOWED_EMAILS } from "../config/botIaAccess.js";
+
 const ROLE_SECTIONS = {
   acquisition_director: new Set(["recent", "acquisition"]),
   // Timothy remplit la page Campagnes : section Finance limitée à cet onglet.
@@ -41,6 +43,53 @@ const ITEM_ROLE_GATE = {
   leads_management: new Set(["ceo", "admin", "head_of_acquisition"]),
 };
 
+// Gate NOMINATIF par email (id -> emails autorises). Un item liste ici
+// n'apparait QUE pour ces adresses, quel que soit le role — y compris admin,
+// volontairement sans bypass. Strictement additif : un id absent de cette map
+// garde exactement le comportement precedent.
+const ITEM_EMAIL_GATE = {
+  /**
+   * @brief Onglet « Sub Tickets » (ACQUISITION) : accès nominatif demandé le 2026-08-28.
+   * @note La liste vit dans src/config/botIaAccess.js, lue AUSSI par la
+   * fonction serveur api/bot-ia/chat.mjs — source unique, pour que l'onglet
+   * visible et l'appel autorisé ne puissent jamais diverger.
+   */
+  bot_ia: new Set(BOT_IA_ALLOWED_EMAILS),
+};
+
+/** Email du user connecte, en minuscules ("" si non connecte). */
+export function currentUserEmail() {
+  try {
+    const u = JSON.parse(localStorage.getItem("auth_user") || "null");
+    return (u?.email || "").trim().toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+/** true si `itemId` est visible pour l'email connecte (cf. ITEM_EMAIL_GATE). */
+export function canSeeGatedItem(itemId) {
+  const gate = ITEM_EMAIL_GATE[itemId];
+  return !gate || gate.has(currentUserEmail());
+}
+
+/**
+ * Retire les onglets sous gate nominatif que l'email connecte n'a pas le
+ * droit de voir. N'affecte QUE les ids presents dans ITEM_EMAIL_GATE : pour
+ * tous les autres onglets, les sections ressortent inchangees.
+ */
+export function filterEmailGatedItems(allSections) {
+  return allSections
+    .map((s) => (
+      s.items
+        ? { ...s, items: s.items.filter((it) => canSeeGatedItem(it.id)) }
+        : s
+    ))
+    // Une section videe par ce gate ne s'affiche pas (ne peut arriver que si
+    // tous ses onglets sont gates — ce n'est le cas d'aucune aujourd'hui).
+    .filter((s) => !s.items || s.items.length > 0);
+}
+
 // ── Scope de navigation persistant (sessionStorage) ────────────────
 // Les vues /ceo/* sont PARTAGÉES entre contextes (CEO, RH, Acquisition) et
 // filtrent la sidebar selon le rôle du viewer -> un admin/ceo y voit TOUT.
@@ -61,6 +110,8 @@ export function setNavScope(scope) {
  * (admin / ceo / marketing voient tout).
  */
 export function getVisibleSections(allSections, role) {
+  // Gate nominatif par email (additif : sans effet sur les onglets non gates).
+  allSections = filterEmailGatedItems(allSections);
   let effective = role;
   try {
     const scope = sessionStorage.getItem("navScope");
