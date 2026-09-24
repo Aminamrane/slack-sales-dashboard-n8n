@@ -1,3 +1,5 @@
+import { parisWallTime } from '../../utils/boardIntegration.js';
+
 // constants.js — single source of truth for the Tracking Finance page.
 //
 // All enum values mirror the backend Pydantic validators. Sending any value
@@ -95,6 +97,24 @@ export const onboardingPhaseOf = (r, today = new Date()) => {
   if (!d) return null;
   const key = /^\d{4}-\d{2}-\d{2}/.test(String(raw).trim()) ? String(raw).trim().slice(0, 10) : dayKey(d);
   return key > dayKey(today) ? 'upcoming' : 'past';
+};
+
+// Vue « Attente Opti'Lex » (dev 2026-09-23) : où en est le rendez-vous
+// d'intégration Opti'Lex de la ligne du board ? Quatre états, parce qu'un RDV
+// coché « effectué » sur le board et une date simplement passée ne sont pas la
+// même chose (dev) :
+//   'done'     : jalon « effectué » coché sur le board (fait foi, quelle que soit la date)
+//   'past'     : date dépassée mais pas marquée effectuée
+//   'upcoming' : date du jour ou à venir
+//   'none'     : aucune date de RDV
+// Dates comparées en jour calendaire Paris, comme le board (`parisWallTime`).
+export const OPTILEX_INTEGRATION_PHASE_KEYS = ['done', 'past', 'upcoming', 'none'];
+export const optilexIntegrationPhaseOf = (br, now = new Date()) => {
+  if (!br) return 'none';
+  if (br.rdv_lancement_done === true) return 'done';
+  const raw = br.rdv_lancement_date;
+  if (!raw) return 'none';
+  return String(raw).slice(0, 10) < parisWallTime(now).slice(0, 10) ? 'past' : 'upcoming';
 };
 
 // ── Commentable cells ────────────────────────────────────────────────────

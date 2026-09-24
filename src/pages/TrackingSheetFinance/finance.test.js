@@ -390,3 +390,18 @@ test('proposer : réservé au rôle finance_team ; les corrections de reste dû 
   assert.deepEqual(outstandingByMonth(corrections, 'global'), { '2026-07': -25, '2026-09': -12 });
   assert.deepEqual(outstandingByMonth([], 'owner'), {});
 });
+
+// ── Attente Opti'Lex : où en est le RDV d'intégration ? (dev 2026-09-23) ──
+test('RDV d’intégration Opti’Lex : effectué (jalon) ≠ date passée ≠ à venir ≠ sans date', async () => {
+  const { optilexIntegrationPhaseOf } = await import('./constants.js');
+  const now = new Date('2026-09-23T12:00:00Z');
+  assert.equal(optilexIntegrationPhaseOf(null, now), 'none', 'contrat sans ligne board');
+  assert.equal(optilexIntegrationPhaseOf({}, now), 'none');
+  assert.equal(optilexIntegrationPhaseOf({ rdv_lancement_date: '2026-09-02T16:00:00+00:00', rdv_lancement_done: true }, now), 'done', 'coché sur le board');
+  assert.equal(optilexIntegrationPhaseOf({ rdv_lancement_done: true }, now), 'done', 'coché même sans date');
+  assert.equal(optilexIntegrationPhaseOf({ rdv_lancement_date: '2026-09-02T16:00:00+00:00' }, now), 'past', 'date passée, pas coché');
+  assert.equal(optilexIntegrationPhaseOf({ rdv_lancement_date: '2026-09-23T09:00:00+00:00', rdv_lancement_done: false }, now), 'upcoming', 'le jour même reste à venir, comme le board');
+  assert.equal(optilexIntegrationPhaseOf({ rdv_lancement_date: '2026-10-02T09:00:00+00:00' }, now), 'upcoming');
+  // Minuit Paris passé alors qu'il est encore la veille en UTC : jour Paris.
+  assert.equal(optilexIntegrationPhaseOf({ rdv_lancement_date: '2026-09-23T09:00:00+00:00' }, new Date('2026-09-23T22:30:00Z')), 'past');
+});
