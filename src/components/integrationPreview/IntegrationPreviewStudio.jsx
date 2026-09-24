@@ -268,7 +268,6 @@ export default function IntegrationPreviewStudio({
       if (companySiren(data?.siren) !== siren || !data?.legal_name?.trim()) throw new Error('Aucune société trouvée pour ce SIREN. Vérifiez le numéro.');
       setDraft(current => applyCompanyLookup(current, company.id, siren, data, () => crypto.randomUUID()));
       setValidated(null);
-      if (data.signer_linked === false) setCompanyError({ id: company.id, message: `Société laissée hors périmètre : Pappers ne confirme pas de lien avec ${data.signer_name || signerName}.` });
     } catch (error) {
       if (alive.current) setCompanyError({ id: company.id, message:
         error?.status === 404 ? 'Aucune société trouvée pour ce SIREN. Vérifiez le numéro.' :
