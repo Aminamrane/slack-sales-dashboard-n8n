@@ -19,6 +19,12 @@ const norm = (v) => String(v || '').trim().toLowerCase();
 
 export const RECO_TONE = {
   observer: 'navy', garder: 'muted', decliner: 'green', hook: 'amber', qualif: 'amber', noshow: 'red', couper: 'red',
+  scale: 'green', keep: 'muted', variant: 'green', fix_qualification: 'amber', fix_noshow: 'amber', stop: 'red', wait: 'navy',
+};
+const agoLabel = (iso) => {
+  if (!iso) return '';
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  return mins < 1 ? "à l'instant" : mins < 60 ? `il y a ${mins} min` : `il y a ${Math.floor(mins / 60)} h`;
 };
 export const toneColors = (T, tone) => ({
   green: { color: T.green, bg: T.accentBg },
@@ -57,7 +63,7 @@ function Stat({ T, label, value, strong }) {
   );
 }
 
-export default function CreativePanel({ row, sales, period, T, onClose }) {
+export default function CreativePanel({ row, sales, period, T, jev, onClose }) {
   const reduce = useReducedMotion();
   const [full, setFull] = useState(row);
   const [lookup, setLookup] = useState(false);
@@ -91,8 +97,15 @@ export default function CreativePanel({ row, sales, period, T, onClose }) {
   const hasFunnel = r.r1_fait != null;
   const leads = hasFunnel ? Math.max(r.crm_leads || 0, r.leads_meta || 0) : (r.leads ?? r.match ?? 0);
   const active = (r.status || 'active') === 'active';
-  const tone = toneColors(T, RECO_TONE[r.reco?.key] || 'muted');
-  const subs = r.subs ? [['Coût par lead', r.subs.cpl], ['Lead → R1 tenu', r.subs.r1], ['R1 → R2', r.subs.r2], ['Closing', r.subs.close], ['Volume', r.subs.vol]] : [];
+  const decision = r.jev || null;
+  const tone = toneColors(T, decision ? (decision.tone || RECO_TONE[decision.action] || 'muted') : 'muted');
+  const subs = !decision && r.subs ? [['Coût par lead', r.subs.cpl], ['Lead → R1 tenu', r.subs.r1], ['R1 → R2', r.subs.r2], ['Closing', r.subs.close], ['Volume', r.subs.vol]] : [];
+  const signals = decision ? [
+    ['Données suffisantes', decision.signals?.enough_data, true],
+    ['Fatigue de la créa', decision.signals?.fatigue, false],
+    ['Retours sales négatifs', decision.signals?.sales_feedback_negative, false],
+  ] : [];
+  const jevStatus = jev?.status;
   const ventesCa = r.ca ?? mine.reduce((s, x) => s + (x.amount || 0), 0);
 
   return (
@@ -124,11 +137,30 @@ export default function CreativePanel({ row, sales, period, T, onClose }) {
         </div>
 
         {(r.score != null || lookup) && (
-          <Block T={T} icon="score" title="Score" sub="0 à 100, lissé sur la période">
+          <Block T={T} icon="score" title={decision ? 'Score Jev' : 'Score'} sub={decision ? `décidé par Jev ${agoLabel(decision.decided_at)}` : (r.score_source === 'rules' && jevStatus === 'ready' ? 'score de repli (règles) : créa non analysée par Jev' : '0 à 100, lissé sur la période')}>
             {lookup && r.score == null ? <div style={{ fontSize: 12.5, color: T.textFaint }}>Recherche dans le leaderboard…</div> : (
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 <Ring value={(r.score || 0) / 100} size={72} stroke={6} color={scoreColor(r.score, T)} label={Math.round(r.score || 0)} sub="/ 100" T={T} />
                 <div style={{ flex: 1, display: 'grid', gap: 6 }}>
+                  {decision && (
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <Pill T={T} color={tone.color} bg={tone.bg}>{decision.action_label}</Pill>
+                        {decision.confidence != null && <span style={{ fontSize: 11.5, color: T.textMuted }}>confiance {Math.round(decision.confidence * 100)} %</span>}
+                      </div>
+                      {signals.map(([label, p, positive]) => (
+                        <div key={label} title={`Probabilité estimée par Jev : ${Math.round((p || 0) * 100)} % de chances que ce soit vrai`} style={{ display: 'grid', gridTemplateColumns: '132px 1fr 44px', gap: 8, alignItems: 'center', fontSize: 11.5 }}>
+                          <span style={{ color: T.textMuted }}>{label}</span>
+                          <div style={{ height: 6, borderRadius: 99, background: T.track, overflow: 'hidden' }}>
+                            <motion.div initial={reduce ? { scaleX: p || 0 } : { scaleX: 0 }} animate={{ scaleX: Math.max(0.02, p || 0) }} transition={{ duration: 0.7, ease: EASE }}
+                              style={{ height: '100%', transformOrigin: 'left center', background: positive ? T.green : ((p || 0) >= 0.5 ? T.amber : T.textFaint), borderRadius: 99 }} />
+                          </div>
+                          <span style={{ textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{Math.round((p || 0) * 100)} %</span>
+                        </div>
+                      ))}
+                      <div style={{ fontSize: 10.5, color: T.textFaint, marginTop: 2 }}>Probabilités estimées par Jev</div>
+                    </div>
+                  )}
                   {subs.map(([label, v]) => (
                     <div key={label} style={{ display: 'grid', gridTemplateColumns: '92px 1fr 34px', gap: 8, alignItems: 'center', fontSize: 11.5 }}>
                       <span style={{ color: T.textMuted }}>{label}</span>
@@ -167,19 +199,34 @@ export default function CreativePanel({ row, sales, period, T, onClose }) {
           </div>
         </Block>
 
-        {r.reco && (
-          <Block T={T} icon="info" title="Recommandation">
-            <div style={{ padding: '12px 14px', borderRadius: T.radiusSm, background: tone.bg }}>
-              <div style={{ fontSize: 13.5, fontWeight: 600, color: tone.color }}>{r.reco.label}</div>
-              {r.reco.detail && <div style={{ marginTop: 4, fontSize: 12.5, color: T.textMuted, lineHeight: 1.45 }}>{r.reco.detail}</div>}
-              {r.reco.suggestions?.length > 0 && (
-                <ul style={{ margin: '8px 0 0', paddingLeft: 16, display: 'grid', gap: 4 }}>
-                  {r.reco.suggestions.map((s, i) => <li key={i} style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.45 }}>{s}</li>)}
-                </ul>
+        <Block T={T} icon="info" title="Décision Jev" sub={decision ? `${decision.model || 'jev'} · ${agoLabel(decision.decided_at)}` : undefined}>
+          {decision ? (
+            <>
+              <div style={{ padding: '12px 14px', borderRadius: T.radiusSm, background: tone.bg }}>
+                <div style={{ fontSize: 15, fontWeight: 650, color: tone.color, letterSpacing: '-0.01em' }}>{decision.action_label}</div>
+                {decision.guardrail && <div style={{ marginTop: 4, fontSize: 12.5, color: T.textMuted, lineHeight: 1.45 }}>{decision.guardrail}</div>}
+                {decision.alternatives?.length > 0 && (
+                  <div style={{ marginTop: 6, fontSize: 12, color: T.textMuted }}>Aussi envisagé : {decision.alternatives.map((a) => `${a.label} (${Math.round(a.p * 100)} %)`).join(' · ')}</div>
+                )}
+              </div>
+              <div style={{ marginTop: 12, fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: T.textFaint }}>Ce que Jev a vu</div>
+              <ul style={{ margin: '6px 0 0', paddingLeft: 16, display: 'grid', gap: 4 }}>
+                {(decision.facts || []).map((f, i) => <li key={i} style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.45 }}>{f}</li>)}
+              </ul>
+              {jev?.glossary?.length > 0 && (
+                <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: T.radiusSm, background: T.surfaceAlt, fontSize: 11.5, color: T.textMuted, lineHeight: 1.5 }}>
+                  {jev.glossary.map(([term, def]) => <div key={term}><strong style={{ color: T.text }}>{term}</strong> : {def}</div>)}
+                </div>
               )}
+            </>
+          ) : (
+            <div style={{ fontSize: 12.5, color: T.textFaint, lineHeight: 1.5 }}>
+              {jevStatus === 'pending' ? 'Jev analyse les créas de cette période, la décision arrive dans quelques secondes.'
+                : jevStatus === 'ready' ? 'Créa non analysée par Jev sur cette période (au-delà des 80 créas les plus dépensières, ou sans dépense).'
+                  : jevStatus === 'unconfigured' ? 'Jev n’est pas configuré sur le serveur.' : 'Décision Jev indisponible pour le moment.'}
             </div>
-          </Block>
-        )}
+          )}
+        </Block>
 
         <Block T={T} icon="sales" title="Ventes signées" sub={`${mine.length} sur la période`}>
           {mine.length === 0 ? <div style={{ fontSize: 12.5, color: T.textFaint }}>Aucune vente déclarée rattachée à cette créa sur la période.</div> : (

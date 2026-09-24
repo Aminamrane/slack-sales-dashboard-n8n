@@ -44,10 +44,12 @@ function NameCell({ name, sub, creative, status, T }) {
   );
 }
 
-function RecoCell({ reco, T }) {
-  if (!reco) return <span style={{ color: T.textFaint }}>—</span>;
-  const tone = toneColors(T, RECO_TONE[reco.key] || 'muted');
-  return <Pill T={T} color={tone.color} bg={tone.bg} title={reco.detail}>{reco.label}</Pill>;
+// Décision Jev (TypeSafe) : action décidée par le modèle à partir des faits calculés côté serveur.
+function JevCell({ jev, T }) {
+  if (!jev) return <span style={{ color: T.textFaint }} title="Pas encore analysée par Jev">—</span>;
+  const tone = toneColors(T, jev.tone || RECO_TONE[jev.action] || 'muted');
+  const title = [(jev.facts || []).join('\n'), jev.confidence != null ? `Confiance ${Math.round(jev.confidence * 100)} %` : ''].filter(Boolean).join('\n');
+  return <Pill T={T} color={tone.color} bg={tone.bg} title={title}>{jev.action_label}</Pill>;
 }
 
 export const TABS = [
@@ -65,7 +67,7 @@ export const TABS = [
       ventes,
       money('cac', 'Coût / vente'),
       roas,
-      { key: 'reco', label: 'Recommandation', sortable: false, render: (r, T) => <RecoCell reco={r.reco} T={T} /> },
+      { key: 'jev', label: 'Décision Jev', sortable: false, render: (r, T) => <JevCell jev={r.jev} T={T} /> },
     ],
   },
   {

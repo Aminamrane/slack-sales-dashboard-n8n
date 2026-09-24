@@ -82,6 +82,9 @@ function useSource(source, range, portfolio, enabled = true) {
   const cache = useRef(new Map());
   const url = urlFor(source, range, portfolio);
   const [state, setState] = useState({ url: null, data: null, loading: enabled, error: null });
+  // `reload` : relit le serveur en oubliant la mémoire de cette URL (Jev qui finit son analyse).
+  const [tick, setTick] = useState(0);
+  const reload = useCallback(() => { cache.current.delete(url); setTick((t) => t + 1); }, [url]);
   useEffect(() => {
     if (!enabled) return undefined;
     let alive = true;
@@ -92,8 +95,8 @@ function useSource(source, range, portfolio, enabled = true) {
       .then((d) => { cache.current.set(url, d); if (alive) setState({ url, data: d, loading: false, error: null }); })
       .catch((e) => { if (alive) setState({ url, data: null, loading: false, error: e?.status === 503 ? 'Configuration Meta en attente sur le serveur.' : (e?.data?.detail || e?.message || 'Erreur de chargement') }); });
     return () => { alive = false; };
-  }, [url, enabled]);
-  return state;
+  }, [url, enabled, tick]);
+  return { ...state, reload };
 }
 
 function syncLabel(iso) {
@@ -161,8 +164,23 @@ export default function MetaAds() {
     if (hit) setPanel(hit);
   }, [params, panel, leaderboardForPanel.data]);
 
+  // Jev analyse une fenêtre inconnue en fond : on relit le leaderboard toutes les 10 s, 8 fois au plus.
+  const jevMeta = leaderboardForPanel.data?.jev;
+  const jevStatus = jevMeta?.status;
+  const jevReload = leaderboardForPanel.reload;
+  const jevTries = useRef(0);
+  useEffect(() => {
+    if (jevStatus !== 'pending' || jevTries.current >= 8) return undefined;
+    const id = setTimeout(() => { jevTries.current += 1; jevReload(); }, 10000);
+    return () => clearTimeout(id);
+  }, [jevStatus, jevReload]);
+  useEffect(() => { jevTries.current = 0; }, [range.since, range.until, portfolio]);
   if (!authChecked) return null;
   const synced = overview.data?.synced_at;
+  const jevLabel = !jevMeta ? null
+    : jevMeta.status === 'ready' ? `Scores Jev ${syncLabel(jevMeta.analysed_at)}${jevMeta.stale ? ' · actualisation en cours' : ''}`
+      : jevMeta.status === 'pending' ? 'Jev analyse les créas de cette période…'
+        : jevMeta.status === 'unconfigured' ? 'Jev non configuré : scores par règles' : 'Jev indisponible : scores par règles';
 
   return (
     <div style={{ minHeight: '100vh', background: T.pageBg, color: T.text, fontFamily: T.font }}>
@@ -175,6 +193,7 @@ export default function MetaAds() {
             <h1 style={{ margin: 0, fontSize: 20, fontWeight: 500, color: T.text }}>Meta Ads</h1>
           </div>
           {synced && <span style={{ fontSize: 12, color: T.textFaint }}>Dernière mise à jour {syncLabel(synced)}</span>}
+          {jevLabel && <span style={{ fontSize: 12, color: jevMeta.status === 'ready' ? T.green : T.textFaint, display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 6, height: 6, borderRadius: 99, background: jevMeta.status === 'ready' ? T.green : T.textFaint }} />{jevLabel}</span>}
         </div>
 
         <Filters T={T} periodKey={periodKey} range={range} onPeriod={onPeriod} portfolio={portfolio} onPortfolio={setPortfolio} />
@@ -219,7 +238,7 @@ export default function MetaAds() {
       </div>
 
       <AnimatePresence>
-        {panel && <CreativePanel key={panel.name} row={panel} sales={overview.data?.sales} period={range} T={T} onClose={() => setPanel(null)} />}
+        {panel && <CreativePanel key={panel.name} row={panel} sales={overview.data?.sales} period={range} T={T} jev={jevMeta} onClose={() => setPanel(null)} />}
       </AnimatePresence>
     </div>
   );
