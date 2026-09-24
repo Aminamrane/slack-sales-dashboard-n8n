@@ -1,5 +1,7 @@
 import AppointmentConfirmation from "../components/booking/AppointmentConfirmation";
 import BoardIntegrationSheet from "../components/BoardIntegrationSheet";
+import { AlertCabinetBlock, MailIcon } from "../components/CabinetAlertBlock";
+import OnboardingFlowModal from "../components/OnboardingFlowModal";
 import BoardOnboardingDateCorrection from "../components/BoardOnboardingDateCorrection";
 import { appointmentConfirmation, appointmentFailure } from "../utils/appointmentConfirmation";
 import { ClientMissions, DetailFold, DetailText } from "../components/OptilexClientDetail";
@@ -8,8 +10,10 @@ import { matchesSignedClient, resolvePendingExit } from "../utils/boardClientSta
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import apiClient from "../services/apiClient";
+// Météo client : primitives partagées avec la météo d'onboarding (fiche d'intégration, parcours).
+import { METEO_BANDS, meteoBandOf, meteoStyle, METEO_MEANING, MeteoIcon } from "../components/meteo.jsx";
 
 // ── Charte sobre (navy + neutre, style Attio/Linear) ─────────────────────────
 const NAVY = "#1e2330";
@@ -70,44 +74,15 @@ const etatOptionsForUser = () => {
   } catch { /* défaut : liste complète */ }
   return ETAT_OPTIONS;
 };
-// ── Météo client : note 1-5 -> bande couleur + sens/action ───────────────────
-// 1-2 rouge (critique, risque résiliation), 3 orange (mécontent), 4-5 vert (satisfait).
-export const METEO_BANDS = {
-  rouge:  { label: "Critique",  color: "#dc2626", bg: "#fdecec", dot: "#dc2626" },
-  orange: { label: "Mécontent", color: "#d97706", bg: "#fff3e3", dot: "#d97706" },
-  vert:   { label: "Satisfait", color: "#15a34a", bg: "#e9f9ef", dot: "#15a34a" },
-};
-export const meteoBandOf = (score) => (score == null ? null : score <= 2 ? "rouge" : score === 3 ? "orange" : "vert");
-const meteoStyle = (score) => { const b = meteoBandOf(score); return b ? METEO_BANDS[b] : null; };
+// ── Météo client : bandes, sens et icônes vivent dans components/meteo.jsx (partagés avec la
+// météo d'onboarding). Réexportés d'ici pour les pages qui les importent déjà du board.
+export { METEO_BANDS, meteoBandOf, MeteoIcon };
 // Commentaire OBLIGATOIRE quand on signale un client Critique (1-2) ou Mécontent (3) : on
 // n'enregistre pas une alerte de risque sans contexte écrit (motif de la dégradation).
 const meteoNoteRequired = (score) => score != null;
-// Sens de chaque note (affiché dans le sélecteur) + action implicite (automatisable via CSV).
-const METEO_MEANING = {
-  1: { txt: "Situation critique, fort risque de résiliation", action: "Plan de rétention (Owner)" },
-  2: { txt: "Situation critique, fort risque de résiliation", action: "Plan de rétention (Owner)" },
-  3: { txt: "Client mécontent", action: "Axes d'optimisation (Opti'Lex)" },
-  4: { txt: "Client satisfait", action: null },
-  5: { txt: "Client satisfait", action: "Programme ambassadeur (Owner)" },
-};
 // Qui peut POSER une note : pour l'instant Owner uniquement (le cabinet la voit mais ne la
 // modifie pas). Plus tard on ouvrira au rôle optilex -> retirer ce gate (backend déjà OK).
 const meteoSettable = () => { try { return (apiClient.getUser() || {}).role !== "optilex"; } catch { return true; } };
-// Icône météo par note (progression orage -> grand soleil, style lucide, colorée par la bande).
-const METEO_ICONS = {
-  1: <><path d="M6 16.326A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 .5 8.973" /><path d="m13 12-3 5h4l-3 5" /></>,      // orage
-  2: <><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" /><path d="M16 14v5M8 14v5M12 16v5" /></>, // pluie
-  3: <><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" /></>,                                          // nuageux
-  4: <><path d="M12 2v2M4.93 4.93l1.41 1.41M20 12h2M19.07 4.93l-1.41 1.41" /><path d="M15.947 12.65a4 4 0 0 0-5.925-4.128" /><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z" /></>, // éclaircie
-  5: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" /></>, // grand soleil
-};
-// `strokeWidth` réglable : à 16 px un trait de 2 est juste, à 54 px (carte
-// météo du dashboard CEO) il faut l'affiner pour que le dessin respire.
-export function MeteoIcon({ score, size = 16, color = "currentColor", strokeWidth = 2 }) {
-  const paths = METEO_ICONS[score];
-  if (!paths) return null;
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>{paths}</svg>;
-}
 // Champ(s) date à saisir par état (raisonnement fiscaliste). Absent = pas de date.
 // Pause = période : début (etat_date) + fin CONNUE (pause_end_date) OU indéterminée -> relance
 // (pause_relance_date), car en B2B le dirigeant ne sait pas toujours quand il reprend.
@@ -1058,7 +1033,8 @@ export default function OptilexBoard({ embed = false }) {
           && (etatsSel.length > 0 || !TERMINATED_ETATS.includes(displayEtat(r)));
         const inOnboarding = (onboardingSel.includes("venir") && isOnboardingUpcoming(r))
           || (onboardingSel.includes("done") && r.rdv_onboarding_done)
-          || (onboardingSel.includes("todo") && todoOk);
+          || (onboardingSel.includes("todo") && todoOk)
+          || (onboardingSel.includes("recaler") && r.onboarding_reschedule_pending && !r.rdv_onboarding_done);
         if (!inOnboarding) return false;
       }
       // Sous-filtre contextuel "En retard" de l'onglet Intégration à venir.
@@ -1389,6 +1365,8 @@ export default function OptilexBoard({ embed = false }) {
               icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></svg> },
             { key: "todo", label: "Onboarding à faire", count: rows.filter((r) => r.numero_client && !r.rdv_onboarding_done && !TERMINATED_ETATS.includes(displayEtat(r))).length,
               icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="M12 14v4M12 14h.01" /></svg> },
+            { key: "recaler", label: "Onboarding à recaler", count: rows.filter((r) => r.onboarding_reschedule_pending && !r.rdv_onboarding_done).length,
+              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg> },
           ]}
           selected={onboardingSel}
           onToggle={(k) => setOnboardingSel((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]))}
@@ -1569,6 +1547,9 @@ export default function OptilexBoard({ embed = false }) {
                       <TableDateEdit value={r.rdv_onboarding_date_manual || r.rdv_onboarding_date}
                         disabled={!r.numero_client || isFinanceTeam()}
                         onSave={(d) => patch(r.numero_client, { rdv_onboarding_date_manual: d })} />
+                      {r.onboarding_reschedule_pending && !r.rdv_onboarding_done && (
+                        <div title={r.onboarding_reschedule_note || "Onboarding à recaler, sans date"} style={{ marginTop: 3, display: "inline-block", padding: "2px 7px", borderRadius: 999, background: "#fff4e0", color: "#b45309", fontSize: 10.5, fontWeight: 700 }}>À recaler</div>
+                      )}
                     </td>
                     <td style={{ ...td, color: r.rdv_lancement_date ? TEXT : "#cbd2e0" }}>
                       {fmtDT(r.rdv_lancement_date) || "—"}
@@ -1662,6 +1643,63 @@ function InfoField({ label, value, full }) {
 // partent sur l'email sélectionné (backend). Réservé admin + ceo + optilex.
 const EMAIL_SELECT_ROLES = ["admin", "ceo", "optilex", "customer_success_manager"];
 const canSelectEmail = () => { try { return EMAIL_SELECT_ROLES.includes((apiClient.getUser() || {}).role); } catch { return false; } };
+// Relance de la signature Opti'Lex : le cabinet (Lisa), l'admin et le CEO. Le Client Success ne
+// relance jamais lui-même : il corrige l'adresse puis PRÉVIENT Lisa (règle du 24/09/2026).
+const RELAUNCH_ROLES = ["admin", "ceo", "optilex"];
+const ALERT_CABINET_ROLES = ["customer_success_manager", "admin", "ceo"];
+const ONBOARDING_FLOW_ROLES = ["customer_success_manager", "admin", "ceo"];
+const roleOf = () => { try { return (apiClient.getUser() || {}).role; } catch { return undefined; } };
+
+// Onglet Détails allégé pour le Client Success : l'état de l'onboarding en une carte et un seul
+// bouton « Faire l'onboarding » ; les rendez-vous de lancement, la convention et la météo
+// vivent dans le parcours. Les autres rôles gardent les lignes détaillées.
+function OnboardingCard({ row, onStart }) {
+  const reduce = useReducedMotion();
+  const date = row.rdv_onboarding_date_manual || row.rdv_onboarding_date;
+  const done = !!row.rdv_onboarding_done;
+  const pending = !!row.onboarding_reschedule_pending && !done;
+  const tone = done ? GREEN : pending ? "#b45309" : NAVY;
+  const status = done ? `Onboarding réalisé${date ? ` · ${fmtDT(date)}` : ""}`
+    : pending ? `À recaler${row.onboarding_reschedule_note ? ` · ${row.onboarding_reschedule_note}` : " · sans date pour le moment"}`
+    : date ? `Prévu le ${fmtDT(date)}` : "Aucune date d'onboarding";
+  const rdv = [
+    ["Intégration Opti'Lex", row.rdv_lancement_date, row.rdv_lancement_done],
+    ["Lancement fiscal", row.rdv_fiscal_date_manual || row.rdv_fiscal_date, row.rdv_fiscal_done],
+    ["Lancement social", row.rdv_social_date_manual || row.rdv_social_date, row.rdv_social_done],
+  ];
+  return (
+    <div style={{ marginBottom: 22, padding: "14px 16px", borderRadius: 12, border: `1px solid ${BORDER}`, background: "#fafbfc" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 11, color: MUTED }}>Onboarding Owner</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: tone, overflowWrap: "anywhere" }}>{status}</div>
+          {row.onboarding_meet_link && !done && (
+            <a href={row.onboarding_meet_link} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 4, fontSize: 12, fontWeight: 700, color: GREEN, textDecoration: "none" }}>Rejoindre le Meet</a>
+          )}
+        </div>
+        <motion.button type="button" whileTap={{ scale: 0.97 }} onClick={onStart}
+          style={{ padding: "10px 16px", display: "inline-flex", alignItems: "center", gap: 8, borderRadius: 10, border: "none", background: done ? CARD : NAVY, color: done ? NAVY : "#fff", boxShadow: done ? `inset 0 0 0 1px ${NAVY}` : "none", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+          {/* Fusée discrète : un léger décollage avec des pauses, comme une invitation. Le pictogramme du
+              lancement client ; immobile si l'utilisateur préfère moins d'animations ou une fois réalisé. */}
+          <motion.svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}
+            animate={reduce || done ? undefined : { y: [0, -1.5, 0.5, 0], rotate: [0, -6, 0, 0] }}
+            transition={{ duration: 1.4, times: [0, 0.4, 0.75, 1], ease: [0.45, 0, 0.55, 1], repeat: Infinity, repeatDelay: 2.2 }}>
+            <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
+            <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
+            <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
+            <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
+          </motion.svg>
+          {done ? "Rouvrir le parcours" : pending ? "Reprendre l'onboarding" : "Faire l'onboarding"}
+        </motion.button>
+      </div>
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 10, fontSize: 12, color: MUTED }}>
+        {rdv.map(([label, d, ok]) => (
+          <span key={label}>{label} : <strong style={{ color: d ? TEXT : "#cbd2e0" }}>{fmtDT(d) || "à placer"}</strong>{ok ? " ✓" : ""}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
 function EmailSelect({ row, patch, onSaved }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
@@ -1964,17 +2002,6 @@ function RdvLink({ url }) {
   );
 }
 
-// Enveloppe email qui gigote de droite à gauche (attire l'œil sur "Relancer").
-function MailIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-      style={{ animation: "mailWiggle 0.9s ease-in-out infinite" }}>
-      <rect x="2" y="4" width="20" height="16" rx="2" />
-      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-    </svg>
-  );
-}
-
 // Lien de signature Opti'Lex (copier) + relance native Yousign (double-clic de confirmation).
 function OptilexSignatureBlock({ email, chosenEmail, refreshKey }) {
   const [loading, setLoading] = useState(true);
@@ -1993,7 +2020,8 @@ function OptilexSignatureBlock({ email, chosenEmail, refreshKey }) {
   }, [email, refreshKey]);
 
   const link = data?.signature_link;
-  const canRemind = data?.can_remind;
+  const canRelaunch = RELAUNCH_ROLES.includes(roleOf());
+  const canRemind = data?.can_remind && canRelaunch;
 
   const copy = () => {
     if (!link) return;
@@ -2039,7 +2067,13 @@ function OptilexSignatureBlock({ email, chosenEmail, refreshKey }) {
           </button>
         </>
       )}
-      {!canRemind && <div style={{ fontSize: 12, color: MUTED, marginTop: 8 }}>Rappel indisponible (statut : {data.signer_status || data.optilex_status || "—"}).</div>}
+      {!canRemind && canRelaunch && <div style={{ fontSize: 12, color: MUTED, marginTop: 8 }}>Rappel indisponible (statut : {data.signer_status || data.optilex_status || "—"}).</div>}
+      {!canRelaunch && (
+        <div style={{ fontSize: 12, color: MUTED, marginTop: 8, lineHeight: 1.5 }}>
+          Adresse d'envoi actuelle : <strong style={{ color: TEXT }}>{data.recipient || chosenEmail || email}</strong>.
+          {" "}La relance est faite par le cabinet : utilisez « Prévenir Lisa » ci-dessous.
+        </div>
+      )}
     </div>
   );
 }
@@ -2435,8 +2469,12 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
   // Rafraîchit le bloc signature Opti'Lex après un changement d'email (le destinataire du
   // rappel Yousign est re-résolu côté backend) : bumpé par EmailSelect après le patch commité.
   const [sigRefresh, setSigRefresh] = useState(0);
+  // Après une correction d'adresse par le Client Success : le bloc « Prévenir Lisa » se
+  // positionne sur le motif « Adresse e-mail corrigée » (l'envoi reste un clic explicite).
+  const [alertPrefill, setAlertPrefill] = useState(null);
   const [agendaOpen, setAgendaOpen] = useState(false); // pop-up "Agenda du client" (RDV standards + RDV juristes)
   const [reschedOpen, setReschedOpen] = useState(false); // pop-up "Recaler le RDV onboarding" (Vincent / facturation)
+  const [onboardingOpen, setOnboardingOpen] = useState(false); // parcours « Faire l'onboarding » (Client Success)
   // Antériorité emails : à l'ouverture d'une fiche, on enregistre les emails vus (Owner + Opti'Lex
   // courant par SIREN) dans l'historique -> on garde la trace même quand l'email change ensuite,
   // pour pouvoir revenir à un email antérieur dans le dropdown. Best-effort (silencieux).
@@ -2514,38 +2552,43 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
               </motion.button>
             )}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
-            <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date_manual || row.rdv_onboarding_date} done={row.rdv_onboarding_done}
-              editable={!!num && ["customer_success_manager", "admin", "ceo"].includes((apiClient.getUser() || {}).role)}
-              meetLink={row.onboarding_meet_link}
-              onToggle={(v) => patch(num, { rdv_onboarding_done: v })} />
-            {!!num && ["customer_success_manager", "admin", "ceo"].includes((apiClient.getUser() || {}).role) && (
-              <BoardOnboardingDateCorrection key={num} numero={num}
-                initialDate={toDateInput(row.rdv_onboarding_date_manual || row.rdv_onboarding_date)} onSaved={reload} />
-            )}
-            {/* Recalage direct du RDV onboarding (Vincent / facturation / admin) : déplace la
-                date CRM ET les 2 événements Google (Vincent + facturation), client notifié. */}
-            {!!num && !!(row.rdv_onboarding_date_manual || row.rdv_onboarding_date)
-              && ["admin", "ceo", "customer_success_manager", "finance_team"].includes((apiClient.getUser() || {}).role) && (
-              <motion.button type="button" whileTap={{ scale: 0.97 }} onClick={() => setReschedOpen("onboarding")}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "#f7f8fa"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = CARD; }}
-                style={{ alignSelf: "flex-start", marginTop: -2, display: "flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg>
-                Recaler le RDV onboarding
-              </motion.button>
-            )}
-            <RdvRow label="Rendez-vous Intégration Opti'Lex" date={row.rdv_lancement_date} done={row.rdv_lancement_done} editable={!!num && !isFinanceTeam()} meetLink={row.lancement_meet_link}
-              onToggle={(v) => patch(num, { rdv_lancement_done: v })} />
-            <RdvRow label="Rendez-vous lancement fiscal" date={row.rdv_fiscal_date_manual || row.rdv_fiscal_date} done={row.rdv_fiscal_done} editable={!!num && !isFinanceTeam() && !!(row.rdv_fiscal_date_manual || row.rdv_fiscal_date)}
-              link={row.fiscal_url || null}
-              onReschedule={num && !isFinanceTeam() && (row.rdv_fiscal_date_manual || row.rdv_fiscal_date) ? () => setReschedOpen("fiscal") : undefined}
-              onToggle={(v) => patch(num, { rdv_fiscal_done: v })} />
-            <RdvRow label="Rendez-vous lancement social" date={row.rdv_social_date_manual || row.rdv_social_date} done={row.rdv_social_done} editable={!!num && !isFinanceTeam() && !!(row.rdv_social_date_manual || row.rdv_social_date)}
-              link={row.social_url || null}
-              onReschedule={num && !isFinanceTeam() && (row.rdv_social_date_manual || row.rdv_social_date) ? () => setReschedOpen("social") : undefined}
-              onToggle={(v) => patch(num, { rdv_social_done: v })} />
-          </div>
+          {ONBOARDING_FLOW_ROLES.includes(roleOf()) && !!num ? (
+            // Onglet Détails allégé (dev 24/09/2026) : un seul bouton, le reste vit dans le parcours.
+            <OnboardingCard row={row} onStart={() => setOnboardingOpen(true)} />
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
+              <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date_manual || row.rdv_onboarding_date} done={row.rdv_onboarding_done}
+                editable={!!num && ["customer_success_manager", "admin", "ceo"].includes((apiClient.getUser() || {}).role)}
+                meetLink={row.onboarding_meet_link}
+                onToggle={(v) => patch(num, { rdv_onboarding_done: v })} />
+              {!!num && ["customer_success_manager", "admin", "ceo"].includes((apiClient.getUser() || {}).role) && (
+                <BoardOnboardingDateCorrection key={num} numero={num}
+                  initialDate={toDateInput(row.rdv_onboarding_date_manual || row.rdv_onboarding_date)} onSaved={reload} />
+              )}
+              {/* Recalage direct du RDV onboarding (Vincent / facturation / admin) : déplace la
+                  date CRM ET les 2 événements Google (Vincent + facturation), client notifié. */}
+              {!!num && !!(row.rdv_onboarding_date_manual || row.rdv_onboarding_date)
+                && ["admin", "ceo", "customer_success_manager", "finance_team"].includes((apiClient.getUser() || {}).role) && (
+                <motion.button type="button" whileTap={{ scale: 0.97 }} onClick={() => setReschedOpen("onboarding")}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "#f7f8fa"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = CARD; }}
+                  style={{ alignSelf: "flex-start", marginTop: -2, display: "flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg>
+                  Recaler le RDV onboarding
+                </motion.button>
+              )}
+              <RdvRow label="Rendez-vous Intégration Opti'Lex" date={row.rdv_lancement_date} done={row.rdv_lancement_done} editable={!!num && !isFinanceTeam()} meetLink={row.lancement_meet_link}
+                onToggle={(v) => patch(num, { rdv_lancement_done: v })} />
+              <RdvRow label="Rendez-vous lancement fiscal" date={row.rdv_fiscal_date_manual || row.rdv_fiscal_date} done={row.rdv_fiscal_done} editable={!!num && !isFinanceTeam() && !!(row.rdv_fiscal_date_manual || row.rdv_fiscal_date)}
+                link={row.fiscal_url || null}
+                onReschedule={num && !isFinanceTeam() && (row.rdv_fiscal_date_manual || row.rdv_fiscal_date) ? () => setReschedOpen("fiscal") : undefined}
+                onToggle={(v) => patch(num, { rdv_fiscal_done: v })} />
+              <RdvRow label="Rendez-vous lancement social" date={row.rdv_social_date_manual || row.rdv_social_date} done={row.rdv_social_done} editable={!!num && !isFinanceTeam() && !!(row.rdv_social_date_manual || row.rdv_social_date)}
+                link={row.social_url || null}
+                onReschedule={num && !isFinanceTeam() && (row.rdv_social_date_manual || row.rdv_social_date) ? () => setReschedOpen("social") : undefined}
+                onToggle={(v) => patch(num, { rdv_social_done: v })} />
+            </div>
+          )}
           </div>
 
   </>;
@@ -2613,6 +2656,14 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
             </>
           )}
 
+          {/* Le Client Success prévient le cabinet (adresse corrigée, non signé…) : jamais de relance directe. */}
+          {!!num && ALERT_CABINET_ROLES.includes(roleOf()) && ["scheduled", "ongoing", "expired"].includes(row.optilex_status) && (
+            <>
+              <SecTitle icon="signature">Prévenir le cabinet</SecTitle>
+              <div style={{ marginBottom: 22 }}><AlertCabinetBlock numero={num} status={row.optilex_status} prefill={alertPrefill} /></div>
+            </>
+          )}
+
           {/* Parcours des 4 emails Opti'Lex automatisés. Section repliable, pliée par
               défaut (clic sur le titre). Enveloppe grise = pas parti, verte = envoyé + date. */}
           {hasOptilexTrack && (
@@ -2637,12 +2688,12 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
 
           </div>
 
-          <BoardIntegrationSheet key={`sheet-${num || row.id}`} numero={num} />
+          <BoardIntegrationSheet key={`sheet-${num || row.id}`} numero={num} onRated={reloadRatings} />
           <ClientMissions key={num || row.id} numero={num} />
           {/* Sections en révélation douce (stagger léger, une seule fois à l'ouverture). */}
           {/* Informations client (override cabinet ?? original Owner, antériorité préservée) */}
           <div className="ob-sec" style={{ animationDelay: "0.05s" }}>
-            <ClientInfoSection row={row} num={num} patch={patch} onEmailSaved={() => setSigRefresh((v) => v + 1)} changeEtat={changeEtat} />
+            <ClientInfoSection row={row} num={num} patch={patch} onEmailSaved={() => { setSigRefresh((v) => v + 1); setAlertPrefill("email_changed"); }} changeEtat={changeEtat} />
           </div>
 
           {/* Météo client : note courante + saisie (score + note d'interaction) + historique */}
@@ -2711,6 +2762,8 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
           </DetailFold>
 
           {agendaOpen && <ClientAgendaModal row={row} num={num} onClose={() => setAgendaOpen(false)} />}
+          {onboardingOpen && <OnboardingFlowModal row={row} num={num} patch={patch} onClose={() => setOnboardingOpen(false)}
+            onRescheduleWithDate={() => setReschedOpen("onboarding")} onChanged={() => { reload(); reloadRatings?.(); }} />}
           {reschedOpen && <ReschedOnboardingModal kind={reschedOpen} row={row} num={num} onClose={() => { setReschedOpen(false); reload(); }} onDone={() => { setReschedOpen(false); reload(); }} />}
 
           <DetailFold title="Facturation et suivi">
