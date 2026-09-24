@@ -17,6 +17,7 @@ import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import SalesRecordingsGrid from "../components/SalesRecordingsGrid.jsx";
 import SalesRecordingsDetail from "../components/SalesRecordingsDetail.jsx";
+import { monthRange } from "../utils/callsPeriod.js";
 import TeamReportView from "../components/TeamReportView.jsx";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo", "acquisition_director", "head_of_acquisition", "head_of_sales_manager", "head_of_sales"]);
@@ -74,6 +75,16 @@ export default function CeoSalesRecordingsView({ embed = false }) {
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [selectedTab, setSelectedTab] = useState("analyses");
   const [avatars, setAvatars] = useState({});
+  // Appels Allo du mois en cours, par sales (périmètre du serveur). Indisponible = tuiles à « — ».
+  const [calls, setCalls] = useState({ byEmail: {}, total: null, loading: true });
+  useEffect(() => {
+    let live = true;
+    const { start, end } = monthRange();
+    apiClient.get(`/api/v1/sales-calls/overview?start=${start}&end=${end}`)
+      .then((d) => { if (!live) return; const byEmail = {}; (d?.sales || []).forEach((s) => { byEmail[(s.email || "").toLowerCase()] = s; }); setCalls({ byEmail, total: d?.total_calls ?? null, loading: false }); })
+      .catch(() => { if (live) setCalls({ byEmail: {}, total: null, loading: false }); });
+    return () => { live = false; };
+  }, []);
 
   // ── ANALYSES HEBDO : rapport direction + sélecteur de semaine ────────
   const [pageTab, setPageTab] = useState("equipes"); // 'equipes' (défaut) | 'direction'
@@ -270,6 +281,8 @@ export default function CeoSalesRecordingsView({ embed = false }) {
                   ...((data?.sales || []).find((s) => s.email === selectedEmail) || { name: selectedEmail, email: selectedEmail, recordings: [] }),
                   avatar_url: avatars[selectedEmail.toLowerCase()],
                   period: selectedPeriod,
+                  nb_calls: calls.byEmail[selectedEmail.toLowerCase()]?.calls ?? undefined,
+                  allo_linked: calls.loading ? undefined : !!calls.byEmail[selectedEmail.toLowerCase()]?.allo_user_id,
                 }}
                 initialTab={selectedTab}
                 loadingFiles={videosLoading || refreshing}
@@ -313,6 +326,7 @@ export default function CeoSalesRecordingsView({ embed = false }) {
                     refreshing={refreshing}
                     onSelectSales={(email, tab) => { setSelectedTab(tab || "analyses"); setSelectedEmail(email); }}
                     avatars={avatars}
+                    calls={calls}
                     C={C}
                     darkMode={darkMode}
                   />
