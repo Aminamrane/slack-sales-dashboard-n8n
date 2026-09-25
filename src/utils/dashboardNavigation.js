@@ -34,7 +34,7 @@ export function getDashboardRoute(role) {
 // Pour /acquisition-director, ceoTabId est ignoré (single-tab dashboard).
 // Onglets qui ont leur propre route : toutes les vues /ceo/* retombent ici
 // pour un onglet qu'elles ne connaissent pas, donc un seul endroit suffit.
-export const CEO_TAB_ROUTES = { meta_ads: "/ceo/meta-ads" };
+export const CEO_TAB_ROUTES = { meta_ads: "/ceo/meta-ads", bot_ia: "/ceo/Sub-Tickets" };
 
 export function navigateBackToDashboard(navigate, role, ceoTabId = null) {
   if (ceoTabId && CEO_TAB_ROUTES[ceoTabId]) { navigate(CEO_TAB_ROUTES[ceoTabId]); return; }

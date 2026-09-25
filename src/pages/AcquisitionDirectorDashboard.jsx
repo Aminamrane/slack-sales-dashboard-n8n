@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import Leaderboard from "./Leaderboard.jsx";
+import { CEO_TAB_ROUTES } from "../utils/dashboardNavigation";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections, setNavScope } from "../utils/sidebarPermissions";
@@ -107,6 +108,7 @@ export default function AcquisitionDirectorDashboard() {
     if (tabId === "funnel_leads") { navigate("/ceo/funnel-leads"); return; }
     if (tabId === "leads_management") { navigate("/ceo/leads-management"); return; }
     if (tabId === "sequences") { navigate("/ceo/sequences"); return; }
+    if (CEO_TAB_ROUTES[tabId]) { navigate(CEO_TAB_ROUTES[tabId]); return; }
     try { localStorage.setItem("ceoActiveTab", tabId); } catch { /* noop */ }
     navigate("/ceo");
   };

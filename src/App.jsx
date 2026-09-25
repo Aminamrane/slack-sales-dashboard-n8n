@@ -52,6 +52,7 @@ const ContractSplitMonitoring = lazy(() => import("./pages/ContractSplitMonitori
 const OptilexBoard = lazy(() => import("./pages/OptilexBoard.jsx"));
 const MetaAds = lazy(() => import("./pages/MetaAds/index.jsx"));
 const CeoMetaAdsView = lazy(() => import("./pages/CeoMetaAdsView.jsx"));
+const CeoBotIaView = lazy(() => import("./pages/CeoBotIaView.jsx"));
 const LeadAssignmentEquity = lazy(() => import("./pages/LeadAssignmentEquity.jsx"));
 const LeadAssignmentMonitor = lazy(() => import("./pages/LeadAssignmentMonitor.jsx"));
 const LeadAssignmentLive = lazy(() => import("./pages/LeadAssignmentLive.jsx"));
@@ -340,6 +341,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['admin', 'optilex', 'finance_team']}>
               <OptilexBoard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ceo/Sub-Tickets"
+          element={
+            <ProtectedRoute allowedRoles={['ceo', 'head_of_acquisition', 'acquisition_director', 'finance_director', 'hr', 'customer_success_manager']}>
+              <CeoBotIaView />
             </ProtectedRoute>
           }
         />
