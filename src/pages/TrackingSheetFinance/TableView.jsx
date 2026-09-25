@@ -1245,12 +1245,20 @@ function RemainingAmount({ expected, received, onboardingPending = false, onboar
     );
   }
   if (!exp) return <EmptyCell />;
+  // Règle dev 2026-09-25 : dès la veille ouvrée de l'onboarding, l'attendu se
+  // voit pour préparer le rendez-vous ; il n'est pas encore exigible.
+  const upcomingTitle = onboardingPending
+    ? ` Onboarding${onboardingDate ? ` le ${formatDateFR(onboardingDate)}` : ' à venir'} : pas encore exigible.`
+    : '';
   return (
-    <span title={`Attendu du mois : ${formatEUR(exp)}. Reste avant imputation des avances : ${formatEUR(remaining)}.`}
+    <span title={`Attendu du mois : ${formatEUR(exp)}. Reste avant imputation des avances : ${formatEUR(remaining)}.${upcomingTitle}`}
       style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
       <span style={{ fontSize: CELL_FONT_SIZE, color: N.text, fontVariantNumeric: 'tabular-nums' }}>{formatEUR(exp)}</span>
       {Number(received || 0) > 0 && <span style={{ fontSize: 10, color: remaining ? '#a4581d' : '#0f7b6c' }}>
         {remaining ? `Reste ${formatEUR(remaining)}` : 'Réglé'}
+      </span>}
+      {onboardingPending && <span style={{ fontSize: 10, color: N.textFaint, fontStyle: 'italic', whiteSpace: 'nowrap' }}>
+        {onboardingDate ? `onboarding le ${formatDateFR(onboardingDate)}` : 'onboarding à venir'}
       </span>}
     </span>
   );

@@ -112,7 +112,7 @@ function SituationStep({ brief, row }) {
         </div>
         <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.5, marginBottom: 8 }}>
           {brief.phase === "day_j" && brief.onboarding.ends_at && <>Le client devient exigible après la fin du rendez-vous, vers {fmtDT(brief.onboarding.ends_at).split("·")[1]?.trim() || "la fin de l'heure"}. Avant, rien n'est dû.</>}
-          {brief.phase === "before" && <>Aucun attendu avant le rendez-vous d'onboarding{f?.billing_start ? ` du ${fmtDate(f.billing_start)}` : ""}.</>}
+          {brief.phase === "before" && <>Rien n'est dû avant le rendez-vous d'onboarding{f?.billing_start ? ` du ${fmtDate(f.billing_start)}` : ""}.</>}
           {brief.phase === "billing" && !f?.is_late && <>Facturation démarrée{f?.billing_start ? ` le ${fmtDate(f.billing_start)}` : ""}, rien en retard.</>}
           {f?.is_late && <>Un impayé est en cours : à évoquer avec le client, sans bloquer l'onboarding.</>}
           {brief.phase === "no_date" && <>Aucune date d'onboarding connue : la facturation n'a pas de point de départ.</>}
