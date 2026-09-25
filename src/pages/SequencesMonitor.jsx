@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import apiClient from "../services/apiClient";
 import { makeCharte } from "../styles/charte.js";
+import SequenceTestPanel from "../components/SequenceTestPanel";
 
 const FONT = 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif';
 
@@ -190,6 +191,10 @@ export default function SequencesMonitor({ embed }) {
             <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.04em", padding: "2px 7px", borderRadius: 6, textTransform: "uppercase", background: C.ok + "22", color: C.ok }}>Actif</span>
           </button>
         </div>
+
+        {/* Envoi de test de l'onglet actif (tout de suite, sans délais, rien n'est compté) */}
+        <SequenceTestPanel active={active} C={C}
+          label={isConf ? "Mail de confirmation" : isNoshow ? "Relance no-show" : (data.sequences.find((x) => x.key === active)?.label || active)} />
 
         {isConf ? (
           !confData ? (
