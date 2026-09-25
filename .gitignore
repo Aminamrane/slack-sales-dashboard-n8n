@@ -52,3 +52,32 @@ src/assets/clients-export-*.csv
 src/assets/prospects-*.csv
 data/clients-export-*.csv
 data/prospects-*.csv
+
+# Registre local des depenses du Bot IA (contient des emails — jamais commite)
+.data/
+
+# Infra/accès SSH prod (hosts, users, commandes, clés) — jamais commité, repo public
+connexions-ssh-owner.txt
+api/connexions-ssh-owner.txt
+ovh_migration
+api/ovh_migration
+*.pem
+*.key
+*.p12
+*.pfx
+id_ed25519*
+id_rsa*
+
+# Variantes de .env (secrets) — seul .env.example se commite
+.env.*
+!.env.example
+
+# Sauvegardes d'infra (.env.bak-…, page.tsx.bak-…) : peuvent contenir des secrets
+*.bak
+*.bak-*
+*.bak.*
+
+# Constitution de l'agent Sub Tickets (procédure d'accès au VPS de prod) :
+# repo public -> jamais commitée, comme CLAUDE.md
+/instruction_file_dattente.md
+/mission.md

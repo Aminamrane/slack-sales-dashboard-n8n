@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import Leaderboard from "./Leaderboard.jsx";
+import { CEO_TAB_ROUTES } from "../utils/dashboardNavigation";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections, setNavScope } from "../utils/sidebarPermissions";
@@ -103,6 +104,7 @@ export default function HrDashboard() {
     if (tabId === "webinar") { navigate("/ceo/webinar"); return; }
     if (tabId === "campaigns") { navigate("/ceo/campaigns"); return; }
     if (tabId === "funnel_leads") { navigate("/ceo/funnel-leads"); return; }
+    if (CEO_TAB_ROUTES[tabId]) { navigate(CEO_TAB_ROUTES[tabId]); return; }
     try { localStorage.setItem("ceoActiveTab", tabId); } catch { /* noop */ }
     navigate("/ceo");
   };

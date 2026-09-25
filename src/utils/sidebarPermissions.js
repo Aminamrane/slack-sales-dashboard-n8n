@@ -9,6 +9,12 @@
 // Pattern hardcoded — quand `role_permissions` devient la source de
 // vérité pour la nav, remplacer par un fetch ou un lookup.
 
+// Sub Tickets (/ceo/Sub-Tickets) : Paul (ceo), Timothy (head_of_acquisition),
+// Gaylord (acquisition_director), Ismahane (finance_director), Mohamed (hr),
+// Vincent (customer_success_manager) et les admins. Aucune adresse ici : le
+// dépôt est public, la liste nominative vit dans le backend.
+export const SUB_TICKETS_ROLES = new Set(["admin", "ceo", "head_of_acquisition", "acquisition_director", "finance_director", "hr", "customer_success_manager"]);
+
 const ROLE_SECTIONS = {
   acquisition_director: new Set(["recent", "acquisition"]),
   // Timothy remplit la page Campagnes : section Finance limitée à cet onglet.
@@ -26,7 +32,7 @@ const ROLE_ITEMS = {
     finance: new Set(["campaigns"]),
   },
   customer_success_manager: {
-    acquisition: new Set(["leaderboard", "funnel_leads"]),
+    acquisition: new Set(["leaderboard", "funnel_leads", "bot_ia"]),
     produit: new Set(["optilex_board"]),
   },
 };
@@ -43,6 +49,9 @@ const ITEM_ROLE_GATE = {
   // (acquisition_director), Ismahane (finance_director). Même liste que
   // l'API (MARKETING_ALLOWED_ROLES) : les RH, qui voient l'Acquisition, non.
   meta_ads: new Set(["ceo", "admin", "finance_director", "acquisition_director", "head_of_acquisition", "marketing"]),
+  // Sub Tickets : rôles des personnes de la liste nominative du backend
+  // (bot_ia_prompts.py ALLOWED_EMAILS), qui reste la garde qui fait foi.
+  bot_ia: SUB_TICKETS_ROLES,
 };
 
 // ── Scope de navigation persistant (sessionStorage) ────────────────
