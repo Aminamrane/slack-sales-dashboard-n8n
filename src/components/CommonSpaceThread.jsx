@@ -54,6 +54,8 @@ export default function CommonSpaceThread({ numero, onShowToast, title = "Espace
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
     if (!numero) return undefined;
@@ -109,6 +111,19 @@ export default function CommonSpaceThread({ numero, onShowToast, title = "Espace
       setSaving(false);
     }
   };
+  const deleteComment = async (id) => {
+    if (deletingId) return;
+    setDeletingId(id);
+    try {
+      await apiClient.delete(`/api/v1/optilex/comments/${id}`);
+      setComments((prev) => (prev || []).filter((c) => c.id !== id));
+      setConfirmDeleteId(null);
+    } catch (e) {
+      onShowToast?.(e?.data?.detail || "Le commentaire n'a pas pu être supprimé.", 'error');
+    } finally {
+      setDeletingId(null);
+    }
+  };
   const canEdit = (c) => !!c.can_edit || (!!me.email && (c.author_email || '').toLowerCase() === me.email.toLowerCase()) || ['admin', 'ceo'].includes(me.role);
   const list = comments || [];
   const shown = expanded ? list : list.slice(0, PREVIEW);
@@ -160,6 +175,23 @@ export default function CommonSpaceThread({ numero, onShowToast, title = "Espace
                           style={{ border: 'none', background: 'transparent', color: C.faint, cursor: 'pointer', padding: '0 2px', fontSize: 11, fontFamily: 'inherit' }}>
                           Modifier
                         </button>
+                      )}
+                      {canEdit(c) && editingId !== c.id && confirmDeleteId !== c.id && (
+                        <button type="button" onClick={() => setConfirmDeleteId(c.id)}
+                          style={{ border: 'none', background: 'transparent', color: C.faint, cursor: 'pointer', padding: '0 2px', fontSize: 11, fontFamily: 'inherit' }}>
+                          Supprimer
+                        </button>
+                      )}
+                      {confirmDeleteId === c.id && (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: C.text }}>
+                          Supprimer ce commentaire ?
+                          <button type="button" onClick={() => setConfirmDeleteId(null)}
+                            style={{ border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, borderRadius: 6, padding: '1px 7px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Annuler</button>
+                          <button type="button" onClick={() => deleteComment(c.id)} disabled={deletingId === c.id}
+                            style={{ border: 'none', background: '#b91c1c', color: '#fff', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                            {deletingId === c.id ? '…' : 'Supprimer'}
+                          </button>
+                        </span>
                       )}
                     </div>
                     {editingId === c.id ? (

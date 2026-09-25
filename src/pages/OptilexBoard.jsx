@@ -1,5 +1,6 @@
 import AppointmentConfirmation from "../components/booking/AppointmentConfirmation";
 import BoardIntegrationSheet from "../components/BoardIntegrationSheet";
+import BoardContactsEditor from "../components/BoardContactsEditor";
 import { AlertCabinetBlock, MailIcon } from "../components/CabinetAlertBlock";
 import OnboardingFlowModal from "../components/OnboardingFlowModal";
 import BoardOnboardingDateCorrection from "../components/BoardOnboardingDateCorrection";
@@ -9,9 +10,10 @@ import MentionTextarea, { MentionedText } from "../components/MentionTextarea";
 import { mentionedIds, notifiedSummary } from "../utils/mentions.js";
 import { matchesUpcomingIntegration, matchesUpcomingOnboarding, matchesOverdueOnboarding, parisWallTime } from "../utils/boardIntegration.js";
 import { matchesSignedClient, resolvePendingExit } from "../utils/boardClientState.js";
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { Fragment, useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
+import { phoneDisplay, sharedEmailOptions } from "../utils/boardContacts.js";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import apiClient from "../services/apiClient";
 // Météo client : primitives partagées avec la météo d'onboarding (fiche d'intégration, parcours).
@@ -1729,9 +1731,11 @@ function EmailSelect({ row, patch, onSaved }) {
     for (const h of (Array.isArray(row.email_history) ? row.email_history : [])) {
       if (h && h.email) add(h.email, h.source === "optilex" ? "Opti'Lex" : "Owner");
     }
+    // Emails ajoutés par la finance (client_contact, table partagée).
+    for (const o of sharedEmailOptions(row)) add(o.email, o.source);
     for (const e of extra) add(e, "Owner");
     return list;
-  }, [owner, row.email_optilex_options, row.email_optilex, row.email_history, extra]);
+  }, [owner, row.email_optilex_options, row.email_optilex, row.email_history, row.shared_contacts, extra]);
   const canOpen = canSelectEmail(); // autorisé à choisir/ajouter (admin/ceo/optilex/client success)
   const choose = async (email) => {
     setSaving(true);
@@ -1815,7 +1819,9 @@ const INFO_FIELDS = [
   { ovr: "phone_ovr", orig: "contact_phone", label: "Téléphone" },
   { ovr: "siren_ovr", orig: "siren", label: "SIREN" },
 ];
-function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat }) {
+// Emails et téléphones partagés avec la finance : Client Success, CEO et admin (même règle que le backend).
+const CONTACT_EDIT_ROLES = ["admin", "ceo", "customer_success_manager"];
+function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContactsChanged }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({});
   const startEdit = () => {
@@ -1858,6 +1864,9 @@ function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat }) {
               </div>
             ))}
           </div>
+          {CONTACT_EDIT_ROLES.includes(roleOf()) && (
+            <BoardContactsEditor numero={num} contacts={row.shared_contacts} onChanged={onContactsChanged} />
+          )}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
             <button type="button" onClick={() => setEditing(false)}
               style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: MUTED, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Annuler</button>
@@ -1870,7 +1879,7 @@ function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat }) {
           <InfoField label="Nom du client" value={name} />
           <InfoField label="Tranche salariale" value={fmtTranche(ov(row, "tranche_ovr", "contact_tranche"))} />
           <EmailSelect row={row} patch={patch} onSaved={onEmailSaved} />
-          <InfoField label="Téléphone" value={ov(row, "phone_ovr", "contact_phone")} />
+          <InfoField label="Téléphone" value={phoneDisplay(ov(row, "phone_ovr", "contact_phone"), row.shared_contacts?.phones)} />
           <InfoField label="SIREN" value={ov(row, "siren_ovr", "siren")} />
           <EtatSection row={row} num={num} changeEtat={changeEtat} compact />
           {companyName(row) && companyName(row) !== name && <InfoField label="Société" value={companyName(row)} full />}
@@ -2487,25 +2496,35 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
     if (row.email_optilex) emails.push({ email: row.email_optilex, source: "optilex" });
     if (emails.length) apiClient.post("/api/v1/optilex/email-history", { numero_client: num, emails }).catch(() => {});
   }, [num, row.email, row.email_optilex]);
-  const sigBlock = (title, status, sentAt, signedAt, scheduledAt, grouped) => {
+  // Carte compacte d'un contrat, dans les informations client (dev 25/09) :
+  // signé ou pas (pastille, même style que la situation du client), envoyé
+  // quand, signé quand.
+  const sigLine = (title, status, sentAt, signedAt, scheduledAt, grouped) => {
     const i = sigInfo(status, sentAt, signedAt, scheduledAt);
+    const tone = i ? i.color : grouped ? GREEN : "#9aa3b2";
+    const label = i ? i.label : grouped ? "Signé" : "Pas de contrat";
+    const rows = [
+      sentAt && ["Envoyé", fmt(sentAt)],
+      scheduledAt && status === "scheduled" && ["Planifié", fmt(scheduledAt)],
+      signedAt && ["Signé", fmt(signedAt)],
+    ].filter(Boolean);
     return (
-      <div style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${BORDER}`, background: "#fafbfc" }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: MUTED, marginBottom: 6 }}>{title}</div>
-        {i ? (
-          <>
-            <div style={{ fontSize: 14, fontWeight: 700, color: i.color }}>{i.icon} {i.label}</div>
-            {sentAt && <div style={{ fontSize: 12, color: MUTED, marginTop: 3 }}>Envoyé le {fmt(sentAt)}</div>}
-            {scheduledAt && status === "scheduled" && <div style={{ fontSize: 12, color: MUTED, marginTop: 3 }}>Planifié le {fmt(scheduledAt)}</div>}
-            {signedAt && <div style={{ fontSize: 12, color: GREEN, marginTop: 3 }}>Signé le {fmt(signedAt)}</div>}
-          </>
-        ) : grouped ? (
-          // Contrat groupé : pas de volet Opti'Lex séparé, il est inclus dans l'Owner signé.
-          <>
-            <div style={{ fontSize: 14, fontWeight: 700, color: GREEN }}>✓ Signé</div>
-            <div style={{ fontSize: 12, color: MUTED, marginTop: 3 }}>Inclus au contrat Owner</div>
-          </>
-        ) : <div style={{ fontSize: 13, color: "#cbd2e0" }}>—</div>}
+      <div style={{ padding: "10px 12px", borderRadius: 10, border: `1px solid ${BORDER}`, background: "#fafbfc", minWidth: 0 }}>
+        <div style={{ fontSize: 11, color: MUTED, marginBottom: 6 }}>{title}</div>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 999, background: `${tone}17`, color: tone, fontSize: 12, fontWeight: 700 }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: tone }} />{label}
+        </span>
+        {(rows.length > 0 || (!i && grouped)) && (
+          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", columnGap: 10, rowGap: 3, marginTop: 8, fontSize: 11.5 }}>
+            {rows.map(([k, v]) => (
+              <Fragment key={k}>
+                <span style={{ color: MUTED }}>{k}</span>
+                <span style={{ color: TEXT, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{v}</span>
+              </Fragment>
+            ))}
+            {!i && grouped && <span style={{ gridColumn: "1 / -1", color: MUTED }}>Inclus au contrat Owner</span>}
+          </div>
+        )}
       </div>
     );
   };
@@ -2626,9 +2645,12 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
         </div>
 
         <div style={{ padding: "18px 22px 40px" }}>
-          {/* Signatures */}
-          <div className="ob-sec" style={{ animationDelay: "0.15s" }}>
-          <SecTitle icon="contrats">Contrats</SecTitle>
+          {/* Ordre de l'onglet Détails (dev 25/09) : 1. informations client (avec le
+              contrat, la fiche d'intégration et les missions quand il y en a), 2. rendez-vous
+              et « Faire l'onboarding », 3. météo et espace commun, 4. historique,
+              5. ambassadeur et parrainage, 6. facturation et suivi. */}
+          <div className="ob-sec" style={{ animationDelay: "0.05s" }}>
+            <ClientInfoSection row={row} num={num} patch={patch} onEmailSaved={() => { setSigRefresh((v) => v + 1); setAlertPrefill("email_changed"); }} changeEtat={changeEtat} onContactsChanged={reload} />
           {integrationAlert(row) && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", borderRadius: 10, border: "1px solid #f5deba", background: "#fff8ec", marginBottom: 12, fontSize: 12.5, fontWeight: 600, color: "#b45309" }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -2637,9 +2659,9 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
               RDV d'intégration à venir, mais le contrat Opti'Lex n'est pas encore signé.
             </div>
           )}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 22 }}>
-            {sigBlock("Owner", row.owner_status, row.owner_sent_at, row.owner_signed_at)}
-            {sigBlock("Opti'Lex", row.optilex_status, row.optilex_sent_at, row.optilex_signed_at, row.optilex_scheduled_at, row.owner_status === "done" && row.optilex_status == null)}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+            {sigLine("Contrat Owner", row.owner_status, row.owner_sent_at, row.owner_signed_at)}
+            {sigLine("Contrat Opti'Lex", row.optilex_status, row.optilex_sent_at, row.optilex_signed_at, row.optilex_scheduled_at, row.owner_status === "done" && row.optilex_status == null)}
           </div>
 
           {["admin", "optilex"].includes((apiClient.getUser() || {}).role) && row.owner_status === "done" && (row.optilex_status === "scheduled" || row.optilex_status === "awaiting_owner_signature") && (
@@ -2688,25 +2710,19 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
             </>
           )}
 
+            <BoardIntegrationSheet key={`sheet-${num || row.id}`} numero={num} onRated={reloadRatings} compact />
+            <ClientMissions key={num || row.id} numero={num} hideWhenEmpty />
           </div>
 
-          <BoardIntegrationSheet key={`sheet-${num || row.id}`} numero={num} onRated={reloadRatings} />
-          <ClientMissions key={num || row.id} numero={num} />
-          {/* Sections en révélation douce (stagger léger, une seule fois à l'ouverture). */}
-          {/* Informations client (override cabinet ?? original Owner, antériorité préservée) */}
-          <div className="ob-sec" style={{ animationDelay: "0.05s" }}>
-            <ClientInfoSection row={row} num={num} patch={patch} onEmailSaved={() => { setSigRefresh((v) => v + 1); setAlertPrefill("email_changed"); }} changeEtat={changeEtat} />
-          </div>
+          {appointments}
 
-          {/* Météo client : note courante + saisie (score + note d'interaction) + historique */}
+          {/* Météo client (note courante + saisie) et espace commun (commentaires + notations) */}
           {row.numero_client && (
             <div className="ob-sec" style={{ animationDelay: "0.075s" }}>
               <SecTitle icon="meteo">Météo client</SecTitle>
-              <MeteoSection key={num} row={row} num={num} recordMeteo={recordMeteo} version={meteoHistVersion} onChanged={reloadRatings} appointments={appointments} />
+              <MeteoSection key={num} row={row} num={num} recordMeteo={recordMeteo} version={meteoHistVersion} onChanged={reloadRatings} />
             </div>
           )}
-
-          {!row.numero_client && appointments}
           <DetailFold title="Historique de la situation"><EtatHistory num={num} version={etatHistVersion} /></DetailFold>
           <DetailFold title="Ambassadeur et parrainage">
           {/* Programme ambassadeur : client à valoriser / à solliciter pour un témoignage (case à cocher). */}
@@ -2958,7 +2974,7 @@ function JalonRow({ label, done, date, onToggle, onDate, alwaysDate = false, tog
 
 // Section météo de la fiche : note courante (badge + qui/quand), saisie inline (Owner
 // uniquement pour l'instant : score + note d'interaction), et historique des notations.
-function MeteoSection({ row, num, recordMeteo, version, onChanged, appointments }) {
+function MeteoSection({ row, num, recordMeteo, version, onChanged }) {
   const [hist, setHist] = useState([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyError, setHistoryError] = useState("");
@@ -3045,7 +3061,6 @@ function MeteoSection({ row, num, recordMeteo, version, onChanged, appointments 
       {historyError && <div role="alert" style={{ color: "#b91c1c", marginBottom: 10 }}>
         {historyError} <button type="button" onClick={refreshHistory}>Réessayer</button>
       </div>}
-      {appointments}
       <SecTitle icon="comments">Échanges et notations</SecTitle>
       <CommentThread numero={num} ratings={hist} ratingsLoading={!historyLoaded && !historyError}
         onRatingEdited={(updated) => { setHist(items => items.map(item => item.id === updated.id ? updated : item)); onChanged(); }}
@@ -3132,6 +3147,19 @@ function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingE
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
+  // Suppression (même règle que la modification) : confirmation sur la ligne même.
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const deleteComment = async (id) => {
+    if (deletingId) return;
+    setDeletingId(id);
+    try {
+      await apiClient.delete(`/api/v1/optilex/comments/${id}`);
+      setComments((prev) => prev.filter((c) => c.id !== id));
+      setConfirmDeleteId(null);
+    } catch { setError("Le commentaire n’a pas pu être supprimé. Réessayez."); }
+    finally { setDeletingId(null); }
+  };
   // Mentions @ (espace commun Owner / Opti'Lex / finance, demande dev 2026-09-24) : annuaire des
   // personnes taguables, confirmation « prévenu(e) » après publication, ouverture directe sur le fil
   // depuis une notification ou un e-mail (?focus=comments).
@@ -3263,6 +3291,29 @@ function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingE
                     onMouseLeave={(e) => { e.currentTarget.style.color = MUTED; }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
                   </button>
+                )}
+                {canEdit(c) && editingId !== c.id && confirmDeleteId !== c.id && (
+                  <button type="button" title="Supprimer ce commentaire" aria-label="Supprimer ce commentaire"
+                    onClick={() => setConfirmDeleteId(c.id)}
+                    style={{ border: "none", background: "transparent", color: MUTED, cursor: "pointer", padding: "0 2px", display: "inline-flex", alignItems: "center" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = "#b91c1c"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = MUTED; }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                  </button>
+                )}
+                {confirmDeleteId === c.id && (
+                  <motion.span initial={{ opacity: 0, x: -4 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: TEXT }}>
+                    Supprimer ce commentaire ?
+                    <button type="button" onClick={() => setConfirmDeleteId(null)}
+                      style={{ border: `1px solid ${BORDER}`, background: "transparent", color: MUTED, borderRadius: 6, padding: "2px 8px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                      Annuler
+                    </button>
+                    <button type="button" onClick={() => deleteComment(c.id)} disabled={deletingId === c.id}
+                      style={{ border: "none", background: "#b91c1c", color: "#fff", borderRadius: 6, padding: "3px 9px", fontSize: 11.5, fontWeight: 600, cursor: deletingId === c.id ? "default" : "pointer", fontFamily: "inherit" }}>
+                      {deletingId === c.id ? "…" : "Supprimer"}
+                    </button>
+                  </motion.span>
                 )}
               </div>
               {editingId === c.id ? (

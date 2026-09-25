@@ -33,7 +33,8 @@ export function DetailText({ text, measureKey }) {
   </div>;
 }
 
-export function ClientMissions({ numero }) {
+// `hideWhenEmpty` (onglet Détails, dev 25/09) : rien à afficher tant qu'il n'y a pas de mission.
+export function ClientMissions({ numero, hideWhenEmpty = false }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -53,6 +54,7 @@ export function ClientMissions({ numero }) {
   }, [numero, retry]);
   const select = key => { setFilter(key); setLimit(4); setHistoryOpen(true); };
   const items = data?.missions?.filter(m => filter === 'total' || m.category === filter) || [];
+  if (hideWhenEmpty && (loading || error || data?.status !== 'available' || !data?.counts?.total)) return null;
   return <section className="ob-client-missions" aria-label="Missions Opti’Lex">
     <div className="ob-mission-heading"><span className="ob-mission-icon"><MissionIcon /></span><div><h3>Missions Opti’Lex</h3><p>Activité du cabinet</p></div>{numero && <button type="button" className="ob-mission-refresh" disabled={loading} aria-label="Actualiser les missions" title="Actualiser les missions" onClick={() => setRetry(v => v + 1)}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></svg></button>}</div>
     {loading ? <div role="status" className="ob-missions-loading"><span/>Chargement des missions…</div> : error ? <div role="alert" className="ob-mission-message">Les missions sont momentanément indisponibles. <button type="button" className="ob-detail-link" onClick={() => setRetry(v => v + 1)}>Réessayer</button></div>
