@@ -44,7 +44,9 @@ export function OnboardingRatingForm({ numero, onSaved, compact = false }) {
   </div>;
 }
 
-export default function BoardIntegrationSheet({ numero, onRated }) {
+// `compact` (onglet Détails du board, dev 25/09) : une ligne statut + PDF. La météo
+// d'onboarding se saisit dans le parcours « Faire l'onboarding », plus ici.
+export default function BoardIntegrationSheet({ numero, onRated, compact = false }) {
   const [state, setState] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -91,6 +93,20 @@ export default function BoardIntegrationSheet({ numero, onRated }) {
   const description = state?.available
     ? (state.final ? 'Fiche finalisée : périmètre, passage de relais du commercial et météo d’onboarding.' : state.message)
     : state ? state.message : error ? '' : 'Chargement de la fiche…';
+  if (compact) return <section aria-label="Fiche d’intégration" style={{ marginBottom:16, padding:'10px 12px', border:'1px solid #e9ebf0', borderRadius:10, background:'#f8faf9', color:'#1e2330' }}>
+    <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+      <FileText size={16} style={{ color:'#526b68', flexShrink:0 }}/>
+      <strong style={{ fontSize:12.5 }}>Fiche d’intégration</strong>
+      {state?.available && <span style={{ fontSize:10.5, fontWeight:700, padding:'2px 8px', borderRadius:999, background: state.final ? '#e3f4ea' : '#fff4e0', color: state.final ? '#15794a' : '#b45309' }}>{state.final ? 'Finalisée' : 'À finaliser'}</span>}
+      {state?.available && <button type="button" disabled={busy} onClick={openPdf} style={{ ...buttonStyle, marginLeft:'auto', padding:'5px 10px', fontSize:12, background:'#253f3d', color:'#fff', border:'1px solid #253f3d', opacity:busy ? .65 : 1 }}>
+        {busy ? <LoaderCircle size={13}/> : <FileText size={13}/>}{busy ? 'Préparation…' : state.final ? 'Voir le PDF' : 'Voir le PDF provisoire'}
+      </button>}
+    </div>
+    {state && !state.available && <p style={{ margin:'6px 0 0', fontSize:11.5, color:'#687483' }}>{state.message}</p>}
+    {state?.available && !state.final && <p style={{ margin:'6px 0 0', fontSize:11.5, color:'#687483' }}>La météo d’onboarding se saisit dans « Faire l’onboarding ».</p>}
+    {pdf && <a href={pdf} target="_blank" rel="noopener noreferrer" style={{ display:'inline-block', fontSize:11, color:'#526b68', marginTop:6 }}>Ouvrir si le nouvel onglet a été bloqué</a>}
+    {error && <p role="alert" style={{ margin:'6px 0 0', fontSize:12, color:'#b42318' }}>{error}</p>}
+  </section>;
   return <section aria-label="Fiche d’intégration" style={{ marginBottom:22, padding:16, border:'1px solid #e9ebf0', borderRadius:12, background:'#f8faf9', color:'#1e2330' }}>
     <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
       <FileText size={21} style={{ color:'#526b68', flexShrink:0, marginTop:2 }}/>
