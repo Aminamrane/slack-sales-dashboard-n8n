@@ -32,7 +32,12 @@ export function getDashboardRoute(role) {
 // `ceoTabId` est fourni, on pose `localStorage.ceoActiveTab` pour que
 // CeoDashboard pré-sélectionne cet onglet à son mount (pattern existant).
 // Pour /acquisition-director, ceoTabId est ignoré (single-tab dashboard).
+// Onglets qui ont leur propre route : toutes les vues /ceo/* retombent ici
+// pour un onglet qu'elles ne connaissent pas, donc un seul endroit suffit.
+export const CEO_TAB_ROUTES = { meta_ads: "/ceo/meta-ads" };
+
 export function navigateBackToDashboard(navigate, role, ceoTabId = null) {
+  if (ceoTabId && CEO_TAB_ROUTES[ceoTabId]) { navigate(CEO_TAB_ROUTES[ceoTabId]); return; }
   const route = getDashboardRoute(role);
   if (route === "/ceo" && ceoTabId) {
     try { localStorage.setItem("ceoActiveTab", ceoTabId); } catch { /* noop */ }

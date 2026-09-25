@@ -22,7 +22,7 @@ import { TABS } from './tabs.jsx';
 import Pict from './icons.jsx';
 import { getTheme, fmtInt, fmtCompact, fmtEur, fmtEur2, fmtRoas } from './theme.js';
 
-const ALLOWED_ROLES = ['admin', 'ceo', 'marketing', 'acquisition_director', 'head_of_acquisition'];
+const ALLOWED_ROLES = ['admin', 'ceo', 'marketing', 'acquisition_director', 'head_of_acquisition', 'finance_director'];
 const MAX_SELECTED = 4;
 
 // ── métriques (tuiles + courbe) ────────────────────────────────────────────
@@ -107,7 +107,9 @@ function syncLabel(iso) {
   return `il y a ${Math.floor(mins / 60)} h`;
 }
 
-export default function MetaAds() {
+// `embedded` : rendue dans /ceo/meta-ads (CeoMetaAdsView), qui fournit la
+// barre latérale, la navbar et le mode sombre.
+export default function MetaAds({ embedded = false, darkMode: parentDark = false }) {
   const navigate = useNavigate();
   const [authChecked, setAuthChecked] = useState(false);
   useEffect(() => {
@@ -118,12 +120,14 @@ export default function MetaAds() {
     setAuthChecked(true);
   }, [navigate]);
 
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
+  const [ownDark, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
+  const darkMode = embedded ? parentDark : ownDark;
   useEffect(() => {
+    if (embedded) return;
     localStorage.setItem('darkMode', darkMode);
     document.body.classList.toggle('dark-mode', darkMode);
     document.documentElement.classList.toggle('dark-mode', darkMode);
-  }, [darkMode]);
+  }, [darkMode, embedded]);
   const T = useMemo(() => getTheme(darkMode), [darkMode]);
   const METRICS = useMemo(() => metricsFor(T), [T]);
 
@@ -184,8 +188,8 @@ export default function MetaAds() {
 
   return (
     <div style={{ minHeight: '100vh', background: T.pageBg, color: T.text, fontFamily: T.font }}>
-      <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
-      <div style={{ maxWidth: 1480, margin: '0 auto', padding: '88px 24px 64px' }}>
+      {!embedded && <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />}
+      <div style={{ maxWidth: 1480, margin: '0 auto', padding: embedded ? '24px 24px 64px' : '88px 24px 64px' }}>
         {/* ── en-tête ── */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
