@@ -68,3 +68,11 @@ test('old contracts do not hide qualification or R2 planning for the private pil
  assert.equal(hasGuidedSalesJourney({...rollout,available:false},lead,{required:false}),false);
  assert.equal(hasGuidedSalesJourney({...rollout,can_manage:false},lead,{required:false}),false);
 });
+import {parisInstantLabel} from './parisDates.js';
+test('server timestamps are shown at Paris time, appointment wall times are not concerned',()=>{
+ assert.equal(parisInstantLabel('2026-09-25T15:39:52.176646+00:00'),'25/09/2026 · 17h39');
+ assert.equal(parisInstantLabel('2026-09-25T17:39:52+02:00'),'25/09/2026 · 17h39');
+ assert.equal(parisInstantLabel('2026-12-31T23:30:00+00:00'),'01/01/2027 · 00h30');
+ assert.equal(parisInstantLabel(null),'');
+ assert.equal(parisInstantLabel('junk'),'');
+});

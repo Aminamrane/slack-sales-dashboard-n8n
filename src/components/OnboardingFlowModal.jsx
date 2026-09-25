@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { motion as Motion, AnimatePresence } from "framer-motion";
 import apiClient from "../services/apiClient";
 import { AlertCabinetBlock } from "./CabinetAlertBlock";
+import { parisInstantLabel } from "../utils/parisDates";
 import { OnboardingRatingForm } from "./BoardIntegrationSheet";
 import { METEO_MEANING, MeteoIcon, meteoStyle } from "./meteo.jsx";
 
@@ -180,7 +181,7 @@ function OptilexStep({ brief, num }) {
         {brief.contracts?.optilex_sent_at && <Row label="Envoyée le">{fmtDT(brief.contracts.optilex_sent_at)}</Row>}
         {brief.contracts?.optilex_signed_at && <Row label="Signée le">{fmtDT(brief.contracts.optilex_signed_at)}</Row>}
         <Row label="Adresse d'envoi">{brief.contracts?.recipient_email || "—"}</Row>
-        {brief.last_cabinet_alert && <Row label="Lisa prévenue">{fmtDT(brief.last_cabinet_alert.created_at)}{brief.last_cabinet_alert.author_name ? ` par ${brief.last_cabinet_alert.author_name}` : ""}</Row>}
+        {brief.last_cabinet_alert && <Row label="Lisa prévenue">{parisInstantLabel(brief.last_cabinet_alert.created_at)}{brief.last_cabinet_alert.author_name ? ` par ${brief.last_cabinet_alert.author_name}` : ""}</Row>}
       </Card>
       {pending ? (
         <Card title="Prévenir le cabinet">

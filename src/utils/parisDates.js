@@ -25,6 +25,14 @@ export function validParisAppointment(value){
  });
 }
 
+// Server timestamps (created_at...) are real instants, unlike appointment fields: show them at Paris time.
+export function parisInstantLabel(value){
+ const d=value?new Date(value):null;
+ if(!d||!Number.isFinite(d.getTime()))return '';
+ const p=Object.fromEntries(new Intl.DateTimeFormat('fr-FR',{timeZone:PARIS_ZONE,day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(d).map(x=>[x.type,x.value]));
+ return `${p.day}/${p.month}/${p.year} · ${p.hour}h${p.minute}`;
+}
+
 export function parisParts(date){return Object.fromEntries(new Intl.DateTimeFormat('fr-FR',{timeZone:PARIS_ZONE,day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(date).map(p=>[p.type,p.value]));}
 
 export function minuteOptions(current='00'){
