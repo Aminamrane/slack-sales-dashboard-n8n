@@ -96,8 +96,9 @@ export function AlertCabinetBlock({ numero, status, prefill }) {
       <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={2} maxLength={1000}
         placeholder="Message pour Lisa (facultatif)"
         style={{ ...inputStyle, width: "100%", resize: "vertical", marginBottom: 8, fontSize: 12.5 }} />
+      {/* La confirmation reste affichée jusqu'à « Confirmer » ou « Annuler » : sortir la souris du
+          bouton l'annulait sans le dire, et l'alerte de Vincent pour n°763 n'est jamais partie (25/09). */}
       <button onClick={confirming ? send : () => setConfirming(true)} disabled={sending || done}
-        onMouseLeave={() => { if (!sending) setConfirming(false); }}
         style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
           padding: "10px 0", borderRadius: 9, border: confirming ? "none" : `1px solid ${NAVY}`, fontSize: 13, fontWeight: 600, fontFamily: "inherit",
           background: done ? GREEN : confirming ? "#b42318" : "transparent",
@@ -105,6 +106,13 @@ export function AlertCabinetBlock({ numero, status, prefill }) {
         {!done && !sending && <MailIcon />}
         {done ? "Lisa prévenue ✓" : sending ? "Envoi…" : state === "error" ? "Échec, réessayer" : confirming ? "Confirmer l'envoi à Lisa" : "Prévenir Lisa"}
       </button>
+      {confirming && !sending && (
+        <button type="button" onClick={() => setConfirming(false)}
+          style={{ display: "block", margin: "6px auto 0", padding: "4px 8px", border: "none", background: "transparent",
+            color: MUTED, fontSize: 12, fontFamily: "inherit", cursor: "pointer", textDecoration: "underline" }}>
+          Annuler
+        </button>
+      )}
       {done && result && (
         <div style={{ fontSize: 12, color: MUTED, marginTop: 8, lineHeight: 1.5 }}>
           {channelLine(result)}{result.recipient_email && <> · adresse transmise : <strong style={{ color: TEXT }}>{result.recipient_email}</strong></>}
