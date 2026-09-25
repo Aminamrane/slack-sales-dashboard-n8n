@@ -3,6 +3,7 @@
 // et le parcours « Faire l'onboarding ».
 import { useEffect, useState } from "react";
 import apiClient from "../services/apiClient";
+import { parisInstantLabel } from "../utils/parisDates";
 
 const NAVY = "#1e2330";
 const BORDER = "#e9ebf0";
@@ -11,16 +12,6 @@ const TEXT = "#1e2330";
 const CARD = "#ffffff";
 const GREEN = "#15794a";
 const inputStyle = { padding: "8px 10px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: TEXT, fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" };
-// Date + heure (les rdv_*_date stockent l'heure-mur Paris labellisée UTC -> parties UTC).
-const fmtDT = (iso) => {
-  if (!iso) return "";
-  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
-  const base = m ? `${m[3]}/${m[2]}/${m[1]}` : "";
-  if (!base) return "";
-  const t = String(iso).match(/T(\d{2}):(\d{2})/);
-  return t && (+t[1] || +t[2]) ? `${base} · ${t[1]}h${t[2]}` : base;
-};
-
 // Enveloppe email qui gigote de droite à gauche (attire l'œil sur "Relancer").
 export function MailIcon() {
   return (
@@ -72,12 +63,13 @@ export function AlertCabinetBlock({ numero, status, prefill }) {
 
   const sending = state === "sending";
   const done = state === "sent";
-  const channelLine = (r) => {
-    if (!r?.channels) return null;
-    const c = r.channels;
-    const bit = (label, ch) => `${label} ${ch?.ok ? "✓" : "✗"}`;
-    return `${bit("Application", c.app)} · ${bit("E-mail", c.email)} · ${c.saas?.ok ? "SaaS ✓" : c.saas?.detail || "SaaS ✗"}`;
-  };
+  // Ce qui est réellement parti, par canal : Vincent doit voir que Lisa a bien été prévenue,
+  // tout de suite après l'envoi comme en rouvrant la fiche (dev, 25/09).
+  // Juste après l'envoi, la réponse s'affiche en attendant que « last » (avec l'auteur) soit rechargé.
+  const delivered = done && result && last?.id !== result.id ? result : last;
+  const channels = delivered?.channels || {};
+  const CHANNELS = [["email", "E-mail"], ["app", "CRM"], ["saas", "Opti'Lex"]];
+  const allOk = CHANNELS.every(([key]) => channels[key]?.ok);
   return (
     <div>
       <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, lineHeight: 1.5 }}>
@@ -113,15 +105,23 @@ export function AlertCabinetBlock({ numero, status, prefill }) {
           Annuler
         </button>
       )}
-      {done && result && (
-        <div style={{ fontSize: 12, color: MUTED, marginTop: 8, lineHeight: 1.5 }}>
-          {channelLine(result)}{result.recipient_email && <> · adresse transmise : <strong style={{ color: TEXT }}>{result.recipient_email}</strong></>}
-        </div>
-      )}
       {state === "error" && errorMsg && <div style={{ fontSize: 12, color: "#b42318", marginTop: 8, lineHeight: 1.5 }}>{errorMsg}</div>}
-      {last && !done && (
-        <div style={{ fontSize: 11.5, color: MUTED, marginTop: 8 }}>
-          Dernière alerte : {last.kind_label} le {fmtDT(last.created_at)}{last.author_name ? ` par ${last.author_name}` : ""}.
+      {delivered && (
+        <div style={{ marginTop: 10, padding: "9px 11px", borderRadius: 8, fontSize: 12, lineHeight: 1.55,
+          background: allOk ? "#eef7f1" : "#fdf6ec", border: `1px solid ${allOk ? "#cfe6d8" : "#f1dcb8"}`, color: TEXT }}>
+          <div style={{ fontWeight: 600, color: allOk ? GREEN : "#a4581d" }}>
+            {allOk ? "Lisa prévenue ✓" : "Lisa prévenue en partie"} le {parisInstantLabel(delivered.created_at)}
+            {delivered.author_name ? ` par ${delivered.author_name}` : ""}
+          </div>
+          <div style={{ color: MUTED }}>
+            {delivered.kind_label}
+            {CHANNELS.map(([key, label]) => (
+              <span key={key}> · {label} <span style={{ color: channels[key]?.ok ? GREEN : "#b42318" }}>{channels[key]?.ok ? "✓" : "✗"}</span></span>
+            ))}
+          </div>
+          {delivered.recipient_email && (
+            <div style={{ color: MUTED }}>Adresse transmise : <strong style={{ color: TEXT }}>{delivered.recipient_email}</strong></div>
+          )}
         </div>
       )}
     </div>
