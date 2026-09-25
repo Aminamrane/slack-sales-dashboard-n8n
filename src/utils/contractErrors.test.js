@@ -55,3 +55,14 @@ test('local preparation requires the signer phone and accepts local formatting',
   for (const phone of ['06 12 34 56 78', '07 66 55 69 19', '+33 7 66 55 69 19']) assert.deepEqual(validateContractPreparation({employee_range:'3-5',email:'valid@example.com',phone}),{});
   assert.deepEqual(Object.keys(validateContractPreparation({employee_range:'3-5',email:'invalid email',phone:'appel moi'})),['email','phone']);
 });
+
+test('un contrat en cours de signature n’est pas présenté comme déjà signé', () => {
+  const inSignature = presentContractError(new Error("Un contrat est déjà en signature pour ce dossier. Ses coordonnées ne peuvent plus être modifiées ici : consultez-le depuis le dossier, attendez la signature ou annulez-le avant d'en préparer un autre."), {preparation:true});
+  assert.equal(inSignature.title, 'Contrat en signature');
+  assert.match(inSignature.message, /en cours de signature/);
+  const legacy = presentContractError(new Error('Un contrat est déjà en signature ou signé. Ses coordonnées ne peuvent plus être modifiées ici.'), {preparation:true});
+  assert.equal(legacy.title, 'Contrat en signature');
+  const signed = presentContractError(new Error('Ce dossier est déjà signé. Consultez le contrat depuis le dossier ; il ne peut pas être renvoyé.'));
+  assert.equal(signed.title, 'Contrat déjà signé');
+  assert.equal(presentContractError('Cannot resend a signed contract').title, 'Contrat déjà signé');
+});

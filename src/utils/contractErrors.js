@@ -59,6 +59,9 @@ export function presentContractError(error, options = {}) {
     return result('Fiche d’intégration à compléter', 'Complétez les sociétés, les dirigeants et la première météo client, puis validez la fiche avant de poursuivre.', { action: 'preparation' });
   if (/coordonnées ont changé|rouvrez|révision|fingerprint/i.test(raw) || problems.some(p => ['fingerprint','revision','source_fingerprint'].includes(p.loc?.at(-1))))
     return result('Informations mises à jour', 'Fermez puis rouvrez la fiche pour récupérer les dernières informations avant de continuer.');
+  // Un envoi en cours n'est pas un contrat signé (retour dev 25/09 : dossier SERR affiché « déjà signé »).
+  if (/déjà en signature|contrat en signature/i.test(raw))
+    return result('Contrat en signature', 'Un contrat est déjà en cours de signature pour ce dossier. Consultez-le depuis le dossier ; attendez la signature ou annulez-le avant d’en préparer un autre.');
   if (/cannot resend a signed|déjà.*signé|already signed/i.test(raw))
     return result('Contrat déjà signé', 'Ce contrat est déjà signé. Consultez-le depuis le dossier ; il ne peut pas être renvoyé.');
   if (/en signature.*modifiées/i.test(raw))
