@@ -11,7 +11,7 @@ const NOSHOW_KEY = '__noshow__';
 
 function target(active) {
   if (active === CONF_KEY) return { url: '/api/v1/tracking/confirmation-email/test', what: 'le mail de confirmation, une version par niche (4 emails)', phone: false };
-  if (active === NOSHOW_KEY) return { url: '/api/v1/tracking/noshow-relance/test', what: 'les 4 emails du parcours de RDV (confirmation R1, confirmation R2, relance 2, no-show) et, avec un mobile, les 4 SMS (répondeur, Lapin, rappel la veille, rappel 15 min avant), signés à votre nom avec votre numéro Allo', phone: true };
+  if (active === NOSHOW_KEY || active === '__sms__') return { url: '/api/v1/tracking/noshow-relance/test', what: 'les 4 emails du parcours de RDV (confirmation R1, confirmation R2, relance 2, no-show) et, avec un mobile, les 4 SMS (répondeur, Lapin, rappel la veille, rappel 15 min avant), signés à votre nom avec votre numéro Allo', phone: true };
   return { url: `/api/v1/tracking/broad-sequence/${encodeURIComponent(active)}/test`, what: 'les 10 emails de la séquence, dans l’ordre', phone: false };
 }
 
