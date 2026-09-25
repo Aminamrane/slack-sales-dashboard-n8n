@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import apiClient from "../services/apiClient";
 import { makeCharte } from "../styles/charte.js";
 import SequenceTestPanel from "../components/SequenceTestPanel";
+import { EmailActivity, SmsActivity } from "../components/SequenceActivity";
 
 const FONT = 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif';
 
@@ -55,10 +56,14 @@ export default function SequencesMonitor({ embed }) {
   const [viewMode, setViewMode] = useState(null);    // null=auto | "in_seq" | "eligible"
   const [refreshedAt, setRefreshedAt] = useState(null);
   const [confData, setConfData] = useState(null);
+  // Période : prospects contactés pour la 1re fois dans les N derniers jours (null = depuis le lancement).
+  const [days, setDays] = useState(null);
+  const daysRef = useRef(null);
   const firstLoad = useRef(true);
 
   const load = () => {
-    apiClient.get("/api/v1/tracking/broad-sequence/monitoring")
+    const d = daysRef.current;
+    apiClient.get("/api/v1/tracking/broad-sequence/monitoring" + (d ? `?days=${d}` : ""))
       .then((r) => {
         setData(r);
         setActive((prev) => prev || (r.sequences[0] && r.sequences[0].key));
@@ -74,11 +79,14 @@ export default function SequencesMonitor({ embed }) {
     const id = setInterval(load, 20000); // sensation "en direct" (le tick cron tourne à la minute)
     return () => clearInterval(id);
   }, []);
+  const choosePeriod = (d) => { daysRef.current = d; setDays(d); load(); };
 
   const CONF_KEY = "__confirmation__";
   const isConf = active === CONF_KEY;
   const NOSHOW_KEY = "__noshow__";
   const isNoshow = active === NOSHOW_KEY;
+  const SMS_KEY = "__sms__";
+  const isSms = active === SMS_KEY;
   const seq = useMemo(() => (data ? data.sequences.find((s) => s.key === active) : null), [data, active]);
   useEffect(() => { setViewMode(null); }, [active]);
   const effView = viewMode || (seq && seq.enabled ? "in_seq" : "eligible");
@@ -98,35 +106,32 @@ export default function SequencesMonitor({ embed }) {
 
   if (loading) return <div style={{ fontFamily: FONT, padding: 48, color: C.muted, textAlign: "center" }}>Chargement du monitoring…</div>;
   if (error) return <div style={{ fontFamily: FONT, padding: 48, color: "#b5675f", textAlign: "center" }}>Erreur : {error}</div>;
-  if (!data || (!seq && !isConf && !isNoshow)) return <div style={{ fontFamily: FONT, padding: 48, color: C.muted, textAlign: "center" }}>Aucune séquence.</div>;
+  if (!data || (!seq && !isConf && !isNoshow && !isSms)) return <div style={{ fontFamily: FONT, padding: 48, color: C.muted, textAlign: "center" }}>Aucune séquence.</div>;
 
   const st = seq ? seq.stats : null;
   const anyEnabled = data.sequences.some((s) => s.enabled);
-  const contactedCount = seq ? seq.contacted.length : 0;
-  const clickedLeads = seq ? seq.contacted.filter((c) => c.clicked).length : 0;
+  const contactedCount = seq ? st.contacted : 0;
   const totalSeg = seq ? SEG_ORDER.reduce((a, k) => a + (seq.segments[k] || 0), 0) : 0;
 
-  // Parcours lead par lead (entonnoir). Réf = éligibles ; conversion vs étape précédente.
-  // Chaque étape convertit depuis un dénominateur sémantique (pas juste l'étape
-  // précédente) : contactés/éligibles, clics & RDV rapportés aux contactés,
-  // présentés/RDV, signés/présentés -> toujours des sous-ensembles, taux ≤ 100%.
+  // Parcours lead par lead : entonnoir STRICT calculé par le serveur
+  // (sequence_stats.py), chaque étape est incluse dans la précédente. Barre =
+  // part des contactés ; pourcentage = conversion depuis l'étape précédente.
   const funnel = seq ? [
-    { key: "elig",  label: "Éligibles",   value: st.eligible,    ref: null,           color: C.slate,   hint: "dans la qualif" },
-    { key: "cont",  label: "Contactés",   value: contactedCount, ref: st.eligible,    color: C.accent,  hint: "≥ 1 email reçu" },
-    { key: "click", label: "Ont cliqué",  value: clickedLeads,   ref: contactedCount, color: "#4b8fb0", hint: "lien ouvert" },
-    { key: "rdv",   label: "RDV repris",  value: st.rebooked,    ref: contactedCount, color: C.ok,      hint: "via la séquence" },
-    { key: "prez",  label: "Présentés",   value: st.presented,   ref: st.rebooked,    color: C.ok,      hint: "R1 tenu" },
-    { key: "sign",  label: "Signés",      value: st.signed,      ref: st.presented,   color: C.ok,      hint: "clients" },
+    { key: "cont",  label: "Contactés",   value: st.contacted, ref: null,         color: C.accent,  hint: "≥ 1 email reçu" },
+    { key: "click", label: "Ont cliqué",  value: st.clicked,   ref: st.contacted, color: "#4b8fb0", hint: "au moins un lien ouvert" },
+    { key: "rdv",   label: "RDV repris",  value: st.rebooked,  ref: st.clicked,   color: C.ok,      hint: "réservé après un clic" },
+    { key: "prez",  label: "Présentés",   value: st.presented, ref: st.rebooked,  color: C.ok,      hint: "R1 tenu après la reprise" },
+    { key: "sign",  label: "Signés",      value: st.signed,    ref: st.presented, color: C.ok,      hint: "clients" },
   ] : [];
 
   // KPI (volume). Icônes SVG inline (charte : carré teinté + chiffre tabular).
   const ic = (p) => <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">{p}</svg>;
   const kpis = seq ? [
-    { l: "Éligibles",      v: st.eligible,  color: C.slate,   s: "prospects ciblables", icon: ic(<><circle cx="9" cy="7" r="4"/><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></>) },
-    { l: "Emails envoyés", v: st.sent,      color: C.accent,  s: "cumul séquence",      icon: ic(<><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></>) },
-    { l: "Clics",          v: st.clicked,   color: "#4b8fb0", s: "liens ouverts",       icon: ic(<><path d="M9 9l5 12 1.8-5.2L21 14 9 9z"/><path d="M7.2 2.2 8 5.1"/><path d="m5.1 7.2-2.9-.8"/></>) },
-    { l: "RDV repris",     v: st.rebooked,  color: C.ok,      s: "via la séquence",     icon: ic(<><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="m9 16 2 2 4-4"/></>) },
-    { l: "Présentés",      v: st.presented, color: C.ok,      s: "R1 tenu",             icon: ic(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></>) },
+    { l: "Éligibles",      v: st.eligible,  color: C.slate,   s: "à relancer aujourd'hui", icon: ic(<><circle cx="9" cy="7" r="4"/><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></>) },
+    { l: "Contactés",      v: st.contacted, color: C.accent,  s: `${st.sent} emails envoyés`,      icon: ic(<><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></>) },
+    { l: "Ont cliqué",     v: st.clicked,   color: "#4b8fb0", s: "prospects",       icon: ic(<><path d="M9 9l5 12 1.8-5.2L21 14 9 9z"/><path d="M7.2 2.2 8 5.1"/><path d="m5.1 7.2-2.9-.8"/></>) },
+    { l: "RDV repris",     v: st.rebooked,  color: C.ok,      s: "réservé après un clic",     icon: ic(<><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="m9 16 2 2 4-4"/></>) },
+    { l: "Présentés",      v: st.presented, color: C.ok,      s: "R1 tenu après la reprise",             icon: ic(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></>) },
     { l: "Signés",         v: st.signed,    color: C.ok,      s: "clients",             icon: ic(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></>) },
   ] : [];
 
@@ -190,13 +195,35 @@ export default function SequencesMonitor({ embed }) {
             Relance no-show
             <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.04em", padding: "2px 7px", borderRadius: 6, textTransform: "uppercase", background: C.ok + "22", color: C.ok }}>Actif</span>
           </button>
+          <button className="seq-pill" onClick={() => setActive(SMS_KEY)}
+            style={{ padding: "8px 15px", borderRadius: 10, border: "1px solid " + (isSms ? C.text : C.border), background: isSms ? C.text : C.bg, color: isSms ? C.bg : C.text2, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8 }}>
+            SMS prospects
+          </button>
         </div>
+
+        {/* Période des chiffres des séquences Meta (prospects contactés pour la 1re fois dans la période) */}
+        {!isConf && !isNoshow && !isSms && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, color: C.muted, marginRight: 4 }}>Prospects entrés dans la séquence :</span>
+            {[[7, "7 derniers jours"], [30, "30 jours"], [90, "90 jours"], [null, "Depuis le lancement"]].map(([d, label]) => {
+              const on = days === d;
+              return (
+                <button key={label} type="button" onClick={() => choosePeriod(d)}
+                  style={{ padding: "5px 11px", borderRadius: 8, border: "1px solid " + (on ? C.text : C.border), background: on ? C.text : C.bg, color: on ? C.bg : C.text2, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Envoi de test de l'onglet actif (tout de suite, sans délais, rien n'est compté) */}
         <SequenceTestPanel active={active} C={C}
-          label={isConf ? "Mail de confirmation" : isNoshow ? "Relance no-show" : (data.sequences.find((x) => x.key === active)?.label || active)} />
+          label={isConf ? "Mail de confirmation" : isNoshow ? "Relance no-show" : isSms ? "SMS prospects" : (data.sequences.find((x) => x.key === active)?.label || active)} />
 
-        {isConf ? (
+        {isSms ? (
+          <SmsActivity C={C} card={card} />
+        ) : isConf ? (
           !confData ? (
             <div style={{ ...card, padding: 40, textAlign: "center", color: C.muted }}>Chargement…</div>
           ) : (
@@ -275,7 +302,7 @@ export default function SequencesMonitor({ embed }) {
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             </span>
             <span>
-              Séquence <strong style={{ color: C.text }}>{seq.label}</strong> en pause : aucun email envoyé. Le tableau montre les <strong style={{ color: C.text }}>{st.eligible}</strong> prospects qui seront ciblés à l'activation.
+              Séquence <strong style={{ color: C.text }}>{seq.label}</strong> en pause : aucun email envoyé. Le tableau montre les <strong style={{ color: C.text }}>{st.eligible}</strong> prospects éligibles aujourd'hui ; à l'activation, seuls les prospects qui entrent ensuite en qualification recevront la séquence.
             </span>
           </div>
         )}
@@ -294,13 +321,16 @@ export default function SequencesMonitor({ embed }) {
           ))}
         </div>
 
+        {/* Qui a reçu, qui est en cours, qui attend (même règle que l'envoi) */}
+        <EmailActivity seqKey={seq.key} C={C} card={card} />
+
         {/* Parcours (entonnoir lead par lead) */}
         <div style={{ ...card, padding: "16px 18px", marginBottom: 16 }}>
           <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 14, letterSpacing: "-0.01em" }}>Parcours des prospects</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
             {funnel.map((f, i) => {
-              const conv = f.ref == null ? null : (f.ref > 0 ? Math.min(100, pct(f.value, f.ref)) : 0);
-              const w = f.value === 0 ? 0 : Math.max(3, conv == null ? 100 : conv);
+              const conv = f.ref == null ? null : (f.ref > 0 ? pct(f.value, f.ref) : 0);
+              const w = f.value === 0 ? 0 : Math.max(3, pct(f.value, st.contacted));
               return (
                 <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{ width: 92, flexShrink: 0, fontSize: 12, fontWeight: 600, color: C.text2, textAlign: "right" }}>{f.label}</div>
@@ -326,7 +356,7 @@ export default function SequencesMonitor({ embed }) {
           {/* Répartition par qualification */}
           <div style={{ ...card, padding: "16px 18px" }}>
             <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4, letterSpacing: "-0.01em" }}>Qualifications entrantes</div>
-            <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 14 }}>Répartition des {totalSeg} prospects par motif d'entrée.</div>
+            <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 14 }}>Répartition des {totalSeg} prospects éligibles aujourd'hui par motif d'entrée.</div>
             <div style={{ display: "flex", height: 10, borderRadius: 6, overflow: "hidden", background: segBg, marginBottom: 16 }}>
               {SEG_ORDER.map((k) => {
                 const n = seq.segments[k] || 0;
