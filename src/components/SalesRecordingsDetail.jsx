@@ -9,12 +9,13 @@
 //   · Vidéos               → enregistrements Meet (proxy stream)
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Video, FileText, ChartNoAxesCombined, BookOpen, Share2, ArrowUpRight } from "lucide-react";
+import { ArrowLeft, Video, FileText, ChartNoAxesCombined, BookOpen, Share2, ArrowUpRight, Phone } from "lucide-react";
 import "./SalesRecordings.css";
 import apiClient from "../services/apiClient";
 import ScorecardView from "./ScorecardView.jsx";
 import RecordingViewerModal from "./RecordingViewerModal.jsx";
 import WeeklyBilanView from "./WeeklyBilanView.jsx";
+import SalesCallsPanel from "./SalesCallsPanel.jsx";
 import ErrorBoundary from "./ErrorBoundary.jsx";
 
 const RDV_TONE = {
@@ -110,6 +111,7 @@ export default function SalesRecordingsDetail({ sales, onBack, C, darkMode, init
 
   const TABS = [
     { key: "analyses", label: "Analyses", icon: ChartNoAxesCombined, n: scList?.length ?? sales.nb_scored ?? 0 },
+    { key: "calls", label: "Appels", icon: Phone, n: sales.nb_calls ?? undefined },
     { key: "videos", label: "Vidéos", icon: Video, n: videos.length },
     { key: "transcriptions", label: "Notes & transcriptions", icon: FileText, n: notes.length },
     ...(shared.length ? [{ key: "shared", label: "Partagés avec ce sales", icon: Share2, n: shared.length }] : []),
@@ -155,6 +157,13 @@ export default function SalesRecordingsDetail({ sales, onBack, C, darkMode, init
       </div>
 
       <div key={tab} style={{ animation: "recFade 0.24s ease both" }}>
+
+      {/* APPELS ALLO — même lecture que le tracking finance, périmètre de la page */}
+      {tab === "calls" && (
+        <ErrorBoundary key={`calls-${sales.email}`}>
+          <SalesCallsPanel email={sales.email} name={sales.name} linked={sales.allo_linked !== false} />
+        </ErrorBoundary>
+      )}
 
       {/* BILAN DE LA SEMAINE — dossier de coaching */}
       {tab === "bilan" && (

@@ -54,7 +54,7 @@ test("la météo est obligatoire et aucune société sans dirigeant ne passe", (
   );
 });
 
-import { uniqueCompanies, applyCompanyLookup } from '../components/integrationPreview/companies.js';
+import { uniqueCompanies, applyCompanyLookup, samePerson } from '../components/integrationPreview/companies.js';
 test('une société multi-établissements compte une fois, sans perdre les liens dirigeants', () => {
   const draft = { companies: [
     {id:'a',name:'Paris',siren:'123 456 789',selected:false},
@@ -115,16 +115,31 @@ test('une réponse Pappers tardive ne remplace pas une société passée en imma
 });
 
 
-test('une société d’un autre associé est décochée et perd les anciens liens du signataire', () => {
+test('une société saisie à la main reste dans le périmètre choisi ; le registre complète sans décider', () => {
   const draft={companies:[{id:'a',name:'Société',siren:'123456789',selected:true}],
     directors:[{id:'p',name:'Camille Martin',companies:['a','other'],provisional_access:true,email:'camille@example.com'},
       {id:'q',name:'Alex Dupont',companies:['a']}]};
-  const result=applyCompanyLookup(draft,'a','123456789',{siren:'123456789',legal_name:'Société Alex',signer_linked:false,
+  const result=applyCompanyLookup(draft,'a','123456789',{siren:'123456789',legal_name:'Société Alex',
     representatives:[{full_name:'DUPONT Alex',first_name:'Alex',last_name:'Dupont',role:'Gérant'}]},()=> 'unused');
-  assert.equal(result.companies[0].selected,false);
+  assert.equal(result.companies[0].selected,true);
+  assert.equal(result.companies[0].name,'Société Alex');
   assert.equal(result.directors.length,2);
-  assert.deepEqual(result.directors[0].companies,['other']);
+  assert.deepEqual(result.directors[0].companies,['a','other']);
   assert.deepEqual(result.directors[1].companies,['a']);
   assert.equal(result.directors[0].provisional_access,true);
   assert.equal(draft.companies[0].selected,true);
+});
+
+test('l’état civil complet du registre ne crée pas un second dirigeant pour la même personne', () => {
+  const draft={companies:[{id:'a',name:'Société',siren:'123456789',selected:true}],
+    directors:[{id:'p',name:'MARTIN Camille',companies:['a']}]};
+  const result=applyCompanyLookup(draft,'a','123456789',{siren:'123456789',legal_name:'Société Martin',
+    representatives:[{full_name:'MARTIN Camille Jean Oscar',first_name:'Camille Jean Oscar',last_name:'Martin',role:'Président'},
+      {full_name:'Léa Durand',first_name:'Léa',last_name:'Durand',role:'Directeur général'}]},()=> 'new');
+  assert.equal(result.directors.length,2);
+  assert.equal(result.directors[0].name,'MARTIN Camille');
+  assert.deepEqual(result.directors[0].companies,['a']);
+  assert.equal(result.directors[1].name,'Léa Durand');
+  assert.equal(samePerson('MARTIN Camille','Camille Martin'),true);
+  assert.equal(samePerson('Martin','MARTIN Camille'),false);
 });

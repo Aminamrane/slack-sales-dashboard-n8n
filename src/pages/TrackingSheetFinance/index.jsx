@@ -79,7 +79,7 @@ import {
   normalizeSearch,
   matchesClientSearch,
   isLiquidationEtat,
-  canFilterMeteo, onboardingPhaseOf, hasEverPaid,
+  canFilterMeteo, onboardingPhaseOf, optilexIntegrationPhaseOf, hasEverPaid,
   PENDING_OPTILEX_LABEL, pendingFinanceRow,
   canUseGlobalScope,
 } from './constants.js';
@@ -303,6 +303,17 @@ const ONBOARDING_PHASES = [
   { key: 'upcoming', label: 'À venir', Icon: CalendarClockIcon },
 ];
 
+// Sous-filtre de la vue « Attente Opti'Lex » (dev 2026-09-23) : où en est le
+// rendez-vous d'intégration Opti'Lex ? « Effectué » (coché sur le board) et
+// « Date passée » (pas coché) sont deux choses différentes, d'où quatre états.
+const OPTILEX_INTEGRATION_PHASES = [
+  { key: 'all',      label: 'Tous',        hint: 'Toute la vue « Attente Opti’Lex »' },
+  { key: 'done',     label: 'Effectué',    Icon: CalendarCheckIcon, hint: 'RDV d’intégration coché « effectué » sur le board Owner / Opti’Lex' },
+  { key: 'past',     label: 'Date passée', hint: 'Date du RDV dépassée, mais pas marqué effectué sur le board' },
+  { key: 'upcoming', label: 'À venir',     Icon: CalendarClockIcon, hint: 'RDV d’intégration daté aujourd’hui ou plus tard' },
+  { key: 'none',     label: 'Sans date',   hint: 'Aucune date de RDV d’intégration' },
+];
+
 // Bandes météo du filtre (menu Filtre). L'icône reprend celle du board,
 // teintée de la bande ; « Sans météo » = aucune note posée.
 const METEO_FILTER_BANDS = [
@@ -454,6 +465,8 @@ export default function TrackingSheetFinance() {
   // les mois d'onboarding cochés (aucun = tous).
   const [onboardingPhase, setOnboardingPhase] = useState('past');
   const [relanceMonths, setRelanceMonths] = useState(() => new Set());
+  // Vue « Attente Opti'Lex » : 'all' | 'done' | 'past' | 'upcoming' | 'none'.
+  const [optilexPhase, setOptilexPhase] = useState('all');
   // Sous-filtre des créances antérieures par ANCIENNETÉ (demande dev
   // 2026-09-01) : 'all' | 'old' (≥ 2 mois) | 'recent' (< 2 mois).
   // L'ancienneté vient du serveur (`overdue_*_since`) : c'est le premier mois
@@ -517,17 +530,21 @@ export default function TrackingSheetFinance() {
         const br = (numero && boardMap) ? boardMap.get(numero) : null;
         return !!br && TERMINATED_BOARD_ETATS.has(displayEtat(br));
       }
-      case 'attente_optilex':
+      case 'attente_optilex': {
         // Même règle que le board : l'état affiché est « Attente Opti'Lex »
         // (Owner signé, contrat Opti'lex encore en vol), numéro client ou
         // pas. Les contrats sans numéro arrivent en plus, en lignes
         // synthétiques (`pendingRows`). Ne prendre que ces derniers faisait
         // afficher 1 client là où le board en compte 13 (2026-09-18).
-        return boardEtatOf(r) === PENDING_OPTILEX_LABEL;
+        if (boardEtatOf(r) !== PENDING_OPTILEX_LABEL) return false;
+        if (optilexPhase === 'all') return true;
+        const br = (r.client?.numero_client && boardMap) ? boardMap.get(r.client.numero_client) : null;
+        return optilexIntegrationPhaseOf(br) === optilexPhase;
+      }
       default:
         return true; // 'all'
     }
-  }, [scope, boardMap, boardEtatOf, relanceMonths, creanceAge, onboardingPhase, period]);
+  }, [scope, boardMap, boardEtatOf, relanceMonths, creanceAge, onboardingPhase, optilexPhase, period]);
 
   // Filtre « Météo client » (menu Filtre), réservé à deux personnes : les
   // bandes du board avec leur volume, plus « Sans météo ».
@@ -603,6 +620,22 @@ export default function TrackingSheetFinance() {
     () => boardPending.map((br) => pendingFinanceRow(br, `${period}-01`)),
     [boardPending, period],
   );
+  // Lignes synthétiques retenues par le sous-filtre « RDV d'intégration ».
+  const pendingRowsInPhase = useMemo(
+    () => (optilexPhase === 'all' ? pendingRows : pendingRows.filter((r) => optilexIntegrationPhaseOf(r.board) === optilexPhase)),
+    [pendingRows, optilexPhase],
+  );
+  // Compteurs du sous-filtre, sur toute la vue « Attente Opti'Lex ».
+  const optilexPhaseCounts = useMemo(() => {
+    const counts = { all: 0, done: 0, past: 0, upcoming: 0, none: 0 };
+    const tally = (br) => { counts.all += 1; counts[optilexIntegrationPhaseOf(br)] += 1; };
+    for (const r of pendingRows) tally(r.board);
+    for (const r of rows) {
+      if (boardEtatOf(r) !== PENDING_OPTILEX_LABEL) continue;
+      tally((r.client?.numero_client && boardMap) ? boardMap.get(r.client.numero_client) : null);
+    }
+    return counts;
+  }, [pendingRows, rows, boardMap, boardEtatOf]);
 
   const viewCounts = useMemo(() => {
     const counts = {};
@@ -612,10 +645,11 @@ export default function TrackingSheetFinance() {
         : rows.filter((r) => matchesView(r, v.key) && !isHiddenInView(r, v.key)).length;
       // Les contrats sans numéro client (lignes synthétiques) comptent dans
       // « Tous » et dans « Attente Opti'Lex », nulle part ailleurs.
-      counts[v.key] = real + (v.key === 'all' || v.key === 'attente_optilex' ? pendingRows.length : 0);
+      // Le chip « Attente Opti'Lex » suit le sous-filtre « RDV d'intégration ».
+      counts[v.key] = real + (v.key === 'all' ? pendingRows.length : v.key === 'attente_optilex' ? pendingRowsInPhase.length : 0);
     }
     return counts;
-  }, [rows, pendingRows, matchesView, isHiddenInView]);
+  }, [rows, pendingRows, pendingRowsInPhase, matchesView, isHiddenInView]);
 
   // Apply business filters to rows : vue-filtre active (chips) PUIS filtres
   // dropdown historiques (union : un lead matche s'il satisfait AU MOINS UN
@@ -628,7 +662,7 @@ export default function TrackingSheetFinance() {
     const viewed = viewFilter === 'all'
       ? [...pendingRows, ...rows]
       : viewFilter === 'attente_optilex'
-        ? [...pendingRows, ...rows.filter((r) => matchesView(r, viewFilter))]
+        ? [...pendingRowsInPhase, ...rows.filter((r) => matchesView(r, viewFilter))]
         : rows.filter((r) => matchesView(r, viewFilter));
     if (tableFilters.size === 0) return viewed;
     // Parser FR/ISO factorisé dans constants.js (`parseDateFR`).
@@ -672,7 +706,7 @@ export default function TrackingSheetFinance() {
       }
       return false;
     });
-  }, [rows, pendingRows, tableFilters, viewFilter, matchesView, boardMap, savedFilters, scope]);
+  }, [rows, pendingRows, pendingRowsInPhase, tableFilters, viewFilter, matchesView, boardMap, savedFilters, scope]);
 
   // Garder le compteur avant masquage permet toujours de réafficher les
   // clients. Il suit l'ancienneté, les filtres et la recherche de cette vue.
@@ -1196,6 +1230,9 @@ export default function TrackingSheetFinance() {
                 creanceAge={creanceAge}
                 onCreanceAgeChange={setCreanceAge}
                 onRelanceMonthsChange={setRelanceMonths}
+                optilexPhase={optilexPhase}
+                onOptilexPhaseChange={setOptilexPhase}
+                optilexPhaseCounts={optilexPhaseCounts}
               />
               {viewFilter === 'creances' && (
                 <CreancesExitBanner
@@ -2183,7 +2220,8 @@ function RelanceMonthPicker({ selected, onChange }) {
 }
 
 function ViewChips({ active, onChange, counts, onboardingPhase, onOnboardingPhaseChange,
-  relanceMonths, onRelanceMonthsChange, creanceAge, onCreanceAgeChange }) {
+  relanceMonths, onRelanceMonthsChange, creanceAge, onCreanceAgeChange,
+  optilexPhase = 'all', onOptilexPhaseChange, optilexPhaseCounts }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 6,
@@ -2261,6 +2299,75 @@ function ViewChips({ active, onChange, counts, onboardingPhase, onOnboardingPhas
       {active === 'creances' && (
         <CreanceAgePicker value={creanceAge} onChange={onCreanceAgeChange} />
       )}
+      <AnimatePresence initial={false}>
+        {active === 'attente_optilex' && (
+          <motion.div
+            key="optilex-integration-phase"
+            initial={{ opacity: 0, x: -6 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -6 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          >
+            <OptilexIntegrationPicker value={optilexPhase} onChange={onOptilexPhaseChange} counts={optilexPhaseCounts} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// Sous-filtre « Attente Opti'Lex » : où en est le RDV d'intégration ?
+// Même forme que le sélecteur de phase de l'onboarding, pilule propre.
+function OptilexIntegrationPicker({ value, onChange, counts }) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Rendez-vous d’intégration Opti’Lex"
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 2, marginLeft: 4,
+        padding: 2, border: `1px solid ${N.border}`, borderRadius: 999, background: '#fff',
+      }}
+    >
+      {OPTILEX_INTEGRATION_PHASES.map((o) => {
+        const actif = value === o.key;
+        const count = counts?.[o.key];
+        return (
+          <button
+            key={o.key}
+            type="button"
+            role="radio"
+            aria-checked={actif}
+            title={o.hint}
+            onClick={() => onChange?.(o.key)}
+            style={{
+              position: 'relative',
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              height: 22, padding: '0 10px',
+              border: 'none', borderRadius: 999, background: 'transparent',
+              color: actif ? '#fff' : N.textMuted,
+              fontSize: 12, fontWeight: actif ? 600 : 500,
+              fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap',
+              transition: 'color 0.18s ease',
+            }}
+          >
+            {actif && (
+              <motion.span
+                layoutId="tsf-optilex-integration-phase"
+                transition={{ type: 'spring', stiffness: 480, damping: 38 }}
+                style={{ position: 'absolute', inset: 0, background: N.text, borderRadius: 999 }}
+              />
+            )}
+            {o.Icon && <o.Icon size={12} style={{ position: 'relative', zIndex: 1, color: actif ? '#fff' : N.textFaint }} />}
+            <span style={{ position: 'relative', zIndex: 1 }}>{o.label}</span>
+            {count !== undefined && (
+              <span style={{ position: 'relative', zIndex: 1, fontSize: 11, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: actif ? 'rgba(255,255,255,0.72)' : N.textFaint }}>
+                {count}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
