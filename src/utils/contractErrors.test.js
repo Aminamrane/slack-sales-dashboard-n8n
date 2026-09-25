@@ -66,3 +66,9 @@ test('un contrat en cours de signature n’est pas présenté comme déjà sign�
   assert.equal(signed.title, 'Contrat déjà signé');
   assert.equal(presentContractError('Cannot resend a signed contract').title, 'Contrat déjà signé');
 });
+
+test('a Yousign cancel refusal says the contract is still signable', () => {
+  const issue = presentContractError(new Error("L'annulation n'a pas abouti chez Yousign : le contrat reste en signature. Réessayez dans un instant."), { operation: 'cancel' });
+  assert.equal(issue.title, 'Annulation non aboutie');
+  assert.match(issue.message, /peut encore le signer/);
+});

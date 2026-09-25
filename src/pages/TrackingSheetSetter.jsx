@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import { fetchContractsOfLead, contractSentLine } from '../utils/leadContracts.js';
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
@@ -734,6 +735,9 @@ export default function TrackingSheetSetter() {
   const [resendingContract, setResendingContract] = useState(null); // lead.id or null
   const [cancelingContract, setCancelingContract] = useState(null); // contract.id or null
   const [leadContracts, setLeadContracts] = useState({}); // { [lead_id]: contract[] }
+  const [contractSenders, setContractSenders] = useState({}); // { [user_id]: full_name }
+  // Setters place appointments: they see a contract, never cancel or resend it.
+  const canManageContracts = !SETTER_ROLES.includes(apiClient.getUser()?.role);
   const [loadingContracts, setLoadingContracts] = useState(false);
   const [signingCard, setSigningCard] = useState(null); // lead.id when signing animation plays
   const [completedSticker, setCompletedSticker] = useState(false); // triggers sticker stamp animation on completed container icon
@@ -1486,10 +1490,10 @@ export default function TrackingSheetSetter() {
   // ── CONTRACT FETCH ────────────────────────────────────────────────────────
   const fetchLeadContracts = async (leadId) => {
     try {
-      const resp = await apiClient.get(`/api/v1/contracts/my-contracts?lead_id=${leadId}`);
-      const contracts = resp.contracts || resp || [];
-      const list = Array.isArray(contracts) ? contracts : [];
+      // Every contract of the lead, whoever sent it (see utils/leadContracts).
+      const { list, senders } = await fetchContractsOfLead(apiClient, leadId);
       setLeadContracts(prev => ({ ...prev, [leadId]: list }));
+      setContractSenders(prev => ({ ...prev, ...senders }));
       return list;
     } catch {
       setLeadContracts(prev => ({ ...prev, [leadId]: [] }));
@@ -7117,6 +7121,7 @@ export default function TrackingSheetSetter() {
                           background: `${badgeColor}20`, color: badgeColor,
                         }}>{badgeLabel}</span>
                         {status === 'ongoing' && daysLeft !== null && <span style={{ fontSize: 11, color: C.muted }}>Expire dans {daysLeft} jour{daysLeft !== 1 ? 's' : ''}</span>}
+                        {status === 'ongoing' && <span style={{ flexBasis: '100%', fontSize: 11, color: C.muted, lineHeight: 1.45 }}>{contractSentLine(latestContract, contractSenders)}.{canManageContracts ? ' En cas d’erreur, annulez-le pour pouvoir en envoyer un autre.' : ''}</span>}
                         {status === 'done' && latestContract.signed_at && <span style={{ fontSize: 11, color: C.muted }}>Signé le {formatDate(latestContract.signed_at)}</span>}
                         {status === 'expired' && latestContract.expired_at && <span style={{ fontSize: 11, color: C.muted }}>Expiré le {formatDate(latestContract.expired_at)}</span>}
                         {status === 'canceled' && latestContract.canceled_at && <span style={{ fontSize: 11, color: C.muted }}>Annulé le {formatDate(latestContract.canceled_at)}</span>}
@@ -7156,14 +7161,14 @@ export default function TrackingSheetSetter() {
                     )}
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      {status === 'ongoing' && (
+                      {status === 'ongoing' && canManageContracts && (
                         <button onClick={() => !isCanceling && handleCancelContract(latestContract.id, lead.id)} disabled={isCanceling}
                           style={actionBtnStyle('#ef4444')}
                           onMouseEnter={(e) => { e.currentTarget.style.background = '#ef4444'; e.currentTarget.style.color = '#fff'; }}
                           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#ef4444'; }}
-                        >{isCanceling ? 'Annulation...' : 'Annuler'}</button>
+                        >{isCanceling ? 'Annulation...' : 'Annuler le contrat'}</button>
                       )}
-                      {(status === 'expired' || status === 'canceled' || status === 'failed') && (
+                      {canManageContracts && (status === 'expired' || status === 'canceled' || status === 'failed') && (
                         <button onClick={() => !isResending && handleResendContract(latestContract.id, lead.id)} disabled={isResending}
                           style={actionBtnStyle('#fb923c')}
                           onMouseEnter={(e) => { e.currentTarget.style.background = '#fb923c'; e.currentTarget.style.color = '#fff'; }}
