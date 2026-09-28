@@ -112,7 +112,9 @@ export function describeAction({ field, from, to, period = null, effectiveOn = n
     case 'payment_promise':
       if (to === 'Oui') return 'a noté une promesse de règlement';
       if (isBlank(to)) return 'a retiré la promesse de règlement';
-      return `a levé la promesse de règlement (${to})`;
+      if (to === 'levée automatiquement') return `a levé la promesse de règlement (${to})`;
+      // Depuis le 28/09 la pose enregistre son commentaire (obligatoire).
+      return `a noté une promesse de règlement : « ${to} »`;
     case 'responsible':
       if (isBlank(to)) return `a retiré le responsable${isBlank(from) ? '' : ` (${from})`}`;
       return `a désigné ${to} comme responsable`;

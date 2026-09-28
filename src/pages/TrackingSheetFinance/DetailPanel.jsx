@@ -37,7 +37,7 @@
 //   GET    /api/v1/finance-periods/client/{id}/profile
 //   GET    /api/v1/finance-periods/client/{id}/audit
 //   GET    /api/v1/optilex/client-agenda?numero_client=…
-//   PATCH  /api/v1/finance-periods/{row_id}  (via onPatchRow prop)
+//   POST   /api/v1/finance-periods/client/{id}/contract(/cancel)  (formule, modalité datées)
 //   GET/POST/PATCH/DELETE  /api/v1/finance-periods/client/{id}/comments
 //     (fil interne Owner — cf. ClientComments, 2026-08-25 ; remplace la
 //      section « Timeline mensuelle » supprimée le même jour)
@@ -46,8 +46,8 @@ import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, ChevronRight, Maximize2, Minimize2, MoreHorizontal, ChevronsRight,
-  Calendar, Briefcase, History, Lock, Landmark, PenLine, FileSignature,
-  Hash, User, Box, CreditCard, Pencil, Download,
+  Calendar, History, Lock, Landmark, FileSignature,
+  Pencil, Download,
   Pin, Trash2, MessageSquarePlus,
   Scale, CalendarClock, CalendarCheck2, Handshake, TriangleAlert, LogOut,
   SlidersHorizontal, ChevronDown, ChevronUp, CalendarRange,
@@ -95,6 +95,7 @@ import ResponsibleSelect from './components/ResponsibleSelect.jsx';
 import { ETAT_STYLE, displayEtat } from '../OptilexBoard.jsx';
 import BoardEtatCell from './components/BoardEtatCell.jsx';
 import ExitClientDialog from './components/ExitClientDialog.jsx';
+import PromiseDialog from './components/PromiseDialog.jsx';
 import BillingStopDialog from './components/BillingStopDialog.jsx';
 import StructureSplits from './components/StructureSplits.jsx';
 import ExpectedManager from './components/ExpectedManager.jsx';
@@ -103,6 +104,10 @@ import OnboardingFacturation from './components/OnboardingFacturation.jsx';
 import SignedContracts from './components/SignedContracts.jsx';
 // Espace commun Owner / Opti'Lex / finance : le fil du board, pour répondre depuis la page finance.
 import CommonSpaceThread from '../../components/CommonSpaceThread.jsx';
+import {
+  NumeroIcon, CompanyIcon, ClientIcon, PeopleIcon, SignatureIcon, PersonIcon,
+  CalendarCheckIcon, ClockIcon, FormulaIcon, CycleIcon,
+} from './components/PropertyIcons.jsx';
 
 // Notion palette (sync with index.jsx N).
 const N = {
@@ -128,13 +133,14 @@ export default function DetailPanel({
   rowId,           // currently focused period row (the one user clicked)
   onClose,
   onSelectRow,     // (rowId) → caller updates rowId
-  onPatchRow,      // (rowId, patch) → reuses table's optimistic patch flow
   boardMap,        // Map numero_client → row board Owner/Opti'Lex (états)
   onBoardEtatChange, // (numero_client, payload) → POST /optilex/etat-change
   onShowToast,     // (msg, type?) → reuses page-level toast
   onPromiseChanged, // () → le parent recharge la ligne (promesse de règlement)
   rows,            // current period rows (so we can find focused row immediately)
   scope = 'global', // vision active du tableau : 'owner' | 'optilex' | 'global'
+  formulaCheck = null, // client « À vérifier » : montant déclaré sans tranche dans sa modalité
+  onContractSaved,     // () → le parent recharge la liste « À vérifier »
 }) {
   const [timeline, setTimeline] = useState(null);
   const [loadingTimeline, setLoadingTimeline] = useState(false);
@@ -589,41 +595,30 @@ export default function DetailPanel({
     }
   }, [pdfGenerating, clientId, focusedRow, client, onShowToast]);
 
-  // Bouton Modifier : déplie le détail complet puis scrolle dessus (léger
-  // délai pour laisser l'accordéon commencer son expansion).
-  // Patch helper bound to current rowId — reuses table's onPatchRow flow.
-  // Falls back to a direct PATCH if the parent didn't wire onPatchRow.
-  // `extra` : champs accompagnant la saisie sans être eux-mêmes édités —
-  // aujourd'hui `change_effective`, le mois d'effet d'un changement de
-  // formule ou de modalité.
-  const patch = useCallback((field, extra = null) => async (value) => {
-    if (!rowId) return;
-    const body = { [field]: value, ...(extra || {}) };
-    if (onPatchRow) {
-      await onPatchRow(rowId, body);
-    } else {
-      await apiClient.patch(`/api/v1/finance-periods/${rowId}`, body);
-    }
-  }, [rowId, onPatchRow]);
-
-  // Promesse de règlement : bascule + rafraîchissement de la ligne et du fil
-  // de commentaires, où l'action vient de s'écrire.
+  // Promesse de règlement. Noter ouvre une fenêtre (date promise +
+  // commentaire obligatoire, dev 2026-09-28) ; retirer est immédiat. La ligne
+  // et le fil de commentaires, où l'action vient de s'écrire, sont rechargés.
+  const [promiseOpen, setPromiseOpen] = useState(false);
+  // Fin de facturation d'un client qui sort (dev 2026-09-28) : direction seule.
+  const [billingOpen, setBillingOpen] = useState(false);
+  const promiseUrl = clientId ? `/api/v1/finance-periods/client/${clientId}/payment-promise` : null;
   const togglePromise = useCallback(async () => {
-    if (!clientId) return;
-    const on = !!focusedRow?.client?.payment_promise;
-    const url = `/api/v1/finance-periods/client/${clientId}/payment-promise`;
+    if (!promiseUrl) return;
+    if (!focusedRow?.client?.payment_promise) { setPromiseOpen(true); return; }
     try {
-      if (on) await apiClient.delete(url);
-      else await apiClient.post(url, {});
-      onShowToast?.(on ? 'Promesse retirée' : 'Promesse de règlement notée', 'success');
+      await apiClient.delete(promiseUrl);
+      onShowToast?.('Promesse retirée', 'success');
       onPromiseChanged?.();
     } catch (e) {
       onShowToast?.(e?.data?.detail || 'Action impossible', 'error');
     }
-  }, [clientId, focusedRow, onShowToast, onPromiseChanged]);
-
-  // Fin de facturation d'un client qui sort (dev 2026-09-28) : direction seule.
-  const [billingOpen, setBillingOpen] = useState(false);
+  }, [promiseUrl, focusedRow, onShowToast, onPromiseChanged]);
+  const submitPromise = useCallback(async ({ promised_for, note }) => {
+    await apiClient.post(promiseUrl, { promised_for, note });  // l'erreur remonte à la fenêtre
+    setPromiseOpen(false);
+    onShowToast?.(`Promesse de règlement notée pour le ${formatDateFR(promised_for)}`, 'success');
+    onPromiseChanged?.();
+  }, [promiseUrl, onShowToast, onPromiseChanged]);
 
   // ── Sortie client (état acté, perte) ────────────────────────────────────
   // Après une perte, tout bouge d'un coup : l'attendu de la fiche, les tuiles,
@@ -870,13 +865,14 @@ export default function DetailPanel({
                 boardRow={boardRow}
                 periods={periods}
 
-                patch={patch}
                 canEdit={canEdit}
                 canEditMoney={canEditMoney}
                 editing={contractEditing}
                 clientId={clientId}
                 onProfileChanged={refreshProfileAndRows}
                 onContractChanged={reloadAfterExit}
+                onContractSaved={onContractSaved}
+                formulaCheck={formulaCheck}
                 onShowToast={onShowToast}
                 onCopied={onCopied}
               />
@@ -1015,6 +1011,12 @@ export default function DetailPanel({
             billingLastMonth={profile?.billing_last_month || null}
             onSaved={reloadAfterExit}
             onShowToast={onShowToast}
+          />
+          <PromiseDialog
+            open={promiseOpen}
+            client={client}
+            onClose={() => setPromiseOpen(false)}
+            onSubmit={submitPromise}
           />
           <ExitClientDialog
             open={exitOpen && canEditMoney}
@@ -1634,8 +1636,9 @@ function RefundPrompt({ value, onChange, onCancel, onSubmit }) {
 
 // ── Informations contractuelles (liste compacte icône + libellé / valeur) ───
 function ContractInfoList({
-  client, profile, focusedRow, boardRow, patch, canEdit, canEditMoney, onCopied,
+  client, profile, focusedRow, boardRow, canEdit, canEditMoney, onCopied,
   editing = false, clientId, onProfileChanged, onContractChanged, onShowToast, periods = [],
+  formulaCheck = null, onContractSaved,
 }) {
   // Séparation nom du client / société (2026-08-21) : « Nom du client » =
   // la/les personne(s), la société a sa propre ligne. Pas de personne
@@ -1681,27 +1684,68 @@ function ContractInfoList({
   // quel mois le changement s'applique avant d'écrire (demande dev
   // 2026-08-27). `pending` porte la saisie en attente de ce choix.
   const [pending, setPending] = useState(null);
-  const askEffective = useCallback((field, value, label) => {
-    setPending({ field, value, label });
+  const askEffective = useCallback((field, value, label, entity = null) => {
+    setPending({ field, value, label, entity });
   }, []);
+
+  // Calendrier des modalités (dev 2026-09-25) : « mensuel jusqu'à telle
+  // date, puis annuel à partir de ce moment-là ». Le serveur dit aussi
+  // jusqu'où l'annuel en cours est déjà facturé, pour ne pas le refacturer.
+  const [modeSchedule, setModeSchedule] = useState(null);
+  const loadModeSchedule = useCallback(() => {
+    if (!clientId) return;
+    apiClient.get(`/api/v1/finance-periods/client/${clientId}/payment-mode-schedule`)
+      .then(setModeSchedule)
+      .catch(() => setModeSchedule(null));
+  }, [clientId]);
+  useEffect(() => { loadModeSchedule(); }, [loadModeSchedule]);
+  // La direction applique ; l'équipe finance envoie une demande que la
+  // direction valide dans « Validations » (dev 2026-09-25). Même geste,
+  // le serveur décide selon le rôle.
+  const afterContract = useCallback((res, doneMessage) => {
+    if (res?.pending) {
+      onShowToast?.(`Demande envoyée à la direction : ${res.label}`, 'success');
+      return;
+    }
+    if (res?.entities) setModeSchedule(res);
+    else loadModeSchedule();
+    // Une formule ou une modalité recalcule PLUSIEURS mois côté serveur :
+    // sans rechargement, « Gérer les attendus » montrait encore les anciens
+    // montants (retour dev 2026-09-10 : « changer ne change pas les attendus »).
+    onContractChanged?.();
+    onContractSaved?.();
+    if (doneMessage) onShowToast?.(doneMessage, 'success');
+  }, [loadModeSchedule, onContractChanged, onContractSaved, onShowToast]);
+
+  const cancelContractChange = useCallback(async (kind, entryId) => {
+    try {
+      const res = await apiClient.post(`/api/v1/finance-periods/client/${clientId}/contract/cancel`,
+        { kind, entry_id: entryId });
+      afterContract(res, 'Changement annulé');
+    } catch (e) {
+      onShowToast?.(e?.message || 'Annulation impossible', 'error');
+    }
+  }, [clientId, afterContract, onShowToast]);
+
   const applyPending = useCallback(async (effective) => {
     if (!pending) return;
     const { field, value } = pending;
     setPending(null);
-    await patch(field, { change_effective: effective })(value);
-    // Une formule ou une modalité recalcule PLUSIEURS mois côté serveur ; la
-    // réponse du PATCH ne porte que la ligne courante. Sans rechargement,
-    // « Gérer les attendus » montrait encore les anciens montants (retour dev
-    // 2026-09-10 : « changer ne change pas les attendus »).
-    onContractChanged?.();
-  }, [pending, patch, onContractChanged]);
+    try {
+      const res = await apiClient.post(`/api/v1/finance-periods/client/${clientId}/contract`,
+        { [field]: value, effective });
+      afterContract(res, null);
+    } catch (e) {
+      onShowToast?.(e?.message || 'Changement impossible', 'error');
+    }
+  }, [pending, clientId, afterContract, onShowToast]);
 
   const [paymentDaySaving, setPaymentDaySaving] = useState(false);
 
   const rows = [
-    { Icon: Hash,       label: 'Client n°',            value: numeroValue, mono: true },
+    { Icon: NumeroIcon, label: 'Client n°',            value: numeroValue, mono: true },
       {
-        Icon: Briefcase,
+        Icon: CompanyIcon,
         label: 'Société',
         copyValue: profile?.company_name || societeName,
         node: (
@@ -1719,7 +1763,7 @@ function ContractInfoList({
         ),
       },
     {
-      Icon: User,
+      Icon: profile?.representatives?.length > 1 ? PeopleIcon : ClientIcon,
       label: profile?.representatives?.length > 1 ? 'Personnes du NDA' : 'Nom du client',
       copyValue: profile?.representatives?.length ? [...profile.representatives.map(ndaPersonLabel), distinctCrmName(profile)].filter(Boolean).join(" / ") : personne || societeName,
       node: (
@@ -1749,7 +1793,7 @@ function ContractInfoList({
     // Date de signature EFFECTIVE pour la finance : la date d'effet posée par
     // les sales sur le contrat prime (dev 2026-09-18) ; on le dit quand c'est
     // le cas, pour que personne ne cherche pourquoi elle diffère du CRM.
-    { Icon: PenLine,    label: 'Date de signature',
+    { Icon: SignatureIcon, label: 'Date de signature',
       value: formatDateLongFR(profile?.date_signature),
       node: profile?.date_signature ? (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -1763,14 +1807,14 @@ function ContractInfoList({
         </span>
       ) : undefined,
     },
-    { Icon: User,       label: 'Sales',                value: profile?.sales_name },
+    { Icon: PersonIcon, label: 'Sales',                value: profile?.sales_name },
     // RDV d'onboarding : c'est lui qui déclenche la facturation — premier
     // mois facturé, départ de l'engagement 12 mois, et bascule en retard
     // (demande dev 2026-08-26). Servi par /profile, qui prend la date du
     // classeur puis celle de la fiche CRM ; le payload de liste ne la porte
     // pas, d'où la lecture sur `profile` uniquement.
     {
-      Icon: CalendarCheck2,
+      Icon: CalendarCheckIcon,
       label: "RDV d'onboarding",
       // Lecture seule quand la date existe (arbitrage dev 2026-08-27 : elle
       // vient de la déclaration de vente). Quand elle MANQUE, la finance peut
@@ -1803,7 +1847,7 @@ function ContractInfoList({
     },
     // Premier paiement réel, puis jour modifiable par la direction financière.
     {
-      Icon: CalendarClock,
+      Icon: ClockIcon,
       label: 'Date de paiement',
       copyValue: profile?.payment_day_effective ? `le ${profile.payment_day_effective} du mois` : '',
       node: (editing && canEditMoney) ? (
@@ -1851,25 +1895,37 @@ function ContractInfoList({
         </span>
       ),
     },
-    // Formule = tranche seule, éditable (PATCH employee_range sur la period
-    // focus — optimiste + rollback + toast via le flow onPatchRow standard).
+    // Formule = tranche seule, datée : POST /client/{id}/contract (la
+    // direction applique, l'équipe propose).
     {
-      Icon: Box,
+      Icon: FormulaIcon,
       label: 'Formule',
       copyValue: employeeRangeLabel(range),
       node: (
-        <EditableSelect
-          value={range}
-          options={EMPLOYEE_RANGES}
-          optionLabels={rangeLabels}
-          onCommit={(v) => askEffective('employee_range', v, employeeRangeLabel(v))}
-          // La formule commande le montant facturé : direction financière
-          // seulement. La modalité, elle, reste ouverte à l'équipe.
-          disabled={!canEditMoney}
-          chip
-          placeholderItalic
-          width="auto"
-        />
+        <ModeWithTimeline
+          // Formule décidée par la finance, datée : elle prime sur le montant
+          // déclaré à la vente à partir de son mois (dev 2026-09-25).
+          timeline={(modeSchedule?.formula?.timeline || []).map((f) => ({
+            id: f.id, mode: f.employee_band, effective_from: f.effective_from,
+          }))}
+          labelOf={employeeRangeLabel}
+          canEdit={canEdit}
+          onCancel={(id) => cancelContractChange('formula', id)}
+          notice={formulaCheck ? formulaCheckNotice(formulaCheck) : null}
+        >
+          <EditableSelect
+            value={range}
+            options={EMPLOYEE_RANGES}
+            optionLabels={rangeLabels}
+            onCommit={(v) => askEffective('employee_range', v, employeeRangeLabel(v))}
+            // La formule commande le montant facturé : la direction l'applique,
+            // l'équipe la propose (demande à valider par la direction).
+            disabled={!canEdit}
+            chip
+            placeholderItalic
+            width="auto"
+          />
+        </ModeWithTimeline>
       ),
     },
     // Modalité éditable (demande dev 2026-08-27) : passer d'annuel à mensuel
@@ -1879,37 +1935,51 @@ function ContractInfoList({
     // pour Opti'lex et mensuel pour Owner ». Sans rythme Opti'lex propre, la
     // ligne Opti'lex reflète celui d'Owner.
     {
-      Icon: CreditCard,
+      Icon: CycleIcon,
       label: 'Modalité Owner',
       copyValue: modalite,
       node: (
-        <EditableSelect
-          value={normalizePaymentMode(focusedRow?.payment_mode || client?.payment_mode)}
-          options={PAYMENT_MODES}
-          optionLabels={PAYMENT_MODE_LABELS}
-          onCommit={(v) => askEffective('payment_mode', v, `Owner ${paymentModeLabel(v)}`)}
-          disabled={!canEdit}
-          chip
-          placeholderItalic
-          width="auto"
-        />
+        <ModeWithTimeline
+          timeline={modeSchedule?.entities?.owner?.timeline}
+          canEdit={canEdit}
+          onCancel={(id) => cancelContractChange('mode', id)}
+        >
+          <EditableSelect
+            value={normalizePaymentMode(focusedRow?.payment_mode || client?.payment_mode)}
+            options={PAYMENT_MODES}
+            optionLabels={PAYMENT_MODE_LABELS}
+            onCommit={(v) => askEffective('payment_mode', v, `Owner ${paymentModeLabel(v)}`, 'owner')}
+            disabled={!canEdit}
+            chip
+            placeholderItalic
+            width="auto"
+          />
+        </ModeWithTimeline>
       ),
     },
     {
-      Icon: CreditCard,
+      Icon: CycleIcon,
       label: "Modalité Opti'lex",
       copyValue: paymentModeLabel(focusedRow?.payment_mode_optilex || client?.payment_mode_optilex || focusedRow?.payment_mode || client?.payment_mode),
       node: (
-        <EditableSelect
-          value={normalizePaymentMode(focusedRow?.payment_mode_optilex || client?.payment_mode_optilex || focusedRow?.payment_mode || client?.payment_mode)}
-          options={PAYMENT_MODES}
-          optionLabels={PAYMENT_MODE_LABELS}
-          onCommit={(v) => askEffective('payment_mode_optilex', v, `Opti'lex ${paymentModeLabel(v)}`)}
-          disabled={!canEdit}
-          chip
-          placeholderItalic
-          width="auto"
-        />
+        <ModeWithTimeline
+          // Un Opti'lex qui suit Owner n'a pas de calendrier propre : ses
+          // changements sont ceux d'Owner, affichés (et annulables) une fois.
+          timeline={modeSchedule?.follows_owner ? null : modeSchedule?.entities?.optilex?.timeline}
+          canEdit={canEdit}
+          onCancel={(id) => cancelContractChange('mode', id)}
+        >
+          <EditableSelect
+            value={normalizePaymentMode(focusedRow?.payment_mode_optilex || client?.payment_mode_optilex || focusedRow?.payment_mode || client?.payment_mode)}
+            options={PAYMENT_MODES}
+            optionLabels={PAYMENT_MODE_LABELS}
+            onCommit={(v) => askEffective('payment_mode_optilex', v, `Opti'lex ${paymentModeLabel(v)}`, 'optilex')}
+            disabled={!canEdit}
+            chip
+            placeholderItalic
+            width="auto"
+          />
+        </ModeWithTimeline>
       ),
     },
   ];
@@ -1927,6 +1997,11 @@ function ContractInfoList({
           onPick={applyPending}
           onCancel={() => setPending(null)}
           periods={periods}
+          // Passage d'un annuel à un autre rythme : on propose la fin de
+          // l'année déjà facturée plutôt que de la refacturer.
+          coverage={pending.entity && normalizePaymentMode(pending.value) !== 'YEARLY'
+            ? modeSchedule?.entities?.[pending.entity]?.annual_coverage || null
+            : null}
         />
       )}
       {rows.map((r, i) => (
@@ -1950,7 +2025,7 @@ function ContractInfoList({
             color: N.textMuted, fontSize: 12.5,
             whiteSpace: 'nowrap', flexShrink: 0,
           }}>
-            <r.Icon size={13} strokeWidth={1.9} style={{ color: N.textFaint }} />
+            <r.Icon size={16} strokeWidth={1.9} style={{ color: N.textFaint }} />
             {r.label}
           </span>
           <span style={{
@@ -2887,10 +2962,88 @@ function RelatedEntityList({ items, kind, clientId, editing, onChanged, onShowTo
 // encaissements, eux, ne bougent pas : si le client payait l'ancien tarif, la
 // différence devient mécaniquement un trop-perçu, mois par mois. C'est le
 // résultat voulu, pas un effet de bord.
-function EffectiveMonthPrompt({ label, onPick, onCancel, periods = [] }) {
+// Modalité + ses changements datés : « Annuel · Mensuel dès mars 2027 ».
+// Seuls les changements à venir ou passés datés s'affichent ; le rythme
+// d'origine est déjà le libellé du sélecteur.
+function ModeWithTimeline({ timeline, canEdit, onCancel, children, labelOf = paymentModeLabel, notice = null }) {
+  const dated = (timeline || []).filter((t) => t.effective_from);
+  if (!dated.length && !notice) return children;
+  const now = currentPeriod();
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
+      {children}
+      {notice && (
+        <span style={{
+          fontSize: 11.5, lineHeight: 1.4, color: '#92400e', background: '#fffbeb',
+          border: '1px solid #fde68a', borderRadius: 8, padding: '4px 9px',
+          maxWidth: 300, textAlign: 'right',
+        }}>
+          {notice}
+        </span>
+      )}
+      {dated.map((t) => {
+        const month = t.effective_from.slice(0, 7);
+        const upcoming = month > now;
+        return (
+          <span
+            key={t.id ?? month}
+            title={upcoming
+              ? 'Changement programmé : le rythme actuel continue jusque-là.'
+              : 'Changement daté, déjà en vigueur.'}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              fontSize: 11.5, lineHeight: 1.3, color: upcoming ? '#1d4ed8' : N.textMuted,
+              background: upcoming ? '#eff4ff' : N.sideBg,
+              border: `1px solid ${upcoming ? '#d6e2ff' : N.borderSft}`,
+              borderRadius: 999, padding: '2px 4px 2px 9px',
+            }}
+          >
+            {labelOf(t.mode)} dès {formatMonthLabel(month).toLowerCase()}
+            {canEdit && t.id != null ? (
+              <button
+                type="button"
+                onClick={() => onCancel?.(t.id)}
+                aria-label={`Annuler le passage en ${labelOf(t.mode)}`}
+                title="Annuler ce changement : le rythme d’avant se prolonge"
+                style={{
+                  border: 'none', background: 'transparent', cursor: 'pointer',
+                  color: 'inherit', padding: '0 4px', fontSize: 13, lineHeight: 1,
+                }}
+              >
+                ×
+              </button>
+            ) : <span style={{ width: 4 }} />}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// « À vérifier » : ce que la finance doit trancher, en une phrase.
+function formulaCheckNotice(check) {
+  const mode = paymentModeLabel(check.payment_mode)?.toLowerCase() || 'sa modalité';
+  const other = check.band_if_other_mode
+    ? ` (c'est le prix ${check.payment_mode === 'MONTHLY' ? 'annuel' : 'mensuel'} de la tranche ${employeeRangeLabel(check.band_if_other_mode)})`
+    : '';
+  const used = check.band_used ? `tranche retenue : ${employeeRangeLabel(check.band_used)}, d'après l'effectif` : 'aucune tranche retenue';
+  return `À vérifier : ${formatEUR(check.declared)} déclarés ne correspondent à aucune tranche en ${mode}${other} ; ${used}. Fixez la formule si besoin.`;
+}
+
+function EffectiveMonthPrompt({ label, onPick, onCancel, periods = [], coverage = null }) {
   const [retro, setRetro] = useState('');
+  const [future, setFuture] = useState('');
   const moisProchain = formatMonthLabel(shiftMonth(currentPeriod(), 1));
   const moisCourant = formatMonthLabel(currentPeriod());
+  // Mois à venir au-delà du mois prochain : « mensuel jusqu'à telle date,
+  // puis annuel » se programme ici (deux ans devant soi).
+  const futureMonths = useMemo(
+    () => Array.from({ length: 23 }, (_, i) => shiftMonth(currentPeriod(), i + 2)),
+    [],
+  );
+  // L'annuel en cours est facturé jusqu'à `covered_to` : passer au mensuel
+  // avant refacturerait des mois déjà réglés.
+  const endOfPaidYear = coverage?.next_month ? coverage.next_month.slice(0, 7) : null;
   // Mois réellement facturés au client, du plus récent au plus ancien, et
   // strictement antérieurs au mois courant : on ne propose pas un mois qui
   // n'existe pas sur sa fiche.
@@ -2922,14 +3075,40 @@ function EffectiveMonthPrompt({ label, onPick, onCancel, periods = [] }) {
         Le montant attendu est recalculé à partir du mois choisi, jusqu’au
         dernier mois de la fiche.
       </div>
+      {endOfPaidYear && (
+        <div style={{
+          fontSize: 12, color: '#92400e', background: '#fffbeb',
+          border: '1px solid #fde68a', borderRadius: 8,
+          padding: '8px 12px', maxWidth: 340, lineHeight: 1.5,
+        }}>
+          L’annuel facturé en {formatMonthLabel(coverage.billed_month.slice(0, 7)).toLowerCase()}
+          {coverage.paid ? ' (réglé)' : ''} couvre jusqu’à {formatMonthLabel(coverage.covered_to.slice(0, 7)).toLowerCase()}.
+          Un passage plus tôt facture ces mois une seconde fois.
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+        {endOfPaidYear && (
+          <button
+            type="button"
+            onClick={() => onPick(endOfPaidYear)}
+            style={{
+              border: 'none', cursor: 'pointer', borderRadius: 6,
+              padding: '7px 14px', fontSize: 12.5, fontWeight: 600,
+              background: N.text, color: '#fff',
+            }}
+          >
+            À la fin de l’année payée, {formatMonthLabel(endOfPaidYear).toLowerCase()}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => onPick('current')}
           style={{
-            border: 'none', cursor: 'pointer', borderRadius: 6,
+            border: endOfPaidYear ? `1px solid ${N.border}` : 'none',
+            cursor: 'pointer', borderRadius: 6,
             padding: '7px 14px', fontSize: 12.5, fontWeight: 600,
-            background: N.text, color: '#fff',
+            background: endOfPaidYear ? '#fff' : N.text,
+            color: endOfPaidYear ? N.text : '#fff',
           }}
         >
           Dès {moisCourant}
@@ -2955,6 +3134,38 @@ function EffectiveMonthPrompt({ label, onPick, onCancel, periods = [] }) {
           }}
         >
           Annuler
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+        <select
+          value={future}
+          onChange={(e) => setFuture(e.target.value)}
+          aria-label="Mois d’effet à venir"
+          style={{
+            border: `1px solid ${N.border}`, borderRadius: 6,
+            padding: '6px 8px', fontSize: 12.5, fontFamily: 'inherit',
+            background: '#fff', color: N.text, outline: 'none',
+          }}
+        >
+          <option value="">Plus tard, choisir un mois…</option>
+          {futureMonths.map((m) => (
+            <option key={m} value={m}>{formatMonthLabel(m)}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          disabled={!future}
+          onClick={() => onPick(future)}
+          style={{
+            border: 'none', borderRadius: 6, padding: '7px 12px',
+            fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit',
+            cursor: future ? 'pointer' : 'default',
+            background: future ? N.text : N.sideBg,
+            color: future ? '#fff' : N.textFaint,
+          }}
+        >
+          Programmer
         </button>
       </div>
 

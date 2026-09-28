@@ -86,6 +86,8 @@ test('perte, promesse, responsable', () => {
   assert.equal(describeAction({ field: 'loss', from: '', to: 'Perte déclarée' }), 'a déclaré le client en perte');
   assert.equal(describeAction({ field: 'loss', from: 'Perte déclarée', to: '' }), "a annulé la perte et restauré l'attendu");
   assert.equal(describeAction({ field: 'payment_promise', from: null, to: 'Oui' }), 'a noté une promesse de règlement');
+  assert.equal(describeAction({ field: 'payment_promise', from: null, to: 'Paiera fin octobre' }),
+    'a noté une promesse de règlement : « Paiera fin octobre »');
   assert.equal(
     describeAction({ field: 'payment_promise', from: 'Oui', to: 'levée automatiquement' }),
     'a levé la promesse de règlement (levée automatiquement)',
