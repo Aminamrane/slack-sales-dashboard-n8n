@@ -173,6 +173,11 @@ function SaleSlotPicker({ kind, value, onChange, C, darkMode, band }) {
   const [data, setData] = useState({ days: [] });
   const [loading, setLoading] = useState(false);
   const [selectedDay, setSelectedDay] = useState(value ? value.slice(0, 10) : null);
+  // À l'ouverture seulement : si le premier créneau libre tombe dans un mois suivant, le
+  // calendrier s'y place (sinon il reste sur un mois sans aucun jour cliquable). Ensuite,
+  // la navigation du commercial n'est plus jamais forcée.
+  const autoMonthDone = useRef(!!value);
+  const slotListRef = useRef(null);
 
   const y = viewMonth.getFullYear();
   const m = viewMonth.getMonth();
@@ -198,6 +203,13 @@ function SaleSlotPicker({ kind, value, onChange, C, darkMode, band }) {
           if (value && days.some(d => d.date === value.slice(0, 10))) return value.slice(0, 10);
           return days.length ? days[0].date : null;
         });
+        if (!autoMonthDone.current) {
+          autoMonthDone.current = true;
+          const first = days.length ? days[0].date : null;
+          if (first && first.slice(0, 7) !== _ymd(y, m, 1).slice(0, 7)) {
+            setViewMonth(new Date(Number(first.slice(0, 4)), Number(first.slice(5, 7)) - 1, 1));
+          }
+        }
       })
       .catch(() => { if (alive) setData({ days: [] }); })
       .finally(() => { if (alive) setLoading(false); });
@@ -209,6 +221,21 @@ function SaleSlotPicker({ kind, value, onChange, C, darkMode, band }) {
   const selectedSlots = selectedDay ? (daysMap[selectedDay] || []) : [];
   const valDay = value ? value.slice(0, 10) : null;
   const valTime = value ? value.slice(11, 16) : null;
+
+  // La liste commence à 8h : sans défilement, un premier créneau libre l'après-midi reste
+  // caché sous les créneaux barrés et le jour paraît complet. On amène en vue le créneau
+  // choisi, sinon le premier créneau libre du jour (dans la liste seule, sans bouger la page).
+  const scrollTarget = (() => {
+    if (valDay === selectedDay && selectedSlots.some(s => s.t === valTime)) return valTime;
+    const firstFree = selectedSlots.find(s => s.free);
+    return firstFree ? firstFree.t : null;
+  })();
+  useEffect(() => {
+    const list = slotListRef.current;
+    if (loading || !list || !scrollTarget) return;
+    const target = list.querySelector(`[data-slot="${scrollTarget}"]`);
+    if (target) list.scrollTop = Math.max(0, target.offsetTop - 6);
+  }, [selectedDay, scrollTarget, loading]);
   let selLabel = '';
   if (selectedDay) { const sd = new Date(selectedDay + 'T00:00:00'); selLabel = `${WD_SHORT[sd.getDay()]} ${sd.getDate()}`; }
 
@@ -256,7 +283,7 @@ function SaleSlotPicker({ kind, value, onChange, C, darkMode, band }) {
       <div style={{ width: 148, borderLeft: `1px solid ${C.border}`, paddingLeft: 16, display: 'flex', flexDirection: 'column' }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 2 }}>{selLabel || '—'}</div>
         {data.slotMinutes ? <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>Créneaux de {data.slotMinutes} min</div> : <div style={{ marginBottom: 8 }} />}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto', paddingRight: 4 }}>
+        <div ref={slotListRef} style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto', paddingRight: 4 }}>
           {loading ? (
             <div style={{ color: C.muted, fontSize: 12, padding: '24px 0', textAlign: 'center' }}>…</div>
           ) : !selectedDay ? (
@@ -264,7 +291,7 @@ function SaleSlotPicker({ kind, value, onChange, C, darkMode, band }) {
           ) : selectedSlots.map((s, idx) => {
             const sel = valDay === selectedDay && valTime === s.t;
             return (
-              <button key={s.t} onClick={() => s.free && onChange(selectedDay + 'T' + s.t)} disabled={!s.free}
+              <button key={s.t} data-slot={s.t} onClick={() => s.free && onChange(selectedDay + 'T' + s.t)} disabled={!s.free}
                 style={{ padding: '10px 0', borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
                   cursor: s.free ? 'pointer' : 'default',
                   border: `1px solid ${sel ? '#1e2330' : (s.free ? C.border : 'transparent')}`,
