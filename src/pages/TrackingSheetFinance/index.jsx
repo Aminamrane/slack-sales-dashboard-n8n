@@ -46,6 +46,7 @@ import ReceiptsView from './components/ReceiptsView.jsx';
 import CreancesExitBanner from './components/CreancesExitBanner.jsx';
 import CallsView from './components/CallsView.jsx';
 import ValidationsView from './components/ValidationsView.jsx';
+import PromisesView from './components/PromisesView.jsx';
 // Icônes de navigation dessinées pour la page (barre latérale, onglets,
 // filtre responsable) : filaires, monochromes, dans l'esprit de la référence
 // donnée par le dev (2026-09-03). Pas de bibliothèque : le trait est le nôtre.
@@ -192,7 +193,13 @@ const STYLE_BLOCK = `
   .tsf-icon-btn:hover { background: ${N.sideHover}; }
 
   /* Subtle "gallery item" hover feedback used in the main area. */
-  .tsf-tab { position: relative; transition: color 0.12s; }
+  .tsf-tab { position: relative; transition: color 0.12s; white-space: nowrap; flex-shrink: 0; }
+  /* Onglets et outils sur deux lignes distinctes (dev 2026-09-28 : « la forme
+     change d'un onglet à l'autre », puis « des onglets sont cachés »). Les
+     onglets ont toute la largeur et ne sont jamais coupés ni masqués ; la
+     ligne d'outils garde la même hauteur sur tous les onglets, même quand
+     ses outils n'ont pas d'objet (appels, validations). */
+  .tsf-toolbar > * { flex-shrink: 0; white-space: nowrap; }
   .tsf-tab:hover { color: ${N.text}; }
   .tsf-tab[data-active="true"]::after {
     content: '';
@@ -291,6 +298,10 @@ const VIEW_FILTERS = [
   // même jour : « les très anciens clients ne nous intéressent pas »).
   { key: 'onboarding',  label: 'Onboarding' },
   { key: 'non_auto',    label: 'Non automatisé' },
+  // Montant déclaré sans tranche dans la modalité du client : l'attendu
+  // retombe sur l'effectif de la fiche. La finance tranche en fixant la
+  // formule, datée, depuis la fiche (dev 2026-09-25).
+  { key: 'a_verifier',  label: 'À vérifier' },
   // Owner signé, Opti'Lex pas encore : lignes venues du board, sans numéro
   // ni attendu, flaguées (demande dev 2026-09-18).
   { key: 'attente_optilex', label: PENDING_OPTILEX_LABEL },
@@ -488,9 +499,20 @@ export default function TrackingSheetFinance() {
     filterKey === 'creances' && hideLiquidations && isLiquidationEtat(boardEtatOf(r)),
   [hideLiquidations, boardEtatOf]);
 
+  // Clients « À vérifier » (serveur, lecture seule) : client_id → détail.
+  const [formulaChecks, setFormulaChecks] = useState(() => new Map());
+  const loadFormulaChecks = useCallback(() => {
+    apiClient.get('/api/v1/finance-periods/formula-checks')
+      .then((d) => setFormulaChecks(new Map((d?.items || []).map((it) => [it.client_id, it]))))
+      .catch(() => {});
+  }, []);
+  useEffect(() => { loadFormulaChecks(); }, [loadFormulaChecks]);
+
   // Prédicat d'une vue-filtre pour une row, dans la vision active.
   const matchesView = useCallback((r, filterKey) => {
     switch (filterKey) {
+      case 'a_verifier':
+        return formulaChecks.has(r.client_id);
       case 'a_jour':
         return scopedOverdueCurrent(r, scope) === 0 && scopedOverdueCum(r, scope) === 0;
       case 'retard_mois':
@@ -544,7 +566,7 @@ export default function TrackingSheetFinance() {
       default:
         return true; // 'all'
     }
-  }, [scope, boardMap, boardEtatOf, relanceMonths, creanceAge, onboardingPhase, optilexPhase, period]);
+  }, [scope, boardMap, boardEtatOf, relanceMonths, creanceAge, onboardingPhase, optilexPhase, period, formulaChecks]);
 
   // Filtre « Météo client » (menu Filtre), réservé à deux personnes : les
   // bandes du board avec leur volume, plus « Sans météo ».
@@ -718,6 +740,15 @@ export default function TrackingSheetFinance() {
   }, [rowsBeforeLiquidationFilter, viewFilter, boardEtatOf, searchQuery]);
 
   // Tableau, recherche, export et KPI partagent les mêmes lignes visibles.
+  const [activeTab, setActiveTab] = useState('all');
+
+  // Promesses en cours : le badge de l'onglet « Promesses de règlement ».
+  // L'onglet lui-même liste tout l'historique (PromisesView).
+  const promiseRows = useMemo(
+    () => rows.filter((r) => !r.pending && r.client?.payment_promise),
+    [rows],
+  );
+
   const filteredRows = useMemo(() =>
     rowsBeforeLiquidationFilter.filter((r) => !isHiddenInView(r, viewFilter)),
   [rowsBeforeLiquidationFilter, isHiddenInView, viewFilter]);
@@ -767,9 +798,6 @@ export default function TrackingSheetFinance() {
   useEffect(() => {
     localStorage.setItem('tsfSideCollapsed', String(sideCollapsed));
   }, [sideCollapsed]);
-
-  // Tab row (purely cosmetic on this 1st pass — wired later).
-  const [activeTab, setActiveTab] = useState('all');
 
   // DetailPanel (slide-in right) — caller-controlled
   const [panelOpen, setPanelOpen] = useState(false);
@@ -1080,6 +1108,7 @@ export default function TrackingSheetFinance() {
           { id: 'table',    label: 'Suivi mensuel', Icon: TableIcon,   active: onTable && viewFilter === 'all', action: goTable('all') },
           { id: 'receipts', label: 'Encaissements', Icon: InboxIcon,   active: activeTab === 'receipts', action: () => setActiveTab('receipts') },
           { id: 'losses',   label: 'Pertes',        Icon: LossIcon,    active: activeTab === 'losses',   action: () => setActiveTab('losses') },
+          { id: 'promises', label: 'Promesses de règlement', Icon: Handshake, active: activeTab === 'promises', action: () => setActiveTab('promises'), count: promiseRows.length || undefined },
           ...(canViewCalls ? [{ id: 'calls', label: 'Tracking des appels', Icon: Phone, active: activeTab === 'calls', action: () => setActiveTab('calls') }] : []),
           ...(canValidate ? [{ id: 'validations', label: 'Validations', Icon: CheckCircle2, active: activeTab === 'validations', action: () => setActiveTab('validations'), count: pendingValidations || undefined }] : []),
         ],
@@ -1105,7 +1134,7 @@ export default function TrackingSheetFinance() {
         ],
       },
     ];
-  }, [activeTab, viewFilter, viewCounts, exportToExcel, exportedRows.length, canViewCalls, canValidate, pendingValidations]);
+  }, [activeTab, viewFilter, viewCounts, exportToExcel, exportedRows.length, canViewCalls, canValidate, pendingValidations, promiseRows.length]);
 
   if (!authChecked) {
     return null;
@@ -1177,7 +1206,7 @@ export default function TrackingSheetFinance() {
           <TitleBlock
             kpis={kpis}
             loading={loading}
-            showKpis={activeTab !== 'calls' && activeTab !== 'validations'}
+            showKpis={activeTab !== 'calls' && activeTab !== 'validations' && activeTab !== 'promises'}
             view={activeTab === 'all' ? viewFilter : 'all'}
             pendingCount={exportedRows.filter((r) => r.pending).length}
           />
@@ -1189,6 +1218,7 @@ export default function TrackingSheetFinance() {
             canViewCalls={canViewCalls}
             canValidate={canValidate}
             pendingValidations={pendingValidations}
+            promiseCount={promiseRows.length}
             period={period}
             setPeriod={setPeriod}
             searchQuery={searchQuery}
@@ -1294,6 +1324,8 @@ export default function TrackingSheetFinance() {
                 />
               ) : activeTab === 'receipts' ? (
                 <ReceiptsView scope={scope} onOpenClient={openClientById} />
+              ) : activeTab === 'promises' ? (
+                <PromisesView scope={scope} onOpenClient={openClientById} />
               ) : (
               <TableView
                 rows={filteredRows}
@@ -1322,13 +1354,14 @@ export default function TrackingSheetFinance() {
         rowId={panelRowId}
         onClose={closePanel}
         onSelectRow={onSelectPanelRow}
-        onPatchRow={onPatchRow}
         boardMap={boardMap}
         onBoardEtatChange={onBoardEtatChange}
         onShowToast={showToast}
         rows={rows}
         scope={scope}
         onPromiseChanged={onRefresh}
+        formulaCheck={formulaChecks.get(panelClientId) || null}
+        onContractSaved={loadFormulaChecks}
       />
 
       {/* Toast */}
@@ -1808,8 +1841,8 @@ function kpiTiles(kpis, loading, view, pendingCount = 0) {
   if (view === 'creances') {
     return [
       clients,
-      { label: 'Attendu', value: loading ? '…' : formatEUR(kpis.openingDebt), color: N.text, dot: N.textFaint,
-        sub: loading ? null : 'créances antérieures',
+      { label: 'Attendu créances', value: loading ? '…' : formatEUR(kpis.openingDebt), color: N.text, dot: N.textFaint,
+        sub: loading ? null : 'retard des mois précédents',
         subColor: N.textMuted,
         subTitle: 'Créances des mois précédents encore dues au début du mois affiché, pour les clients listés.',
       },
@@ -1938,13 +1971,18 @@ function TitleBlock({ kpis, loading, showKpis = true, view = 'all', pendingCount
 
       {/* KPI mini-table — la lecture bascule avec la vue (mois ⇄ créances
           antérieures) ; un fondu court marque le changement de sens. */}
-      {showKpis && <motion.div
+      {/* Toujours rendues : masquées (et non retirées) là où elles n'ont pas de
+          sens, pour que la barre d'onglets reste au même endroit sur tous les
+          onglets (dev 2026-09-28 : « la forme change d'un onglet à l'autre »). */}
+      <motion.div
         key={creancesView ? 'creances' : 'mois'}
         className="tsf-kpis"
+        aria-hidden={!showKpis}
         initial={{ opacity: 0, y: 3 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
         style={{
+          visibility: showKpis ? 'visible' : 'hidden',
           display: 'grid',
           gridTemplateColumns: `repeat(${tiles.length}, auto)`,
           marginLeft: 12,
@@ -1982,7 +2020,7 @@ function TitleBlock({ kpis, loading, showKpis = true, view = 'all', pendingCount
             )}
           </div>
         ))}
-      </motion.div>}
+      </motion.div>
     </div>
   );
 }
@@ -2840,6 +2878,7 @@ function HiddenColsPill({ hiddenKeys, labels, onShowCol, onShowAll }) {
 
 function TabRow({
   activeTab, setActiveTab, canViewCalls = false, canValidate = false, pendingValidations = 0,
+  promiseCount = 0,
   period, setPeriod,
   searchQuery, setSearchQuery, searchResultCount,
   onRefresh, refreshing, onExport, exportCount = 0,
@@ -2858,13 +2897,21 @@ function TabRow({
     { key: 'receipts', label: 'Encaissements',       Icon: InboxIcon },
     // Quantifier ce qui a été abandonné (demande dev 2026-09-01).
     { key: 'losses',   label: 'Pertes',              Icon: LossIcon },
+    // Les clients qui ont promis de régler (dev 2026-09-28).
+    { key: 'promises', label: 'Promesses de règlement', Icon: Handshake, count: promiseCount,
+      countTitle: `${promiseCount} client${promiseCount > 1 ? 's' : ''} avec une promesse de règlement` },
     ...(canViewCalls ? [{ key: 'calls', label: 'Tracking des appels', Icon: Phone }] : []),
     // Les demandes de l'équipe finance à valider (dev 2026-09-23).
     ...(canValidate ? [{ key: 'validations', label: 'Validations', Icon: CheckCircle2, count: pendingValidations }] : []),
   ];
 
+  // Scope, mois, recherche, filtres, export : sans objet sur les appels et
+  // les validations. Leur ligne reste là, vide, pour que rien ne bouge.
+  const showTools = activeTab !== 'calls' && activeTab !== 'validations';
+
   return (
-    <div style={{
+    <>
+    <div className="tsf-tabrow" style={{
       marginTop: 32,
       display: 'flex', alignItems: 'center',
       borderBottom: `1px solid ${N.border}`,
@@ -2872,7 +2919,7 @@ function TabRow({
       paddingBottom: 0,
     }}>
       {/* Tabs */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <div className="tsf-tabs" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 16, rowGap: 4 }}>
         {tabs.map((t) => {
           const active = activeTab === t.key;
           return (
@@ -2898,7 +2945,7 @@ function TabRow({
               <t.Icon size={14} strokeWidth={1.75} style={{ color: active ? N.text : N.textFaint }} />
               {t.label}
               {t.count > 0 && (
-                <span title={`${t.count} demande${t.count > 1 ? 's' : ''} en attente`} style={{
+                <span title={t.countTitle || `${t.count} demande${t.count > 1 ? 's' : ''} en attente`} style={{
                   minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999,
                   background: '#fff8ed', color: '#b45309', border: '1px solid #f5dcb5',
                   fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -2926,11 +2973,14 @@ function TabRow({
           <Plus size={14} />
         </button>
       </div>
+    </div>
 
-      <div style={{ flex: 1 }} />
-
+    <div className="tsf-toolbar" style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      minHeight: 40, marginTop: 10,
+    }}>
       {/* Vision Owner / Opti'lex / Global (segmented control) */}
-      {activeTab !== 'calls' && activeTab !== 'validations' && <>
+      {showTools && <>
       <ScopeSelector scope={scope} setScope={setScope} canGlobal={canGlobalScope} />
 
       {/* Hidden columns dropdown — left of month nav */}
@@ -2945,6 +2995,8 @@ function TabRow({
 
       {/* Period navigator (compact) */}
       <MonthNavigator period={period} setPeriod={setPeriod} />
+
+      <div style={{ flex: 1 }} />
 
       {/* Action icons row */}
       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2, marginLeft: 4 }}>
@@ -3023,6 +3075,7 @@ function TabRow({
       </div>
       </>}
     </div>
+    </>
   );
 }
 

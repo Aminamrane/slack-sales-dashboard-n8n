@@ -463,6 +463,34 @@ export const deferralsByMonth = (deferrals, scope) => {
   return out;
 };
 
+// Les deux bouts de chaque report (dev 2026-09-28 : « les reports s'affichent
+// mal, ce n'est pas intuitif »). Les lignes d'un même report sont écrites dans
+// la même transaction, donc avec le même horodatage : les −X (mois déchargés,
+// ramenés à période − 1) et le +X (mois qui reçoit). Renvoie, par mois,
+// `to` (où sa créance est partie) et `from` (d'où vient ce qu'il reçoit) :
+// { 'YYYY-MM': { to: [{ month, amount }], from: [{ month, amount }] } }.
+export const deferralLinks = (deferrals, scope) => {
+  const groups = new Map();
+  for (const d of deferrals || []) {
+    if (scope !== 'global' && d.entity !== scope) continue;
+    const amount = toNumber(d.amount) || 0;
+    if (!amount) continue;
+    const key = String(d.period).slice(0, 7);
+    const group = groups.get(d.created_at) || { outs: [], ins: [] };
+    if (amount < 0) group.outs.push({ month: shiftMonth(key, -1), amount: -amount });
+    else group.ins.push({ month: key, amount });
+    groups.set(d.created_at, group);
+  }
+  const links = {};
+  const cell = (m) => links[m] || (links[m] = { to: [], from: [] });
+  for (const { outs, ins } of groups.values()) {
+    const target = ins[0]?.month || null;
+    for (const o of outs) cell(o.month).to.push({ month: target, amount: o.amount });
+    for (const i of ins) for (const o of outs) cell(i.month).from.push({ month: o.month, amount: o.amount });
+  }
+  return links;
+};
+
 // Corrections du reste dû (kind 'outstanding', dev 2026-09-23) : un ajustement
 // de créance daté du mois SUIVANT le mois corrigé, quel que soit son signe.
 // Renvoie { 'YYYY-MM': delta } ramené au mois corrigé, dans la vision demandée.
