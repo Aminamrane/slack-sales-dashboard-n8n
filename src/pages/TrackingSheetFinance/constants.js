@@ -491,6 +491,26 @@ export const deferralLinks = (deferrals, scope) => {
   return links;
 };
 
+// ── Reports d'échéancier (dev 2026-09-28) ────────────────────────────────
+//
+// « Reporter, ça ne veut pas dire additionner […] ça veut dire que j'ai
+// reporté les paiements. » Un report (`billing_shifts` du profil) vide les
+// mois de `from_month` à `to_month` exclu ; les paiements reprennent en
+// `to_month` et la suite de l'échéancier glisse d'autant. Renvoie, dans la
+// vision demandée, { 'YYYY-MM': { gap, resume } } : `gap` = le report qui a
+// vidé ce mois, `resume` = le report dont les paiements reprennent ici.
+export const shiftsByMonth = (shifts, scope) => {
+  const out = {};
+  const cell = (m) => out[m] || (out[m] = { gap: null, resume: null });
+  for (const s of shifts || []) {
+    if (scope !== 'global' && s.entity !== scope) continue;
+    if (!s.from_month || !s.to_month || s.to_month <= s.from_month) continue;
+    for (let m = s.from_month; m < s.to_month; m = shiftMonth(m, 1)) cell(m).gap = s;
+    cell(s.to_month).resume = s;
+  }
+  return out;
+};
+
 // Corrections du reste dû (kind 'outstanding', dev 2026-09-23) : un ajustement
 // de créance daté du mois SUIVANT le mois corrigé, quel que soit son signe.
 // Renvoie { 'YYYY-MM': delta } ramené au mois corrigé, dans la vision demandée.
@@ -905,6 +925,12 @@ export const formatMonthLabel = (period) => {
   const [y, m] = period.split('-').map(Number);
   if (!y || !m) return period;
   return `${MONTH_LABELS[m - 1]} ${y}`;
+};
+
+// « d’août 2026 », « de septembre 2026 » : le mois précédé de sa préposition.
+export const deMonthLabel = (period) => {
+  const label = formatMonthLabel(period).toLowerCase();
+  return /^[aeiouyàâéèêëîïôöùû]/.test(label) ? `d’${label}` : `de ${label}`;
 };
 
 export const shiftMonth = (period, delta) => {

@@ -435,3 +435,31 @@ test('un report de plusieurs mois garde chaque source', () => {
   assert.deepEqual(links['2026-10'].to, [{ month: '2026-12', amount: 20 }]);
   assert.deepEqual(links['2026-12'].from, [{ month: '2026-10', amount: 20 }]);
 });
+
+// ── Reports d'échéancier : le mois reporté est vide, la reprise est nommée (28/09) ──
+import { shiftsByMonth } from './constants.js';
+
+test('un report vide ses mois et nomme le mois de reprise', () => {
+  const shifts = [{ id: 's1', entity: 'owner', from_month: '2026-08', to_month: '2026-10', months: 2 }];
+  const byMonth = shiftsByMonth(shifts, 'owner');
+  assert.equal(byMonth['2026-08'].gap.id, 's1');
+  assert.equal(byMonth['2026-09'].gap.id, 's1');
+  assert.equal(byMonth['2026-10'].gap, null);
+  assert.equal(byMonth['2026-10'].resume.id, 's1');
+  assert.deepEqual(shiftsByMonth(shifts, 'optilex'), {});
+  assert.equal(shiftsByMonth(shifts, 'global')['2026-09'].gap.id, 's1');
+});
+
+test('un report de décembre à janvier passe l’année', () => {
+  const byMonth = shiftsByMonth([{ id: 's', entity: 'optilex', from_month: '2026-12', to_month: '2027-01' }], 'optilex');
+  assert.deepEqual(Object.keys(byMonth).sort(), ['2026-12', '2027-01']);
+  assert.equal(byMonth['2027-01'].resume.id, 's');
+});
+
+import { deMonthLabel } from './constants.js';
+
+test('le mois prend sa préposition', () => {
+  assert.equal(deMonthLabel('2026-08'), 'd’août 2026');
+  assert.equal(deMonthLabel('2026-10'), 'd’octobre 2026');
+  assert.equal(deMonthLabel('2026-09'), 'de septembre 2026');
+});
