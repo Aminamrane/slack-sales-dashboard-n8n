@@ -2872,11 +2872,13 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    apiClient.get(`/api/v1/optilex/board-reschedule-slots?kind=${kind}&start=${start}`)
+    // Onboarding : créneaux de l'animateur du client (Vincent, ou Paul s'il a pris le relais).
+    const client = kind === "onboarding" && num ? `&numero_client=${encodeURIComponent(num)}` : "";
+    apiClient.get(`/api/v1/optilex/board-reschedule-slots?kind=${kind}&start=${start}${client}`)
       .then((r) => { if (alive) { setDays(r.days || []); setLoading(false); } })
       .catch(() => { if (alive) { setDays([]); setError("Impossible de charger les disponibilités. Réessayez."); setLoading(false); } });
     return () => { alive = false; };
-  }, [start, kind]);
+  }, [start, kind, num]);
 
   const shiftWeek = (dir) => {
     const d = new Date(start + "T00:00:00");
