@@ -132,6 +132,7 @@ function SituationStep({ brief, row }) {
         <Row label="Contrat Owner">{brief.contracts?.owner_status === "done" ? <Pill color={GREEN}>Signé{brief.contracts.owner_signed_at ? ` le ${fmtDate(brief.contracts.owner_signed_at)}` : ""}</Pill> : <Pill color={AMBER}>{brief.contracts?.owner_status || "Non signé"}</Pill>}</Row>
         <Row label="Convention Opti'Lex"><Pill color={optilex[1]}>{optilex[0]}</Pill></Row>
         {brief.sheet && <Row label="Fiche d'intégration">{brief.sheet.final ? <Pill color={GREEN}>Finalisée</Pill> : brief.sheet.available ? <Pill color={AMBER}>À finaliser par votre météo</Pill> : <Pill color={MUTED}>Partie commerciale non terminée</Pill>}</Row>}
+        {brief.documents?.waiver && <Row label="Pièces du dossier"><Pill color={AMBER}>Aucune à la déclaration · {brief.documents.waiver.label}</Pill></Row>}
       </Card>
     </>
   );

@@ -20,3 +20,15 @@ export function documentStatus(file, remote) {
 export function hasRequiredSaleDocuments(files) {
   return Array.isArray(files) && files.some(file => ['waiting', 'sending', 'sent'].includes(file.status));
 }
+
+// Société en cours de création ou trop récente : pas encore de pièce. Case à cocher de l'étape
+// « Pièces du dossier » ; la vente se déclare sans document et la dispense est tracée côté serveur.
+export const DOCUMENT_WAIVERS = [
+  ['company_in_creation', 'Société en cours de création'],
+  ['company_too_recent', 'Société trop récente, pas encore de documents'],
+];
+
+export function canDeclareSale(files, waiver) {
+  return hasRequiredSaleDocuments(files) || DOCUMENT_WAIVERS.some(([value]) => value === waiver);
+}
+
