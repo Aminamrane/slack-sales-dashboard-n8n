@@ -57,6 +57,10 @@ import {
   Square, Edit3, MessageSquare, Check,
   EyeOff, Eye, Columns3, ChevronLeft, ChevronRight,
 } from 'lucide-react';
+import {
+  ClientIcon, CycleIcon, BanknoteIcon, ReceivedIcon, DebtIcon, RecoveredPriorIcon,
+  TrendIcon, CardIcon, CalendarIcon,
+} from './components/PropertyIcons.jsx';
 
 import {
   PSP_OPTIONS,
@@ -150,26 +154,26 @@ function buildCols(scope) {
     numero:   { w: 85,  group: 'identite',  shortLabel: 'N° client',        fullLabel: COLUMN_LABELS.numero,  kind: 'text',   sticky: true,  splitVisible: true,  align: 'center', editable: false, hideKindIcon: true },
     // heavyRight : séparateur du bloc sticky (repris de l'ex-colonne État,
     // retirée 2026-08-21 — état = pill couleur sur le N° + DetailPanel).
-    societe:  { w: 230, group: 'identite',  shortLabel: 'Nom + entreprise', fullLabel: COLUMN_LABELS.societe, kind: 'text',   sticky: true,  splitVisible: true,  align: 'left',   editable: false, heavyRight: true },
+    societe:  { icon: ClientIcon, w: 230, group: 'identite',  shortLabel: 'Nom + entreprise', fullLabel: COLUMN_LABELS.societe, kind: 'text',   sticky: true,  splitVisible: true,  align: 'left',   editable: false, heavyRight: true },
     // Colonne compacte fusionnant Mode + Modalité + Prélèvement (chip icône
     // + mini-pills OW/OL — w 160 pour loger chip 3× + 2 pills à glyphe).
-    modalites:       { w: 160, group: 'modalites',   shortLabel: 'Modalités',          fullLabel: COLUMN_LABELS.modalites,                                kind: 'select', sticky: false, splitVisible: false, align: 'left',   editable: contract, heavyRight: true },
+    modalites:       { icon: CycleIcon, w: 160, group: 'modalites',   shortLabel: 'Modalités',          fullLabel: COLUMN_LABELS.modalites,                                kind: 'select', sticky: false, splitVisible: false, align: 'left',   editable: contract, heavyRight: true },
     // ── Bloc entité (Owner / Opti'lex / Global selon la vision) ───────────
-    expected:        { w: 110, group: entityGroup,   shortLabel: 'Attendu',            fullLabel: stripEntitySuffix(COLUMN_LABELS.expectedOwner),         kind: 'amount', sticky: false, splitVisible: true,  align: 'right',  editable: false },
-    received:        { w: 150, group: entityGroup,   shortLabel: 'Récupéré',           fullLabel: stripEntitySuffix(COLUMN_LABELS.receivedOwner),         kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: !isGlobal && amounts },
-    overdueCum:      { w: 125, group: entityGroup,   shortLabel: 'Créance initiale',   fullLabel: stripEntitySuffix(COLUMN_LABELS.overdueOwnerCum),       kind: 'amount', sticky: false, splitVisible: false, align: 'right',  editable: false },
-    receivedOverdue: { w: 150, group: entityGroup,   shortLabel: 'Récupéré antérieur', fullLabel: stripEntitySuffix(COLUMN_LABELS.receivedOverdueOwner),  kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: !isGlobal && amounts },
+    expected:        { icon: BanknoteIcon, w: 110, group: entityGroup,   shortLabel: 'Attendu',            fullLabel: stripEntitySuffix(COLUMN_LABELS.expectedOwner),         kind: 'amount', sticky: false, splitVisible: true,  align: 'right',  editable: false },
+    received:        { icon: ReceivedIcon, w: 150, group: entityGroup,   shortLabel: 'Récupéré',           fullLabel: stripEntitySuffix(COLUMN_LABELS.receivedOwner),         kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: !isGlobal && amounts },
+    overdueCum:      { icon: DebtIcon, w: 125, group: entityGroup,   shortLabel: 'Créance initiale',   fullLabel: stripEntitySuffix(COLUMN_LABELS.overdueOwnerCum),       kind: 'amount', sticky: false, splitVisible: false, align: 'right',  editable: false },
+    receivedOverdue: { icon: RecoveredPriorIcon, w: 150, group: entityGroup,   shortLabel: 'Récupéré antérieur', fullLabel: stripEntitySuffix(COLUMN_LABELS.receivedOverdueOwner),  kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: !isGlobal && amounts },
     // Ce que le client doit VRAIMENT à cet instant : retard du mois +
     // créances antérieures, encaissements du mois déduits. C'est la colonne
     // « Retard de paiement » du classeur, et la seule qui baisse quand on
     // enregistre un paiement (remise en place 2026-08-26 — le « retard
     // global » que le dev avait demandé de déplacer le 2026-08-18).
-    overdueToDate:   { w: 125, group: entityGroup,   shortLabel: 'Retard à date',      fullLabel: COLUMN_LABELS.overdueCurrent,                           kind: 'amount', sticky: false, splitVisible: false, align: 'right',  editable: false },
+    overdueToDate:   { icon: TrendIcon, w: 125, group: entityGroup,   shortLabel: 'Retard à date',      fullLabel: COLUMN_LABELS.overdueCurrent,                           kind: 'amount', sticky: false, splitVisible: false, align: 'right',  editable: false },
     // Check / Date paiement : par entité uniquement — pas de somme possible,
     // absentes en vision Globale.
     ...(isGlobal ? {} : {
-      psp:           { w: 100, group: entityGroup,   shortLabel: 'Check',              fullLabel: stripEntitySuffix(COLUMN_LABELS.pspOwner),              kind: 'select', sticky: false, splitVisible: false, align: 'left',   editable: contract },
-      payDate:       { w: 110, group: entityGroup,   shortLabel: 'Date paie.',         fullLabel: stripEntitySuffix(COLUMN_LABELS.payDateOwner),          kind: 'date',   sticky: false, splitVisible: false, align: 'center', editable: amounts },
+      psp:           { icon: CardIcon, w: 100, group: entityGroup,   shortLabel: 'Check',              fullLabel: stripEntitySuffix(COLUMN_LABELS.pspOwner),              kind: 'select', sticky: false, splitVisible: false, align: 'left',   editable: contract },
+      payDate:       { icon: CalendarIcon, w: 110, group: entityGroup,   shortLabel: 'Date paie.',         fullLabel: stripEntitySuffix(COLUMN_LABELS.payDateOwner),          kind: 'date',   sticky: false, splitVisible: false, align: 'center', editable: amounts },
     }),
   };
 }
@@ -196,7 +200,10 @@ const STICKY_KEYS = new Set(Object.keys(COLS_BASE).filter((k) => COLS_BASE[k].st
 const HIDDEN_COLS_LS_KEY = 'tsf-hidden-cols';
 
 // Header type-icon (Notion convention).
-function HeaderTypeIcon({ kind }) {
+// Une icône PAR PROPRIÉTÉ (dev 2026-09-25, référence Notion) ; l'icône du
+// type de colonne ne sert plus que de repli.
+function HeaderTypeIcon({ kind, Icon = null }) {
+  if (Icon) return <Icon size={15} style={{ color: N.textFaint }} />;
   const props = { size: 12, strokeWidth: 1.8, style: { color: N.textFaint, flexShrink: 0 } };
   switch (kind) {
     case 'text':       return <Type {...props} />;
@@ -384,7 +391,7 @@ function Header({ keys, cols, stickyLefts, hiddenCols, onHideCol, onShowCol, all
                 userSelect: 'none',
               }}
             >
-              {!c.hideKindIcon && <HeaderTypeIcon kind={c.kind} />}
+              {!c.hideKindIcon && <HeaderTypeIcon kind={c.kind} Icon={c.icon} />}
               {!c.headerIconOnly && (
                 <span style={{
                   // Wrap sur 2 lignes max au lieu de tronquer (capture #36).
