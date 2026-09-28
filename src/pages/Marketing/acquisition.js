@@ -4,6 +4,8 @@ export const WEBINAR_CAMPAIGNS = {
   'webinar-2026-07-20': ['WEBINAIRE - AMBU - Copie'],
   'webinar-2026-09-07': ['WEBINAIRE - AMBU - 7/9 - Copie'],
   'webinar-2026-09-21': ['WEBINAIRE BROAD SEPTEMBRE'],
+  // Seule campagne branchée sur le formulaire « Webinaire AMBULANCE - OCTOBRE » (vérifié le 28/09).
+  'webinar-2026-10-08': ['AMBU WEBINAIRE OCTOBRE'],
 };
 
 export function acquisitionPeriod(stats, webinar) {
