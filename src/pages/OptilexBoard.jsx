@@ -1726,10 +1726,7 @@ function OnboardingCard({ row, onStart, onManualDone }) {
               onChange={(e) => setManualDate(e.target.value)}
               style={{ display: "block", marginTop: 6, padding: "7px 10px", border: `1px solid ${BORDER}`, borderRadius: 8, fontFamily: "inherit", fontSize: 13, color: TEXT, background: CARD }} />
           </label>
-          <div style={{ margin: "8px 0 10px", fontSize: 11.5, lineHeight: 1.5, color: MUTED }}>
-            Pour les anciens clients seulement : marque l'onboarding comme réalisé à cette date, pour le suivi. Aucun agenda, aucune facturation.
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
             <button type="submit" disabled={!manualDate}
               style={{ padding: "7px 12px", borderRadius: 8, border: "none", background: NAVY, color: "#fff", fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: manualDate ? "pointer" : "default", opacity: manualDate ? 1 : 0.6 }}>
               Marquer réalisé
