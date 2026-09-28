@@ -81,3 +81,12 @@ id_rsa*
 # repo public -> jamais commitée, comme CLAUDE.md
 /instruction_file_dattente.md
 /mission.md
+
+# Runbooks internes d'infra (IP serveur, noms des variables secrètes, accès SSH) :
+# repo public -> jamais commités
+/RUNBOOK-*.md
+
+# Contenu généré des séquences e-mail webinaire (objets/corps réels déjà envoyés à de vrais
+# inscrits) : données marketing sensibles, repo public -> jamais commitées. Régénérable via
+# scripts/webinar-sequences/build.mjs ; le catalogue (métadonnées seules) reste suivi.
+src/data/webinarSequences/cohorts/

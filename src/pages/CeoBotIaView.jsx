@@ -45,6 +45,13 @@ import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections, SUB_TICKETS_ROLES } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import companyLogo from "../assets/my_image.png";
+// Mini client e-mail (cohortes → e-mails → onglets → fenêtres flottantes), fenêtre réutilisable
+// (accrochage sur une moitié d'écran, déplacement, redimensionnement) et fenêtre « Schéma de
+// séquence » : ajouts autonomes, cf. src/components/sequenceMail/.
+import SequenceEmailManager from "../components/sequenceMail/SequenceEmailManager.jsx";
+import SequenceWindow, { SEQUENCE_WINDOW_Z } from "../components/sequenceMail/SequenceWindow.jsx";
+import SequenceSchema from "../components/sequenceMail/SequenceSchema.jsx";
+import { SCHEMA_COLORS } from "../components/sequenceMail/schemaTheme.js";
 import {
   suggestMentions, parseMention, expandMention, mentionRefusal,
 } from "../config/botIaMentions.js";
@@ -188,6 +195,7 @@ export default function CeoBotIaView() {
   useEffect(() => {
     localStorage.setItem("ceoSideCollapsed_v2", String(sideCollapsed));
   }, [sideCollapsed]);
+  const sidebarW = sideCollapsed ? 56 : 260;
 
   // ── Garde d'accès ──────────────────────────────────────────────────────
   const [authChecked, setAuthChecked] = useState(false);
@@ -264,21 +272,26 @@ export default function CeoBotIaView() {
     clearTimeout(pollTimerRef.current);
   }, []);
 
-  // ── Fenêtre « Gestion de séquence » — mockup additif, gris et vide ──────
+  // ── Fenêtres « Gestion de séquence » et « Schéma de séquence » ───────────
   // Machine à états pour l'enchaînement animé :
   //   idle → shake → fall (composer+bouton tombent hors écran) →
-  //   window-in (la fenêtre apparaît) → window-open (interactive,
-  //   déplaçable) → window-closing (la fenêtre tombe) → return
-  //   (composer+bouton reviennent du haut) → idle.
+  //   window-in (les deux fenêtres apparaissent, accrochées chacune sur une
+  //   moitié de l'écran) → window-open (interactives, déplaçables) →
+  //   window-closing (les fenêtres tombent) → return (composer+bouton
+  //   reviennent du haut) → idle.
+  // La géométrie (accrochage, déplacement, agrandissement, redimensionnement)
+  // vit dans <SequenceWindow>, une instance par fenêtre : ici, seul reste
+  // l'enchaînement d'ouverture et de fermeture.
   const [seqPhase, setSeqPhase] = useState("idle");
-  const [seqWinPos, setSeqWinPos] = useState(null); // { w, h } px, calculé à l'ouverture
-  // Décalage de drag depuis la position centrée par défaut — (0,0) = centré.
-  // Coordonnées RELATIVES (pas des px absolus de viewport) : le centrage
-  // lui-même est fait en CSS pur (calc + transform), donc aucun calcul
-  // manuel ne peut le désaligner.
-  const [seqDrag, setSeqDrag] = useState({ x: 0, y: 0 });
+  // « Schéma de séquence » s'ouvre avec « Gestion de séquence ». Sa croix ne
+  // ferme QUE cette fenêtre ; celle de « Gestion de séquence » ferme les deux.
+  // Le bouton du volet de navigation de « Gestion de séquence » la rouvre.
+  // "off" | "opening" (animation d'entrée) | "on" | "closing".
+  const [schemaState, setSchemaState] = useState("off");
+  // Fenêtre au premier plan : elles ne se recouvrent que si l'on en déplace
+  // ou en agrandit une.
+  const [seqFront, setSeqFront] = useState("manager");
   const seqTimersRef = useRef([]);
-  const seqDragRef = useRef(null);
 
   const seqClearTimers = () => {
     seqTimersRef.current.forEach(clearTimeout);
@@ -291,11 +304,8 @@ export default function CeoBotIaView() {
   const SEQ_FALL_MS = 600;
   const SEQ_WINDOW_IN_MS = 220;
   const SEQ_RETURN_MS = 650;
-  const SEQ_WIN_W = 880;
-  const SEQ_WIN_H = 600;
   // Espace réservé à la navbar flottante (profil, pages, dark mode…) : même
-  // valeur que le `paddingTop` du shell CEO, + marge demandée avant de la
-  // toucher en drag.
+  // valeur que le `paddingTop` du shell CEO. Les fenêtres ne passent jamais dessous.
   const SEQ_NAVBAR_SAFE_TOP = 64 + 0;
 
   const openSeqWindow = () => {
@@ -308,12 +318,9 @@ export default function CeoBotIaView() {
     setSeqPhase("shake");
     seqAfter(SEQ_SHAKE_MS, () => setSeqPhase("fall"));
     seqAfter(SEQ_SHAKE_MS + SEQ_FALL_MS, () => {
-      const sidebarW = sideCollapsed ? 56 : 260;
-      const availW = window.innerWidth - sidebarW;
-      const w = Math.min(SEQ_WIN_W, availW - 48);
-      const h = Math.min(SEQ_WIN_H, window.innerHeight - 96);
-      setSeqWinPos({ w, h });
-      setSeqDrag({ x: 0, y: 0 }); // repart toujours centrée, jamais l'ancien drag
+      // Les fenêtres repartent toujours accrochées, jamais à l'ancienne position.
+      setSchemaState("on");
+      setSeqFront("manager");
       setSeqPhase("window-in");
     });
     seqAfter(SEQ_SHAKE_MS + SEQ_FALL_MS + SEQ_WINDOW_IN_MS, () => setSeqPhase("window-open"));
@@ -327,32 +334,20 @@ export default function CeoBotIaView() {
     seqAfter(SEQ_FALL_MS + SEQ_RETURN_MS, () => setSeqPhase("idle"));
   };
 
-  // Drag de la fenêtre via sa barre supérieure — décalage RELATIF au centre
-  // (cf. seqDrag), pas une position absolue : le centrage CSS reste la seule
-  // source de vérité pour la position de repos.
-  const onSeqHeaderMouseDown = (e) => {
+  const closeSchemaWindow = () => {
+    if (seqPhase !== "window-open" || schemaState !== "on") return;
+    setSchemaState("closing");
+    seqAfter(SEQ_FALL_MS, () => setSchemaState("off"));
+  };
+
+  // Rouvre « Schéma de séquence » (fermée par sa croix) sur sa moitié, au premier plan ; déjà ouverte :
+  // la ramène simplement devant.
+  const openSchemaWindow = () => {
     if (seqPhase !== "window-open") return;
-    e.preventDefault();
-    seqDragRef.current = { startX: e.clientX, startY: e.clientY, origX: seqDrag.x, origY: seqDrag.y };
-    const onMove = (ev) => {
-      if (!seqDragRef.current) return;
-      const { startX, startY, origX, origY } = seqDragRef.current;
-      // Le plafond vertical est calculé en absolu (position réelle à l'écran),
-      // pas en simple décalage relatif : il s'arrête à SEQ_NAVBAR_SAFE_TOP du
-      // haut du viewport, quelle que soit la hauteur de fenêtre/écran.
-      const centeredTop = (window.innerHeight - seqWinPos.h) / 2;
-      const minY = SEQ_NAVBAR_SAFE_TOP - centeredTop;
-      const nextX = Math.max(-500, Math.min(origX + (ev.clientX - startX), 500));
-      const nextY = Math.max(minY, Math.min(origY + (ev.clientY - startY), 320));
-      setSeqDrag({ x: nextX, y: nextY });
-    };
-    const onUp = () => {
-      seqDragRef.current = null;
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    setSeqFront("schema");
+    if (schemaState !== "off") return;
+    setSchemaState("opening");
+    seqAfter(SEQ_WINDOW_IN_MS, () => setSchemaState("on"));
   };
 
   // Même chaîne d'animation tant que la fenêtre est visible (fall/window-in/
@@ -366,7 +361,19 @@ export default function CeoBotIaView() {
           : "none";
   const seqRowInteractive = seqPhase === "idle";
   const seqWindowVisible = seqPhase === "window-in" || seqPhase === "window-open" || seqPhase === "window-closing";
-  const seqWindowInteractive = seqPhase === "window-open";
+  // « Schéma de séquence » tombe aussi quand on ferme « Gestion de séquence ».
+  const schemaPhase = seqPhase === "window-closing" || schemaState === "closing" ? "window-closing"
+    : schemaState === "opening" ? "window-in" : seqPhase;
+  // Cadre fixe : le composer tombé hors écran rend la page défilable (+160 vh) alors que les fenêtres
+  // remplissent déjà toute la zone visible. On fige donc le défilement tant qu'elles sont ouvertes ;
+  // la gouttière de `html` (scrollbar-gutter: stable) évite tout décalage de mise en page.
+  useEffect(() => {
+    if (!seqWindowVisible) return undefined;
+    const root = document.documentElement;
+    const previous = root.style.overflow;
+    root.style.overflow = "hidden";
+    return () => { root.style.overflow = previous; };
+  }, [seqWindowVisible]);
 
   const canSend = text.trim().length > 0 && !sending;
   const isEmpty = messages.length === 0;
@@ -806,7 +813,7 @@ export default function CeoBotIaView() {
         display: "flex",
       }}>
         <Sidebar
-          width={sideCollapsed ? 56 : 260}
+          width={sidebarW}
           collapsed={sideCollapsed}
           onToggle={() => setSideCollapsed((v) => !v)}
           sections={visibleSections}
@@ -1423,120 +1430,45 @@ export default function CeoBotIaView() {
               </button>
             </div>
 
-            {/* Fenêtre « Gestion de séquence » — mockup vide (étape 1). Position
-                fixed calculée en px à l'ouverture (cf. openSeqWindow), pour que
-                `transform` reste libre aux animations d'entrée/sortie. */}
-            {seqWindowVisible && seqWinPos && (
-              // Couche EXTERNE : positionnement pur, centrage CSS natif
-              // (calc(50%) + transform self-centering — aucun calcul manuel
-              // de px ne peut le désaligner) + décalage de drag additif.
-              // `transform` reste donc TOUJOURS le même type de valeur ici ;
-              // l'animation d'entrée/sortie vit sur la couche INTERNE pour
-              // ne jamais rentrer en conflit avec ce transform de position.
-              <div
-                style={{
-                  position: "fixed",
-                  top: "50%",
-                  left: `calc(50% + ${(sideCollapsed ? 56 : 260) / 2}px)`,
-                  width: seqWinPos.w,
-                  height: seqWinPos.h,
-                  transform: `translate(calc(-50% + ${seqDrag.x}px), calc(-50% + ${seqDrag.y}px))`,
-                  zIndex: 500,
-                  pointerEvents: seqWindowInteractive ? "auto" : "none",
-                }}
+            {/* Fenêtres « Gestion de séquence » (moitié gauche de l'écran) et « Schéma de
+                séquence » (moitié droite), comme après Win + ← / Win + →. Rendues sous
+                <body> par SequenceWindow : ancrées au viewport, elles ne défilent pas avec la page. */}
+            {seqWindowVisible && (
+              <SequenceWindow
+                title="Gestion de séquence"
+                side="left"
+                phase={seqPhase}
+                sidebarWidth={sidebarW}
+                safeTop={SEQ_NAVBAR_SAFE_TOP}
+                colors={C}
+                darkMode={darkMode}
+                logo={companyLogo}
+                zIndex={SEQUENCE_WINDOW_Z + (seqFront === "manager" ? 1 : 0)}
+                onActivate={() => setSeqFront("manager")}
+                onClose={closeSeqWindow}
               >
-                <div
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    borderRadius: 14,
-                    overflow: "hidden",
-                    border: `1px solid ${C.border}`,
-                    boxShadow: darkMode ? "0 24px 64px rgba(0,0,0,0.55)" : "0 24px 64px rgba(16,24,40,0.28)",
-                    display: "flex",
-                    flexDirection: "column",
-                    animation:
-                      seqPhase === "window-in" ? "ceoBotIaWindowPop 0.22s cubic-bezier(0.16,1,0.3,1) both"
-                        : seqPhase === "window-closing" ? "ceoBotIaFallOut 0.6s cubic-bezier(0.55,0,0.85,0.35) both"
-                          : "none",
-                  }}
-                >
-                  {/* Barre supérieure : drag + réduire/agrandir (inertes)/fermer. */}
-                  <div
-                    onMouseDown={onSeqHeaderMouseDown}
-                    style={{
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      height: 42, flexShrink: 0, padding: "0 8px 0 14px",
-                      background: C.bg, borderBottom: `1px solid ${C.border}`,
-                      cursor: seqWindowInteractive ? "grab" : "default",
-                      userSelect: "none",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{
-                        width: 22, height: 22, borderRadius: 6, flexShrink: 0,
-                        background: darkMode ? "#fff" : "#1e2330",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                      }}>
-                        <img src={companyLogo} alt="" style={{ width: 14, height: 14, objectFit: "contain", filter: darkMode ? "none" : "brightness(0) invert(1)" }} />
-                      </div>
-                      <span style={{ fontSize: 12.5, fontWeight: 600, color: C.secondary }}>Gestion de séquence</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <button
-                        type="button"
-                        aria-label="Réduire"
-                        title="Réduire"
-                        onMouseDown={(e) => e.stopPropagation()}
-                        style={{
-                          width: 28, height: 28, borderRadius: 7, border: "none",
-                          background: "transparent", display: "flex", alignItems: "center", justifyContent: "center",
-                          cursor: "default", color: C.muted,
-                        }}
-                      >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                          <line x1="5" y1="19" x2="19" y2="19" />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Agrandir"
-                        title="Agrandir"
-                        onMouseDown={(e) => e.stopPropagation()}
-                        style={{
-                          width: 28, height: 28, borderRadius: 7, border: "none",
-                          background: "transparent", display: "flex", alignItems: "center", justifyContent: "center",
-                          cursor: "default", color: C.muted,
-                        }}
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round">
-                          <rect x="4" y="4" width="16" height="16" rx="2" />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Fermer"
-                        title="Fermer"
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={closeSeqWindow}
-                        style={{
-                          width: 28, height: 28, borderRadius: 7, border: "none",
-                          background: "transparent", display: "flex", alignItems: "center", justifyContent: "center",
-                          cursor: "pointer", color: C.muted, transition: "background 0.15s, color 0.15s",
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = "#ff3b30"; e.currentTarget.style.color = "#fff"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = C.muted; }}
-                      >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                  {/* Corps — mockup volontairement vide, gris, sans contenu. */}
-                  <div style={{ flex: 1, background: darkMode ? "#2a2b36" : "#e4e6ea" }} />
-                </div>
-              </div>
+                {/* Mini client e-mail (cohortes → e-mails → onglets → fenêtres flottantes). */}
+                <SequenceEmailManager darkMode={darkMode} onOpenSchema={openSchemaWindow} schemaOpen={schemaState === "on" || schemaState === "opening"} />
+              </SequenceWindow>
+            )}
+            {seqWindowVisible && schemaState !== "off" && (
+              <SequenceWindow
+                title="Schéma de séquence"
+                side="right"
+                phase={schemaPhase}
+                sidebarWidth={sidebarW}
+                safeTop={SEQ_NAVBAR_SAFE_TOP}
+                colors={SCHEMA_COLORS}
+                darkMode={false}
+                logo={companyLogo}
+                borderWidth={2}
+                labelSuffix=" — Schéma de séquence"
+                zIndex={SEQUENCE_WINDOW_Z + (seqFront === "schema" ? 1 : 0)}
+                onActivate={() => setSeqFront("schema")}
+                onClose={closeSchemaWindow}
+              >
+                <SequenceSchema onOpenManager={() => setSeqFront("manager")} />
+              </SequenceWindow>
             )}
 
             {/* Rien ne s'affiche quand tout va bien. Un échec d'enregistrement

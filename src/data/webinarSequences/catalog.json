@@ -1,0 +1,124 @@
+[
+ {
+  "id": "webinar-2026-05-26",
+  "label": "Webinaire du 26 mai 2026",
+  "short": "26 mai",
+  "audience": "TPE/PME",
+  "liveAt": "2026-05-26T11:00:00+02:00",
+  "speakers": [
+   "Paul Faucomprez",
+   "Maître Moraru"
+  ],
+  "pages": [
+   "/",
+   "/broad"
+  ],
+  "notes": [
+   "Cohorte historique figée : à l'origine prévue le 19 mai, décalée au 26 (e-mail de report du 14 mai).",
+   "Contenu reconstitué depuis la version du code de la landing antérieure au pied de désinscription (introduit le 22/06)."
+  ],
+  "codeEra": "may",
+  "stepCount": 19
+ },
+ {
+  "id": "webinar-2026-06-22",
+  "label": "Webinaire du 22 juin 2026",
+  "short": "22 juin",
+  "audience": "TPE/PME",
+  "liveAt": "2026-06-22T20:00:00+02:00",
+  "speakers": [
+   "Paul Faucomprez",
+   "Maître Moraru"
+  ],
+  "pages": [
+   "/"
+  ],
+  "notes": [
+   "Compte à rebours (19h30 / 19h55) inséré hors du code d'inscription, absent du planificateur de la cohorte."
+  ],
+  "codeEra": "june",
+  "stepCount": 21
+ },
+ {
+  "id": "webinar-2026-07-20",
+  "label": "Webinaire du 20 juillet 2026",
+  "short": "20 juill.",
+  "audience": "Ambulances",
+  "liveAt": "2026-07-20T20:00:00+02:00",
+  "speakers": [
+   "Paul Faucomprez",
+   "Maître Bouchareb"
+  ],
+  "pages": [
+   "/",
+   "/v2"
+  ],
+  "notes": [
+   "Première séquence ambulances complète. Les inscriptions ont continué jusqu'au 10 août, cohorte restée active jusqu'au 17/08."
+  ],
+  "codeEra": "july",
+  "stepCount": 21
+ },
+ {
+  "id": "webinar-2026-09-07",
+  "label": "Webinaire du 7 septembre 2026",
+  "short": "7 sept.",
+  "audience": "Ambulances",
+  "liveAt": "2026-09-07T20:00:00+02:00",
+  "speakers": [
+   "Paul Faucomprez",
+   "Maître Bouchareb"
+  ],
+  "pages": [
+   "/",
+   "/v2"
+  ],
+  "notes": [
+   "Copie réécrite d'après les maquettes du dev (18/08) : test diagnostic en J+2, simulateur de redevance de marque en J+4.",
+   "Le kind « email_sep07_comptable » garde son nom historique mais porte le contenu « Redevance de marque - Simulateur »."
+  ],
+  "codeEra": "sept",
+  "stepCount": 23
+ },
+ {
+  "id": "webinar-2026-09-21",
+  "label": "Webinaire du 21 septembre 2026",
+  "short": "21 sept.",
+  "audience": "TPE/PME",
+  "liveAt": "2026-09-21T20:00:00+02:00",
+  "speakers": [
+   "Paul Faucomprez",
+   "Maître Moraru"
+  ],
+  "pages": [
+   "/tpe-pme"
+  ],
+  "notes": [
+   "Copie fournie par le dev (« Séquence Mail + sms webinaire broad », 02/09), activée le 03/09 après validation des 13 e-mails.",
+   "Invitation agenda (fichier .ics) ajoutée le 17/09 ; les inscrits antérieurs l'ont reçue par rattrapage.",
+   "Post-live en parcours unique : le rapport Zoom ne contenait aucune adresse, présents et absents ne sont pas distinguables."
+  ],
+  "codeEra": "sept",
+  "stepCount": 18
+ },
+ {
+  "id": "webinar-2026-10-08",
+  "label": "Webinaire du 8 octobre 2026",
+  "short": "8 oct.",
+  "audience": "Ambulances",
+  "liveAt": "2026-10-08T20:00:00+02:00",
+  "speakers": [
+   "Paul Faucomprez",
+   "Maître Bouchared"
+  ],
+  "pages": [
+   "/"
+  ],
+  "notes": [
+   "Cohorte ouverte le 25/09/2026 : seules la confirmation et l'événement Meta CAPI sont programmés, les relances attendent la copie du dev.",
+   "La confirmation n'a pas de gabarit propre à cette cohorte : elle retombe sur le gabarit générique (« masterclass »), sans lien personnel ni groupe WhatsApp."
+  ],
+  "codeEra": "sept",
+  "stepCount": 1
+ }
+]
