@@ -9672,7 +9672,7 @@ export default function TrackingSheet() {
                       )}
                     </div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>{saleStep === 'onboarding' ? 'RDV Onboarding' : 'RDV Lancement'}</div>
-                    <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Choisis un créneau libre · {saleStep === 'onboarding' ? 'Vincent et facturation' : "Opti'Lex"}</div>
+                    <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Choisis un créneau libre · {saleStep === 'onboarding' ? 'Vincent ou Paul, et facturation' : "Opti'Lex"}</div>
                   </div>
 
                   <SaleSlotPicker key={saleStep} kind={saleStep} value={saleSlots[saleStep]} band={saleForm.employeeRange}
