@@ -27,7 +27,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, TriangleAlert, RotateCcw, CalendarDays, Check } from 'lucide-react';
 
 import { ETAT_DATE_CONFIG } from '../../OptilexBoard.jsx';
-import { formatEUR, formatDateFR, ACTED_EXIT_ETATS } from '../constants.js';
+import { formatEUR, formatDateFR, formatMonthLabel, shiftMonth, ACTED_EXIT_ETATS } from '../constants.js';
 
 const N = {
   text: '#37352f',
@@ -440,34 +440,51 @@ export default function ExitClientDialog({
                 {busy === 'etat' ? 'Enregistrement…' : 'Acter'}
               </button>
             </div>
-            {billingChoice && (
-              <div style={{
-                marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-                fontSize: 12, color: N.textMuted,
-              }}>
-                <span>Facturer jusqu’à</span>
-                <input
-                  type="month"
-                  value={chosenLastBilled}
-                  onChange={(e) => setLastBilled(e.target.value)}
-                  title="Dernier mois facturé, inclus. Par défaut : le mois qui précède la date d’effet."
-                  style={{
-                    border: `1px solid ${N.border}`, borderRadius: 7, padding: '6px 8px',
-                    fontSize: 12.5, fontFamily: 'inherit', background: '#fff', color: N.text, outline: 'none',
-                  }}
-                />
-                <span>inclus</span>
-                {chosenLastBilled && chosenLastBilled !== defaultLastBilled && (
-                  <button type="button" onClick={() => setLastBilled(defaultLastBilled)} style={{ ...btn('ghost'), fontSize: 11.5, padding: '3px 8px' }}>
-                    Remettre la règle automatique
-                  </button>
-                )}
-                <span style={{ flexBasis: '100%', fontSize: 11.5, lineHeight: 1.5 }}>
-                  Les attendus restent dus jusqu’à ce mois inclus, puis tombent à zéro.
-                  Un mois déjà encaissé ou fixé à la main n’est jamais retouché.
-                </span>
-              </div>
-            )}
+            {billingChoice && (() => {
+              // Les deux mêmes choix que la fenêtre « Fin de facturation » de la
+              // fiche (dev 2026-09-28 : que ce soit intuitif). L'aperçu mois par
+              // mois s'ouvre depuis la fiche, pastille « Facturé jusqu'à ».
+              const garder = chosenLastBilled !== defaultLastBilled;
+              const radio = (actif, onPick, titre, detail, extra) => (
+                <label style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', padding: '8px 10px',
+                  borderRadius: 8, border: `1px solid ${actif ? N.text : N.border}`, background: actif ? '#fafaf9' : '#fff',
+                }}>
+                  <input type="radio" checked={actif} onChange={onPick} style={{ marginTop: 2, accentColor: N.text }} />
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: N.text }}>{titre}</span>
+                    <span style={{ display: 'block', fontSize: 11.5, color: N.textMuted, marginTop: 1 }}>{detail}</span>
+                    {actif && extra}
+                  </span>
+                </label>
+              );
+              return (
+                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: N.text }}>Fin de facturation</div>
+                  {radio(!garder, () => setLastBilled(defaultLastBilled), 'Arrêter à la date d’effet',
+                    defaultLastBilled
+                      ? `Dernier mois facturé : ${formatMonthLabel(defaultLastBilled).toLowerCase()}.`
+                      : 'Choisissez d’abord la date d’effet.')}
+                  {radio(garder, () => setLastBilled(defaultLastBilled ? shiftMonth(defaultLastBilled, 1) : ''),
+                    'Conserver les attendus jusqu’à…', 'Le client reste redevable jusqu’au mois choisi, inclus.',
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                      <input
+                        type="month"
+                        value={chosenLastBilled}
+                        onChange={(e) => setLastBilled(e.target.value)}
+                        style={{
+                          border: `1px solid ${N.border}`, borderRadius: 7, padding: '6px 8px',
+                          fontSize: 12.5, fontFamily: 'inherit', background: '#fff', color: N.text, outline: 'none',
+                        }}
+                      />
+                      <span style={{ fontSize: 12, color: N.textMuted }}>inclus</span>
+                    </span>)}
+                  <span style={{ fontSize: 11.5, color: N.textFaint, lineHeight: 1.45 }}>
+                    Un mois déjà encaissé ou fixé à la main n’est jamais retouché. Modifiable ensuite depuis la fiche.
+                  </span>
+                </div>
+              );
+            })()}
             {billingDone && (
               <div style={{ marginTop: 8, fontSize: 12, color: '#15794a' }}>
                 Facturation maintenue jusqu’à {billingDone.slice(5, 7)}/{billingDone.slice(0, 4)} inclus.

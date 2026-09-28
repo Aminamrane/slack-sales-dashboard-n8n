@@ -50,7 +50,7 @@ import {
   Hash, User, Box, CreditCard, Pencil, Download,
   Pin, Trash2, MessageSquarePlus,
   Scale, CalendarClock, CalendarCheck2, Handshake, TriangleAlert, LogOut,
-  SlidersHorizontal, ChevronDown, ChevronUp,
+  SlidersHorizontal, ChevronDown, ChevronUp, CalendarRange,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
@@ -95,6 +95,7 @@ import ResponsibleSelect from './components/ResponsibleSelect.jsx';
 import { ETAT_STYLE, displayEtat } from '../OptilexBoard.jsx';
 import BoardEtatCell from './components/BoardEtatCell.jsx';
 import ExitClientDialog from './components/ExitClientDialog.jsx';
+import BillingStopDialog from './components/BillingStopDialog.jsx';
 import StructureSplits from './components/StructureSplits.jsx';
 import ExpectedManager from './components/ExpectedManager.jsx';
 import PortalDropdown from './components/PortalDropdown.jsx';
@@ -621,6 +622,9 @@ export default function DetailPanel({
     }
   }, [clientId, focusedRow, onShowToast, onPromiseChanged]);
 
+  // Fin de facturation d'un client qui sort (dev 2026-09-28) : direction seule.
+  const [billingOpen, setBillingOpen] = useState(false);
+
   // ── Sortie client (état acté, perte) ────────────────────────────────────
   // Après une perte, tout bouge d'un coup : l'attendu de la fiche, les tuiles,
   // et la ligne du tableau derrière. On recharge les trois — la page n'a pas
@@ -794,6 +798,8 @@ export default function DetailPanel({
               boardRow={boardRow}
               loss={profile?.loss || null}
               promise={!!focusedRow?.client?.payment_promise}
+              billingLastMonth={profile?.billing_last_month || null}
+              onEditBilling={canEditMoney ? () => setBillingOpen(true) : null}
             />
             <ActionsBar
               canManageMoney={canEditMoney}
@@ -999,6 +1005,17 @@ export default function DetailPanel({
             onShowToast={onShowToast}
           />
 
+          <BillingStopDialog
+            open={billingOpen && canEditMoney}
+            onClose={() => setBillingOpen(false)}
+            clientId={clientId}
+            client={client}
+            etat={TERMINATED_BOARD_ETATS.has(boardRow?.etat_manuel) ? boardRow.etat_manuel : null}
+            etatDate={isoDay(boardRow?.etat_date)}
+            billingLastMonth={profile?.billing_last_month || null}
+            onSaved={reloadAfterExit}
+            onShowToast={onShowToast}
+          />
           <ExitClientDialog
             open={exitOpen && canEditMoney}
             onClose={() => setExitOpen(false)}
@@ -2994,7 +3011,18 @@ function EffectiveMonthPrompt({ label, onPick, onCancel, periods = [] }) {
 // 2026-08-27) : le SIREN, et l'échéance du contrat. L'État était en double
 // avec l'en-tête juste au-dessus, l'Effectif avec la Formule des
 // informations contractuelles, et la Période est déjà celle du tableau.
-function FactsRow({ profile, boardRow, loss = null, promise = false }) {
+// « AAAA-MM-JJ » d'une date du board, sans conversion de fuseau (heure-mur :
+// un 1er du mois repassé par toISOString glisse au mois précédent).
+const isoDay = (s) => {
+  const str = String(s || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.slice(0, 10);
+  const d = parseDateFR(str);
+  if (!d) return null;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+function FactsRow({ profile, boardRow, loss = null, promise = false, billingLastMonth = null, onEditBilling = null }) {
   const items = [];
   if (profile?.siren) {
     items.push({ icon: <Landmark size={12} />, label: 'SIREN', value: profile.siren });
@@ -3015,6 +3043,22 @@ function FactsRow({ profile, boardRow, loss = null, promise = false }) {
       value: `${aVenir ? 'le' : 'depuis le'} ${formatDateLongFR(boardRow.etat_date)}`,
       pillBg: meta.bg, pillFg: meta.fg,
     });
+    // Jusqu'où le client reste facturé (dev 2026-09-28 : « conserver les
+    // montants attendus jusqu'à une date choisie », de façon visible). Une
+    // rétractation annule tout depuis la signature : pas de fin à choisir.
+    if (exitEtat !== 'Rétractation') {
+      const auto = shiftMonth(isoDay(boardRow.etat_date).slice(0, 7), -1);
+      const last = billingLastMonth || auto;
+      items.push({
+        icon: <CalendarRange size={12} />,
+        label: 'Facturé jusqu’à',
+        value: `${formatMonthLabel(last).toLowerCase()}${billingLastMonth ? '' : ' (auto)'}`,
+        title: billingLastMonth
+          ? 'Fin de facturation choisie par la direction : les attendus restent dus jusqu’à ce mois inclus'
+          : 'Règle automatique : le mois de la date d’effet n’est plus facturé',
+        onClick: onEditBilling,
+      });
+    }
   } else if (!exitEtat && profile?.contract_end) {
     // Renouvellement annuel à la date anniversaire : le compte à rebours
     // seul, la date exacte en survol ; la couleur ne s'allume qu'à
@@ -3061,8 +3105,13 @@ function FactsRow({ profile, boardRow, loss = null, promise = false }) {
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 10 }}>
-      {items.map((it, idx) => (
-        <div key={idx} title={it.title || undefined} style={{
+      {items.map((it, idx) => {
+        // Une pastille qui se règle (fin de facturation) est un bouton.
+        const Tag = it.onClick ? 'button' : 'div';
+        return (
+        <Tag key={idx} type={it.onClick ? 'button' : undefined} onClick={it.onClick || undefined}
+          className={it.onClick ? 'tsf-icon-btn' : undefined}
+          title={it.onClick ? `${it.title || ''} · cliquer pour modifier` : (it.title || undefined)} style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
           padding: '4px 10px',
           borderRadius: 4,
@@ -3071,6 +3120,8 @@ function FactsRow({ profile, boardRow, loss = null, promise = false }) {
           fontSize: 12.5,
           border: it.pillBg ? 'none' : `1px solid ${N.borderSft}`,
           fontWeight: 500,
+          fontFamily: 'inherit',
+          cursor: it.onClick ? 'pointer' : 'default',
         }}>
           <span style={{ display: 'inline-flex', color: it.pillFg || N.textFaint }}>
             {it.icon}
@@ -3083,8 +3134,10 @@ function FactsRow({ profile, boardRow, loss = null, promise = false }) {
           }}>
             {it.value}
           </span>
-        </div>
-      ))}
+          {it.onClick && <Pencil size={11} style={{ color: N.textFaint, flexShrink: 0 }} />}
+        </Tag>
+        );
+      })}
     </div>
   );
 }
