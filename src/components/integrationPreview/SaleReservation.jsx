@@ -13,13 +13,15 @@ export default function SaleReservation({ preparation, busy, error, onRetry, onC
     return () => clearInterval(timer);
   }, [preparation, confirmed, finalized]);
   const Icon = confirmed || finalized ? CalendarCheck2 : Clock3;
+  // Animateur de l'onboarding : Vincent, ou Paul en relais quand Vincent n'était pas libre.
+  const host = preparation?.host_name || 'Vincent';
   return <section className="integration-preview ip-embedded si-reservation">
     <header className="si-title"><span className="si-title-icon"><Icon size={28}/></span><div>
       <small>{finalized ? 'DOSSIER TERMINÉ' : 'PREMIÈRE PARTIE ENREGISTRÉE'}</small>
       <h2>{finalized ? 'Vente déjà déclarée' : confirmed ? 'Le rendez-vous est réservé' : 'Réservation en cours de confirmation'}</h2>
-      <p>{finalized ? `Client n°${preparation.client_numero}` : confirmed ? 'Vincent et la facturation ont leur rendez-vous dans l’agenda.' : 'Nous vérifions la confirmation des deux agendas. Le rendez-vous ne sera confirmé qu’après cette vérification.'}</p>
+      <p>{finalized ? `Client n°${preparation.client_numero}` : confirmed ? `${host} et la facturation ont leur rendez-vous dans l’agenda.` : 'Nous vérifions la confirmation des deux agendas. Le rendez-vous ne sera confirmé qu’après cette vérification.'}</p>
     </div></header>
-    <div className="si-reservation-date"><CalendarCheck2 size={24}/><div><strong>{new Intl.DateTimeFormat('fr-FR', {dateStyle:'full', timeStyle:'short', timeZone:'Europe/Paris'}).format(new Date(preparation.slot))}</strong><span>Heure de Paris · Vincent 50 min · facturation les 15 dernières minutes</span></div></div>
+    <div className="si-reservation-date"><CalendarCheck2 size={24}/><div><strong>{new Intl.DateTimeFormat('fr-FR', {dateStyle:'full', timeStyle:'short', timeZone:'Europe/Paris'}).format(new Date(preparation.slot))}</strong><span>Heure de Paris · {host} 50 min · facturation les 15 dernières minutes</span></div></div>
     {!finalized && <div className="si-reservation-next"><Check size={20}/><div><strong>Vos informations de vente et de facturation sont sauvegardées.</strong><p>Vous pouvez fermer cette fenêtre et reprendre depuis « Finaliser la déclaration ». La vente sera déclarée après la finalisation du dossier et l’ajout d’au moins un document.</p></div></div>}
     {error && <div className="si-error" role="alert">{error}</div>}
     <footer className="si-actions"><button className="ip-secondary" disabled={busy} onClick={onClose}>{finalized ? 'Fermer' : 'Reprendre plus tard'}</button>

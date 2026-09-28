@@ -68,11 +68,13 @@ function ReschedModal({ numeroClient, label, onClose, onDone }) {
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    apiClient.get(`/api/v1/tracking/sale-slots?kind=onboarding&start=${start}&days=7`)
+    // Créneaux de l'animateur du client (Vincent, ou Paul s'il a pris le relais) : le recalage
+    // déplace l'événement dans son agenda, on ne propose donc que ses disponibilités.
+    apiClient.get(`/api/v1/optilex/board-reschedule-slots?kind=onboarding&start=${start}&numero_client=${encodeURIComponent(numeroClient)}`)
       .then((r) => { if (alive) { setDays(r.days || []); setLoading(false); } })
       .catch(() => { if (alive) { setDays([]); setLoading(false); } });
     return () => { alive = false; };
-  }, [start]);
+  }, [start, numeroClient]);
 
   const shiftWeek = (dir) => {
     const d = new Date(start + "T00:00:00");
