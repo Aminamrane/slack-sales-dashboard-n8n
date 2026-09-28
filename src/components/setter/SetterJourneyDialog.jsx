@@ -16,8 +16,10 @@ const outcomes = [
 ];
 const dateLabel = (day, opts = {}) => new Date(`${day}T12:00:00Z`).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'short', day: 'numeric', month: 'short', ...opts });
 
-export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onSaved, dark = false, browseOnly = false, asSetter = null }) {
-  const [outcome, setOutcome] = useState(browseOnly ? 'r1' : '');
+// `onBook` (prospection) : le R1 d'une entreprise qui n'est pas encore un lead ; la fenêtre s'ouvre sur
+// « Placer un R1 » et confie l'enregistrement à `onBook(action)`, qui crée le lead avec le rendez-vous.
+export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onSaved, dark = false, browseOnly = false, asSetter = null, prospect = null, onBook = null }) {
+  const [outcome, setOutcome] = useState(browseOnly || onBook ? 'r1' : '');
   const [slot, setSlot] = useState(null), [note, setNote] = useState(''), [email, setEmail] = useState(lead?.email || '');
   const [callback, setCallback] = useState(''), [targetCalendar, setTargetCalendar] = useState('sales');
   const [data, setData] = useState(null), [loading, setLoading] = useState(false), [reload, setReload] = useState(0);
@@ -31,7 +33,7 @@ export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onS
   const booking = outcome === 'r1' || outcome === 'r2';
   const query = () => {
     const params = new URLSearchParams({ kind: outcome });
-    if (!browseOnly && lead?.id) params.set('lead_id', String(lead.id));
+    if (!browseOnly && !onBook && lead?.id) params.set('lead_id', String(lead.id));
     if (asSetter) params.set('as_setter', asSetter);
     return `/api/v1/tracking/setter/availability?${params}`;
   };
@@ -57,14 +59,17 @@ export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onS
     if (submitting.current || browseOnly) return;
     submitting.current = true; setBusy(true); setError('');
     try {
-      const action = setterAction({ lead, outcome, slot: selectedSlot, note, email, callback, targetCalendar });
+      const action = setterAction({ lead: lead || {}, outcome, slot: selectedSlot, note, email, callback, targetCalendar });
       if (booking && bookingMode === 'available') {
         const latest = await apiClient.get(query());
         setData(latest);
         if (!availableSelection(latest, slot)) { setSlot(null); throw new Error('Ce créneau n’est plus disponible. Choisissez-en un autre.'); }
       }
-      if (action.email) await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { email: action.email });
-      await apiClient[action.method](action.path, action.body);
+      if (onBook) await onBook(action);
+      else {
+        if (action.email) await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { email: action.email });
+        await apiClient[action.method](action.path, action.body);
+      }
       onSaved?.(booking ? `${outcome.toUpperCase()} placé.` : outcome === 'disqualify' ? 'Lead disqualifié.' : outcome === 'callback' ? 'Rappel enregistré.' : 'Appel enregistré.');
       onClose();
     } catch (e) { setError(e.message || 'L’action n’a pas été enregistrée. Réessayez.'); }
@@ -72,11 +77,11 @@ export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onS
   }
   return createPortal(<div className={`sj-overlay stj-overlay ${dark ? 'sj-dark' : ''}`} onClick={e => { if (e.target === e.currentTarget && !busy) onClose(); }}>
     <section ref={ref} tabIndex={-1} className={`sj-dialog stj-dialog ${booking ? 'stj-wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby="stj-title">
-      <header className="sj-head"><span className="sj-icon">{browseOnly ? <UsersRound size={24}/> : <Phone size={24}/>}</span><div><small>{browseOnly ? 'AGENDAS COMMERCIAUX' : 'PARCOURS SETTER'}</small><h2 id="stj-title">{browseOnly ? 'Disponibilités des sales' : 'Qualifier l’appel'}</h2><p>{browseOnly ? 'Consultez les créneaux à proposer pendant votre appel.' : lead?.full_name}</p></div><button className="sj-close" onClick={onClose} disabled={busy} aria-label="Fermer"><X size={20}/></button></header>
+      <header className="sj-head"><span className="sj-icon">{browseOnly ? <UsersRound size={24}/> : <Phone size={24}/>}</span><div><small>{browseOnly ? 'AGENDAS COMMERCIAUX' : onBook ? 'PROSPECTION' : 'PARCOURS SETTER'}</small><h2 id="stj-title">{browseOnly ? 'Disponibilités des sales' : onBook ? 'Prendre le rendez-vous' : 'Qualifier l’appel'}</h2><p>{browseOnly ? 'Consultez les créneaux à proposer pendant votre appel.' : onBook ? prospect?.name : lead?.full_name}</p></div><button className="sj-close" onClick={onClose} disabled={busy} aria-label="Fermer"><X size={20}/></button></header>
       <div className="sj-body">
         {!outcome && <><h3 className="stj-question">Quel est le résultat de l’appel ?</h3><div className="sj-options stj-outcomes">{outcomes.map(([value, title, desc, Icon]) => <button key={value} onClick={() => selectOutcome(value)}><Icon size={23}/><span><strong>{title}</strong><small>{desc}</small></span><ChevronRight size={17}/></button>)}</div></>}
         {outcome && <>
-          {browseOnly ? <div className="sj-attendance" aria-label="Type de rendez-vous">{['r1', 'r2'].map(k => <button key={k} disabled={busy} aria-pressed={outcome === k} onClick={() => selectOutcome(k)}>{k.toUpperCase()} · {k === 'r1' ? 'Premier rendez-vous' : 'Audit'}</button>)}</div> : <div className="stj-step"><button disabled={busy} onClick={() => selectOutcome('')}><ArrowLeft size={16}/> Résultat de l’appel</button><strong>{outcomes.find(o => o[0] === outcome)?.[1]}</strong></div>}
+          {browseOnly ? <div className="sj-attendance" aria-label="Type de rendez-vous">{['r1', 'r2'].map(k => <button key={k} disabled={busy} aria-pressed={outcome === k} onClick={() => selectOutcome(k)}>{k.toUpperCase()} · {k === 'r1' ? 'Premier rendez-vous' : 'Audit'}</button>)}</div> : <div className="stj-step">{!onBook && <button disabled={busy} onClick={() => selectOutcome('')}><ArrowLeft size={16}/> Résultat de l’appel</button>}<strong>{outcomes.find(o => o[0] === outcome)?.[1]}</strong></div>}
           {booking && !browseOnly && <div className="sj-attendance stj-booking-mode" aria-label="Mode de réservation"><button disabled={busy} aria-pressed={bookingMode === 'available'} onClick={() => {setBookingMode('available');setError('');}}><CalendarDays size={18}/> Créneaux disponibles</button><button disabled={busy} aria-pressed={bookingMode === 'manual'} onClick={() => {setBookingMode('manual');setError('');}}><Clock3 size={18}/> Forcer un rendez-vous</button></div>}
           {booking && bookingMode === 'manual' && !browseOnly && <div className="stj-manual"><p className="stj-muted">Avec l’accord du sales, placez le rendez-vous à l’heure convenue, même hors de ses disponibilités.</p>{<label className="stj-sales-filter">Commercial<select aria-label="Commercial pour le rendez-vous manuel" disabled={busy} value={manualEmail} onChange={e => setManualSales(e.target.value)}><option value="">Choisir un commercial</option>{manualOptions.map(s => <option key={s.email} value={s.email}>{s.name}</option>)}</select></label>}<ParisDateTimeInput label="Date et heure convenues" value={manualDate} onChange={setManualDate} disabled={busy}/></div>}
           {booking && bookingMode === 'available' && <div className="stj-calendar">

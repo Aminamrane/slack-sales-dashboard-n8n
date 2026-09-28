@@ -10,7 +10,9 @@ import { leadAvatar } from "../utils/leadAvatar";
 import LeadsManagement from "./LeadsManagement.jsx";
 // ── Setter modales (Option B duplication intégrale TrackingSheet) ──────────
 import SetterJourneyDialog from "../components/setter/SetterJourneyDialog.jsx";
-import {Phone, CalendarDays, ChevronRight} from "lucide-react";
+import {Phone, CalendarDays, ChevronRight, UserSearch, ListChecks} from "lucide-react";
+import ProspectSearch from "../components/setter/prospection/ProspectSearch.jsx";
+import ProspectLists from "../components/setter/prospection/ProspectLists.jsx";
 import CreateColdLeadModal from "../components/setter/CreateColdLeadModal.jsx";
 import SetterOnboarding from "../components/SetterOnboarding.jsx";
 import "../index.css";
@@ -923,6 +925,8 @@ export default function TrackingSheetSetter() {
   // ── SIDEBAR NAV + FORM STATE ────────────────────────────────────────────
   const [cancelledExpanded, setCancelledExpanded] = useState(false);
   const [sidebarView, setSidebarView] = useState(initialView || 'leads');
+  // Prospection : liste ouverte dans « Mes listes » (null = vue d'ensemble).
+  const [prospectListId, setProspectListId] = useState(null);
   // Sidebar repliable (hover) — overlay comme la vue sales
   const [sidebarHover, setSidebarHover] = useState(false);
   const sidebarCollapsed = !sidebarHover;
@@ -2530,6 +2534,9 @@ export default function TrackingSheetSetter() {
               // réactivité reste aux sales). Le setter y récupère un lead en
               // posant un R1 pour l'un de ses commerciaux.
               { key: 'barrage', label: 'Barrage', iconSrc: iconMyLead, accent: '#0891b2' },
+              // Prospection : recherche d'entreprises (API Leads) et listes réservées.
+              { key: 'prospect_search', label: 'Trouver des contacts', icon: <UserSearch size={20} strokeWidth={1.8} style={{ display: 'block', margin: '0 auto' }} />, accent: C.accent },
+              { key: 'prospect_lists', label: 'Mes listes', icon: <ListChecks size={20} strokeWidth={1.8} style={{ display: 'block', margin: '0 auto' }} />, accent: C.accent },
               { key: 'notifications', label: 'Notifications', iconSrc: iconNotif, accent: '#ef4444', iconSize: 55, badgeCount: (() => {
                 const meetingKeys = [
                   ...leads.filter(l => l.status === 'r1' && toDateOnly(l.r1) === TODAY).map(l => `r1-${l.id}-${TODAY}`),
@@ -2822,6 +2829,34 @@ export default function TrackingSheetSetter() {
                 name: s.full_name || s.name || s.email || s,
               }))}
             />
+          </div>
+        )}
+
+        {sidebarView === 'prospect_search' && (
+          <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
+              Trouver des contacts
+            </h2>
+            <p style={{ fontSize: 13, color: C.muted, margin: '0 0 24px' }}>
+              Choisissez une activité (code NAF) et un département, puis réservez les entreprises dans une liste :
+              personne d'autre ne les appellera.
+            </p>
+            <ProspectSearch C={C} darkMode={darkMode} onToast={showSetterToast}
+              onOpenList={(id) => { setProspectListId(id); setSidebarView('prospect_lists'); }} />
+          </div>
+        )}
+
+        {sidebarView === 'prospect_lists' && (
+          <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
+              Mes listes
+            </h2>
+            <p style={{ fontSize: 13, color: C.muted, margin: '0 0 24px' }}>
+              Suivez votre prospection entreprise par entreprise. « Exporter vers CRM » crée les leads dans l'onglet Nouveau lead.
+            </p>
+            <ProspectLists C={C} darkMode={darkMode} onToast={showSetterToast} teamSales={teamSales}
+              openListId={prospectListId} onOpenList={setProspectListId}
+              onOpenLeads={() => { setSidebarView('leads'); setActiveTab(Math.max(0, CATEGORIES.findIndex(c => c.key === 'mine'))); refreshData().catch(() => {}); }} />
           </div>
         )}
 
