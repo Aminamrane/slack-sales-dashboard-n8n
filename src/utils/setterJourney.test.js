@@ -48,3 +48,9 @@ test('manual appointments preserve exact Paris time without requiring an availab
  assert.throws(()=>setterAction({lead:owned,outcome:'r1',slot:{...manual,date:'2026-02-30'}}),/heure de Paris/);
  assert.throws(()=>setterAction({lead:owned,outcome:'r1',slot:{...manual,date:'2027-03-28',time:'02:30'}}),/heure de Paris/);
 });
+test('a prospect without a lead yet still gets the R1 body and the prospect email (prospection list)', () => {
+ const action=setterAction({lead:{},outcome:'r1',slot,email:'gerant@exemple.fr',targetCalendar:'sales'});
+ assert.deepEqual(action.body,{r1_date:'2026-09-24T10:30',target_sales_email:'a@example.com',notes:undefined,target_calendar:'sales'});
+ assert.equal(action.email,'gerant@exemple.fr');
+ assert.equal(setterAction({lead:{},outcome:'r1',slot}).email,undefined);
+});
