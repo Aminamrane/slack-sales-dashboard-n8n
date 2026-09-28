@@ -1225,7 +1225,7 @@ export default function TrackingSheet() {
     } finally {saleRequestBusy.current = false; setSaleSubmitting(false);}
   };
 
-  const handleSaleSubmit = async (leadId) => {
+  const handleSaleSubmit = async (leadId, documentsWaiver = null) => {
     if (saleRequestBusy.current) return;
     saleRequestBusy.current = true;
     setSaleSubmitting(true);
@@ -1247,6 +1247,8 @@ export default function TrackingSheet() {
           billing_structures: saleForm.billingStructures || null,
           structures_count: saleForm.billingStructures === 'plusieurs' ? (saleForm.structuresCount || null) : null,
           discount: saleForm.discount === true ? ((saleForm.discountValue || '').trim() || 'Oui') : (saleForm.discount === false ? 'Non' : null),
+          // Aucune pièce : société en création ou trop récente (case de l'étape documents).
+          ...(documentsWaiver ? { documents_waiver: documentsWaiver } : {}),
         });
         clientNumero = res.client_numero || null;
       } catch (err) {
@@ -9559,7 +9561,7 @@ export default function TrackingSheet() {
               ) : saleStep === 'handoff' ? (
                 <SaleIntake key={showSaleModal} leadId={showSaleModal} backLabel="Rendez-vous réservé" onBack={() => setSaleStep('reserved')} onSaved={value => {setSaleIntake(value); setSaleStep('documents');}} />
               ) : saleStep === 'documents' ? (
-                <SaleDocuments leadId={showSaleModal} draft={saleIntake?.draft} submitting={saleSubmitting} continueLabel="Déclarer la vente" onBack={() => setSaleStep('handoff')} onContinue={() => handleSaleSubmit(showSaleModal)} />
+                <SaleDocuments leadId={showSaleModal} draft={saleIntake?.draft} submitting={saleSubmitting} continueLabel="Déclarer la vente" onBack={() => setSaleStep('handoff')} onContinue={(documentsWaiver) => handleSaleSubmit(showSaleModal, documentsWaiver)} />
               ) : saleStep === 'questions' ? (
                 <>
                   {/* Étape questions facturation (après les créneaux, avant la déclaration).

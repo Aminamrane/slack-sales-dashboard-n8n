@@ -1422,3 +1422,17 @@
 .si-reservation-date strong,.si-reservation-date span{display:block}.si-reservation-date span{font-size:13px;margin-top:7px;color:#62716f}
 .si-reservation-next{background:transparent}.si-reservation-next p{font-size:14px;line-height:1.6;color:#62716f;margin-bottom:0}
 .sj-sale-part{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:#65746f;font-weight:700;margin:0 34px 16px 0}
+/* Société en création ou trop récente : déclaration sans pièce (case + situation). */
+.si-waiver {border:1px solid #e3e6ed;border-radius:14px;padding:14px 16px;margin:16px 0 4px;background:#fafbfc;transition:border-color .15s,background .15s;}
+.si-waiver.is-on {border-color:#c9d3ea;background:#f5f7fc;}
+.si-waiver-check {display:flex;align-items:flex-start;gap:12px;cursor:pointer;}
+.si-waiver-check input {margin-top:3px;width:17px;height:17px;flex-shrink:0;cursor:pointer;accent-color:#1e2330;}
+.si-waiver-check>svg {flex-shrink:0;color:#657084;margin-top:1px;}
+.si-waiver-check strong {display:block;font-size:13px;}
+.si-waiver-check small {display:block;font-size:12px;color:#657084;margin-top:3px;line-height:1.5;}
+.si-waiver-reasons {display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0 29px;}
+.si-waiver-reasons button {display:inline-flex;align-items:center;gap:6px;border:1px solid #d6dbe6;background:#fff;border-radius:999px;padding:7px 14px;font-size:12px;font-weight:600;color:#1e2330;cursor:pointer;transition:border-color .15s,background .15s;}
+.si-waiver-reasons button:hover {border-color:#9aa6c2;}
+.si-waiver-reasons button.is-selected {background:#1e2330;border-color:#1e2330;color:#fff;}
+@media(max-width:600px) {.si-waiver-reasons {margin-left:0;}}
+

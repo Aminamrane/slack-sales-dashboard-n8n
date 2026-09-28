@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, FileUp, FileText, UsersRound, Building2, Check, Clock3, LoaderCircle, RefreshCw, Trash2, CircleAlert } from 'lucide-react';
+import { ArrowLeft, ArrowRight, FileUp, FileText, UsersRound, Building2, Check, Clock3, LoaderCircle, RefreshCw, Trash2, CircleAlert, FileX2 } from 'lucide-react';
 import apiClient from '../../services/apiClient';
-import { validateIntakeFile, documentStatus, hasRequiredSaleDocuments } from '../../utils/intakeDocuments';
+import { validateIntakeFile, documentStatus, hasRequiredSaleDocuments, canDeclareSale, DOCUMENT_WAIVERS } from '../../utils/intakeDocuments';
 
 export default function SaleDocuments({ leadId, draft, onBack, onContinue, continueLabel = "Continuer vers la facturation", submitting = false }) {
   const [files, setFiles] = useState([]), [platform, setPlatform] = useState(null);
@@ -9,9 +9,14 @@ export default function SaleDocuments({ leadId, draft, onBack, onContinue, conti
   const uploading = useRef(false);
   const [busy, setBusy] = useState(''), [loading, setLoading] = useState(true), [error, setError] = useState('');
   const [otherType, setOtherType] = useState('other'), [otherCompany, setOtherCompany] = useState('');
+  // Société en création ou trop récente : pas encore de pièce (case cochée + situation choisie).
+  const [waiverOn, setWaiverOn] = useState(false), [waiver, setWaiver] = useState('');
+  const hasDocuments = hasRequiredSaleDocuments(files);
+  const chosenWaiver = !hasDocuments && waiverOn ? waiver : '';
   const companies = draft?.companies?.filter(c => c.selected) || [];
   const directors = draft?.directors?.filter(d => d.companies?.some(id => companies.some(c => c.id === id))) || [];
   const root = `/api/v1/owner-integration/leads/${leadId}/sale-documents`;
+  useEffect(() => { if (hasDocuments) { setWaiverOn(false); setWaiver(''); } }, [hasDocuments]);
   useEffect(() => {
     let live = true;
     apiClient.get(root + '?remote=true').then(result => {if (live) {setFiles(result.documents);setPlatform(result.platform);setAccount(result.account);}})
@@ -49,8 +54,9 @@ export default function SaleDocuments({ leadId, draft, onBack, onContinue, conti
     try {
       const result = await apiClient.get(root);
       setFiles(result.documents);
-      if (!hasRequiredSaleDocuments(result.documents)) {setError('Ajoutez au moins un document avant de poursuivre la déclaration de vente.'); return;}
-      await onContinue();
+      if (hasRequiredSaleDocuments(result.documents)) {await onContinue(null); return;}
+      if (canDeclareSale([], chosenWaiver)) {await onContinue(chosenWaiver); return;}
+      setError('Ajoutez au moins un document, ou cochez « Le client n’a pas encore de documents » pour une société en création ou trop récente.');
     } catch(e) {setError(e.message || 'Impossible de vérifier les documents. Réessayez.');}
     finally {setBusy('');}
   }
@@ -62,7 +68,7 @@ export default function SaleDocuments({ leadId, draft, onBack, onContinue, conti
     </label>;
   }
   return <section className="integration-preview ip-embedded si-documents">
-    <header className="si-title"><span className="si-title-icon"><FileUp size={26}/></span><div><small>PIÈCES DU DOSSIER</small><h2>Ajouter les documents</h2><p>Étape obligatoire : ajoutez au moins un document pour poursuivre la déclaration de vente.</p></div></header>
+    <header className="si-title"><span className="si-title-icon"><FileUp size={26}/></span><div><small>PIÈCES DU DOSSIER</small><h2>Ajouter les documents</h2><p>Étape obligatoire : ajoutez au moins un document pour poursuivre la déclaration de vente. Société en création ou trop récente : cochez la case en bas de l’étape.</p></div></header>
     {account && <div className="si-account-state"><UsersRound size={20}/><div><strong>{account.label}</strong><p>{account.detail}</p></div></div>}
     <div className="si-section-title"><UsersRound size={19}/><h3>Pour chaque dirigeant</h3></div>
     <div className="si-upload-grid">{directors.map(d => <article key={d.id}><h4>{d.name}</h4>{drop('Avis d’imposition', {document_type:'tax_notice', director_id:d.id}, FileText)}</article>)}</div>
@@ -80,9 +86,17 @@ export default function SaleDocuments({ leadId, draft, onBack, onContinue, conti
       {platform?.reason && <p className="si-delivery-note">{platform.reason}</p>}
     </section>
     {platform?.available && <details className="si-other-docs"><summary>État dans l’espace client · {platform.documents?.total || 0} document(s)</summary><p>Une pièce est complète lorsque son analyse est terminée.</p>{platform.expected?.map((piece,i) => <div className="si-checklist" key={`${piece.key}-${i}`}><span>{piece.label}{piece.company?.name ? ` · ${piece.company.name}` : ''}</span><small>{piece.status==='received' ? 'Analysé' : 'À compléter / analyse en attente'}</small></div>)}</details>}
-    {!loading && !hasRequiredSaleDocuments(files) && <p role="status">Un document doit être enregistré avant de continuer. Les dépôts refusés doivent être corrigés.</p>}
+    {!loading && !hasDocuments && <div className={`si-waiver ${waiverOn ? 'is-on' : ''}`}>
+      <label className="si-waiver-check"><input type="checkbox" checked={waiverOn} disabled={!!busy || submitting} onChange={e => {setWaiverOn(e.target.checked); setWaiver(''); setError('');}}/>
+        <FileX2 size={20}/><span><strong>Le client n’a pas encore de documents</strong><small>Société en cours de création, ou trop récente pour avoir un bilan ou un avis d’imposition : la vente peut être déclarée sans pièce.</small></span></label>
+      {waiverOn && <div className="si-waiver-reasons" role="radiogroup" aria-label="Situation de la société">{DOCUMENT_WAIVERS.map(([value, label]) =>
+        <button type="button" key={value} role="radio" aria-checked={waiver === value} className={waiver === value ? 'is-selected' : ''} disabled={!!busy || submitting} onClick={() => {setWaiver(value); setError('');}}>{waiver === value && <Check size={14}/>}{label}</button>)}</div>}
+    </div>}
+    {!loading && !hasDocuments && (chosenWaiver
+      ? <p role="status">Déclaration sans pièce : {DOCUMENT_WAIVERS.find(([value]) => value === chosenWaiver)?.[1]}. La dispense sera visible par l’équipe d’onboarding.</p>
+      : <p role="status">{waiverOn ? 'Choisissez la situation de la société pour continuer.' : 'Un document doit être enregistré avant de continuer. Les dépôts refusés doivent être corrigés.'}</p>)}
     {error && <div className="si-error" role="alert">{error}</div>}
-    <footer className="si-actions"><button className="ip-secondary" disabled={!!busy || submitting} onClick={onBack}><ArrowLeft size={16}/> Fiche</button><button className="ip-primary" disabled={!!busy || submitting || loading || !hasRequiredSaleDocuments(files)} onClick={continueToBilling}>{submitting ? "Déclaration…" : continueLabel}<ArrowRight size={17}/></button></footer>
+    <footer className="si-actions"><button className="ip-secondary" disabled={!!busy || submitting} onClick={onBack}><ArrowLeft size={16}/> Fiche</button><button className="ip-primary" disabled={!!busy || submitting || loading || !canDeclareSale(files, chosenWaiver)} onClick={continueToBilling}>{submitting ? "Déclaration…" : continueLabel}<ArrowRight size={17}/></button></footer>
   </section>;
 }
 function FileCheckIcon(){return <FileText size={19}/>;}
