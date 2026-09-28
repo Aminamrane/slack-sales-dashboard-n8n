@@ -1551,6 +1551,11 @@ export default function OptilexBoard({ embed = false }) {
                       <TableDateEdit value={r.rdv_onboarding_date_manual || r.rdv_onboarding_date}
                         disabled={!r.numero_client || isFinanceTeam()}
                         onSave={(d) => patch(r.numero_client, { rdv_onboarding_date_manual: d })} />
+                      {r.rdv_onboarding_done && r.rdv_onboarding_done_date && (
+                        <div title="Onboarding réalisé saisi à la main (ancien client)" style={{ marginTop: 3, fontSize: 10.5, fontWeight: 600, color: GREEN }}>
+                          Réalisé le {fmtDT(r.rdv_onboarding_done_date)}
+                        </div>
+                      )}
                       {r.onboarding_reschedule_pending && !r.rdv_onboarding_done && (
                         <div title={r.onboarding_reschedule_note || "Onboarding à recaler, sans date"} style={{ marginTop: 3, display: "inline-block", padding: "2px 7px", borderRadius: 999, background: "#fff4e0", color: "#b45309", fontSize: 10.5, fontWeight: 700 }}>À recaler</div>
                       )}
@@ -1657,13 +1662,17 @@ const roleOf = () => { try { return (apiClient.getUser() || {}).role; } catch { 
 // Onglet Détails allégé pour le Client Success : l'état de l'onboarding en une carte et un seul
 // bouton « Faire l'onboarding » ; les rendez-vous de lancement, la convention et la météo
 // vivent dans le parcours. Les autres rôles gardent les lignes détaillées.
-function OnboardingCard({ row, onStart }) {
+function OnboardingCard({ row, onStart, onManualDone }) {
   const reduce = useReducedMotion();
   const date = row.rdv_onboarding_date_manual || row.rdv_onboarding_date;
   const done = !!row.rdv_onboarding_done;
+  // Date d'un onboarding réalisé saisie à la main (anciens clients) : elle fait foi une fois réalisé.
+  const doneDate = row.rdv_onboarding_done_date || date;
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualDate, setManualDate] = useState("");
   const pending = !!row.onboarding_reschedule_pending && !done;
   const tone = done ? GREEN : pending ? "#b45309" : NAVY;
-  const status = done ? `Onboarding réalisé${date ? ` · ${fmtDT(date)}` : ""}`
+  const status = done ? `Onboarding réalisé${doneDate ? ` · ${fmtDT(doneDate)}` : ""}`
     : pending ? `À recaler${row.onboarding_reschedule_note ? ` · ${row.onboarding_reschedule_note}` : " · sans date pour le moment"}`
     : date ? `Prévu le ${fmtDT(date)}` : "Aucune date d'onboarding";
   const rdv = [
@@ -1701,6 +1710,37 @@ function OnboardingCard({ row, onStart }) {
           <span key={label}>{label} : <strong style={{ color: d ? TEXT : "#cbd2e0" }}>{fmtDT(d) || "à placer"}</strong>{ok ? " ✓" : ""}</span>
         ))}
       </div>
+      {/* Exception anciens clients (dev 28/09/2026) : onboarding déjà fait hors parcours. Pur suivi :
+          ni agenda, ni facturation (champ rdv_onboarding_done_date, distinct de la date du RDV). */}
+      {!done && onManualDone && (!manualOpen ? (
+        <button type="button" onClick={() => { setManualDate(""); setManualOpen(true); }}
+          style={{ marginTop: 10, padding: 0, border: "none", background: "transparent", color: MUTED, fontSize: 12, fontFamily: "inherit", cursor: "pointer", textDecoration: "underline" }}>
+          Ancien client : onboarding déjà réalisé ?
+        </button>
+      ) : (
+        <form onSubmit={(e) => { e.preventDefault(); if (manualDate) { onManualDone(manualDate); setManualOpen(false); } }}
+          style={{ marginTop: 10, padding: 12, borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD }}>
+          <label style={{ display: "block", fontSize: 12, fontWeight: 650, color: TEXT }}>
+            Date de l'onboarding réalisé
+            <input type="date" required autoFocus value={manualDate} max={new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" })}
+              onChange={(e) => setManualDate(e.target.value)}
+              style={{ display: "block", marginTop: 6, padding: "7px 10px", border: `1px solid ${BORDER}`, borderRadius: 8, fontFamily: "inherit", fontSize: 13, color: TEXT, background: CARD }} />
+          </label>
+          <div style={{ margin: "8px 0 10px", fontSize: 11.5, lineHeight: 1.5, color: MUTED }}>
+            Pour les anciens clients seulement : marque l'onboarding comme réalisé à cette date, pour le suivi. Aucun agenda, aucune facturation.
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="submit" disabled={!manualDate}
+              style={{ padding: "7px 12px", borderRadius: 8, border: "none", background: NAVY, color: "#fff", fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: manualDate ? "pointer" : "default", opacity: manualDate ? 1 : 0.6 }}>
+              Marquer réalisé
+            </button>
+            <button type="button" onClick={() => setManualOpen(false)}
+              style={{ padding: "7px 12px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: TEXT, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>
+              Annuler
+            </button>
+          </div>
+        </form>
+      ))}
     </div>
   );
 }
@@ -2363,7 +2403,7 @@ function ClientAgendaModal({ row, num, onClose }) {
 
   const items = useMemo(() => {
     const std = [
-      { key: "onb", label: "Onboarding Owner", type: "Owner", date: row.rdv_onboarding_date_manual || row.rdv_onboarding_date, done: row.rdv_onboarding_done },
+      { key: "onb", label: "Onboarding Owner", type: "Owner", date: row.rdv_onboarding_date_manual || row.rdv_onboarding_date || row.rdv_onboarding_done_date, done: row.rdv_onboarding_done },
       { key: "int", label: "Intégration Opti'Lex", type: "Opti'Lex", date: row.rdv_lancement_date, done: row.rdv_lancement_done },
       { key: "fis", label: "Lancement fiscal", type: "Opti'Lex", date: row.rdv_fiscal_date_manual || row.rdv_fiscal_date, done: row.rdv_fiscal_done },
       { key: "soc", label: "Lancement social", type: "Opti'Lex", date: row.rdv_social_date_manual || row.rdv_social_date, done: row.rdv_social_done },
@@ -2575,10 +2615,11 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
           </div>
           {ONBOARDING_FLOW_ROLES.includes(roleOf()) && !!num ? (
             // Onglet Détails allégé (dev 24/09/2026) : un seul bouton, le reste vit dans le parcours.
-            <OnboardingCard row={row} onStart={() => setOnboardingOpen(true)} />
+            <OnboardingCard row={row} onStart={() => setOnboardingOpen(true)}
+              onManualDone={(d) => patch(num, { rdv_onboarding_done: true, rdv_onboarding_done_date: d })} />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
-              <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date_manual || row.rdv_onboarding_date} done={row.rdv_onboarding_done}
+              <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date_manual || row.rdv_onboarding_date || row.rdv_onboarding_done_date} done={row.rdv_onboarding_done}
                 editable={!!num && ["customer_success_manager", "admin", "ceo"].includes((apiClient.getUser() || {}).role)}
                 meetLink={row.onboarding_meet_link}
                 onToggle={(v) => patch(num, { rdv_onboarding_done: v })} />
