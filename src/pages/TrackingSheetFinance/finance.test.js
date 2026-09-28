@@ -405,3 +405,33 @@ test('RDV d’intégration Opti’Lex : effectué (jalon) ≠ date passée ≠ �
   // Minuit Paris passé alors qu'il est encore la veille en UTC : jour Paris.
   assert.equal(optilexIntegrationPhaseOf({ rdv_lancement_date: '2026-09-23T09:00:00+00:00' }, new Date('2026-09-23T22:30:00Z')), 'past');
 });
+
+// ── Reports : chaque mois dit vers où sa créance est partie (n°743, 28/09) ──
+import { deferralLinks } from './constants.js';
+
+test('un report relie le mois déchargé et le mois receveur', () => {
+  const sept = [
+    { entity: 'owner', amount: -4032, period: '2026-10-01', created_at: '2026-09-28T09:07:28Z' },
+    { entity: 'owner', amount: 4032, period: '2026-10-01', created_at: '2026-09-28T09:07:28Z' },
+  ];
+  const links = deferralLinks(sept, 'owner');
+  assert.deepEqual(links['2026-09'].to, [{ month: '2026-10', amount: 4032 }]);
+  assert.deepEqual(links['2026-10'].from, [{ month: '2026-09', amount: 4032 }]);
+  assert.deepEqual(deferralLinks(sept, 'optilex'), {});
+});
+
+test('un report de plusieurs mois garde chaque source', () => {
+  const links = deferralLinks([
+    { entity: 'owner', amount: -100, period: '2026-08-01', created_at: 't' },
+    { entity: 'owner', amount: -50, period: '2026-09-01', created_at: 't' },
+    { entity: 'owner', amount: 150, period: '2026-10-01', created_at: 't' },
+    // Un autre report, indépendant, sur le même client.
+    { entity: 'owner', amount: -20, period: '2026-11-01', created_at: 'u' },
+    { entity: 'owner', amount: 20, period: '2026-12-01', created_at: 'u' },
+  ], 'global');
+  assert.deepEqual(links['2026-07'].to, [{ month: '2026-10', amount: 100 }]);
+  assert.deepEqual(links['2026-08'].to, [{ month: '2026-10', amount: 50 }]);
+  assert.deepEqual(links['2026-10'].from, [{ month: '2026-07', amount: 100 }, { month: '2026-08', amount: 50 }]);
+  assert.deepEqual(links['2026-10'].to, [{ month: '2026-12', amount: 20 }]);
+  assert.deepEqual(links['2026-12'].from, [{ month: '2026-10', amount: 20 }]);
+});

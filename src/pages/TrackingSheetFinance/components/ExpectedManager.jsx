@@ -46,7 +46,7 @@ import {
 } from 'lucide-react';
 
 import apiClient from '../../../services/apiClient.js';
-import { formatEUR, formatMonthLabel, formatDateFR, currentPeriod, deferralsByMonth, outstandingByMonth } from '../constants.js';
+import { formatEUR, formatMonthLabel, formatDateFR, currentPeriod, deferralsByMonth, deferralLinks, outstandingByMonth } from '../constants.js';
 
 const N = {
   text: '#37352f',
@@ -233,46 +233,72 @@ export default function ExpectedManager({
   const nowKey = currentPeriod();
   // Reports de créance, ramenés au mois déchargé (out) et au mois receveur (in).
   const deferred = useMemo(() => deferralsByMonth(deferrals, entity), [deferrals, entity]);
+  // Et, pour chaque mois, vers où sa créance est partie / d'où vient ce qu'il reçoit.
+  const links = useMemo(() => deferralLinks(deferrals, entity), [deferrals, entity]);
   // Corrections du reste dû, ramenées au mois corrigé.
   const corrections = useMemo(() => outstandingByMonth(outstanding, entity), [outstanding, entity]);
-  const rows = useMemo(() => (periods || [])
-    .map((p) => {
-      const key = String(p.period).slice(0, 7);
-      const attendu = round2(p[f.expected]);
-      const recuMois = round2(p[f.received] || 0);
-      const recuCreances = round2(p[f.overdue] || 0);
-      const recu = round2(recuMois + recuCreances);
-      const deferredOut = round2(deferred[key]?.out || 0);
-      const deferredIn = round2(deferred[key]?.in || 0);
-      const corrected = round2(corrections[key] || 0);
-      // Ce qui reste dû sur le mois : l'attendu, moins ce qui a été reçu,
-      // moins ce qui a été reporté ailleurs, plus ce qui a été reporté ici,
-      // plus les corrections de reste dû posées à la main sur ce mois.
-      const reste = round2(Math.max(attendu + deferredIn - recu - deferredOut + corrected, 0));
-      const pauseActive = !!p.expected_pause_active;
-      let status = 'none';
-      if (attendu > 0 || recu > 0 || deferredIn > 0) {
-        if (recu >= attendu + deferredIn && recu > 0) status = 'paid';
-        else if (recu > 0) status = 'partial';
-        else if (deferredOut > 0 && reste === 0) status = 'deferred';
-        else if (pauseActive) status = 'paused';
-        else if (key > nowKey) status = 'upcoming';
-        else status = 'late';
-      } else if (pauseActive) {
-        status = 'paused';
-      }
-      return {
-        id: p.id, key, label: formatMonthLabel(key),
-        attendu, recu, recuMois, recuCreances, reste, status, deferredOut, deferredIn, corrected,
-        pendingRequest: pendingMonths.has(key),
-        manual: !!p.expected_manual,
-        paused: !!p.expected_paused,
-        pauseActive,
-        pauseUntil: p.expected_paused_until || null,
-        passe: key < nowKey, courant: key === nowKey, futur: key > nowKey,
-      };
-    })
-    .sort((a, b) => a.key.localeCompare(b.key)), [periods, f, nowKey, deferred, corrections, pendingMonths]);
+  const rows = useMemo(() => {
+    // Mois par mois, dans l'ordre : un mois qui reçoit un report ne reçoit que
+    // ce que le mois d'origine devait vraiment (même règle que le moteur du
+    // tableau, dev 2026-09-28). Un report ne fait jamais passer un mois sous
+    // zéro ; si le mois a été modifié après coup, le report perd son effet.
+    const applied = {}; // mois source → part du report réellement déplacée (0..1)
+    return [...(periods || [])]
+      .sort((a, b) => String(a.period).localeCompare(String(b.period)))
+      .map((p) => {
+        const key = String(p.period).slice(0, 7);
+        const attendu = round2(p[f.expected]);
+        const recuMois = round2(p[f.received] || 0);
+        const recuCreances = round2(p[f.overdue] || 0);
+        const recu = round2(recuMois + recuCreances);
+        const deferredOut = round2(deferred[key]?.out || 0);
+        const deferredIn = round2(deferred[key]?.in || 0);
+        const deferTo = links[key]?.to || [];
+        // Chaque source avec ce qu'elle apporte vraiment (prorata de ce que son
+        // mois devait encore quand le report est parti).
+        const deferFrom = (links[key]?.from || []).map((src) => ({
+          ...src, effective: round2(src.amount * (applied[src.month] ?? 1)),
+        }));
+        const corrected = round2(corrections[key] || 0);
+        // Ce qui arrive vraiment ici : chaque report entrant, au prorata de ce
+        // que son mois d'origine devait encore quand il est parti.
+        const effectiveIn = deferFrom.length
+          ? round2(deferFrom.reduce((sum, src) => sum + src.effective, 0))
+          : deferredIn;
+        // Ce qui reste dû sur le mois : l'attendu, plus ce qui a été reporté ici,
+        // plus les corrections de reste dû, moins ce qui a été reçu, moins ce
+        // qui a été reporté ailleurs (jamais plus que ce que le mois devait).
+        const avantReport = round2(attendu + effectiveIn - recu + corrected);
+        const reportApplique = round2(Math.min(deferredOut, Math.max(avantReport, 0)));
+        if (deferredOut > 0) applied[key] = reportApplique / deferredOut;
+        const reste = round2(Math.max(avantReport - reportApplique, 0));
+        const pauseActive = !!p.expected_pause_active;
+        let status = 'none';
+        if (attendu > 0 || recu > 0 || effectiveIn > 0) {
+          if (recu >= attendu + effectiveIn && recu > 0) status = 'paid';
+          else if (recu > 0) status = 'partial';
+          else if (deferredOut > 0 && reste === 0) status = 'deferred';
+          else if (pauseActive) status = 'paused';
+          else if (key > nowKey) status = 'upcoming';
+          else status = 'late';
+        } else if (pauseActive) {
+          status = 'paused';
+        }
+        return {
+          id: p.id, key, label: formatMonthLabel(key),
+          attendu, recu, recuMois, recuCreances, reste, status, deferredOut, deferredIn, corrected,
+          deferTo, deferFrom, effectiveIn,
+          // Report posé mais sans effet (ou en partie) : le mois a changé depuis.
+          reportSansEffet: round2(deferredOut - reportApplique),
+          pendingRequest: pendingMonths.has(key),
+          manual: !!p.expected_manual,
+          paused: !!p.expected_paused,
+          pauseActive,
+          pauseUntil: p.expected_paused_until || null,
+          passe: key < nowKey, courant: key === nowKey, futur: key > nowKey,
+        };
+      });
+  }, [periods, f, nowKey, deferred, links, corrections, pendingMonths]);
 
   const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
 
@@ -851,7 +877,8 @@ export default function ExpectedManager({
                   const isTarget = mode === 'defer' && r.id === deferTo;
                   const canPick = selectable(r) && !isTarget;
                   const isPicked = selected.has(r.id);
-                  const dim = r.attendu === 0 && r.recu === 0 && !r.pauseActive;
+                  // Un mois sans attendu qui reçoit un report porte une créance : il reste lisible.
+                  const dim = r.attendu === 0 && r.recu === 0 && r.reste === 0 && !r.pauseActive;
                   return (
                     <div
                       key={r.id}
@@ -919,16 +946,6 @@ export default function ExpectedManager({
                       </span>
                       <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: r.reste > 0 ? N.red : N.textFaint }}>
                         {formatEUR(r.reste)}
-                        {r.deferredOut > 0 && (
-                          <span title="Créance reportée sur un autre mois : l’attendu du mois est inchangé" style={{ display: 'block', fontSize: 10.5, color: N.blue, whiteSpace: 'nowrap' }}>
-                            −{formatEUR(r.deferredOut)} reporté
-                          </span>
-                        )}
-                        {r.deferredIn > 0 && (
-                          <span title="Créance reçue d’un autre mois, en plus de l’attendu du mois" style={{ display: 'block', fontSize: 10.5, color: N.blue, whiteSpace: 'nowrap' }}>
-                            +{formatEUR(r.deferredIn)} reporté ici
-                          </span>
-                        )}
                         {r.corrected !== 0 && (
                           <span title="Reste dû corrigé à la main : ajustement de créance, attendu et reçu inchangés" style={{ display: 'block', fontSize: 10.5, color: N.amber, whiteSpace: 'nowrap' }}>
                             {r.corrected > 0 ? '+' : '−'}{formatEUR(Math.abs(r.corrected))} corrigé
@@ -942,6 +959,25 @@ export default function ExpectedManager({
                         }}>
                           {st.label}
                         </span>
+                        {/* Le sens du report, en toutes lettres : l'attendu du mois
+                            ne change pas, la créance, elle, a bougé. */}
+                        {r.deferTo.map((t, i) => (
+                          <span key={`to-${i}`} title="Créance reportée sur un autre mois : l’attendu du mois est inchangé" style={{ display: 'block', fontSize: 10.5, color: N.blue, marginTop: 2, lineHeight: 1.3 }}>
+                            {formatEUR(t.amount)} reporté{t.month ? ` sur ${formatMonthLabel(t.month).toLowerCase()}` : ''}
+                          </span>
+                        ))}
+                        {r.reportSansEffet > 0 && (
+                          <span title="Le mois a été modifié après le report : il ne devait plus ce montant, le report ne le déplace donc pas" style={{ display: 'block', fontSize: 10.5, color: N.amber, marginTop: 2, lineHeight: 1.3 }}>
+                            {r.reportSansEffet >= r.deferredOut ? 'sans effet : le mois a changé depuis' : `dont ${formatEUR(r.reportSansEffet)} sans effet`}
+                          </span>
+                        )}
+                        {r.deferFrom.map((f2, i) => (
+                          <span key={`from-${i}`} title="Créance reçue d’un autre mois, en plus de l’attendu du mois" style={{ display: 'block', fontSize: 10.5, color: f2.effective < f2.amount ? N.amber : N.blue, marginTop: 2, lineHeight: 1.3 }}>
+                            {f2.effective > 0
+                              ? `reçoit ${formatEUR(f2.effective)} de ${formatMonthLabel(f2.month).toLowerCase()}${f2.effective < f2.amount ? ` (sur ${formatEUR(f2.amount)})` : ''}`
+                              : `report de ${formatMonthLabel(f2.month).toLowerCase()} sans effet`}
+                          </span>
+                        ))}
                         {r.pauseActive && r.pauseUntil && (
                           <span style={{ display: 'block', fontSize: 10.5, color: N.textFaint, marginTop: 2 }}>
                             reprise le {formatDateFR(r.pauseUntil)}
@@ -992,6 +1028,17 @@ export default function ExpectedManager({
                               max={r.reste}
                               onChange={(v) => setDrafts((d) => ({ ...d, [r.id]: v }))}
                             />
+                          )}
+                          {/* Reports déjà posés : sortant en moins, entrant en plus. */}
+                          {mode === 'defer' && !isPicked && (r.deferredOut > 0 || r.deferredIn > 0) && (
+                            <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: N.blue }}>
+                              {r.deferredOut > 0 && <span style={{ display: 'block' }}>−{formatEUR(r.deferredOut)}</span>}
+                              {r.deferredIn > 0 && (
+                                <span style={{ display: 'block' }} title={r.effectiveIn < r.deferredIn ? `${formatEUR(r.deferredIn)} reportés à l’origine` : undefined}>
+                                  +{formatEUR(r.effectiveIn)}
+                                </span>
+                              )}
+                            </span>
                           )}
                           {mode === 'pause' && r.pauseActive && (
                             <button type="button" onClick={() => resume([r.key])} style={{ ...btn('solid'), padding: '4px 9px', fontSize: 11.5 }}>
