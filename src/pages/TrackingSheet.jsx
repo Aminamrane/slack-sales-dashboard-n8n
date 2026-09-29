@@ -529,7 +529,7 @@ export default function TrackingSheet() {
     const patch=qualificationPatch(lead,stage,{result,attended,date,followUp});
     try {
       const response=await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`,patch);
-      for(const field of ['r1_meet_link','r2_meet_link','r1_event_id','r2_event_id']){
+      for(const field of ['r1_meet_link','r2_meet_link','r1_event_id','r2_event_id','r3_event_id']){
         if(response?.lead?.[field])patch[field]=response.lead[field];
       }
       if(response?.calendar_conflict){
@@ -539,9 +539,9 @@ export default function TrackingSheet() {
     catch(error) { throw new Error(error.status===409 ? 'Ce créneau est indisponible. Vérifiez l’agenda avant de choisir une autre date.' : 'La qualification n’a pas pu être enregistrée. Vos choix sont conservés ; réessayez.'); }
     setLeads(previous=>previous.map(l=>l.id===lead.id?{...l,...patch,...(patch.r1_date?{r1:patch.r1_date}:{}),...(patch.r2_date?{r2:patch.r2_date}:{}),...(patch.r3_date?{r3:patch.r3_date}:{})}:l));
     setQualificationDialog(null);
-    if(patch.status==='r2'){
-      triggerLeadMovedNotif(lead,'r2');
-      const index=CATEGORIES.findIndex(c=>c.key==='r2');
+    if(patch.status==='r2'||patch.status==='r3'){
+      triggerLeadMovedNotif(lead,patch.status);
+      const index=CATEGORIES.findIndex(c=>c.key===patch.status);
       if(index>=0)handleTabChange(index);
       setSelectedLead(lead.id);
     }
@@ -9432,7 +9432,7 @@ export default function TrackingSheet() {
         await handleWorkflowSubmit(current.id, patch, {strict:true});
         setContactDialog(null);
       }}/>}
-      {qualificationDialog && (qualificationDialog.stage==='r1'?<R1QualificationDialog {...qualificationDialog} dark={darkMode} onClose={()=>setQualificationDialog(null)} onSave={saveQualification}/>:<QualificationDialog {...qualificationDialog} dark={darkMode} onClose={()=>setQualificationDialog(null)} onSave={saveQualification}/>)}
+      {qualificationDialog && (qualificationDialog.stage==='r1'?<R1QualificationDialog {...qualificationDialog} dark={darkMode} onClose={()=>setQualificationDialog(null)} onSave={saveQualification}/>:<QualificationDialog {...qualificationDialog} dark={darkMode} canPlaceR3={calSettings?.r3_enabled===true} onClose={()=>setQualificationDialog(null)} onSave={saveQualification}/>)}
       {intakeDialog && <IntegrationDialog key={intakeDialog.lead_id} context={intakeDialog}
         contractDetails={{
           email: leads.find(l => l.id === intakeDialog.lead_id)?.email,

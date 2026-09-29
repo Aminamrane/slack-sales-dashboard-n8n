@@ -76,3 +76,15 @@ test('server timestamps are shown at Paris time, appointment wall times are not 
  assert.equal(parisInstantLabel(null),'');
  assert.equal(parisInstantLabel('junk'),'');
 });
+test('le R3 se pose depuis la qualification du R2, comme le R2 depuis le R1',()=>{
+ const lead={email:'test@example.com',r2_completed_at:'2026-09-29T09:00:00Z'};
+ assert.deepEqual(qualificationPatch(lead,'r2',{result:'relire_contrat',attended:true,date:'2026-10-02T18:00',followUp:'r3_set'}),
+  {r2_result:'relire_contrat',r2_completed_at:'2026-09-29T09:00:00Z',r3_date:'2026-10-02T18:00',status:'r3'});
+ assert.equal(qualificationPatch(lead,'r2',{result:'done',attended:true,date:'2026-10-02T18:00',followUp:'r3_set'}).status,'r3');
+ assert.throws(()=>qualificationPatch(lead,'r2',{result:'pas_interesse',attended:true,date:'2026-10-02T18:00',followUp:'r3_set'}));
+ assert.throws(()=>qualificationPatch({},'r2',{result:'done',attended:true,date:'2026-10-02T18:00',followUp:'r3_set'}));
+ assert.throws(()=>qualificationPatch(lead,'r2',{result:'done',attended:true,date:'',followUp:'r3_set'}));
+ assert.throws(()=>qualificationPatch(lead,'r3',{result:'done',attended:true,date:'2026-10-02T18:00',followUp:'r3_set'}));
+ // Sans suite choisie, rien ne change : le contrat part comme aujourd'hui.
+ assert.deepEqual(qualificationPatch(lead,'r2',{result:'done',attended:true}),{r2_result:'done',r2_completed_at:'2026-09-29T09:00:00Z'});
+});

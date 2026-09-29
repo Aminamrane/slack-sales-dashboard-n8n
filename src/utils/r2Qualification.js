@@ -23,5 +23,12 @@ export function qualificationPatch(lead,stage,{result,attended,date,followUp},no
   if(!validParisAppointment(date))throw new Error('Choisissez une date et une heure valides.');
   patch[`${stage}_date`]=date;
  }
+ // R3 posé depuis la qualification du R2 (dev 2026-09-29), comme le R2 depuis le R1.
+ if(followUp==='r3_set'){
+  if(stage!=='r2'||!attended||result==='pas_interesse')throw new Error('Le R3 se pose après un R2 effectué.');
+  if(!lead.email)throw new Error('Ajoutez l’email du client dans son dossier avant de poser le R3.');
+  if(!validParisAppointment(date))throw new Error('Choisissez la date et l’heure du R3.');
+  patch.r3_date=date;patch.status='r3';
+ }
  return patch;
 }
