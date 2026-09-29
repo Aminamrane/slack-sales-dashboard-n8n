@@ -1,9 +1,10 @@
 // Parcours « Faire l'onboarding » (board, Client Success). Un pop-up guidé en cinq étapes :
-// 1. la situation du client (état, finance, contrats), 2. les rendez-vous de lancement,
+// 1. la situation du client (état, finance, contrats), 2. les rendez-vous de lancement (fiscal et
+// social reprogrammables sans quitter le parcours),
 // 3. la convention Opti'Lex (prévenir Lisa), 4. la météo d'onboarding qui finalise la fiche,
 // 5. la clôture : réalisé, ou à recaler (avec ou sans date). Règle finance affichée telle
 // que le moteur l'applique : le jour J, rien n'est dû avant la fin du rendez-vous.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion as Motion, AnimatePresence } from "framer-motion";
 import apiClient from "../services/apiClient";
@@ -81,6 +82,16 @@ function Button({ children, onClick, primary, danger, disabled, small }) {
   );
 }
 
+// Copie un lien en un clic (lien Meet d'un RDV de lancement à donner au client).
+function CopyButton({ text, label }) {
+  const [state, setState] = useState(null); // null | "ok" | "ko"
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(text); setState("ok"); } catch { setState("ko"); }
+    setTimeout(() => setState(null), 1500);
+  };
+  return <Button small onClick={copy}>{state === "ok" ? "Lien copié ✓" : state === "ko" ? "Copie impossible" : label}</Button>;
+}
+
 function CopyLink({ url }) {
   const [copied, setCopied] = useState(false);
   if (!url) return null;
@@ -138,9 +149,9 @@ function SituationStep({ brief, row }) {
   );
 }
 
-function RdvStep({ brief }) {
+function RdvStep({ brief, onReschedule }) {
   const a = brief.appointments;
-  const item = (label, entry, responsable) => (
+  const item = (label, entry, responsable, kind) => (
     <Card title={label} key={label}>
       {entry?.at ? (
         <Row label="Date" strong>{fmtDT(entry.at)}{entry.done ? <> <Pill color={GREEN}>effectué</Pill></> : null}</Row>
@@ -148,6 +159,14 @@ function RdvStep({ brief }) {
         <div style={{ fontSize: 13, color: TEXT, marginBottom: 4 }}>Pas encore de date.</div>
       )}
       {entry?.meet_link && <Row label="Visio"><a href={entry.meet_link} target="_blank" rel="noreferrer" style={{ color: BRAND, fontWeight: 700, textDecoration: "none" }}>Rejoindre le Meet</a></Row>}
+      {/* Client absent : Vincent déplace le RDV sans quitter le parcours (même recalage que le board),
+          ou copie le lien Meet pour le lui donner. */}
+      {kind && entry?.at && !entry.done && (onReschedule || entry.meet_link) && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+          {onReschedule && <Button small onClick={() => onReschedule(kind)}>Reprogrammer ce rendez-vous</Button>}
+          {entry.meet_link && <CopyButton text={entry.meet_link} label="Copier le lien Meet" />}
+        </div>
+      )}
       {responsable && (
         <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.5, marginTop: 6 }}>
           Normalement, ce rendez-vous est pris par le client sur sa plateforme avec {responsable}. Vous pouvez le placer ici avec lui, avec le même lien.
@@ -165,8 +184,8 @@ function RdvStep({ brief }) {
         {brief.onboarding.reschedule_pending && <Row label="Statut"><Pill color={AMBER}>à recaler</Pill></Row>}
       </Card>
       {item("Intégration Opti'Lex", a.lancement, null)}
-      {item("Lancement fiscal", a.fiscal, "Adam Bouchareb")}
-      {item("Lancement social", a.social, "Haci Moraru")}
+      {item("Lancement fiscal", a.fiscal, "Adam Bouchareb", "fiscal")}
+      {item("Lancement social", a.social, "Haci Moraru", "social")}
     </>
   );
 }
@@ -245,7 +264,7 @@ function ClotureStep({ brief, busy, onDone, onRescheduleWithDate, onRescheduleLa
   );
 }
 
-export default function OnboardingFlowModal({ row, num, onClose, patch, onRescheduleWithDate, onChanged }) {
+export default function OnboardingFlowModal({ row, num, onClose, patch, onRescheduleWithDate, onReschedule, blocked, refreshKey, onChanged }) {
   const [step, setStep] = useState(0);
   const [brief, setBrief] = useState(null);
   const [error, setError] = useState("");
@@ -253,20 +272,28 @@ export default function OnboardingFlowModal({ row, num, onClose, patch, onResche
   const [note, setNote] = useState("");
   const [rated, setRated] = useState(null);
   const [closingMessage, setClosingMessage] = useState("");
+  const noteLoaded = useRef(false);
 
   useEffect(() => {
     let alive = true;
     apiClient.get(`/api/v1/optilex/onboarding-brief?numero_client=${encodeURIComponent(num)}`)
-      .then((b) => { if (alive) { setBrief(b); setNote(b?.onboarding?.reschedule_note || ""); } })
+      // Relue après un recalage (refreshKey) : la note de recalage n'est chargée qu'à l'ouverture,
+      // une saisie en cours est gardée.
+      .then((b) => {
+        if (!alive) return;
+        setBrief(b);
+        if (!noteLoaded.current) { noteLoaded.current = true; setNote(b?.onboarding?.reschedule_note || ""); }
+      })
       .catch(() => { if (alive) setError("Impossible de charger la situation du client. Fermez et réessayez."); });
     return () => { alive = false; };
-  }, [num]);
+  }, [num, refreshKey]);
 
+  // Échap ferme le parcours, sauf quand la fenêtre de recalage est ouverte par-dessus (blocked).
   useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape" && !busy) onClose(); };
+    const onKey = (e) => { if (e.key === "Escape" && !busy && !blocked) onClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [busy, onClose]);
+  }, [busy, blocked, onClose]);
 
   const current = STEPS[step];
   const progress = useMemo(() => ((step + 1) / STEPS.length) * 100, [step]);
@@ -323,7 +350,7 @@ export default function OnboardingFlowModal({ row, num, onClose, patch, onResche
             <AnimatePresence mode="wait" initial={false}>
               <Motion.div key={current.key} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.24, ease: EASE }}>
                 {current.key === "situation" && <SituationStep brief={brief} row={row} />}
-                {current.key === "rdv" && <RdvStep brief={brief} />}
+                {current.key === "rdv" && <RdvStep brief={brief} onReschedule={onReschedule} />}
                 {current.key === "optilex" && <OptilexStep brief={brief} num={num} />}
                 {current.key === "meteo" && <MeteoStep brief={brief} num={num} rated={rated} onRated={(d) => { setRated(d); onChanged?.(); }} />}
                 {current.key === "cloture" && (
