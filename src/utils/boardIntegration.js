@@ -17,6 +17,14 @@ export function matchesUpcomingOnboarding(row, today) {
     return !!row.numero_client && !!date && !row.rdv_onboarding_done && String(date).slice(0, 10) >= today;
 }
 
+// Date d'onboarding d'une ligne pour le filtre de dates du board et ses mois : un onboarding réalisé
+// compte à sa date de réalisation (« onboardings réalisés en septembre », Vincent 29/09), les autres
+// à leur date prévue.
+export function onboardingDateOf(row) {
+    const date = (row.rdv_onboarding_done && row.rdv_onboarding_done_date) || row.rdv_onboarding_date_manual || row.rdv_onboarding_date;
+    return date ? String(date).slice(0, 10) : null;
+}
+
 export function matchesOverdueOnboarding(row, parisNow) {
     if (!matchesUpcomingOnboarding(row, parisNow.slice(0, 10))) return false;
     const date = String(row.rdv_onboarding_date_manual || row.rdv_onboarding_date);
