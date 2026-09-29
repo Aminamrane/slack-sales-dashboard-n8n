@@ -155,7 +155,7 @@ function TimeSelect({ value, onChange, C, darkMode }) {
 }
 
 // ── SLOT PICKER (créneaux libres freebusy 8h-18h) pour RDV Onboarding/Lancement ──
-function SaleSlotPicker({ kind, value, onChange, C, darkMode, band }) {
+function SaleSlotPicker({ kind, value, onChange, C, darkMode, band, readOnly = false }) {
   const accent = C.accent || '#2563eb';
   const _pad = (n) => String(n).padStart(2, '0');
   const _ymd = (yy, mm, dd) => `${yy}-${_pad(mm + 1)}-${_pad(dd)}`;
@@ -292,9 +292,9 @@ function SaleSlotPicker({ kind, value, onChange, C, darkMode, band }) {
           ) : selectedSlots.map((s, idx) => {
             const sel = valDay === selectedDay && valTime === s.t;
             return (
-              <button key={s.t} data-slot={s.t} onClick={() => s.free && onChange(selectedDay + 'T' + s.t)} disabled={!s.free}
+              <button key={s.t} data-slot={s.t} onClick={() => !readOnly && s.free && onChange(selectedDay + 'T' + s.t)} disabled={!s.free || readOnly}
                 style={{ padding: '10px 0', borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
-                  cursor: s.free ? 'pointer' : 'default',
+                  cursor: s.free && !readOnly ? 'pointer' : 'default',
                   border: `1px solid ${sel ? '#1e2330' : (s.free ? C.border : 'transparent')}`,
                   background: sel ? '#1e2330' : (s.free ? (darkMode ? '#252636' : '#f9fafb') : (darkMode ? 'rgba(255,255,255,0.02)' : '#f3f4f6')),
                   color: sel ? '#fff' : (s.free ? C.text : (darkMode ? '#4a4b57' : '#c3cad6')),
@@ -1173,6 +1173,7 @@ export default function TrackingSheet() {
   // ── SALE DECLARATION MODAL (signed tab) ────────────────────────────────────
   const [showSaleModal, setShowSaleModal] = useState(null); // lead.id when modal is open
   const [reschedRdv, setReschedRdv] = useState(null); // { leadId, kind } RDV post-signature à reprogrammer (créneau + dispo agenda)
+  const [onbAvailOpen, setOnbAvailOpen] = useState(false); // consultation des dispos onboarding avant le contrat (29/09)
   // billingStructures ('une'|'plusieurs') + discount (null|false|true) + discountValue (texte
   // libre "5 %") = questions facturation posées à l'étape 'questions' (après les créneaux),
   // destinées à la description de l'event RDV Onboarding (agenda facturation@).
@@ -6753,6 +6754,24 @@ export default function TrackingSheet() {
                     </div>
                   ));
                 })()}
+                {/* Dispos onboarding (demande dev 29/09) : consultation seule des créneaux de Vincent et
+                    Paul, pour en parler au client avant le contrat. Le créneau se réserve toujours à la
+                    déclaration de vente. Additif. */}
+                <button type="button" onClick={() => setOnbAvailOpen(true)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left', border: 'none', background: 'transparent',
+                    borderRadius: 8, padding: '4px 6px', margin: '-4px -6px', cursor: 'pointer', fontFamily: 'inherit', transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+                  <div style={{ width: 22, height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="m9 16 2 2 4-4"/></svg>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dispos onboarding</div>
+                    <div style={{ fontSize: 12, color: C.accent, fontWeight: 600 }}>Voir les créneaux de Vincent et Paul</div>
+                  </div>
+                </button>
                 {/* Mode MANUEL — donner ce lead à un setter (visible seulement si le sales
                     a au moins un setter en mode manuel ; 1 lead -> 1 setter). Additif. */}
                 {myManualSetters.length > 0 && (
@@ -9449,6 +9468,30 @@ export default function TrackingSheet() {
           </>
         );
       })(), document.body)}
+
+      {/* Dispos onboarding : même calendrier qu'à la déclaration de vente, en consultation seule. */}
+      {onbAvailOpen && createPortal(
+        <>
+          <div onClick={() => setOnbAvailOpen(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both' }} />
+          <div role="dialog" aria-modal="true" aria-label="Disponibilités onboarding" style={{
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
+            width: 680, maxWidth: '92vw', background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`,
+            boxShadow: '0 24px 48px rgba(0,0,0,0.2)', padding: '28px 28px 24px',
+            animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+          }}>
+            <button onClick={() => setOnbAvailOpen(false)} aria-label="Fermer"
+              style={{ position: 'absolute', top: 16, right: 16, width: 28, height: 28, borderRadius: '50%', border: 'none',
+                background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted, fontSize: 14,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+            <div style={{ textAlign: 'center', marginBottom: 18 }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Disponibilités onboarding</div>
+              <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Vincent ou Paul, et facturation · pour information, le créneau se réserve à la déclaration de vente</div>
+            </div>
+            <SaleSlotPicker kind="onboarding" value="" onChange={() => {}} readOnly C={C} darkMode={darkMode} />
+          </div>
+        </>, document.body)}
 
       {commentLeadId && <NotesDialog dark={darkMode} lead={leads.find(l=>l.id===commentLeadId)} value={editingNotes[commentLeadId]||''} onChange={value=>setEditingNotes(p=>({...p,[commentLeadId]:value}))} error={notesError?.leadId===commentLeadId?notesError.message:null} onClose={()=>{micCleanup();setCommentLeadId(null);}} onSave={async()=>{if(await handleNotesSave(commentLeadId)){micCleanup();setCommentLeadId(null);}}} recording={micRecording} transcribing={micTranscribing} micError={micError} onDictate={()=>{if(micRecording){const id=commentLeadId;micStopAndTranscribe(text=>setEditingNotes(p=>({...p,[id]:(p[id]?p[id]+' ':'')+text})));}else if(!micTranscribing)micStartRecording();}}/>}
       {contactDialog && <ContactQualificationDialog key={contactDialog.lead.id} {...contactDialog} dark={darkMode} onClose={() => setContactDialog(null)} onSave={async values => {
