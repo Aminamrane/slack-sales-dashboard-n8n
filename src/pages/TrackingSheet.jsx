@@ -6727,6 +6727,31 @@ export default function TrackingSheet() {
                     </div>
                   </a>
                 )}
+                {/* Setter qui a posé le RDV (demande dev 29/09) : le sales voit qui l'a placé et peut
+                    le contacter en cas de souci. Lecture seule, additif. */}
+                {(() => {
+                  const r1 = lead.r1_placed_by_setter_name;
+                  const r2 = lead.r2_placed_by_setter_name;
+                  const rows = r1 && r2 && r1 === r2
+                    ? [{ label: 'R1 et R2 posés par', name: r1, email: lead.r1_placed_by_setter_email || lead.r2_placed_by_setter_email }]
+                    : [r1 && { label: 'R1 posé par', name: r1, email: lead.r1_placed_by_setter_email },
+                       r2 && { label: 'R2 posé par', name: r2, email: lead.r2_placed_by_setter_email }].filter(Boolean);
+                  return rows.map((r) => (
+                    <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 22, height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{r.label}</div>
+                        <div style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>{r.name}</div>
+                        {r.email && (
+                          <a href={`mailto:${r.email}`} title={`Écrire à ${r.name}`}
+                            style={{ fontSize: 11.5, color: C.accent, fontWeight: 600, textDecoration: 'none', overflowWrap: 'anywhere' }}>{r.email}</a>
+                        )}
+                      </div>
+                    </div>
+                  ));
+                })()}
                 {/* Mode MANUEL — donner ce lead à un setter (visible seulement si le sales
                     a au moins un setter en mode manuel ; 1 lead -> 1 setter). Additif. */}
                 {myManualSetters.length > 0 && (
