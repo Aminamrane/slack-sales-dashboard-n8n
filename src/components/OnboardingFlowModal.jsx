@@ -26,7 +26,7 @@ const EASE = [0.16, 1, 0.3, 1];
 
 const STEPS = [
   { key: "situation", title: "Situation du client", hint: "Où en est le client, en finance et dans ses contrats" },
-  { key: "rdv", title: "Rendez-vous de lancement", hint: "Fiscal et social, normalement pris par le client" },
+  { key: "rdv", title: "Rendez-vous de lancement", hint: "Fiscal et social" },
   { key: "optilex", title: "Convention Opti'Lex", hint: "Signée, en attente, ou à relancer par Lisa" },
   { key: "meteo", title: "Météo d'onboarding", hint: "Votre note finalise la fiche d'intégration" },
   { key: "cloture", title: "Clôture", hint: "Réalisé, ou à recaler" },
@@ -151,7 +151,7 @@ function SituationStep({ brief, row }) {
 
 function RdvStep({ brief, onReschedule }) {
   const a = brief.appointments;
-  const item = (label, entry, responsable, kind) => (
+  const item = (label, entry, kind) => (
     <Card title={label} key={label}>
       {entry?.at ? (
         <Row label="Date" strong>{fmtDT(entry.at)}{entry.done ? <> <Pill color={GREEN}>effectué</Pill></> : null}</Row>
@@ -167,13 +167,8 @@ function RdvStep({ brief, onReschedule }) {
           {entry.meet_link && <CopyButton text={entry.meet_link} label="Copier le lien Meet" />}
         </div>
       )}
-      {responsable && (
-        <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.5, marginTop: 6 }}>
-          Normalement, ce rendez-vous est pris par le client sur sa plateforme avec {responsable}. Vous pouvez le placer ici avec lui, avec le même lien.
-        </div>
-      )}
-      {responsable && !entry?.at && <CopyLink url={entry?.link} />}
-      {responsable && !entry?.link && !entry?.at && <div style={{ fontSize: 12, color: AMBER, marginTop: 6 }}>Aucun lien de prise de rendez-vous pour ce client. Il sera créé au prochain passage automatique, sinon signalez-le.</div>}
+      {kind && !entry?.at && <CopyLink url={entry?.link} />}
+      {kind && !entry?.link && !entry?.at && <div style={{ fontSize: 12, color: AMBER, marginTop: 6 }}>Aucun lien de prise de rendez-vous pour ce client. Il sera créé au prochain passage automatique, sinon signalez-le.</div>}
     </Card>
   );
   return (
@@ -184,8 +179,8 @@ function RdvStep({ brief, onReschedule }) {
         {brief.onboarding.reschedule_pending && <Row label="Statut"><Pill color={AMBER}>à recaler</Pill></Row>}
       </Card>
       {item("Intégration Opti'Lex", a.lancement, null)}
-      {item("Lancement fiscal", a.fiscal, "Adam Bouchareb", "fiscal")}
-      {item("Lancement social", a.social, "Haci Moraru", "social")}
+      {item("Lancement fiscal", a.fiscal, "fiscal")}
+      {item("Lancement social", a.social, "social")}
     </>
   );
 }
