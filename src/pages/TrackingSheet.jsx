@@ -1,5 +1,6 @@
 import SaleReservation from '../components/integrationPreview/SaleReservation';
 import { fetchContractsOfLead, contractSentLine } from '../utils/leadContracts.js';
+import { isTypingTarget } from '../utils/typingTarget.js';
 import { AbsenceDialog } from "../components/absences/AbsencePanel";
 import { periodOnDay } from "../components/absences/absenceDates";
 import {hasGuidedSalesJourney} from '../utils/guidedSalesJourney';
@@ -2057,7 +2058,7 @@ export default function TrackingSheet() {
         return;
       }
       if (e.key === 'Escape' && spotlightOpen) { setSpotlightOpen(false); return; }
-      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+      if (isTypingTarget(document.activeElement)) return;
       if (e.key === 'ArrowRight') {
         e.preventDefault();
         handleTabChange(Math.min(activeTab + 1, CATEGORIES.length - 1));
