@@ -2523,6 +2523,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
   const [alertPrefill, setAlertPrefill] = useState(null);
   const [agendaOpen, setAgendaOpen] = useState(false); // pop-up "Agenda du client" (RDV standards + RDV juristes)
   const [reschedOpen, setReschedOpen] = useState(false); // pop-up "Recaler le RDV onboarding" (Vincent / facturation)
+  const [apptVersion, setApptVersion] = useState(0);      // recalage fait depuis le parcours : il relit ses RDV
   const [onboardingOpen, setOnboardingOpen] = useState(false); // parcours « Faire l'onboarding » (Client Success)
   // Antériorité emails : à l'ouverture d'une fiche, on enregistre les emails vus (Owner + Opti'Lex
   // courant par SIREN) dans l'historique -> on garde la trace même quand l'email change ensuite,
@@ -2821,8 +2822,9 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
 
           {agendaOpen && <ClientAgendaModal row={row} num={num} onClose={() => setAgendaOpen(false)} />}
           {onboardingOpen && <OnboardingFlowModal row={row} num={num} patch={patch} onClose={() => setOnboardingOpen(false)}
-            onRescheduleWithDate={() => setReschedOpen("onboarding")} onChanged={() => { reload(); reloadRatings?.(); }} />}
-          {reschedOpen && <ReschedOnboardingModal kind={reschedOpen} row={row} num={num} onClose={() => { setReschedOpen(false); reload(); }} onDone={() => { setReschedOpen(false); reload(); }} />}
+            onRescheduleWithDate={() => setReschedOpen("onboarding")} onReschedule={(kind) => setReschedOpen(kind)}
+            blocked={!!reschedOpen} refreshKey={apptVersion} onChanged={() => { reload(); reloadRatings?.(); }} />}
+          {reschedOpen && <ReschedOnboardingModal kind={reschedOpen} row={row} num={num} onClose={() => { setReschedOpen(false); setApptVersion((v) => v + 1); reload(); }} onDone={() => { setReschedOpen(false); setApptVersion((v) => v + 1); reload(); }} />}
 
           <DetailFold title="Facturation et suivi">
           {/* Jalons éditables (indisponibles tant que le client n'est pas établi) */}
