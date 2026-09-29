@@ -34,7 +34,7 @@ import {
   Edit3, Plus, Filter, ArrowUpDown, MoreHorizontal, Share2,
   CheckCircle, Sparkles, FileText, Users, Settings, Clock,
   XCircle, CircleDot, FilterX, Eye, Check, Star, Handshake, TriangleAlert, Download, Phone,
-  CircleDashed,
+  CircleDashed, MailCheck,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
@@ -47,6 +47,7 @@ import CreancesExitBanner from './components/CreancesExitBanner.jsx';
 import CallsView from './components/CallsView.jsx';
 import ValidationsView from './components/ValidationsView.jsx';
 import PromisesView from './components/PromisesView.jsx';
+import SequencesView from './components/SequencesView.jsx';
 // Icônes de navigation dessinées pour la page (barre latérale, onglets,
 // filtre responsable) : filaires, monochromes, dans l'esprit de la référence
 // donnée par le dev (2026-09-03). Pas de bibliothèque : le trait est le nôtre.
@@ -1109,6 +1110,7 @@ export default function TrackingSheetFinance() {
           { id: 'receipts', label: 'Encaissements', Icon: InboxIcon,   active: activeTab === 'receipts', action: () => setActiveTab('receipts') },
           { id: 'losses',   label: 'Pertes',        Icon: LossIcon,    active: activeTab === 'losses',   action: () => setActiveTab('losses') },
           { id: 'promises', label: 'Promesses de règlement', Icon: Handshake, active: activeTab === 'promises', action: () => setActiveTab('promises'), count: promiseRows.length || undefined },
+          { id: 'sequences', label: 'Suivi des séquences', Icon: MailCheck, active: activeTab === 'sequences', action: () => setActiveTab('sequences') },
           ...(canViewCalls ? [{ id: 'calls', label: 'Tracking des appels', Icon: Phone, active: activeTab === 'calls', action: () => setActiveTab('calls') }] : []),
           ...(canValidate ? [{ id: 'validations', label: 'Validations', Icon: CheckCircle2, active: activeTab === 'validations', action: () => setActiveTab('validations'), count: pendingValidations || undefined }] : []),
         ],
@@ -1206,7 +1208,7 @@ export default function TrackingSheetFinance() {
           <TitleBlock
             kpis={kpis}
             loading={loading}
-            showKpis={activeTab !== 'calls' && activeTab !== 'validations' && activeTab !== 'promises'}
+            showKpis={activeTab !== 'calls' && activeTab !== 'validations' && activeTab !== 'promises' && activeTab !== 'sequences'}
             view={activeTab === 'all' ? viewFilter : 'all'}
             pendingCount={exportedRows.filter((r) => r.pending).length}
           />
@@ -1326,6 +1328,8 @@ export default function TrackingSheetFinance() {
                 <ReceiptsView scope={scope} onOpenClient={openClientById} />
               ) : activeTab === 'promises' ? (
                 <PromisesView scope={scope} onOpenClient={openClientById} />
+              ) : activeTab === 'sequences' ? (
+                <SequencesView onOpenClient={openClientById} />
               ) : (
               <TableView
                 rows={filteredRows}
@@ -2900,14 +2904,16 @@ function TabRow({
     // Les clients qui ont promis de régler (dev 2026-09-28).
     { key: 'promises', label: 'Promesses de règlement', Icon: Handshake, count: promiseCount,
       countTitle: `${promiseCount} client${promiseCount > 1 ? 's' : ''} avec une promesse de règlement` },
+    // Les emails et SMS envoyés par la finance : remise, ouvertures (dev 2026-09-29).
+    { key: 'sequences', label: 'Séquences', Icon: MailCheck },
     ...(canViewCalls ? [{ key: 'calls', label: 'Tracking des appels', Icon: Phone }] : []),
     // Les demandes de l'équipe finance à valider (dev 2026-09-23).
     ...(canValidate ? [{ key: 'validations', label: 'Validations', Icon: CheckCircle2, count: pendingValidations }] : []),
   ];
 
-  // Scope, mois, recherche, filtres, export : sans objet sur les appels et
-  // les validations. Leur ligne reste là, vide, pour que rien ne bouge.
-  const showTools = activeTab !== 'calls' && activeTab !== 'validations';
+  // Scope, mois, recherche, filtres, export : sans objet sur les appels, les
+  // validations et les séquences. Leur ligne reste là, vide, pour que rien ne bouge.
+  const showTools = activeTab !== 'calls' && activeTab !== 'validations' && activeTab !== 'sequences';
 
   return (
     <>
