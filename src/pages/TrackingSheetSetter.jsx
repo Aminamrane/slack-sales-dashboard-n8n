@@ -10,9 +10,10 @@ import { leadAvatar } from "../utils/leadAvatar";
 import LeadsManagement from "./LeadsManagement.jsx";
 // ── Setter modales (Option B duplication intégrale TrackingSheet) ──────────
 import SetterJourneyDialog from "../components/setter/SetterJourneyDialog.jsx";
-import {Phone, CalendarDays, ChevronRight, UserSearch, ListChecks} from "lucide-react";
+import {Phone, CalendarDays, ChevronRight, UserSearch, ListChecks, UsersRound} from "lucide-react";
 import ProspectSearch from "../components/setter/prospection/ProspectSearch.jsx";
 import ProspectLists from "../components/setter/prospection/ProspectLists.jsx";
+import SetterTeamPerf from "../components/setter/SetterTeamPerf.jsx";
 import CreateColdLeadModal from "../components/setter/CreateColdLeadModal.jsx";
 import SetterOnboarding from "../components/SetterOnboarding.jsx";
 import "../index.css";
@@ -974,6 +975,8 @@ export default function TrackingSheetSetter() {
   const currentUser = apiClient.getUser();
   const canManageSheets = currentUser?.role === 'admin' || currentUser?.role === 'head_of_sales' || currentUser?.role === 'head_of_sales_manager';
   const canManageLeads = currentUser?.role === 'admin' || currentUser?.role === 'head_of_sales_manager';
+  // Onglet « Équipe setters » : le manager des setters (+ admin, CEO), même garde côté API.
+  const canSeeTeamPerf = ['setter_manager', 'admin', 'ceo'].includes(currentUser?.role);
   const isAdmin = currentUser?.role === 'admin';
 
   const fetchAllSheets = async () => {
@@ -2548,6 +2551,7 @@ export default function TrackingSheetSetter() {
               { key: 'email', label: 'Relance', iconSrc: iconEmail, accent: C.accent },
               { key: 'campaigns', label: 'Campagnes', iconSrc: iconCampaigns, accent: '#f59e0b' },
               { key: 'kpis', label: 'KPIs & Stats', iconSrc: iconKpis, accent: '#6366f1' },
+              ...(canSeeTeamPerf ? [{ key: 'team_perf', label: 'Équipe setters', icon: <UsersRound size={20} strokeWidth={1.8} style={{ display: 'block', margin: '0 auto' }} />, accent: C.accent }] : []),
               ...(canManageLeads ? [{ key: 'leads_management', label: 'Gestion des leads', iconSrc: iconFuse, accent: '#6366f1', keepColor: true, iconSize: 19 }] : []),
               ...(canManageSheets ? [{ key: 'sheets', label: 'Tracking Sheets', iconSrc: iconSheets, accent: '#8b5cf6' }] : []),
             ].map(item => {
@@ -2890,6 +2894,18 @@ export default function TrackingSheetSetter() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {sidebarView === 'team_perf' && canSeeTeamPerf && (
+          <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
+              Équipe setters
+            </h2>
+            <p style={{ fontSize: 13, color: C.muted, margin: '0 0 24px' }}>
+              Appels Allo et rendez-vous posés par chaque setter, jour par jour.
+            </p>
+            <SetterTeamPerf C={C} darkMode={darkMode} />
           </div>
         )}
 
