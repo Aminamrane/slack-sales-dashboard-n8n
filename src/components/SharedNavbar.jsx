@@ -7,6 +7,7 @@ import { notificationTarget, notificationPlacement, freshNotifications } from '.
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import apiClient from "../services/apiClient";
+import { isTypingTarget } from '../utils/typingTarget.js';
 import lightIcon from "../assets/light.png";
 import darkIcon from "../assets/dark.png";
 import meetIcon from "../assets/meet.png";
@@ -438,8 +439,8 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
   // ── KEYBOARD SHORTCUT ───────────────────────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Shift+S → TrackingSheet (ignore if typing in an input/textarea, and only if user has access)
-      if (e.shiftKey && e.key === 'S' && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+      // Shift+S → TrackingSheet (jamais pendant une saisie, éditeur enrichi compris ; seulement si l'accès existe)
+      if (e.shiftKey && e.key === 'S' && !isTypingTarget(document.activeElement)) {
         if (apiClient.hasAccess('tracking_sheet')) {
           e.preventDefault();
           navigate('/tracking-sheet');
