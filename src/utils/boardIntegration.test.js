@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { matchesUpcomingIntegration, matchesOverdueOnboarding, matchesUpcomingOnboarding, parisWallTime } from './boardIntegration.js';
+import { matchesUpcomingIntegration, matchesOverdueOnboarding, matchesUpcomingOnboarding, onboardingDateOf, parisWallTime } from './boardIntegration.js';
 const row = { numero_client: '42', rdv_lancement_date: '2026-09-30T10:00:00', rdv_lancement_done: false };
 test('both withdrawal states are excluded from upcoming and overdue integration', () => {
     for (const state of ['En cours de rétractation', 'Rétractation']) {
@@ -32,4 +32,16 @@ test('onboarding overdue is a subset of upcoming appointments, not historical ba
 });
 test('Paris wall clock preserves CRM appointment hour convention', () => {
     assert.equal(parisWallTime(new Date('2026-09-16T07:53:00Z')),'2026-09-16T09:53:00');
+});
+
+test('a done onboarding counts on the day it was done, others on their planned day', () => {
+    // Sarah Ruiz n°341 : signée en 2025, onboarding réalisé le 25/09/2026.
+    const planned = { rdv_onboarding_date: '2026-09-24T14:30:00+00:00' };
+    assert.equal(onboardingDateOf(planned), '2026-09-24');
+    assert.equal(onboardingDateOf({ ...planned, rdv_onboarding_date_manual: '2026-09-26' }), '2026-09-26');
+    assert.equal(onboardingDateOf({ ...planned, rdv_onboarding_done: true, rdv_onboarding_done_date: '2026-10-01' }), '2026-10-01');
+    assert.equal(onboardingDateOf({ rdv_onboarding_done: true, rdv_onboarding_done_date: '2026-09-25' }), '2026-09-25');
+    // Un onboarding annulé garde sa date prévue, pas une ancienne date de réalisation.
+    assert.equal(onboardingDateOf({ ...planned, rdv_onboarding_done: false, rdv_onboarding_done_date: '2026-10-01' }), '2026-09-24');
+    assert.equal(onboardingDateOf({ rdv_onboarding_done: true }), null);
 });

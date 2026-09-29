@@ -8,7 +8,7 @@ import { appointmentConfirmation, appointmentFailure } from "../utils/appointmen
 import { ClientMissions, DetailFold, DetailText } from "../components/OptilexClientDetail";
 import MentionTextarea, { MentionedText } from "../components/MentionTextarea";
 import { mentionedIds, notifiedSummary } from "../utils/mentions.js";
-import { matchesUpcomingIntegration, matchesUpcomingOnboarding, matchesOverdueOnboarding, parisWallTime } from "../utils/boardIntegration.js";
+import { matchesUpcomingIntegration, matchesUpcomingOnboarding, matchesOverdueOnboarding, onboardingDateOf, parisWallTime } from "../utils/boardIntegration.js";
 import { matchesSignedClient, resolvePendingExit } from "../utils/boardClientState.js";
 import { Fragment, useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -798,7 +798,7 @@ function SigDateFilter({ from, to, onChange, months = [], target = "signature", 
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={active ? "#fff" : MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
         </svg>
-        {active ? label : (isOnb ? "Date onboarding" : "Date signature")}
+        {active ? `${isOnb ? "Onboarding" : "Signature"} · ${label}` : (isOnb ? "Date onboarding" : "Date signature")}
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={active ? "rgba(255,255,255,0.75)" : MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
           style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.16s ease", flexShrink: 0 }}>
           <polyline points="6 9 12 15 18 9" />
@@ -1046,13 +1046,9 @@ export default function OptilexBoard({ embed = false }) {
       // Filtre date de signature Owner (mois ou période). Une ligne sans date de
       // signature est exclue dès qu'un filtre date est actif.
       if (sigRange.from || sigRange.to) {
-        // Filtre onboarding actif -> la plage porte sur la date d'ONBOARDING
-        // (« les onboarding à effectuer sur cette période »), sinon sur la date
-        // de signature Owner (comportement historique).
-        const onbRaw = r.rdv_onboarding_date_manual || r.rdv_onboarding_date;
-        const d = dateTarget === "onboarding"
-          ? (onbRaw ? String(onbRaw).slice(0, 10) : null)
-          : sigDateOf(r);
+        // Cible « Onboarding » (choisie dans le menu) -> la plage porte sur la date d'onboarding,
+        // sinon sur la date de signature Owner (comportement historique).
+        const d = dateTarget === "onboarding" ? onboardingDateOf(r) : sigDateOf(r);
         if (!d) return false;
         if (sigRange.from && d < sigRange.from) return false;
         if (sigRange.to && d > sigRange.to) return false;
@@ -1063,7 +1059,7 @@ export default function OptilexBoard({ embed = false }) {
       }
       return true;
     });
-  }, [rows, etatFilter, multiFilter, sigRange, q, integrationView, programmeSel, onboardingSel]);
+  }, [rows, etatFilter, multiFilter, sigRange, dateTarget, q, integrationView, programmeSel, onboardingSel]);
 
   // Compteurs par bande météo (rouge 1-2 / orange 3 / vert 4-5 / "none" = non noté), calculés
   // sur la base pré-météo -> le nombre affiché sur chaque chip ne bouge pas quand on coche.
@@ -1131,10 +1127,7 @@ export default function OptilexBoard({ embed = false }) {
   // restent sur tel mois », y compris des dates déjà passées jamais traitées.
   const onbMonths = useMemo(() => {
     const set = new Set();
-    for (const r of rows) {
-      const d = r.rdv_onboarding_date_manual || r.rdv_onboarding_date;
-      if (d) set.add(String(d).slice(0, 7));
-    }
+    for (const r of rows) { const d = onboardingDateOf(r); if (d) set.add(d.slice(0, 7)); }
     return [...set].sort().reverse();
   }, [rows]);
 
@@ -1661,8 +1654,9 @@ const roleOf = () => { try { return (apiClient.getUser() || {}).role; } catch { 
 
 // Onglet Détails allégé pour le Client Success : l'état de l'onboarding en une carte et un seul
 // bouton « Faire l'onboarding » ; les rendez-vous de lancement, la convention et la météo
-// vivent dans le parcours. Les autres rôles gardent les lignes détaillées.
-function OnboardingCard({ row, onStart, onManualDone }) {
+// vivent dans le parcours. Les autres rôles gardent les lignes détaillées. Les RDV fiscal et
+// social se reprogramment aussi d'ici (client absent, Vincent 29/09).
+function OnboardingCard({ row, onStart, onManualDone, onReschedule }) {
   const reduce = useReducedMotion();
   const date = row.rdv_onboarding_date_manual || row.rdv_onboarding_date;
   const done = !!row.rdv_onboarding_done;
@@ -1670,6 +1664,8 @@ function OnboardingCard({ row, onStart, onManualDone }) {
   const doneDate = row.rdv_onboarding_done_date || date;
   const [manualOpen, setManualOpen] = useState(false);
   const [manualDate, setManualDate] = useState("");
+  const todayParis = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
+  const plannedDay = date ? String(date).slice(0, 10) : "";
   const pending = !!row.onboarding_reschedule_pending && !done;
   const tone = done ? GREEN : pending ? "#b45309" : NAVY;
   const status = done ? `Onboarding réalisé${doneDate ? ` · ${fmtDT(doneDate)}` : ""}`
@@ -1677,8 +1673,8 @@ function OnboardingCard({ row, onStart, onManualDone }) {
     : date ? `Prévu le ${fmtDT(date)}` : "Aucune date d'onboarding";
   const rdv = [
     ["Intégration Opti'Lex", row.rdv_lancement_date, row.rdv_lancement_done],
-    ["Lancement fiscal", row.rdv_fiscal_date_manual || row.rdv_fiscal_date, row.rdv_fiscal_done],
-    ["Lancement social", row.rdv_social_date_manual || row.rdv_social_date, row.rdv_social_done],
+    ["Lancement fiscal", row.rdv_fiscal_date_manual || row.rdv_fiscal_date, row.rdv_fiscal_done, "fiscal"],
+    ["Lancement social", row.rdv_social_date_manual || row.rdv_social_date, row.rdv_social_done, "social"],
   ];
   return (
     <div style={{ marginBottom: 22, padding: "14px 16px", borderRadius: 12, border: `1px solid ${BORDER}`, background: "#fafbfc" }}>
@@ -1706,23 +1702,28 @@ function OnboardingCard({ row, onStart, onManualDone }) {
         </motion.button>
       </div>
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 10, fontSize: 12, color: MUTED }}>
-        {rdv.map(([label, d, ok]) => (
-          <span key={label}>{label} : <strong style={{ color: d ? TEXT : "#cbd2e0" }}>{fmtDT(d) || "à placer"}</strong>{ok ? " ✓" : ""}</span>
+        {rdv.map(([label, d, ok, kind]) => (
+          <span key={label}>{label} : <strong style={{ color: d ? TEXT : "#cbd2e0" }}>{fmtDT(d) || "à placer"}</strong>{ok ? " ✓" : ""}
+            {kind && d && !ok && onReschedule && (
+              <button type="button" className="ob-detail-link" onClick={() => onReschedule(kind)} style={{ padding: 0, margin: "0 0 0 6px" }}>Reprogrammer</button>
+            )}
+          </span>
         ))}
       </div>
-      {/* Exception anciens clients (dev 28/09/2026) : onboarding déjà fait hors parcours. Pur suivi :
-          ni agenda, ni facturation (champ rdv_onboarding_done_date, distinct de la date du RDV). */}
+      {/* Onboarding réalisé sans le parcours (anciens clients 28/09/2026, tout client 29/09/2026) :
+          date proposée = date prévue si elle est passée, sinon aujourd'hui. Pur suivi : ni agenda,
+          ni facturation (champ rdv_onboarding_done_date, distinct de la date du RDV). */}
       {!done && onManualDone && (!manualOpen ? (
-        <button type="button" onClick={() => { setManualDate(""); setManualOpen(true); }}
+        <button type="button" onClick={() => { setManualDate(plannedDay && plannedDay <= todayParis ? plannedDay : todayParis); setManualOpen(true); }}
           style={{ marginTop: 10, padding: 0, border: "none", background: "transparent", color: MUTED, fontSize: 12, fontFamily: "inherit", cursor: "pointer", textDecoration: "underline" }}>
-          Ancien client : onboarding déjà réalisé ?
+          Marquer l'onboarding réalisé sans le parcours
         </button>
       ) : (
         <form onSubmit={(e) => { e.preventDefault(); if (manualDate) { onManualDone(manualDate); setManualOpen(false); } }}
           style={{ marginTop: 10, padding: 12, borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD }}>
           <label style={{ display: "block", fontSize: 12, fontWeight: 650, color: TEXT }}>
             Date de l'onboarding réalisé
-            <input type="date" required autoFocus value={manualDate} max={new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" })}
+            <input type="date" required autoFocus value={manualDate} max={todayParis}
               onChange={(e) => setManualDate(e.target.value)}
               style={{ display: "block", marginTop: 6, padding: "7px 10px", border: `1px solid ${BORDER}`, borderRadius: 8, fontFamily: "inherit", fontSize: 13, color: TEXT, background: CARD }} />
           </label>
@@ -2613,7 +2614,8 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
           {ONBOARDING_FLOW_ROLES.includes(roleOf()) && !!num ? (
             // Onglet Détails allégé (dev 24/09/2026) : un seul bouton, le reste vit dans le parcours.
             <OnboardingCard row={row} onStart={() => setOnboardingOpen(true)}
-              onManualDone={(d) => patch(num, { rdv_onboarding_done: true, rdv_onboarding_done_date: d })} />
+              onManualDone={(d) => patch(num, { rdv_onboarding_done: true, rdv_onboarding_done_date: d })}
+              onReschedule={(kind) => setReschedOpen(kind)} />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
               <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date_manual || row.rdv_onboarding_date || row.rdv_onboarding_done_date} done={row.rdv_onboarding_done}
