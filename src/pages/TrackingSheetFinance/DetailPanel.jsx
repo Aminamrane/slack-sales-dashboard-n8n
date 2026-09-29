@@ -82,7 +82,7 @@ import {
   scopedPeriodAmounts,
   isExitCandidate,
   deferralsByMonth,
-  shiftsByMonth,
+  reportsByMonth,
   deMonthLabel,
 } from './constants.js';
 import { statementRows } from './pdf/statementRows.js';
@@ -458,9 +458,10 @@ export default function DetailPanel({
   // créance », dev 2026-09-07) : le mois déchargé n'est plus en retard, le
   // mois receveur porte la créance en plus de son attendu.
   const deferred = useMemo(() => deferralsByMonth(profile?.deferrals, scope), [profile?.deferrals, scope]);
-  // Reports d'échéancier (dev 2026-09-28) : le mois reporté n'attend plus
-  // rien, mais il reste dans l'échéancier pour dire où reprennent les paiements.
-  const shifted = useMemo(() => shiftsByMonth(profile?.billing_shifts, scope), [profile?.billing_shifts, scope]);
+  // Reports d'attendu (dev 2026-09-28) : le mois reporté n'attend plus rien
+  // mais reste dans l'échéancier pour dire où son attendu est parti ; le mois
+  // qui reçoit dit d'où vient ce qu'il porte en plus.
+  const reported = useMemo(() => reportsByMonth(profile?.reports, scope), [profile?.reports, scope]);
 
   const installments = useMemo(() => {
     const nowMonth = currentPeriod();
@@ -472,11 +473,12 @@ export default function DetailPanel({
       const month = String(p.period).slice(0, 7);
       const deferredOut = deferred[month]?.out || 0;
       const deferredIn = deferred[month]?.in || 0;
-      const gap = shifted[month]?.gap || null;
-      if (a.expected <= 0 && a.received <= 0 && deferredIn <= 0 && !p.expected_pause_active && !gap) continue;
+      const reportedTo = reported[month]?.to || [];
+      const reportedFrom = reported[month]?.from || [];
+      if (a.expected <= 0 && a.received <= 0 && deferredIn <= 0 && !p.expected_pause_active && !reportedTo.length) continue;
       const due = a.expected + deferredIn - deferredOut;
       let status;
-      if (gap && a.expected <= 0 && a.received <= 0) status = 'deferred';
+      if (reportedTo.length && a.expected <= 0 && a.received <= 0) status = 'deferred';
       else if (a.received >= due && a.received > 0) status = 'paid';
       else if (a.received > 0) status = 'partial';
       else if (deferredOut > 0 && due <= 0) status = 'deferred';
@@ -488,14 +490,13 @@ export default function DetailPanel({
       list.push({
         id: p.id, n: list.length + 1, month, status, ...a,
         deferredOut, deferredIn,
-        shiftTo: gap?.to_month || null,
-        shiftFrom: shifted[month]?.resume?.from_month || null,
+        reportedTo, reportedFrom,
         manual: !!p.expected_manual,
         pauseUntil: p.expected_paused_until || null,
       });
     }
     return list;
-  }, [visiblePeriods, scope, deferred, shifted]);
+  }, [visiblePeriods, scope, deferred, reported]);
 
   // (Le forfait mensuel dérivé des échéances a été retiré avec le « N × … »
   // de la modalité — 2026-08-25. La Formule affiche la tranche seule.)
@@ -1005,7 +1006,7 @@ export default function DetailPanel({
             periods={periods}
             deferrals={profile?.deferrals || []}
             outstanding={profile?.outstanding_corrections || []}
-            shifts={profile?.billing_shifts || []}
+            reports={profile?.reports || []}
             scope={scope}
             onDone={reloadAfterExit}
             onShowToast={onShowToast}
@@ -2130,16 +2131,20 @@ function installmentSubline(inst) {
   // Format long FR (« 12 mars 2026 ») — demande dev 2026-08-19.
   const date = inst.payDate ? formatDateLongFR(inst.payDate) : null;
   const monthLabel = formatMonthLabel(inst.month);
-  // Un attendu fixé à la main se signale : la grille ne le réécrira plus.
-  const manuel = inst.manual ? ' · fixé à la main' : '';
+  // Un attendu fixé à la main se signale : la grille ne le réécrira plus. Un
+  // report le fixe aussi, mais il se dit lui-même (d'où vient, où part).
+  const reportes = (inst.reportedTo?.length || 0) + (inst.reportedFrom?.length || 0);
+  const manuel = inst.manual && !reportes ? ' · fixé à la main' : '';
   // Une créance déplacée se lit sur les deux mois : d'où elle part, où elle arrive.
   const report = (inst.deferredOut > 0 ? ` · ${formatEUR(inst.deferredOut)} reportés sur un autre mois` : '')
     + (inst.deferredIn > 0 ? ` · ${formatEUR(inst.deferredIn)} reportés ici` : '')
-    + (inst.shiftFrom ? ` · reprise après report ${deMonthLabel(inst.shiftFrom)}` : '');
+    + (inst.reportedFrom?.length
+      ? ` · dont ${inst.reportedFrom.map((r) => `${formatEUR(r.amount)} reportés ${deMonthLabel(r.month)}`).join(', ')}`
+      : '');
   switch (inst.status) {
     case 'deferred':
-      return inst.shiftTo
-        ? `${monthLabel} · échéance reportée, reprise en ${formatMonthLabel(inst.shiftTo).toLowerCase()}`
+      return inst.reportedTo?.length
+        ? `${monthLabel} · attendu reporté sur ${inst.reportedTo.map((r) => formatMonthLabel(r.month).toLowerCase()).join(', ')}`
         : `${monthLabel} · créance reportée, attendu inchangé${manuel}`;
     case 'paused':
       return `${monthLabel} · en pause${inst.pauseUntil ? ` jusqu'au ${formatDateFR(inst.pauseUntil)}` : ', reprise à décider'}${manuel}`;
@@ -3271,8 +3276,7 @@ function FactsRow({ profile, boardRow, loss = null, promise = false, billingLast
     // montants attendus jusqu'à une date choisie », de façon visible). Une
     // rétractation annule tout depuis la signature : pas de fin à choisir.
     if (exitEtat !== 'Rétractation') {
-      // Le serveur la calcule, reports d'échéancier compris ; repli sur la date d'effet.
-      const auto = profile?.billing_last_month_auto || shiftMonth(isoDay(boardRow.etat_date).slice(0, 7), -1);
+      const auto = shiftMonth(isoDay(boardRow.etat_date).slice(0, 7), -1);
       const last = billingLastMonth || auto;
       items.push({
         icon: <CalendarRange size={12} />,

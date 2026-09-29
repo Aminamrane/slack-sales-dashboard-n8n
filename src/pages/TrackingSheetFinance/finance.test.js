@@ -436,24 +436,21 @@ test('un report de plusieurs mois garde chaque source', () => {
   assert.deepEqual(links['2026-12'].from, [{ month: '2026-10', amount: 20 }]);
 });
 
-// ── Reports d'échéancier : le mois reporté est vide, la reprise est nommée (28/09) ──
-import { shiftsByMonth } from './constants.js';
+// ── Reports d'attendu : juillet reporté sur août, n°687 (28/09) ──
+import { reportsByMonth } from './constants.js';
 
-test('un report vide ses mois et nomme le mois de reprise', () => {
-  const shifts = [{ id: 's1', entity: 'owner', from_month: '2026-08', to_month: '2026-10', months: 2 }];
-  const byMonth = shiftsByMonth(shifts, 'owner');
-  assert.equal(byMonth['2026-08'].gap.id, 's1');
-  assert.equal(byMonth['2026-09'].gap.id, 's1');
-  assert.equal(byMonth['2026-10'].gap, null);
-  assert.equal(byMonth['2026-10'].resume.id, 's1');
-  assert.deepEqual(shiftsByMonth(shifts, 'optilex'), {});
-  assert.equal(shiftsByMonth(shifts, 'global')['2026-09'].gap.id, 's1');
-});
-
-test('un report de décembre à janvier passe l’année', () => {
-  const byMonth = shiftsByMonth([{ id: 's', entity: 'optilex', from_month: '2026-12', to_month: '2027-01' }], 'optilex');
-  assert.deepEqual(Object.keys(byMonth).sort(), ['2026-12', '2027-01']);
-  assert.equal(byMonth['2027-01'].resume.id, 's');
+test('un report relie le mois reporté et le mois qui reçoit, avec le montant', () => {
+  const reports = [
+    { id: 'r1', entity: 'owner', from_month: '2026-07', to_month: '2026-08', amount: 539 },
+    { id: 'r2', entity: 'owner', from_month: '2026-09', to_month: '2026-10', amount: 18.5 },
+    { id: 'r3', entity: 'optilex', from_month: '2026-07', to_month: '2026-08', amount: 50 },
+  ];
+  const owner = reportsByMonth(reports, 'owner');
+  assert.deepEqual(owner['2026-07'], { to: [{ month: '2026-08', amount: 539 }], from: [] });
+  assert.deepEqual(owner['2026-08'], { to: [], from: [{ month: '2026-07', amount: 539 }] });
+  assert.deepEqual(owner['2026-10'].from, [{ month: '2026-09', amount: 18.5 }]);
+  assert.equal(reportsByMonth(reports, 'global')['2026-08'].from.length, 2);
+  assert.deepEqual(reportsByMonth(reports, 'optilex')['2026-09'], undefined);
 });
 
 import { deMonthLabel } from './constants.js';
