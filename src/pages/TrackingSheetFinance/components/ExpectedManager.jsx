@@ -14,14 +14,13 @@
 //   · RÉDUIRE    — appliquer une réduction du catalogue (un pourcentage nommé,
 //                  réutilisable d'un client à l'autre) à des mois choisis. Le
 //                  montant réduit est écrit, jamais recalculé à l'affichage.
-//   · REPORTER   — décaler l'échéancier (dev 2026-09-28 : « reporter, ça ne
-//                  veut pas dire additionner […] ça veut dire que j'ai reporté
-//                  les paiements »). Le mois reporté n'est plus attendu, les
-//                  paiements reprennent au mois CHOISI (jamais pré-rempli) à
-//                  leur montant normal, et la suite glisse d'autant. L'aperçu
-//                  vient du serveur, du même calcul que l'enregistrement.
-//                  Supprimer en perte est une option à part, qui retire
-//                  l'attendu sans le reporter.
+//   · REPORTER   — déplacer l'attendu (dev 2026-09-28 : « le report déplace
+//                  l'attendu, exactement, donc l'attendu arrive à zéro »). Les
+//                  mois cochés perdent ce qui leur reste dû, le mois CHOISI
+//                  (jamais pré-rempli) le reçoit en plus du sien : juillet
+//                  reporté sur août = juillet 0, août = 539 + 539. Le total dû
+//                  ne change pas. Supprimer en perte est une option à part,
+//                  qui retire l'attendu sans le reporter.
 //   · PAUSE      — suspendre l'exigibilité de mois : ils restent comptés dans
 //                  le contrat, mais ne créent ni retard ni créance tant que la
 //                  pause dure. Reprise à date, ou à la main.
@@ -49,7 +48,7 @@ import {
 } from 'lucide-react';
 
 import apiClient from '../../../services/apiClient.js';
-import { formatEUR, formatMonthLabel, formatDateFR, currentPeriod, deferralsByMonth, deferralLinks, outstandingByMonth, shiftsByMonth, deMonthLabel } from '../constants.js';
+import { formatEUR, formatMonthLabel, formatDateFR, currentPeriod, deferralsByMonth, deferralLinks, outstandingByMonth, reportsByMonth, deMonthLabel } from '../constants.js';
 
 const N = {
   text: '#37352f',
@@ -84,7 +83,7 @@ const fmtWhen = (iso) => {
 const MODES = [
   { key: 'edit',     label: 'Modifier',   Icon: Pencil,          hint: 'Fixer l’attendu, le reçu ou le reste dû d’un mois. La valeur fait foi : ni la grille ni le classeur ne la réécriront. Un reste dû corrigé devient un ajustement de créance : l’attendu et le reçu du mois ne bougent pas.' },
   { key: 'discount', label: 'Réduire',    Icon: Percent,         hint: 'Appliquer une réduction du catalogue à des mois. Réutilisable d’un client à l’autre.' },
-  { key: 'defer',    label: 'Reporter',   Icon: CornerDownRight, hint: 'Reporter une échéance décale l’échéancier : le mois reporté n’est plus attendu, les paiements reprennent au mois choisi à leur montant normal, et la suite glisse d’autant. Rien ne s’additionne. Supprimer en perte est une option à part.' },
+  { key: 'defer',    label: 'Reporter',   Icon: CornerDownRight, hint: 'Reporter déplace l’attendu : les mois cochés perdent ce qui leur reste dû, le mois de destination le reçoit en plus du sien. Le total dû ne change pas. Supprimer en perte est une option à part.' },
   { key: 'pause',    label: 'Pause',      Icon: PauseCircle,     hint: 'Suspendre l’exigibilité : les mois restent comptés, sans retard ni créance tant que la pause dure.' },
   { key: 'history',  label: 'Historique', Icon: History,         hint: 'Chaque geste peut être annulé tant que ses mois n’ont pas été retouchés depuis : l’état d’avant revient au centime.' },
 ];
@@ -130,8 +129,8 @@ export default function ExpectedManager({
   canApply = true,
   // Corrections du reste dû déjà posées (profil, kind 'outstanding').
   outstanding = [],
-  // Reports d'échéancier en vigueur (profil, `billing_shifts`).
-  shifts = [],
+  // Reports d'attendu en vigueur (profil, `reports`).
+  reports = [],
   currentUserId = null,
 }) {
   const [entity, setEntity] = useState(scope === 'optilex' ? 'optilex' : 'owner');
@@ -147,13 +146,9 @@ export default function ExpectedManager({
   // Demandes de modification sur ce client (équipe → direction).
   const [requests, setRequests] = useState(null);
   const [lastRequest, setLastRequest] = useState(null);
-  // Onglet Reporter : décaler l'échéancier ('shift') ou supprimer en perte ('loss').
-  const [deferKind, setDeferKind] = useState('shift');
-  const [shiftFrom, setShiftFrom] = useState('');   // 'YYYY-MM' : échéance reportée
-  const [shiftTo, setShiftTo] = useState('');       // 'YYYY-MM' : reprise des paiements
-  const [shiftPreview, setShiftPreview] = useState(null);
-  const [shiftError, setShiftError] = useState('');
-  const [shiftLoading, setShiftLoading] = useState(false);
+  // Onglet Reporter : déplacer l'attendu ('report') ou le supprimer en perte ('loss').
+  const [deferKind, setDeferKind] = useState('report');
+  const [deferTo, setDeferTo] = useState('');       // id du mois de destination
   const [pauseUntil, setPauseUntil] = useState('');
   // Ce que le client doit sur les mois en pause : 'later' (à rattraper) ou
   // 'never' (rien dû, part en perte). Ça dépend de la situation de la société.
@@ -186,9 +181,8 @@ export default function ExpectedManager({
     setRecDrafts({});
     setResteDrafts({});
     setPlan({ amount: '', months: '3', from: '', toEnd: false });
-    setDeferKind('shift');
-    setShiftFrom('');
-    setShiftTo('');
+    setDeferKind('report');
+    setDeferTo('');
     setPauseUntil('');
     setPauseOwed('later');
     setReason('');
@@ -250,12 +244,8 @@ export default function ExpectedManager({
   const links = useMemo(() => deferralLinks(deferrals, entity), [deferrals, entity]);
   // Corrections du reste dû, ramenées au mois corrigé.
   const corrections = useMemo(() => outstandingByMonth(outstanding, entity), [outstanding, entity]);
-  // Reports d'échéancier : mois vidés et mois de reprise, dans l'entité choisie.
-  const shifted = useMemo(() => shiftsByMonth(shifts, entity), [shifts, entity]);
-  // Un nouveau report se pose après le dernier : sinon il décalerait l'autre.
-  const lastResume = useMemo(() => (shifts || [])
-    .filter((x) => x.entity === entity).reduce((m, x) => (x.to_month > m ? x.to_month : m), ''),
-  [shifts, entity]);
+  // Reports d'attendu : où l'attendu du mois est parti, d'où vient ce qu'il reçoit.
+  const reported = useMemo(() => reportsByMonth(reports, entity), [reports, entity]);
   const rows = useMemo(() => {
     // Mois par mois, dans l'ordre : un mois qui reçoit un report ne reçoit que
     // ce que le mois d'origine devait vraiment (même règle que le moteur du
@@ -292,10 +282,10 @@ export default function ExpectedManager({
         if (deferredOut > 0) applied[key] = reportApplique / deferredOut;
         const reste = round2(Math.max(avantReport - reportApplique, 0));
         const pauseActive = !!p.expected_pause_active;
-        const shiftGap = shifted[key]?.gap || null;
-        const shiftResume = shifted[key]?.resume || null;
+        const reportedTo = reported[key]?.to || [];
+        const reportedFrom = reported[key]?.from || [];
         let status = 'none';
-        if (shiftGap && attendu === 0 && recu === 0) {
+        if (reportedTo.length && attendu === 0 && recu === 0) {
           status = 'deferred';
         } else if (attendu > 0 || recu > 0 || effectiveIn > 0) {
           if (recu >= attendu + effectiveIn && recu > 0) status = 'paid';
@@ -310,7 +300,7 @@ export default function ExpectedManager({
         return {
           id: p.id, key, label: formatMonthLabel(key),
           attendu, recu, recuMois, recuCreances, reste, status, deferredOut, deferredIn, corrected,
-          deferTo, deferFrom, effectiveIn, shiftGap, shiftResume,
+          deferTo, deferFrom, effectiveIn, reportedTo, reportedFrom,
           // Report posé mais sans effet (ou en partie) : le mois a changé depuis.
           reportSansEffet: round2(deferredOut - reportApplique),
           pendingRequest: pendingMonths.has(key),
@@ -321,7 +311,7 @@ export default function ExpectedManager({
           passe: key < nowKey, courant: key === nowKey, futur: key > nowKey,
         };
       });
-  }, [periods, f, nowKey, deferred, links, corrections, shifted, pendingMonths]);
+  }, [periods, f, nowKey, deferred, links, corrections, reported, pendingMonths]);
 
   const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
 
@@ -329,13 +319,12 @@ export default function ExpectedManager({
   const selectable = useCallback((r) => {
     switch (mode) {
       case 'discount': return r.status !== 'paid' && r.attendu > 0;
-      case 'defer':    return deferKind === 'shift'
-        ? r.attendu > 0 && r.recuMois === 0 && !r.shiftGap && (!lastResume || r.key >= lastResume)
-        : !r.futur && r.reste > 0;
+      // Reporter : tout mois qui doit encore quelque chose, mois en cours compris.
+      case 'defer':    return deferKind === 'report' ? r.reste > 0 : !r.futur && r.reste > 0;
       case 'pause':    return r.status !== 'paid' && r.attendu > 0 && !r.pauseActive;
       default:         return false;
     }
-  }, [mode, deferKind, lastResume]);
+  }, [mode, deferKind]);
 
   // Sélection par défaut : ce sur quoi le geste s'applique le plus souvent.
   useEffect(() => {
@@ -347,48 +336,18 @@ export default function ExpectedManager({
     setDrafts({});
     setRecDrafts({});
     setResteDrafts({});
-    // Le mois de reprise d'un report se choisit toujours à la main.
-    if (mode === 'defer') { setShiftFrom(''); setShiftTo(''); }
+    // Le mois de destination d'un report se choisit toujours à la main.
+    if (mode === 'defer') setDeferTo('');
   }, [open, mode, entity, deferKind]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deferIsLoss = mode === 'defer' && deferKind === 'loss';
-  const isShift = mode === 'defer' && deferKind === 'shift';
-  const toggle = (id) => {
-    if (isShift) {
-      const key = byId.get(id)?.key;
-      if (!key) return;
-      setShiftFrom(key);
-      setShiftTo((to) => (to && to > key ? to : ''));
-      return;
-    }
-    setSelected((s) => {
-      const next = new Set(s);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-  // Mois de reprise possibles : après le mois reporté, dans l'échéancier connu.
-  const resumeOptions = shiftFrom ? rows.filter((r) => r.key > shiftFrom).slice(0, 24) : [];
-  const shiftToLabel = shiftTo ? formatMonthLabel(shiftTo) : '';
-  const previewByKey = useMemo(() => {
-    const map = {};
-    for (const m of shiftPreview?.months || []) map[m.period] = m;
-    return map;
-  }, [shiftPreview]);
-
-  // Aperçu serveur : le même calcul que l'enregistrement, rien n'est écrit.
-  useEffect(() => {
-    setShiftPreview(null);
-    setShiftError('');
-    if (!open || !isShift || !shiftFrom || !shiftTo) return undefined;
-    let alive = true;
-    setShiftLoading(true);
-    apiClient.post(`${base}/billing-shift/preview`, { entity, from_month: shiftFrom, to_month: shiftTo })
-      .then((d) => { if (alive) setShiftPreview(d); })
-      .catch((e) => { if (alive) setShiftError(e?.data?.detail || 'Aperçu indisponible'); })
-      .finally(() => { if (alive) setShiftLoading(false); });
-    return () => { alive = false; };
-  }, [open, isShift, shiftFrom, shiftTo, entity, base]);
+  const isReport = mode === 'defer' && deferKind === 'report';
+  const toggle = (id) => setSelected((s) => {
+    if (isReport && id === deferTo) return s;
+    const next = new Set(s);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
 
   // ── Réduction choisie ────────────────────────────────────────────────
   const discount = useMemo(
@@ -444,6 +403,27 @@ export default function ExpectedManager({
   [resteDrafts, byId]);
   const picked = useMemo(() => rows.filter((r) => selected.has(r.id)), [rows, selected]);
   const deferTotal = round2(picked.reduce((s, r) => s + round2(drafts[r.id] ?? r.reste), 0));
+  // Mois de destination possibles : après le dernier mois coché.
+  const lastPicked = picked.reduce((m, r) => (r.key > m ? r.key : m), '');
+  const targetOptions = lastPicked ? rows.filter((r) => r.key > lastPicked) : [];
+  const deferTarget = deferTo ? byId.get(deferTo) : null;
+  useEffect(() => {
+    if (deferTarget && lastPicked && deferTarget.key <= lastPicked) setDeferTo('');
+  }, [deferTarget, lastPicked]);
+  // Ce que le report va faire, comme le serveur : chaque mois coché perd au plus
+  // ce qui lui reste dû, le mois de destination reçoit la somme en plus du sien.
+  const reportPlan = useMemo(() => {
+    if (!isReport || !deferTarget) return null;
+    const moves = picked
+      .map((r) => ({ r, moved: round2(Math.min(round2(drafts[r.id] ?? r.reste), r.reste)) }))
+      .filter((m) => m.moved > 0);
+    if (!moves.length) return null;
+    const total = round2(moves.reduce((acc, m) => acc + m.moved, 0));
+    const after = {};
+    for (const { r, moved } of moves) after[r.id] = round2(r.attendu - moved);
+    after[deferTarget.id] = round2(deferTarget.attendu + total);
+    return { moves, total, after };
+  }, [isReport, deferTarget, picked, drafts]);
   const pausedRows = rows.filter((r) => r.pauseActive);
   const editCount = edits.length + recEdits.length + resteEdits.length;
 
@@ -476,9 +456,7 @@ export default function ExpectedManager({
   const ready = (() => {
     if (mode === 'edit') return editCount > 0;
     if (mode === 'discount') return !!discount && picked.length > 0;
-    if (mode === 'defer') return deferIsLoss
-      ? deferTotal > 0
-      : !!shiftFrom && !!shiftTo && !!shiftPreview && !shiftError && !shiftLoading;
+    if (mode === 'defer') return deferIsLoss ? deferTotal > 0 : !!reportPlan;
     if (mode === 'pause') return picked.length > 0;
     return false;
   })();
@@ -492,9 +470,9 @@ export default function ExpectedManager({
       ? `${p}appliquer −${discount.percent} % sur ${picked.length} mois` : 'Choisir une réduction';
     if (mode === 'defer') {
       if (deferIsLoss) return deferTotal ? `${p}supprimer ${formatEUR(deferTotal)} (perte)` : 'Cocher des mois';
-      if (!shiftFrom) return 'Choisir l’échéance à reporter';
-      if (!shiftTo) return 'Choisir le mois de reprise';
-      return `${p}reporter l’échéance ${deMonthLabel(shiftFrom)} à ${shiftToLabel.toLowerCase()}`;
+      if (!picked.length) return 'Cocher les mois à reporter';
+      if (!deferTarget) return 'Choisir le mois de destination';
+      return `${p}reporter ${formatEUR(reportPlan?.total ?? deferTotal)} sur ${deferTarget.label.toLowerCase()}`;
     }
     if (mode === 'pause') return picked.length
       ? (pauseOwed === 'never' ? `${p}mettre en pause ${picked.length} mois, rien dû` : `${p}mettre en pause ${picked.length} mois`)
@@ -575,12 +553,14 @@ export default function ExpectedManager({
         });
         afterSuccess(`${formatEUR(r?.retire ?? deferTotal)} supprimé (perte)`, [r]);
       } else if (mode === 'defer') {
-        const r = await apiClient.post(`${base}/billing-shift`, {
-          entity, from_month: shiftFrom, to_month: shiftTo, reason: note,
+        const r = await apiClient.post(`${base}/expected-correction`, {
+          entity,
+          removals: reportPlan.moves.map(({ r: row, moved }) => ({ period_id: row.id, amount: moved })),
+          defer_to: deferTo,
+          reason: note,
         });
-        afterSuccess(`Échéance ${deMonthLabel(shiftFrom)} reportée : reprise des paiements en ${shiftToLabel.toLowerCase()}`, [r]);
-        setShiftFrom('');
-        setShiftTo('');
+        afterSuccess(`${formatEUR(r?.retire ?? reportPlan.total)} reporté sur ${deferTarget.label.toLowerCase()}`, [r]);
+        setDeferTo('');
       } else if (mode === 'pause') {
         const r = await apiClient.post(`${base}/expected/pause`, {
           periods: picked.map((row) => row.key), until: pauseUntil || null, reason: note, owed: pauseOwed,
@@ -592,7 +572,7 @@ export default function ExpectedManager({
     } finally {
       setSaving(false);
     }
-  }, [ready, saving, base, reason, mode, edits, recEdits, resteEdits, editCount, entity, picked, discount, deferIsLoss, shiftFrom, shiftTo, shiftToLabel, drafts, deferTotal, pauseUntil, pauseOwed, onShowToast]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, saving, base, reason, mode, edits, recEdits, resteEdits, editCount, entity, picked, discount, deferIsLoss, deferTo, deferTarget, reportPlan, drafts, deferTotal, pauseUntil, pauseOwed, onShowToast]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const resume = useCallback(async (keys) => {
     try {
@@ -800,32 +780,21 @@ export default function ExpectedManager({
                   <Segmented
                     value={deferKind}
                     onChange={setDeferKind}
-                    options={[{ key: 'shift', label: 'Reporter l’échéance' }, { key: 'loss', label: 'Supprimer (perte)' }]}
+                    options={[{ key: 'report', label: 'Reporter' }, { key: 'loss', label: 'Supprimer (perte)' }]}
                   />
                 </div>
-                {deferKind === 'shift' ? (
+                {deferKind === 'report' ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 12, color: N.textMuted }}>Reporter l’échéance de</span>
+                    <span style={{ fontSize: 12, color: N.textMuted }}>Cocher les mois à reporter, puis reporter sur</span>
                     <select
-                      value={shiftFrom}
-                      onChange={(e) => { setShiftFrom(e.target.value); setShiftTo((to) => (to && to > e.target.value ? to : '')); }}
-                      style={{ ...input, minWidth: 170, borderColor: shiftFrom ? N.text : N.border }}
+                      value={deferTo}
+                      onChange={(e) => setDeferTo(e.target.value)}
+                      disabled={!picked.length}
+                      style={{ ...input, minWidth: 230, borderColor: deferTo ? N.text : N.border, opacity: picked.length ? 1 : 0.5 }}
                     >
-                      <option value="">Choisir le mois…</option>
-                      {rows.filter((r) => selectable(r)).map((r) => (
-                        <option key={r.id} value={r.key}>{r.label} · {formatEUR(r.attendu)}</option>
-                      ))}
-                    </select>
-                    <span style={{ fontSize: 12, color: N.textMuted }}>reprise des paiements en</span>
-                    <select
-                      value={shiftTo}
-                      onChange={(e) => setShiftTo(e.target.value)}
-                      disabled={!shiftFrom}
-                      style={{ ...input, minWidth: 170, borderColor: shiftTo ? N.text : N.border, opacity: shiftFrom ? 1 : 0.5 }}
-                    >
-                      <option value="">Choisir le mois…</option>
-                      {resumeOptions.map((r) => (
-                        <option key={r.id} value={r.key}>{r.label}{r.courant ? ' (ce mois-ci)' : ''}</option>
+                      <option value="">{picked.length ? 'Choisir le mois de destination…' : 'Cocher d’abord les mois'}</option>
+                      {targetOptions.map((r) => (
+                        <option key={r.id} value={r.id}>{r.label}{r.courant ? ' (ce mois-ci)' : ''} · {formatEUR(r.attendu)}</option>
                       ))}
                     </select>
                   </div>
@@ -958,12 +927,12 @@ export default function ExpectedManager({
 
                 {rows.map((r) => {
                   const st = STATUS[r.status];
-                  const isTarget = isShift && r.key === shiftTo;
+                  const isTarget = isReport && r.id === deferTo;
                   const canPick = selectable(r) && !isTarget;
-                  const isPicked = isShift ? r.key === shiftFrom : selected.has(r.id);
-                  const preview = isShift ? previewByKey[r.key] : null;
-                  // Un mois reporté, ou qui reçoit une créance, reste lisible même sans attendu.
-                  const dim = r.attendu === 0 && r.recu === 0 && r.reste === 0 && !r.pauseActive && !r.shiftGap && !preview;
+                  const isPicked = selected.has(r.id);
+                  const after = reportPlan ? reportPlan.after[r.id] : undefined;
+                  // Un mois reporté, ou qui reçoit un report, reste lisible même sans attendu.
+                  const dim = r.attendu === 0 && r.recu === 0 && r.reste === 0 && !r.pauseActive && !r.reportedTo.length && after === undefined;
                   return (
                     <div
                       key={r.id}
@@ -980,7 +949,7 @@ export default function ExpectedManager({
                     >
                       {showCheck && (
                         <input
-                          type={isShift ? 'radio' : 'checkbox'}
+                          type="checkbox"
                           checked={isPicked}
                           disabled={!canPick}
                           onChange={() => toggle(r.id)}
@@ -995,11 +964,12 @@ export default function ExpectedManager({
                             marginLeft: 6, fontSize: 10, fontWeight: 700, color: N.green, background: '#fff',
                             border: `1px solid ${N.green}`, borderRadius: 3, padding: '1px 5px', verticalAlign: 'middle',
                             whiteSpace: 'nowrap',
-                          }} title="Les paiements reprennent ce mois-ci, à leur montant normal">
-                            reprise
+                          }} title="Ce mois reçoit l’attendu des mois cochés, en plus du sien">
+                            reçoit le report
                           </span>
                         )}
-                        {r.manual && (
+                        {/* Un report fixe aussi le montant, mais il se dit lui-même (d'où, vers où). */}
+                        {r.manual && !r.reportedTo.length && !r.reportedFrom.length && (
                           <span title="Montant fixé à la main : la grille ne le réécrit plus" style={{
                             marginLeft: 6, fontSize: 10, fontWeight: 700, color: N.blue, background: N.blueBg,
                             borderRadius: 3, padding: '1px 5px', verticalAlign: 'middle',
@@ -1064,16 +1034,16 @@ export default function ExpectedManager({
                               : `report de ${formatMonthLabel(f2.month).toLowerCase()} sans effet`}
                           </span>
                         ))}
-                        {r.shiftGap && (
-                          <span title="Échéancier décalé : ce mois n’est plus attendu" style={{ display: 'block', fontSize: 10.5, color: N.blue, marginTop: 2, lineHeight: 1.3 }}>
-                            reprise en {formatMonthLabel(r.shiftGap.to_month).toLowerCase()}
+                        {r.reportedTo.map((x, i) => (
+                          <span key={`rto-${i}`} title="Attendu reporté sur un autre mois" style={{ display: 'block', fontSize: 10.5, color: N.blue, marginTop: 2, lineHeight: 1.3 }}>
+                            {formatEUR(x.amount)} reporté sur {formatMonthLabel(x.month).toLowerCase()}
                           </span>
-                        )}
-                        {r.shiftResume && (
-                          <span title="Les paiements reprennent ce mois-ci, à leur montant normal" style={{ display: 'block', fontSize: 10.5, color: N.blue, marginTop: 2, lineHeight: 1.3 }}>
-                            reprise après report {deMonthLabel(r.shiftResume.from_month)}
+                        ))}
+                        {r.reportedFrom.map((x, i) => (
+                          <span key={`rfrom-${i}`} title="Attendu reçu d’un autre mois, en plus du sien" style={{ display: 'block', fontSize: 10.5, color: N.blue, marginTop: 2, lineHeight: 1.3 }}>
+                            dont {formatEUR(x.amount)} reporté {deMonthLabel(x.month)}
                           </span>
-                        )}
+                        ))}
                         {r.pauseActive && r.pauseUntil && (
                           <span style={{ display: 'block', fontSize: 10.5, color: N.textFaint, marginTop: 2 }}>
                             reprise le {formatDateFR(r.pauseUntil)}
@@ -1118,26 +1088,21 @@ export default function ExpectedManager({
                               {formatEUR(reduced(r))}
                             </span>
                           )}
-                          {deferIsLoss && isPicked && (
+                          {mode === 'defer' && isPicked && (
                             <AmountInput
                               value={drafts[r.id] ?? r.reste}
                               max={r.reste}
                               onChange={(v) => setDrafts((d) => ({ ...d, [r.id]: v }))}
                             />
                           )}
-                          {preview && (
-                            <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: preview.after > preview.before ? N.green : N.blue }}>
-                              {formatEUR(preview.after)}
+                          {/* Le mois de destination : son nouvel attendu, le sien plus ce qu'il reçoit. */}
+                          {isTarget && after !== undefined && (
+                            <span title={`${formatEUR(r.attendu)} + ${formatEUR(reportPlan.total)} reportés`} style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: N.green }}>
+                              {formatEUR(after)}
                             </span>
                           )}
-                          {/* Mois de reprise inchangé (mensuel) : son montant normal, rien d'ajouté. */}
-                          {isTarget && !preview && shiftPreview && (
-                            <span title="Montant normal, rien ne s’additionne" style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: N.green }}>
-                              {formatEUR(r.attendu)}
-                            </span>
-                          )}
-                          {/* Reports déjà posés : sortant en moins, entrant en plus. */}
-                          {mode === 'defer' && !isPicked && !preview && (r.deferredOut > 0 || r.deferredIn > 0) && (
+                          {/* Reports de créance d'avant le 28/09 : sortant en moins, entrant en plus. */}
+                          {mode === 'defer' && !isPicked && !isTarget && (r.deferredOut > 0 || r.deferredIn > 0) && (
                             <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: N.blue }}>
                               {r.deferredOut > 0 && <span style={{ display: 'block' }}>−{formatEUR(r.deferredOut)}</span>}
                               {r.deferredIn > 0 && (
@@ -1175,18 +1140,14 @@ export default function ExpectedManager({
                 {!canApply && <> · envoyé à la direction pour validation</>}
               </span>
             )}
-            {isShift && (shiftPreview || shiftError || shiftLoading) && (
-              <span style={{ flexBasis: '100%', fontSize: 12, color: shiftError ? N.red : N.textMuted, lineHeight: 1.5 }}>
-                {shiftError ? shiftError : shiftLoading ? 'Calcul de l’aperçu…' : (
-                  <>
-                    <strong style={{ color: N.text }}>Avant d’enregistrer :</strong>
-                    {' '}{shiftPreview.months.slice(0, 4).map((m) => `${formatMonthLabel(m.period).toLowerCase()} ${formatEUR(m.before)} → ${formatEUR(m.after)}`).join(' · ')}
-                    {shiftPreview.months.length > 4 ? ` · et ${shiftPreview.months.length - 4} autre${shiftPreview.months.length - 4 > 1 ? 's' : ''} mois` : ''}
-                    {shiftPreview.months_shifted > 1 ? ` · la suite glisse de ${shiftPreview.months_shifted} mois` : ' · la suite glisse d’un mois'}, rien ne s’additionne
-                    {shiftPreview.stop_note && <span style={{ display: 'block' }}>{shiftPreview.stop_note}</span>}
-                    {!canApply && <> · envoyé à la direction pour validation</>}
-                  </>
-                )}
+            {isReport && reportPlan && (
+              <span style={{ flexBasis: '100%', fontSize: 12, color: N.textMuted, lineHeight: 1.5 }}>
+                <strong style={{ color: N.text }}>Avant d’enregistrer :</strong>
+                {' '}{[...reportPlan.moves.map(({ r: row }) => row), deferTarget]
+                  .map((row) => `${row.label.toLowerCase()} ${formatEUR(row.attendu)} → ${formatEUR(reportPlan.after[row.id])}`)
+                  .join(' · ')}
+                {' · le total dû ne change pas'}
+                {!canApply && <> · envoyé à la direction pour validation</>}
               </span>
             )}
             {lastRequest && (

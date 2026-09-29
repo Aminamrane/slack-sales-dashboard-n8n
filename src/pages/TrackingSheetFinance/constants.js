@@ -491,22 +491,23 @@ export const deferralLinks = (deferrals, scope) => {
   return links;
 };
 
-// ── Reports d'échéancier (dev 2026-09-28) ────────────────────────────────
+// ── Reports d'attendu (dev 2026-09-28) ───────────────────────────────────
 //
-// « Reporter, ça ne veut pas dire additionner […] ça veut dire que j'ai
-// reporté les paiements. » Un report (`billing_shifts` du profil) vide les
-// mois de `from_month` à `to_month` exclu ; les paiements reprennent en
-// `to_month` et la suite de l'échéancier glisse d'autant. Renvoie, dans la
-// vision demandée, { 'YYYY-MM': { gap, resume } } : `gap` = le report qui a
-// vidé ce mois, `resume` = le report dont les paiements reprennent ici.
-export const shiftsByMonth = (shifts, scope) => {
+// « Le report déplace l'attendu, exactement, donc l'attendu arrive à zéro. »
+// Un report (`reports` du profil) a déplacé `amount` de l'attendu de
+// `from_month` sur celui de `to_month` : juillet reporté sur août = juillet 0,
+// août = son attendu + celui de juillet. Renvoie, dans la vision demandée,
+// { 'YYYY-MM': { to: [{ month, amount }], from: [{ month, amount }] } } :
+// `to` = où l'attendu du mois est parti, `from` = d'où vient ce qu'il reçoit.
+export const reportsByMonth = (reports, scope) => {
   const out = {};
-  const cell = (m) => out[m] || (out[m] = { gap: null, resume: null });
-  for (const s of shifts || []) {
-    if (scope !== 'global' && s.entity !== scope) continue;
-    if (!s.from_month || !s.to_month || s.to_month <= s.from_month) continue;
-    for (let m = s.from_month; m < s.to_month; m = shiftMonth(m, 1)) cell(m).gap = s;
-    cell(s.to_month).resume = s;
+  const cell = (m) => out[m] || (out[m] = { to: [], from: [] });
+  for (const r of reports || []) {
+    if (scope !== 'global' && r.entity !== scope) continue;
+    const amount = toNumber(r.amount) || 0;
+    if (!amount || !r.from_month || !r.to_month) continue;
+    cell(r.from_month).to.push({ month: r.to_month, amount });
+    cell(r.to_month).from.push({ month: r.from_month, amount });
   }
   return out;
 };
