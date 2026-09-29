@@ -45,7 +45,7 @@ const STATUS = {
   sent:      { label: 'Envoyé',  fg: N.slate, bg: N.slateBg },
   delivered: { label: 'Délivré', fg: N.blue,  bg: N.blueBg },
   opened:    { label: 'Ouvert',  fg: N.green, bg: N.greenBg },
-  clicked:   { label: 'Cliqué',  fg: N.green, bg: N.greenBg },
+  clicked:   { label: 'Ouvert',  fg: N.green, bg: N.greenBg },   // clics retirés de l'écran (dev 29/09)
   failed:    { label: 'Échec',   fg: N.red,   bg: N.redBg },
 };
 
@@ -55,7 +55,7 @@ const FAILURE_LABEL = {
 };
 
 // Tient dans l'écran intégré (/ceo/dispatch, ~950 px).
-const LIST_GRID = 'minmax(260px, 2.6fr) 110px 100px 80px 110px 70px';
+const LIST_GRID = 'minmax(260px, 2.6fr) 110px 100px 110px 70px';
 const RECIP_GRID = 'minmax(170px, 1.3fr) minmax(210px, 1.6fr) minmax(120px, 0.9fr) minmax(170px, 1.2fr)';
 
 const pct = (v) => (v == null ? null : `${Math.round(v * 100)} %`);
@@ -166,8 +166,8 @@ export default function SequencesView({ onOpenClient }) {
         <Message texte="Aucune séquence envoyée par la finance pour l’instant." />
       ) : (
         <div style={{ border: `1px solid ${N.borderSft}`, borderRadius: 10, overflowX: 'auto', background: '#fff' }}>
-          <HeaderRow grid={LIST_GRID} cells={['Envoi', 'Emails délivrés', 'Ouverts', 'Cliqués', 'SMS délivrés', 'Échecs']}
-            right={[1, 2, 3, 4, 5]} />
+          <HeaderRow grid={LIST_GRID} cells={['Envoi', 'Emails délivrés', 'Ouverts', 'SMS délivrés', 'Échecs']}
+            right={[1, 2, 3, 4]} />
           {items.map((s, i) => {
             const failed = (s.email?.failed || 0) + (s.sms?.failed || 0);
             return (
@@ -198,7 +198,6 @@ export default function SequencesView({ onOpenClient }) {
                 {!s.email ? <Vide texte="—" />
                   : s.email.opens_tracked ? <Taux count={s.email.opened} rate={s.email.open_rate} color={N.green} />
                   : <Vide texte="non suivi" />}
-                {s.email?.opens_tracked ? <Taux count={s.email.clicked} rate={s.email.click_rate} color={N.text} /> : <Vide texte="—" />}
                 {s.sms ? <Taux count={`${s.sms.delivered}/${s.sms.sent}`} rate={s.sms.delivery_rate} color={s.sms.delivery_rate === 1 ? N.green : N.amber} /> : <Vide texte="—" />}
                 <Nombre value={failed} color={failed ? N.red : N.textFaint} />
               </motion.div>
@@ -206,10 +205,6 @@ export default function SequencesView({ onOpenClient }) {
           })}
         </div>
       )}
-      <div style={{ color: N.textFaint, fontSize: 11.5, marginTop: 10, lineHeight: 1.5 }}>
-        Un envoi regroupe les emails d’un même objet partis le même jour et les SMS envoyés aux mêmes clients dans la foulée.
-        Ouvertures suivies depuis le 18/08 ; celles d’un robot, à la réception, ne comptent pas. Les aperçus internes ne sont pas comptés.
-      </div>
     </div>
   );
 }
@@ -264,12 +259,9 @@ function SequenceDetail({ sequenceKey, onBack, onOpenClient }) {
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
           {email && <Pastille label="Emails délivrés" value={`${email.delivered} / ${email.sent}`} hint={pct(email.delivery_rate)} color={email.delivery_rate === 1 ? N.green : N.amber} />}
-          {email && (email.opens_tracked ? (
-            <>
-              <Pastille label="Ouverts" value={email.opened} hint={pct(email.open_rate)} color={N.green} />
-              <Pastille label="Cliqués" value={email.clicked} hint={pct(email.click_rate)} color={N.text} />
-            </>
-          ) : <Pastille label="Ouvertures" value="non suivies" hint="envoi antérieur au suivi" color={N.textMuted} />)}
+          {email && (email.opens_tracked
+            ? <Pastille label="Ouverts" value={email.opened} hint={pct(email.open_rate)} color={N.green} />
+            : <Pastille label="Ouvertures" value="non suivies" hint="envoi antérieur au suivi" color={N.textMuted} />)}
           {sms && <Pastille label="SMS délivrés" value={`${sms.delivered} / ${sms.sent}`} hint={pct(sms.delivery_rate)} color={sms.delivery_rate === 1 ? N.green : N.amber} />}
           {failed > 0 && <Pastille label="Échecs" value={failed} color={N.red} />}
         </div>
