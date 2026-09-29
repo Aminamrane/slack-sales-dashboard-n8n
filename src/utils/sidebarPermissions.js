@@ -45,6 +45,8 @@ const ITEM_ROLE_GATE = {
   // « Gestion des leads » dans le dashboard acquisition : réservé à head_of_acquisition
   // (Timothy) + admin/ceo. acquisition_director (Gaylord) ne le voit PAS.
   leads_management: new Set(["ceo", "admin", "head_of_acquisition"]),
+  // « Leads < 100 k€ » : Paul (ceo) et les admins (données de contact de leads non affectés).
+  small_leads: new Set(["ceo", "admin"]),
   // Meta Ads : Paul (ceo), Timothy (head_of_acquisition), Gaylord
   // (acquisition_director), Ismahane (finance_director). Même liste que
   // l'API (MARKETING_ALLOWED_ROLES) : les RH, qui voient l'Acquisition, non.

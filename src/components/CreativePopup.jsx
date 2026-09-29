@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import apiClient from "../services/apiClient";
+// URL absolue d'un asset (/uploads/...) — même logique que Campaigns.jsx.
+import { mediaUrl } from "../utils/mediaUrl";
 
 /**
  * Affichage de la créa (publicité) avec laquelle un lead s'est inscrit, depuis le
@@ -14,12 +16,6 @@ import apiClient from "../services/apiClient";
  * cubic-bezier expo-out, backdrop, bouton close glass) pour rester cohérent.
  */
 
-// Construit l'URL absolue d'un asset (/uploads/...) — même logique que Campaigns.jsx.
-const mediaUrl = (p) => {
-  if (!p) return "";
-  if (/^https?:\/\//i.test(p)) return p;
-  return `${apiClient.baseUrl}${p}`;
-};
 
 /**
  * Pré-charge la créa d'un lead. À appeler au top-level du composant (pas dans une
