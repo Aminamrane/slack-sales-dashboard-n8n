@@ -93,8 +93,12 @@ function LifetimeBlock({ T, row }) {
     return (
       <Block T={T} icon="roas" title="Depuis le lancement" sub={`session ${ws.session}`}>
         <div style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.5, marginBottom: 8 }}>
-          Créa webinaire : ses inscrits ne sont pas suivis un par un au CRM, les ventes sont celles de la session que sa campagne a alimentée
+          Créa webinaire : la landing ne transmet pas la créa, les ventes sont celles de la session que sa campagne a alimentée
           ({fmtInt(ws.session_sales)} vente{ws.session_sales > 1 ? 's' : ''} pour {fmtEur(ws.campaign_spend_eur)} de campagne).
+          {ws.campaign_creatives?.length > 0 && (
+            <> Campagne {ws.campaign} : {ws.campaign_creatives.map((cr) => `${cr.name} ${fmtEur(cr.spend_eur)}`).join(', ')}
+              {ws.other_creatives?.count > 0 && `, ${ws.other_creatives.count} autre${ws.other_creatives.count > 1 ? 's' : ''} créa${ws.other_creatives.count > 1 ? 's' : ''} ${fmtEur(ws.other_creatives.spend_eur)}`}.</>
+          )}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
           <ProfitStat T={T} label="Montant collecté" amount={ws.cash_at_signature_eur} profit={ws.profit_pct_cash} roas={ws.roas_cash} horizon="aujourd’hui" />
@@ -379,9 +383,19 @@ export default function CreativePanel({ row, sales, period, T, jev, onClose }) {
             <Stat T={T} label="Dépense" value={fmtEur(r.spend)} />
             <Stat T={T} label="Coût par lead" value={fmtEur2(r.cpl)} />
             {hasFunnel ? <Stat T={T} label="Coût par R1 tenu" value={fmtEur2(r.cpr1)} /> : <Stat T={T} label="CPM" value={fmtEur2(r.cpm)} />}
-            <Stat T={T} label="Ventes" value={fmtInt(r.ventes ?? mine.length)} strong={T.green} />
-            <Stat T={T} label="Coût par vente" value={fmtEur(r.cac ?? (r.ventes ? r.spend / r.ventes : null))} />
-            <Stat T={T} label="Retour sur dépense" value={fmtRoas(r.roas ?? (r.spend ? ventesCa / r.spend : null))} strong={(r.roas ?? 0) >= 1 ? T.green : undefined} />
+            {r.webinar_session ? (
+              <>
+                <Stat T={T} label="Ventes de la session" value={fmtInt(r.webinar_session.session_sales)} strong={T.green} />
+                <Stat T={T} label="Coût par vente (session)" value={fmtEur(r.webinar_session.cost_per_sale_eur)} />
+                <Stat T={T} label="Retour sur dépense (session)" value={fmtRoas(r.webinar_session.roas_contract)} strong={(r.webinar_session.roas_contract ?? 0) >= 1 ? T.green : undefined} />
+              </>
+            ) : (
+              <>
+                <Stat T={T} label="Ventes" value={fmtInt(r.ventes ?? mine.length)} strong={T.green} />
+                <Stat T={T} label="Coût par vente" value={fmtEur(r.cac ?? (r.ventes ? r.spend / r.ventes : null))} />
+                <Stat T={T} label="Retour sur dépense" value={fmtRoas(r.roas ?? (r.spend ? ventesCa / r.spend : null))} strong={(r.roas ?? 0) >= 1 ? T.green : undefined} />
+              </>
+            )}
           </div>
         </Block>
 

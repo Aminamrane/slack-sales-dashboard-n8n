@@ -65,6 +65,11 @@ function ProfitCell({ lifetime, session, kind, T }) {
   return <span title={title} style={{ fontWeight: 600, color: profit >= 0 ? T.green : T.red, fontVariantNumeric: 'tabular-nums' }}>{fmtProfit(profit)}</span>;
 }
 
+// Créa webinaire : la landing ne transmet pas la créa, ses ventes sont celles de la session que sa campagne a
+// alimentée. Les colonnes de ventes montrent donc les chiffres de la session, marqués « session ».
+const sessionTitle = (ws) => `${ws.session} : ${fmtInt(ws.session_sales)} vente${ws.session_sales > 1 ? 's' : ''} pour toute la campagne ${ws.campaign} (${fmtEur(ws.campaign_spend_eur)}). La landing webinaire ne transmet pas la créa : les ventes se rattachent à la session, pas à une créa.`;
+const SessionTag = ({ T }) => <span style={{ marginLeft: 4, fontSize: 10.5, fontWeight: 500, color: T.textFaint }}>session</span>;
+
 export const TABS = [
   {
     key: 'creatives', label: 'Créas', source: 'leaderboard', rows: (d) => d?.rows || [], clickable: true, rowKey: (r) => r.name,
@@ -72,14 +77,33 @@ export const TABS = [
     columns: [
       { key: 'name', label: 'Créa', sortValue: (r) => r.name, render: (r, T) => <NameCell name={r.name} sub={r.campaign_name} creative={r.creative} status={r.status || 'active'} T={T} /> },
       { key: 'score', label: 'Score', align: 'right', width: 70, render: (r, T) => <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Ring value={(r.score || 0) / 100} size={26} stroke={3} color={scoreColor(r.score, T)} T={T} /><span style={{ fontVariantNumeric: 'tabular-nums' }}>{r.score == null ? '—' : Math.round(r.score)}</span></span> },
-      money('spend', 'Dépense'),
+      { key: 'spend', label: 'Dépense', align: 'right', sortValue: (r) => r.spend,
+        render: (r, T) => (r.webinar_session
+          ? <span title={sessionTitle(r.webinar_session)} style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.25 }}>
+              <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtEur(r.spend)}</span>
+              <span style={{ fontSize: 10.5, color: T.textFaint, fontVariantNumeric: 'tabular-nums' }}>campagne {fmtEur(r.webinar_session.campaign_spend_eur)}</span>
+            </span>
+          : fmtEur(r.spend)) },
       { key: 'leads', label: 'Leads', align: 'right', format: fmtInt, sortValue: (r) => Math.max(r.crm_leads || 0, r.leads_meta || 0), render: (r) => fmtInt(Math.max(r.crm_leads || 0, r.leads_meta || 0)) },
       money2('cpl', 'Coût / lead'),
       int('r1_fait', 'R1 tenus'),
       int('r2_fait', 'R2 tenus'),
-      ventes,
-      money('cac', 'Coût / vente'),
-      roas,
+      { ...ventes, sortValue: (r) => (r.webinar_session ? r.webinar_session.session_sales : r.ventes),
+        render: (r, T) => (r.webinar_session
+          ? <span title={sessionTitle(r.webinar_session)} style={{ fontWeight: 600, color: r.webinar_session.session_sales ? T.green : T.textFaint, fontVariantNumeric: 'tabular-nums' }}>
+              {fmtInt(r.webinar_session.session_sales)}<SessionTag T={T} />
+            </span>
+          : <span style={{ fontWeight: 600, color: r.ventes ? T.green : T.textFaint }}>{fmtInt(r.ventes)}</span>) },
+      { key: 'cac', label: 'Coût / vente', align: 'right', sortValue: (r) => (r.webinar_session ? r.webinar_session.cost_per_sale_eur : r.cac),
+        render: (r, T) => (r.webinar_session
+          ? <span title={sessionTitle(r.webinar_session)} style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtEur(r.webinar_session.cost_per_sale_eur)}<SessionTag T={T} /></span>
+          : fmtEur(r.cac)) },
+      { ...roas, sortValue: (r) => (r.webinar_session ? r.webinar_session.roas_contract : r.roas),
+        render: (r, T) => {
+          const value = r.webinar_session ? r.webinar_session.roas_contract : r.roas;
+          const color = value == null ? T.textFaint : value >= 1 ? T.green : T.red;
+          return <span title={r.webinar_session ? sessionTitle(r.webinar_session) : undefined} style={{ color, fontVariantNumeric: 'tabular-nums' }}>{fmtRoas(value)}{r.webinar_session && <SessionTag T={T} />}</span>;
+        } },
       { key: 'profit_today', label: 'Rentable aujourd’hui', align: 'right', sortValue: (r) => (r.lifetime || r.webinar_session)?.profit_pct_cash ?? null,
         render: (r, T) => <ProfitCell lifetime={r.lifetime} session={r.webinar_session} kind="cash" T={T} /> },
       { key: 'ca_year', label: 'CA sur l’année', align: 'right', sortValue: (r) => (r.lifetime || r.webinar_session)?.contract_value_eur ?? null,
