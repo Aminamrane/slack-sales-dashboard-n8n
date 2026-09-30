@@ -1176,6 +1176,28 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
               />
             </div></>}
 
+            {/* Comptes « dashboard seul » (Paul) : « Mes pages » leur reste masqué ; hors du
+                dashboard (sa Tracking Sheet, 2026-09-30), un retour direct vers /ceo. */}
+            {dashboardOnly && ['ceo', 'admin'].includes(apiClient.getUser()?.role)
+              && !window.location.pathname.startsWith('/ceo') && (
+              <button
+                onClick={() => navigate('/ceo')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '8px 12px', minHeight: 34, maxHeight: 34, borderRadius: 10, border: 'none',
+                  background: darkMode ? '#2a2b2e' : '#eef0f6', color: darkMode ? '#eef0f6' : '#1e2330',
+                  fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'background 0.15s',
+                  opacity: collapsed ? 0 : 1, maxWidth: collapsed ? 0 : '200px', overflow: 'hidden',
+                  pointerEvents: collapsed ? 'none' : 'auto', flexShrink: 0, whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? '#2a2b36' : '#e2e6ef'}
+                onMouseLeave={(e) => e.currentTarget.style.background = darkMode ? '#2a2b2e' : '#eef0f6'}
+              >
+                <span aria-hidden="true">←</span>
+                <span>Dashboard</span>
+              </button>
+            )}
+
             {/* Logout */}
             <button
               onClick={logout}

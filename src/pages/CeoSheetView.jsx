@@ -122,6 +122,7 @@ export default function CeoSheetView() {
     if (tabId === "campaigns") { navigate("/ceo/campaigns"); return; }
     // Fallback : retour à la home dashboard du user (role-aware).
     if (tabId === "funnel_leads") { navigate("/ceo/funnel-leads"); return; }
+    if (tabId === 'my_tracking_sheet') { navigate('/tracking-sheet'); return; }
     if (tabId === 'optilex_board') { navigate('/ceo/optilex-board'); return; }
     if (tabId === "leads_management") { navigate("/ceo/leads-management"); return; }
     navigateBackToDashboard(navigate, userRole, tabId);
