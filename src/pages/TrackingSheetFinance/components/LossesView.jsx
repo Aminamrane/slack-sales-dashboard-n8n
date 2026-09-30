@@ -46,7 +46,7 @@ const FAMILLES = [
 const AUTRES = { key: 'autres', label: 'Autres', etats: [] };
 
 // ARR perdu, part Owner seule (demande dev 2026-09-30 : « l'ARR des résiliations et des rétractations,
-// les pertes d'Owner uniquement ») : le tarif annuel HT des contrats sortis, chaque client compté une fois.
+// les pertes d'Owner uniquement ») : l'attendu Owner HT de la Finance, annualisé, chaque client compté une fois.
 const ARR_FAMILLES = [
   { key: 'resiliation', label: 'ARR des résiliations', accent: N.red },
   { key: 'retractation', label: 'ARR des rétractations', accent: N.amber },
@@ -132,7 +132,7 @@ export default function LossesView({ boardMap, scope, onOpenClient }) {
       arr[key] = {
         total: values.reduce((s, v) => s + (v || 0), 0),
         n: values.length,
-        sansTarif: values.filter((v) => v == null).length,
+        sansMontant: values.filter((v) => v == null).length,
       };
     }
     return { acc, creance, futur, n: enriched.length, parNature, arr };
@@ -256,7 +256,7 @@ export default function LossesView({ boardMap, scope, onOpenClient }) {
         })}
       </div>
 
-      {/* ARR perdu : la valeur annuelle des contrats sortis, part Owner seule, quel que soit le périmètre. */}
+      {/* ARR perdu : l'attendu Owner HT des clients sortis, annualisé, quel que soit le périmètre. */}
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
         gap: 10, marginBottom: 22,
@@ -287,8 +287,8 @@ export default function LossesView({ boardMap, scope, onOpenClient }) {
                 {formatEUR(a.total)}
               </div>
               <div style={{ fontSize: 11, color: N.textFaint, marginTop: 2 }}>
-                valeur annuelle des contrats · Owner HT
-                {a.sansTarif > 0 && ` · ${a.sansTarif} sans tarif`}
+                attendu Owner HT annualisé
+                {a.sansMontant > 0 && ` · ${a.sansMontant} sans montant`}
               </div>
             </motion.div>
           );
