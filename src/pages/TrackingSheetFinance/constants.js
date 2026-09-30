@@ -7,7 +7,9 @@ import { parisWallTime } from '../../utils/boardIntegration.js';
 // Keep in sync with backend `app/schemas/client_finance.py`.
 
 // ── Roles allowed on this page ───────────────────────────────────────────
-export const ALLOWED_ROLES = ['admin', 'finance_director', 'finance_team'];
+// Le CEO a les accès de la direction financière depuis le 2026-09-30 (dev :
+// « tous les accès à Paul comme à Isma »).
+export const ALLOWED_ROLES = ['admin', 'ceo', 'finance_director', 'finance_team'];
 
 // ── Qui peut écrire quoi (décision dev 2026-08-27) ───────────────────────
 //
@@ -19,7 +21,7 @@ export const ALLOWED_ROLES = ['admin', 'finance_director', 'finance_team'];
 // Ces listes ne font que refléter l'écran : le serveur refuse de son côté
 // (`_FINANCE_TEAM_WRITABLE` dans client_finance.py). Une cellule grisée n'est
 // pas une permission.
-const AMOUNT_EDIT_ROLES = ['admin', 'finance_director'];
+const AMOUNT_EDIT_ROLES = ['admin', 'ceo', 'finance_director'];
 
 // Encaissements, dates de paiement, PSP, formule, état board.
 export const canEditAmounts = (role) => AMOUNT_EDIT_ROLES.includes(role);
@@ -32,11 +34,13 @@ export const canEditContract = (role) => ALLOWED_ROLES.includes(role);
 // par Ismahane (dev 2026-09-23). Le serveur fait la même distinction.
 export const canProposeAmounts = (role) => role === 'finance_team';
 
-// Filtre « Météo client » du menu Filtre : réservé à deux personnes, pas à
-// un rôle (décision dev 2026-09-18) — Ismahane (direction financière) et
-// Aurélie B (équipe finance). Même mécanique que l'onglet des appels.
+// Filtre « Météo client » du menu Filtre : réservé à des personnes, pas à
+// un rôle (décision dev 2026-09-18) — Ismahane (direction financière),
+// Aurélie B (équipe finance) et Paul (CEO, mêmes accès qu'Ismahane depuis le
+// 2026-09-30). Même mécanique que l'onglet des appels.
 const METEO_FILTER_USER_IDS = new Set([
   '94b5dcc1-a1bb-41ac-94fe-14cf047cffef', // Ismahane
+  '6b32dc17-528d-4e01-b955-2c49a5f44b6a', // Paul (CEO)
   '6dfc7435-c938-4bd3-b143-a6516b2981bd', // Aurélie B
   '445a5b0d-61e3-4e3b-b1fc-77b04b66df12', // Youcef Amrane — le dev est toujours inclus (règle 2026-09-19)
 ]);

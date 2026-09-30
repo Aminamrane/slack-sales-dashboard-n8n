@@ -324,7 +324,7 @@ function App() {
         <Route
           path="/dialer"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'finance_director', 'finance_team']}>
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'finance_director', 'finance_team']}>
               <Dialer />
             </ProtectedRoute>
           }

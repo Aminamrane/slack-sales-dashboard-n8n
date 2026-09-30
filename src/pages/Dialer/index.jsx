@@ -1,8 +1,9 @@
 // src/pages/Dialer/index.jsx — Power Dialer (page interne CRM).
 //
-// Roles : admin / finance_director / finance_team. Anyone else → '/'.
+// Roles : admin / ceo / finance_director / finance_team. Anyone else → '/'.
 //   - finance_team  (opératrice, ex. Aurélie) → console d'appel
 //   - finance_director (DAF)                  → supervision (upload + stats)
+//   - ceo (mêmes accès que la DAF, 2026-09-30) → supervision
 //   - admin                                   → les deux (onglets)
 //
 // 100 % additif : nouvelle route, nouveau service (dialerClient), aucune
@@ -22,7 +23,7 @@ import { getTheme } from './theme.js';
 import OperatorConsole from './OperatorConsole.jsx';
 import SupervisorPanel from './SupervisorPanel.jsx';
 
-const ALLOWED_ROLES = ['admin', 'finance_director', 'finance_team'];
+const ALLOWED_ROLES = ['admin', 'ceo', 'finance_director', 'finance_team'];
 const STATS_POLL_MS = 4000;
 
 export default function Dialer() {
@@ -53,12 +54,12 @@ export default function Dialer() {
 
   // ── role-derived capabilities ───────────────────────────────────────────
   const isOperator   = role === 'finance_team' || role === 'admin';
-  const isSupervisor = role === 'finance_director' || role === 'admin';
+  const isSupervisor = role === 'finance_director' || role === 'ceo' || role === 'admin';
   const showTabs     = isOperator && isSupervisor; // admin only
   const [tab, setTab] = useState('console'); // 'console' | 'supervision'
   // operator-only users land on console ; DAF-only on supervision
   useEffect(() => {
-    if (role === 'finance_director') setTab('supervision');
+    if (role === 'finance_director' || role === 'ceo') setTab('supervision');
     else setTab('console');
   }, [role]);
 
@@ -121,7 +122,7 @@ export default function Dialer() {
           <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.02em', margin: 0 }}>Power Dialer</h1>
         </div>
         <p style={{ margin: '0 0 26px 50px', fontSize: 14, color: T.textMuted }}>
-          {role === 'finance_director'
+          {(role === 'finance_director' || role === 'ceo')
             ? 'Préparez les listes d’appels et suivez l’avancement en temps réel.'
             : 'Traitez votre liste d’appels.'}
         </p>

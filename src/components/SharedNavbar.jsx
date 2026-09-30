@@ -1032,7 +1032,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                 {/* Tracking Finance : la page n'avait AUCUNE entrée de menu —
                     l'équipe finance ne pouvait tout simplement pas y arriver
                     (signalé 2026-08-27 par Lény, Aurélie et Ingrid). */}
-                {(apiClient.getUser()?.role === 'admin' || apiClient.getUser()?.role === 'finance_director' || apiClient.getUser()?.role === 'finance_team') && (
+                {(apiClient.getUser()?.role === 'admin' || apiClient.getUser()?.role === 'ceo' || apiClient.getUser()?.role === 'finance_director' || apiClient.getUser()?.role === 'finance_team') && (
                   <button
                     onClick={() => navigate("/tracking-finance")}
                     style={{
@@ -1048,7 +1048,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                   </button>
                 )}
 
-                {(apiClient.getUser()?.role === 'admin' || apiClient.getUser()?.role === 'finance_director' || apiClient.getUser()?.role === 'finance_team') && (
+                {(apiClient.getUser()?.role === 'admin' || apiClient.getUser()?.role === 'ceo' || apiClient.getUser()?.role === 'finance_director' || apiClient.getUser()?.role === 'finance_team') && (
                   <button
                     onClick={() => navigate("/dialer")}
                     style={{
