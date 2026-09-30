@@ -67,6 +67,7 @@ export default function CeoLeadsManagementView() {
     if (tabId === "lead_quality") { navigate("/ceo/lead-quality"); return; }
     if (tabId === "sales_team") { navigate("/ceo/sales-team"); return; }
     if (tabId === "sales_recordings") { navigate("/ceo/sales-recordings"); return; }
+    if (tabId === 'my_tracking_sheet') { navigate('/tracking-sheet'); return; }
     if (tabId === 'optilex_board') { navigate('/ceo/optilex-board'); return; }
     navigateBackToDashboard(navigate, userRole, tabId);
   };

@@ -50,6 +50,11 @@ const SIDEBAR_TABS = [
   { key: 'dashboard', label: 'Dashboard', icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
   )},
+  // Sa propre Tracking Sheet (demande dev 2026-09-30 : Paul envoie aussi des contrats).
+  // Réservée ceo/admin (ITEM_ROLE_GATE) : la page refuse les autres rôles sans l'accès.
+  { key: 'my_tracking_sheet', label: 'Ma Tracking Sheet', icon: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg>
+  )},
   { section: 'HUMAN' },
   { key: 'conges', label: 'Absence', icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -1642,6 +1647,7 @@ export default function CeoDashboard() {
           if (tabId === 'conges') { navigate('/ceo/conges'); return; }
           if (tabId === 'work_hours') { navigate('/ceo/work-hours'); return; }
           if (tabId === 'campaigns') { navigate('/ceo/campaigns'); return; }
+          if (tabId === 'my_tracking_sheet') { navigate('/tracking-sheet'); return; }
           if (tabId === 'optilex_board') { navigate('/ceo/optilex-board'); return; }
           if (tabId === 'sales_recordings') { navigate('/ceo/sales-recordings'); return; }
           if (tabId === 'meta_ads') { navigate('/ceo/meta-ads'); return; }

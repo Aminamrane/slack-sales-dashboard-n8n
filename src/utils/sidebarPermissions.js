@@ -54,6 +54,8 @@ const ITEM_ROLE_GATE = {
   // Sub Tickets : rôles des personnes de la liste nominative du backend
   // (bot_ia_prompts.py ALLOWED_EMAILS), qui reste la garde qui fait foi.
   bot_ia: SUB_TICKETS_ROLES,
+  // « Ma Tracking Sheet » : la page n'ouvre sans permission qu'aux rôles ceo et admin.
+  my_tracking_sheet: new Set(["ceo", "admin"]),
 };
 
 // ── Scope de navigation persistant (sessionStorage) ────────────────
