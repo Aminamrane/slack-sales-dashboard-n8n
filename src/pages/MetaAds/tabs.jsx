@@ -60,7 +60,7 @@ function ProfitCell({ lifetime, session, kind, T }) {
   const profit = kind === 'cash' ? src.profit_pct_cash : src.profit_pct_contract;
   const amount = kind === 'cash' ? src.cash_at_signature_eur : src.contract_value_eur;
   if (profit == null) return <span style={{ color: T.textFaint }}>—</span>;
-  const title = `${kind === 'cash' ? 'Montant collecté' : 'Contrats signés (sur l’année)'} : ${fmtEur(amount)} pour ${fmtEur(lifetime ? lifetime.spend_eur : session.campaign_spend_eur)} dépensés`
+  const title = `${kind === 'cash' ? 'Montant collecté' : 'CA sur l’année (contrats signés)'} : ${fmtEur(amount)} pour ${fmtEur(lifetime ? lifetime.spend_eur : session.campaign_spend_eur)} dépensés`
     + (lifetime ? ` depuis ${monthLabel(lifetime.since_month)}` : ` (session ${session.session})`);
   return <span title={title} style={{ fontWeight: 600, color: profit >= 0 ? T.green : T.red, fontVariantNumeric: 'tabular-nums' }}>{fmtProfit(profit)}</span>;
 }
@@ -82,6 +82,12 @@ export const TABS = [
       roas,
       { key: 'profit_today', label: 'Rentable aujourd’hui', align: 'right', sortValue: (r) => (r.lifetime || r.webinar_session)?.profit_pct_cash ?? null,
         render: (r, T) => <ProfitCell lifetime={r.lifetime} session={r.webinar_session} kind="cash" T={T} /> },
+      { key: 'ca_year', label: 'CA sur l’année', align: 'right', sortValue: (r) => (r.lifetime || r.webinar_session)?.contract_value_eur ?? null,
+        render: (r, T) => {
+          const src = r.lifetime || r.webinar_session;
+          const title = src ? (r.lifetime ? `Contrats signés depuis ${monthLabel(r.lifetime.since_month)}` : `Session ${r.webinar_session.session}`) : undefined;
+          return src ? <span title={title} style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtEur(src.contract_value_eur)}</span> : <span style={{ color: T.textFaint }}>—</span>;
+        } },
       { key: 'profit_year', label: 'Rentable sur l’année', align: 'right', sortValue: (r) => (r.lifetime || r.webinar_session)?.profit_pct_contract ?? null,
         render: (r, T) => <ProfitCell lifetime={r.lifetime} session={r.webinar_session} kind="contract" T={T} /> },
       { key: 'big_leads', label: 'Leads 11+ salariés', align: 'right', sortValue: (r) => r.company_size?.big_leads ?? null,

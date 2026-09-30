@@ -98,7 +98,7 @@ function LifetimeBlock({ T, row }) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
           <ProfitStat T={T} label="Montant collecté" amount={ws.cash_at_signature_eur} profit={ws.profit_pct_cash} roas={ws.roas_cash} horizon="aujourd’hui" />
-          <ProfitStat T={T} label="Contrats signés" amount={ws.contract_value_eur} profit={ws.profit_pct_contract} roas={ws.roas_contract} horizon="sur l’année" />
+          <ProfitStat T={T} label="CA sur l’année" amount={ws.contract_value_eur} profit={ws.profit_pct_contract} roas={ws.roas_contract} horizon="sur l’année" />
         </div>
       </Block>
     );
@@ -113,7 +113,7 @@ function LifetimeBlock({ T, row }) {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginTop: 8 }}>
         <ProfitStat T={T} label="Montant collecté" amount={lt.cash_at_signature_eur} profit={lt.profit_pct_cash} roas={lt.roas_cash} horizon="aujourd’hui" />
-        <ProfitStat T={T} label="Contrats signés (sur l’année)" amount={lt.contract_value_eur} profit={lt.profit_pct_contract} roas={lt.roas_contract} horizon="sur l’année" />
+        <ProfitStat T={T} label="CA sur l’année (contrats signés)" amount={lt.contract_value_eur} profit={lt.profit_pct_contract} roas={lt.roas_contract} horizon="sur l’année" />
       </div>
       <div style={{ marginTop: 8, fontSize: 11.5, color: T.textFaint, lineHeight: 1.5 }}>
         {provisional
