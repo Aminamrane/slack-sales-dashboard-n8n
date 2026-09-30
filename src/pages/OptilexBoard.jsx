@@ -8,7 +8,7 @@ import { appointmentConfirmation, appointmentFailure } from "../utils/appointmen
 import { ClientMissions, DetailFold, DetailText } from "../components/OptilexClientDetail";
 import MentionTextarea, { MentionedText } from "../components/MentionTextarea";
 import { mentionedIds, notifiedSummary } from "../utils/mentions.js";
-import { matchesUpcomingIntegration, matchesUpcomingOnboarding, matchesOverdueOnboarding, onboardingDateOf, parisWallTime } from "../utils/boardIntegration.js";
+import { matchesUpcomingIntegration, matchesUpcomingOnboarding, matchesOverdueOnboarding, onboardingDateOf, onboardingSituation, parisWallTime } from "../utils/boardIntegration.js";
 import { matchesSignedClient, resolvePendingExit } from "../utils/boardClientState.js";
 import { Fragment, useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -1005,15 +1005,25 @@ export default function OptilexBoard({ embed = false }) {
   // Changer d'onglet réinitialise le tri manuel -> on retombe sur le défaut intelligent de l'onglet.
   useEffect(() => { setSortCol(null); }, [etatFilter]);
 
-  // Base : toutes les lignes passant les filtres SAUF la météo. Sert de socle à la vue finale
-  // ET aux compteurs par bande (qui restent stables quand on coche/décoche une bande météo).
-  const preMeteoRows = useMemo(() => {
+  // Filtres de la vue SAUF la météo, et situation d'onboarding de chaque ligne. `withOnboarding`
+  // à false : même vue sans le menu Onboarding, socle de ses compteurs.
+  const viewFilter = useMemo(() => {
     const ql = q.trim().toLowerCase();
     // Sélection multiple : les ÉTATS se combinent en OU, les CRITÈRES en ET.
     const activeCats = [...new Set(etatFilter !== "Tous" ? [etatFilter, ...multiFilter] : multiFilter)];
     const etatsSel = activeCats.filter((c) => !CRITERIA_CATS.includes(c));
     const critsSel = activeCats.filter((c) => CRITERIA_CATS.includes(c));
-    return rows.filter((r) => {
+    const today = _todayParisISO();
+    // Réalisé / à venir / à faire : une seule case par client (Vincent 30/09 : leur cumul dépassait
+    // le nombre de clients signés). Les clients partis (résiliés / rétractés / liquidés) n'entrent
+    // dans aucune case… SAUF si leur état est explicitement sélectionné : Vincent croise
+    // résiliés/rétractés × « à faire » pour tenter de les récupérer via la plateforme (retour dev
+    // 2026-08-28). Un client parti qui arrive ici avec une sélection d'états active a forcément été
+    // demandé (il a passé le filtre d'états).
+    const situationOf = (r) => onboardingSituation(r, today, {
+      exited: TERMINATED_ETATS.includes(displayEtat(r)), includeExited: etatsSel.length > 0,
+    });
+    const passes = (r, withOnboarding = true) => {
       // « Tous » regroupe les clients actuels et anciens, pas les prospects.
       // Le statut du contrat ne suffit pas : un client peut avoir un contrat expiré.
       if (activeCats.length === 0 && r.is_pending_contract) return false;
@@ -1025,21 +1035,11 @@ export default function OptilexBoard({ embed = false }) {
           || (programmeSel.includes("parrainage") && r.parrainage_eligible);
         if (!inProgramme) return false;
       }
-      // Menu « Onboarding » : UNION des situations cochées (à venir / réalisé / à faire).
-      // « À faire » exclut les clients partis (résiliés / rétractés / liquidés)…
-      // SAUF si leur état est explicitement sélectionné : Vincent croise
-      // résiliés/rétractés × « à faire » pour tenter de les récupérer via la
-      // plateforme (retour dev 2026-08-28). Un client parti qui arrive ici avec
-      // une sélection d'états active a forcément été demandé (il a passé le
-      // filtre d'états au-dessus).
-      if (onboardingSel.length > 0) {
-        const todoOk = !!r.numero_client && !r.rdv_onboarding_done
-          && (etatsSel.length > 0 || !TERMINATED_ETATS.includes(displayEtat(r)));
-        const inOnboarding = (onboardingSel.includes("venir") && isOnboardingUpcoming(r))
-          || (onboardingSel.includes("done") && r.rdv_onboarding_done)
-          || (onboardingSel.includes("todo") && todoOk)
-          || (onboardingSel.includes("recaler") && r.onboarding_reschedule_pending && !r.rdv_onboarding_done);
-        if (!inOnboarding) return false;
+      // Menu « Onboarding » : UNION des situations cochées, qui sont EXCLUSIVES (voir situationOf).
+      if (withOnboarding && onboardingSel.length > 0) {
+        const situation = situationOf(r);
+        const recaler = situation === "todo" && !!r.onboarding_reschedule_pending;
+        if (!onboardingSel.includes(situation) && !(onboardingSel.includes("recaler") && recaler)) return false;
       }
       // Sous-filtre contextuel "En retard" de l'onglet Intégration à venir.
       if (etatFilter === "Intégration à venir" && integrationView === "overdue" && !isIntegrationOverdue(r)) return false;
@@ -1058,8 +1058,30 @@ export default function OptilexBoard({ embed = false }) {
         if (!hay.includes(ql)) return false;
       }
       return true;
-    });
-  }, [rows, etatFilter, multiFilter, sigRange, dateTarget, q, integrationView, programmeSel, onboardingSel]);
+    };
+    return { passes, situationOf };
+  }, [etatFilter, multiFilter, sigRange, dateTarget, q, integrationView, programmeSel, onboardingSel]);
+
+  // Base : toutes les lignes passant les filtres SAUF la météo. Sert de socle à la vue finale
+  // ET aux compteurs par bande (qui restent stables quand on coche/décoche une bande météo).
+  const preMeteoRows = useMemo(() => rows.filter((r) => viewFilter.passes(r)), [rows, viewFilter]);
+
+  // Compteurs du menu Onboarding : sur la vue affichée (onglet, filtres, météo) hors ce menu.
+  // « À venir + réalisé + à faire » = clients comptés (`total`, affiché dans le menu) ;
+  // « à recaler » est un sous-ensemble de « à faire ».
+  const onboardingCounts = useMemo(() => {
+    const c = { venir: 0, done: 0, todo: 0, recaler: 0, total: 0 };
+    for (const r of rows) {
+      if (!viewFilter.passes(r, false)) continue;
+      if (meteoFilter.length > 0 && !meteoFilter.includes(meteoBandOf(r.meteo_score) || "none")) continue;
+      const situation = viewFilter.situationOf(r);
+      if (!situation) continue;
+      c[situation] += 1;
+      c.total += 1;
+      if (situation === "todo" && r.onboarding_reschedule_pending) c.recaler += 1;
+    }
+    return c;
+  }, [rows, viewFilter, meteoFilter]);
 
   // Compteurs par bande météo (rouge 1-2 / orange 3 / vert 4-5 / "none" = non noté), calculés
   // sur la base pré-météo -> le nombre affiché sur chaque chip ne bouge pas quand on coche.
@@ -1353,16 +1375,16 @@ export default function OptilexBoard({ embed = false }) {
         {/* Onboarding + Programmes : regroupés chacun dans UN menu (demande dev
             2026-09-03, moins de gros blocs). Multi-sélection = union dans le menu. */}
         <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
-        <ChecklistMenu label="Onboarding" title="Onboarding Owner"
+        <ChecklistMenu label="Onboarding" title={`Onboarding Owner · ${onboardingCounts.total} client${onboardingCounts.total > 1 ? "s" : ""}`}
           icon={(c) => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>}
           items={[
-            { key: "venir", label: "Onboarding à venir", count: counts["Onboarding à venir"] || 0,
+            { key: "venir", label: "Onboarding à venir", count: onboardingCounts.venir,
               icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg> },
-            { key: "done", label: "Onboarding réalisé", count: rows.filter((r) => r.rdv_onboarding_done).length,
+            { key: "done", label: "Onboarding réalisé", count: onboardingCounts.done,
               icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></svg> },
-            { key: "todo", label: "Onboarding à faire", count: rows.filter((r) => r.numero_client && !r.rdv_onboarding_done && !TERMINATED_ETATS.includes(displayEtat(r))).length,
+            { key: "todo", label: "Onboarding à faire", count: onboardingCounts.todo,
               icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="M12 14v4M12 14h.01" /></svg> },
-            { key: "recaler", label: "Onboarding à recaler", count: rows.filter((r) => r.onboarding_reschedule_pending && !r.rdv_onboarding_done).length,
+            { key: "recaler", label: "Onboarding à recaler", count: onboardingCounts.recaler,
               icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg> },
           ]}
           selected={onboardingSel}

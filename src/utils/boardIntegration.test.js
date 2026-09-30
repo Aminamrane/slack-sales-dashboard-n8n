@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { matchesUpcomingIntegration, matchesOverdueOnboarding, matchesUpcomingOnboarding, onboardingDateOf, parisWallTime } from './boardIntegration.js';
+import { matchesUpcomingIntegration, matchesOverdueOnboarding, matchesUpcomingOnboarding, onboardingDateOf, onboardingSituation, parisWallTime } from './boardIntegration.js';
 const row = { numero_client: '42', rdv_lancement_date: '2026-09-30T10:00:00', rdv_lancement_done: false };
 test('both withdrawal states are excluded from upcoming and overdue integration', () => {
     for (const state of ['En cours de rétractation', 'Rétractation']) {
@@ -44,4 +44,27 @@ test('a done onboarding counts on the day it was done, others on their planned d
     // Un onboarding annulé garde sa date prévue, pas une ancienne date de réalisation.
     assert.equal(onboardingDateOf({ ...planned, rdv_onboarding_done: false, rdv_onboarding_done_date: '2026-10-01' }), '2026-09-24');
     assert.equal(onboardingDateOf({ rdv_onboarding_done: true }), null);
+});
+
+test('each client counts in exactly one onboarding situation, so the three add up to the clients shown', () => {
+    const today = '2026-09-30';
+    const clients = [
+        { numero_client: 'n°1', rdv_onboarding_done: true, rdv_onboarding_date: '2026-10-09T10:30:00' },
+        { numero_client: 'n°2', rdv_onboarding_date: '2026-10-09T10:30:00' },
+        { numero_client: 'n°3', rdv_onboarding_date_manual: '2026-09-30' },
+        { numero_client: 'n°4', rdv_onboarding_date: '2026-07-15T10:00:00' },
+        { numero_client: 'n°5' },
+        { numero_client: 'n°6', onboarding_reschedule_pending: true },
+    ];
+    const situations = clients.map((r) => onboardingSituation(r, today));
+    assert.deepEqual(situations, ['done', 'venir', 'venir', 'todo', 'todo', 'todo']);
+    assert.equal(situations.filter(Boolean).length, clients.length);
+});
+
+test('an exited client or a pending contract is in no onboarding situation unless its state is asked for', () => {
+    const today = '2026-09-30';
+    assert.equal(onboardingSituation({ numero_client: 'n°7' }, today, { exited: true }), null);
+    assert.equal(onboardingSituation({ numero_client: 'n°7', rdv_onboarding_done: true }, today, { exited: true }), null);
+    assert.equal(onboardingSituation({ numero_client: 'n°7' }, today, { exited: true, includeExited: true }), 'todo');
+    assert.equal(onboardingSituation({ numero_client: null, rdv_onboarding_date: '2026-10-09' }, today), null);
 });
