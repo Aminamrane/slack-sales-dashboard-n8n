@@ -17,6 +17,15 @@ export function matchesUpcomingOnboarding(row, today) {
     return !!row.numero_client && !!date && !row.rdv_onboarding_done && String(date).slice(0, 10) >= today;
 }
 
+// Situation d'onboarding d'un client, EXCLUSIVE (Vincent 30/09 : « quand tu cumules à venir, réalisé et
+// à faire, tu dépasses le nombre de clients signés ») : chaque client compte dans UNE seule case, « à faire »
+// = ni réalisé ni planifié. Un client sorti n'entre dans aucune case, sauf si son état est demandé.
+export function onboardingSituation(row, today, { exited = false, includeExited = false } = {}) {
+    if (!row.numero_client || (exited && !includeExited)) return null;
+    if (row.rdv_onboarding_done) return 'done';
+    return matchesUpcomingOnboarding(row, today) ? 'venir' : 'todo';
+}
+
 // Date d'onboarding d'une ligne pour le filtre de dates du board et ses mois : un onboarding réalisé
 // compte à sa date de réalisation (« onboardings réalisés en septembre », Vincent 29/09), les autres
 // à leur date prévue.
