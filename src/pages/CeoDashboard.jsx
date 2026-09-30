@@ -14,7 +14,7 @@ import {
   meteoBandOf, METEO_BANDS,
 } from "./OptilexBoard.jsx";
 import SharedNavbar from "../components/SharedNavbar.jsx";
-import { CeoFinanceMetrics, CeoProductMetrics, CeoDelayMetrics, CeoUpcomingAppointments } from "../components/CeoDashboardMetrics.jsx";
+import { CeoFinanceMetrics, CeoPilotageMetrics, CeoProductMetrics, CeoDelayMetrics, CeoUpcomingAppointments } from "../components/CeoDashboardMetrics.jsx";
 import { matchesSignedClient } from "../utils/boardClientState.js";
 import SalesTeamGrid from "../components/SalesTeamGrid.jsx";
 import SettersGrid from "../components/SettersGrid.jsx";
@@ -1932,6 +1932,7 @@ export default function CeoDashboard() {
                 ))}
               </div>
 
+              <CeoPilotageMetrics darkMode={darkMode} />
               <CeoFinanceMetrics darkMode={darkMode} onOpenFinance={(period) => navigate(`/ceo/dispatch?period=${period}`)} />
               <CeoProductMetrics boardRows={boardRows} darkMode={darkMode} />
               <CeoDelayMetrics darkMode={darkMode} />
