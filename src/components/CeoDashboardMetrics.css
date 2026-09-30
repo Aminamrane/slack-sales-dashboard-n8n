@@ -96,6 +96,9 @@
 @media(max-width:620px) { .ceo-client-kpis { grid-template-columns:1fr; } }
 
 .ceo-kpi-split { grid-column:span 2; }
+/* ARR des sorties : une demi-ligne chacune sous les états clients ; côte à côte dès deux colonnes. */
+.ceo-kpi-wide { grid-column:span 2; }
+@media(max-width:1000px) { .ceo-kpi-wide { grid-column:span 1; } }
 .ceo-kpi-sections { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
 .ceo-kpi-section { min-width:0; padding-right:18px; }
 .ceo-kpi-section + .ceo-kpi-section { padding-right:0; padding-left:18px; border-left:1px solid #94a3b830; }

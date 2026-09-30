@@ -16,6 +16,7 @@ import {
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import { CeoFinanceMetrics, CeoPilotageMetrics, CeoProductMetrics, CeoDelayMetrics, CeoUpcomingAppointments } from "../components/CeoDashboardMetrics.jsx";
 import { matchesSignedClient } from "../utils/boardClientState.js";
+import { lossArr } from "../utils/lossArr.js";
 import SalesTeamGrid from "../components/SalesTeamGrid.jsx";
 import SettersGrid from "../components/SettersGrid.jsx";
 import SalesSettersToggle from "../components/SalesSettersToggle.jsx";
@@ -25,7 +26,7 @@ import {
   ChevronDown, Home, MessageSquare, Mail, Search, PanelLeft, Sparkles,
   // Glyphes des cartes d'états : un pictogramme qui PORTE le sens du KPI,
   // à la place des anciennes pastilles de couleur.
-  Users, TrendingUp, Cloud, CalendarClock, Scale, UserRoundX, RotateCcw, Send,
+  Users, TrendingUp, Cloud, CalendarClock, Scale, UserRoundX, RotateCcw, Send, BadgeEuro,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import "../index.css";
@@ -1007,6 +1008,10 @@ export default function CeoDashboard() {
   // sélecteur du bandeau Cash, qui ne pilote que les montants.
   const [etatPeriod, setEtatPeriod] = useState('all');
   const [boardRows, setBoardRows] = useState(null); // null = pas encore chargé
+  // ARR Owner par client (part Owner facturée par la Finance, annualisée) : cartes
+  // « ARR des résiliations / rétractations ». null = en cours, false = échec (« — »,
+  // jamais 0 €).
+  const [ownerArr, setOwnerArr] = useState(null);
   const [perfClients, setPerfClients] = useState([]); // perf-closing clients list
   const [dataLoading, setDataLoading] = useState(true);
   const [avatarMap, setAvatarMap] = useState({});
@@ -1082,6 +1087,27 @@ export default function CeoDashboard() {
     loadBoard();
     const refresh = () => { if (!document.hidden) loadBoard(); };
     const timer = setInterval(refresh, 30000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { cancelled = true; clearInterval(timer); document.removeEventListener('visibilitychange', refresh); };
+  }, [user]);
+
+  // Montants de la Finance : ils bougent au rythme de la facturation, pas du board.
+  // Un échec après un premier chargement garde les derniers montants connus.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const loadArr = async () => {
+      try {
+        const data = await apiClient.get('/api/v1/ceo-dashboard/owner-arr');
+        if (!cancelled) setOwnerArr(data?.clients || {});
+      } catch (e) {
+        console.warn('[CeoDashboard] ARR Owner indisponible:', e);
+        if (!cancelled) setOwnerArr((prev) => prev || false);
+      }
+    };
+    loadArr();
+    const refresh = () => { if (!document.hidden) loadArr(); };
+    const timer = setInterval(refresh, 300000);
     document.addEventListener('visibilitychange', refresh);
     return () => { cancelled = true; clearInterval(timer); document.removeEventListener('visibilitychange', refresh); };
   }, [user]);
@@ -1225,8 +1251,9 @@ export default function CeoDashboard() {
     }).length;
 
     // ── FLUX : les entrées dans l'état pendant la période ──
-    const countEtat = (name) => established
-      .filter((r) => displayEtat(r) === name && (allTime || inPeriod(r.etat_date))).length;
+    const exitsOf = (name) => established
+      .filter((r) => displayEtat(r) === name && (allTime || inPeriod(r.etat_date)));
+    const countEtat = (name) => exitsOf(name).length;
 
     // ── HISTORIQUE DES SORTIES : hors filtre ──
     // 12 derniers mois + mois courant, par état. Ils nourrissent les courbes et
@@ -1235,12 +1262,13 @@ export default function CeoDashboard() {
     // on ne la place pas au hasard (0 sur 45 résiliations, 3 sur 44 rétractations).
     const now = new Date();
     const currentMonthKeyLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const monthlyExits = (etatName) => {
+    // `weight` : 1 par sortie pour les comptes, son ARR pour les cartes d'ARR.
+    const monthlyExits = (etatName, weight = () => 1) => {
       const byMonth = {};
       established.forEach((r) => {
         if (displayEtat(r) !== etatName) return;
         const k = (dateOnly(r.etat_date) || '').slice(0, 7);
-        if (k) byMonth[k] = (byMonth[k] || 0) + 1;
+        if (k) byMonth[k] = (byMonth[k] || 0) + weight(r);
       });
       const series = [];
       for (let i = 11; i >= 0; i -= 1) {
@@ -1251,6 +1279,19 @@ export default function CeoDashboard() {
     };
     const resiliesExits = monthlyExits(BOARD_RESILIE);
     const retractesExits = monthlyExits(BOARD_RETRACTE);
+
+    // ── ARR PERDU : part Owner des MÊMES sorties que « Résiliés » et « Rétractés »
+    // (même filtre de période), montants de la Finance. null tant qu'ils manquent.
+    const arrStats = (name) => {
+      if (!ownerArr) return null;
+      const thisMonth = established.filter((r) => displayEtat(r) === name
+        && (dateOnly(r.etat_date) || '').slice(0, 7) === currentMonthKeyLocal);
+      return {
+        ...lossArr(exitsOf(name), ownerArr),
+        thisMonth: lossArr(thisMonth, ownerArr),
+        series: monthlyExits(name, (r) => ownerArr[r.numero_client] || 0).series,
+      };
+    };
 
     // ── À DATE : insensibles à la période ──
     // Un RDV "à venir" est par nature dans le futur, et la météo est un relevé
@@ -1271,6 +1312,8 @@ export default function CeoDashboard() {
       resiliesThisMonth: resiliesExits.thisMonth,
       retractesSeries: retractesExits.series,
       retractesThisMonth: retractesExits.thisMonth,
+      arrResilies: arrStats(BOARD_RESILIE),
+      arrRetractes: arrStats(BOARD_RETRACTE),
       currentMonthLabel: `${MONTH_LABELS_FR[now.getMonth()].toLowerCase()} ${now.getFullYear()}`,
       onboarding: established.filter(isOnboardingUpcoming).length,
       onboardingOverdue: established.filter(isOnboardingOverdue).length,
@@ -1283,7 +1326,7 @@ export default function CeoDashboard() {
       pendingRetraction: established.filter((r) => displayEtat(r) === 'En cours de rétractation' && signedBy(r)).length,
       meteoBands,
     };
-  }, [boardRows, etatPeriod]);
+  }, [boardRows, etatPeriod, ownerArr]);
 
   // États clients — cartes alignées sur le board Owner/Opti'Lex, sauf
   // "En retard de paiement" : la notion de retard n'existe pas dans le board
@@ -1374,6 +1417,40 @@ export default function CeoDashboard() {
       },
     ];
   }, [boardStats, etatPeriod]);
+
+  // ARR des sorties, sous les états clients (demande dev 2026-09-30) : la part
+  // Owner des résiliations et des rétractations comptées au-dessus, sur la même
+  // période. Un client sans montant connu est annoncé, jamais compté pour 0 €.
+  const kpiArr = useMemo(() => {
+    const periodLabel = etatPeriod === 'all'
+      ? null
+      : `${MONTH_LABELS_FR[Number(etatPeriod.slice(5, 7)) - 1]} ${etatPeriod.slice(0, 4)}`.toLowerCase();
+    const failed = ownerArr === false;
+    const missing = (n) => (n > 0 ? ` · ${n} sans montant` : '');
+    const card = (label, color, stats, noun) => ({
+      label, Icon: BadgeEuro, color, cardClass: 'ceo-kpi-wide',
+      loading: !failed && !stats,
+      value: stats ? formatEuro(stats.total) : '—',
+      sub: failed
+        ? 'Montants de la Finance indisponibles'
+        : `${periodLabel ? `Part Owner HT, ${periodLabel}` : 'Part Owner HT'}${missing(stats?.missing)}`,
+      subChip: true,
+      readings: (!periodLabel && stats) ? [
+        { value: formatEuro(stats.total), sub: `Part Owner HT${missing(stats.missing)}` },
+        { value: formatEuro(stats.thisMonth.total), sub: `En ${boardStats.currentMonthLabel}${missing(stats.thisMonth.missing)}` },
+      ] : null,
+      spark: stats ? { values: stats.series } : null,
+      breakdown: stats ? [
+        { label: `${noun} chiffrées`, value: `${stats.known} sur ${stats.known + stats.missing}` },
+        ...(stats.missing > 0 ? [{ label: 'Sans montant Owner', value: String(stats.missing) }] : []),
+        { label: 'Base', value: 'Attendu Owner HT annualisé' },
+      ] : [],
+    });
+    return [
+      card('ARR des résiliations', '#ef4444', boardStats?.arrResilies, 'Résiliations'),
+      card('ARR des rétractations', '#f97316', boardStats?.arrRetractes, 'Rétractations'),
+    ];
+  }, [boardStats, etatPeriod, ownerArr]);
 
   useEffect(() => {
     localStorage.setItem('darkMode', darkMode);
@@ -1920,7 +1997,7 @@ export default function CeoDashboard() {
               </div>
 
               <div className="ceo-client-kpis" style={{ display: 'grid', gap: 14, marginBottom: 28 }}>
-                {kpiRow2.map((kpi, i) => (
+                {[...kpiRow2, ...kpiArr].map((kpi, i) => (
                   <CeoKpiCard
                     key={kpi.label}
                     kpi={kpi}
