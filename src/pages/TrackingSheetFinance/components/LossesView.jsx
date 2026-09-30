@@ -45,6 +45,13 @@ const FAMILLES = [
 ];
 const AUTRES = { key: 'autres', label: 'Autres', etats: [] };
 
+// ARR perdu, part Owner seule (demande dev 2026-09-30 : « l'ARR des résiliations et des rétractations,
+// les pertes d'Owner uniquement ») : le tarif annuel HT des contrats sortis, chaque client compté une fois.
+const ARR_FAMILLES = [
+  { key: 'resiliation', label: 'ARR des résiliations', accent: N.red },
+  { key: 'retractation', label: 'ARR des rétractations', accent: N.amber },
+];
+
 const familleOf = (etat) =>
   FAMILLES.find((f) => f.etats.includes(etat))?.key || AUTRES.key;
 
@@ -114,7 +121,21 @@ export default function LossesView({ boardMap, scope, onOpenClient }) {
       parNature[k].futur += l.futur;
       parNature[k].n += 1;
     }
-    return { acc, creance, futur, n: enriched.length, parNature };
+    const arr = {};
+    for (const { key } of ARR_FAMILLES) {
+      const clients = new Map();
+      for (const l of enriched) {
+        if (l.correction || l.famille !== key || clients.has(l.client_id)) continue;
+        clients.set(l.client_id, l.arr_owner);
+      }
+      const values = [...clients.values()];
+      arr[key] = {
+        total: values.reduce((s, v) => s + (v || 0), 0),
+        n: values.length,
+        sansTarif: values.filter((v) => v == null).length,
+      };
+    }
+    return { acc, creance, futur, n: enriched.length, parNature, arr };
   }, [enriched]);
 
   if (error) {
@@ -229,6 +250,45 @@ export default function LossesView({ boardMap, scope, onOpenClient }) {
               </div>
               <div style={{ fontSize: 11, color: N.textFaint, marginTop: 2 }}>
                 + {formatEUR(t.futur)} de futur annulé
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* ARR perdu : la valeur annuelle des contrats sortis, part Owner seule, quel que soit le périmètre. */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+        gap: 10, marginBottom: 22,
+      }}>
+        {ARR_FAMILLES.map((f, i) => {
+          const a = totaux.arr[f.key];
+          return (
+            <motion.div
+              key={f.key}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.28, delay: 0.2 + i * 0.05, ease: [0.4, 0, 0.2, 1] }}
+              style={{
+                border: `1px solid ${N.borderSft}`, borderRadius: 10,
+                padding: '12px 14px', background: '#fff',
+              }}
+            >
+              <div style={{
+                fontSize: 10.5, fontWeight: 600, color: N.textMuted,
+                textTransform: 'uppercase', letterSpacing: '0.04em',
+              }}>
+                {f.label} · {a.n}
+              </div>
+              <div style={{
+                fontSize: 18, fontWeight: 700, color: a.n ? f.accent : N.textFaint, marginTop: 4,
+                fontVariantNumeric: 'tabular-nums',
+              }}>
+                {formatEUR(a.total)}
+              </div>
+              <div style={{ fontSize: 11, color: N.textFaint, marginTop: 2 }}>
+                valeur annuelle des contrats · Owner HT
+                {a.sansTarif > 0 && ` · ${a.sansTarif} sans tarif`}
               </div>
             </motion.div>
           );
