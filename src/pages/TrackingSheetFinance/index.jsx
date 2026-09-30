@@ -6,7 +6,7 @@
 //   PATCH /api/v1/finance-periods/{row_id}
 //   GET   /api/v1/finance-periods/{row_id}/audit
 //
-// Roles allowed : admin / finance_director / finance_team. Anyone else
+// Roles allowed : admin / ceo / finance_director / finance_team. Anyone else
 // is redirected to '/'. Pattern mirrors Campaigns.jsx :77.
 //
 // Composition (Notion-like shell, v6 refonte 2026-05-08) :
@@ -394,9 +394,9 @@ export default function TrackingSheetFinance() {
   }, [authChecked]);
 
   // ── Validations (dev 2026-09-23) : les demandes de l'équipe finance, à
-  // valider par la direction. Onglet réservé à admin / finance_director ; le
+  // valider par la direction. Onglet réservé à admin / finance_director / ceo ; le
   // compteur se rafraîchit toutes les 30 s et au retour sur l'onglet.
-  const canValidate = ['admin', 'finance_director'].includes(apiClient.getUser()?.role);
+  const canValidate = ['admin', 'ceo', 'finance_director'].includes(apiClient.getUser()?.role);
   const [pendingValidations, setPendingValidations] = useState(0);
   const refreshPendingValidations = useCallback(() => {
     if (!canValidate) return;
@@ -416,10 +416,10 @@ export default function TrackingSheetFinance() {
     const token = apiClient.getToken();
     const user = apiClient.getUser();
     if (!token || !user) { navigate('/login'); return; }
-    const allowed = ALLOWED_ROLES.includes(user.role) || (embedMode && user.role === 'ceo');
+    const allowed = ALLOWED_ROLES.includes(user.role);
     if (!allowed) { navigate('/'); return; }
     setAuthChecked(true);
-  }, [navigate, embedMode]);
+  }, [navigate]);
 
   // ── State ────────────────────────────────────────────────────────────
   const [period, setPeriod] = useState(() => {
