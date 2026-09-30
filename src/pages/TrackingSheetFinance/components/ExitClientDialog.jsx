@@ -28,6 +28,7 @@ import { X, TriangleAlert, RotateCcw, CalendarDays, Check } from 'lucide-react';
 
 import { ETAT_DATE_CONFIG } from '../../OptilexBoard.jsx';
 import { formatEUR, formatDateFR, formatMonthLabel, shiftMonth, ACTED_EXIT_ETATS } from '../constants.js';
+import { lossPreview } from '../lossPreview.js';
 
 const N = {
   text: '#37352f',
@@ -62,43 +63,10 @@ const btn = (kind) => ({
   cursor: 'pointer',
 });
 
-// Ce que la perte effacerait, ventilé sur les TROIS périmètres que la finance
-// choisit séparément (demande dev 2026-08-28) : les créances antérieures, le
-// mois en cours, le reste du contrat. Calculé sur la timeline déjà chargée par
-// le panneau — le montant se voit AVANT de valider, jamais après.
-//
-// On n'abandonne QUE ce qui reste dû : attendu moins encaissé, plancher à
-// zéro. Un mois déjà soldé ne compte pas — il n'y a rien à y abandonner, et
-// son attendu ne bougera pas (sinon la page afficherait un crédit imaginaire
-// en faveur d'un client qu'on passe justement en perte).
-//
-// EXACTEMENT la même formule que le serveur : ce que l'écran annonce ici est
-// ce qui sera écrit, au centime.
-const abandonable = (r) => {
-  const eo = Number(r.expected_owner || 0);
-  const ep = Number(r.expected_optilex_ttc || 0);
-  const paidO = Number(r.received_owner || 0) + Number(r.received_overdue_owner || 0);
-  const paidP = Number(r.received_optilex_ttc || 0)
-    + Number(r.received_overdue_optilex_ttc || 0);
-  return Math.max(eo - Math.max(paidO, 0), 0) + Math.max(ep - Math.max(paidP, 0), 0);
-};
-
-function useLossPreview(periods) {
-  return useMemo(() => {
-    const cur = new Date();
-    const curKey = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`;
-    const empty = () => ({ amount: 0, months: 0 });
-    const out = { past: empty(), current: empty(), future: empty() };
-    for (const r of periods || []) {
-      const amount = abandonable(r);
-      if (amount <= 0) continue;
-      const key = String(r.period || '').slice(0, 7);
-      const bucket = key < curKey ? 'past' : key === curKey ? 'current' : 'future';
-      out[bucket].months += 1;
-      out[bucket].amount += amount;
-    }
-    return out;
-  }, [periods]);
+// Aperçu par périmètre : voir lossPreview.js (même règle que le serveur, le
+// reste du contrat s'arrête à l'échéance du contrat).
+function useLossPreview(periods, contractEnd) {
+  return useMemo(() => lossPreview(periods, { contractEnd }), [periods, contractEnd]);
 }
 
 // Une ligne de périmètre : la case, le montant total, et — si la finance
@@ -208,7 +176,7 @@ function AmountField({ label, value, max, onChange, danger = false }) {
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 export default function ExitClientDialog({
-  open, onClose, client, boardRow, periods,
+  open, onClose, client, boardRow, periods, contractEnd = null,
   onEtatChange, onDeclareLoss, onRevertLoss, loss,
   // Dernier mois facturé choisi par la direction (« AAAA-MM »), et son
   // enregistrement : contrôle total sur la fin de facturation (dev 2026-09-18).
@@ -256,7 +224,7 @@ export default function ExitClientDialog({
   // Montant abandonné par périmètre. `null` = tout le périmètre (cas courant).
   const [partial, setPartial] = useState({ past: null, current: null, future: null });
 
-  const preview = useLossPreview(periods);
+  const preview = useLossPreview(periods, contractEnd);
   const amountFor = (k) => (partial[k] == null ? preview[k].amount : partial[k]);
   const selectedTotal = ['past', 'current', 'future']
     .reduce((sum, k) => sum + (scope[k] ? amountFor(k) : 0), 0);
@@ -581,7 +549,7 @@ export default function ExitClientDialog({
                     checked={scope.future}
                     onToggle={(v) => setScope((s) => ({ ...s, future: v }))}
                     label="Reste du contrat"
-                    hint="Mois à venir"
+                    hint={contractEnd ? `Jusqu’à l’échéance du ${formatDateFR(contractEnd)}` : 'Mois à venir'}
                     amount={preview.future.amount}
                     months={preview.future.months}
                     disabled={preview.future.months === 0}

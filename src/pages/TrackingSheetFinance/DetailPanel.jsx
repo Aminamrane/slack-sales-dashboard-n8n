@@ -1039,6 +1039,7 @@ export default function DetailPanel({
             // les colonnes par entité. Or une perte porte sur les DEUX
             // entités, exactement comme le fait le serveur.
             periods={periods}
+            contractEnd={profile?.contract_end || null}
             loss={profile?.loss || null}
             initialEtat={exitPreset}
             signatureDate={profile?.date_signature}
