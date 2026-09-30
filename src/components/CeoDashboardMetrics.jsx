@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowUpRight, Wallet, RotateCcw, TrendingUp, CalendarCheck, Building2, Users, Sparkles, Banknote, ChevronDown, ChevronRight, CalendarDays, Scale, CalendarClock, FileCheck2, X, UserRoundCheck, PiggyBank, Hourglass, FileUp } from 'lucide-react';
+import { ArrowUpRight, Wallet, RotateCcw, TrendingUp, CalendarCheck, Building2, Users, Sparkles, Banknote, ChevronDown, ChevronRight, CalendarDays, Scale, CalendarClock, FileCheck2, X, UserRoundCheck, Hourglass, FileUp } from 'lucide-react';
 import apiClient from '../services/apiClient';
 import { computeKpis } from '../pages/TrackingSheetFinance/constants.js';
 import { isCurrentProductClient } from '../utils/boardClientState.js';
@@ -167,10 +167,9 @@ const compactEuro = (v) => v == null ? '—' : v >= 1e6 ? `${new Intl.NumberForm
 
 // Pilotage OWNER (demande dev 30/09/2026) : l'usage du portail client, lu dans ses métriques (doc « api-chiffres ») ;
 // chiffres arrêtés chaque nuit côté portail, définitions du portail en infobulle. Rien n'est recalculé ici.
+// Les gains réalisés ne sont pas repris : ce sont les « Économies réalisées » du bloc Produit (même donnée).
 const intFr = (v) => (v == null ? '—' : new Intl.NumberFormat('fr-FR').format(v));
-const euro0 = (v) => (v == null ? '—' : new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Number(v)).replace(/\u202f/g, '\u00a0'));
 const monthOf = (key, options) => (key ? new Intl.DateTimeFormat('fr-FR', { ...options, timeZone: 'UTC' }).format(new Date(`${key}-01T12:00:00Z`)) : '');
-const dayOf = (iso) => (iso ? new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${iso}T12:00:00Z`)) : '—');
 
 function Share({ part, total, label, tone }) {
   const reduceMotion = useReducedMotion();
@@ -191,19 +190,13 @@ export function CeoPilotageMetrics({ darkMode }) {
   const monthTitle = monthOf(d?.month, { month: 'long', year: 'numeric' });
   return <section className={`ceo-metrics-section${darkMode ? ' is-dark' : ''}`} aria-label="Pilotage OWNER">
     <div className="ceo-metrics-title"><h2>Pilotage OWNER <small>{monthTitle ? `${monthTitle.charAt(0).toUpperCase()}${monthTitle.slice(1)} · ` : ''}mis à jour chaque nuit</small></h2></div>
-    <div className="ceo-metrics-grid">
+    <div className="ceo-metrics-grid ceo-metrics-grid--3">
       <Card title="Clients revenus sur 30 jours" Icon={UserRoundCheck} {...pilotage}>
         <div className="ceo-hero" title={defs.clients_back_30d}>
           <HeroNumber value={d?.clients_back_30d} duration={1300} className="ceo-hero-value" />
           <div className="ceo-hero-caption">sur {intFr(d?.client_accounts)} comptes clients</div>
         </div>
         <Share part={d?.clients_back_30d} total={d?.client_accounts} label="des comptes revenus en 30 jours" />
-      </Card>
-      <Card title="Gains réalisés pour les clients" Icon={PiggyBank} {...pilotage} tone="money">
-        <div className="ceo-hero ceo-hero--money" title={defs.gains_eur}>
-          <HeroNumber value={d?.gains_eur} duration={1900} className="ceo-hero-value" format={compactEuro} />
-          <div className="ceo-hero-caption">{euro0(d?.gains_eur)} · cumul au {dayOf(d?.gains_as_of)}{d?.gains_upcoming_eur ? ` · ${compactEuro(d.gains_upcoming_eur)} à venir` : ''}</div>
-        </div>
       </Card>
       <Card title="Demandes du cabinet sans réponse" Icon={Hourglass} {...pilotage}>
         <div className="ceo-hero" title={defs.requests_waiting}>

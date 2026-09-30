@@ -9,6 +9,7 @@
 .ceo-metrics-period { border:1px solid #d5dae5; border-radius:12px; background:transparent; color:inherit; padding:9px 14px; font-family:inherit; font-weight:600; font-size:13px; cursor:pointer; }
 .ceo-metrics-period option { color:#1e2330; background:#fff; }
 .ceo-metrics-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; }
+.ceo-metrics-grid--3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
 .ceo-metrics-section { --metric-muted:#596174; --metric-border:#e3e6ee; --metric-surface:#fff; --metric-strong:#252c38; --metric-accent:#475569; --metric-soft:#f5f6f8; }
 .ceo-metrics-section.is-dark { --metric-muted:#bbc2d3; --metric-border:#3a4050; --metric-surface:#242733; --metric-strong:#eff2f8; --metric-accent:#bac7d9; --metric-soft:#2c303d; }
 .ceo-metrics-section .ceo-card.ceo-metric { container-type:inline-size; padding:22px; min-width:0; display:flex; flex-direction:column; min-height:300px; border:1px solid var(--metric-border); border-radius:20px; background:var(--metric-surface); box-shadow:0 3px 12px #1d294208; transition:box-shadow .25s ease,border-color .25s ease; }
