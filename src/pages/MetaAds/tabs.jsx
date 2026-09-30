@@ -9,7 +9,8 @@ import React from 'react';
 import CreativeThumb from './CreativeThumb.jsx';
 import { Ring, Pill } from './motion.jsx';
 import { RECO_TONE, toneColors, scoreColor } from './CreativePanel.jsx';
-import { fmtInt, fmtCompact, fmtEur, fmtEur2, fmtRoas, fmtShare, fmtDay } from './theme.js';
+import { fmtInt, fmtCompact, fmtEur, fmtEur2, fmtRoas, fmtShare, fmtDay, fmtPct } from './theme.js';
+import { fmtProfit, monthLabel } from './profit.js';
 
 const GENDER = { female: 'Femmes', male: 'Hommes', unknown: 'Non renseigné' };
 const FORMAT = { video: 'Vidéo', image: 'Image', carousel: 'Carrousel', other: 'Autre' };
@@ -52,6 +53,18 @@ function JevCell({ jev, T }) {
   return <Pill T={T} color={tone.color} bg={tone.bg} title={title}>{jev.action_label}</Pill>;
 }
 
+// Rentabilité depuis le lancement : montant (collecté ou contrats) comparé à toute la dépense de la créa.
+function ProfitCell({ lifetime, session, kind, T }) {
+  const src = lifetime || session;
+  if (!src) return <span style={{ color: T.textFaint }} title="Pas encore de vente rattachée depuis le lancement">—</span>;
+  const profit = kind === 'cash' ? src.profit_pct_cash : src.profit_pct_contract;
+  const amount = kind === 'cash' ? src.cash_at_signature_eur : src.contract_value_eur;
+  if (profit == null) return <span style={{ color: T.textFaint }}>—</span>;
+  const title = `${kind === 'cash' ? 'Montant collecté' : 'Contrats signés (sur l’année)'} : ${fmtEur(amount)} pour ${fmtEur(lifetime ? lifetime.spend_eur : session.campaign_spend_eur)} dépensés`
+    + (lifetime ? ` depuis ${monthLabel(lifetime.since_month)}` : ` (session ${session.session})`);
+  return <span title={title} style={{ fontWeight: 600, color: profit >= 0 ? T.green : T.red, fontVariantNumeric: 'tabular-nums' }}>{fmtProfit(profit)}</span>;
+}
+
 export const TABS = [
   {
     key: 'creatives', label: 'Créas', source: 'leaderboard', rows: (d) => d?.rows || [], clickable: true, rowKey: (r) => r.name,
@@ -67,6 +80,14 @@ export const TABS = [
       ventes,
       money('cac', 'Coût / vente'),
       roas,
+      { key: 'profit_today', label: 'Rentable aujourd’hui', align: 'right', sortValue: (r) => (r.lifetime || r.webinar_session)?.profit_pct_cash ?? null,
+        render: (r, T) => <ProfitCell lifetime={r.lifetime} session={r.webinar_session} kind="cash" T={T} /> },
+      { key: 'profit_year', label: 'Rentable sur l’année', align: 'right', sortValue: (r) => (r.lifetime || r.webinar_session)?.profit_pct_contract ?? null,
+        render: (r, T) => <ProfitCell lifetime={r.lifetime} session={r.webinar_session} kind="contract" T={T} /> },
+      { key: 'big_leads', label: 'Leads 11+ salariés', align: 'right', sortValue: (r) => r.company_size?.big_leads ?? null,
+        render: (r, T) => (r.company_size?.leads_with_headcount
+          ? <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.company_size.big_leads)} <span style={{ color: T.textFaint }}>{fmtPct(r.company_size.big_leads_pct, 0)}</span></span>
+          : <span style={{ color: T.textFaint }}>—</span>) },
       { key: 'jev', label: 'Décision Jev', sortable: false, render: (r, T) => <JevCell jev={r.jev} T={T} /> },
     ],
   },

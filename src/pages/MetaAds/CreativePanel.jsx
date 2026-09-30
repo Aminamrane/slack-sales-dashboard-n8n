@@ -5,21 +5,24 @@
 // leads → R1 tenus → R2 tenus → ventes, les coûts, la recommandation, et les
 // clients signés rattachés à cette créa. Si la ligne vient du tableau
 // Campagnes (sans entonnoir), le panneau va chercher la créa dans le
-// leaderboard de la même période.
+// leaderboard de la même période. « Voir sur quoi Jev se base » déplie les
+// probabilités de tous les choix proposés à Jev et le dossier qu'il a lu.
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import apiClient from '../../services/apiClient.js';
 import CreativeThumb from './CreativeThumb.jsx';
 import Pict from './icons.jsx';
 import { Ring, Funnel, Pill, EASE } from './motion.jsx';
 import { fmtInt, fmtEur, fmtEur2, fmtRoas, fmtDay, fmtPct } from './theme.js';
+import { fmtProfit, monthLabel, BRACKETS } from './profit.js';
 
 const norm = (v) => String(v || '').trim().toLowerCase();
 
 export const RECO_TONE = {
   observer: 'navy', garder: 'muted', decliner: 'green', hook: 'amber', qualif: 'amber', noshow: 'red', couper: 'red',
   scale: 'green', keep: 'muted', variant: 'green', fix_qualification: 'amber', fix_noshow: 'amber', stop: 'red', wait: 'navy',
+  reduce_budget: 'amber', relaunch: 'green', leave_stopped: 'muted', check_tracking: 'amber',
 };
 const agoLabel = (iso) => {
   if (!iso) return '';
@@ -59,6 +62,189 @@ function Stat({ T, label, value, strong }) {
     <div style={{ padding: '10px 12px', borderRadius: T.radiusSm, background: T.surfaceAlt }}>
       <div style={{ fontSize: 11, color: T.textFaint, fontWeight: 600 }}>{label}</div>
       <div style={{ marginTop: 3, fontSize: 16, fontWeight: 500, color: strong || T.text, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+    </div>
+  );
+}
+
+const pctLabel = (p) => `${Math.round((p || 0) * 100)} %`;
+
+// Rentabilité d'un montant face à la dépense : « aujourd’hui » = montant collecté, « sur l’année » = contrats signés.
+function ProfitStat({ T, label, amount, profit, roas, horizon }) {
+  const positive = profit != null && profit >= 0;
+  const color = profit == null ? T.textFaint : positive ? T.green : T.red;
+  const verdict = profit == null ? 'aucune vente' : positive ? `rentable ${horizon}` : horizon === 'aujourd’hui' ? 'pas encore rentable' : `pas rentable ${horizon}`;
+  return (
+    <div style={{ padding: '10px 12px', borderRadius: T.radiusSm, background: T.surfaceAlt }}>
+      <div style={{ fontSize: 11, color: T.textFaint, fontWeight: 600 }}>{label}</div>
+      <div style={{ marginTop: 3, fontSize: 16, fontWeight: 500, color: T.text, fontVariantNumeric: 'tabular-nums' }}>{fmtEur(amount)}</div>
+      <div style={{ marginTop: 4, fontSize: 12, fontWeight: 600, color }}>
+        {verdict}{profit != null && <span style={{ fontVariantNumeric: 'tabular-nums' }}> · {fmtProfit(profit)} · ROAS {fmtRoas(roas)}</span>}
+      </div>
+    </div>
+  );
+}
+
+// Depuis le lancement (ou le début du suivi par créa) : toutes les ventes de ses leads face à toute sa dépense.
+function LifetimeBlock({ T, row }) {
+  const lt = row.lifetime;
+  const ws = row.webinar_session;
+  if (!lt && !ws) return null;
+  if (!lt) {
+    return (
+      <Block T={T} icon="roas" title="Depuis le lancement" sub={`session ${ws.session}`}>
+        <div style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.5, marginBottom: 8 }}>
+          Créa webinaire : ses inscrits ne sont pas suivis un par un au CRM, les ventes sont celles de la session que sa campagne a alimentée
+          ({fmtInt(ws.session_sales)} vente{ws.session_sales > 1 ? 's' : ''} pour {fmtEur(ws.campaign_spend_eur)} de campagne).
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+          <ProfitStat T={T} label="Montant collecté" amount={ws.cash_at_signature_eur} profit={ws.profit_pct_cash} roas={ws.roas_cash} horizon="aujourd’hui" />
+          <ProfitStat T={T} label="Contrats signés" amount={ws.contract_value_eur} profit={ws.profit_pct_contract} roas={ws.roas_contract} horizon="sur l’année" />
+        </div>
+      </Block>
+    );
+  }
+  const provisional = (lt.recent_spend_pct ?? 0) >= 30;
+  return (
+    <Block T={T} icon="roas" title="Depuis le lancement" sub={`depuis ${monthLabel(lt.since_month)}${lt.launched_before_tracking ? ' (suivi par créa)' : ''}`}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+        <Stat T={T} label="Dépense" value={fmtEur(lt.spend_eur)} />
+        <Stat T={T} label="Ventes" value={fmtInt(lt.sales)} strong={lt.sales ? T.green : undefined} />
+        <Stat T={T} label="Coût par vente" value={fmtEur(lt.cost_per_sale_eur)} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginTop: 8 }}>
+        <ProfitStat T={T} label="Montant collecté" amount={lt.cash_at_signature_eur} profit={lt.profit_pct_cash} roas={lt.roas_cash} horizon="aujourd’hui" />
+        <ProfitStat T={T} label="Contrats signés (sur l’année)" amount={lt.contract_value_eur} profit={lt.profit_pct_contract} roas={lt.roas_contract} horizon="sur l’année" />
+      </div>
+      <div style={{ marginTop: 8, fontSize: 11.5, color: T.textFaint, lineHeight: 1.5 }}>
+        {provisional
+          ? `${lt.recent_spend_pct} % de cette dépense a moins de ${lt.maturity_days} jours : 90 % des ventes arrivent dans ce délai, le résultat va encore monter.`
+          : `L’essentiel de cette dépense a plus de ${lt.maturity_days} jours : le résultat est quasi définitif.`}
+        {lt.launched_before_tracking && ' Lancée avant que les leads portent leur créa : le cumul part de ce moment-là.'}
+      </div>
+    </Block>
+  );
+}
+
+// Taille des entreprises des leads de la période, et ventes par tranche depuis le lancement.
+function CompanySizeBlock({ T, row, reduce }) {
+  const size = row.company_size;
+  if (!size || !size.leads_with_headcount) return null;
+  const max = Math.max(...BRACKETS.map((b) => size.leads_by_headcount[b] || 0), 1);
+  const sold = row.lifetime?.sales_by_headcount || {};
+  return (
+    <Block T={T} icon="audience" title="Taille des entreprises" sub="leads de la période">
+      <div style={{ display: 'grid', gap: 6 }}>
+        {BRACKETS.map((b, i) => {
+          const n = size.leads_by_headcount[b] || 0;
+          const big = i >= 3;
+          return (
+            <div key={b} style={{ display: 'grid', gridTemplateColumns: '92px 1fr 70px', gap: 8, alignItems: 'center', fontSize: 11.5 }}>
+              <span style={{ color: big ? T.text : T.textMuted, fontWeight: big ? 600 : 400 }}>{b} salariés</span>
+              <div style={{ height: 6, borderRadius: 99, background: T.track, overflow: 'hidden' }}>
+                <motion.div initial={reduce ? { scaleX: n / max } : { scaleX: 0 }} animate={{ scaleX: Math.max(0.02, n / max) }}
+                  transition={{ duration: 0.6, delay: reduce ? 0 : i * 0.04, ease: EASE }}
+                  style={{ height: '100%', transformOrigin: 'left center', background: big ? T.green : T.textFaint, borderRadius: 99 }} />
+              </div>
+              <span style={{ textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                {fmtInt(n)} <span style={{ color: T.textFaint, fontWeight: 500 }}>{fmtPct((n / size.leads_with_headcount) * 100, 0)}</span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ marginTop: 8, fontSize: 12, color: T.textMuted, lineHeight: 1.5 }}>
+        <strong style={{ color: T.text }}>{fmtPct(size.big_leads_pct, 1)}</strong> des leads ont 11 salariés et plus
+        {size.account_big_leads_pct != null && <> (compte : {fmtPct(size.account_big_leads_pct, 1)})</>}.
+        {Object.keys(sold).length > 0 && <> Ventes depuis le lancement : {Object.entries(sold).map(([b, n]) => `${n} en ${b === 'inconnue' ? 'tranche inconnue' : `${b} salariés`}`).join(', ')}.</>}
+      </div>
+    </Block>
+  );
+}
+
+// Le raisonnement de Jev, replié par défaut : probabilités de chaque choix proposé (selon le statut et le type
+// de la créa), qualité jugée, puis le dossier transmis, calculé et rédigé côté serveur. Rien n'est généré ici.
+function JevBasis({ T, decision, tone, reduce }) {
+  const [open, setOpen] = useState(false);
+  const [comments, setComments] = useState(false);
+  const choices = decision.probabilities || [];
+  const basis = decision.basis || [];
+  if (!choices.length && !basis.length) {
+    return <div style={{ marginTop: 12, fontSize: 11.5, color: T.textFaint }}>Le détail du raisonnement sera disponible à la prochaine analyse de Jev.</div>;
+  }
+  const heading = { fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: T.textFaint };
+  const link = { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 0', border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, color: T.accent };
+  return (
+    <div style={{ marginTop: 14, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} style={{ ...link, fontSize: 12.5 }}>
+        <motion.span animate={{ rotate: open ? 270 : 180 }} transition={{ duration: reduce ? 0 : 0.24, ease: EASE }} style={{ display: 'inline-flex' }}>
+          <Pict name="back" size={14} color={T.accent} />
+        </motion.span>
+        {open ? 'Masquer le raisonnement' : 'Voir sur quoi Jev se base'}
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div key="basis" initial={reduce ? { opacity: 0 } : { height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+            exit={reduce ? { opacity: 0 } : { height: 0, opacity: 0 }} transition={{ duration: 0.34, ease: EASE }} style={{ overflow: 'hidden' }}>
+            <div style={{ display: 'grid', gap: 18, paddingTop: 12 }}>
+              {choices.length > 0 && (
+                <div>
+                  <div style={heading}>Choix proposés à Jev</div>
+                  <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
+                    {choices.map((c, i) => {
+                      const kept = c.action === decision.action;
+                      return (
+                        <div key={c.action} style={{ display: 'grid', gridTemplateColumns: '156px 1fr 40px', gap: 8, alignItems: 'center', fontSize: 11.5 }}>
+                          <span title={c.label} style={{ color: kept ? T.text : T.textMuted, fontWeight: kept ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {c.label}{c.action === decision.overridden_from && <span style={{ color: T.textFaint, fontWeight: 400 }}> · réponse de Jev</span>}
+                          </span>
+                          <div style={{ height: 6, borderRadius: 99, background: T.track, overflow: 'hidden' }}>
+                            <motion.div initial={reduce ? { scaleX: c.p || 0 } : { scaleX: 0 }} animate={{ scaleX: Math.max(0.02, c.p || 0) }}
+                              transition={{ duration: 0.6, delay: reduce ? 0 : 0.12 + i * 0.04, ease: EASE }}
+                              style={{ height: '100%', transformOrigin: 'left center', background: kept ? tone.color : T.textFaint, borderRadius: 99 }} />
+                          </div>
+                          <span style={{ textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: kept ? T.text : T.textMuted }}>{pctLabel(c.p)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 11.5, color: T.textFaint, lineHeight: 1.5 }}>
+                    Probabilités estimées par Jev pour chaque choix.
+                    {decision.quality_label && <> Qualité jugée : <strong style={{ color: T.text, fontWeight: 600 }}>{decision.quality_label}</strong>
+                      {decision.quality_confidence != null && ` (confiance ${pctLabel(decision.quality_confidence)})`}.</>}
+                  </div>
+                </div>
+              )}
+              {basis.map((section) => (
+                <div key={section.title}>
+                  <div style={heading}>{section.title}</div>
+                  <div style={{ marginTop: 6, padding: '2px 12px', borderRadius: T.radiusSm, background: T.surfaceAlt }}>
+                    {section.rows.map(([label, value], i) => (
+                      <div key={label} style={{ display: 'grid', gridTemplateColumns: '42% minmax(0, 1fr)', gap: 10, padding: '7px 0', borderTop: i ? `1px solid ${T.border}` : 'none', fontSize: 12, lineHeight: 1.45 }}>
+                        <span style={{ color: T.textMuted }}>{label}</span>
+                        <span style={{ color: T.text, fontVariantNumeric: 'tabular-nums' }}>{value ?? '—'}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {section.comments?.length > 0 && (
+                    <>
+                      <button type="button" onClick={() => setComments((v) => !v)} aria-expanded={comments} style={{ ...link, marginTop: 6, fontSize: 12 }}>
+                        {comments ? 'Masquer les commentaires' : `Lire les ${section.comments.length} commentaires transmis à Jev`}
+                      </button>
+                      {comments && (
+                        <div style={{ display: 'grid', gap: 8, marginTop: 6, maxHeight: 420, overflowY: 'auto', paddingRight: 4 }}>
+                          {section.comments.map((c, i) => (
+                            <div key={i} style={{ paddingLeft: 10, borderLeft: `2px solid ${T.border}`, fontSize: 12, color: T.textMuted, lineHeight: 1.5, whiteSpace: 'pre-line', overflowWrap: 'anywhere' }}>{c}</div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -199,6 +385,9 @@ export default function CreativePanel({ row, sales, period, T, jev, onClose }) {
           </div>
         </Block>
 
+        <LifetimeBlock T={T} row={r} />
+        <CompanySizeBlock T={T} row={r} reduce={reduce} />
+
         <Block T={T} icon="info" title="Décision Jev" sub={decision ? `${decision.model || 'jev'} · ${agoLabel(decision.decided_at)}` : undefined}>
           {decision ? (
             <>
@@ -213,6 +402,7 @@ export default function CreativePanel({ row, sales, period, T, jev, onClose }) {
               <ul style={{ margin: '6px 0 0', paddingLeft: 16, display: 'grid', gap: 4 }}>
                 {(decision.facts || []).map((f, i) => <li key={i} style={{ fontSize: 12.5, color: T.textMuted, lineHeight: 1.45 }}>{f}</li>)}
               </ul>
+              <JevBasis T={T} decision={decision} tone={tone} reduce={reduce} />
               {jev?.glossary?.length > 0 && (
                 <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: T.radiusSm, background: T.surfaceAlt, fontSize: 11.5, color: T.textMuted, lineHeight: 1.5 }}>
                   {jev.glossary.map(([term, def]) => <div key={term}><strong style={{ color: T.text }}>{term}</strong> : {def}</div>)}
