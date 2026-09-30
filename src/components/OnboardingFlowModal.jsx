@@ -149,7 +149,7 @@ function SituationStep({ brief, row }) {
   );
 }
 
-function RdvStep({ brief, onReschedule }) {
+function RdvStep({ brief, onReschedule, onCancel }) {
   const a = brief.appointments;
   const item = (label, entry, kind) => (
     <Card title={label} key={label}>
@@ -161,9 +161,11 @@ function RdvStep({ brief, onReschedule }) {
       {entry?.meet_link && <Row label="Visio"><a href={entry.meet_link} target="_blank" rel="noreferrer" style={{ color: BRAND, fontWeight: 700, textDecoration: "none" }}>Rejoindre le Meet</a></Row>}
       {/* Client absent : Vincent déplace le RDV sans quitter le parcours (même recalage que le board),
           ou copie le lien Meet pour le lui donner. */}
-      {kind && entry?.at && !entry.done && (onReschedule || entry.meet_link) && (
+      {kind && entry?.at && !entry.done && (onReschedule || onCancel || entry.meet_link) && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
           {onReschedule && <Button small onClick={() => onReschedule(kind)}>Reprogrammer ce rendez-vous</Button>}
+          {onCancel && String(entry.at).slice(0, 10) >= new Date().toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" })
+            && <Button small danger onClick={() => onCancel(kind)}>Annuler ce rendez-vous</Button>}
           {entry.meet_link && <CopyButton text={entry.meet_link} label="Copier le lien Meet" />}
         </div>
       )}
@@ -259,7 +261,7 @@ function ClotureStep({ brief, busy, onDone, onRescheduleWithDate, onRescheduleLa
   );
 }
 
-export default function OnboardingFlowModal({ row, num, onClose, patch, onRescheduleWithDate, onReschedule, blocked, refreshKey, onChanged }) {
+export default function OnboardingFlowModal({ row, num, onClose, patch, onRescheduleWithDate, onReschedule, onCancel, blocked, refreshKey, onChanged }) {
   const [step, setStep] = useState(0);
   const [brief, setBrief] = useState(null);
   const [error, setError] = useState("");
@@ -345,7 +347,7 @@ export default function OnboardingFlowModal({ row, num, onClose, patch, onResche
             <AnimatePresence mode="wait" initial={false}>
               <Motion.div key={current.key} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.24, ease: EASE }}>
                 {current.key === "situation" && <SituationStep brief={brief} row={row} />}
-                {current.key === "rdv" && <RdvStep brief={brief} onReschedule={onReschedule} />}
+                {current.key === "rdv" && <RdvStep brief={brief} onReschedule={onReschedule} onCancel={onCancel} />}
                 {current.key === "optilex" && <OptilexStep brief={brief} num={num} />}
                 {current.key === "meteo" && <MeteoStep brief={brief} num={num} rated={rated} onRated={(d) => { setRated(d); onChanged?.(); }} />}
                 {current.key === "cloture" && (

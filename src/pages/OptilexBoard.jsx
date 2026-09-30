@@ -1656,7 +1656,7 @@ const roleOf = () => { try { return (apiClient.getUser() || {}).role; } catch { 
 // bouton « Faire l'onboarding » ; les rendez-vous de lancement, la convention et la météo
 // vivent dans le parcours. Les autres rôles gardent les lignes détaillées. Les RDV fiscal et
 // social se reprogramment aussi d'ici (client absent, Vincent 29/09).
-function OnboardingCard({ row, onStart, onManualDone, onReschedule }) {
+function OnboardingCard({ row, onStart, onManualDone, onReschedule, onCancel }) {
   const reduce = useReducedMotion();
   const date = row.rdv_onboarding_date_manual || row.rdv_onboarding_date;
   const done = !!row.rdv_onboarding_done;
@@ -1706,6 +1706,9 @@ function OnboardingCard({ row, onStart, onManualDone, onReschedule }) {
           <span key={label}>{label} : <strong style={{ color: d ? TEXT : "#cbd2e0" }}>{fmtDT(d) || "à placer"}</strong>{ok ? " ✓" : ""}
             {kind && d && !ok && onReschedule && (
               <button type="button" className="ob-detail-link" onClick={() => onReschedule(kind)} style={{ padding: 0, margin: "0 0 0 6px" }}>Reprogrammer</button>
+            )}
+            {kind && onCancel && launchCancellable(d, ok) && (
+              <button type="button" className="ob-detail-link" onClick={() => onCancel(kind)} style={{ padding: 0, margin: "0 0 0 6px", color: CANCEL_RED }}>Annuler</button>
             )}
           </span>
         ))}
@@ -1987,7 +1990,7 @@ function TableDateEdit({ value, onSave, disabled }) {
 
 // Ligne RDV : date (planifiée ou saisie manuellement) + toggle "effectué" + lien (optionnel).
 // onDate présent -> crayon pour saisir/modifier la date à la main (antériorité).
-function RdvRow({ label, date, done, editable, onToggle, link, onDate, meetLink, onReschedule }) {
+function RdvRow({ label, date, done, editable, onToggle, link, onDate, meetLink, onReschedule, onCancel }) {
   const [editing, setEditing] = useState(false);
   const cancelRef = useRef(false);
   return (
@@ -2012,6 +2015,7 @@ function RdvRow({ label, date, done, editable, onToggle, link, onDate, meetLink,
         )}
         {link && <RdvLink url={link} />}
         {onReschedule && <button type="button" className="ob-detail-link" onClick={onReschedule}>Reprogrammer ce rendez-vous</button>}
+        {onCancel && <button type="button" className="ob-detail-link" onClick={onCancel} style={{ color: CANCEL_RED }}>Annuler ce rendez-vous</button>}
         {meetLink && (
           <a href={meetLink} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
             style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 6, padding: "4px 10px", borderRadius: 8, background: GREEN + "14", border: `1px solid ${GREEN}44`, color: GREEN, fontSize: 11.5, fontWeight: 700, textDecoration: "none" }}>
@@ -2523,6 +2527,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
   const [alertPrefill, setAlertPrefill] = useState(null);
   const [agendaOpen, setAgendaOpen] = useState(false); // pop-up "Agenda du client" (RDV standards + RDV juristes)
   const [reschedOpen, setReschedOpen] = useState(false); // pop-up "Recaler le RDV onboarding" (Vincent / facturation)
+  const [cancelOpen, setCancelOpen] = useState(false);   // "fiscal" | "social" : annuler un RDV de lancement (30/09)
   const [apptVersion, setApptVersion] = useState(0);      // recalage fait depuis le parcours : il relit ses RDV
   const [onboardingOpen, setOnboardingOpen] = useState(false); // parcours « Faire l'onboarding » (Client Success)
   // Antériorité emails : à l'ouverture d'une fiche, on enregistre les emails vus (Owner + Opti'Lex
@@ -2616,7 +2621,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
             // Onglet Détails allégé (dev 24/09/2026) : un seul bouton, le reste vit dans le parcours.
             <OnboardingCard row={row} onStart={() => setOnboardingOpen(true)}
               onManualDone={(d) => patch(num, { rdv_onboarding_done: true, rdv_onboarding_done_date: d })}
-              onReschedule={(kind) => setReschedOpen(kind)} />
+              onReschedule={(kind) => setReschedOpen(kind)} onCancel={!isFinanceTeam() ? (kind) => setCancelOpen(kind) : undefined} />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
               <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date_manual || row.rdv_onboarding_date || row.rdv_onboarding_done_date} done={row.rdv_onboarding_done}
@@ -2644,10 +2649,12 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
               <RdvRow label="Rendez-vous lancement fiscal" date={row.rdv_fiscal_date_manual || row.rdv_fiscal_date} done={row.rdv_fiscal_done} editable={!!num && !isFinanceTeam() && !!(row.rdv_fiscal_date_manual || row.rdv_fiscal_date)}
                 link={row.fiscal_url || null}
                 onReschedule={num && !isFinanceTeam() && (row.rdv_fiscal_date_manual || row.rdv_fiscal_date) ? () => setReschedOpen("fiscal") : undefined}
+                onCancel={num && !isFinanceTeam() && launchCancellable(row.rdv_fiscal_date_manual || row.rdv_fiscal_date, row.rdv_fiscal_done) ? () => setCancelOpen("fiscal") : undefined}
                 onToggle={(v) => patch(num, { rdv_fiscal_done: v })} />
               <RdvRow label="Rendez-vous lancement social" date={row.rdv_social_date_manual || row.rdv_social_date} done={row.rdv_social_done} editable={!!num && !isFinanceTeam() && !!(row.rdv_social_date_manual || row.rdv_social_date)}
                 link={row.social_url || null}
                 onReschedule={num && !isFinanceTeam() && (row.rdv_social_date_manual || row.rdv_social_date) ? () => setReschedOpen("social") : undefined}
+                onCancel={num && !isFinanceTeam() && launchCancellable(row.rdv_social_date_manual || row.rdv_social_date, row.rdv_social_done) ? () => setCancelOpen("social") : undefined}
                 onToggle={(v) => patch(num, { rdv_social_done: v })} />
             </div>
           )}
@@ -2662,7 +2669,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
         initial={{ x: 36, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
         exit={{ x: 56, opacity: 0, transition: { duration: 0.18, ease: [0.4, 0, 1, 1] } }}
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-        className="ob-detail-panel" role="dialog" aria-modal="true" aria-hidden={agendaOpen || !!reschedOpen || undefined} aria-label="Détails du client" style={{ position: "fixed", top: 0, right: 0, height: "100dvh", width: 520, maxWidth: "100vw", background: CARD, zIndex: 9999, boxShadow: "-12px 0 40px rgba(0,0,0,0.12)", overflowY: "auto", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+        className="ob-detail-panel" role="dialog" aria-modal="true" aria-hidden={agendaOpen || !!reschedOpen || !!cancelOpen || undefined} aria-label="Détails du client" style={{ position: "fixed", top: 0, right: 0, height: "100dvh", width: 520, maxWidth: "100vw", background: CARD, zIndex: 9999, boxShadow: "-12px 0 40px rgba(0,0,0,0.12)", overflowY: "auto", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
         {/* Header */}
         <div style={{ padding: "20px 22px 16px", borderBottom: `1px solid ${BORDER}`, position: "sticky", top: 0, background: CARD, zIndex: 1 }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
@@ -2823,8 +2830,10 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
           {agendaOpen && <ClientAgendaModal row={row} num={num} onClose={() => setAgendaOpen(false)} />}
           {onboardingOpen && <OnboardingFlowModal row={row} num={num} patch={patch} onClose={() => setOnboardingOpen(false)}
             onRescheduleWithDate={() => setReschedOpen("onboarding")} onReschedule={(kind) => setReschedOpen(kind)}
-            blocked={!!reschedOpen} refreshKey={apptVersion} onChanged={() => { reload(); reloadRatings?.(); }} />}
+            onCancel={!isFinanceTeam() ? (kind) => setCancelOpen(kind) : undefined}
+            blocked={!!reschedOpen || !!cancelOpen} refreshKey={apptVersion} onChanged={() => { reload(); reloadRatings?.(); }} />}
           {reschedOpen && <ReschedOnboardingModal kind={reschedOpen} row={row} num={num} onClose={() => { setReschedOpen(false); setApptVersion((v) => v + 1); reload(); }} onDone={() => { setReschedOpen(false); setApptVersion((v) => v + 1); reload(); }} />}
+          {cancelOpen && <CancelLaunchModal kind={cancelOpen} row={row} num={num} onClose={() => setCancelOpen(false)} onDone={() => { setCancelOpen(false); setApptVersion((v) => v + 1); reload(); }} />}
 
           <DetailFold title="Facturation et suivi">
           {/* Jalons éditables (indisponibles tant que le client n'est pas établi) */}
@@ -2977,6 +2986,73 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
             style={{ padding: "9px 18px", borderRadius: 10, border: "none", background: sel ? GREEN : "#e5e8ee", color: sel ? "#fff" : MUTED, fontSize: 13, fontWeight: 700, cursor: sel && !saving ? "pointer" : "default", fontFamily: "inherit", flexShrink: 0 }}>
             {saving ? "Recalage…" : (uncertain ? "Vérifier ce créneau" : "Confirmer le recalage")}
           </motion.button>
+        </div>
+      </motion.div>
+    </div>,
+    document.body
+  );
+}
+
+// Annulation d'un RDV de lancement fiscal / social depuis le board (dev 2026-09-30). Même moteur
+// que l'espace client : événement retiré de l'agenda du juriste (client prévenu par Google, juriste
+// par e-mail), droit de réserver rendu au client. Pas de délai de 24 h ici ; un RDV passé reste consommé.
+const CANCEL_RED = "#b42318";
+const launchCancellable = (date, done) => {
+  if (!date || done) return false;
+  const today = new Date().toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" });
+  return String(date).slice(0, 10) >= today;   // heure-mur Paris, jamais de conversion
+};
+
+function CancelLaunchModal({ row, num, kind, onClose, onDone }) {
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState(null);
+  const date = kind === "fiscal" ? (row.rdv_fiscal_date_manual || row.rdv_fiscal_date) : (row.rdv_social_date_manual || row.rdv_social_date);
+  const label = ov(row, "contact_name_ovr", "contact_name") || row.crm_societe || num;
+
+  const confirm = async () => {
+    if (saving || done) return;
+    setSaving(true); setError(null);
+    try {
+      await apiClient.post("/api/v1/optilex/board-cancel", { numero_client: num, kind });
+      setDone(true);
+    } catch (e) {
+      setError(!e.status || e.status >= 500
+        ? "L'agenda n'a pas confirmé l'annulation. Réessayez : elle reprendra sans doublon."
+        : (typeof e.data?.detail === "string" ? e.data.detail : e.message || "L'annulation a échoué."));
+    }
+    setSaving(false);
+  };
+  const close = () => { if (saving) return; if (done) onDone(); else onClose(); };
+
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-label="Annuler le rendez-vous de lancement" style={{ position: "fixed", inset: 0, zIndex: 10070, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={close}
+        style={{ position: "absolute", inset: 0, background: "rgba(17,24,39,0.42)" }} />
+      <motion.div initial={{ opacity: 0, scale: 0.97, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+        style={{ position: "relative", width: "min(460px, 100%)", background: CARD, borderRadius: 16, border: `1px solid ${BORDER}`, boxShadow: "0 24px 60px rgba(17,24,39,0.28)", padding: "20px 22px" }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>{done ? "Rendez-vous annulé" : `Annuler le rendez-vous de lancement ${kind}`}</div>
+        <div style={{ fontSize: 12, color: MUTED, marginTop: 3, overflowWrap: "anywhere" }}>{label}{date ? ` · ${fmtDT(date)}` : ""}</div>
+        <p style={{ fontSize: 13, color: TEXT, lineHeight: 1.55, margin: "14px 0 0" }}>
+          {done
+            ? "Il est retiré de l'agenda du juriste. Le client a reçu l'annulation et peut réserver un nouveau créneau avec son lien."
+            : "Le rendez-vous sera retiré de l'agenda du juriste. Le client reçoit l'annulation de Google, le juriste un e-mail, et le client pourra réserver un nouveau créneau avec son lien."}
+        </p>
+        {error && <div role="alert" style={{ marginTop: 12, fontSize: 12, color: CANCEL_RED, lineHeight: 1.5, overflowWrap: "anywhere" }}>{error}</div>}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18, flexWrap: "wrap" }}>
+          {done ? (
+            <motion.button type="button" whileTap={{ scale: 0.97 }} onClick={onDone} autoFocus
+              style={{ padding: "9px 18px", borderRadius: 10, border: "none", background: NAVY, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Fermer</motion.button>
+          ) : (
+            <>
+              <button type="button" disabled={saving} onClick={onClose}
+                style={{ padding: "9px 16px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 13, fontWeight: 600, cursor: saving ? "default" : "pointer", fontFamily: "inherit" }}>Garder le rendez-vous</button>
+              <motion.button type="button" whileTap={saving ? undefined : { scale: 0.97 }} disabled={saving} onClick={confirm}
+                style={{ padding: "9px 18px", borderRadius: 10, border: "none", background: CANCEL_RED, color: "#fff", fontSize: 13, fontWeight: 700, cursor: saving ? "default" : "pointer", fontFamily: "inherit", opacity: saving ? 0.75 : 1 }}>
+                {saving ? "Annulation…" : "Annuler le rendez-vous"}
+              </motion.button>
+            </>
+          )}
         </div>
       </motion.div>
     </div>,
