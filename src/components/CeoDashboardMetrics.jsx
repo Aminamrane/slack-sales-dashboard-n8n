@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowUpRight, Wallet, RotateCcw, TrendingUp, CalendarCheck, Building2, Users, Sparkles, Banknote, ChevronDown, ChevronRight, CalendarDays, Scale, CalendarClock, FileCheck2, X } from 'lucide-react';
+import { ArrowUpRight, Wallet, RotateCcw, TrendingUp, CalendarCheck, Building2, Users, Sparkles, Banknote, ChevronDown, ChevronRight, CalendarDays, Scale, CalendarClock, FileCheck2, X, UserRoundCheck, PiggyBank, Hourglass, FileUp } from 'lucide-react';
 import apiClient from '../services/apiClient';
 import { computeKpis } from '../pages/TrackingSheetFinance/constants.js';
 import { isCurrentProductClient } from '../utils/boardClientState.js';
@@ -164,6 +164,67 @@ function HeroNumber({ value, format = (v) => new Intl.NumberFormat('fr-FR', { ma
 // 3 918 987 € se lit « 3,92 M€ » d'un coup d'œil ; le montant exact reste en légende.
 const compactEuro = (v) => v == null ? '—' : v >= 1e6 ? `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(v / 1e6)} M€`
   : v >= 1e3 ? `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(v / 1e3)} k€` : euro(v);
+
+// Pilotage OWNER (demande dev 30/09/2026) : l'usage du portail client, lu dans ses métriques (doc « api-chiffres ») ;
+// chiffres arrêtés chaque nuit côté portail, définitions du portail en infobulle. Rien n'est recalculé ici.
+const intFr = (v) => (v == null ? '—' : new Intl.NumberFormat('fr-FR').format(v));
+const euro0 = (v) => (v == null ? '—' : new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Number(v)).replace(/\u202f/g, '\u00a0'));
+const monthOf = (key, options) => (key ? new Intl.DateTimeFormat('fr-FR', { ...options, timeZone: 'UTC' }).format(new Date(`${key}-01T12:00:00Z`)) : '');
+const dayOf = (iso) => (iso ? new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${iso}T12:00:00Z`)) : '—');
+
+function Share({ part, total, label, tone }) {
+  const reduceMotion = useReducedMotion();
+  if (part == null || !total) return null;
+  const pct = Math.round((part / total) * 100);
+  return <div className={`ceo-progress${tone ? ` ceo-progress--${tone}` : ''}`}>
+    <div className="ceo-progress-track" role="img" aria-label={`${pct} % ${label}`}>
+      <motion.div className="ceo-progress-fill" initial={reduceMotion ? false : { scaleX: 0 }} whileInView={{ scaleX: Math.min(1, part / total) }} viewport={{ once: true, amount: .6 }} transition={{ duration: 1.3, ease: [.16, 1, .3, 1], delay: .25 }} />
+    </div>
+    <span><strong>{pct} %</strong> {label}</span>
+  </div>;
+}
+
+export function CeoPilotageMetrics({ darkMode }) {
+  const pilotage = useDashboardData('/api/v1/ceo-dashboard/pilotage', 15 * 60 * 1000);
+  const d = pilotage.data;
+  const defs = d?.definitions || {};
+  const monthTitle = monthOf(d?.month, { month: 'long', year: 'numeric' });
+  return <section className={`ceo-metrics-section${darkMode ? ' is-dark' : ''}`} aria-label="Pilotage OWNER">
+    <div className="ceo-metrics-title"><h2>Pilotage OWNER <small>{monthTitle ? `${monthTitle.charAt(0).toUpperCase()}${monthTitle.slice(1)} · ` : ''}mis à jour chaque nuit</small></h2></div>
+    <div className="ceo-metrics-grid">
+      <Card title="Clients revenus sur 30 jours" Icon={UserRoundCheck} {...pilotage}>
+        <div className="ceo-hero" title={defs.clients_back_30d}>
+          <HeroNumber value={d?.clients_back_30d} duration={1300} className="ceo-hero-value" />
+          <div className="ceo-hero-caption">sur {intFr(d?.client_accounts)} comptes clients</div>
+        </div>
+        <Share part={d?.clients_back_30d} total={d?.client_accounts} label="des comptes revenus en 30 jours" />
+      </Card>
+      <Card title="Gains réalisés pour les clients" Icon={PiggyBank} {...pilotage} tone="money">
+        <div className="ceo-hero ceo-hero--money" title={defs.gains_eur}>
+          <HeroNumber value={d?.gains_eur} duration={1900} className="ceo-hero-value" format={compactEuro} />
+          <div className="ceo-hero-caption">{euro0(d?.gains_eur)} · cumul au {dayOf(d?.gains_as_of)}{d?.gains_upcoming_eur ? ` · ${compactEuro(d.gains_upcoming_eur)} à venir` : ''}</div>
+        </div>
+      </Card>
+      <Card title="Demandes du cabinet sans réponse" Icon={Hourglass} {...pilotage}>
+        <div className="ceo-hero" title={defs.requests_waiting}>
+          <HeroNumber value={d?.requests_waiting} duration={1300} className="ceo-hero-value" />
+          <div className="ceo-hero-caption">dont {intFr(d?.requests_waiting_over_30d)} depuis plus de 30 jours</div>
+        </div>
+        <Share part={d?.requests_waiting_over_30d} total={d?.requests_waiting} label="en attente depuis plus de 30 jours" tone="watch" />
+      </Card>
+      <Card title={`Documents déposés${d?.month ? ` en ${monthOf(d.month, { month: 'long' })}` : ' ce mois-ci'}`} Icon={FileUp} {...pilotage}>
+        <div className="ceo-hero" title={defs.documents_month}>
+          <HeroNumber value={d?.documents_month} duration={1500} className="ceo-hero-value" />
+          <div className="ceo-hero-caption">{intFr(d?.documents_sent_to_firm)} envois au cabinet</div>
+        </div>
+        <Share part={d?.documents_sent_to_firm} total={d?.documents_month} label="envoyés au cabinet" />
+      </Card>
+    </div>
+    {d?.stale && <p className="ceo-metrics-caption" role="status">
+      Actualisation temporairement indisponible · dernières données disponibles
+    </p>}
+  </section>;
+}
 
 export function CeoProductMetrics({ boardRows, darkMode }) {
   const product = useDashboardData('/api/v1/ceo-dashboard/product', 15 * 60 * 1000);
