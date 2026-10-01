@@ -86,6 +86,7 @@ import {
   toNumber,
   PENDING_OPTILEX_LABEL,
 } from './constants.js';
+import { upcomingExpectedHint } from './upcomingExpected.js';
 import { EditableNumber, EditableSelect, EditableDate } from './EditableCell.jsx';
 import ModalitesCell from './components/ModalitesCell.jsx';
 import StructureAmountCell from './components/StructureAmountCell.jsx';
@@ -892,6 +893,8 @@ const RowRenderer = React.memo(function RowRenderer({
           received={received}
           onboardingPending={Boolean(row.onboarding_pending)}
           onboardingDate={row.client?.rdv_onboarding}
+          upcoming={upcomingExpectedHint(row, scope,
+            row.client?.rdv_onboarding ? formatDateFR(row.client.rdv_onboarding) : null)}
         />
       ))}
 
@@ -1234,20 +1237,36 @@ function ReadOnlyAmount({ value }) {
 //   received < expected    → (expected − received) en ORANGE — manquement
 //   received ≥ expected    → check ✓ animé en vert (objectif atteint, surplus
 //                            géré côté cell Récupéré via pill verte)
-function RemainingAmount({ expected, received, onboardingPending = false, onboardingDate = null }) {
+//
+// `upcoming` (incident 01/10/2026) : attendu du MOIS SUIVANT quand la
+// facturation y démarre, servi par le serveur à partir de la veille ouvrée
+// de l'onboarding (cf. upcomingExpected.js). Indication en gris, jamais
+// comptée dans le mois affiché.
+function RemainingAmount({ expected, received, onboardingPending = false, onboardingDate = null, upcoming = null }) {
   const exp = Number(expected || 0);
   const remaining = Math.max(exp - Number(received || 0), 0);
+  const upcomingLine = upcoming && (
+    <span title={upcoming.title}
+      style={{ fontSize: 11, color: N.textMuted, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+      {upcoming.label}
+    </span>
+  );
   // Règle dev 2026-09-18 : aucun attendu tant que le rendez-vous d'onboarding
   // n'a pas eu lieu. La cellule le dit, sinon un attendu vide se lit comme
   // un oubli (« pourquoi il n'a pas d'attendu ? »).
-  if (!exp && onboardingPending) {
+  if (!exp && (onboardingPending || upcoming)) {
     const when = onboardingDate ? formatDateFR(onboardingDate) : null;
+    // Après le rendez-vous, sans date connue, on n'annonce pas un onboarding « à venir ».
+    const onboardingText = when ? `onboarding le ${when}` : (onboardingPending ? 'onboarding à venir' : null);
     return (
       <span
-        title="Pas d’attendu avant le rendez-vous d’onboarding : c’est lui qui ouvre la facturation."
-        style={{ fontSize: 11, color: N.textFaint, fontStyle: 'italic', whiteSpace: 'nowrap' }}
+        title={upcoming ? upcoming.title : 'Pas d’attendu avant le rendez-vous d’onboarding : c’est lui qui ouvre la facturation.'}
+        style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}
       >
-        {when ? `onboarding le ${when}` : 'onboarding à venir'}
+        {upcomingLine}
+        {onboardingText && <span style={{ fontSize: upcoming ? 10 : 11, color: N.textFaint, fontStyle: 'italic', whiteSpace: 'nowrap' }}>
+          {onboardingText}
+        </span>}
       </span>
     );
   }
@@ -1267,6 +1286,7 @@ function RemainingAmount({ expected, received, onboardingPending = false, onboar
       {onboardingPending && <span style={{ fontSize: 10, color: N.textFaint, fontStyle: 'italic', whiteSpace: 'nowrap' }}>
         {onboardingDate ? `onboarding le ${formatDateFR(onboardingDate)}` : 'onboarding à venir'}
       </span>}
+      {upcomingLine}
     </span>
   );
 }
