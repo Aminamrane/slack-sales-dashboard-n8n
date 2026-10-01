@@ -12,6 +12,7 @@ import {
 import apiClient from "../../services/apiClient";
 import {
   TYPES,
+  DECLARABLE_TYPES,
   PERIODS,
   STATUSES,
   todayParis,
@@ -48,11 +49,21 @@ export function AbsenceForm({ userId, initial, onSaved, onCancel }) {
           start_date: todayParis(),
           end_date: todayParis(),
           period: "full",
-          absence_type: "conge",
+          absence_type: "absence",
           description: "",
           exceptional: false,
         },
   );
+  // Une absence existante peut porter un type qui n'est plus proposé (« Congé
+  // vacances ») : on le garde dans la liste le temps de la modifier, sinon le
+  // select afficherait un autre type que celui réellement enregistré.
+  const legacyType =
+    initial?.absence_type && !DECLARABLE_TYPES[initial.absence_type]
+      ? initial.absence_type
+      : null;
+  const typeOptions = legacyType
+    ? { ...DECLARABLE_TYPES, [legacyType]: TYPES[legacyType] || legacyType }
+    : DECLARABLE_TYPES;
   useEffect(() => {
     let active = true;
     setPolicy(null);
@@ -209,7 +220,7 @@ export function AbsenceForm({ userId, initial, onSaved, onCancel }) {
             value={form.absence_type}
             onChange={(e) => set("absence_type", e.target.value)}
           >
-            {Object.entries(TYPES).map(([k, v]) => (
+            {Object.entries(typeOptions).map(([k, v]) => (
               <option key={k} value={k}>
                 {v}
               </option>
@@ -224,9 +235,8 @@ export function AbsenceForm({ userId, initial, onSaved, onCancel }) {
             <div>
               <strong>Périodes sensibles Finance</strong>
               <p>
-                Du 1er au 5 et les 5 derniers jours du mois : pas de congés
-                vacances. Une urgence nécessite un motif et une validation
-                direction/RH.
+                Du 1er au 5 et les 5 derniers jours du mois : une absence
+                nécessite un motif et une validation direction/RH.
               </p>
             </div>
           </div>
@@ -239,8 +249,7 @@ export function AbsenceForm({ userId, initial, onSaved, onCancel }) {
               onChange={(e) => set("exceptional", e.target.checked)}
               required
             />{" "}
-            Je confirme qu’il s’agit d’une demande exceptionnelle, hors
-            vacances.
+            Je confirme qu’il s’agit d’une demande exceptionnelle.
           </label>
         )}
         <label htmlFor={`${id}-description`}>

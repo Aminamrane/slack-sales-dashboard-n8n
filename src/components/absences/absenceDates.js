@@ -1,10 +1,17 @@
 // Date-only arithmetic deliberately uses UTC: no DST or browser-timezone drift.
+// Libellés de tous les types connus. `conge` y reste pour que les absences déjà
+// enregistrées (historique, planning, tooltips) gardent leur libellé.
 export const TYPES = {
   conge: "Congé vacances",
   maladie: "Maladie",
   absence: "Absence",
   autre: "Autre",
 };
+// Types proposés à la déclaration : pas de congé vacances, l'équipe est
+// entièrement prestataire.
+export const DECLARABLE_TYPES = Object.fromEntries(
+  Object.entries(TYPES).filter(([type]) => type !== "conge"),
+);
 export const PERIODS = {
   full: "Journée entière",
   am: "Matin",

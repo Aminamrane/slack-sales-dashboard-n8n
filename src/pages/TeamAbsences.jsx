@@ -11,6 +11,9 @@ const COLORS = { primary: "#6366f1", secondary: "#fb923c", tertiary: "#10b981" }
 const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif';
 const WEEKDAYS = [["1", "LUN"], ["2", "MAR"], ["3", "MER"], ["4", "JEU"], ["5", "VEN"], ["6", "SAM"], ["7", "DIM"]];
 const ABSENCE_TYPE_META = { conge: { label: "Congé", color: "#f59e0b" }, maladie: { label: "Maladie", color: "#ef4444" }, absence: { label: "Absence", color: "#ec4899" }, autre: { label: "Autre", color: "#6366f1" } };
+// Pas de congé vacances à la déclaration (équipe 100 % prestataire). `conge` reste dans la table
+// ci-dessus uniquement pour libeller les absences déjà enregistrées.
+const DECLARABLE_TYPE_ENTRIES = Object.entries(ABSENCE_TYPE_META).filter(([k]) => k !== "conge");
 
 const ROLE_LABELS = {
   admin: "Admin", sales: "Sales", setter: "Setter", hr: "RH", ceo: "CEO",
@@ -72,7 +75,7 @@ export default function TeamAbsences({ embed = false }) {
   const [declTarget, setDeclTarget] = useState("");
   const [declStart, setDeclStart] = useState("");
   const [declEnd, setDeclEnd] = useState("");
-  const [declType, setDeclType] = useState("conge");
+  const [declType, setDeclType] = useState("absence");
   const [declDesc, setDeclDesc] = useState("");
   const [declPeriod, setDeclPeriod] = useState("full"); // full | am (matin) | pm (après-midi)
   // Absence en cours d'édition : { id, user_id, start_date, end_date, period }.
@@ -185,7 +188,7 @@ export default function TeamAbsences({ embed = false }) {
       const data = await apiClient.get("/api/v1/team-unavailability");
       setAbsences(Array.isArray(data) ? data : []);
       setDeclSuccess("Absence déclarée.");
-      setDeclTarget(""); setDeclStart(""); setDeclEnd(""); setDeclType("conge"); setDeclDesc(""); setDeclPeriod("full");
+      setDeclTarget(""); setDeclStart(""); setDeclEnd(""); setDeclType("absence"); setDeclDesc(""); setDeclPeriod("full");
       setTimeout(() => setDeclSuccess(""), 2500);
     } catch (e) {
       const msg = e?.message || "";
@@ -213,7 +216,7 @@ export default function TeamAbsences({ embed = false }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13.5, fontWeight: 600, color: C.text, display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
           {a.full_name}
-          {(() => { const m = ABSENCE_TYPE_META[a.absence_type] || ABSENCE_TYPE_META.conge; return <span style={{ fontSize: 9.5, fontWeight: 700, color: m.color, background: m.color + "1e", borderRadius: 5, padding: "1px 6px" }}>{m.label}</span>; })()}
+          {(() => { const m = ABSENCE_TYPE_META[a.absence_type] || ABSENCE_TYPE_META.absence; return <span style={{ fontSize: 9.5, fontWeight: 700, color: m.color, background: m.color + "1e", borderRadius: 5, padding: "1px 6px" }}>{m.label}</span>; })()}
           {!past && a.active_now && <span style={{ fontSize: 9.5, fontWeight: 700, color: COLORS.secondary, background: COLORS.secondary + "1e", borderRadius: 5, padding: "1px 6px" }}>EN COURS</span>}
         </div>
         <div style={{ fontSize: 11.5, color: C.muted, marginTop: 1 }}>{rangeLabel(a)}{a.period && a.period !== "full" ? ` · ${a.period === "am" ? "matin" : "après-midi"}` : ""} · {(a.days ?? 0).toLocaleString("fr-FR")} j</div>
@@ -349,7 +352,7 @@ export default function TeamAbsences({ embed = false }) {
                     <option value="pm">Demi-journée · après-midi</option>
                   </select>
                   <select value={declType} onChange={(e) => setDeclType(e.target.value)} style={{ ...declInput, cursor: "pointer" }}>
-                    {Object.entries(ABSENCE_TYPE_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
+                    {DECLARABLE_TYPE_ENTRIES.map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
                   </select>
                   <input type="text" value={declDesc} maxLength={200} placeholder="Description (optionnel)" onChange={(e) => setDeclDesc(e.target.value)} style={declInput} />
                   <button onClick={handleDeclare} disabled={declBusy} style={{ padding: "10px 0", borderRadius: 9, border: "none", background: declBusy ? C.muted : C.accent, color: "#fff", fontSize: 13, fontWeight: 600, cursor: declBusy ? "wait" : "pointer", fontFamily: "inherit" }}>{declBusy ? "Déclaration…" : "Déclarer l'absence"}</button>
@@ -367,7 +370,7 @@ export default function TeamAbsences({ embed = false }) {
                 </div>
                 <MonthGrid month={calMonth} absences={absences || []} C={C} darkMode={darkMode} />
                 <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 12, paddingTop: 12, borderTop: "1px dashed " + C.border }}>
-                  {Object.values(ABSENCE_TYPE_META).map((m) => (
+                  {Object.entries(ABSENCE_TYPE_META).filter(([k]) => k !== "conge" || (absences || []).some((a) => a.absence_type === "conge")).map(([, m]) => (
                     <span key={m.label} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.muted }}>
                       <span style={{ width: 9, height: 9, borderRadius: "50%", background: m.color }} />{m.label}
                     </span>
@@ -471,7 +474,7 @@ function MonthGrid({ month, absences, C, darkMode }) {
           return (
             <div key={i} title={cov.length ? cov.map((a) => a.full_name).join(", ") : undefined} style={{ minHeight: 46, borderRadius: 8, border: "1px solid " + C.border, padding: "5px 6px", background: weekend ? (darkMode ? "rgba(255,255,255,0.02)" : "#fafbfd") : C.bg, opacity: weekend ? 0.7 : 1 }}>
               <div style={{ fontSize: 10.5, fontWeight: 600, color: cov.length ? C.text : C.muted }}>{d.getDate()}</div>
-              {cov.slice(0, 3).map((a, j) => <div key={j} style={{ height: 3, borderRadius: 2, marginTop: 3, background: (ABSENCE_TYPE_META[a.absence_type] || ABSENCE_TYPE_META.conge).color }} />)}
+              {cov.slice(0, 3).map((a, j) => <div key={j} style={{ height: 3, borderRadius: 2, marginTop: 3, background: (ABSENCE_TYPE_META[a.absence_type] || ABSENCE_TYPE_META.absence).color }} />)}
               {cov.length > 3 && <div style={{ fontSize: 8, color: C.muted, marginTop: 1, lineHeight: 1 }}>+{cov.length - 3}</div>}
             </div>
           );

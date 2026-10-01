@@ -1,4 +1,10 @@
-import { TYPES, PERIODS, dateObject, daysLabel } from "./absenceDates";
+import {
+  TYPES,
+  DECLARABLE_TYPES,
+  PERIODS,
+  dateObject,
+  daysLabel,
+} from "./absenceDates";
 import { countDays, daySlots, teamLabel } from "./absenceOverview";
 import { PersonAvatar } from "./AbsenceVisuals";
 
@@ -15,6 +21,12 @@ export default function AbsencePlanning({
       rows.filter((r) => r.kind === "absence").map((r) => [r.user_id, r]),
     ).values(),
   ].sort((a, b) => a.full_name.localeCompare(b.full_name, "fr"));
+  // Légende : types déclarables + anciens types encore présents dans le mois,
+  // pour que la couleur d'une ancienne absence reste expliquée.
+  const legend = Object.entries(TYPES).filter(
+    ([type]) =>
+      DECLARABLE_TYPES[type] || rows.some((r) => r.absence_type === type),
+  );
   return (
     <section className="hr-planning">
       <div className="hr-section-heading">
@@ -25,7 +37,7 @@ export default function AbsencePlanning({
           </p>
         </div>
         <div className="hr-legend">
-          {Object.entries(TYPES).map(([type, label]) => (
+          {legend.map(([type, label]) => (
             <span key={type}>
               <i data-type={type} />
               {label}

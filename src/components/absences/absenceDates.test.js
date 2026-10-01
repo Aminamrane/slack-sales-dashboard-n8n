@@ -1,11 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  TYPES,
+  DECLARABLE_TYPES,
   restrictedFinance,
   duration,
   periodOnDay,
   nextDay,
 } from "./absenceDates.js";
+test("pas de congé vacances à la déclaration, mais les anciennes absences gardent leur libellé", () => {
+  assert.deepEqual(Object.keys(DECLARABLE_TYPES), [
+    "maladie",
+    "absence",
+    "autre",
+  ]);
+  assert.equal(TYPES.conge, "Congé vacances");
+});
 test("Finance : bornes exactes, mois court et années bissextiles", () => {
   for (const [start, end, expected] of [
     ["2026-09-05", "2026-09-05", true],
