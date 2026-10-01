@@ -56,6 +56,10 @@ import {
   RefundIcon, CalendarCheckIcon, CalendarClockIcon, MeteoFilterIcon, ContractPendingIcon, BankOffIcon, ExitIcon, ExportIcon, ContactIcon,
 } from './components/FinanceIcons.jsx';
 import { exportFinanceXlsx } from './exportExcel.js';
+import { parisToday } from '../../utils/parisDates.js';
+import {
+  initialPeriodState, choosePeriodState, followCurrentMonth, withPeriodParam, parisCurrentPeriod,
+} from './periodFollow.js';
 import companyLogo from '../../assets/my_image.png';
 import '../../index.css';
 
@@ -422,10 +426,25 @@ export default function TrackingSheetFinance() {
   }, [navigate]);
 
   // ── State ────────────────────────────────────────────────────────────
-  const [period, setPeriod] = useState(() => {
-    const requested = new URLSearchParams(window.location.search).get('period');
-    return /^20\d{2}-(0[1-9]|1[0-2])$/.test(requested || '') ? requested : currentPeriod();
-  });
+  // Mois affiché + suivi du mois en cours (incident 01/10/2026 : un onglet
+  // ouvert la veille montrait encore septembre). Règles dans periodFollow.js.
+  // Mois en cours = heure de Paris, aux trois endroits (ouverture, choix,
+  // contrôle) : comparés à des mois différents, un mois choisi passerait
+  // pour un mois suivi.
+  const [periodState, setPeriodState] = useState(() => initialPeriodState(
+    new URLSearchParams(window.location.search).get('period'), parisCurrentPeriod(),
+  ));
+  const { period } = periodState;
+  // Flèches et sélecteur : un autre mois que le mois en cours fige
+  // l'affichage, revenir sur le mois en cours réactive le suivi.
+  // Le contrôle du changement de mois vit après `fetchPeriod`, dont il dépend.
+  const setPeriod = useCallback((p) => setPeriodState(choosePeriodState(p, parisCurrentPeriod())), []);
+  // Mois affiché, lu par les réponses qui arrivent après coup (chargement,
+  // synchro) : une réponse d'un mois quitté entre-temps est écartée. Mis à
+  // jour par un effet déclaré AVANT celui qui charge le mois : il a donc la
+  // nouvelle valeur quand ce chargement part.
+  const periodRef = useRef(period);
+  useEffect(() => { periodRef.current = period; }, [period]);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -860,19 +879,32 @@ export default function TrackingSheetFinance() {
   }, [reloadSavedFilters, showToast]);
 
   // ── Fetch period rows ───────────────────────────────────────────────
+  // Seule la DERNIÈRE demande, faite pour le mois affiché, écrit le tableau.
+  // Sans ça, une réponse en retard d'un mois quitté entre-temps (synchro de
+  // l'onglet réveillé le 1er du mois, flèches cliquées vite) poserait les
+  // lignes de l'ancien mois sous l'en-tête du nouveau.
+  const fetchSeqRef = useRef(0);
   const fetchPeriod = useCallback(async (p, { soft = false } = {}) => {
+    if (p !== periodRef.current) return;   // mois déjà quitté : rien à charger
+    const seq = ++fetchSeqRef.current;
+    const latest = () => seq === fetchSeqRef.current;
     if (soft) setRefreshing(true);
     else setLoading(true);
     setError(null);
     try {
       const data = await apiClient.get(`/api/v1/finance-periods?period=${encodeURIComponent(p)}`);
-      setRows(Array.isArray(data?.periods) ? data.periods : []);
+      if (latest()) setRows(Array.isArray(data?.periods) ? data.periods : []);
     } catch (e) {
-      setError(e?.data?.detail || e?.message || 'Erreur lors du chargement');
-      setRows([]);
+      if (latest()) {
+        setError(e?.data?.detail || e?.message || 'Erreur lors du chargement');
+        setRows([]);
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      // Une demande dépassée laisse les indicateurs à la suivante, encore en vol.
+      if (latest()) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
@@ -880,6 +912,45 @@ export default function TrackingSheetFinance() {
     if (!authChecked) return;
     fetchPeriod(period);
   }, [authChecked, period, fetchPeriod]);
+
+  // Onglet resté ouvert (incident 01/10/2026), contrôle toutes les minutes et
+  // au retour sur l'onglet :
+  //   · nouveau mois et page sur le mois en cours : on passe au nouveau mois
+  //     (l'effet ci-dessus le charge) ;
+  //   · nouveau jour (Paris) : on recharge le mois en douceur. Ce que le
+  //     serveur calcule selon la date (attendu visible dès la veille de
+  //     l'onboarding, exigibilité, retards) ne passe pas par le delta de
+  //     synchronisation, qui ne renvoie que les lignes modifiées.
+  useEffect(() => {
+    if (!authChecked) return;
+    let day = parisToday();
+    const check = () => {
+      const next = followCurrentMonth(periodState, parisCurrentPeriod());
+      if (next !== periodState) {
+        setPeriodState(next);
+        // Un `?period=` resté dans l'URL suit lui aussi : un rechargement
+        // montre le mois affiché.
+        const search = withPeriodParam(window.location.search, next.period);
+        if (search !== null) {
+          window.history.replaceState(window.history.state, '', `${window.location.pathname}${search}${window.location.hash}`);
+        }
+        return;
+      }
+      const today = parisToday();
+      if (today === day) return;
+      day = today;
+      fetchPeriod(periodState.period, { soft: true });
+    };
+    const id = setInterval(check, 60000);
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [authChecked, periodState, fetchPeriod]);
 
   // Fetch du board Owner/Opti'Lex (state `boardMap` déclaré plus haut).
   // La colonne « État » du tableau n'édite plus `clients.etat` (champ retiré
@@ -1044,6 +1115,9 @@ export default function TrackingSheetFinance() {
       const params = new URLSearchParams({ period });
       if (syncTokenRef.current) params.set('since', syncTokenRef.current);
       const d = await apiClient.get(`/api/v1/finance-periods/updates?${params}`);
+      // Mois quitté pendant l'appel : la réponse ne vaut plus rien, ni pour le
+      // tableau ni pour l'horloge, qui appartient désormais au nouveau mois.
+      if (periodRef.current !== period) return;
       const first = !syncTokenRef.current;
       syncTokenRef.current = d?.now || syncTokenRef.current;
       if (first) return;                 // premier passage : on amorce l'horloge
