@@ -3103,7 +3103,9 @@ export default function TrackingSheet() {
             background: darkMode ? C.subtle : '#eceef2',
             animation: 'sidebarReveal 0.4s ease both',
             transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)',
-            overflow: 'hidden',
+            // Menu défilant : sur un petit écran les derniers onglets (Tracking Sheets…) restaient
+            // hors de vue, sans moyen d'y accéder (dev 2026-10-02).
+            overflowX: 'hidden', overflowY: 'auto', scrollbarWidth: 'thin',
             boxShadow: sidebarCollapsed ? 'none' : (darkMode ? '6px 0 28px rgba(0,0,0,0.45)' : '6px 0 28px rgba(0,0,0,0.12)'),
           }}>
             {/* Sidebar header — company logo like Quno */}
