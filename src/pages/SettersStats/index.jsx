@@ -5,8 +5,9 @@
 import { useEffect, useMemo, useState } from "react";
 import apiClient from "../../services/apiClient";
 import {
-  CHANNEL_LABELS, CLIENT_STATE_LABELS, OUTCOME_HINTS, OUTCOME_LABELS, OUTCOME_TONES, assignedLabel, clientState,
-  conversion, fmtDay, fmtEuro, fmtInt, fmtMonth, fmtMonthShort, fmtRate, fmtRdv, neighbourMonth, rowsForMonth,
+  CHANNEL_LABELS, CLIENT_STATE_LABELS, ORIGIN_LABELS, ORIGIN_TONES, OUTCOME_HINTS, OUTCOME_LABELS, OUTCOME_TONES,
+  assignedLabel, clientState, conversion, fmtDay, fmtEuro, fmtInt, fmtMonth, fmtMonthShort, fmtRate, fmtRdv,
+  neighbourMonth, originEntries, rowsForMonth,
 } from "./settersStats.js";
 
 const CLIENT_TONES = { client: "#10b981", already_client: "#94a3b8", signed_not_declared: "#f59e0b" };
@@ -18,6 +19,14 @@ export default function SettersStats({ C, darkMode }) {
   const [loading, setLoading] = useState(false);
   const [setterId, setSetterId] = useState("");       // filtre des listes détaillées
   const [trend, setTrend] = useState("sales");
+  const [detailId, setDetailId] = useState(null);     // setter dont on ouvre la fiche (clients signés)
+
+  useEffect(() => {
+    if (!detailId) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") setDetailId(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [detailId]);
 
   useEffect(() => {
     let alive = true;
@@ -35,6 +44,7 @@ export default function SettersStats({ C, darkMode }) {
   const names = useMemo(() => Object.fromEntries((data?.setters || []).map((s) => [s.id, s.name])), [data]);
   const rdvList = useMemo(() => (data?.rdv || []).filter((r) => !setterId || r.setter_id === setterId), [data, setterId]);
   const salesList = useMemo(() => (data?.sales || []).filter((s) => !setterId || s.setter_id === setterId), [data, setterId]);
+  const detail = useMemo(() => (data?.setters || []).find((s) => s.id === detailId) || null, [data, detailId]);
   const prev = neighbourMonth(data?.months, current, -1);
   const next = neighbourMonth(data?.months, current, 1);
 
@@ -125,7 +135,10 @@ export default function SettersStats({ C, darkMode }) {
                     <tr key={s.id} onClick={() => setSetterId(selected ? "" : s.id)} title={selected ? "Afficher tous les setters" : "Filtrer les listes sur ce setter"}
                       style={{ borderBottom: `1px solid ${C.border}`, cursor: "pointer", background: selected ? C.subtle : "transparent" }}>
                       <td style={td}>
-                        <div style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{s.name || "Setter inconnu"}</div>
+                        <button type="button" title="Voir ses clients signés" onClick={(e) => { e.stopPropagation(); setDetailId(s.id); }}
+                          style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 600, color: C.accent, whiteSpace: "nowrap", textAlign: "left" }}>
+                          {s.name || "Setter inconnu"}
+                        </button>
                         {s.has_webinar_link && <div style={{ marginTop: 4 }}>{pill(C.accent, "Lien webinaire")}</div>}
                         {!s.active && <div style={sub}>Compte désactivé</div>}
                       </td>
@@ -230,14 +243,16 @@ export default function SettersStats({ C, darkMode }) {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
-                  {["Client", "Setter", "RDV posé", "Signé le", "Délai"].map((h) => <th key={h} style={th}>{h}</th>)}
+                  {["N° client", "Client", "Origine", "Setter", "RDV posé", "Signé le", "Délai"].map((h) => <th key={h} style={th}>{h}</th>)}
                   <th style={thNum}>Contrat</th><th style={thNum}>Cash</th><th style={th}>Vendu par</th>
                 </tr>
               </thead>
               <tbody>
                 {salesList.map((s, i) => (
                   <tr key={`${s.setter_id}-${s.signed_at}-${i}`} style={{ borderBottom: `1px solid ${C.border}` }}>
-                    <td style={td}><div style={{ fontWeight: 600 }}>{s.client_name || "Client"}</div>{s.shared && <div style={sub}>RDV posés par plusieurs setters</div>}</td>
+                    <td style={{ ...td, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{s.numero_client || "Sans numéro"}</td>
+                    <td style={td}><div style={{ fontWeight: 600 }}>{s.client_name || s.societe || "Client"}</div>{s.shared && <div style={sub}>RDV posés par plusieurs setters</div>}</td>
+                    <td style={td}>{pill(ORIGIN_TONES[s.origin] || ORIGIN_TONES.other, ORIGIN_LABELS[s.origin] || s.origin)}{s.origin_label && <div style={sub}>{s.origin_label}</div>}</td>
                     <td style={{ ...td, whiteSpace: "nowrap" }}>{s.setter_name}</td>
                     <td style={{ ...td, whiteSpace: "nowrap" }}>
                       <div>{fmtRdv(s.rdv_at)}</div>
@@ -295,6 +310,60 @@ export default function SettersStats({ C, darkMode }) {
           </div>
         )}
       </div>
+
+      {detail && (
+        <div onClick={() => setDetailId(null)} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,17,23,0.35)", display: "flex", justifyContent: "flex-end" }}>
+          <div role="dialog" aria-label={`Clients de ${detail.name}`} onClick={(e) => e.stopPropagation()}
+            style={{ width: "min(980px, 100vw)", height: "100%", overflowY: "auto", background: darkMode ? "#0f1117" : "#f6f7f9", boxShadow: "-12px 0 40px rgba(0,0,0,0.18)", padding: "26px 28px 40px" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: "0 0 6px" }}>{detail.name}</h2>
+                <div style={{ fontSize: 13, color: C.secondary, lineHeight: 1.6 }}>
+                  <b style={{ color: C.text }}>{fmtInt(detail.totals.sales.count)} client{detail.totals.sales.count > 1 ? "s" : ""} signé{detail.totals.sales.count > 1 ? "s" : ""}</b> depuis mai
+                  {" · "}{fmtEuro(detail.totals.sales.amount)} de contrats · {fmtEuro(detail.totals.sales.cash)} encaissés à la signature
+                  <br />{fmtInt(detail.totals.rdv.total)} RDV posés ({fmtInt(detail.totals.rdv.crm)} CRM, {fmtInt(detail.totals.rdv.webinar_link)} lien webinaire) · transformation {fmtRate(conversion(detail.totals.rdv))}
+                </div>
+              </div>
+              <button type="button" aria-label="Fermer" onClick={() => setDetailId(null)}
+                style={{ width: 34, height: 34, borderRadius: 9, border: `1px solid ${C.border}`, background: C.bg, color: C.text, cursor: "pointer", fontSize: 18, lineHeight: 1, fontFamily: "inherit" }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "16px 0 18px" }}>
+              {originEntries(detail.origins).map(([key, n]) => (
+                <span key={key}>{pill(ORIGIN_TONES[key] || ORIGIN_TONES.other, `${ORIGIN_LABELS[key] || key} : ${fmtInt(n)}`)}</span>
+              ))}
+            </div>
+            <div style={{ ...card, overflow: "hidden" }}>
+              {!detail.clients?.length ? (
+                <div style={{ padding: 20, fontSize: 13, color: C.muted }}>Aucun client signé à la suite de ses RDV depuis mai.</div>
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
+                        {["N° client", "Client", "Origine", "RDV posé", "Signé le"].map((h) => <th key={h} style={th}>{h}</th>)}
+                        <th style={thNum}>Contrat</th><th style={th}>Vendu par</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detail.clients.map((c, i) => (
+                        <tr key={`${c.numero_client || i}-${c.signed_at}`} style={{ borderBottom: `1px solid ${C.border}` }}>
+                          <td style={{ ...td, whiteSpace: "nowrap", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{c.numero_client || "Sans numéro"}</td>
+                          <td style={td}><div style={{ fontWeight: 600 }}>{c.client_name || c.societe || "Client"}</div>{c.societe && c.societe !== c.client_name && <div style={sub}>{c.societe}</div>}</td>
+                          <td style={td}>{pill(ORIGIN_TONES[c.origin] || ORIGIN_TONES.other, ORIGIN_LABELS[c.origin] || c.origin)}{c.origin_label && <div style={sub}>{c.origin_label}</div>}</td>
+                          <td style={{ ...td, whiteSpace: "nowrap" }}><div>{fmtRdv(c.rdv_at)}</div><div style={sub}>{c.kind === "r1" ? "R1" : "R2"} · {CHANNEL_LABELS[c.channel]}</div></td>
+                          <td style={{ ...td, whiteSpace: "nowrap" }}><div>{fmtDay(c.signed_at)}</div><div style={sub}>{fmtInt(c.days_to_sign)} j après la pose</div></td>
+                          <td style={tdNum}><div>{fmtEuro(c.amount)}</div><div style={sub}>{fmtEuro(c.cash)} cash</div></td>
+                          <td style={{ ...td, whiteSpace: "nowrap" }}>{c.sales_name || ""}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <p style={{ fontSize: 12, color: C.muted, margin: "18px 0 0", maxWidth: 980, lineHeight: 1.6 }}>
         Un RDV compte comme devenu client quand la même personne signe une vente déclarée après la pose du RDV

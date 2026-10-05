@@ -75,3 +75,19 @@ export function rowsForMonth(setters, month) {
     || String(a.name || '').localeCompare(String(b.name || ''), 'fr')
   ));
 }
+
+// Origine du lead d'un client (règle meta_ads_history.sale_channel côté serveur), avec les mots du CEO.
+export const ORIGIN_LABELS = {
+  webinar: 'Webinaire', ads: 'Ads', cold_call_sales: 'Cold call sales', cold_call_setter: 'Cold call setter',
+  partners: 'Partenaires', other: 'Autre',
+};
+export const ORIGIN_TONES = {
+  webinar: '#8b5cf6', ads: '#3b82f6', cold_call_sales: '#f97316', cold_call_setter: '#14b8a6',
+  partners: '#64748b', other: '#94a3b8',
+};
+
+// Répartition par origine, la plus fréquente d'abord : [[clé, nombre], …].
+export function originEntries(origins) {
+  return Object.entries(origins || {}).filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1] || String(ORIGIN_LABELS[a[0]] || a[0]).localeCompare(String(ORIGIN_LABELS[b[0]] || b[0]), 'fr'));
+}

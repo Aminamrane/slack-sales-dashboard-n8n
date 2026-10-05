@@ -43,3 +43,11 @@ test('setters with sales this month come first', () => {
   ];
   assert.deepEqual(rowsForMonth(setters, '2026-09').map((s) => s.name), ['Aline', 'Bea', 'Chloé']);
 });
+
+test('origins are listed most frequent first, with the CEO words', async () => {
+  const { originEntries, ORIGIN_LABELS } = await import('./settersStats.js');
+  assert.deepEqual(originEntries({ ads: 4, cold_call_setter: 4, partners: 3, webinar: 0 }),
+    [['ads', 4], ['cold_call_setter', 4], ['partners', 3]]);
+  assert.equal(ORIGIN_LABELS.cold_call_sales, 'Cold call sales');
+  assert.deepEqual(originEntries(null), []);
+});
