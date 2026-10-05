@@ -460,3 +460,19 @@ test('le mois prend sa préposition', () => {
   assert.equal(deMonthLabel('2026-10'), 'd’octobre 2026');
   assert.equal(deMonthLabel('2026-09'), 'de septembre 2026');
 });
+
+import {installmentSubline} from './installmentLabel.js';
+test('statement always identifies billed month separately from a payment in another month',()=>{
+ const july=installmentSubline({month:'2026-07',status:'paid',payDate:'2026-06-29'});
+ assert.match(july,/Juillet 2026/);assert.match(july,/29 juin 2026/);
+ const august=installmentSubline({month:'2026-08',status:'late',payDate:'2026-07-29'});
+ assert.match(august,/Août 2026/);assert.match(august,/29 juillet 2026/);
+ assert.ok(!august.includes('Prévue le'));
+});
+test('month remains explicit for partial, future, paused and deferred installments',()=>{
+ for(const status of ['partial','upcoming','paused','deferred']) {
+  assert.match(installmentSubline({month:'2026-08',status,payDate:'2026-07-29',received:20,expected:100}),/Août 2026/);
+ }
+ const report=installmentSubline({month:'2026-08',status:'deferred',reportedTo:[{month:'2026-09',amount:100}]});
+ assert.match(report,/Août 2026/);assert.match(report,/septembre 2026/);
+});
