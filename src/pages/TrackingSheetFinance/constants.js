@@ -998,3 +998,9 @@ export const distinctCrmName = (profile) => {
   return profile?.crm_name && !(profile?.representatives || []).some(p => key(p.fullName) === key(profile.crm_name))
     ? profile.crm_name : null;
 };
+
+export function formatDateLongFR(iso) {
+  const d = parseDateFR(iso);
+  if (!d) return null;
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+}
