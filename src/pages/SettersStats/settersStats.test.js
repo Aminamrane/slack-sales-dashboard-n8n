@@ -51,3 +51,35 @@ test('origins are listed most frequent first, with the CEO words', async () => {
   assert.equal(ORIGIN_LABELS.cold_call_sales, 'Cold call sales');
   assert.deepEqual(originEntries(null), []);
 });
+
+test('the period is either the cumulative since May or one month', async () => {
+  const { periodStats, periodOptions, hasActivity, ALL } = await import('./settersStats.js');
+  const s = { totals: { rdv: { total: 236 }, sales: { count: 19 } }, months: { '2026-09': { rdv: { total: 57 }, sales: { count: 6 } } } };
+  assert.equal(periodStats(s, ALL).sales.count, 19);
+  assert.equal(periodStats(s, '2026-09').rdv.total, 57);
+  assert.deepEqual(periodStats(s, '2026-01'), { rdv: {}, sales: {} });
+  assert.deepEqual(periodOptions(['2026-05', '2026-06']).map((o) => o.label), ['Depuis mai 2026', 'Juin 2026', 'Mai 2026']);
+  assert.equal(hasActivity({ rdv: { total: 0 }, sales: { count: 0 } }), false);
+});
+
+test('a client name splits into company and manager', async () => {
+  const { splitClient } = await import('./settersStats.js');
+  assert.deepEqual(splitClient('DG AGENCEMENT (DITTA Geoffroy Denis Michel)', 'DG AGENCEMENT'), { company: 'DG AGENCEMENT', person: 'DITTA Geoffroy Denis Michel' });
+  assert.deepEqual(splitClient('CAFE DU PARVIS', null), { company: 'CAFE DU PARVIS', person: null });
+  assert.deepEqual(splitClient('', 'SOCIACOM'), { company: 'SOCIACOM', person: null });
+});
+
+test('lists are grouped by month, latest first, and sorted by date inside', async () => {
+  const { groupByMonth } = await import('./settersStats.js');
+  const groups = groupByMonth([
+    { id: 1, at: '2026-09-14T10:00:00+02:00' }, { id: 2, at: '2026-10-02T10:00:00+02:00' },
+    { id: 3, at: '2026-09-26T10:00:00+02:00' },
+  ], 'at');
+  assert.deepEqual(groups.map((g) => [g.month, g.items.map((i) => i.id)]), [['2026-10', [2]], ['2026-09', [3, 1]]]);
+});
+
+test('the meeting results bar only keeps non-empty parts', async () => {
+  const { resultSegments } = await import('./settersStats.js');
+  assert.deepEqual(resultSegments({ held: 3, no_show: 1, to_qualify: 0, upcoming: 0 }).map((s) => [s.key, s.pct]), [['held', 75], ['no_show', 25]]);
+  assert.deepEqual(resultSegments({}), []);
+});

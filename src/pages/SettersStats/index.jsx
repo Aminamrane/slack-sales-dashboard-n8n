@@ -1,376 +1,477 @@
-// Page CEO « Setters » (demande dev 05/10/2026, pour Paul) : pour chaque setter, les RDV qu'il a posés, via le CRM
-// ou via son lien webinaire personnel (passés et à venir), ce qu'ils sont devenus, et les clients qu'il a amenés,
-// au mois de signature. Lecture seule. Calculs côté serveur (app/services/ceo_setters.py), logique d'affichage
-// testée dans ./settersStats.js. Données : GET /ceo-dashboard/setters?month=YYYY-MM (admin, CEO).
+// Page CEO « Setters » (demande dev 05/10/2026, pour Paul ; refonte UX le même jour).
+// Une période (« Depuis mai » ou un mois), le classement des setters (appels Allo, RDV posés, résultat des RDV,
+// clients signés, CA, transformation), les clients signés mois par mois, et la fiche d'un setter : ses clients
+// signés et ses RDV posés, regroupés par mois et triés par date. Lecture seule.
+// Calculs côté serveur (app/services/ceo_setters.py) ; logique d'affichage testée dans ./settersStats.js.
+// Données : GET /ceo-dashboard/setters et /ceo-dashboard/setters/calls?period= (admin, CEO).
+// Lien direct vers une fiche : ?setter=<id>.
 import { useEffect, useMemo, useState } from "react";
 import apiClient from "../../services/apiClient";
+import { fmtTalk } from "../../utils/setterPilotage.js";
 import {
-  CHANNEL_LABELS, CLIENT_STATE_LABELS, ORIGIN_LABELS, ORIGIN_TONES, OUTCOME_HINTS, OUTCOME_LABELS, OUTCOME_TONES,
+  ALL, CHANNEL_LABELS, CLIENT_STATE_LABELS, ORIGIN_LABELS, ORIGIN_TONES, OUTCOME_HINTS, OUTCOME_LABELS, OUTCOME_TONES,
   assignedLabel, clientState, conversion, fmtDay, fmtEuro, fmtInt, fmtMonth, fmtMonthShort, fmtRate, fmtRdv,
-  neighbourMonth, originEntries, rowsForMonth,
+  groupByMonth, hasActivity, initials, originEntries, periodOptions, periodStats, resultSegments, splitClient,
 } from "./settersStats.js";
 
 const CLIENT_TONES = { client: "#10b981", already_client: "#94a3b8", signed_not_declared: "#f59e0b" };
+const RESULT_LABELS = { held: "Honorés", no_show: "No-show", to_qualify: "À qualifier", upcoming: "À venir" };
+
+function readSetterParam() {
+  try { return new URLSearchParams(window.location.search).get("setter"); } catch { return null; }
+}
+function writeSetterParam(id) {
+  try {
+    const url = new URL(window.location.href);
+    if (id) url.searchParams.set("setter", id); else url.searchParams.delete("setter");
+    window.history.replaceState(window.history.state, "", url);
+  } catch { /* lien direct indisponible : la fiche s'ouvre quand même */ }
+}
+
+// Appels Allo d'un setter sur une période : chiffres, ou la raison de leur absence (jamais un 0 inventé).
+function callsOf(response, setterId) {
+  if (!response) return { state: "loading" };
+  if (response.status === "error") return { state: "error" };
+  const st = response.setters?.[setterId];
+  if (!st || st.status === "missing") return { state: "missing" };
+  if (st.status === "error") return { state: "error" };
+  return { state: "ok", ...st };
+}
 
 export default function SettersStats({ C, darkMode }) {
-  const [month, setMonth] = useState(null);           // null : mois en cours (choisi par le serveur)
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [setterId, setSetterId] = useState("");       // filtre des listes détaillées
-  const [trend, setTrend] = useState("sales");
-  const [detailId, setDetailId] = useState(null);     // setter dont on ouvre la fiche (clients signés)
+  const [period, setPeriod] = useState(ALL);
+  const [calls, setCalls] = useState({});             // période -> réponse Allo
+  const [detailId, setDetailId] = useState(readSetterParam);
+  const [tab, setTab] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get("onglet") === "rdv" ? "rdv" : "clients"; } catch { return "clients"; }
+  });
 
   useEffect(() => {
+    let alive = true;
+    apiClient.get("/api/v1/ceo-dashboard/setters")
+      .then((d) => { if (alive) setData(d); })
+      .catch(() => { if (alive) setError("Impossible de charger les statistiques des setters. Réessayez dans un instant."); });
+    return () => { alive = false; };
+  }, []);
+
+  // Allo à la demande, par période (le cache du serveur rend les relectures immédiates).
+  const wanted = useMemo(() => [...new Set([period, ...(detailId ? [ALL] : [])])], [period, detailId]);
+  useEffect(() => {
+    wanted.filter((p) => !(p in calls)).forEach((p) => {
+      setCalls((c) => ({ ...c, [p]: null }));
+      apiClient.get(`/api/v1/ceo-dashboard/setters/calls?period=${p}`)
+        .then((res) => setCalls((c) => ({ ...c, [p]: res })))
+        .catch(() => setCalls((c) => ({ ...c, [p]: { status: "error", setters: {} } })));
+    });
+  }, [wanted, calls]);
+
+  const openDetail = (id) => { setDetailId(id); setTab("clients"); writeSetterParam(id); };
+  const closeDetail = () => { setDetailId(null); writeSetterParam(null); };
+  useEffect(() => {
     if (!detailId) return undefined;
-    const onKey = (e) => { if (e.key === "Escape") setDetailId(null); };
+    const onKey = (e) => { if (e.key === "Escape") closeDetail(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [detailId]);
 
-  useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    setError("");
-    apiClient.get("/api/v1/ceo-dashboard/setters" + (month ? `?month=${month}` : ""))
-      .then((d) => { if (alive) { setData(d); setLoading(false); } })
-      .catch(() => { if (alive) { setError("Impossible de charger les statistiques des setters. Réessayez dans un instant."); setLoading(false); } });
-    return () => { alive = false; };
-  }, [month]);
-
-  const current = data?.month || month;
-  const team = data?.team?.months?.[current] || { rdv: {}, sales: {} };
-  const rows = useMemo(() => rowsForMonth(data?.setters, current), [data, current]);
-  const names = useMemo(() => Object.fromEntries((data?.setters || []).map((s) => [s.id, s.name])), [data]);
-  const rdvList = useMemo(() => (data?.rdv || []).filter((r) => !setterId || r.setter_id === setterId), [data, setterId]);
-  const salesList = useMemo(() => (data?.sales || []).filter((s) => !setterId || s.setter_id === setterId), [data, setterId]);
+  const options = useMemo(() => periodOptions(data?.months, data?.since?.slice(0, 7)), [data]);
+  const team = periodStats(data?.team, period);
+  const ranked = useMemo(() => (data?.setters || [])
+    .map((s) => ({ ...s, st: periodStats(s, period) }))
+    .sort((a, b) => (b.st.sales.count || 0) - (a.st.sales.count || 0) || (b.st.rdv.total || 0) - (a.st.rdv.total || 0)
+      || String(a.name || "").localeCompare(String(b.name || ""), "fr")), [data, period]);
+  const periodCalls = calls[period];
+  const active = ranked.filter((s) => hasActivity(s.st) || (callsOf(periodCalls, s.id).calls || 0) > 0);
+  const idle = ranked.filter((s) => !active.includes(s));
+  const teamCalls = useMemo(() => {
+    if (!periodCalls || periodCalls.status === "error") return null;
+    return Object.values(periodCalls.setters || {}).filter((x) => x.status === "linked")
+      .reduce((t, x) => ({ calls: t.calls + x.calls, answered: t.answered + x.answered, duration: t.duration + x.duration }),
+        { calls: 0, answered: 0, duration: 0 });
+  }, [periodCalls]);
+  const everActive = useMemo(() => (data?.setters || []).filter((s) => (s.totals?.sales?.count || 0) > 0), [data]);
+  const shownMonths = useMemo(() => (data?.months || []).filter((m) => m <= (data?.now || "").slice(0, 7)), [data]);
   const detail = useMemo(() => (data?.setters || []).find((s) => s.id === detailId) || null, [data, detailId]);
-  const prev = neighbourMonth(data?.months, current, -1);
-  const next = neighbourMonth(data?.months, current, 1);
+  const periodLabel = options.find((o) => o.value === period)?.label || "";
 
+  // ── Styles ─────────────────────────────────────────────────────────────────────────────────
   const card = { background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14, boxShadow: C.shadow };
-  const th = { padding: "10px 12px", fontSize: 10.5, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "left", whiteSpace: "nowrap" };
-  const thNum = { ...th, textAlign: "right", whiteSpace: "normal", lineHeight: 1.35, verticalAlign: "bottom" };
-  const td = { padding: "10px 12px", fontSize: 12.5, color: C.text, verticalAlign: "top" };
+  const label = { fontSize: 10.5, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" };
+  const th = { ...label, padding: "11px 14px", textAlign: "left", whiteSpace: "nowrap" };
+  const thNum = { ...th, textAlign: "right" };
+  const td = { padding: "12px 14px", fontSize: 13, color: C.text, verticalAlign: "middle" };
   const tdNum = { ...td, textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" };
   const sub = { fontSize: 11.5, color: C.secondary, marginTop: 2 };
-  const h2 = { fontSize: 15, fontWeight: 700, color: C.text, margin: "28px 0 10px", letterSpacing: "-0.01em" };
-  const navBtn = (enabled) => ({
-    width: 32, height: 32, borderRadius: 9, border: `1px solid ${C.border}`, background: C.bg, color: enabled ? C.text : C.muted,
-    cursor: enabled ? "pointer" : "default", fontSize: 16, lineHeight: 1, fontFamily: "inherit", opacity: enabled ? 1 : 0.5,
-  });
-  const seg = (active) => ({
-    padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5,
-    fontWeight: 600, background: active ? C.bg : "transparent", color: active ? C.text : C.secondary,
-    boxShadow: active ? (darkMode ? "none" : "0 1px 2px rgba(16,24,40,0.08)") : "none",
-  });
-  const pill = (tone, label, title) => (
+  const h2 = { fontSize: 15, fontWeight: 700, color: C.text, margin: "30px 0 12px", letterSpacing: "-0.01em" };
+  const pill = (tone, text, title) => (
     <span title={title} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 9px", borderRadius: 999, fontSize: 11.5, fontWeight: 600, color: tone, background: `${tone}1f`, whiteSpace: "nowrap" }}>
-      <span style={{ width: 6, height: 6, borderRadius: 999, background: tone }} />{label}
+      <span style={{ width: 6, height: 6, borderRadius: 999, background: tone }} />{text}
     </span>
   );
-  const tile = (label, value, detail, tone) => (
-    <div key={label} style={{ ...card, padding: "14px 16px" }}>
-      <div style={{ fontSize: 10.5, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: tone || C.text, fontVariantNumeric: "tabular-nums" }}>{data ? value : "…"}</div>
-      {detail && <div style={{ ...sub, marginTop: 4 }}>{data ? detail : ""}</div>}
+  const avatar = (name, size = 32) => (
+    <span style={{ width: size, height: size, borderRadius: 999, background: darkMode ? "#2a2b36" : "#e8ebf5", color: C.accent, fontSize: size * 0.38, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      {initials(name)}
+    </span>
+  );
+  const resultBar = (rdv, height = 8) => {
+    const parts = resultSegments(rdv);
+    if (!parts.length) return <div style={{ height, borderRadius: 999, background: C.subtle }} />;
+    return (
+      <div title={parts.map((p) => `${RESULT_LABELS[p.key]} : ${p.value}`).join(" · ")}
+        style={{ display: "flex", height, borderRadius: 999, overflow: "hidden", background: C.subtle }}>
+        {parts.map((p) => <span key={p.key} style={{ width: `${p.pct}%`, background: OUTCOME_TONES[p.key] }} />)}
+      </div>
+    );
+  };
+  const legend = (rdv) => (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", marginTop: 10 }}>
+      {Object.keys(RESULT_LABELS).map((k) => (
+        <span key={k} title={OUTCOME_HINTS[k]} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: C.secondary }}>
+          <span style={{ width: 8, height: 8, borderRadius: 999, background: OUTCOME_TONES[k] }} />
+          {RESULT_LABELS[k]} <b style={{ color: C.text, fontVariantNumeric: "tabular-nums" }}>{fmtInt(rdv?.[k])}</b>
+        </span>
+      ))}
     </div>
   );
+  const kpi = (title, value, detailText, tone) => (
+    <div style={{ ...card, padding: "16px 18px" }}>
+      <div style={label}>{title}</div>
+      <div style={{ fontSize: 26, fontWeight: 700, color: tone || C.text, fontVariantNumeric: "tabular-nums", marginTop: 6 }}>{value}</div>
+      {detailText && <div style={{ ...sub, marginTop: 4 }}>{detailText}</div>}
+    </div>
+  );
+  const callsCell = (c) => {
+    if (c.state === "loading") return <span style={{ color: C.muted }}>…</span>;
+    if (c.state === "missing") return <span style={{ fontSize: 12, color: C.muted }}>Pas de compte Allo</span>;
+    if (c.state === "error") return <span style={{ fontSize: 12, color: C.muted }}>Allo indisponible</span>;
+    return (
+      <>
+        <div style={{ fontWeight: 600 }}>{fmtInt(c.calls)}</div>
+        <div style={sub}>{fmtInt(c.answered)} répondus · {fmtTalk(c.duration)}</div>
+      </>
+    );
+  };
 
   return (
-    <div style={{ padding: "28px 32px 48px", maxWidth: 1480 }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
-        <div style={{ flex: "1 1 520px" }}>
+    <div style={{ padding: "28px 32px 56px", maxWidth: 1320 }}>
+      {/* En-tête et période */}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap", marginBottom: 22 }}>
+        <div style={{ flex: "1 1 420px" }}>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: C.text, margin: "0 0 6px", letterSpacing: "-0.01em" }}>Setters</h1>
-          <p style={{ fontSize: 13, color: C.muted, margin: 0, maxWidth: 860, lineHeight: 1.55 }}>
-            Les rendez-vous posés par chaque setter, depuis le CRM ou via son lien webinaire, ce qu'ils sont devenus
-            et les clients qu'ils ont amenés. Les RDV comptent au mois du rendez-vous (mois à venir compris), les ventes
-            au mois de signature.
+          <p style={{ fontSize: 13, color: C.muted, margin: 0, lineHeight: 1.55 }}>
+            Appels, rendez-vous posés et clients amenés par chaque setter. Cliquez sur un setter pour voir ses clients et ses RDV.
           </p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button type="button" aria-label="Mois précédent" disabled={!prev} onClick={() => prev && setMonth(prev)} style={navBtn(!!prev)}>‹</button>
-          <div style={{ minWidth: 150, textAlign: "center", fontSize: 15, fontWeight: 700, color: C.text }}>{current ? fmtMonth(current) : "…"}</div>
-          <button type="button" aria-label="Mois suivant" disabled={!next} onClick={() => next && setMonth(next)} style={navBtn(!!next)}>›</button>
-        </div>
+        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <span style={label}>Période</span>
+          <select value={period} onChange={(e) => setPeriod(e.target.value)} disabled={!data}
+            style={{ minWidth: 200, padding: "9px 12px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>
+            {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </label>
       </div>
 
       {error && <div role="alert" style={{ ...card, padding: 18, fontSize: 13.5, color: "#b42318", marginBottom: 16 }}>{error}</div>}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12, opacity: loading ? 0.6 : 1, transition: "opacity 0.15s" }}>
-        {tile("RDV posés", fmtInt(team.rdv.total), `dont ${fmtInt(team.rdv.webinar_link)} via un lien webinaire`)}
-        {tile("Honorés", fmtInt(team.rdv.held), `${fmtInt(team.rdv.no_show)} no-show`, OUTCOME_TONES.held)}
-        {tile("À qualifier", fmtInt(team.rdv.to_qualify), "RDV passés sans résultat saisi par le sales", OUTCOME_TONES.to_qualify)}
-        {tile("À venir", fmtInt(team.rdv.upcoming), null, OUTCOME_TONES.upcoming)}
-        {tile("Ventes signées", fmtInt(team.sales.count), `dont ${fmtInt(team.sales.webinar_link)} via un lien webinaire`, "#10b981")}
-        {tile("CA des contrats", fmtEuro(team.sales.amount), `${fmtEuro(team.sales.cash)} encaissés à la signature`)}
+      {/* Chiffres clés de la période */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+        {kpi("Appels passés", teamCalls ? fmtInt(teamCalls.calls) : (periodCalls?.status === "error" ? "Indisponible" : "…"),
+          teamCalls ? `${fmtInt(teamCalls.answered)} répondus · ${fmtTalk(teamCalls.duration)} au téléphone` : "Allo")}
+        {kpi("RDV posés", data ? fmtInt(team.rdv.total) : "…", data ? `dont ${fmtInt(team.rdv.webinar_link)} via un lien webinaire` : null)}
+        {kpi("Clients signés", data ? fmtInt(team.sales.count) : "…", "à la suite d'un RDV de setter", "#10b981")}
+        {kpi("CA des contrats", data ? fmtEuro(team.sales.amount) : "…", data ? `${fmtEuro(team.sales.cash)} encaissés à la signature` : null)}
+        {kpi("Transformation", data ? fmtRate(conversion(team.rdv)) : "…", "clients signés / RDV honorés")}
+      </div>
+      <div style={{ ...card, padding: "16px 18px", marginTop: 12 }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
+          <div style={label}>Résultat des RDV posés</div>
+          <div style={{ fontSize: 12, color: C.muted }}>{periodLabel}</div>
+        </div>
+        {resultBar(team.rdv, 12)}
+        {legend(team.rdv)}
       </div>
 
-      <h2 style={h2}>Par setter, {current ? fmtMonth(current).toLowerCase() : ""}</h2>
-      <div style={{ ...card, overflow: "hidden", opacity: loading ? 0.6 : 1 }}>
+      {/* Classement */}
+      <h2 style={h2}>Classement des setters</h2>
+      <div style={{ ...card, overflow: "hidden" }}>
         {!data ? (
           <div style={{ padding: 22, fontSize: 13.5, color: C.muted }}>{error ? "" : "Chargement…"}</div>
+        ) : !active.length ? (
+          <div style={{ padding: 22, fontSize: 13.5, color: C.muted }}>Aucune activité de setter sur cette période.</div>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", minWidth: 980 }}>
+              <colgroup>
+                <col style={{ width: "23%" }} /><col style={{ width: "13%" }} /><col style={{ width: "9%" }} /><col style={{ width: "22%" }} />
+                <col style={{ width: "9%" }} /><col style={{ width: "11%" }} /><col style={{ width: "8%" }} /><col style={{ width: 36 }} />
+              </colgroup>
               <thead>
                 <tr style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
                   <th style={th}>Setter</th>
-                  <th style={thNum} title="RDV dont la date tombe ce mois-ci (CRM · lien webinaire)">RDV du mois</th>
-                  <th style={thNum}>Honorés</th>
-                  <th style={thNum}>No-show</th>
-                  <th style={thNum} title={OUTCOME_HINTS.to_qualify}>À qualifier</th>
-                  <th style={thNum}>À venir</th>
-                  <th style={thNum} title="RDV du mois dont la personne a signé (à ce jour)">Devenus clients</th>
-                  <th style={thNum} title="Ventes signées ce mois-ci, issues d'un RDV de ce setter">Ventes signées</th>
-                  <th style={thNum}>CA des contrats</th>
-                  <th style={{ ...thNum, borderLeft: `1px solid ${C.border}` }} title="Depuis mai 2026 : clients amenés, CA, RDV posés et transformation (clients / RDV honorés)">Depuis mai</th>
+                  <th style={thNum}>Appels Allo</th>
+                  <th style={thNum}>RDV posés</th>
+                  <th style={th}>Résultat des RDV</th>
+                  <th style={thNum}>Clients</th>
+                  <th style={thNum}>CA contrats</th>
+                  <th style={thNum} title="Clients signés / RDV honorés">Transfo</th>
+                  <th style={th} aria-label="Ouvrir" />
                 </tr>
               </thead>
               <tbody>
-                {rows.map((s) => {
-                  const m = s.month;
-                  const selected = setterId === s.id;
-                  return (
-                    <tr key={s.id} onClick={() => setSetterId(selected ? "" : s.id)} title={selected ? "Afficher tous les setters" : "Filtrer les listes sur ce setter"}
-                      style={{ borderBottom: `1px solid ${C.border}`, cursor: "pointer", background: selected ? C.subtle : "transparent" }}>
-                      <td style={td}>
-                        <button type="button" title="Voir ses clients signés" onClick={(e) => { e.stopPropagation(); setDetailId(s.id); }}
-                          style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 600, color: C.accent, whiteSpace: "nowrap", textAlign: "left" }}>
-                          {s.name || "Setter inconnu"}
-                        </button>
-                        {s.has_webinar_link && <div style={{ marginTop: 4 }}>{pill(C.accent, "Lien webinaire")}</div>}
-                        {!s.active && <div style={sub}>Compte désactivé</div>}
-                      </td>
-                      <td style={tdNum}>
-                        <div>{fmtInt(m.rdv.total)}</div>
-                        {(m.rdv.total || 0) > 0 && <div style={sub}>{fmtInt(m.rdv.crm)} CRM · {fmtInt(m.rdv.webinar_link)} lien</div>}
-                      </td>
-                      <td style={tdNum}>{fmtInt(m.rdv.held)}</td>
-                      <td style={tdNum}>{fmtInt(m.rdv.no_show)}</td>
-                      <td style={tdNum}>{fmtInt(m.rdv.to_qualify)}</td>
-                      <td style={tdNum}>{fmtInt(m.rdv.upcoming)}</td>
-                      <td style={tdNum}>{fmtInt(m.rdv.clients)}</td>
-                      <td style={{ ...tdNum, fontWeight: 700 }}>{fmtInt(m.sales.count)}</td>
-                      <td style={tdNum}>{fmtEuro(m.sales.amount)}</td>
-                      <td style={{ ...tdNum, borderLeft: `1px solid ${C.border}` }}>
-                        <div><b>{fmtInt(s.totals.sales.count)}</b> client{s.totals.sales.count > 1 ? "s" : ""} · {fmtEuro(s.totals.sales.amount)}</div>
-                        <div style={sub}>{fmtInt(s.totals.rdv.total)} RDV · transfo {fmtRate(conversion(s.totals.rdv))}</div>
-                      </td>
-                    </tr>
-                  );
-                })}
-                <tr style={{ background: C.surface, fontWeight: 700 }}>
-                  <td style={{ ...td, fontWeight: 700 }}>Équipe</td>
-                  <td style={tdNum}>{fmtInt(team.rdv.total)}</td>
-                  <td style={tdNum}>{fmtInt(team.rdv.held)}</td>
-                  <td style={tdNum}>{fmtInt(team.rdv.no_show)}</td>
-                  <td style={tdNum}>{fmtInt(team.rdv.to_qualify)}</td>
-                  <td style={tdNum}>{fmtInt(team.rdv.upcoming)}</td>
-                  <td style={tdNum}>{fmtInt(team.rdv.clients)}</td>
-                  <td style={tdNum}>{fmtInt(team.sales.count)}</td>
-                  <td style={tdNum}>{fmtEuro(team.sales.amount)}</td>
-                  <td style={{ ...tdNum, borderLeft: `1px solid ${C.border}` }}>
-                    <div>{fmtInt(data.team.totals.sales.count)} clients · {fmtEuro(data.team.totals.sales.amount)}</div>
-                    <div style={{ ...sub, fontWeight: 600 }}>{fmtInt(data.team.totals.rdv.total)} RDV · transfo {fmtRate(conversion(data.team.totals.rdv))}</div>
-                  </td>
-                </tr>
+                {active.map((s) => (
+                  <tr key={s.id} onClick={() => openDetail(s.id)} title="Voir ses clients et ses RDV"
+                    style={{ borderBottom: `1px solid ${C.border}`, cursor: "pointer", transition: "background 0.12s" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = C.subtle; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                    <td style={td}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        {avatar(s.name)}
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name || "Setter inconnu"}</div>
+                          <div style={sub}>{s.has_webinar_link ? "Lien webinaire" : "CRM"}{!s.active ? " · compte désactivé" : ""}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={tdNum}>{callsCell(callsOf(periodCalls, s.id))}</td>
+                    <td style={tdNum}>
+                      <div style={{ fontWeight: 600 }}>{fmtInt(s.st.rdv.total)}</div>
+                      {(s.st.rdv.webinar_link || 0) > 0 && <div style={sub}>dont {fmtInt(s.st.rdv.webinar_link)} lien</div>}
+                    </td>
+                    <td style={td}>
+                      {resultBar(s.st.rdv)}
+                      <div style={{ ...sub, marginTop: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {fmtInt(s.st.rdv.held)} honorés · {fmtInt(s.st.rdv.no_show)} no-show · {fmtInt(s.st.rdv.to_qualify)} à qualifier
+                      </div>
+                    </td>
+                    <td style={{ ...tdNum, fontSize: 15, fontWeight: 700, color: (s.st.sales.count || 0) > 0 ? "#10b981" : C.muted }}>{fmtInt(s.st.sales.count)}</td>
+                    <td style={tdNum}>{fmtEuro(s.st.sales.amount)}</td>
+                    <td style={tdNum}>{fmtRate(conversion(s.st.rdv))}</td>
+                    <td style={{ ...td, color: C.muted, fontSize: 18, textAlign: "center" }}>›</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         )}
+        {data && idle.length > 0 && (
+          <div style={{ padding: "12px 16px", fontSize: 12.5, color: C.muted, borderTop: `1px solid ${C.border}`, background: C.surface }}>
+            Sans activité sur la période : {idle.map((s) => s.name || "Setter inconnu").join(", ")}
+          </div>
+        )}
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <h2 style={{ ...h2, marginRight: "auto" }}>Mois par mois</h2>
-        <div style={{ display: "flex", gap: 3, padding: 3, borderRadius: 10, background: C.subtle, border: `1px solid ${C.border}`, marginTop: 18 }}>
-          {[["sales", "Ventes au mois de signature"], ["rdv", "RDV au mois du rendez-vous"]].map(([key, label]) => (
-            <button key={key} type="button" onClick={() => setTrend(key)} style={seg(trend === key)}>{label}</button>
+      {/* Clients signés par mois */}
+      {data && everActive.length > 0 && (
+        <>
+          <h2 style={h2}>Clients signés par mois</h2>
+          <div style={{ ...card, overflow: "hidden" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
+                    <th style={th}>Setter</th>
+                    {shownMonths.map((m) => (
+                      <th key={m} style={{ ...thNum, color: m === period ? C.accent : C.muted }}>
+                        <button type="button" onClick={() => setPeriod(m)} title={`Voir ${fmtMonth(m).toLowerCase()}`}
+                          style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", font: "inherit", color: "inherit", textTransform: "inherit", letterSpacing: "inherit" }}>
+                          {fmtMonthShort(m)}
+                        </button>
+                      </th>
+                    ))}
+                    <th style={thNum}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...everActive, { id: "__team", name: "Équipe", months: data.team.months, totals: data.team.totals, team: true }].map((s) => (
+                    <tr key={s.id} onClick={s.team ? undefined : () => openDetail(s.id)}
+                      style={{ borderBottom: `1px solid ${C.border}`, background: s.team ? C.surface : "transparent", cursor: s.team ? "default" : "pointer" }}>
+                      <td style={{ ...td, fontWeight: s.team ? 700 : 600, whiteSpace: "nowrap" }}>{s.name || "Setter inconnu"}</td>
+                      {shownMonths.map((m) => {
+                        const st = s.months?.[m]?.sales || {};
+                        return (
+                          <td key={m} style={{ ...tdNum, background: m === period ? C.subtle : "transparent", color: st.count ? C.text : C.muted, fontWeight: s.team ? 700 : 500 }}>
+                            <div>{st.count ? fmtInt(st.count) : "·"}</div>
+                            {st.count > 0 && <div style={sub}>{fmtEuro(st.amount)}</div>}
+                          </td>
+                        );
+                      })}
+                      <td style={{ ...tdNum, fontWeight: 700 }}>
+                        <div>{fmtInt(s.totals.sales.count)}</div>
+                        <div style={sub}>{fmtEuro(s.totals.sales.amount)}</div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {detail && <SetterDetail detail={detail} rdvAll={data?.rdv_all || []} allCalls={callsOf(calls[ALL], detail.id)} tab={tab} setTab={setTab}
+        onClose={closeDetail} C={C} darkMode={darkMode} styles={{ card, label, sub, pill, avatar, resultBar, legend }} />}
+    </div>
+  );
+}
+
+function SetterDetail({ detail, rdvAll, allCalls, tab, setTab, onClose, C, darkMode, styles }) {
+  const { card, label, sub, pill, avatar, resultBar, legend } = styles;
+  const clientsByMonth = useMemo(() => groupByMonth(detail.clients, "signed_at"), [detail]);
+  const rdvs = useMemo(() => rdvAll.filter((r) => r.setter_id === detail.id), [rdvAll, detail]);
+  const rdvByMonth = useMemo(() => groupByMonth(rdvs, "rdv_at"), [rdvs]);
+  const t = detail.totals;
+  const callsValue = allCalls.state === "ok" ? fmtInt(allCalls.calls) : allCalls.state === "loading" ? "…" : allCalls.state === "missing" ? "Pas de compte" : "Indisponible";
+  const callsDetail = allCalls.state === "ok" ? `${fmtInt(allCalls.answered)} répondus · ${fmtTalk(allCalls.duration)}` : "Allo";
+  const tabBtn = (key, text) => (
+    <button type="button" onClick={() => setTab(key)} style={{
+      padding: "9px 14px", border: "none", borderBottom: `2px solid ${tab === key ? C.accent : "transparent"}`, background: "transparent",
+      color: tab === key ? C.text : C.secondary, fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer",
+    }}>{text}</button>
+  );
+  const monthHeader = (month, right) => (
+    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, padding: "18px 2px 8px" }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{month === "sans-date" ? "Sans date" : fmtMonth(month)}</div>
+      <div style={{ fontSize: 12.5, color: C.secondary }}>{right}</div>
+    </div>
+  );
+  const row = { display: "grid", alignItems: "center", gap: 14, padding: "12px 16px", borderBottom: `1px solid ${C.border}` };
+  const ellipsis = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,17,23,0.35)", display: "flex", justifyContent: "flex-end" }}>
+      <div role="dialog" aria-label={`Fiche de ${detail.name}`} onClick={(e) => e.stopPropagation()}
+        style={{ width: "min(1080px, 100vw)", height: "100%", overflowY: "auto", background: darkMode ? "#0f1117" : "#f6f7f9", boxShadow: "-12px 0 40px rgba(0,0,0,0.18)", padding: "24px 28px 48px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          {avatar(detail.name, 44)}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: 0 }}>{detail.name}</h2>
+            <div style={sub}>{detail.has_webinar_link ? "Setter avec lien webinaire" : "Setter"}{!detail.active ? " · compte désactivé" : ""} · chiffres depuis mai 2026</div>
+          </div>
+          <button type="button" aria-label="Fermer" onClick={onClose}
+            style={{ width: 36, height: 36, borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, cursor: "pointer", fontSize: 20, lineHeight: 1, fontFamily: "inherit" }}>×</button>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 10, marginTop: 18 }}>
+          {[["Appels Allo", callsValue, callsDetail],
+            ["RDV posés", fmtInt(t.rdv.total), `${fmtInt(t.rdv.crm)} CRM · ${fmtInt(t.rdv.webinar_link)} lien webinaire`],
+            ["Clients signés", fmtInt(t.sales.count), null],
+            ["CA des contrats", fmtEuro(t.sales.amount), `${fmtEuro(t.sales.cash)} encaissés`],
+            ["Transformation", fmtRate(conversion(t.rdv)), "clients / RDV honorés"]].map(([k, v, d]) => (
+            <div key={k} style={{ ...card, padding: "12px 14px" }}>
+              <div style={label}>{k}</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: C.text, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>{v}</div>
+              {d && <div style={sub}>{d}</div>}
+            </div>
           ))}
         </div>
-      </div>
-      {data && (
-        <div style={{ ...card, overflow: "hidden" }}>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
-                  <th style={th}>Setter</th>
-                  {data.months.map((m) => (
-                    <th key={m} style={{ ...thNum, color: m === current ? C.text : C.muted }}>
-                      <button type="button" onClick={() => setMonth(m)} style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", font: "inherit", color: "inherit", textTransform: "inherit", letterSpacing: "inherit" }}>{fmtMonthShort(m)}</button>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {[...data.setters, { id: "__team", name: "Équipe", months: data.team.months, team: true }].map((s) => (
-                  <tr key={s.id} style={{ borderBottom: `1px solid ${C.border}`, background: s.team ? C.surface : "transparent" }}>
-                    <td style={{ ...td, fontWeight: s.team ? 700 : 600, whiteSpace: "nowrap" }}>{s.name || "Setter inconnu"}</td>
-                    {data.months.map((m) => {
-                      const cell = s.months?.[m] || { rdv: {}, sales: {} };
-                      const value = trend === "sales" ? cell.sales.count : cell.rdv.total;
-                      const detail = trend === "sales"
-                        ? (cell.sales.count ? fmtEuro(cell.sales.amount) : "")
-                        : (cell.rdv.total ? `${fmtInt(cell.rdv.clients)} client${cell.rdv.clients > 1 ? "s" : ""}` : "");
+        <div style={{ ...card, padding: "12px 14px", marginTop: 10 }}>
+          {resultBar(t.rdv, 10)}
+          {legend(t.rdv)}
+        </div>
+        {originEntries(detail.origins).length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 12 }}>
+            <span style={{ ...label, marginRight: 4 }}>Origine des clients</span>
+            {originEntries(detail.origins).map(([key, n]) => (
+              <span key={key}>{pill(ORIGIN_TONES[key] || ORIGIN_TONES.other, `${ORIGIN_LABELS[key] || key} · ${fmtInt(n)}`)}</span>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 4, borderBottom: `1px solid ${C.border}`, marginTop: 18 }}>
+          {tabBtn("clients", `Clients signés (${fmtInt(detail.clients?.length)})`)}
+          {tabBtn("rdv", `RDV posés (${fmtInt(rdvs.length)})`)}
+        </div>
+
+        {tab === "clients" && (
+          !clientsByMonth.length
+            ? <div style={{ padding: "22px 2px", fontSize: 13, color: C.muted }}>Aucun client signé à la suite de ses RDV depuis mai.</div>
+            : clientsByMonth.map((g) => {
+              const total = g.items.reduce((n, c) => n + (Number(c.amount) || 0), 0);
+              return (
+                <div key={g.month}>
+                  {monthHeader(g.month, `${fmtInt(g.items.length)} client${g.items.length > 1 ? "s" : ""} · ${fmtEuro(total)}`)}
+                  <div style={{ ...card, overflow: "hidden" }}>
+                    {g.items.map((c, i) => {
+                      const who = splitClient(c.client_name, c.societe);
                       return (
-                        <td key={m} style={{ ...tdNum, background: m === current ? C.subtle : "transparent", color: value ? C.text : C.muted, fontWeight: s.team ? 700 : 500 }}>
-                          <div>{fmtInt(value)}</div>{detail && <div style={sub}>{detail}</div>}
-                        </td>
+                        <div key={`${c.numero_client || i}-${c.signed_at}`} style={{ ...row, gridTemplateColumns: "78px minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1.9fr) 104px minmax(0, 1.3fr)" }}>
+                          <div style={{ fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums" }}>{c.numero_client || "Sans n°"}</div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, color: C.text, ...ellipsis }}>{who.company}</div>
+                            {who.person && <div style={{ ...sub, ...ellipsis }}>{who.person}</div>}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            {pill(ORIGIN_TONES[c.origin] || ORIGIN_TONES.other, ORIGIN_LABELS[c.origin] || c.origin)}
+                            {c.origin_label && <div style={{ ...sub, ...ellipsis }}>{c.origin_label}</div>}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, color: C.text }}>Signé le {fmtDay(c.signed_at)}</div>
+                            <div style={sub}>RDV du {fmtRdv(c.rdv_at)} · {c.kind === "r1" ? "R1" : "R2"} {CHANNEL_LABELS[c.channel]}</div>
+                            <div style={sub}>{fmtInt(c.days_to_sign)} j entre le RDV posé et la signature</div>
+                          </div>
+                          <div style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                            <div style={{ fontWeight: 600, color: C.text }}>{fmtEuro(c.amount)}</div>
+                            <div style={sub}>{fmtEuro(c.cash)} cash</div>
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ ...label, fontSize: 9.5 }}>Vendu par</div>
+                            <div style={{ fontSize: 12.5, color: C.text, ...ellipsis }}>{c.sales_name || "Non renseigné"}</div>
+                          </div>
+                        </div>
                       );
                     })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
-        <h2 style={h2}>Ventes signées en {current ? fmtMonth(current).toLowerCase() : ""}</h2>
-        {setterId && (
-          <button type="button" onClick={() => setSetterId("")} style={{ border: "none", background: "transparent", color: C.accent, cursor: "pointer", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit" }}>
-            {names[setterId]} · afficher tous les setters
-          </button>
-        )}
-      </div>
-      <div style={{ ...card, overflow: "hidden" }}>
-        {!salesList.length ? (
-          <div style={{ padding: 20, fontSize: 13, color: C.muted }}>{data ? "Aucune vente issue d'un RDV de setter ce mois-ci." : ""}</div>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
-                  {["N° client", "Client", "Origine", "Setter", "RDV posé", "Signé le", "Délai"].map((h) => <th key={h} style={th}>{h}</th>)}
-                  <th style={thNum}>Contrat</th><th style={thNum}>Cash</th><th style={th}>Vendu par</th>
-                </tr>
-              </thead>
-              <tbody>
-                {salesList.map((s, i) => (
-                  <tr key={`${s.setter_id}-${s.signed_at}-${i}`} style={{ borderBottom: `1px solid ${C.border}` }}>
-                    <td style={{ ...td, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{s.numero_client || "Sans numéro"}</td>
-                    <td style={td}><div style={{ fontWeight: 600 }}>{s.client_name || s.societe || "Client"}</div>{s.shared && <div style={sub}>RDV posés par plusieurs setters</div>}</td>
-                    <td style={td}>{pill(ORIGIN_TONES[s.origin] || ORIGIN_TONES.other, ORIGIN_LABELS[s.origin] || s.origin)}{s.origin_label && <div style={sub}>{s.origin_label}</div>}</td>
-                    <td style={{ ...td, whiteSpace: "nowrap" }}>{s.setter_name}</td>
-                    <td style={{ ...td, whiteSpace: "nowrap" }}>
-                      <div>{fmtRdv(s.rdv_at)}</div>
-                      <div style={sub}>{s.kind === "r1" ? "R1" : "R2"} · {CHANNEL_LABELS[s.channel]}</div>
-                    </td>
-                    <td style={{ ...td, whiteSpace: "nowrap" }}>{fmtDay(s.signed_at)}</td>
-                    <td style={{ ...td, whiteSpace: "nowrap" }}>{fmtInt(s.days_to_sign)} j</td>
-                    <td style={tdNum}>{fmtEuro(s.amount)}</td>
-                    <td style={tdNum}>{fmtEuro(s.cash)}</td>
-                    <td style={{ ...td, whiteSpace: "nowrap" }}>{s.sales_name || ""}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      <h2 style={h2}>RDV de {current ? fmtMonth(current).toLowerCase() : ""}</h2>
-      <div style={{ ...card, overflow: "hidden" }}>
-        {!rdvList.length ? (
-          <div style={{ padding: 20, fontSize: 13, color: C.muted }}>{data ? "Aucun RDV de setter ce mois-ci." : ""}</div>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
-                  {["Prospect", "Setter", "Rendez-vous", "Résultat", "Client", "Affecté à"].map((h) => <th key={h} style={th}>{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {rdvList.map((r) => {
-                  const state = clientState(r);
-                  const waiting = r.assigned?.state !== "assigned";
-                  return (
-                    <tr key={`${r.setter_id}-${r.lead_id}-${r.kind}`} style={{ borderBottom: `1px solid ${C.border}` }}>
-                      <td style={td}><div style={{ fontWeight: 600 }}>{r.full_name || "Prospect sans nom"}</div>{r.company && <div style={sub}>{r.company}</div>}</td>
-                      <td style={{ ...td, whiteSpace: "nowrap" }}>{r.setter_name}</td>
-                      <td style={{ ...td, whiteSpace: "nowrap" }}>
-                        <div>{fmtRdv(r.rdv_at)}</div>
-                        <div style={sub}>{r.kind === "r1" ? "R1" : "R2"} · {CHANNEL_LABELS[r.channel]}</div>
-                      </td>
-                      <td style={td}>{pill(OUTCOME_TONES[r.outcome] || OUTCOME_TONES.removed, OUTCOME_LABELS[r.outcome] || r.outcome, OUTCOME_HINTS[r.outcome])}</td>
-                      <td style={td}>
-                        {state
-                          ? <>{pill(CLIENT_TONES[state], CLIENT_STATE_LABELS[state])}{r.client && <div style={sub}>{fmtDay(r.client.signed_at)} · {fmtEuro(r.client.amount)}</div>}</>
-                          : <span style={{ color: C.muted }}>Pas encore</span>}
-                      </td>
-                      <td style={{ ...td, whiteSpace: "nowrap", color: waiting ? C.muted : C.text, fontStyle: waiting ? "italic" : "normal" }}>{assignedLabel(r.assigned)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {detail && (
-        <div onClick={() => setDetailId(null)} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,17,23,0.35)", display: "flex", justifyContent: "flex-end" }}>
-          <div role="dialog" aria-label={`Clients de ${detail.name}`} onClick={(e) => e.stopPropagation()}
-            style={{ width: "min(980px, 100vw)", height: "100%", overflowY: "auto", background: darkMode ? "#0f1117" : "#f6f7f9", boxShadow: "-12px 0 40px rgba(0,0,0,0.18)", padding: "26px 28px 40px" }}>
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-              <div style={{ flex: 1 }}>
-                <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: "0 0 6px" }}>{detail.name}</h2>
-                <div style={{ fontSize: 13, color: C.secondary, lineHeight: 1.6 }}>
-                  <b style={{ color: C.text }}>{fmtInt(detail.totals.sales.count)} client{detail.totals.sales.count > 1 ? "s" : ""} signé{detail.totals.sales.count > 1 ? "s" : ""}</b> depuis mai
-                  {" · "}{fmtEuro(detail.totals.sales.amount)} de contrats · {fmtEuro(detail.totals.sales.cash)} encaissés à la signature
-                  <br />{fmtInt(detail.totals.rdv.total)} RDV posés ({fmtInt(detail.totals.rdv.crm)} CRM, {fmtInt(detail.totals.rdv.webinar_link)} lien webinaire) · transformation {fmtRate(conversion(detail.totals.rdv))}
+                  </div>
                 </div>
-              </div>
-              <button type="button" aria-label="Fermer" onClick={() => setDetailId(null)}
-                style={{ width: 34, height: 34, borderRadius: 9, border: `1px solid ${C.border}`, background: C.bg, color: C.text, cursor: "pointer", fontSize: 18, lineHeight: 1, fontFamily: "inherit" }}>×</button>
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "16px 0 18px" }}>
-              {originEntries(detail.origins).map(([key, n]) => (
-                <span key={key}>{pill(ORIGIN_TONES[key] || ORIGIN_TONES.other, `${ORIGIN_LABELS[key] || key} : ${fmtInt(n)}`)}</span>
-              ))}
-            </div>
-            <div style={{ ...card, overflow: "hidden" }}>
-              {!detail.clients?.length ? (
-                <div style={{ padding: 20, fontSize: 13, color: C.muted }}>Aucun client signé à la suite de ses RDV depuis mai.</div>
-              ) : (
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
-                        {["N° client", "Client", "Origine", "RDV posé", "Signé le"].map((h) => <th key={h} style={th}>{h}</th>)}
-                        <th style={thNum}>Contrat</th><th style={th}>Vendu par</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {detail.clients.map((c, i) => (
-                        <tr key={`${c.numero_client || i}-${c.signed_at}`} style={{ borderBottom: `1px solid ${C.border}` }}>
-                          <td style={{ ...td, whiteSpace: "nowrap", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{c.numero_client || "Sans numéro"}</td>
-                          <td style={td}><div style={{ fontWeight: 600 }}>{c.client_name || c.societe || "Client"}</div>{c.societe && c.societe !== c.client_name && <div style={sub}>{c.societe}</div>}</td>
-                          <td style={td}>{pill(ORIGIN_TONES[c.origin] || ORIGIN_TONES.other, ORIGIN_LABELS[c.origin] || c.origin)}{c.origin_label && <div style={sub}>{c.origin_label}</div>}</td>
-                          <td style={{ ...td, whiteSpace: "nowrap" }}><div>{fmtRdv(c.rdv_at)}</div><div style={sub}>{c.kind === "r1" ? "R1" : "R2"} · {CHANNEL_LABELS[c.channel]}</div></td>
-                          <td style={{ ...td, whiteSpace: "nowrap" }}><div>{fmtDay(c.signed_at)}</div><div style={sub}>{fmtInt(c.days_to_sign)} j après la pose</div></td>
-                          <td style={tdNum}><div>{fmtEuro(c.amount)}</div><div style={sub}>{fmtEuro(c.cash)} cash</div></td>
-                          <td style={{ ...td, whiteSpace: "nowrap" }}>{c.sales_name || ""}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+              );
+            })
+        )}
 
-      <p style={{ fontSize: 12, color: C.muted, margin: "18px 0 0", maxWidth: 980, lineHeight: 1.6 }}>
-        Un RDV compte comme devenu client quand la même personne signe une vente déclarée après la pose du RDV
-        (retrouvée par la fiche client, le contrat ou l'e-mail, comme dans le Suivi des ventes). Une vente signée avant
-        la pose n'est pas comptée. Transformation = clients amenés / RDV honorés. Historique depuis mai 2026.
-        {data?.dated_before_since > 0 && ` ${fmtInt(data.dated_before_since)} RDV ont une date de fiche antérieure à mai 2026 (date probablement mal saisie) : comptés dans les totaux, pas dans les mois.`}
-      </p>
+        {tab === "rdv" && (
+          !rdvByMonth.length
+            ? <div style={{ padding: "22px 2px", fontSize: 13, color: C.muted }}>Aucun RDV posé depuis mai.</div>
+            : rdvByMonth.map((g) => {
+              const held = g.items.filter((r) => r.outcome === "held").length;
+              const clients = g.items.filter((r) => r.client).length;
+              return (
+                <div key={g.month}>
+                  {monthHeader(g.month, `${fmtInt(g.items.length)} RDV · ${fmtInt(held)} honoré${held > 1 ? "s" : ""} · ${fmtInt(clients)} client${clients > 1 ? "s" : ""}`)}
+                  <div style={{ ...card, overflow: "hidden" }}>
+                    {g.items.map((r) => {
+                      const state = clientState(r);
+                      const waiting = r.assigned?.state !== "assigned";
+                      return (
+                        <div key={`${r.lead_id}-${r.kind}`} style={{ ...row, gridTemplateColumns: "172px minmax(0, 2fr) minmax(0, 1.1fr) 120px minmax(0, 1.4fr) minmax(0, 1.2fr)" }}>
+                          <div>
+                            <div style={{ fontWeight: 600, color: C.text, whiteSpace: "nowrap" }}>{fmtRdv(r.rdv_at)}</div>
+                            <div style={sub}>{r.kind === "r1" ? "R1" : "R2"} · {CHANNEL_LABELS[r.channel]}</div>
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, color: C.text, ...ellipsis }}>{r.company || r.full_name || "Prospect sans nom"}</div>
+                            {r.company && r.full_name && <div style={{ ...sub, ...ellipsis }}>{r.full_name}</div>}
+                          </div>
+                          <div style={{ minWidth: 0 }}>{pill(ORIGIN_TONES[r.origin] || ORIGIN_TONES.other, ORIGIN_LABELS[r.origin] || r.origin)}</div>
+                          <div>{pill(OUTCOME_TONES[r.outcome] || OUTCOME_TONES.removed, OUTCOME_LABELS[r.outcome] || r.outcome, OUTCOME_HINTS[r.outcome])}</div>
+                          <div style={{ minWidth: 0 }}>
+                            {state
+                              ? <>{pill(CLIENT_TONES[state], state === "client" && r.client?.numero_client ? `Client ${r.client.numero_client}` : CLIENT_STATE_LABELS[state])}
+                                {r.client && <div style={sub}>signé le {fmtDay(r.client.signed_at)}</div>}</>
+                              : <span style={{ fontSize: 12.5, color: C.muted }}>Pas encore client</span>}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ ...label, fontSize: 9.5 }}>Affecté à</div>
+                            <div style={{ fontSize: 12.5, color: waiting ? C.muted : C.text, fontStyle: waiting ? "italic" : "normal", ...ellipsis }}>{assignedLabel(r.assigned)}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })
+        )}
+      </div>
     </div>
   );
 }

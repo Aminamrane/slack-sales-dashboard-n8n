@@ -43,8 +43,10 @@ export function fmtRdv(iso) {
   const p = wallParts(iso);
   if (!p) return 'Date inconnue';
   const weekday = WEEKDAYS[new Date(Date.UTC(p.y, p.mo - 1, p.d)).getUTCDay()];
+  const day = `${weekday} ${p.d} ${MONTHS[p.mo - 1]}`;
+  if (!p.h && !p.mi) return day;                      // minuit : RDV saisi sans heure
   const hour = p.mi ? `${p.h} h ${String(p.mi).padStart(2, '0')}` : `${p.h} h`;
-  return `${weekday} ${p.d} ${MONTHS[p.mo - 1]} · ${hour}`;
+  return `${day} · ${hour}`;
 }
 
 // Instant réel de la réservation (avec fuseau), affiché en heure de Paris.

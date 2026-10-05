@@ -91,3 +91,52 @@ export function originEntries(origins) {
   return Object.entries(origins || {}).filter(([, n]) => n > 0)
     .sort((a, b) => b[1] - a[1] || String(ORIGIN_LABELS[a[0]] || a[0]).localeCompare(String(ORIGIN_LABELS[b[0]] || b[0]), 'fr'));
 }
+
+// ── Refonte du 05/10 : période, regroupement par mois, client lisible ─────────────────────────
+
+export const ALL = 'all';
+const EMPTY = { rdv: {}, sales: {} };
+
+// Chiffres d'un setter (ou de l'équipe) sur la période : « Depuis mai » = cumul, sinon le mois.
+export function periodStats(entity, period) {
+  if (!entity) return EMPTY;
+  return period === ALL ? (entity.totals || EMPTY) : (entity.months?.[period] || EMPTY);
+}
+
+export function periodOptions(months, since = '2026-05') {
+  return [{ value: ALL, label: `Depuis ${fmtMonth(since).toLowerCase()}` },
+    ...[...(months || [])].reverse().map((m) => ({ value: m, label: fmtMonth(m) }))];
+}
+
+export const hasActivity = (st) => (Number(st?.rdv?.total) || 0) > 0 || (Number(st?.sales?.count) || 0) > 0;
+
+// « DG AGENCEMENT (DITTA Geoffroy) » -> société + dirigeant ; sinon le nom tel quel.
+export function splitClient(name, societe) {
+  const raw = String(name || '').trim();
+  const m = /^(.+?)\s*\((.+)\)\s*$/.exec(raw);
+  if (m) return { company: m[1].trim(), person: m[2].trim() };
+  return { company: raw || String(societe || '').trim() || 'Client', person: null };
+}
+
+// [{ month, items }] du mois le plus récent au plus ancien, chaque mois trié du plus récent au plus ancien.
+export function groupByMonth(items, key) {
+  const groups = new Map();
+  for (const it of items || []) {
+    const month = String(it?.[key] || '').slice(0, 7) || 'sans-date';
+    if (!groups.has(month)) groups.set(month, []);
+    groups.get(month).push(it);
+  }
+  return [...groups.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([month, list]) => ({ month, items: list.sort((x, y) => String(y[key] || '').localeCompare(String(x[key] || ''))) }));
+}
+
+// Barre de résultats des RDV : segments non vides, dans l'ordre de lecture.
+export const RESULT_KEYS = ['held', 'no_show', 'to_qualify', 'upcoming'];
+export function resultSegments(rdv) {
+  const total = RESULT_KEYS.reduce((n, k) => n + (Number(rdv?.[k]) || 0), 0);
+  if (!total) return [];
+  return RESULT_KEYS.filter((k) => Number(rdv?.[k]) > 0).map((k) => ({ key: k, value: Number(rdv[k]), pct: (100 * Number(rdv[k])) / total }));
+}
+
+export const initials = (name) => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
