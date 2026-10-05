@@ -54,6 +54,7 @@ const MetaAds = lazy(() => import("./pages/MetaAds/index.jsx"));
 const CeoMetaAdsView = lazy(() => import("./pages/CeoMetaAdsView.jsx"));
 const CeoSmallLeadsView = lazy(() => import("./pages/CeoSmallLeadsView.jsx"));
 const CeoSettersView = lazy(() => import("./pages/CeoSettersView.jsx"));
+const CeoAgendaView = lazy(() => import("./pages/CeoAgendaView.jsx"));
 const CeoBotIaView = lazy(() => import("./pages/CeoBotIaView.jsx"));
 const LeadAssignmentEquity = lazy(() => import("./pages/LeadAssignmentEquity.jsx"));
 const LeadAssignmentMonitor = lazy(() => import("./pages/LeadAssignmentMonitor.jsx"));
@@ -375,6 +376,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['admin', 'ceo']}>
               <CeoSettersView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ceo/agenda"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'acquisition_director', 'head_of_acquisition']}>
+              <CeoAgendaView />
             </ProtectedRoute>
           }
         />

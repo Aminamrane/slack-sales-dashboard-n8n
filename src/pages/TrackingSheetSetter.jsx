@@ -16,6 +16,7 @@ import ProspectSearch from "../components/setter/prospection/ProspectSearch.jsx"
 import ProspectLists from "../components/setter/prospection/ProspectLists.jsx";
 import PilotageSetting from "../components/setter/PilotageSetting.jsx";
 import SetterWebinarRdv from "../components/setter/SetterWebinarRdv.jsx";
+import InternalCalendar from "../components/calendar/InternalCalendar";
 import CreateColdLeadModal from "../components/setter/CreateColdLeadModal.jsx";
 import SetterOnboarding from "../components/SetterOnboarding.jsx";
 import "../index.css";
@@ -2533,15 +2534,17 @@ export default function TrackingSheetSetter() {
               </div>
             </div>
 
-            {/* Nav items — Setter version : pas de Calendrier (RDV gérés
-                par les sales). Le reste (Notifications, Relance, Campagnes,
-                KPIs) reste accessible — utile pour le setter. */}
+            {/* Nav items — Setter version : pas le Calendrier des sales (leurs RDV
+                sont gérés par eux) ; l'Agenda montre les RDV que le setter a posés.
+                Le reste (Notifications, Relance, Campagnes, KPIs) reste accessible. */}
             {[
               { key: 'leads', label: 'Mes leads', iconSrc: iconMyLead, accent: C.accent, keepColor: true },
               // Barrage répondeur commun — pool TRAITEMENT uniquement (la
               // réactivité reste aux sales). Le setter y récupère un lead en
               // posant un R1 pour l'un de ses commerciaux.
               { key: 'barrage', label: 'Barrage', iconSrc: iconMyLead, accent: '#0891b2' },
+              // Agenda (05/10/2026) : les RDV posés chez les commerciaux (no-show visible) et les rappels.
+              { key: 'agenda', label: 'Agenda', icon: <CalendarDays size={20} strokeWidth={1.8} style={{ display: 'block', margin: '0 auto' }} />, accent: C.accent },
               ...(webinarRdv?.has_tunnel ? [{ key: 'webinar_rdv', label: 'RDV webinaire', icon: <Video size={20} strokeWidth={1.8} style={{ display: 'block', margin: '0 auto' }} />, accent: C.accent }] : []),
               // Prospection : recherche d'entreprises (API Leads) et listes réservées.
               { key: 'prospect_search', label: 'Trouver des contacts', icon: <UserSearch size={20} strokeWidth={1.8} style={{ display: 'block', margin: '0 auto' }} />, accent: C.accent },
@@ -2838,6 +2841,19 @@ export default function TrackingSheetSetter() {
                 email: s.email || s,
                 name: s.full_name || s.name || s.email || s,
               }))}
+            />
+          </div>
+        )}
+
+        {sidebarView === 'agenda' && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '20px 28px', animation: 'tabFadeIn 0.3s ease-out both' }}>
+            <InternalCalendar
+              view="setter"
+              C={C}
+              darkMode={darkMode}
+              asUser={urlParams.get('ghost') === 'true' ? viewingSheetId : undefined}
+              canOpenLead={(leadId) => leads.some((l) => l.id === leadId)}
+              onOpenLead={(leadId) => { setSidebarView('leads'); setTimeout(() => setSelectedLead(leadId), 100); }}
             />
           </div>
         )}

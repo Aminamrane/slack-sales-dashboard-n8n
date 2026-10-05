@@ -49,6 +49,9 @@ const ITEM_ROLE_GATE = {
   small_leads: new Set(["ceo", "admin"]),
   // « Setters » : RDV posés par les setters et clients amenés (05/10), Paul (ceo) et les admins.
   setters_stats: new Set(["ceo", "admin"]),
+  // « Agenda des RDV » : Paul (ceo), Gaylord (acquisition_director), Timothy (head_of_acquisition), admins.
+  // Même liste que l'API (calendar_internal.DIRECTOR_ROLES).
+  acquisition_agenda: new Set(["ceo", "admin", "acquisition_director", "head_of_acquisition"]),
   // Meta Ads : Paul (ceo), Timothy (head_of_acquisition), Gaylord
   // (acquisition_director), Ismahane (finance_director). Même liste que
   // l'API (MARKETING_ALLOWED_ROLES) : les RH, qui voient l'Acquisition, non.
