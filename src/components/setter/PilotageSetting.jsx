@@ -14,7 +14,10 @@
 // (effacée à la déconnexion).
 // Logique pure et règles : src/utils/setterPilotage.js (testée).
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, LoaderCircle, PencilLine, RefreshCw } from 'lucide-react';
+import {
+  CalendarCheck, CalendarPlus, CalendarX, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Clock, LoaderCircle,
+  PencilLine, Phone, PhoneCall, RefreshCw, Timer,
+} from 'lucide-react';
 import apiClient, { USER_DRAFTS_PREFIX } from '../../services/apiClient';
 import { Card, ProspectionStyles } from './prospection/ui.jsx';
 import { fmtInt } from './prospection/format.js';
@@ -30,6 +33,14 @@ const API = '/api/v1/tracking/setter-team/pilotage';
 
 // Saisies non enregistrées, gardées dans ce navigateur pour l'utilisateur connecté (rechargement,
 // changement d'onglet, session expirée). apiClient.logout() efface tout le préfixe.
+// En-têtes des statistiques : une icône, le libellé complet au survol (gain de place, tout sur une ligne).
+const METRIC_ICONS = {
+  calls: Phone, answered: PhoneCall, r1: CalendarPlus, held: CalendarCheck, no_show: CalendarX, r2: CalendarPlus,
+  duration: Clock, average: Timer,
+};
+const SHORT_LABELS = { discours: 'Discours' };
+const METRIC_WIDTH = 66;
+
 const draftsStorageKey = () => {
   const user = apiClient.getUser();
   const id = user?.id || user?.email;
@@ -249,7 +260,8 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
   const shownDayMode = loadedMode === 'day';
   const editable = shownDayMode && canEdit;
   const locked = stale || loading;
-  const rows = useMemo(() => sortSetters(data?.setters), [data]);
+  // Comptes désactivés : jamais dans le tableau ni dans les totaux (dev 05/10).
+  const rows = useMemo(() => sortSetters((data?.setters || []).filter((s) => s.active !== false)), [data]);
   const team = useMemo(() => teamTotals(rows), [rows]);
   const blocage = blocageChoices(data?.blocage_suggestions);
   const multiDay = !shownDayMode;
@@ -279,7 +291,7 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
   const fieldBorder = darkMode ? 'rgba(250, 204, 21, 0.24)' : '#eadfae';
   const ok = darkMode ? '#4ade80' : '#15803d';
   const bad = darkMode ? '#f87171' : '#b42318';
-  const cell = { padding: '10px 12px', fontSize: 13.5, color: C.text, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', textAlign: 'right' };
+  const cell = { padding: '10px 8px', fontSize: 13.5, color: C.text, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', textAlign: 'center' };
   const head = {
     ...cell, fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em',
     padding: '10px 12px', whiteSpace: 'normal', verticalAlign: 'bottom', lineHeight: 1.3,
@@ -655,15 +667,25 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${C.border}`, background: C.surface }}>
-                  <th style={{ ...head, ...sticky, textAlign: 'left' }}>Setter</th>
-                  {columns.map((c) => (
-                    <th key={c} style={{
-                      ...head,
-                      ...(COLUMN_LABELS[c].includes(' ') ? null : { whiteSpace: 'nowrap' }),
-                      ...(MANUAL_COLUMNS.includes(c) ? { textAlign: 'left' } : null),
-                      ...(MANUAL_COLUMNS.includes(c) && editable ? { background: yellow } : null),
-                    }}>{COLUMN_LABELS[c]}</th>
-                  ))}
+                  <th style={{ ...head, ...sticky, textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>Setter</th>
+                  {columns.map((c) => {
+                    const Icon = METRIC_ICONS[c];
+                    const manual = MANUAL_COLUMNS.includes(c);
+                    return (
+                      <th key={c} title={COLUMN_LABELS[c]} aria-label={COLUMN_LABELS[c]} style={{
+                        ...head, verticalAlign: 'middle', whiteSpace: 'nowrap', height: 46,
+                        ...(manual ? { textAlign: 'left' } : { textAlign: 'center', width: METRIC_WIDTH, minWidth: METRIC_WIDTH, padding: '10px 8px' }),
+                        ...(manual && editable ? { background: yellow } : null),
+                      }}>
+                        {Icon ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'flex-start', justifyContent: 'center', color: C.secondary }}>
+                            <Icon size={18} strokeWidth={1.9} />
+                            {c === 'r2' && <span style={{ fontSize: 10, fontWeight: 700, marginLeft: 1, lineHeight: 1 }}>2</span>}
+                          </span>
+                        ) : (SHORT_LABELS[c] || COLUMN_LABELS[c])}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
