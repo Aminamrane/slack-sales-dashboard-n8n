@@ -5,7 +5,7 @@ import SaleReservation from '../components/integrationPreview/SaleReservation';
 import { fetchContractsOfLead, contractSentLine } from '../utils/leadContracts.js';
 import { isTypingTarget } from '../utils/typingTarget.js';
 import { AbsenceDialog } from "../components/absences/AbsencePanel";
-import { periodOnDay } from "../components/absences/absenceDates";
+import InternalCalendar from "../components/calendar/InternalCalendar";
 import {hasGuidedSalesJourney} from '../utils/guidedSalesJourney';
 import FrenchDateInput from '../components/salesJourney/FrenchDateInput';
 import {parisToday,parisParts,minuteOptions} from '../utils/parisDates';
@@ -1536,7 +1536,7 @@ export default function TrackingSheet() {
     const ghostParam = isAdmin && ghostMode ? '&ghost=true' : '';
     window.location.href = `/tracking-sheet?sheet_id=${encodeURIComponent(email)}${ghostParam}`;
   }; // 'leads' | 'add_lead' | 'calendar' | 'notifications' | 'kpis' | 'campaigns'
-  const [calendarWeekOffset, setCalendarWeekOffset] = useState(0);
+  const [calendarReload, setCalendarReload] = useState(0); // recharge le calendrier après une absence déclarée
   // Vacances/absences : declarees par le sales lui-meme, visibles dans le calendrier
   const [myUnavailability, setMyUnavailability] = useState([]);
   const [showVacationModal, setShowVacationModal] = useState(false);
@@ -1547,11 +1547,6 @@ export default function TrackingSheet() {
     } catch (e) { console.warn('Failed to fetch unavailability:', e); }
   };
   useEffect(() => { fetchMyUnavailability(); }, []);
-  const vacationPeriod = (date) => {
-    const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    return periodOnDay(myUnavailability, day);
-  };
-  const isDayInVacation = (date) => Boolean(vacationPeriod(date));
   const [formData, setFormData] = useState({ full_name: '', phone: '', email: '', sector: '', company_type: '' });
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formSuccess, setFormSuccess] = useState(false);
@@ -3700,221 +3695,41 @@ export default function TrackingSheet() {
           );
         })()}
 
-        {/* ════ VIEW: CALENDAR ═════════════════════════════════════════════ */}
-        {sidebarView === 'calendar' && (() => {
-          // Build week days: Monday → Sunday of the selected week
-          const calWeekOffset = calendarWeekOffset || 0;
-          const now = new Date();
-          const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon...
-          const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-          const monday = new Date(now);
-          monday.setDate(now.getDate() + mondayOffset + calWeekOffset * 7);
-          const weekDays = Array.from({ length: 7 }, (_, i) => {
-            const d = new Date(monday);
-            d.setDate(monday.getDate() + i);
-            return d;
-          });
-          const dayLabels = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-          const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
-
-          // Collect R1 and R2 events
-          const events = [];
-          leads.forEach(l => {
-            if (l.r1 && (l.status === 'r1' || l.status === 'r2' || l.status === 'signed')) {
-              events.push({ lead: l, type: 'R1', datetime: l.r1, color: '#3b82f6', bgLight: 'rgba(59,130,246,0.08)', bgDark: 'rgba(59,130,246,0.15)' });
-            }
-            if (l.r2 && (l.status === 'r2' || l.status === 'signed')) {
-              events.push({ lead: l, type: 'R2', datetime: l.r2, color: '#fb923c', bgLight: 'rgba(251,146,60,0.08)', bgDark: 'rgba(251,146,60,0.15)' });
-            }
-          });
-
-          // Hours range: 8am - 20pm
-          const HOUR_START = 8;
-          const HOUR_END = 20;
-          const HOUR_HEIGHT = 60; // px per hour
-          const hours = Array.from({ length: HOUR_END - HOUR_START }, (_, i) => HOUR_START + i);
-
-          // Position events in the grid
-          const getEventsForDay = (dayDate) => {
-            const dayStr = dayDate.toISOString().split('T')[0];
-            return events.filter(ev => toDateOnly(ev.datetime) === dayStr).map(ev => {
-              const t = ev.datetime.length > 10 ? ev.datetime.slice(11, 16) : '09:00';
-              const [h, m] = t.split(':').map(Number);
-              const startHour = h + m / 60;
-              const duration = 1; // 1h per RDV
-              return { ...ev, startHour, duration };
-            });
-          };
-
-          const isToday = (d) => d.toISOString().split('T')[0] === TODAY;
-
-          return (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'tabFadeIn 0.3s ease-out both' }}>
-              {/* Header */}
-              <div style={{ padding: '20px 28px 0', flexShrink: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-                  <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: 0, letterSpacing: '-0.01em' }}>
-                    Calendrier
-                  </h2>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button onClick={() => setCalendarWeekOffset(prev => (prev || 0) - 1)}
-                      style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontFamily: 'inherit' }}
-                    >&lsaquo;</button>
-                    <button onClick={() => setCalendarWeekOffset(0)}
-                      style={{ padding: '6px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: calWeekOffset === 0 ? (darkMode ? '#fff' : '#1e2330') : 'transparent', color: calWeekOffset === 0 ? (darkMode ? '#1e2330' : '#fff') : C.text, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
-                    >Aujourd'hui</button>
-                    <button onClick={() => setCalendarWeekOffset(prev => (prev || 0) + 1)}
-                      style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontFamily: 'inherit' }}
-                    >&rsaquo;</button>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: C.muted, marginLeft: 8 }}>
-                      {monthNames[weekDays[0].getMonth()]} {weekDays[0].getFullYear()}
-                    </span>
-                    <div style={{ width: 1, height: 22, background: C.border, margin: '0 4px' }} />
-                    <button onClick={() => setShowVacationModal(true)}
-                      style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: myUnavailability.length > 0 ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)') : 'transparent', color: C.text, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}
-                      title="Déclarer mes absences"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                        <rect x="3" y="4" width="18" height="18" rx="2" />
-                        <line x1="16" y1="2" x2="16" y2="6" />
-                        <line x1="8" y1="2" x2="8" y2="6" />
-                        <line x1="3" y1="10" x2="21" y2="10" />
-                        <line x1="10" y1="14" x2="14" y2="18" />
-                        <line x1="14" y1="14" x2="10" y2="18" />
-                      </svg>
-                      <span>Mes absences</span>
-                      {myUnavailability.length > 0 && <span style={{ background: darkMode ? '#eef0f6' : '#1e2330', color: darkMode ? '#1e2330' : '#fff', borderRadius: 8, padding: '0 6px', fontSize: 10, fontWeight: 700 }}>{myUnavailability.length}</span>}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Day headers */}
-                <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(7, 1fr)', borderBottom: `1px solid ${C.border}` }}>
-                  <div />
-                  {weekDays.map((d, i) => {
-                    const onVacation = isDayInVacation(d);
-                    return (
-                      <div key={i} style={{
-                        textAlign: 'center', padding: '8px 0 10px',
-                        borderLeft: `1px solid ${C.border}`,
-                        background: onVacation ? (darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)') : 'transparent',
-                        position: 'relative',
-                      }}>
-                        <div style={{ fontSize: 11, fontWeight: 500, color: C.muted, textTransform: 'uppercase' }}>{dayLabels[i]}</div>
-                        <div style={{
-                          fontSize: 20, fontWeight: 700, lineHeight: 1.3,
-                          color: isToday(d) ? (darkMode ? '#1e2330' : '#fff') : C.text,
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                          width: 34, height: 34, borderRadius: '50%',
-                          background: isToday(d) ? (darkMode ? '#fff' : '#1e2330') : 'transparent',
-                        }}>
-                          {d.getDate()}
-                        </div>
-                        {onVacation && <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, marginTop: 2, letterSpacing: '0.04em' }}>{vacationPeriod(d) === 'am' ? 'Absent le matin' : vacationPeriod(d) === 'pm' ? 'Absent l’après-midi' : 'Absent'}</div>}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Time grid */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '0 28px 20px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '56px repeat(7, 1fr)', position: 'relative' }}>
-                  {hours.map(h => (
-                    <React.Fragment key={h}>
-                      {/* Hour label */}
-                      <div style={{
-                        height: HOUR_HEIGHT, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end',
-                        paddingRight: 10, paddingTop: 0,
-                        fontSize: 11, fontWeight: 500, color: C.muted,
-                        borderTop: `1px solid ${C.border}`,
-                      }}>
-                        {h}h
-                      </div>
-                      {/* Day cells */}
-                      {weekDays.map((d, di) => (
-                        <div key={di} style={{
-                          height: HOUR_HEIGHT, position: 'relative',
-                          borderTop: `1px solid ${C.border}`,
-                          borderLeft: `1px solid ${C.border}`,
-                          background: isToday(d) ? (darkMode ? 'rgba(124,138,219,0.04)' : 'rgba(91,106,191,0.03)') : 'transparent',
-                        }}>
-                          {/* Render events that start in this hour */}
-                          {getEventsForDay(d).filter(ev => Math.floor(ev.startHour) === h).map((ev, ei) => {
-                            const topOffset = (ev.startHour - h) * HOUR_HEIGHT;
-                            const height = ev.duration * HOUR_HEIGHT - 4;
-                            return (
-                              <div key={ei}
-                                onClick={() => { setSidebarView('leads'); setTimeout(() => setSelectedLead(ev.lead.id), 100); }}
-                                style={{
-                                  position: 'absolute', top: topOffset + 2, left: 3, right: 3,
-                                  height, borderRadius: 8, padding: '6px 8px',
-                                  background: darkMode ? ev.bgDark : ev.bgLight,
-                                  borderLeft: `3px solid ${ev.color}`,
-                                  cursor: 'pointer', overflow: 'hidden',
-                                  transition: 'transform 0.15s, box-shadow 0.15s',
-                                }}
-                                onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = `0 2px 8px ${ev.color}25`; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
-                              >
-                                <div style={{ fontSize: 11, fontWeight: 700, color: ev.color, marginBottom: 2 }}>{ev.type}</div>
-                                <div style={{ fontSize: 11, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                  {ev.lead.full_name}
-                                </div>
-                                <div style={{ fontSize: 10, color: C.muted }}>
-                                  {ev.datetime.length > 10 ? ev.datetime.slice(11, 16).replace(':', 'h') : '09h00'} - {(() => {
-                                    const t = ev.datetime.length > 10 ? ev.datetime.slice(11, 16) : '09:00';
-                                    const [hh, mm] = t.split(':').map(Number);
-                                    const end = hh + 1;
-                                    return `${end}h${mm.toString().padStart(2, '0')}`;
-                                  })()}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ))}
-                    </React.Fragment>
-                  ))}
-
-                  {/* Current time indicator */}
-                  {calWeekOffset === 0 && (() => {
-                    const nowH = new Date().getHours();
-                    const nowM = new Date().getMinutes();
-                    if (nowH < HOUR_START || nowH >= HOUR_END) return null;
-                    const topPx = (nowH - HOUR_START) * HOUR_HEIGHT + (nowM / 60) * HOUR_HEIGHT;
-                    const todayIdx = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1; // 0=Mon
-                    return (
-                      <>
-                        {/* Time badge */}
-                        <div style={{
-                          position: 'absolute', top: topPx - 10, left: 0, width: 56,
-                          display: 'flex', justifyContent: 'flex-end', paddingRight: 6, zIndex: 5,
-                        }}>
-                          <span style={{
-                            fontSize: 10, fontWeight: 700, color: '#fff',
-                            background: C.accent, borderRadius: 4, padding: '2px 5px',
-                          }}>
-                            {nowH}:{nowM.toString().padStart(2, '0')}
-                          </span>
-                        </div>
-                        {/* Red line across today's column */}
-                        <div style={{
-                          position: 'absolute', top: topPx, left: `calc(56px + ${todayIdx} * ((100% - 56px) / 7))`,
-                          width: `calc((100% - 56px) / 7)`, height: 2,
-                          background: C.accent, zIndex: 4, borderRadius: 1,
-                        }} />
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
+        {/* ════ VIEW: CALENDAR ═════════════════════════════════════════════
+            Calendrier interne (05/10/2026) : agenda Google du commercial (copie synchronisée côté serveur,
+            lecture seule) + ses RDV du CRM avec leurs détails internes, ses rappels et ses absences. */}
+        {sidebarView === 'calendar' && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '20px 28px', animation: 'tabFadeIn 0.3s ease-out both' }}>
+            <InternalCalendar
+              view="sales"
+              C={C}
+              darkMode={darkMode}
+              asUser={isAdminView ? viewingSheetId : undefined}
+              reloadKey={calendarReload}
+              onOpenLead={(leadId) => { setSidebarView('leads'); setTimeout(() => setSelectedLead(leadId), 100); }}
+              toolbarExtra={(
+                <button onClick={() => setShowVacationModal(true)}
+                  style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: myUnavailability.length > 0 ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)') : 'transparent', color: C.text, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}
+                  title="Déclarer mes absences"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <rect x="3" y="4" width="18" height="18" rx="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                    <line x1="10" y1="14" x2="14" y2="18" />
+                    <line x1="14" y1="14" x2="10" y2="18" />
+                  </svg>
+                  <span>Mes absences</span>
+                  {myUnavailability.length > 0 && <span style={{ background: darkMode ? '#eef0f6' : '#1e2330', color: darkMode ? '#1e2330' : '#fff', borderRadius: 8, padding: '0 6px', fontSize: 10, fontWeight: 700 }}>{myUnavailability.length}</span>}
+                </button>
+              )}
+            />
+          </div>
+        )}
 
         {/* ════ MODAL: Mes absences (declaration vacances) ═══════════════ */}
-        {showVacationModal && <AbsenceDialog dark={darkMode} onClose={() => setShowVacationModal(false)} onChanged={fetchMyUnavailability} />}
+        {showVacationModal && <AbsenceDialog dark={darkMode} onClose={() => setShowVacationModal(false)} onChanged={() => { fetchMyUnavailability(); setCalendarReload((n) => n + 1); }} />}
 
         {/* ════ VIEW: NOTIFICATIONS ═══════════════════════════════════════ */}
         {sidebarView === 'notifications' && (() => {
