@@ -47,6 +47,8 @@ const ITEM_ROLE_GATE = {
   leads_management: new Set(["ceo", "admin", "head_of_acquisition"]),
   // « Leads < 100 k€ » : Paul (ceo) et les admins (données de contact de leads non affectés).
   small_leads: new Set(["ceo", "admin"]),
+  // « Setters » : RDV posés par les setters et clients amenés (05/10), Paul (ceo) et les admins.
+  setters_stats: new Set(["ceo", "admin"]),
   // Meta Ads : Paul (ceo), Timothy (head_of_acquisition), Gaylord
   // (acquisition_director), Ismahane (finance_director). Même liste que
   // l'API (MARKETING_ALLOWED_ROLES) : les RH, qui voient l'Acquisition, non.
