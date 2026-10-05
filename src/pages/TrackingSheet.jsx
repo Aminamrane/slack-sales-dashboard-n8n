@@ -9537,7 +9537,7 @@ export default function TrackingSheet() {
                   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
 
               {saleOnboardingOnly && !saleSuccess && <>
-                <p className="sj-sale-part">{['handoff','documents'].includes(saleStep) ? 'Partie 2 sur 2 · Finaliser et déclarer la vente' : 'Partie 1 sur 2 · Sécuriser le rendez-vous'}</p>
+                <p className="sj-sale-part">{salePreparation?.status === 'finalized' ? 'Déclaration terminée' : ['handoff','documents'].includes(saleStep) ? 'Partie 2 sur 2 · Finaliser et déclarer la vente' : 'Partie 1 sur 2 · Sécuriser le rendez-vous'}</p>
                 {saleStep !== 'reserved' && <SalesJourneySteps salePart={['handoff','documents'].includes(saleStep) ? 2 : 1} phase={saleStep === 'form' ? 'details' : saleStep === 'questions' ? 'billing' : ['handoff','documents'].includes(saleStep) ? saleStep : 'booking'} compact />}
               </>}
               {saleReservationError && saleStep !== 'reserved' && <div className="si-error" role="alert">{saleReservationError}</div>}
