@@ -4,6 +4,11 @@ const TOKEN_KEY = "auth_token";
 const REFRESH_KEY = "refresh_token";
 const USER_KEY = "auth_user";
 
+// Saisies métier gardées dans ce navigateur, par utilisateur, en attendant leur enregistrement
+// (onglet Pilotage setting). Effacées à la déconnexion volontaire ; une session expirée les garde
+// pour qu'on les retrouve en se reconnectant.
+export const USER_DRAFTS_PREFIX = "ot.drafts.";
+
 async function safeJson(res) {
   const txt = await res.text();
   try { return txt ? JSON.parse(txt) : null; } catch { return { raw: txt }; }
@@ -50,6 +55,15 @@ class ApiClient {
     localStorage.removeItem(REFRESH_KEY);
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem('permissions');
+  }
+
+  clearUserDrafts() {
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(USER_DRAFTS_PREFIX)) localStorage.removeItem(key);
+      }
+    } catch { /* stockage indisponible : rien à effacer */ }
   }
 
   _expireSession() {
@@ -254,6 +268,7 @@ class ApiClient {
     const refreshToken = localStorage.getItem(REFRESH_KEY);
     // Fermer localement tout de suite, y compris si une rotation est en cours.
     this.clearAuth();
+    this.clearUserDrafts();
     window.location.href = '/login';
     if (refreshToken) {
       try {
