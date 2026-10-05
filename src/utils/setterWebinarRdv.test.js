@@ -5,6 +5,7 @@ import { assignedLabel, fmtBooked, fmtRdv, orderRdv } from './setterWebinarRdv.j
 test('the meeting date is the CRM wall time, never converted', () => {
   assert.equal(fmtRdv('2026-10-08T20:00:00'), 'jeu. 8 oct. · 20 h');
   assert.equal(fmtRdv('2026-03-09T14:30:00'), 'lun. 9 mars · 14 h 30');
+  assert.equal(fmtRdv('2026-09-22T00:00:00'), 'mar. 22 sept.');                 // saisi sans heure
   assert.equal(fmtRdv(null), 'Date inconnue');
   assert.equal(fmtRdv('pas une date'), 'Date inconnue');
 });
