@@ -15,7 +15,7 @@
 // Logique pure et règles : src/utils/setterPilotage.js (testée).
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  CalendarCheck, CalendarPlus, CalendarX, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Clock, LoaderCircle,
+  CalendarCheck, CalendarDays, CalendarPlus, CalendarX, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Clock, LoaderCircle,
   PencilLine, Phone, PhoneCall, RefreshCw, Timer,
 } from 'lucide-react';
 import apiClient, { USER_DRAFTS_PREFIX } from '../../services/apiClient';
@@ -38,6 +38,7 @@ const METRIC_ICONS = {
   calls: Phone, answered: PhoneCall, r1: CalendarPlus, held: CalendarCheck, no_show: CalendarX, r2: CalendarPlus,
   duration: Clock, average: Timer,
 };
+const ICON_SIZES = { average: 22 };                // cercle du chronomètre plus petit que celui de l'horloge
 const SHORT_LABELS = { discours: 'Discours' };
 const METRIC_WIDTH = 66;
 
@@ -86,6 +87,29 @@ const loadErrorMessage = (err) => {
   if (err?.status === 422) return errorMessage(err, 'Période refusée.');
   return 'Impossible de charger le pilotage. Réessayez.';
 };
+
+// Date affichée jj/mm/aaaa quelle que soit la langue du navigateur ; le calendrier natif reste celui qui s'ouvre.
+function FrDateInput({ value, max, onChange, ariaLabel, style }) {
+  const ref = useRef(null);
+  const label = /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? `${value.slice(8, 10)}/${value.slice(5, 7)}/${value.slice(0, 4)}` : 'jj/mm/aaaa';
+  const open = () => {
+    const el = ref.current;
+    if (!el) return;
+    try { el.showPicker(); } catch { el.focus(); }
+  };
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex' }}>
+      <button type="button" onClick={open} aria-label={`${ariaLabel} : ${label}`}
+        style={{ ...style, display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}>
+        {label}
+        <CalendarDays size={14} style={{ opacity: 0.6 }} />
+      </button>
+      <input ref={ref} type="date" tabIndex={-1} aria-hidden="true" value={value || ''} max={max}
+        onChange={(e) => { if (e.target.value) onChange(e.target.value); }}
+        style={{ position: 'absolute', left: 0, bottom: 0, width: '100%', height: 0, opacity: 0, pointerEvents: 'none', border: 0, padding: 0 }} />
+    </span>
+  );
+}
 
 function AutoGrowTextarea({ value, style, ...rest }) {
   const ref = useRef(null);
@@ -287,7 +311,7 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
   const goToDay = (day) => { setOpen(null); setPeriod((p) => ({ ...p, mode: 'day', day })); };
 
   /* ── Styles ── */
-  const yellow = darkMode ? 'rgba(250, 204, 21, 0.08)' : '#fdf6d8';
+  const yellow = darkMode ? 'rgba(250, 204, 21, 0.07)' : '#fffaeb';
   const fieldBorder = darkMode ? 'rgba(250, 204, 21, 0.24)' : '#eadfae';
   const ok = darkMode ? '#4ade80' : '#15803d';
   const bad = darkMode ? '#f87171' : '#b42318';
@@ -301,10 +325,10 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
   // Propriétés détaillées seulement (borderColor, backgroundColor…) : React ne réapplique que les clés
   // modifiées, un raccourci « border » ou « background » à côté effacerait la couleur ou la flèche.
   const field = {
-    width: '100%', boxSizing: 'border-box', padding: '7px 9px', borderRadius: 8,
+    width: '100%', boxSizing: 'border-box', padding: '9px 11px', borderRadius: 10,
     borderWidth: 1, borderStyle: 'solid', borderColor: fieldBorder,
-    backgroundColor: darkMode ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.7)', color: C.text, fontSize: 13, fontFamily: 'inherit',
-    outline: 'none', lineHeight: 1.4,
+    backgroundColor: darkMode ? 'rgba(0,0,0,0.22)' : '#ffffff', color: C.text, fontSize: 13, fontFamily: 'inherit',
+    outline: 'none', lineHeight: 1.45, transition: 'border-color 0.12s, box-shadow 0.12s',
   };
   const selectField = {
     ...field, appearance: 'none', cursor: 'pointer', padding: '7px 22px 7px 9px',
@@ -400,16 +424,24 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
     const blocageOptions = blocage.mode === 'fixed' && blocageValue && !blocage.options.includes(blocageValue)
       ? [blocageValue, ...blocage.options] : blocage.options;
     return [
-      <td key="discours" style={{ ...td, minWidth: 72 }} title={tip}>
-        <select aria-label={`Discours de ${s.name}`} className="pilotage-field" value={value.discours ?? ''} disabled={locked}
-          onChange={(e) => {
-            editField(s.id, day.day, 'discours', e.target.value === '' ? null : Number(e.target.value));
-            saveRow(s.id, day.day, 'discours');
-          }}
-          style={{ ...selectField, width: 60, ...border('discours') }}>
-          <option value="" />
-          {DISCOURS_SCORES.map((n) => <option key={n} value={n}>{n}</option>)}
-        </select>
+      <td key="discours" style={{ ...td, minWidth: 158 }} title={tip}>
+        <div role="radiogroup" aria-label={`Discours de ${s.name}, note de 1 à 5`} style={{ display: 'flex', gap: 4, paddingTop: 2 }}>
+          {DISCOURS_SCORES.map((n) => {
+            const on = value.discours === n;
+            return (
+              <button key={n} type="button" role="radio" aria-checked={on} className="pilotage-score" disabled={locked}
+                title={on ? 'Cliquer pour retirer la note' : `Discours : ${n} sur 5`}
+                onClick={() => { editField(s.id, day.day, 'discours', on ? null : n); saveRow(s.id, day.day, 'discours'); }}
+                style={{
+                  width: 26, height: 26, borderRadius: 999, padding: 0, fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+                  cursor: locked ? 'default' : 'pointer', borderWidth: 1, borderStyle: 'solid',
+                  borderColor: on ? C.accent : fieldBorder, backgroundColor: on ? C.accent : (darkMode ? 'rgba(0,0,0,0.22)' : '#ffffff'),
+                  color: on ? '#fff' : C.secondary, transition: 'background-color 0.12s, border-color 0.12s',
+                  ...(failed && status[key]?.field === 'discours' ? { borderColor: bad } : null),
+                }}>{n}</button>
+            );
+          })}
+        </div>
         {statusIcon(s.id, day.day, 'discours', dirty)}
       </td>,
       <td key="blocage" style={{ ...td, minWidth: 260 }} title={tip}>
@@ -422,23 +454,25 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
           </select>
         ) : (
           <AutoGrowTextarea aria-label={`Blocage principal de ${s.name}`} className="pilotage-field" disabled={locked} rows={2}
+            placeholder="Le blocage principal du jour…"
             maxLength={BLOCAGE_MAX} value={blocageValue}
             onChange={(e) => editField(s.id, day.day, 'blocage', e.target.value)}
             onFocus={() => onFocusField(s.id, day.day, 'blocage')}
             onBlur={() => saveIfDirty(s.id, day.day, 'blocage')}
             onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) e.currentTarget.blur(); }}
-            style={{ ...field, minHeight: 52, ...border('blocage') }} />
+            style={{ ...field, minHeight: 56, ...border('blocage') }} />
         )}
         {statusIcon(s.id, day.day, 'blocage', dirty)}
       </td>,
       <td key="action" style={{ ...td, minWidth: 300 }} title={tip}>
         <AutoGrowTextarea aria-label={`Action ou coaching pour ${s.name}`} className="pilotage-field" disabled={locked} rows={2}
+          placeholder="L'action de coaching à mener…"
           maxLength={ACTION_MAX} value={value.action ?? ''}
           onChange={(e) => editField(s.id, day.day, 'action', e.target.value)}
           onFocus={() => onFocusField(s.id, day.day, 'action')}
           onBlur={() => saveIfDirty(s.id, day.day, 'action')}
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) e.currentTarget.blur(); }}
-          style={{ ...field, minHeight: 52, ...border('action') }} />
+          style={{ ...field, minHeight: 56, ...border('action') }} />
         {statusIcon(s.id, day.day, 'action', dirty)}
       </td>,
     ];
@@ -553,14 +587,14 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
   const fresh = Boolean(data) && !stale && !loadError && !periodError;
   const kpis = [
     {
-      label: "Appels de l'équipe",
+      label: "Appels de l'équipe", icon: Phone, tone: C.accent,
       value: data?.allo === 'error' ? 'Allo indisponible' : team.calls == null ? '–' : fmtInt(team.calls),
       note: team.answered != null && data?.allo !== 'error' ? `dont ${fmtInt(team.answered)} répondus` : '',
     },
-    { label: 'Temps au téléphone', value: data?.allo === 'error' ? '–' : fmtTalk(team.duration), note: '' },
-    { label: 'RDV pris', value: fmtInt(team.r1), color: '#3b82f6', note: showR2 ? `et ${fmtInt(team.r2)} R2 posés` : '' },
+    { label: 'Temps au téléphone', icon: Clock, tone: '#8b5cf6', value: data?.allo === 'error' ? '–' : fmtTalk(team.duration), note: '' },
+    { label: 'RDV pris', icon: CalendarPlus, tone: '#3b82f6', value: fmtInt(team.r1), color: '#3b82f6', note: showR2 ? `et ${fmtInt(team.r2)} R2 posés` : '' },
     {
-      label: 'RDV honorés', value: fmtInt(team.held), color: ok,
+      label: 'RDV honorés', icon: CalendarCheck, tone: ok, value: fmtInt(team.held), color: ok,
       note: `${fmtInt(team.no_show)} no-show${team.to_qualify ? `, ${fmtInt(team.to_qualify)} à qualifier` : ''}`,
     },
   ];
@@ -568,7 +602,38 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 1500 }}>
       <ProspectionStyles />
-      <style>{`.pilotage-field:focus { border-color: ${C.accent} !important; box-shadow: 0 0 0 3px ${darkMode ? 'rgba(124,138,219,0.22)' : 'rgba(91,106,191,0.16)'}; }`}</style>
+      <style>{`
+        .pilotage-field:focus { border-color: ${C.accent} !important; box-shadow: 0 0 0 3px ${darkMode ? 'rgba(124,138,219,0.22)' : 'rgba(91,106,191,0.16)'}; }
+        .pilotage-field:hover:not(:disabled):not(:focus) { border-color: ${darkMode ? 'rgba(250, 204, 21, 0.4)' : '#d9c77e'} !important; }
+        .pilotage-field::placeholder { color: ${C.muted}; opacity: 1; }
+        .pilotage-tip { position: relative; }
+        .pilotage-tip::after {
+          content: attr(data-tip); position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+          background: ${darkMode ? '#eef0f6' : '#1e2330'}; color: ${darkMode ? '#1e2330' : '#fff'}; font-size: 11.5px; font-weight: 600;
+          text-transform: none; letter-spacing: 0; white-space: nowrap; padding: 5px 9px; border-radius: 7px;
+          opacity: 0; pointer-events: none; transition: opacity 0.12s; z-index: 5; box-shadow: 0 4px 14px rgba(0,0,0,0.16);
+        }
+        .pilotage-tip:hover::after { opacity: 1; }
+        .pilotage-score:hover:not(:disabled) { border-color: ${C.accent} !important; }
+      `}</style>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
+        {kpis.map((k) => (
+          <Card key={k.label} C={C} darkMode={darkMode} style={{ padding: '16px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <span style={{ width: 32, height: 32, borderRadius: 9, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                background: `${k.tone}1a`, color: k.tone }}>
+                <k.icon size={17} strokeWidth={2} />
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k.label}</span>
+            </div>
+            <div style={{ fontSize: 26, fontWeight: 700, color: k.color || C.text, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', opacity: loading ? 0.45 : 1, transition: 'opacity 0.2s' }}>
+              {fresh ? k.value : '–'}
+            </div>
+            {fresh && k.note && <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{k.note}</div>}
+          </Card>
+        ))}
+      </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 12, background: C.subtle, border: `1px solid ${C.border}` }}>
@@ -584,8 +649,7 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
             <button type="button" onClick={() => goToDay(shiftDay(start, -1))} title="Jour précédent" aria-label="Jour précédent" style={iconBtn(false)}>
               <ChevronLeft size={16} />
             </button>
-            <input type="date" aria-label="Jour affiché" value={period.day} max={today}
-              onChange={(e) => { if (e.target.value) goToDay(e.target.value); }} style={dateInput} />
+            <FrDateInput ariaLabel="Jour affiché" value={period.day} max={today} onChange={goToDay} style={dateInput} />
             <button type="button" onClick={() => goToDay(shiftDay(start, 1))} disabled={start >= today}
               title="Jour suivant" aria-label="Jour suivant" style={iconBtn(start >= today)}>
               <ChevronRight size={16} />
@@ -601,11 +665,11 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
         {period.mode === 'custom' && (
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: C.secondary }}>
             <span>Du</span>
-            <input type="date" aria-label="Début de la période" value={period.from} max={today}
-              onChange={(e) => setPeriod((p) => ({ ...p, from: e.target.value }))} style={dateInput} />
+            <FrDateInput ariaLabel="Début de la période" value={period.from} max={today}
+              onChange={(v) => setPeriod((p) => ({ ...p, from: v }))} style={dateInput} />
             <span>au</span>
-            <input type="date" aria-label="Fin de la période" value={period.to} max={today}
-              onChange={(e) => setPeriod((p) => ({ ...p, to: e.target.value }))} style={dateInput} />
+            <FrDateInput ariaLabel="Fin de la période" value={period.to} max={today}
+              onChange={(v) => setPeriod((p) => ({ ...p, to: v }))} style={dateInput} />
           </div>
         )}
 
@@ -617,16 +681,11 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
           <RefreshCw size={14} style={{ animation: loading ? 'prospSpin 1s linear infinite' : 'none' }} />
           Actualiser
         </button>
+        {!dayMode && !periodError && <span style={{ fontSize: 12.5, color: C.muted, fontWeight: 600 }}>{fmtPeriod(start, end)}</span>}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginTop: -6 }}>
-        {periodError ? (
-          <span role="alert" style={{ fontSize: 13, color: bad, fontWeight: 600 }}>{periodError}</span>
-        ) : (
-          <span style={{ fontSize: 14, fontWeight: 600, color: C.text }}>
-            {fmtPeriod(start, end)}{dayMode && start === today ? " (aujourd'hui)" : ''}
-          </span>
-        )}
+      {(periodError || pendingKeys.length > 0) && <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginTop: -6 }}>
+        {periodError && <span role="alert" style={{ fontSize: 13, color: bad, fontWeight: 600 }}>{periodError}</span>}
         {pendingKeys.length > 0 && (
           <span role="status" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: bad, fontWeight: 600, flexWrap: 'wrap' }}>
             <CircleAlert size={14} />
@@ -639,19 +698,7 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
             ))}
           </span>
         )}
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
-        {kpis.map((k) => (
-          <Card key={k.label} C={C} darkMode={darkMode} style={{ padding: '16px 18px' }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{k.label}</div>
-            <div style={{ fontSize: 26, fontWeight: 700, color: k.color || C.text, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', opacity: loading ? 0.45 : 1, transition: 'opacity 0.2s' }}>
-              {fresh ? k.value : '–'}
-            </div>
-            {fresh && k.note && <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{k.note}</div>}
-          </Card>
-        ))}
-      </div>
+      </div>}
 
       <Card C={C} darkMode={darkMode} style={{ overflow: 'hidden' }}>
         {periodError ? (
@@ -678,11 +725,17 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
                         ...(manual && editable ? { background: yellow } : null),
                       }}>
                         {Icon ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'flex-start', justifyContent: 'center', color: C.secondary }}>
-                            <Icon size={18} strokeWidth={1.9} />
+                          <span className="pilotage-tip" data-tip={COLUMN_LABELS[c]}
+                            style={{ display: 'inline-flex', alignItems: 'flex-start', justifyContent: 'center', color: C.secondary, cursor: 'help', height: 22 }}>
+                            <Icon size={ICON_SIZES[c] || 18} strokeWidth={1.9} />
                             {c === 'r2' && <span style={{ fontSize: 10, fontWeight: 700, marginLeft: 1, lineHeight: 1 }}>2</span>}
                           </span>
-                        ) : (SHORT_LABELS[c] || COLUMN_LABELS[c])}
+                        ) : (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            {c !== 'discours' && <PencilLine size={12} strokeWidth={2} />}
+                            {SHORT_LABELS[c] || COLUMN_LABELS[c]}
+                          </span>
+                        )}
                       </th>
                     );
                   })}
