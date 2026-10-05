@@ -138,11 +138,11 @@ export default async function handler(req, res) {
       String(incoming.legalForm || "").toUpperCase() === "EI" ||
       (String(incoming.legalForm || "").toUpperCase() === "AUTRE" && !incoming.rcsCity);
 
-    // --- Build a version ONLY for schema validation (schema doesn't know EI and requires rcsCity)
+    // --- Normalize EI for the shared schema; never invent a registry city.
     const forSchema = {
       ...normalizedIncoming,
       legalForm: isEI ? "Autre" : normalizedIncoming.legalForm,     // map EI → Autre so the schema accepts it
-      rcsCity: isEI ? (normalizedIncoming.rcsCity || "Lille") : normalizedIncoming.rcsCity, // dummy city to satisfy required field
+      rcsCity: isEI ? "" : (normalizedIncoming.rcsCity || ""),
     };
 
     const parsed = CompanySchema.safeParse(forSchema);

@@ -1,3 +1,4 @@
+import { generateSavedNda } from '../contracts/ndaGeneration.js';
 import SaleReservation from '../components/integrationPreview/SaleReservation';
 import { fetchContractsOfLead, contractSentLine } from '../utils/leadContracts.js';
 import { isTypingTarget } from '../utils/typingTarget.js';
@@ -2692,19 +2693,10 @@ export default function TrackingSheet() {
         isInRegistration: ndaData.isInRegistration || false,
       };
       // Generate PDF
-      const resp = await fetch('/api/contract-preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          company: payloadCompany,
-          meta: { typeEntreprise: ndaData.businessType || 'Général' },
-        }),
+      const blob = await generateSavedNda({
+        company: payloadCompany, meta: { typeEntreprise: ndaData.businessType || 'Général' },
+        leadId: lead.id, apiClient,
       });
-      if (!resp.ok) {
-        setNdaError('Le PDF n’a pas pu être généré. Vérifiez les informations renseignées puis réessayez.');
-        return;
-      }
-      const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -2713,15 +2705,6 @@ export default function TrackingSheet() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      // The guided flow must persist the NDA before proceeding to intake.
-      try {
-        await apiClient.post('/api/v1/contracts/client-data', {
-          company: payloadCompany,
-          meta: { typeEntreprise: ndaData.businessType || 'Général' },
-          client_info_text: '',
-          lead_id: lead.id,
-        });
-      } catch (e) { if (ndaPopup.nextAction || isGuidedLead(lead)) throw new Error('Le NDA n’a pas pu être enregistré. Réessayez avant de poursuivre vers le contrat.'); console.warn('Backend client-data sync failed (non-blocking):', e); }
       // Convention v2 : récupère via Pappers TOUTES les sociétés des dirigeants
       // retenus (Annexe 1, tout coché par défaut) — fire-and-forget, décochable
       // ensuite dans l'onglet Options de la page Détails. Pas de fetch pour une

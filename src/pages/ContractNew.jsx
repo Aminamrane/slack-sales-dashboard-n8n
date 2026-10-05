@@ -1,3 +1,4 @@
+import { generateSavedNda } from '../contracts/ndaGeneration.js';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CompanySchema, normalizeSiren, isValidSiren } from "../contracts/schemas.js";
@@ -359,20 +360,10 @@ export default function ContractNew() {
         isInRegistration: company.isInRegistration || false,
       };
 
-      const resp = await fetch("/api/contract-preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          company: payloadCompany,
-          meta: { typeEntreprise: company.businessType || "Général" },
-          }),
+      const blob = await generateSavedNda({
+        company: payloadCompany, meta: { typeEntreprise: company.businessType || 'Général' },
+        leadId: leadId, apiClient,
       });
-      if (!resp.ok) {
-        alert("Erreur génération PDF: " + (await resp.text()));
-        return;
-      }
-
-      const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -381,19 +372,6 @@ export default function ContractNew() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-
-      // Fire-and-forget: sync client data to backend DB
-      try {
-        const clientDataPayload = {
-          company: payloadCompany,
-          meta: { typeEntreprise: company.businessType || "Général" },
-          client_info_text: preview,
-        };
-        if (leadId) clientDataPayload.lead_id = parseInt(leadId, 10);
-        await apiClient.post('/api/v1/contracts/client-data', clientDataPayload);
-      } catch (e) {
-        console.warn("Backend client-data sync failed (non-blocking):", e);
-      }
 
       // Post-generation flow
       if (hasGenerated.current) {
@@ -406,7 +384,7 @@ export default function ContractNew() {
       }
     } catch (err) {
       console.error(err);
-      alert("Erreur réseau lors de la génération du PDF.");
+      alert(err?.message || "Erreur réseau lors de la génération du PDF.");
     }
   };
 

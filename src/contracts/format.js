@@ -64,8 +64,8 @@ export function companyClause({ company }) {
   let registrationText;
   if (isInRegistration) {
     // Company in registration process
-    if (isEI) {
-      // EI doesn't have RCS
+    if (isEI || !rcsCity?.trim()) {
+      // A company being formed may not yet have an RCS city.
       registrationText = `en cours d'immatriculation`;
     } else {
       // Other legal forms have RCS
