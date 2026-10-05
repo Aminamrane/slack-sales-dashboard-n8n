@@ -114,7 +114,7 @@ function Row({ icon, children, C }) {
   );
 }
 
-function Popover({ ev, rect, view, C, dark, onClose, onOpenLead }) {
+function Popover({ ev, rect, view, C, dark, onClose, onOpenLead, canOpenLead }) {
   const ref = useRef(null);
   const [pos, setPos] = useState(null);
 
@@ -140,6 +140,7 @@ function Popover({ ev, rect, view, C, dark, onClose, onOpenLead }) {
   const color = eventColor(ev, dark);
   const isRdv = ev.kind === 'rdv';
   const outcome = isRdv ? OUTCOME[ev.outcome] : null;
+  const canOpen = Boolean(onOpenLead && ev.lead_id && (!canOpenLead || canOpenLead(ev.lead_id)));
   const assigned = ev.assigned?.state === 'assigned' ? ev.assigned.name
     : ev.assigned?.state === 'archived' ? 'Lead archivé' : ev.assigned ? 'Non affecté' : null;
 
@@ -216,9 +217,9 @@ function Popover({ ev, rect, view, C, dark, onClose, onOpenLead }) {
           {ev.private && <Row icon={CalendarDays} C={C}><span style={{ color: C.secondary }}>Créneau occupé, détail privé.</span></Row>}
         </div>
 
-        {(ev.meet_link || (onOpenLead && ev.lead_id)) && (
+        {(ev.meet_link || canOpen) && (
           <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-            {onOpenLead && ev.lead_id && (
+            {canOpen && (
               <button type="button" onClick={() => { onClose(); onOpenLead(ev.lead_id, ev); }} style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 8, border: 'none',
                 background: dark ? '#eef0f6' : NAVY, color: dark ? NAVY : '#fff', fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
@@ -242,7 +243,7 @@ function Popover({ ev, rect, view, C, dark, onClose, onOpenLead }) {
   );
 }
 
-export default function InternalCalendar({ view = 'sales', C, darkMode = false, asUser, onOpenLead, toolbarExtra, reloadKey, fill = true }) {
+export default function InternalCalendar({ view = 'sales', C, darkMode = false, asUser, onOpenLead, canOpenLead, toolbarExtra, reloadKey, fill = true }) {
   const [monday, setMonday] = useState(() => mondayOf(parisNow().key));
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -537,7 +538,7 @@ export default function InternalCalendar({ view = 'sales', C, darkMode = false, 
         </div>
       </div>
 
-      {popover && <Popover ev={popover.ev} rect={popover.rect} view={view} C={C} dark={darkMode} onClose={closePopover} onOpenLead={onOpenLead} />}
+      {popover && <Popover ev={popover.ev} rect={popover.rect} view={view} C={C} dark={darkMode} onClose={closePopover} onOpenLead={onOpenLead} canOpenLead={canOpenLead} />}
     </div>
   );
 }
