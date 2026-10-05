@@ -12,6 +12,8 @@ import { AlertCabinetBlock } from "./CabinetAlertBlock";
 import { parisInstantLabel } from "../utils/parisDates";
 import { OnboardingRatingForm } from "./BoardIntegrationSheet";
 import { METEO_MEANING, MeteoIcon, meteoStyle } from "./meteo.jsx";
+import BoardOnboardingDateCorrection from "./BoardOnboardingDateCorrection";
+import { onboardingDateOf } from "../utils/boardIntegration";
 
 const NAVY = "#1e2330";
 const BORDER = "#e9ebf0";
@@ -244,7 +246,7 @@ function ClotureStep({ brief, busy, onDone, onRescheduleWithDate, onRescheduleLa
     <>
       <Card title="Conclure l'onboarding">
         <div style={{ fontSize: 13, color: TEXT, lineHeight: 1.6, marginBottom: 12 }}>
-          {alreadyDone ? "Cet onboarding est déjà marqué réalisé. Vous pouvez le rouvrir pour un recalage si besoin." : "Trois issues possibles. Seul « réalisé » clôt l'onboarding ; les deux autres laissent la fiche en « à recaler » jusqu'à la nouvelle date."}
+          {alreadyDone ? "Cet onboarding est déjà réalisé. Pour corriger sa date, utilisez « Modifier la date de réalisation » en haut du parcours. Les actions ci-dessous servent à prévoir un nouveau rendez-vous." : "Trois issues possibles. Seul « réalisé » clôt l'onboarding ; les deux autres laissent la fiche en « à recaler » jusqu'à la nouvelle date."}
         </div>
         <div style={{ display: "grid", gap: 8 }}>
           <Button primary disabled={busy || alreadyDone} onClick={onDone}>{alreadyDone ? "Onboarding déjà réalisé" : busy === "done" ? "Enregistrement…" : "Onboarding réalisé"}</Button>
@@ -269,7 +271,10 @@ export default function OnboardingFlowModal({ row, num, onClose, patch, onResche
   const [note, setNote] = useState("");
   const [rated, setRated] = useState(null);
   const [closingMessage, setClosingMessage] = useState("");
+  const [completedDate, setCompletedDate] = useState(() => onboardingDateOf(row));
   const noteLoaded = useRef(false);
+
+  useEffect(() => { setCompletedDate(onboardingDateOf(row)); }, [row.rdv_onboarding_done_date, row.rdv_onboarding_date_manual, row.rdv_onboarding_date, row.rdv_onboarding_done]);
 
   useEffect(() => {
     let alive = true;
@@ -336,6 +341,13 @@ export default function OnboardingFlowModal({ row, num, onClose, patch, onResche
         </div>
 
         <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1 }}>
+          {brief?.onboarding.done && !closingMessage && <section style={{ marginBottom: 16, padding: 14, border: '1px solid #cce6d7', borderRadius: 12, background: '#f1f8f4' }}>
+            <div style={{ color: GREEN, fontSize: 13, fontWeight: 750, marginBottom: 10 }}>
+              Onboarding réalisé{completedDate ? ` le ${fmtDate(completedDate)}` : ''}
+            </div>
+            <BoardOnboardingDateCorrection numero={num} initialDate={completedDate} completed
+              onSaved={(date) => { setCompletedDate(date); onChanged?.(); }} />
+          </section>}
           {closingMessage ? (
             <Motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.3, ease: EASE }}
               style={{ padding: 28, textAlign: "center", color: GREEN, fontSize: 15, fontWeight: 800 }}>{closingMessage}</Motion.div>
