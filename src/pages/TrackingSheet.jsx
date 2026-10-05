@@ -1,3 +1,4 @@
+import {canRescheduleAfterSale} from '../utils/saleRescheduling';
 import OnboardingReschedule from '../components/integrationPreview/OnboardingReschedule';
 import { generateSavedNda } from '../contracts/ndaGeneration.js';
 import SaleReservation from '../components/integrationPreview/SaleReservation';
@@ -7924,7 +7925,7 @@ export default function TrackingSheet() {
                 const canDeclare = true;
                 // Les pickers date/heure libres n'apparaissent qu'APRÈS déclaration (dates
                 // posées) -> avant, seul le bouton Déclarer (qui ouvre le pop-up créneaux).
-                const rdvDatesSet = (!intakeJourneys[lead.id]?.preparation || intakeJourneys[lead.id]?.preparation.status === 'finalized') && !!(lead.rdv_onboarding_date || (!isSignedPilot(lead) && lead.rdv_lancement_date));
+                const rdvDatesSet = canRescheduleAfterSale(lead, intakeJourneys[lead.id]);
                 // Statut contrats (Owner + Opti'Lex) — depuis la donnée du lead (marche en vue admin, sans fetch user-scopé).
                 const _ownerDone = !!lead.contract_signed_at;   // onglet Signés -> Owner signé
                 const _ol = lead.contract_optilex_status;        // null = contrat groupé (pré-split), pas de statut Opti'Lex séparé

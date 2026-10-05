@@ -88,3 +88,15 @@ test('le R3 se pose depuis la qualification du R2, comme le R2 depuis le R1',()=
  // Sans suite choisie, rien ne change : le contrat part comme aujourd'hui.
  assert.deepEqual(qualificationPatch(lead,'r2',{result:'done',attended:true}),{r2_result:'done',r2_completed_at:'2026-09-29T09:00:00Z'});
 });
+
+import {canRescheduleAfterSale} from './saleRescheduling.js';
+test('onboarding recalage waits for the journey and the complete declaration',()=>{
+ const lead={rdv_onboarding_date:'2026-09-30T10:00'};
+ assert.equal(canRescheduleAfterSale(lead,undefined),false);
+ for(const status of ['pending_confirmation','booked']) assert.equal(canRescheduleAfterSale(lead,{onboarding_only:true,preparation:{status}}),false);
+ assert.equal(canRescheduleAfterSale(lead,{onboarding_only:true,preparation:{status:'finalized'}}),true);
+ assert.equal(canRescheduleAfterSale({}, {onboarding_only:true,preparation:{status:'finalized'}}),false);
+ assert.equal(canRescheduleAfterSale(lead,{onboarding_only:true,preparation:null}),true);
+ assert.equal(canRescheduleAfterSale({rdv_lancement_date:'2026-09-30T10:00'},{onboarding_only:false}),true);
+ assert.equal(canRescheduleAfterSale({rdv_lancement_date:'2026-09-30T10:00'},{onboarding_only:true}),false);
+});
