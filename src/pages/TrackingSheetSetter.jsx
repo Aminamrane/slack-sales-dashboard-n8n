@@ -2919,12 +2919,6 @@ export default function TrackingSheetSetter() {
 
         {sidebarView === 'team_perf' && canSeeTeamPerf && (
           <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
-              Pilotage setting
-            </h2>
-            <p style={{ fontSize: 13, color: C.muted, margin: '0 0 24px' }}>
-              Chaque jour, les chiffres de chaque setter et le suivi du manager : discours, blocage principal, action de coaching.
-            </p>
             <PilotageSetting C={C} darkMode={darkMode} onToast={showSetterToast} />
           </div>
         )}
