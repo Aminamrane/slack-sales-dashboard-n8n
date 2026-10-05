@@ -19,7 +19,7 @@ import { parisToday, PARIS_ZONE } from './parisDates.js';
 export { parisToday };
 
 export const MAX_RANGE_DAYS = 31;
-export const BLOCAGE_MAX = 200;
+export const BLOCAGE_MAX = 2000;                // un paragraphe (dev 05/10)
 export const ACTION_MAX = 2000;
 export const SUGGESTIONS_MAX = 30;
 export const DISCOURS_SCORES = [1, 2, 3, 4, 5];

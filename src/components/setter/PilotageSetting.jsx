@@ -27,7 +27,6 @@ import {
 } from '../../utils/setterPilotage.js';
 
 const API = '/api/v1/tracking/setter-team/pilotage';
-const DATALIST_ID = 'pilotage-blocage-suggestions';
 
 // Saisies non enregistrées, gardées dans ce navigateur pour l'utilisateur connecté (rechargement,
 // changement d'onglet, session expirée). apiClient.logout() efface tout le préfixe.
@@ -325,9 +324,11 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
       if (col === 'calls') {
         out.push(linked
           ? <td key={col} style={{ ...cell, fontWeight: 600 }}>{fmtInt(m.calls)}</td>
-          : <td key={col} colSpan={2} style={{ ...cell, color: C.muted, textAlign: 'center', fontStyle: 'italic' }}>{ALLO_LABELS[s.allo] || ALLO_LABELS.error}</td>);
+          : <td key={col} style={{ ...cell, color: C.muted }} title={ALLO_LABELS[s.allo] || ALLO_LABELS.error}>–</td>);
       } else if (col === 'answered') {
-        if (linked) out.push(<td key={col} style={cell}>{fmtInt(m.answered)}</td>);
+        out.push(linked
+          ? <td key={col} style={cell}>{fmtInt(m.answered)}</td>
+          : <td key={col} style={{ ...cell, color: C.muted }} title={ALLO_LABELS[s.allo] || ALLO_LABELS.error}>–</td>);
       } else if (col === 'r1') {
         out.push(<td key={col} style={{ ...cell, fontWeight: 600, color: m.r1 ? '#3b82f6' : C.muted }}>{fmtInt(m.r1)}</td>);
       } else if (col === 'held') {
@@ -399,7 +400,7 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
         </select>
         {statusIcon(s.id, day.day, 'discours', dirty)}
       </td>,
-      <td key="blocage" style={{ ...td, minWidth: 170 }} title={tip}>
+      <td key="blocage" style={{ ...td, minWidth: 260 }} title={tip}>
         {blocage.mode === 'fixed' ? (
           <select aria-label={`Blocage principal de ${s.name}`} className="pilotage-field" value={blocageValue} disabled={locked}
             onChange={(e) => { editField(s.id, day.day, 'blocage', e.target.value); saveRow(s.id, day.day, 'blocage'); }}
@@ -408,24 +409,24 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
             {blocageOptions.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         ) : (
-          <input aria-label={`Blocage principal de ${s.name}`} className="pilotage-field" list={DATALIST_ID} disabled={locked}
+          <AutoGrowTextarea aria-label={`Blocage principal de ${s.name}`} className="pilotage-field" disabled={locked} rows={2}
             maxLength={BLOCAGE_MAX} value={blocageValue}
             onChange={(e) => editField(s.id, day.day, 'blocage', e.target.value)}
             onFocus={() => onFocusField(s.id, day.day, 'blocage')}
             onBlur={() => saveIfDirty(s.id, day.day, 'blocage')}
-            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-            style={{ ...field, ...border('blocage') }} />
+            onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) e.currentTarget.blur(); }}
+            style={{ ...field, minHeight: 52, ...border('blocage') }} />
         )}
         {statusIcon(s.id, day.day, 'blocage', dirty)}
       </td>,
-      <td key="action" style={{ ...td, minWidth: 230 }} title={tip}>
-        <AutoGrowTextarea aria-label={`Action ou coaching pour ${s.name}`} className="pilotage-field" disabled={locked}
+      <td key="action" style={{ ...td, minWidth: 300 }} title={tip}>
+        <AutoGrowTextarea aria-label={`Action ou coaching pour ${s.name}`} className="pilotage-field" disabled={locked} rows={2}
           maxLength={ACTION_MAX} value={value.action ?? ''}
           onChange={(e) => editField(s.id, day.day, 'action', e.target.value)}
           onFocus={() => onFocusField(s.id, day.day, 'action')}
           onBlur={() => saveIfDirty(s.id, day.day, 'action')}
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) e.currentTarget.blur(); }}
-          style={{ ...field, ...border('action') }} />
+          style={{ ...field, minHeight: 52, ...border('action') }} />
         {statusIcon(s.id, day.day, 'action', dirty)}
       </td>,
     ];
@@ -438,7 +439,7 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
       <td key="discours" style={{ ...roCell, fontWeight: 600, color: review?.discours ? C.text : C.muted }} title={tip}>
         {review?.discours ?? '–'}
       </td>,
-      <td key="blocage" style={{ ...roCell, color: review?.blocage ? C.text : C.muted, maxWidth: 240 }} title={tip}>
+      <td key="blocage" style={{ ...roCell, color: review?.blocage ? C.text : C.muted, maxWidth: 320, whiteSpace: 'pre-wrap' }} title={tip}>
         {review?.blocage || '–'}
       </td>,
       <td key="action" style={{ ...roCell, color: review?.action ? C.text : C.muted, maxWidth: 360, whiteSpace: 'pre-wrap' }} title={tip}>
@@ -456,7 +457,8 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
         {fmtScore(s.totals?.discours_avg)}
         {s.totals?.discours_avg != null && <div style={sub}>moyenne</div>}
       </td>,
-      <td key="blocage" style={{ ...manualCell, verticalAlign: 'middle', color: top ? C.text : C.muted, maxWidth: 240 }}>
+      <td key="blocage" title={top?.label} style={{ ...manualCell, verticalAlign: 'middle', color: top ? C.text : C.muted, maxWidth: 280,
+        display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
         {top ? <>{top.label}{top.count > 1 && <span style={{ color: C.muted, fontWeight: 500 }}>{` (${top.count} jours)`}</span>}</> : '–'}
       </td>,
       <td key="action" style={{ ...manualCell, verticalAlign: 'middle', color: C.muted }}>
@@ -465,13 +467,27 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
     ];
   };
 
+  const avatar = (s) => (s.avatar_url
+    ? <img src={s.avatar_url} alt="" loading="lazy" referrerPolicy="no-referrer"
+        style={{ width: 30, height: 30, borderRadius: 999, objectFit: 'cover', flexShrink: 0, border: `1px solid ${C.border}` }} />
+    : <span style={{ width: 30, height: 30, borderRadius: 999, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        background: darkMode ? '#2a2b36' : '#e8ebf5', color: C.accent, fontSize: 11.5, fontWeight: 700 }}>
+        {String(s.name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('')}
+      </span>);
+
   const nameCell = (s, { chevron, expanded } = {}) => (
     <td style={{ ...cell, ...sticky, textAlign: 'left', fontWeight: 600 }}>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
         {chevron && (expanded ? <ChevronDown size={15} color={C.muted} /> : <ChevronRight size={15} color={C.muted} />)}
-        {s.name}
-        {s.role === 'setter_manager' && <span style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>manager</span>}
-        {s.active === false && <span style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>inactif</span>}
+        {avatar(s)}
+        <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            {s.name}
+            {s.role === 'setter_manager' && <span style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>manager</span>}
+            {s.active === false && <span style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>inactif</span>}
+          </span>
+          {s.allo !== 'linked' && <span style={{ fontSize: 11, fontWeight: 500, color: C.muted }}>{ALLO_LABELS[s.allo] || ALLO_LABELS.error}</span>}
+        </span>
       </span>
     </td>
   );
@@ -541,11 +557,6 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 1500 }}>
       <ProspectionStyles />
       <style>{`.pilotage-field:focus { border-color: ${C.accent} !important; box-shadow: 0 0 0 3px ${darkMode ? 'rgba(124,138,219,0.22)' : 'rgba(91,106,191,0.16)'}; }`}</style>
-      {blocage.mode === 'free' && (
-        <datalist id={DATALIST_ID}>
-          {blocage.options.map((o) => <option key={o} value={o} />)}
-        </datalist>
-      )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 12, background: C.subtle, border: `1px solid ${C.border}` }}>
@@ -663,14 +674,6 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
         )}
       </Card>
 
-      <p style={{ fontSize: 12.5, color: C.muted, margin: 0, lineHeight: 1.6 }}>
-        Appels : relevés Allo, passés et reçus. Appels répondus : appels sortants décrochés, hors répondeur détecté par Allo.
-        RDV pris : R1 placés par le setter, comptés le jour de la pose. RDV honorés et no-show : R1 du setter et R2 de son
-        tunnel webinaire, comptés le jour du RDV d'après le résultat saisi par le commercial ; « à qualifier » : RDV passé sans résultat.
-        {showR2 ? ' R2 posés : R2 attribués au setter, ceux du tunnel webinaire comptés le jour du RDV.' : ''}
-        {multiDay ? ' Cliquez sur un setter pour le détail jour par jour.' : ''}
-        {editable ? " Cellules jaunes : la saisie est enregistrée dès que vous quittez la cellule (Ctrl + Entrée dans l'action)." : ''}
-      </p>
     </div>
   );
 }
