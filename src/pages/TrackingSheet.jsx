@@ -1,3 +1,4 @@
+import OnboardingReschedule from '../components/integrationPreview/OnboardingReschedule';
 import { generateSavedNda } from '../contracts/ndaGeneration.js';
 import SaleReservation from '../components/integrationPreview/SaleReservation';
 import { fetchContractsOfLead, contractSentLine } from '../utils/leadContracts.js';
@@ -156,7 +157,7 @@ function TimeSelect({ value, onChange, C, darkMode }) {
 }
 
 // ── SLOT PICKER (créneaux libres freebusy 8h-18h) pour RDV Onboarding/Lancement ──
-function SaleSlotPicker({ kind, value, onChange, C, darkMode, band, readOnly = false }) {
+function SaleSlotPicker({ kind, value, onChange, C, darkMode, band, readOnly = false, slotsPath }) {
   const accent = C.accent || '#2563eb';
   const _pad = (n) => String(n).padStart(2, '0');
   const _ymd = (yy, mm, dd) => `${yy}-${_pad(mm + 1)}-${_pad(dd)}`;
@@ -195,7 +196,7 @@ function SaleSlotPicker({ kind, value, onChange, C, darkMode, band, readOnly = f
     // on lit les dispos du BON agenda. Onboarding = créneaux 50 min avec dispo CROISÉE
     // Vincent (v.chaintron@) + facturation@ sur les 15 dernières min (géré côté backend).
     const bandParam = band ? `&band=${encodeURIComponent(band)}` : '';
-    apiClient.get(`/api/v1/tracking/sale-slots?kind=${kind}&start=${_ymd(y, m, 1)}&days=${daysInMonth}${bandParam}`)
+    apiClient.get(`${slotsPath || "/api/v1/tracking/sale-slots"}?kind=${kind}&start=${_ymd(y, m, 1)}&days=${daysInMonth}${bandParam}`)
       .then(r => {
         if (!alive) return;
         const days = (r && r.days) || [];
@@ -216,7 +217,7 @@ function SaleSlotPicker({ kind, value, onChange, C, darkMode, band, readOnly = f
       .catch(() => { if (alive) setData({ days: [] }); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [kind, monthKey, band]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [kind, monthKey, band, slotsPath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const daysMap = {};
   (data.days || []).forEach(d => { daysMap[d.date] = d.slots; });
@@ -1173,6 +1174,7 @@ export default function TrackingSheet() {
 
   // ── SALE DECLARATION MODAL (signed tab) ────────────────────────────────────
   const [showSaleModal, setShowSaleModal] = useState(null); // lead.id when modal is open
+  const [rescheduleNotice, setRescheduleNotice] = useState(null);
   const [reschedRdv, setReschedRdv] = useState(null); // { leadId, kind } RDV post-signature à reprogrammer (créneau + dispo agenda)
   const [onbAvailOpen, setOnbAvailOpen] = useState(false); // consultation des dispos onboarding avant le contrat (29/09)
   // billingStructures ('une'|'plusieurs') + discount (null|false|true) + discountValue (texte
@@ -7951,9 +7953,8 @@ export default function TrackingSheet() {
                     )}
                     <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Post-signature</div>
 
-                    {rdvDatesSet && !isSignedPilot(lead) && (<>
-                    {/* RDV Onboarding / Lancement : clic = reprogrammer AVEC dispo agenda (SaleSlotPicker en modale).
-                        Le PATCH sur rdv_*_date déplace déjà l'event Google côté back (reschedule_sale_event). */}
+                    {rdvDatesSet && (<>
+                    {/* Reprogrammation disponible aussi après finalisation du parcours en deux parties. */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                       <div style={{
                         display: 'flex', alignItems: 'center', gap: 8, flex: 1, padding: '8px 12px', borderRadius: 10,
@@ -7961,14 +7962,14 @@ export default function TrackingSheet() {
                         border: `1px solid ${darkMode ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.15)'}`,
                       }}>
                         <span style={{ fontSize: 9, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Onboarding</span>
-                        <button type="button" onClick={() => setReschedRdv({ leadId: lead.id, kind: 'onboarding' })}
+                        <button type="button" onClick={() => setReschedRdv({ leadId: lead.id, kind: 'onboarding', twoStage: isSignedPilot(lead) })}
                           title="Reprogrammer (créneaux libres de l'agenda)"
                           style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '6px 10px', borderRadius: 8,
                             border: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#f9fafb', color: lead.rdv_onboarding_date ? C.text : C.muted,
                             fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', transition: 'border-color 0.15s' }}
                           onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#10b981'; }}
                           onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; }}>
-                          <span>{lead.rdv_onboarding_date ? fmtRdvLabel(lead.rdv_onboarding_date) : 'Choisir un créneau'}</span>
+                          <span>{lead.rdv_onboarding_date ? `${fmtRdvLabel(lead.rdv_onboarding_date)} · Reprogrammer` : 'Choisir un créneau'}</span>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                             <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
                           </svg>
@@ -7976,6 +7977,7 @@ export default function TrackingSheet() {
                       </div>
                     </div>
 
+                    {rescheduleNotice?.leadId === lead.id && <p role="status" style={{color:C.text,fontSize:13}}>{rescheduleNotice.message}</p>}
                     {/* RDV Lancement : contrats historiques uniquement */}
                     {intakeJourneys[lead.id]?.onboarding_only === false && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <div style={{
@@ -9416,7 +9418,15 @@ export default function TrackingSheet() {
       {/* Reprogrammation d'un RDV post-signature (onboarding/lancement) AVEC dispo agenda :
           même SaleSlotPicker qu'à la déclaration ; le PATCH rdv_*_date déplace l'event Google déjà câblé.
           fontFamily Inter reposée : createPortal(document.body) sort du conteneur de police. */}
-      {reschedRdv && createPortal((() => {
+      {reschedRdv?.twoStage && <OnboardingReschedule lead={leads.find(l => l.id === reschedRdv.leadId)} SlotPicker={SaleSlotPicker} C={C} darkMode={darkMode}
+        onClose={() => setReschedRdv(null)} onSaved={result => {
+          const leadId = reschedRdv.leadId;
+          setLeads(previous => previous.map(l => l.id === leadId ? {...l, rdv_onboarding_date:result.new_dt} : l));
+          setIntakeJourneys(previous => ({...previous, [leadId]:{...previous[leadId], preparation:result.preparation}}));
+          setRescheduleNotice({leadId, message:result.notification_sent === false ? 'Rendez-vous reprogrammé. La notification au client reste à vérifier.' : 'Rendez-vous reprogrammé dans les agendas.'});
+          setReschedRdv(null);
+        }}/>}
+      {reschedRdv && !reschedRdv.twoStage && createPortal((() => {
         const lead = leads.find(l => l.id === reschedRdv.leadId);
         if (!lead) return null;
         const kind = reschedRdv.kind;
