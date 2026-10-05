@@ -41,11 +41,13 @@ export const CompanySchema = z.object({
   siren: z.string()
     .transform(normalizeSiren)
     .refine((v) => v === "" || /^\d{9}$/.test(v), "SIREN = 9 chiffres"),
-  rcsCity: z.string().min(2, "Ville du RCS requise"),
+  isInRegistration: z.boolean().default(false),
+  rcsCity: z.string().default(""),
   headOffice: AddressSchema,
   representatives: z.array(RepresentativeSchema)
     .min(1, "Ajoute au moins 1 représentant (fonction + nom)"),
-});
+}).refine(c => c.isInRegistration || c.legalForm === "Autre" || c.rcsCity.trim().length >= 2,
+  { message: "Ville du RCS requise", path: ["rcsCity"] });
 
 export const ClientSchema = z.object({
   name: z.string().min(2, "Nom du client requis"),

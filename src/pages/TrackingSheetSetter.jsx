@@ -1,3 +1,4 @@
+import { generateSavedNda } from '../contracts/ndaGeneration.js';
 import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { fetchContractsOfLead, contractSentLine } from '../utils/leadContracts.js';
 import { createPortal } from "react-dom";
@@ -2038,7 +2039,7 @@ export default function TrackingSheetSetter() {
   };
 
   const handleNdaPrefill = async () => {
-    if (!ndaData || !ndaPopup) return;
+    if (!ndaData || !ndaPopup || ndaGenerating) return;
     const lead = leads.find(l => l.id === ndaPopup.leadId);
     const query = `${ndaData.legalName || lead?.company_name || ''} - ${lead?.full_name || ''}`.trim();
     if (!query || query === '-') { setNdaError('Renseignez le nom de la société'); return; }
@@ -2084,7 +2085,7 @@ export default function TrackingSheetSetter() {
   };
 
   const handleNdaGenerate = async () => {
-    if (!ndaData || !ndaPopup) return;
+    if (!ndaData || !ndaPopup || ndaGenerating) return;
     const lead = leads.find(l => l.id === ndaPopup.leadId);
     if (!lead) return;
     if (!ndaData.legalName.trim()) { setNdaError('La raison sociale est requise'); return; }
@@ -2107,19 +2108,10 @@ export default function TrackingSheetSetter() {
         isInRegistration: ndaData.isInRegistration || false,
       };
       // Generate PDF
-      const resp = await fetch('/api/contract-preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          company: payloadCompany,
-          meta: { typeEntreprise: ndaData.businessType || 'Général' },
-        }),
+      const blob = await generateSavedNda({
+        company: payloadCompany, meta: { typeEntreprise: ndaData.businessType || 'Général' },
+        leadId: lead.id, apiClient,
       });
-      if (!resp.ok) {
-        setNdaError('Erreur génération PDF: ' + (await resp.text()));
-        return;
-      }
-      const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -2128,15 +2120,6 @@ export default function TrackingSheetSetter() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      // Fire-and-forget: sync client data to backend
-      try {
-        await apiClient.post('/api/v1/contracts/client-data', {
-          company: payloadCompany,
-          meta: { typeEntreprise: ndaData.businessType || 'Général' },
-          client_info_text: '',
-          lead_id: lead.id,
-        });
-      } catch (e) { console.warn('Backend client-data sync failed (non-blocking):', e); }
       // Success → close popup
       setNdaPopup(null);
       setNdaData(null);
