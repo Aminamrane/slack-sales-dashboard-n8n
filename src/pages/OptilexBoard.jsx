@@ -1678,7 +1678,7 @@ const roleOf = () => { try { return (apiClient.getUser() || {}).role; } catch { 
 // bouton « Faire l'onboarding » ; les rendez-vous de lancement, la convention et la météo
 // vivent dans le parcours. Les autres rôles gardent les lignes détaillées. Les RDV fiscal et
 // social se reprogramment aussi d'ici (client absent, Vincent 29/09).
-function OnboardingCard({ row, onStart, onManualDone, onReschedule, onCancel }) {
+function OnboardingCard({ row, onStart, onManualDone, onReschedule, onCancel, onDateSaved }) {
   const reduce = useReducedMotion();
   const date = row.rdv_onboarding_date_manual || row.rdv_onboarding_date;
   const done = !!row.rdv_onboarding_done;
@@ -1723,6 +1723,10 @@ function OnboardingCard({ row, onStart, onManualDone, onReschedule, onCancel }) 
           {done ? "Rouvrir le parcours" : pending ? "Reprendre l'onboarding" : "Faire l'onboarding"}
         </motion.button>
       </div>
+      {done && <div style={{ marginTop: 12 }}>
+        <BoardOnboardingDateCorrection key={row.numero_client} numero={row.numero_client} completed
+          initialDate={toDateInput(doneDate)} onSaved={onDateSaved} />
+      </div>}
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 10, fontSize: 12, color: MUTED }}>
         {rdv.map(([label, d, ok, kind]) => (
           <span key={label}>{label} : <strong style={{ color: d ? TEXT : "#cbd2e0" }}>{fmtDT(d) || "à placer"}</strong>{ok ? " ✓" : ""}
@@ -2641,7 +2645,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
           </div>
           {ONBOARDING_FLOW_ROLES.includes(roleOf()) && !!num ? (
             // Onglet Détails allégé (dev 24/09/2026) : un seul bouton, le reste vit dans le parcours.
-            <OnboardingCard row={row} onStart={() => setOnboardingOpen(true)}
+            <OnboardingCard row={row} onStart={() => setOnboardingOpen(true)} onDateSaved={reload}
               onManualDone={(d) => patch(num, { rdv_onboarding_done: true, rdv_onboarding_done_date: d })}
               onReschedule={(kind) => setReschedOpen(kind)} onCancel={!isFinanceTeam() ? (kind) => setCancelOpen(kind) : undefined} />
           ) : (
