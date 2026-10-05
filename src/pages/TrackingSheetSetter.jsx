@@ -11,10 +11,11 @@ import { leadAvatar } from "../utils/leadAvatar";
 import LeadsManagement from "./LeadsManagement.jsx";
 // ── Setter modales (Option B duplication intégrale TrackingSheet) ──────────
 import SetterJourneyDialog from "../components/setter/SetterJourneyDialog.jsx";
-import {Phone, CalendarDays, ChevronRight, UserSearch, ListChecks, UsersRound} from "lucide-react";
+import {Phone, CalendarDays, ChevronRight, UserSearch, ListChecks, UsersRound, Video} from "lucide-react";
 import ProspectSearch from "../components/setter/prospection/ProspectSearch.jsx";
 import ProspectLists from "../components/setter/prospection/ProspectLists.jsx";
 import PilotageSetting from "../components/setter/PilotageSetting.jsx";
+import SetterWebinarRdv from "../components/setter/SetterWebinarRdv.jsx";
 import CreateColdLeadModal from "../components/setter/CreateColdLeadModal.jsx";
 import SetterOnboarding from "../components/SetterOnboarding.jsx";
 import "../index.css";
@@ -426,6 +427,24 @@ export default function TrackingSheetSetter() {
     } catch (e) { console.warn('Failed to fetch dismissed notifs:', e); }
   }, []);
 
+  // RDV pris via le lien webinaire personnel de la setteuse (/lamia, /aurelie) : onglet en lecture seule,
+  // affiché seulement si elle a un lien ou des RDV. Même impersonation lecture que refreshData.
+  const [webinarRdv, setWebinarRdv] = useState(null);
+  const [webinarRdvState, setWebinarRdvState] = useState({ loading: false, error: false });
+  const fetchWebinarRdv = useCallback(async () => {
+    const _u = new URLSearchParams(window.location.search);
+    const _asSetter = _u.get('ghost') === 'true' ? _u.get('sheet_id') : null;
+    const _q = _asSetter ? `?as_setter=${encodeURIComponent(_asSetter)}` : '';
+    setWebinarRdvState({ loading: true, error: false });
+    try {
+      setWebinarRdv(await apiClient.get('/api/v1/tracking/setter/webinar-rdv' + _q));
+      setWebinarRdvState({ loading: false, error: false });
+    } catch (e) {
+      console.warn('[Setter] RDV webinaire indisponibles', e);
+      setWebinarRdvState({ loading: false, error: true });
+    }
+  }, []);
+
   useEffect(() => {
     const check = async () => {
       try {
@@ -458,6 +477,7 @@ export default function TrackingSheetSetter() {
         }
 
         await refreshData();
+        fetchWebinarRdv();
         // Fetch calendar + relance settings immediately (for R3 tab visibility + toggle states)
         try {
           const cs = await apiClient.get('/api/v1/tracking/calendar-settings');
@@ -2522,6 +2542,7 @@ export default function TrackingSheetSetter() {
               // réactivité reste aux sales). Le setter y récupère un lead en
               // posant un R1 pour l'un de ses commerciaux.
               { key: 'barrage', label: 'Barrage', iconSrc: iconMyLead, accent: '#0891b2' },
+              ...(webinarRdv?.has_tunnel ? [{ key: 'webinar_rdv', label: 'RDV webinaire', icon: <Video size={20} strokeWidth={1.8} style={{ display: 'block', margin: '0 auto' }} />, accent: C.accent }] : []),
               // Prospection : recherche d'entreprises (API Leads) et listes réservées.
               { key: 'prospect_search', label: 'Trouver des contacts', icon: <UserSearch size={20} strokeWidth={1.8} style={{ display: 'block', margin: '0 auto' }} />, accent: C.accent },
               { key: 'prospect_lists', label: 'Mes listes', icon: <ListChecks size={20} strokeWidth={1.8} style={{ display: 'block', margin: '0 auto' }} />, accent: C.accent },
@@ -2818,6 +2839,20 @@ export default function TrackingSheetSetter() {
                 name: s.full_name || s.name || s.email || s,
               }))}
             />
+          </div>
+        )}
+
+        {sidebarView === 'webinar_rdv' && (
+          <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
+              RDV webinaire
+            </h2>
+            <p style={{ fontSize: 13, color: C.muted, margin: '0 0 24px' }}>
+              Les rendez-vous pris via votre lien webinaire personnel : leur date, leur résultat et le commercial
+              à qui chacun a été affecté.
+            </p>
+            <SetterWebinarRdv C={C} darkMode={darkMode} data={webinarRdv} loading={webinarRdvState.loading}
+              error={webinarRdvState.error} onRefresh={fetchWebinarRdv} />
           </div>
         )}
 
