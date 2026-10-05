@@ -22,6 +22,8 @@ function setup(t, { locks = true } = {}) {
     getItem: key => values.get(key) ?? null,
     setItem: (key, value) => values.set(key, value),
     removeItem: key => values.delete(key),
+    get length() { return values.size; },
+    key: index => [...values.keys()][index] ?? null,
   };
   let lockTail = Promise.resolve();
   const navigator = locks ? { locks: { request: (_name, fn) => {
@@ -142,6 +144,18 @@ for (const kind of ['expired', 'revoked', 'missing']) {
     assert.equal(window.location.href, '/login');
   });
 }
+
+test('logout clears the per-user drafts; an expired session keeps them for the next login', async t => {
+  const { client, state, values } = setup(t);
+  values.set('ot.drafts.pilotageSetting.fixture-user', '{"s|2026-10-01":{"action":"x"}}');
+  values.set('darkMode', 'true');
+  state.now = 91 * DAY;
+  await assert.rejects(client.getMe(), error => error.status === 401);
+  assert.equal(values.has('ot.drafts.pilotageSetting.fixture-user'), true);
+  await client.logout();
+  assert.equal(values.has('ot.drafts.pilotageSetting.fixture-user'), false);
+  assert.equal(values.get('darkMode'), 'true');
+});
 
 test('logout during an in-flight refresh cannot resurrect the session', async t => {
   const { client, state, server, values } = setup(t);
