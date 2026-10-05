@@ -65,9 +65,10 @@ const DOW_SHORT = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
 const DOW_LONG = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 
+// Heure compacte façon Tedeles : « 9h », « 10h30 ».
 export function fmtTime(iso) {
   const m = minutesOf(iso);
-  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  return `${Math.floor(m / 60)}h${m % 60 ? String(m % 60).padStart(2, '0') : ''}`;
 }
 
 export function fmtDayHead(key) {
@@ -156,7 +157,7 @@ export function hasWeekendEvents(events, monday) {
   const sat = addDays(monday, 5);
   const mon = addDays(monday, 7);
   return (events || []).some((ev) => {
-    if (ev.kind === 'absence') return false;          // une absence le week-end ne justifie pas d'afficher le week-end
+    if (ev.kind !== 'rdv' && ev.kind !== 'callback') return false;   // agenda perso ou absence : le week-end reste masqué
     const s = dayOf(ev.start);
     const e = ev.all_day ? addDays(dayOf(ev.end || ev.start), -1) : dayOf(ev.end || ev.start);
     return s < mon && e >= sat;
@@ -312,8 +313,8 @@ export function chipColors(hex, dark = false) {
     const text = [r, g, b].map((c) => Math.round(c + (255 - c) * 0.45));
     return { bg: `rgb(${mix.join(', ')})`, text: `rgb(${text.join(', ')})`, line: hex };
   }
-  const bg = [r, g, b].map((c) => Math.round(255 - (255 - c) * 0.14));
-  const text = [r, g, b].map((c) => Math.round(c * 0.55));
+  const bg = [r, g, b].map((c) => Math.round(255 - (255 - c) * 0.16));     // mêmes teintes que Tedeles
+  const text = [r, g, b].map((c) => Math.round(c * 0.58));
   return { bg: `rgb(${bg.join(', ')})`, text: `rgb(${text.join(', ')})`, line: hex };
 }
 

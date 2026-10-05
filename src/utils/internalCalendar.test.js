@@ -30,7 +30,7 @@ test('l\'heure de Paris ne dépend pas du fuseau du navigateur', () => {
 
 test('les dates du CRM restent à l\'heure affichée', () => {
   const ev = { kind: 'rdv', start: '2026-10-06T10:00:00', end: '2026-10-06T10:45:00' };
-  assert.equal(fmtRange(ev), 'mardi 6 octobre, 10:00 à 10:45');
+  assert.equal(fmtRange(ev), 'mardi 6 octobre, 10h à 10h45');
   assert.equal(fmtRange({ all_day: true, start: '2026-10-09', end: '2026-10-10' }), 'vendredi 9 octobre, toute la journée');
   assert.equal(fmtRange({ all_day: true, start: '2026-10-08', end: '2026-10-10' }), 'Du jeudi 8 octobre au vendredi 9 octobre');
 });
@@ -52,6 +52,7 @@ test('le week-end n\'apparaît que s\'il porte un rendez-vous', () => {
   assert.equal(hasWeekendEvents([{ kind: 'rdv', start: '2026-10-07T10:00:00', end: '2026-10-07T11:00:00' }], '2026-10-05'), false);
   assert.equal(hasWeekendEvents([{ kind: 'rdv', start: '2026-10-10T10:00:00', end: '2026-10-10T11:00:00' }], '2026-10-05'), true);
   assert.equal(hasWeekendEvents([{ kind: 'absence', all_day: true, start: '2026-10-09', end: '2026-10-13' }], '2026-10-05'), false);
+  assert.equal(hasWeekendEvents([{ kind: 'google', start: '2026-10-10T07:00:00', end: '2026-10-10T08:00:00' }], '2026-10-05'), false);
 });
 
 const seg = (id, s, e) => ({ id, segStart: s, segEnd: e });
