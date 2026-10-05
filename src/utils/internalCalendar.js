@@ -80,6 +80,19 @@ export function fmtLongDate(key) {
   return `${DOW_LONG[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
 }
 
+// « Lundi 5 octobre 2026 » (vue direction, jour par jour).
+export function fmtDayTitle(key) {
+  const label = `${fmtLongDate(key)} ${parseKey(key).getUTCFullYear()}`;
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+// Jour ouvré précédent ou suivant (la direction navigue du lundi au vendredi).
+export function stepWorkday(key, dir) {
+  let next = addDays(key, dir);
+  while ([0, 6].includes(parseKey(next).getUTCDay())) next = addDays(next, dir);
+  return next;
+}
+
 // « Du 5 au 9 octobre 2026 », « Du 29 septembre au 3 octobre 2026 », « Du 29 décembre 2025 au 2 janvier 2026 ».
 export function fmtWeekLabel(days) {
   const a = parseKey(days[0]);
@@ -325,6 +338,20 @@ export const HANDLED = {
 export function filterHandled(events, mode) {
   if (!mode || mode === 'all') return events || [];
   return (events || []).filter((ev) => ev.kind !== 'rdv' || ev.handled_by === mode);
+}
+
+// Vue direction : une colonne par commercial (ordre alphabétique, RDV non affectés et leads archivés à la fin).
+export function groupBySales(events) {
+  const groups = new Map();
+  for (const ev of events || []) {
+    if (ev.kind !== 'rdv') continue;
+    const state = ev.assigned?.state || 'unassigned';
+    const key = state === 'assigned' ? `a:${ev.assigned.name}` : `z:${state}`;
+    const name = state === 'assigned' ? ev.assigned.name : state === 'archived' ? 'Lead archivé' : 'Non affecté';
+    if (!groups.has(key)) groups.set(key, { key, name, events: [] });
+    groups.get(key).events.push(ev);
+  }
+  return [...groups.values()].sort((a, b) => a.key.localeCompare(b.key, 'fr'));
 }
 
 export function countByOutcome(events) {

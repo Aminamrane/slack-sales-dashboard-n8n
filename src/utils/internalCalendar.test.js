@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  addDays, chipColors, countByOutcome, eventColor, filterHandled, fmtRange, fmtWeekLabel, hasWeekendEvents,
-  layoutDay, mondayOf, parisNow, splitEvents, weekDays,
+  addDays, chipColors, countByOutcome, eventColor, filterHandled, fmtDayTitle, fmtRange, fmtWeekLabel, groupBySales,
+  hasWeekendEvents, layoutDay, mondayOf, parisNow, splitEvents, stepWorkday, weekDays,
 } from './internalCalendar.js';
 
 test('la semaine commence le lundi, y compris depuis un dimanche', () => {
@@ -83,4 +83,18 @@ test('vue direction : filtrer ce que gèrent les setters et ce qui revient à la
   assert.equal(filterHandled(events, 'all').length, 3);
   assert.equal(filterHandled(events, 'direction').length, 2);
   assert.deepEqual(countByOutcome(events), { total: 2, upcoming: 1, held: 0, no_show: 1, to_qualify: 0 });
+});
+
+test('vue direction : un jour à la fois, une colonne par commercial', () => {
+  assert.equal(fmtDayTitle('2026-10-05'), 'Lundi 5 octobre 2026');
+  assert.equal(stepWorkday('2026-10-09', 1), '2026-10-12');                  // vendredi → lundi
+  assert.equal(stepWorkday('2026-10-12', -1), '2026-10-09');
+  const groups = groupBySales([
+    { kind: 'rdv', assigned: { state: 'assigned', name: 'Vincent' } },
+    { kind: 'rdv', assigned: { state: 'unassigned', name: null } },
+    { kind: 'rdv', assigned: { state: 'assigned', name: 'Ambre' } },
+    { kind: 'rdv', assigned: { state: 'assigned', name: 'Vincent' } },
+    { kind: 'google' },
+  ]);
+  assert.deepEqual(groups.map((g) => [g.name, g.events.length]), [['Ambre', 1], ['Vincent', 2], ['Non affecté', 1]]);
 });

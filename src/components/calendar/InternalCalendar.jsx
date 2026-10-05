@@ -9,17 +9,18 @@ import { createElement, useCallback, useEffect, useLayoutEffect, useMemo, useRef
 import { createPortal } from 'react-dom';
 import {
   CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, LoaderCircle, MapPin, Phone,
-  PhoneCall, RefreshCw, User, UserRoundCheck, Video, X,
+  PhoneCall, RefreshCw, User, UserRoundCheck, UserX, Video, X,
 } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
 import {
   ABSENCE_COLOR, CALLBACK_COLOR, DAY_MINUTES, GOOGLE_COLOR, GOOGLE_COLOR_DARK, HANDLED, OUTCOME, RDV_COLORS, addDays, chipColors,
-  eventColor, filterHandled, fmtDayHead, fmtRange, fmtSince, fmtTime, fmtWeekLabel, hasWeekendEvents,
-  layoutDay, mondayOf, parisNow, rdvLabel, splitEvents, weekDays,
+  eventColor, filterHandled, fmtDayHead, fmtDayTitle, fmtRange, fmtSince, fmtTime, fmtWeekLabel, groupBySales, hasWeekendEvents,
+  layoutDay, mondayOf, parisNow, rdvLabel, splitEvents, stepWorkday, weekDays,
 } from '../../utils/internalCalendar.js';
 
 const HOUR_HEIGHT = 52;
 const RULER = 56;
+const SALES_COL_MIN = 184;                // vue direction : largeur mini d'une colonne commercial (défilement horizontal au-delà)
 const POPOVER_WIDTH = 340;
 const RELOAD_EVERY_MS = 3 * 60 * 1000;
 const NAVY = '#121b35';
@@ -48,6 +49,25 @@ function eventTitle(ev) {
   return ev.title || 'Occupé';
 }
 
+// Vue direction : « MOI » = aucun setter n'a posé ce RDV, la relance revient à la direction.
+function MineTag({ dark }) {
+  return (
+    <span style={{ flexShrink: 0, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.03em', color: dark ? NAVY : '#fff', background: dark ? '#fbbf24' : '#b45309', borderRadius: 4, padding: '1px 4px' }}>
+      MOI
+    </span>
+  );
+}
+
+function SetterTag({ name, dark }) {
+  const first = String(name || '').trim().split(/\s+/)[0];
+  if (!first) return null;
+  return (
+    <span title={`Suivi par ${name}`} style={{ flexShrink: 0, fontSize: 9.5, fontWeight: 600, color: dark ? '#cbd5e1' : '#475569', background: dark ? 'rgba(148,163,184,0.18)' : 'rgba(71,85,105,0.10)', borderRadius: 4, padding: '1px 4px', maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      {first}
+    </span>
+  );
+}
+
 function Chip({ ev, view, dark, onOpen, height }) {
   const color = eventColor(ev, dark);
   const tone = chipColors(color, dark);
@@ -58,7 +78,7 @@ function Chip({ ev, view, dark, onOpen, height }) {
   const extends100 = ev.leftPct + ev.widthPct >= 99.5;
   const context = !isRdv ? null
     : view === 'setter' ? (ev.assigned?.name ? `Chez ${ev.assigned.name}` : null)
-      : view === 'director' ? (ev.handled_by === 'setter' ? `Setter : ${ev.setter_name}` : 'À relancer par moi')
+      : view === 'director' ? (ev.handled_by === 'setter' ? `Suivi par ${ev.setter_name}` : 'À relancer par moi')
         : (ev.setter_name ? `Posé par ${ev.setter_name}` : null);
   return (
     <button
@@ -80,16 +100,18 @@ function Chip({ ev, view, dark, onOpen, height }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
         {isRdv && <span style={{ fontWeight: 700, fontSize: 10, flexShrink: 0 }}>{rdvLabel(ev)}</span>}
         {ev.kind === 'callback' && <PhoneCall size={11} style={{ flexShrink: 0 }} />}
-        <span style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: 1 }}>
+        <span style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: view === 'director' ? 52 : 0, flex: 1 }}>
           {eventTitle(ev)}
         </span>
         {held && <CheckCircle2 size={12} color={OUTCOME.held.color} style={{ flexShrink: 0 }} aria-label="Honoré" />}
-        {noShow && (
+        {noShow && view === 'director' && <UserX size={13} color={OUTCOME.no_show.color} strokeWidth={2.4} style={{ flexShrink: 0 }} aria-label="No-show" />}
+        {noShow && view !== 'director' && (
           <span style={{ flexShrink: 0, fontSize: 9.5, fontWeight: 700, color: '#fff', background: OUTCOME.no_show.color, borderRadius: 4, padding: '1px 4px', letterSpacing: '0.02em' }}>
             NO-SHOW
           </span>
         )}
         {toQualify && <span title={OUTCOME.to_qualify.hint} style={{ flexShrink: 0, width: 7, height: 7, borderRadius: 4, background: OUTCOME.to_qualify.color }} />}
+        {isRdv && view === 'director' && (ev.handled_by === 'setter' ? <SetterTag name={ev.setter_name} dark={dark} /> : <MineTag dark={dark} />)}
       </div>
       {height >= 34 && (
         <div style={{ fontSize: 10.5, opacity: 0.8, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -244,7 +266,11 @@ function Popover({ ev, rect, view, C, dark, onClose, onOpenLead, canOpenLead }) 
 }
 
 export default function InternalCalendar({ view = 'sales', C, darkMode = false, asUser, onOpenLead, canOpenLead, toolbarExtra, reloadKey, fill = true }) {
-  const [monday, setMonday] = useState(() => mondayOf(parisNow().key));
+  const byDay = view === 'director';                       // direction : un jour à la fois, une colonne par commercial
+  const [anchor, setAnchor] = useState(() => {
+    const today = parisNow().key;
+    return byDay ? ([0, 6].includes(new Date(`${today}T12:00:00Z`).getUTCDay()) ? stepWorkday(today, 1) : today) : mondayOf(today);
+  });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -253,7 +279,6 @@ export default function InternalCalendar({ view = 'sales', C, darkMode = false, 
   const [handled, setHandled] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
   const [notice, setNotice] = useState(null);
-  const [sbWidth, setSbWidth] = useState(0);
   const scrollRef = useRef(null);
   const requestRef = useRef(0);
 
@@ -261,7 +286,7 @@ export default function InternalCalendar({ view = 'sales', C, darkMode = false, 
     const id = ++requestRef.current;
     if (!quiet) setLoading(true);
     try {
-      const qs = new URLSearchParams({ view, start: monday, end: addDays(monday, 7) });
+      const qs = new URLSearchParams({ view, start: anchor, end: addDays(anchor, byDay ? 1 : 7) });
       if (asUser) qs.set('as', asUser);
       const res = await apiClient.get(`/api/v1/calendar/events?${qs}`);
       if (id !== requestRef.current) return;
@@ -272,7 +297,7 @@ export default function InternalCalendar({ view = 'sales', C, darkMode = false, 
     } finally {
       if (id === requestRef.current) setLoading(false);
     }
-  }, [view, monday, asUser, reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps -- reloadKey : recharger à la demande du parent
+  }, [view, anchor, byDay, asUser, reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps -- reloadKey : recharger à la demande du parent
 
   useEffect(() => { load(); }, [load]);
 
@@ -287,39 +312,55 @@ export default function InternalCalendar({ view = 'sales', C, darkMode = false, 
   }, []);
 
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return undefined;
-    const measure = () => setSbWidth(el.offsetWidth - el.clientWidth);
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  useEffect(() => {
     if (!notice) return undefined;
     const t = setTimeout(() => setNotice(null), 5000);
     return () => clearTimeout(t);
   }, [notice]);
 
-  const events = useMemo(() => filterHandled(data?.events, view === 'director' ? handled : 'all'), [data, view, handled]);
-  const days = useMemo(() => weekDays(monday, hasWeekendEvents(events, monday)), [events, monday]);
-  const { allDay, timed } = useMemo(() => splitEvents(events, days), [events, days]);
-  const positioned = useMemo(() => new Map(days.map((d) => [d, layoutDay(timed.get(d))])), [days, timed]);
-  const absencesByDay = useMemo(() => new Map(days.map((d) => [d, allDay.get(d).filter((e) => e.kind === 'absence')])), [days, allDay]);
-  const hasAllDay = days.some((d) => allDay.get(d).length > 0);
+  const events = useMemo(() => filterHandled(data?.events, byDay ? handled : 'all'), [data, byDay, handled]);
+
+  // Colonnes : les jours de la semaine (sales, setter) ou les commerciaux du jour (direction).
+  const columns = useMemo(() => {
+    if (byDay) {
+      const { timed } = splitEvents(events, [anchor]);
+      const ids = new Set(timed.get(anchor).map((e) => e.id));
+      return groupBySales(events).map((g) => {
+        const segs = timed.get(anchor).filter((e) => g.events.some((x) => x.id === e.id) && ids.has(e.id));
+        const noShows = g.events.filter((e) => e.outcome === 'no_show').length;
+        return { key: g.key, day: anchor, label: g.name, sub: `${g.events.length} RDV${noShows ? ` · ${noShows} no-show` : ''}`, items: layoutDay(segs), allDay: [], absences: [] };
+      });
+    }
+    const days = weekDays(anchor, hasWeekendEvents(events, anchor));
+    const { allDay, timed } = splitEvents(events, days);
+    return days.map((d) => {
+      const head = fmtDayHead(d);
+      return {
+        key: d, day: d, label: `${head.dow} ${head.day}`, items: layoutDay(timed.get(d)),
+        allDay: allDay.get(d), absences: allDay.get(d).filter((e) => e.kind === 'absence'),
+      };
+    });
+  }, [byDay, events, anchor]);
+
+  const hasAllDay = columns.some((c) => c.allDay.length > 0);
   const counts = useMemo(() => {
     const out = { setter: 0, direction: 0 };
     for (const ev of data?.events || []) if (ev.kind === 'rdv' && ev.handled_by in out) out[ev.handled_by] += 1;
     return out;
   }, [data]);
 
-  const thisMonday = mondayOf(now.key);
-  const cols = `${RULER}px repeat(${days.length}, minmax(0, 1fr))`;
+  const todayAnchor = byDay ? now.key : mondayOf(now.key);
+  const isCurrent = anchor === todayAnchor;
+  const step = (dir) => setAnchor((a) => (byDay ? stepWorkday(a, dir) : addDays(a, 7 * dir)));
+  const colWidth = byDay ? `minmax(${SALES_COL_MIN}px, 1fr)` : 'minmax(0, 1fr)';
+  const cols = `${RULER}px repeat(${Math.max(1, columns.length)}, ${colWidth})`;
+  const minWidth = byDay ? RULER + Math.max(1, columns.length) * SALES_COL_MIN : undefined;
   const openPopover = useCallback((ev, rect) => setPopover((p) => (p?.ev.id === ev.id ? null : { ev, rect })), []);
   const closePopover = useCallback(() => setPopover(null), []);
   const google = view === 'sales' ? data?.google : null;
   const googleWarning = google && !asUser ? GOOGLE_STATUS[google.status] : null;
+  const title = byDay ? fmtDayTitle(anchor) : fmtWeekLabel(weekDays(anchor, columns.length === 7));
+  const nowCol = columns.findIndex((c) => c.day === now.key);
+  const showNow = !byDay ? nowCol >= 0 : anchor === now.key;
 
   const refresh = async () => {
     if (refreshing) return;
@@ -344,17 +385,19 @@ export default function InternalCalendar({ view = 'sales', C, darkMode = false, 
     background: active ? (darkMode ? '#eef0f6' : NAVY) : 'transparent', color: active ? (darkMode ? NAVY : '#fff') : C.secondary,
     display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
   });
+  const stickyBg = C.bg;
 
   const legend = [
     { label: 'R1', color: RDV_COLORS.r1 },
     { label: 'R2', color: RDV_COLORS.r2 },
     view === 'sales' && { label: 'R3', color: RDV_COLORS.r3 },
     { label: 'No-show', color: OUTCOME.no_show.color, hatch: true },
-    view !== 'director' && { label: 'À rappeler', color: CALLBACK_COLOR },
+    !byDay && { label: 'À rappeler', color: CALLBACK_COLOR },
     view === 'sales' && { label: 'Google Agenda', color: darkMode ? GOOGLE_COLOR_DARK : GOOGLE_COLOR },
-    view !== 'director' && { label: 'Absence', color: ABSENCE_COLOR, absence: true },
+    !byDay && { label: 'Absence', color: ABSENCE_COLOR, absence: true },
     { label: 'Honoré', mark: 'held' },
     { label: 'À qualifier', mark: 'to_qualify' },
+    byDay && { label: 'À relancer par moi', mark: 'mine' },
   ].filter(Boolean);
 
   return (
@@ -364,28 +407,28 @@ export default function InternalCalendar({ view = 'sales', C, darkMode = false, 
       {/* Barre d'outils */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button type="button" onClick={() => setMonday((m) => addDays(m, -7))} style={navBtn} aria-label="Semaine précédente" title="Semaine précédente">
+          <button type="button" onClick={() => step(-1)} style={navBtn} aria-label={byDay ? 'Jour précédent' : 'Semaine précédente'} title={byDay ? 'Jour précédent' : 'Semaine précédente'}>
             <ChevronLeft size={16} />
           </button>
-          <button type="button" onClick={() => setMonday(thisMonday)} style={{
+          <button type="button" onClick={() => setAnchor(byDay && [0, 6].includes(new Date(`${now.key}T12:00:00Z`).getUTCDay()) ? stepWorkday(now.key, 1) : todayAnchor)} style={{
             ...navBtn, width: 'auto', padding: '0 14px', fontSize: 12, fontWeight: 600,
-            background: monday === thisMonday ? (darkMode ? '#eef0f6' : NAVY) : 'transparent',
-            color: monday === thisMonday ? (darkMode ? NAVY : '#fff') : C.text,
-            borderColor: monday === thisMonday ? 'transparent' : C.border,
+            background: isCurrent ? (darkMode ? '#eef0f6' : NAVY) : 'transparent',
+            color: isCurrent ? (darkMode ? NAVY : '#fff') : C.text,
+            borderColor: isCurrent ? 'transparent' : C.border,
           }}>
             Aujourd'hui
           </button>
-          <button type="button" onClick={() => setMonday((m) => addDays(m, 7))} style={navBtn} aria-label="Semaine suivante" title="Semaine suivante">
+          <button type="button" onClick={() => step(1)} style={navBtn} aria-label={byDay ? 'Jour suivant' : 'Semaine suivante'} title={byDay ? 'Jour suivant' : 'Semaine suivante'}>
             <ChevronRight size={16} />
           </button>
-          <span style={{ fontSize: 14, fontWeight: 650, marginLeft: 6, whiteSpace: 'nowrap' }}>{fmtWeekLabel(weekDays(monday, days.length === 7))}</span>
+          <span style={{ fontSize: 14, fontWeight: 650, marginLeft: 6, whiteSpace: 'nowrap' }}>{title}</span>
           {loading && data && <LoaderCircle size={15} color={C.secondary} style={{ animation: 'icalSpin 0.9s linear infinite' }} />}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          {view === 'director' && (
+          {byDay && (
             <div style={{ display: 'flex', gap: 2, padding: 3, borderRadius: 9, background: C.subtle, border: `1px solid ${C.border}` }}>
-              <button type="button" onClick={() => setHandled('all')} style={segBtn(handled === 'all')}>Tous</button>
+              <button type="button" onClick={() => setHandled('all')} style={segBtn(handled === 'all')}>Tous <span style={{ opacity: 0.7 }}>{counts.setter + counts.direction}</span></button>
               <button type="button" onClick={() => setHandled('setter')} style={segBtn(handled === 'setter')} title="Rendez-vous posés par un setter, qui en assure le suivi">
                 {HANDLED.setter.label} <span style={{ opacity: 0.7 }}>{counts.setter}</span>
               </button>
@@ -413,102 +456,108 @@ export default function InternalCalendar({ view = 'sales', C, darkMode = false, 
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: fill ? 1 : undefined, border: `1px solid ${C.border}`, borderRadius: 12, background: C.bg, overflow: 'hidden', position: 'relative' }}>
-        {/* En-tête des jours */}
-        <div style={{ display: 'grid', gridTemplateColumns: cols, paddingRight: sbWidth, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-          <div />
-          {days.map((d) => {
-            const { dow, day } = fmtDayHead(d);
-            const today = d === now.key;
-            return (
-              <div key={d} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '9px 0', borderLeft: `1px solid ${C.border}` }}>
-                <span style={{
-                  fontSize: 12.5, padding: '4px 12px', borderRadius: 999, fontWeight: today ? 700 : 500,
-                  background: today ? (darkMode ? '#eef0f6' : NAVY) : 'transparent', color: today ? (darkMode ? NAVY : '#fff') : C.secondary,
-                }}>
-                  {dow} {day}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Bandeau « journée entière » : absences et événements Google sur la journée */}
-        {hasAllDay && (
-          <div style={{ display: 'grid', gridTemplateColumns: cols, paddingRight: sbWidth, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-            <div style={{ fontSize: 10, color: C.muted, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 8 }}>Journée</div>
-            {days.map((d) => (
-              <div key={d} style={{ borderLeft: `1px solid ${C.border}`, padding: 3, display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-                {allDay.get(d).map((ev) => {
-                  const tone = chipColors(eventColor(ev, darkMode), darkMode);
+        <div ref={scrollRef} style={{ overflow: 'auto', flex: fill ? 1 : undefined, maxHeight: fill ? undefined : 'calc(100vh - 260px)', minHeight: 0, position: 'relative' }}>
+          <div style={{ minWidth, position: 'relative' }}>
+            {/* En-têtes (jours ou commerciaux) et bandeau « journée entière », collés en haut au défilement */}
+            <div style={{ position: 'sticky', top: 0, zIndex: 60, background: stickyBg }}>
+              <div style={{ display: 'grid', gridTemplateColumns: cols, borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ position: 'sticky', left: 0, background: stickyBg, zIndex: 2 }} />
+                {columns.map((c) => {
+                  const today = !byDay && c.day === now.key;
                   return (
-                    <button key={ev.id} type="button" data-ical-chip onClick={(e) => openPopover(ev, e.currentTarget.getBoundingClientRect())} title={ev.title} style={{
-                      border: 'none', borderRadius: 6, padding: '3px 7px', textAlign: 'left', fontFamily: 'inherit', fontSize: 11.5, fontWeight: 600,
-                      background: ev.kind === 'absence' ? `${ABSENCE_HATCH}, ${tone.bg}` : tone.bg, color: tone.text, cursor: 'pointer',
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                    }}>
-                      {ev.title}
-                    </button>
+                    <div key={c.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: byDay ? '8px 6px' : '9px 0', borderLeft: `1px solid ${C.border}`, minWidth: 0 }}>
+                      <span style={{
+                        fontSize: byDay ? 13 : 12.5, padding: byDay ? 0 : '4px 12px', borderRadius: 999, fontWeight: today || byDay ? 650 : 500, maxWidth: '100%',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        background: today ? (darkMode ? '#eef0f6' : NAVY) : 'transparent', color: today ? (darkMode ? NAVY : '#fff') : (byDay ? C.text : C.secondary),
+                      }}>
+                        {c.label}
+                      </span>
+                      {c.sub && <span style={{ fontSize: 11, color: C.secondary, marginTop: 2, whiteSpace: 'nowrap' }}>{c.sub}</span>}
+                    </div>
                   );
                 })}
               </div>
-            ))}
-          </div>
-        )}
-
-        {/* Grille horaire */}
-        <div ref={scrollRef} style={{ overflowY: 'auto', overflowX: 'hidden', flex: fill ? 1 : undefined, maxHeight: fill ? undefined : 'calc(100vh - 260px)', minHeight: 0, position: 'relative' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: cols, height: 24 * HOUR_HEIGHT, position: 'relative' }}>
-            <div style={{ position: 'relative' }}>
-              {Array.from({ length: 24 }, (_, h) => h > 0 && (
-                <div key={h} style={{ position: 'absolute', top: h * HOUR_HEIGHT - 7, right: 8, fontSize: 10.5, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>
-                  {String(h).padStart(2, '0')}:00
+              {hasAllDay && (
+                <div style={{ display: 'grid', gridTemplateColumns: cols, borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ fontSize: 10, color: C.muted, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 8, position: 'sticky', left: 0, background: stickyBg }}>Journée</div>
+                  {columns.map((c) => (
+                    <div key={c.key} style={{ borderLeft: `1px solid ${C.border}`, padding: 3, display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+                      {c.allDay.map((ev) => {
+                        const tone = chipColors(eventColor(ev, darkMode), darkMode);
+                        return (
+                          <button key={ev.id} type="button" data-ical-chip onClick={(e) => openPopover(ev, e.currentTarget.getBoundingClientRect())} title={ev.title} style={{
+                            border: 'none', borderRadius: 6, padding: '3px 7px', textAlign: 'left', fontFamily: 'inherit', fontSize: 11.5, fontWeight: 600,
+                            background: ev.kind === 'absence' ? `${ABSENCE_HATCH}, ${tone.bg}` : tone.bg, color: tone.text, cursor: 'pointer',
+                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                          }}>
+                            {ev.title}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-            {days.map((d) => {
-              const absences = absencesByDay.get(d);
-              return (
-                <div key={d} style={{ position: 'relative', borderLeft: `1px solid ${C.border}`, background: d === now.key ? (darkMode ? 'rgba(124,138,219,0.04)' : 'rgba(18,27,53,0.018)') : 'transparent' }}>
+
+            {/* Grille horaire */}
+            <div style={{ display: 'grid', gridTemplateColumns: cols, height: 24 * HOUR_HEIGHT, position: 'relative' }}>
+              <div style={{ position: 'sticky', left: 0, zIndex: 45, background: stickyBg }}>
+                {Array.from({ length: 24 }, (_, h) => h > 0 && (
+                  <div key={h} style={{ position: 'absolute', top: h * HOUR_HEIGHT - 7, right: 8, fontSize: 10.5, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>
+                    {String(h).padStart(2, '0')}:00
+                  </div>
+                ))}
+              </div>
+              {columns.map((c) => (
+                <div key={c.key} style={{ position: 'relative', borderLeft: `1px solid ${C.border}`, background: !byDay && c.day === now.key ? (darkMode ? 'rgba(124,138,219,0.04)' : 'rgba(18,27,53,0.018)') : 'transparent' }}>
                   {Array.from({ length: 24 }, (_, h) => (
                     <div key={h} style={{ position: 'absolute', left: 0, right: 0, top: h * HOUR_HEIGHT, borderTop: `1px solid ${C.border}`, opacity: h === 0 ? 0 : 0.8, pointerEvents: 'none' }} />
                   ))}
-                  {absences.map((a) => {
+                  {c.absences.map((a) => {
                     const from = a.period === 'pm' ? 13 : 0;
                     const to = a.period === 'am' ? 13 : 24;
                     return <div key={a.id} style={{ position: 'absolute', left: 0, right: 0, top: from * HOUR_HEIGHT, height: (to - from) * HOUR_HEIGHT, background: ABSENCE_HATCH, pointerEvents: 'none' }} />;
                   })}
-                  {positioned.get(d).map((ev) => (
+                  {c.items.map((ev) => (
                     <Chip key={ev.id} ev={ev} view={view} dark={darkMode} onOpen={openPopover}
                       height={((ev.segEnd - ev.segStart) / 60) * HOUR_HEIGHT - 2} />
                   ))}
                 </div>
-              );
-            })}
+              ))}
+              {!columns.length && !loading && (
+                <div style={{ position: 'absolute', left: RULER, right: 0, top: 9 * HOUR_HEIGHT, textAlign: 'center', fontSize: 13, color: C.secondary }}>
+                  Aucun rendez-vous ce jour-là.
+                </div>
+              )}
 
-            {/* Heure courante */}
-            {days.includes(now.key) && now.minutes < DAY_MINUTES && (() => {
-              const idx = days.indexOf(now.key);
-              const y = (now.minutes / 60) * HOUR_HEIGHT;
-              const left = `calc(${RULER}px + (100% - ${RULER}px) * ${idx} / ${days.length})`;
-              return (
-                <>
-                  <div style={{ position: 'absolute', zIndex: 40, pointerEvents: 'none', top: y, left, width: `calc((100% - ${RULER}px) / ${days.length})`, borderTop: `2px solid ${darkMode ? '#eef0f6' : NAVY}` }} />
-                  <div style={{ position: 'absolute', zIndex: 41, pointerEvents: 'none', top: y, left, transform: 'translate(-100%, -50%)', background: darkMode ? '#eef0f6' : NAVY, color: darkMode ? NAVY : '#fff', fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 999, fontVariantNumeric: 'tabular-nums' }}>
-                    {now.iso.slice(11, 16)}
-                  </div>
-                </>
-              );
-            })()}
+              {/* Heure courante */}
+              {showNow && now.minutes < DAY_MINUTES && (() => {
+                const y = (now.minutes / 60) * HOUR_HEIGHT;
+                const n = Math.max(1, columns.length);
+                const left = byDay ? `${RULER}px` : `calc(${RULER}px + (100% - ${RULER}px) * ${nowCol} / ${n})`;
+                const width = byDay ? `calc(100% - ${RULER}px)` : `calc((100% - ${RULER}px) / ${n})`;
+                return (
+                  <>
+                    <div style={{ position: 'absolute', zIndex: 40, pointerEvents: 'none', top: y, left, width, borderTop: `2px solid ${darkMode ? '#eef0f6' : NAVY}` }} />
+                    <div style={{ position: 'absolute', zIndex: 46, pointerEvents: 'none', top: y, left, transform: 'translate(-100%, -50%)', background: darkMode ? '#eef0f6' : NAVY, color: darkMode ? NAVY : '#fff', fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 999, fontVariantNumeric: 'tabular-nums' }}>
+                      {now.iso.slice(11, 16)}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
           </div>
         </div>
 
         {loading && !data && (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13, color: C.secondary, background: darkMode ? 'rgba(30,31,40,0.6)' : 'rgba(255,255,255,0.6)' }}>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13, color: C.secondary, background: darkMode ? 'rgba(30,31,40,0.6)' : 'rgba(255,255,255,0.6)', zIndex: 70 }}>
             <LoaderCircle size={16} style={{ animation: 'icalSpin 0.9s linear infinite' }} /> Chargement du calendrier…
           </div>
         )}
         {error && !loading && (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, fontSize: 13, color: C.secondary, background: darkMode ? 'rgba(30,31,40,0.85)' : 'rgba(255,255,255,0.85)' }}>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, fontSize: 13, color: C.secondary, background: darkMode ? 'rgba(30,31,40,0.85)' : 'rgba(255,255,255,0.85)', zIndex: 70 }}>
             Impossible de charger le calendrier.
             <button type="button" onClick={() => load()} style={{ ...navBtn, width: 'auto', padding: '0 14px', fontSize: 12.5, fontWeight: 600 }}>Réessayer</button>
           </div>
@@ -519,10 +568,10 @@ export default function InternalCalendar({ view = 'sales', C, darkMode = false, 
           {legend.map((l) => {
             if (l.mark) {
               return (
-                <span key={l.label} title={OUTCOME[l.mark].hint} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  {l.mark === 'held'
-                    ? <CheckCircle2 size={12} color={OUTCOME.held.color} />
-                    : <span style={{ width: 7, height: 7, borderRadius: 4, background: OUTCOME.to_qualify.color }} />}
+                <span key={l.label} title={l.mark === 'mine' ? 'Aucun setter n\'a posé ce rendez-vous' : OUTCOME[l.mark].hint} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  {l.mark === 'held' && <CheckCircle2 size={12} color={OUTCOME.held.color} />}
+                  {l.mark === 'to_qualify' && <span style={{ width: 7, height: 7, borderRadius: 4, background: OUTCOME.to_qualify.color }} />}
+                  {l.mark === 'mine' && <MineTag dark={darkMode} />}
                   {l.label}
                 </span>
               );
