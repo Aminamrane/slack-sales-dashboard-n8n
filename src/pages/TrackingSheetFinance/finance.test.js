@@ -23,7 +23,20 @@ import {
   scopedCredit, entityCredit, scopedOverdueToDate,
   scopedOverdueCurrent, scopedOverdueCum, computeKpis, creanceAgeMonths,
   isExitCandidate,
+  financeAutomationFilter,
 } from './constants.js';
+
+test('filtres Finances : Owner seul, Opti’Lex seul et les deux ne se mélangent pas', () => {
+  assert.equal(financeAutomationFilter('Partiellement Owner'), 'finance:auto_owner');
+  assert.equal(financeAutomationFilter('Partiellement Optilex'), 'finance:auto_optilex');
+  assert.equal(financeAutomationFilter('Partiellement Optilex Non souhaité Owner'), 'finance:auto_optilex');
+  assert.equal(financeAutomationFilter('OUI'), 'finance:auto_both');
+  assert.equal(financeAutomationFilter('  partiellement owner  '), 'finance:auto_owner');
+  assert.equal(financeAutomationFilter('oui'), 'finance:auto_both');
+  for (const value of ['NON', 'Non souhaitais', 'En attend', null, undefined, '', 'inconnu']) {
+    assert.equal(financeAutomationFilter(value), null, String(value));
+  }
+});
 
 const row = (o = {}) => ({
   overdue_owner_current_month: 0,

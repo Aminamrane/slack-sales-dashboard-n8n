@@ -271,6 +271,22 @@ export const autoDebitPastilles = (value) => {
   }
 };
 
+// Catégories exclusives, indépendantes de la vision des montants affichés.
+// Réutiliser les pastilles pour inclure les variantes historiques Opti'Lex.
+export const FINANCE_AUTOMATION_FILTERS = [
+  { value: 'finance:auto_owner', label: 'Automatisés Owner', hint: 'Automatisés uniquement chez Owner' },
+  { value: 'finance:auto_optilex', label: 'Automatisés OPTI’LEX', hint: 'Automatisés uniquement chez OPTI’LEX' },
+  { value: 'finance:auto_both', label: 'Automatisés Owner OPTI’LEX', hint: 'Automatisés chez Owner et OPTI’LEX' },
+];
+
+export const financeAutomationFilter = (value) => {
+  const { owner, optilex } = autoDebitPastilles(value);
+  if (owner === 'green' && optilex === 'green') return 'finance:auto_both';
+  if (owner === 'green' && optilex === 'red') return 'finance:auto_owner';
+  if (owner === 'red' && optilex === 'green') return 'finance:auto_optilex';
+  return null;
+};
+
 // ── Vision Owner / Opti'lex / Global (phase 2-3) ─────────────────────────
 //
 // Champs backend par entité — source UNIQUE du mapping vision → colonnes.

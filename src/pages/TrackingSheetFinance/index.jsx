@@ -76,6 +76,8 @@ import {
   currentPeriod,
   parseDateFR,
   autoDebitPastilles,
+  FINANCE_AUTOMATION_FILTERS,
+  financeAutomationFilter,
   TERMINATED_BOARD_ETATS,
   scopedOverdueCurrent,
   scopedOverdueCum,
@@ -728,6 +730,8 @@ export default function TrackingSheetFinance() {
       if (tableFilters.has('overdue_past_only') && overdueCurrent === 0 && overdueCumul > 0) return true;
       if (tableFilters.has('payment_promise') && r.client?.payment_promise) return true;
       if (tableFilters.has('loss') && r.client?.is_loss) return true;
+      const automationFilter = financeAutomationFilter(r.auto_debit);
+      if (automationFilter && tableFilters.has(automationFilter)) return true;
       // Filtres par responsable (clés « resp:<id> », « resp:none »).
       const respId = r.client?.responsible_user_id || null;
       if (respId && tableFilters.has(`resp:${respId}`)) return true;
@@ -2614,6 +2618,13 @@ function FilterDropdown({
     return q ? meteoOptions.filter((o) => o.label.toLowerCase().includes(q)) : meteoOptions;
   }, [search, meteoOptions]);
 
+  const filteredFinances = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return !q || 'finances'.includes(q)
+      ? FINANCE_AUTOMATION_FILTERS
+      : FINANCE_AUTOMATION_FILTERS.filter((o) => o.label.toLowerCase().includes(q));
+  }, [search]);
+
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-flex' }}>
       <button
@@ -2688,9 +2699,42 @@ function FilterDropdown({
 
           {/* Liste options */}
           <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
-          {filtered.length === 0 && (
+          {filtered.length === 0 && filteredFinances.length === 0 && (
             <div style={{ padding: '12px 14px', fontSize: 13, color: N.textMuted, textAlign: 'center' }}>
               Aucun filtre trouvé
+            </div>
+          )}
+          {filteredFinances.length > 0 && (
+            <div role="group" aria-label="Finances" style={{ marginBottom: 4, paddingBottom: 4, borderBottom: `1px solid ${N.borderSoft}` }}>
+              <div style={{ padding: '6px 14px 2px', fontSize: 10.5, fontWeight: 600, color: N.textFaint, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Finances
+              </div>
+              {filteredFinances.map((opt) => {
+                const isActive = values?.has(opt.value);
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    title={opt.hint}
+                    aria-pressed={!!isActive}
+                    onClick={() => onToggle(opt.value)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      width: '100%', padding: '10px 14px', border: 'none',
+                      background: isActive ? N.sideHover : 'transparent',
+                      borderRadius: 6, fontSize: 14, color: N.text,
+                      textAlign: 'left', cursor: 'pointer',
+                      fontWeight: isActive ? 600 : 400, fontFamily: 'inherit',
+                    }}
+                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = N.sideHover; }}
+                    onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <CheckCircle size={18} strokeWidth={1.8} style={{ flexShrink: 0, color: N.textMuted }} />
+                    <span style={{ flex: 1 }}>{opt.label}</span>
+                    {isActive && <span style={{ color: N.accent, fontSize: 14 }}>✓</span>}
+                  </button>
+                );
+              })}
             </div>
           )}
           {filtered.map((opt) => {
