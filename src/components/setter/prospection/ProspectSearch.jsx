@@ -1,6 +1,7 @@
 // « Trouver des contacts » : le stock de l'outil de scraping, interrogé avec les seuls critères que son
 // API accepte (code NAF, département). Le total affiché est celui de l'API, exact ; la pagination suit
-// son curseur ; « Créer une liste » réserve exactement ce stock-là.
+// son curseur ; « Créer une liste » réserve exactement ce stock-là. `nafOnly` (sheet des commerciaux,
+// demande dev 06/10/2026) : la recherche ne demande que le code NAF, partout en France.
 import { useEffect, useRef, useState } from 'react';
 import { MapPin, Landmark, Loader2, ListPlus, Radar } from 'lucide-react';
 import { prospectionApi, errorMessage } from './prospectionApi';
@@ -16,10 +17,17 @@ const EXAMPLES = [
   { activity: { code: '69.20Z', label: 'Activités comptables' }, departement: null, title: 'Activités comptables · toute la France' },
 ];
 
+// Commerciaux : le code NAF seul (« demande juste code NAF »).
+const NAF_EXAMPLES = [
+  { activity: { code: '43.22A', label: "Travaux d'installation d'eau et de gaz en tous locaux" }, departement: null, title: '43.22A · Plomberie' },
+  { activity: { code: '56.10A', label: 'Restauration traditionnelle' }, departement: null, title: '56.10A · Restauration traditionnelle' },
+  { activity: { code: '69.20Z', label: 'Activités comptables' }, departement: null, title: '69.20Z · Activités comptables' },
+];
+
 const activityLabel = (a) => `${a.code} · ${a.label}`;
 const departementLabel = (d) => `${d.name} (${d.code})`;
 
-export default function ProspectSearch({ C, darkMode, onToast, onOpenList }) {
+export default function ProspectSearch({ C, darkMode, onToast, onOpenList, nafOnly = false }) {
   const [meta, setMeta] = useState(null);
   const [stockSize, setStockSize] = useState(null);
   const [criteria, setCriteria] = useState({ activity: null, departement: null });
@@ -82,8 +90,8 @@ export default function ProspectSearch({ C, darkMode, onToast, onOpenList }) {
       <ProspectionStyles />
       <Card C={C} darkMode={darkMode} style={{ padding: '6px 20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 4px' }}>
-          <CriteriaInput C={C} onPick={onPick} autoFocus
-            placeholder="Activité, code NAF, département ou ville (ex. plombier, 43.22A, Rhône, Lyon)" />
+          <CriteriaInput C={C} onPick={onPick} autoFocus kinds={nafOnly ? ['activities'] : undefined}
+            placeholder={nafOnly ? 'Code NAF (ex. 43.22A)' : 'Activité, code NAF, département ou ville (ex. plombier, 43.22A, Rhône, Lyon)'} />
           {loading && <Loader2 size={18} color={C.muted} style={{ animation: 'prospSpin 1s linear infinite', flexShrink: 0 }} />}
         </div>
 
@@ -93,9 +101,9 @@ export default function ProspectSearch({ C, darkMode, onToast, onOpenList }) {
             {criteria.activity
               ? <Chip C={C} darkMode={darkMode} label={activityLabel(criteria.activity)} onRemove={() => setCriterion('activity', null)} />
               : <MutedChip C={C} label="Toutes activités" />}
-            {criteria.departement
+            {!nafOnly && (criteria.departement
               ? <Chip C={C} darkMode={darkMode} label={departementLabel(criteria.departement)} onRemove={() => setCriterion('departement', null)} />
-              : <MutedChip C={C} label="Toute la France" />}
+              : <MutedChip C={C} label="Toute la France" />)}
           </div>
         )}
 
@@ -130,9 +138,9 @@ export default function ProspectSearch({ C, darkMode, onToast, onOpenList }) {
 
       {!hasCriteria && (
         <div style={{ color: C.muted, fontSize: 14, lineHeight: 1.7 }}>
-          Choisissez une activité (code NAF), un département, ou les deux : ce sont les critères de l'outil de scraping. Par exemple :
+          {nafOnly ? 'Saisissez un code NAF. Par exemple :' : "Choisissez une activité (code NAF), un département, ou les deux : ce sont les critères de l'outil de scraping. Par exemple :"}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
-            {EXAMPLES.map((ex) => (
+            {(nafOnly ? NAF_EXAMPLES : EXAMPLES).map((ex) => (
               <button key={ex.title} type="button" onClick={() => load({ activity: ex.activity, departement: ex.departement }, [null], 0)} style={{
                 border: `1px solid ${C.border}`, background: col.bg, color: col.text, borderRadius: 999, padding: '6px 12px',
                 fontSize: 13, fontFamily: 'inherit', cursor: 'pointer',
@@ -256,7 +264,7 @@ function CreateListModal({ C, darkMode, criteria, total, max, onClose, onCreate 
             style={{ ...inputStyle(C), width: 160, marginTop: 6, display: 'block' }} />
         </label>
         <p style={{ margin: 0, fontSize: 13, color: C.muted, lineHeight: 1.55 }}>
-          Les entreprises sont prises dans le stock avec ces mêmes critères et vous sont réservées : aucun autre setter ne les
+          Les entreprises sont prises dans le stock avec ces mêmes critères et vous sont réservées : personne d'autre ne les
           recevra. {fmtInt(max)} au plus par liste. Si d'autres réservations passent entre-temps, la liste peut en contenir un peu moins.
         </p>
         {error && <div role="alert" style={{ color: '#b42318', fontSize: 13 }}>{error}</div>}

@@ -13,7 +13,8 @@ import React, { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
-import { CalendarCheck2, ChevronRight, Building2, UserRoundCheck, ArrowRight, PhoneCall } from 'lucide-react';
+import { CalendarCheck2, ChevronRight, Building2, UserRoundCheck, ArrowRight, PhoneCall, UserSearch, ListChecks } from 'lucide-react';
+import SalesProspection from "../components/setter/prospection/SalesProspection.jsx";
 import R1QualificationDialog from '../components/salesJourney/R1QualificationDialog';
 import QualificationDialog from '../components/salesJourney/QualificationDialog';
 import ContactQualificationDialog from '../components/salesJourney/ContactQualificationDialog';
@@ -3119,6 +3120,15 @@ export default function TrackingSheet() {
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
               ) },
               { key: 'calendar', label: 'Calendrier', iconSrc: iconCalendrier, accent: '#3b82f6' },
+              // Prospection (06/10/2026) : l'outil des setters, sur la sheet du commercial lui-même seulement.
+              ...(isAdminView ? [] : [
+                { key: 'prospect_search', label: 'Trouver des contacts', accent: C.accent, iconNode: (active) => (
+                  <UserSearch size={19} strokeWidth={2} color={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} />
+                ) },
+                { key: 'prospect_lists', label: 'Mes listes', accent: C.accent, iconNode: (active) => (
+                  <ListChecks size={19} strokeWidth={2} color={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} />
+                ) },
+              ]),
               { key: 'notifications', label: 'Notifications', iconSrc: iconNotif, accent: '#ef4444', iconSize: 55, badgeCount: (() => {
                 const meetingKeys = [
                   ...leads.filter(l => l.status === 'r1' && toDateOnly(l.r1) === TODAY).map(l => `r1-${l.id}-${TODAY}`),
@@ -3461,6 +3471,14 @@ export default function TrackingSheet() {
         )}
 
         {/* ════ VIEW: BILAN IA ════════════════════════════════════════════ */}
+        {/* ════ VIEW: PROSPECTION (06/10/2026) ══════════════════════════════
+            « Trouver des contacts » et « Mes listes », comme chez les setters ; l'export crée les leads
+            dans les Nouveaux leads du commercial. */}
+        {!isAdminView && (sidebarView === 'prospect_search' || sidebarView === 'prospect_lists') && (
+          <SalesProspection view={sidebarView} C={C} darkMode={darkMode} onNavigate={setSidebarView}
+            onOpenLeads={() => { setSidebarView('leads'); setActiveTab(Math.max(0, CATEGORIES.findIndex(c => c.key === 'new'))); refreshData().catch(() => {}); }} />
+        )}
+
         {sidebarView === 'ai_bilan' && (
           <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
             <MyWeeklyBilan name={currentUser?.name} avatarUrl={currentUser?.avatar_url} team={currentUser?.team} />
