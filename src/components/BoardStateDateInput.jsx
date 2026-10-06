@@ -7,14 +7,12 @@ import { frenchDate } from '../utils/parisDates';
 export default function BoardStateDateInput({ value, onChange, label, style }) {
   const [draft, setDraft] = useState(value || '');
   const draftRef = useRef(value || '');
-  return <span className="board-state-date" onBlur={event => {
-    if (event.currentTarget.contains(event.relatedTarget)) return;
-    const input = event.currentTarget.querySelector('input');
-    if (input && !input.validity.valid) { input.reportValidity(); return; }
+  const commit = () => {
     const next = draftRef.current || null;
     if (next !== (value || null)) onChange(next);
-  }}>
-    <FrenchDateInput aria-label={label} value={draft} style={style}
+  };
+  return <span className="board-state-date">
+    <FrenchDateInput floating onCommit={commit} aria-label={label} value={draft} style={style}
       onChange={next => { draftRef.current = next; setDraft(next); }}
       onKeyDown={event => {
         if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); }
