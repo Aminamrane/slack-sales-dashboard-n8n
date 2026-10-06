@@ -20,8 +20,10 @@ const dateLabel = (day, opts = {}) => new Date(`${day}T12:00:00Z`).toLocaleDateS
 // « Placer un R1 » et confie l'enregistrement à `onBook(action)`, qui crée le lead avec le rendez-vous.
 // Agenda unique (dev 06/10/2026) : pour un R1, le setter ne choisit plus le commercial. Il voit les créneaux où au
 // moins un sales est libre (sans nom) et le serveur attribue le RDV (préférence de secteur, puis équité).
-export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onSaved, dark = false, browseOnly = false, asSetter = null, prospect = null, onBook = null }) {
-  const [outcome, setOutcome] = useState(browseOnly || onBook ? 'r1' : '');
+// `initialOutcome` : ouverture directe sur « Placer un R1 / R2 » (reprise d'un lead de Seconde chance) ;
+// `lockSales` : un R2 repris se repose avec son commercial, seul agenda proposé.
+export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onSaved, dark = false, browseOnly = false, asSetter = null, prospect = null, onBook = null, initialOutcome = null, lockSales = null }) {
+  const [outcome, setOutcome] = useState(initialOutcome || (browseOnly || onBook ? 'r1' : ''));
   const [slot, setSlot] = useState(null), [note, setNote] = useState(''), [email, setEmail] = useState(lead?.email || '');
   const [callback, setCallback] = useState(''), [targetCalendar, setTargetCalendar] = useState('sales');
   const [data, setData] = useState(null), [loading, setLoading] = useState(false), [reload, setReload] = useState(0);
@@ -38,6 +40,7 @@ export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onS
     const params = new URLSearchParams({ kind: outcome });
     if (single && onBook && prospect?.itemId) return `/api/v1/prospection/items/${prospect.itemId}/agenda`;
     if (!browseOnly && !onBook && lead?.id) params.set('lead_id', String(lead.id));
+    if (!single && lockSales) params.set('sales_email', lockSales);
     if (asSetter) params.set('as_setter', asSetter);
     return `/api/v1/tracking/setter/${single ? 'agenda' : 'availability'}?${params}`;
   };
@@ -101,11 +104,11 @@ export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onS
         {!outcome && <><h3 className="stj-question">Quel est le résultat de l’appel ?</h3><div className="sj-options stj-outcomes">{outcomes.map(([value, title, desc, Icon]) => <button key={value} onClick={() => selectOutcome(value)}><Icon size={23}/><span><strong>{title}</strong><small>{desc}</small></span><ChevronRight size={17}/></button>)}</div></>}
         {outcome && <>
           {browseOnly ? <div className="sj-attendance" aria-label="Type de rendez-vous">{['r1', 'r2'].map(k => <button key={k} disabled={busy} aria-pressed={outcome === k} onClick={() => selectOutcome(k)}>{k.toUpperCase()} · {k === 'r1' ? 'Premier rendez-vous' : 'Audit'}</button>)}</div> : <div className="stj-step">{!onBook && <button disabled={busy} onClick={() => selectOutcome('')}><ArrowLeft size={16}/> Résultat de l’appel</button>}<strong>{outcomes.find(o => o[0] === outcome)?.[1]}</strong></div>}
-          {booking && !single && !browseOnly && <div className="sj-attendance stj-booking-mode" aria-label="Mode de réservation"><button disabled={busy} aria-pressed={bookingMode === 'available'} onClick={() => {setBookingMode('available');setError('');}}><CalendarDays size={18}/> Créneaux disponibles</button><button disabled={busy} aria-pressed={bookingMode === 'manual'} onClick={() => {setBookingMode('manual');setError('');}}><Clock3 size={18}/> Forcer un rendez-vous</button></div>}
+          {booking && !single && !browseOnly && !lockSales && <div className="sj-attendance stj-booking-mode" aria-label="Mode de réservation"><button disabled={busy} aria-pressed={bookingMode === 'available'} onClick={() => {setBookingMode('available');setError('');}}><CalendarDays size={18}/> Créneaux disponibles</button><button disabled={busy} aria-pressed={bookingMode === 'manual'} onClick={() => {setBookingMode('manual');setError('');}}><Clock3 size={18}/> Forcer un rendez-vous</button></div>}
           {booking && bookingMode === 'manual' && !browseOnly && <div className="stj-manual"><p className="stj-muted">Avec l’accord du sales, placez le rendez-vous à l’heure convenue, même hors de ses disponibilités.</p>{<label className="stj-sales-filter">Commercial<select aria-label="Commercial pour le rendez-vous manuel" disabled={busy} value={manualEmail} onChange={e => setManualSales(e.target.value)}><option value="">Choisir un commercial</option>{manualOptions.map(s => <option key={s.email} value={s.email}>{s.name}</option>)}</select></label>}<ParisDateTimeInput label="Date et heure convenues" value={manualDate} onChange={setManualDate} disabled={busy}/></div>}
           {booking && bookingMode === 'available' && <div className="stj-calendar">
             <div className="stj-calendar-bar"><div><CalendarDays size={17}/><strong>Créneaux disponibles</strong><span>Heure de Paris</span></div><button aria-label="Actualiser les disponibilités" disabled={loading || busy} onClick={() => setReload(v => v + 1)}><RefreshCw size={16} className={loading ? 'stj-spin' : ''}/></button></div>
-            {!single && data?.sales?.length > 1 && <label className="stj-sales-filter">Commercial<select disabled={busy} value={salesFilter} onChange={e => { setSalesFilter(e.target.value); setSlot(null); setDay(''); setDayPage(0); }}>{<option value="">Tous mes commerciaux</option>}{data.sales.map(s => <option key={s.email} value={s.email}>{s.full_name || s.email}</option>)}</select></label>}
+            {!single && !lockSales && data?.sales?.length > 1 && <label className="stj-sales-filter">Commercial<select disabled={busy} value={salesFilter} onChange={e => { setSalesFilter(e.target.value); setSlot(null); setDay(''); setDayPage(0); }}>{<option value="">Tous mes commerciaux</option>}{data.sales.map(s => <option key={s.email} value={s.email}>{s.full_name || s.email}</option>)}</select></label>}
             {loading && <div className="stj-empty" role="status"><LoaderCircle className="stj-spin" size={22}/> Consultation des agendas…</div>}
             {!loading && !single && data?.sales?.length === 0 && <p className="stj-empty">Aucun commercial rattaché à votre compte.</p>}
             {!loading && single && data && !days.length && <p className="stj-empty">Aucun créneau libre sur les 6 prochaines semaines.</p>}
