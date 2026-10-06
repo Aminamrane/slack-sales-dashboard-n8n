@@ -3,7 +3,7 @@
 // « Setters » dans le dashboard (section Acquisition, demande dev 05/10/2026) : RDV posés par les setters,
 // via le CRM ou leur lien webinaire, et clients amenés au mois de signature. Même gabarit que
 // CeoSmallLeadsView : sidebar CEO filtrée par rôle + navbar, page SettersStats.
-// Accès : CEO et admin (onglet), l'API /ceo-dashboard garde sa propre porte.
+// Accès : CEO, admin et Gaylord (acquisition_director, 06/10) ; l'API garde sa propre porte.
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -15,7 +15,7 @@ import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo", "acquisition_director"]);
 
 export default function CeoSettersView() {
   const navigate = useNavigate();
