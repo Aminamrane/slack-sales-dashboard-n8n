@@ -8,10 +8,11 @@
 // pour ceo/acquisition_director (isAdmin=role==='admin' côté composant).
 
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import { navigateBackToDashboard } from "../utils/dashboardNavigation";
 import LeadAssignmentLive from "./LeadAssignmentLive.jsx";
+import SetterAutoAssignMonitor from "../components/SetterAutoAssignMonitor.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
@@ -21,6 +22,9 @@ const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "acquisition_director", "he
 
 export default function CeoAutoAssignView() {
   const navigate = useNavigate();
+  // Deux monitorings (06/10/2026) : les leads ads (auto-affectation historique) et les RDV posés par les setters.
+  const [params, setParams] = useSearchParams();
+  const view = params.get("vue") === "setters" ? "setters" : "ads";
 
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
   useEffect(() => {
@@ -144,7 +148,22 @@ export default function CeoAutoAssignView() {
 
       <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 64 }}>
         <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
-        <LeadAssignmentLive embed />
+        <div style={{ padding: "18px 6px 0 6px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: C.text, letterSpacing: "-0.02em", margin: 0 }}>Auto-affectation</h1>
+          <div role="tablist" aria-label="Monitoring" style={{ display: "inline-flex", padding: 3, gap: 3, borderRadius: 10, background: darkMode ? "rgba(255,255,255,0.05)" : "#eceef2" }}>
+            {[["ads", "Leads ads"], ["setters", "RDV setters"]].map(([key, label]) => (
+              <button key={key} type="button" role="tab" aria-selected={view === key}
+                onClick={() => setParams(key === "setters" ? { vue: "setters" } : {}, { replace: true })}
+                style={{ padding: "7px 14px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer",
+                  background: view === key ? (darkMode ? "#2a2b36" : "#ffffff") : "transparent",
+                  color: view === key ? C.text : C.muted,
+                  boxShadow: view === key && !darkMode ? "0 1px 2px rgba(16,24,40,0.08)" : "none", transition: "all .15s ease" }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {view === "setters" ? <div style={{ padding: "14px 0 0" }}><SetterAutoAssignMonitor darkMode={darkMode} /></div> : <LeadAssignmentLive embed />}
       </div>
     </div>
   );
