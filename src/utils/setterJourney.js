@@ -37,3 +37,17 @@ export function setterAction({ lead, outcome, slot, note = '', email = '', callb
     email: mail && mail.toLowerCase() !== (lead.email || '').trim().toLowerCase() ? mail : undefined,
   };
 }
+
+// R1 de l'agenda unique (06/10/2026) : pas de commercial dans la requête, le serveur l'attribue.
+export function singleBookingAction({ lead, slot, note = '', email = '', prospect = false }) {
+  if (!slot?.date || !slot.time) throw new Error('Choisissez une date et une heure.');
+  if (!validParisAppointment(`${slot.date}T${slot.time}`)) throw new Error('Choisissez une date et une heure valides en heure de Paris.');
+  const mail = email.trim();
+  if (mail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) throw new Error('Vérifiez l’adresse email du prospect.');
+  const body = { r1_date: `${slot.date}T${slot.time}`, notes: note.trim() || undefined };
+  if (prospect) return { single: true, body, email: mail || undefined };
+  return {
+    single: true, path: `/api/v1/tracking/setter/leads/${lead.id}/book-r1`, body,
+    email: mail && mail.toLowerCase() !== (lead.email || '').trim().toLowerCase() ? mail : undefined,
+  };
+}

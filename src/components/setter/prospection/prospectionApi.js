@@ -39,6 +39,8 @@ export const prospectionApi = {
   exportCrm: (id, itemIds = null) => apiClient.post(`${BASE}/lists/${id}/export-crm`, { item_ids: itemIds }),
   // R1 pris depuis la liste : `body` = celui du parcours setter (r1_date, target_sales_email, notes, target_calendar).
   placeR1: (itemId, body, email) => apiClient.post(`${BASE}/items/${itemId}/place-r1`, { ...body, email: email || null }),
+  // R1 de l'agenda unique : le serveur attribue le commercial (préférence de secteur, puis équité).
+  bookR1: (itemId, body, email) => apiClient.post(`${BASE}/items/${itemId}/book-r1`, { ...body, email: email || null }),
   poolStats: ({ departement, codeNaf }) => apiClient.get(`${BASE}/pool-stats${query({ departement, code_naf: codeNaf })}`),
   pappersSearches: () => apiClient.get(`${BASE}/pappers-searches`),
   launchPappers: (body) => apiClient.post(`${BASE}/pappers-searches`, body),

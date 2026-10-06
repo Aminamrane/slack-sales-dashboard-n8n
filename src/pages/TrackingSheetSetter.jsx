@@ -8,6 +8,7 @@ import apiClient from "../services/apiClient";
 import { supabase } from "../lib/supabaseClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import { leadAvatar } from "../utils/leadAvatar";
+import { originDisplay } from "../utils/sectors";
 import LeadsManagement from "./LeadsManagement.jsx";
 // ── Setter modales (Option B duplication intégrale TrackingSheet) ──────────
 import SetterJourneyDialog from "../components/setter/SetterJourneyDialog.jsx";
@@ -1477,7 +1478,7 @@ export default function TrackingSheetSetter() {
     const dx = (destRect.left + destRect.width / 2) - (sourceRect.left + sourceRect.width / 2);
     const dy = (destRect.top + destRect.height / 2) - (sourceRect.top + sourceRect.height / 2);
     setFlyingCard({
-      lead: { full_name: lead.full_name, origin: lead.origin },
+      lead: { full_name: lead.full_name, origin: lead.origin, cc_sector: lead.cc_sector },
       sourceRect: { left: sourceRect.left, top: sourceRect.top, width: sourceRect.width, height: sourceRect.height },
       dx, dy,
       catColor: CATEGORIES[destCatIdx].color,
@@ -2470,7 +2471,7 @@ export default function TrackingSheetSetter() {
               color: (ORIGIN_COLORS[flyingCard.lead.origin] || DEFAULT_ORIGIN).text,
               flexShrink: 0,
             }}>
-              {flyingCard.lead.origin}
+              {originDisplay(flyingCard.lead.origin, flyingCard.lead.cc_sector)}
             </span>
           </div>
           {/* Expanded: subtle content placeholder lines */}
@@ -5173,7 +5174,7 @@ export default function TrackingSheetSetter() {
                           background: origin.bg, color: origin.text,
                           flexShrink: 0,
                         }}>
-                          {lead.origin}
+                          {originDisplay(lead.origin, lead.cc_sector)}
                         </span>
                       )}
 
@@ -5927,7 +5928,7 @@ export default function TrackingSheetSetter() {
                     padding: '1px 7px', borderRadius: 50, fontSize: 10, fontWeight: 600,
                     background: origin.bg, color: origin.text, marginBottom: 3, alignSelf: 'flex-start',
                   }}>
-                    {lead.origin}
+                    {originDisplay(lead.origin, lead.cc_sector)}
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
                     <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setterAction, availableSelection, bookingSalesChoices } from './setterJourney.js';
+import { setterAction, availableSelection, bookingSalesChoices, singleBookingAction } from './setterJourney.js';
 const owned = { id: 7, assigned_to: 'a@example.com', email: 'client@example.com' };
 const mine = { ...owned, created_by_setter: 'setter@example.com' };
 const slot = { email: 'a@example.com', date: '2026-09-24', time: '10:30' };
@@ -53,4 +53,13 @@ test('a prospect without a lead yet still gets the R1 body and the prospect emai
  assert.deepEqual(action.body,{r1_date:'2026-09-24T10:30',target_sales_email:'a@example.com',notes:undefined,target_calendar:'sales'});
  assert.equal(action.email,'gerant@exemple.fr');
  assert.equal(setterAction({lead:{},outcome:'r1',slot}).email,undefined);
+});
+
+test('R1 de l’agenda unique : aucun commercial dans la requête, email changé seulement s’il diffère', () => {
+  const action = singleBookingAction({ lead: { id: 42, email: 'a@b.fr' }, slot: { date: '2026-10-08', time: '10:30' }, note: ' Rappel ', email: 'A@b.fr' });
+  assert.deepEqual(action, { single: true, path: '/api/v1/tracking/setter/leads/42/book-r1', body: { r1_date: '2026-10-08T10:30', notes: 'Rappel' }, email: undefined });
+  const prospect = singleBookingAction({ lead: {}, slot: { date: '2026-10-08', time: '10:30' }, email: 'x@y.fr', prospect: true });
+  assert.deepEqual(prospect, { single: true, body: { r1_date: '2026-10-08T10:30', notes: undefined }, email: 'x@y.fr' });
+  assert.throws(() => singleBookingAction({ lead: { id: 1 }, slot: null }), /date et une heure/);
+  assert.throws(() => singleBookingAction({ lead: { id: 1 }, slot: { date: '2026-10-08', time: '10:30' }, email: 'pas-un-email' }), /email/);
 });

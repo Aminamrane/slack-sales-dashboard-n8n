@@ -295,6 +295,7 @@ export const OUTCOME = {
   no_show: { label: 'No-show', color: '#dc2626', hint: 'Le prospect ne s\'est pas présenté.' },
   to_qualify: { label: 'À qualifier', color: '#d97706', hint: 'Rendez-vous passé : le résultat n\'est pas encore saisi.' },
   removed: { label: 'Retiré', color: '#94a3b8', hint: 'Le rendez-vous a été retiré de la fiche, sans résultat.' },
+  cancelled: { label: 'Annulé', color: '#94a3b8', hint: 'Le commercial a indiqué que le rendez-vous est annulé.' },
 };
 
 function channels(hex) {
