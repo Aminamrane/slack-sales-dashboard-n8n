@@ -882,12 +882,20 @@ export default function OptilexBoard({ embed = false }) {
   // la mutation est jetée (sinon elle écraserait l'optimiste avec une photo périmée de la base).
   const mutSeq = useRef(0);
   // Feedback d'échec d'enregistrement (bandeau discret, auto-dismiss).
-  const [saveError, setSaveError] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const errTimer = useRef(null);
-  const flagSaveError = useCallback(() => {
-    setSaveError(true);
+  const flagSaveError = useCallback((error) => {
+    const detail = error?.data?.detail;
+    const message = error?.status >= 400 && error.status < 500 && typeof detail === "string"
+      ? detail
+      : error?.status === 422
+        ? "Certaines informations sont invalides. Vérifiez les champs renseignés et les dates avant de réessayer."
+        : error?.status >= 500
+          ? "Le serveur n’a pas pu enregistrer la modification. Réessayez dans quelques instants ou contactez le support."
+          : "Enregistrement non confirmé. Vérifiez votre connexion, actualisez la fiche puis réessayez.";
+    setSaveError(message);
     clearTimeout(errTimer.current);
-    errTimer.current = setTimeout(() => setSaveError(false), 4200);
+    errTimer.current = setTimeout(() => setSaveError(""), 15000);
   }, []);
   useEffect(() => () => clearTimeout(errTimer.current), []);
 
@@ -1100,7 +1108,7 @@ export default function OptilexBoard({ embed = false }) {
     catch (e) {
       console.error("patch failed", e);
       if (snapshot) setRows((prev) => prev.map((r) => (r.numero_client === numero ? snapshot : r)));
-      flagSaveError();
+      flagSaveError(e);
     }
   }, [flagSaveError]);
 
@@ -1127,7 +1135,7 @@ export default function OptilexBoard({ embed = false }) {
     } catch (e) {
       console.error("etat-change failed", e);
       if (snapshot) setRows((prev) => prev.map((r) => (r.numero_client === numero ? snapshot : r)));
-      flagSaveError();
+      flagSaveError(e);
     }
   }, [flagSaveError]);
 
@@ -1155,7 +1163,7 @@ export default function OptilexBoard({ embed = false }) {
     } catch (e) {
       console.error("meteo failed", e);
       if (snapshot) setRows((prev) => prev.map((r) => (r.numero_client === numero ? snapshot : r)));
-      flagSaveError();
+      flagSaveError(e);
       return false;
     }
   }, [flagSaveError]);
@@ -1222,11 +1230,12 @@ export default function OptilexBoard({ embed = false }) {
         {saveError && (
           <motion.div initial={{ opacity: 0, y: -10, x: "-50%" }} animate={{ opacity: 1, y: 0, x: "-50%" }} exit={{ opacity: 0, y: -10, x: "-50%" }}
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            style={{ position: "fixed", top: 16, left: "50%", zIndex: 10060, background: "#b42318", color: "#fff", padding: "9px 16px", borderRadius: 10, fontSize: 12.5, fontWeight: 600, boxShadow: "0 8px 24px rgba(180,35,24,0.32)", display: "flex", alignItems: "center", gap: 8 }}>
+            role="alert" style={{ maxWidth: "min(620px, calc(100vw - 32px))", lineHeight: 1.5, position: "fixed", top: 16, left: "50%", zIndex: 10060, background: "#b42318", color: "#fff", padding: "9px 16px", borderRadius: 10, fontSize: 12.5, fontWeight: 600, boxShadow: "0 8px 24px rgba(180,35,24,0.32)", display: "flex", alignItems: "center", gap: 8 }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
-            Enregistrement impossible. Vérifiez votre connexion et réessayez.
+            <span>{saveError}</span>
+            <button type="button" aria-label="Fermer le message" onClick={() => setSaveError("")} style={{ background: "none", border: 0, color: "inherit", fontSize: 20, cursor: "pointer" }}>×</button>
           </motion.div>
         )}
       </AnimatePresence>
