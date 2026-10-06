@@ -1,5 +1,7 @@
 
 .fr-date-control{position:relative;display:inline-flex;min-width:0;flex:1;color:inherit}
+.board-state-date{display:inline-flex;flex-shrink:0}
+.board-state-date .fr-calendar{left:auto;right:0}
 .fr-date-control>input{box-sizing:border-box;width:100%;min-width:0;padding-right:34px!important}
 .fr-date-control .fr-date-trigger{position:absolute;right:3px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:28px;height:28px;padding:0;border:0;background:transparent;color:inherit;cursor:pointer;border-radius:7px}
 .fr-date-control .fr-date-trigger:hover{background:#e9edf5}

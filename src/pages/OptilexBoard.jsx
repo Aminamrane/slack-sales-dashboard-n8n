@@ -6,6 +6,7 @@ import BoardContactsEditor from "../components/BoardContactsEditor";
 import { AlertCabinetBlock, MailIcon } from "../components/CabinetAlertBlock";
 import OnboardingFlowModal from "../components/OnboardingFlowModal";
 import BoardOnboardingDateCorrection from "../components/BoardOnboardingDateCorrection";
+import BoardStateDateInput from "../components/BoardStateDateInput";
 import { appointmentConfirmation, appointmentFailure } from "../utils/appointmentConfirmation";
 import { ClientMissions, DetailFold, DetailText } from "../components/OptilexClientDetail";
 import MentionTextarea, { MentionedText } from "../components/MentionTextarea";
@@ -2181,26 +2182,14 @@ function RenewBlock({ email, sentAt, onRenewed }) {
 }
 
 // ── PANNEAU DÉTAILS (slide-in droite, façon Notion) ──────────────────────────
-// Rangée date labellisée. COMMIT AU BLUR (pas à chaque frappe) : un input date natif émet un
-// change par segment valide -> une année en cours de saisie ("0002") partirait en base ET dans
-// l'historique d'audit. Enter = valider, Escape = annuler. key force la resynchro si la valeur
-// change de l'extérieur (optimiste / polling).
+// Toutes les dates de situation utilisent le calendrier français partagé.
+// La validation se fait en quittant le contrôle complet ou avec Entrée.
 function DateRow({ label, value, onChange }) {
-  const cancelRef = useRef(false);
   const committed = toDateInput(value);
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
       <div style={{ fontSize: 13.5, fontWeight: 500, color: TEXT }}>{label}</div>
-      <input key={committed} type="date" defaultValue={committed}
-        onBlur={(e) => {
-          if (cancelRef.current) { cancelRef.current = false; return; }
-          const v = e.target.value || null;
-          if (v !== (committed || null)) onChange(v);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") e.currentTarget.blur();
-          if (e.key === "Escape") { cancelRef.current = true; e.currentTarget.value = committed; e.currentTarget.blur(); }
-        }}
+      <BoardStateDateInput key={committed} value={committed} label={label} onChange={onChange}
         style={{ ...inputStyle, width: 168, padding: "7px 10px", fontSize: 12.5 }} />
     </div>
   );
@@ -2278,7 +2267,7 @@ function EtatSection({ row, num, changeEtat, compact = false }) {
       <AnimatePresence initial={false}>
         {cfg && num && (
           <motion.div key={etat} initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }} style={{ overflow: "hidden" }}>
+            transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }} style={{ overflow: "visible" }}>
             <div style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
               {cfg.pause ? (
                 <>
