@@ -46,6 +46,7 @@ import ReceiptsView from './components/ReceiptsView.jsx';
 import CreancesExitBanner from './components/CreancesExitBanner.jsx';
 import CallsView from './components/CallsView.jsx';
 import ValidationsView from './components/ValidationsView.jsx';
+import { StateReviewQueue } from './components/StateReview.jsx';
 import PromisesView from './components/PromisesView.jsx';
 import SequencesView from './components/SequencesView.jsx';
 // Icônes de navigation dessinées pour la page (barre latérale, onglets,
@@ -397,6 +398,18 @@ export default function TrackingSheetFinance() {
       })
       .catch(() => { if (live) { setCanViewCalls(false); setCallsOperators([]); } });
     return () => { live = false; };
+  }, [authChecked]);
+
+  const [pendingStateReviews, setPendingStateReviews] = useState(0);
+  useEffect(() => {
+    if (!authChecked) return;
+    let live = true;
+    const refresh = () => apiClient.get('/api/v1/finance-periods/client/state-reviews')
+      .then(d => { if (live) setPendingStateReviews(d.items?.length || 0); }).catch(() => {});
+    refresh();
+    const timer = setInterval(() => { if (document.visibilityState !== 'hidden') refresh(); }, 30000);
+    window.addEventListener('focus', refresh);
+    return () => { live = false; clearInterval(timer); window.removeEventListener('focus', refresh); };
   }, [authChecked]);
 
   // ── Validations (dev 2026-09-23) : les demandes de l'équipe finance, à
@@ -1190,6 +1203,7 @@ export default function TrackingSheetFinance() {
           { id: 'promises', label: 'Promesses de règlement', Icon: Handshake, active: activeTab === 'promises', action: () => setActiveTab('promises'), count: promiseRows.length || undefined },
           { id: 'sequences', label: 'Suivi des séquences', Icon: MailCheck, active: activeTab === 'sequences', action: () => setActiveTab('sequences') },
           ...(canViewCalls ? [{ id: 'calls', label: 'Tracking des appels', Icon: Phone, active: activeTab === 'calls', action: () => setActiveTab('calls') }] : []),
+          { id: 'state-reviews', label: 'États à traiter', Icon: CheckCircle2, count: pendingStateReviews || undefined, active: activeTab === 'state-reviews', action: () => setActiveTab('state-reviews') },
           ...(canValidate ? [{ id: 'validations', label: 'Validations', Icon: CheckCircle2, active: activeTab === 'validations', action: () => setActiveTab('validations'), count: pendingValidations || undefined }] : []),
         ],
       },
@@ -1214,7 +1228,7 @@ export default function TrackingSheetFinance() {
         ],
       },
     ];
-  }, [activeTab, viewFilter, viewCounts, exportToExcel, exportedRows.length, canViewCalls, canValidate, pendingValidations, promiseRows.length]);
+  }, [activeTab, viewFilter, viewCounts, exportToExcel, exportedRows.length, canViewCalls, canValidate, pendingValidations, pendingStateReviews, promiseRows.length]);
 
   if (!authChecked) {
     return null;
@@ -1298,6 +1312,7 @@ export default function TrackingSheetFinance() {
             canViewCalls={canViewCalls}
             canValidate={canValidate}
             pendingValidations={pendingValidations}
+            pendingStateReviews={pendingStateReviews}
             promiseCount={promiseRows.length}
             period={period}
             setPeriod={setPeriod}
@@ -1390,7 +1405,7 @@ export default function TrackingSheetFinance() {
             >
               {activeTab === 'calls' && canViewCalls ? (
                 <CallsView operators={callsOperators} />
-              ) : activeTab === 'validations' && canValidate ? (
+              ) : activeTab === 'state-reviews' ? (<StateReviewQueue onOpenClient={openClientById}/>) : activeTab === 'validations' && canValidate ? (
                 <ValidationsView
                   onOpenClient={openClientById}
                   onChanged={() => { refreshPendingValidations(); onRefresh?.(); }}
@@ -2999,7 +3014,7 @@ function HiddenColsPill({ hiddenKeys, labels, onShowCol, onShowAll }) {
 }
 
 function TabRow({
-  activeTab, setActiveTab, canViewCalls = false, canValidate = false, pendingValidations = 0,
+  activeTab, setActiveTab, canViewCalls = false, canValidate = false, pendingValidations = 0, pendingStateReviews = 0,
   promiseCount = 0,
   period, setPeriod,
   searchQuery, setSearchQuery, searchResultCount,
@@ -3026,6 +3041,7 @@ function TabRow({
     { key: 'sequences', label: 'Séquences', Icon: MailCheck },
     ...(canViewCalls ? [{ key: 'calls', label: 'Tracking des appels', Icon: Phone }] : []),
     // Les demandes de l'équipe finance à valider (dev 2026-09-23).
+    { key: 'state-reviews', label: 'États à traiter', Icon: CheckCircle2, count: pendingStateReviews },
     ...(canValidate ? [{ key: 'validations', label: 'Validations', Icon: CheckCircle2, count: pendingValidations }] : []),
   ];
 

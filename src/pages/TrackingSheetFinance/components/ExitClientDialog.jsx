@@ -26,6 +26,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, TriangleAlert, RotateCcw, CalendarDays, Check } from 'lucide-react';
 
+import FrenchDateInput from '../../../components/salesJourney/FrenchDateInput.jsx';
 import { ETAT_DATE_CONFIG } from '../../OptilexBoard.jsx';
 import { formatEUR, formatDateFR, formatMonthLabel, shiftMonth, ACTED_EXIT_ETATS } from '../constants.js';
 import { lossPreview } from '../lossPreview.js';
@@ -199,7 +200,7 @@ export default function ExitClientDialog({
   const withdrawing = etat === 'Rétractation';
   // Pour une résiliation ou une liquidation, la finance peut maintenir les
   // attendus au-delà de la date d'effet. La rétractation annule tout.
-  const billingChoice = !!etat && !withdrawing;
+  const billingChoice = false; // Financial execution lives in StateReview.
   const monthBefore = (iso) => {
     if (!iso) return '';
     const y = Number(iso.slice(0, 4)); const m = Number(iso.slice(5, 7));
@@ -207,7 +208,7 @@ export default function ExitClientDialog({
   };
   const defaultLastBilled = monthBefore(etatDate);
   const chosenLastBilled = lastBilled || billingLastMonth || defaultLastBilled;
-  const effectiveDate = withdrawing ? (signatureDate || '').slice(0, 10) : etatDate;
+  const effectiveDate = etatDate;
 
   // À chaque ouverture : repartir propre, avec l'état pré-choisi s'il y en a un.
   useEffect(() => {
@@ -351,7 +352,7 @@ export default function ExitClientDialog({
                   {etatDone.date && new Date(etatDone.date) > new Date()
                     ? <>Le client basculera le {formatDateFR(etatDone.date)} ; d’ici là il reste actif.</>
                     : <>Effective depuis le {formatDateFR(etatDone.date)}.</>}
-                  {etatDone.etat === 'Rétractation' && ' Les attendus ont été annulés depuis la signature. Les règlements restent tracés.'}
+                  {etatDone.etat === 'Rétractation' && ' Déclaration enregistrée. La finance doit maintenant traiter les conséquences financières dans la fiche client.'}
                 </span>
               </motion.div>
             )}
@@ -381,18 +382,9 @@ export default function ExitClientDialog({
                 <option value="">Choisir un état…</option>
                 {ACTED_ETATS.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
-              <input
-                type="date"
-                value={effectiveDate}
-                disabled={withdrawing}
-                onChange={(e) => setEtatDate(e.target.value)}
-                title={etat ? (ETAT_DATE_CONFIG[etat]?.label || "Date d'effet") : "Date d'effet"}
-                style={{
-                  border: `1px solid ${N.border}`, borderRadius: 7, padding: '8px 9px',
-                  fontSize: 12.5, fontFamily: 'inherit', background: '#fff',
-                  color: N.text, outline: 'none', width: 148,
-                }}
-              />
+              <FrenchDateInput floating value={effectiveDate} onChange={setEtatDate}
+                aria-label={etat ? (ETAT_DATE_CONFIG[etat]?.label || "Date d’effet") : "Date d’effet"}
+                style={{width:148}} />
               <button
                 type="button"
                 onClick={submitEtat}
@@ -461,8 +453,9 @@ export default function ExitClientDialog({
             {withdrawing && (
               <div style={{ marginTop: 10, fontSize: 12, lineHeight: 1.6, color: N.textMuted }}>
                 {effectiveDate
-                  ? <>Effet à la signature du <strong>{formatDateFR(effectiveDate)}</strong>. Tous les attendus Owner et Opti’lex depuis cette date, y compris les échéances futures, seront annulés. Les paiements et remboursements restent tracés. Cette opération pourra être annulée depuis le journal.</>
-                  : 'La date de signature doit être renseignée avant la rétractation.'}
+                  ? <>Cette déclaration informe la finance. Elle ne modifie aucun montant. Le traitement financier sera confirmé séparément depuis la fiche client.</>
+                  : 'La déclaration est possible ; la date de signature sera nécessaire pour le traitement financier.'}
+
               </div>
             )}
             {error && <div role="alert" style={{ marginTop: 10, color: N.red, fontSize: 12 }}>{error}</div>}

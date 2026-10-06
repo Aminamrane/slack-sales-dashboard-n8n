@@ -98,6 +98,7 @@ import ResponsibleSelect from './components/ResponsibleSelect.jsx';
 import { ETAT_STYLE, displayEtat } from '../OptilexBoard.jsx';
 import BoardEtatCell from './components/BoardEtatCell.jsx';
 import ExitClientDialog from './components/ExitClientDialog.jsx';
+import StateReview from './components/StateReview.jsx';
 import PromiseDialog from './components/PromiseDialog.jsx';
 import BillingStopDialog from './components/BillingStopDialog.jsx';
 import StructureSplits from './components/StructureSplits.jsx';
@@ -157,6 +158,7 @@ export default function DetailPanel({
   // Fiche client (profil) : SIREN, contacts typés, effectif courant, état
   // hérité du board, fin de contrat, journal des changements de la fiche.
   const [profile, setProfile] = useState(null);
+  const [stateReview, setStateReview] = useState(null);
   // Édition en place des informations contractuelles (crayon de section).
   const [contractEditing, setContractEditing] = useState(false);
   // Le mode modification est propre à UNE fiche : changer de client ou fermer
@@ -786,6 +788,7 @@ export default function DetailPanel({
               onShowToast={onShowToast}
             />
 
+            <StateReview clientId={clientId} version={profile} canProcess={canEditMoney} onReview={setStateReview} onChanged={reloadAfterExit}/>
             {/* Error state */}
             {error && (
               <div style={{
@@ -800,6 +803,7 @@ export default function DetailPanel({
                 promesse posée. Puis les actions, toutes au même endroit —
                 plus de bouton isolé à l'autre bout de la fiche. */}
             <FactsRow
+              stateReview={stateReview}
               profile={profile}
               boardRow={boardRow}
               loss={profile?.loss || null}
@@ -3217,7 +3221,7 @@ const isoDay = (s) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-function FactsRow({ profile, boardRow, loss = null, promise = false, billingLastMonth = null, onEditBilling = null }) {
+function FactsRow({ stateReview, profile, boardRow, loss = null, promise = false, billingLastMonth = null, onEditBilling = null }) {
   const items = [];
   if (profile?.siren) {
     items.push({ icon: <Landmark size={12} />, label: 'SIREN', value: profile.siren });
@@ -3241,10 +3245,10 @@ function FactsRow({ profile, boardRow, loss = null, promise = false, billingLast
     // Jusqu'où le client reste facturé (dev 2026-09-28 : « conserver les
     // montants attendus jusqu'à une date choisie », de façon visible). Une
     // rétractation annule tout depuis la signature : pas de fin à choisir.
-    if (exitEtat !== 'Rétractation') {
+    if (exitEtat !== 'Rétractation' && stateReview?.status !== 'pending') {
       const auto = shiftMonth(isoDay(boardRow.etat_date).slice(0, 7), -1);
-      const last = billingLastMonth || auto;
-      items.push({
+      const last = billingLastMonth || (stateReview?.billing_stop ? shiftMonth(stateReview.billing_stop.slice(0,7), -1) : stateReview?.revision ? null : auto);
+      if (last) items.push({
         icon: <CalendarRange size={12} />,
         label: 'Facturé jusqu’à',
         value: `${formatMonthLabel(last).toLowerCase()}${billingLastMonth ? '' : ' (auto)'}`,
