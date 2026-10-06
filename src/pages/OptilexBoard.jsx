@@ -2239,7 +2239,7 @@ function EtatSection({ row, num, changeEtat, compact = false }) {
       {compact ? <div style={{ fontSize: 12, color: MUTED, marginBottom: 5 }}>Situation du client</div> : <SecTitle icon="etat">État du client</SecTitle>}
       <EtatPicker etat={etat} disabled={!num} onPick={(v) => changeEtat(num, { etat: v })} />
       {num && row.finance_review_status === 'pending' && <div style={{marginTop:9,padding:'8px 10px',borderRadius:8,background:'#fff8e9',color:'#866013',fontSize:12,lineHeight:1.5}}>
-        État déclaré · traitement financier à effectuer. Les montants restent inchangés jusqu’à la décision de la finance.
+        Situation enregistrée dans le board. La finance doit en traiter les conséquences sur les montants ; elle ne valide pas le changement de situation.
       </div>}
       {num && isEtatPending(row) && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 9, padding: "6px 10px", borderRadius: 8, background: "#fff3e3", color: "#b45309", fontSize: 12, fontWeight: 600, lineHeight: 1.45 }}>
