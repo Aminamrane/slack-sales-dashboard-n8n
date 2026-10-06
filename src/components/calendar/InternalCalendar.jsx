@@ -94,7 +94,7 @@ function Chip({ ev, view, dark, onOpen, height, ring }) {
   const context = !isRdv ? null
     : view === 'setter' ? (ev.assigned?.name ? `Chez ${ev.assigned.name}` : null)
       : view === 'director' ? null
-        : (ev.setter_name ? `Posé par ${ev.setter_name}` : ev.lead_setter ? `Setter : ${ev.lead_setter}` : null);
+        : (ev.setter_name ? `Posé par ${ev.setter_name}` : ev.lead_setter ? (ev.lead_setter_placed_r1 ? `R1 posé par ${ev.lead_setter}` : `Setter : ${ev.lead_setter}`) : null);
   return (
     <button
       type="button"
@@ -231,7 +231,7 @@ function Popover({ ev, rect, view, T, dark, onClose, onOpenLead, canOpenLead }) 
         {view === 'director' && isRdv && (
           <div style={{ fontSize: 13, color: T.muted }}>
             {ev.handled_by === 'setter'
-              ? <>Suivi par <span style={{ color: T.ink }}>{setterOf(ev)}</span>, {ev.setter_name ? 'qui a posé ce rendez-vous.' : 'qui a apporté ce lead.'}</>
+              ? <>Suivi par <span style={{ color: T.ink }}>{setterOf(ev)}</span>, {ev.setter_name ? 'qui a posé ce rendez-vous.' : ev.lead_setter_placed_r1 ? 'qui a posé le RDV initial (R1).' : 'qui a apporté ce lead.'}</>
               : <><span style={{ color: T.ink }}>À relancer par vous</span> : aucun setter n'a posé ce rendez-vous.</>}
           </div>
         )}
@@ -249,8 +249,10 @@ function Popover({ ev, rect, view, T, dark, onClose, onOpenLead, canOpenLead }) 
             <span style={{ color: T.muted }}>{ev.channel === 'webinar_link' ? ', via le lien webinaire' : ', depuis le CRM'}</span>
           </Row>
         )}
-        {isRdv && view !== 'setter' && !ev.setter_name && ev.lead_setter && !/setter/i.test(ev.origin || '') && (
-          <Row icon={UserRoundCheck} T={T}>Lead apporté par {ev.lead_setter}</Row>
+        {isRdv && view !== 'setter' && !ev.setter_name && ev.lead_setter && (ev.lead_setter_placed_r1 || !/setter/i.test(ev.origin || '')) && (
+          <Row icon={UserRoundCheck} T={T}>
+            {ev.lead_setter_placed_r1 ? `RDV initial (R1) posé par ${ev.lead_setter}` : `Lead apporté par ${ev.lead_setter}`}
+          </Row>
         )}
         {isRdv && view === 'director' && ev.channel && (
           <Row icon={UserRoundCheck} T={T}>{ev.channel === 'webinar_link' ? 'Pris via le lien webinaire' : 'Posé depuis le CRM'}</Row>
@@ -258,7 +260,7 @@ function Popover({ ev, rect, view, T, dark, onClose, onOpenLead, canOpenLead }) 
         {isRdv && ev.origin && (
           <Row icon={CalendarDays} T={T}>
             <span style={{ color: T.muted }}>Origine :</span> {ev.origin}
-            {/setter/i.test(ev.origin) && setterOf(ev) && view !== 'setter' ? `, ${setterOf(ev)}` : ''}
+            {/setter/i.test(ev.origin) && setterOf(ev) && view !== 'setter' && !(ev.lead_setter_placed_r1 && !ev.setter_name) ? `, ${setterOf(ev)}` : ''}
           </Row>
         )}
         {ev.location && <Row icon={MapPin} T={T}>{ev.location}</Row>}
