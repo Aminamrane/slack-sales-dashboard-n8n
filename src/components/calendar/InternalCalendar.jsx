@@ -51,6 +51,12 @@ const REFRESH_MESSAGES = {
   error: 'Actualisation impossible pour le moment, nouvel essai automatique.',
 };
 
+// Setter lié au RDV : celui qui l'a posé, sinon celui qui a apporté le lead (un R2 tenu par le commercial après un
+// R1 posé par le setter reste lié à ce setter).
+function setterOf(ev) {
+  return ev.setter_name || ev.lead_setter || null;
+}
+
 function eventTitle(ev) {
   if (ev.kind === 'rdv' || ev.kind === 'callback') return ev.company || ev.prospect || 'Prospect';
   return ev.title || 'Occupé';
@@ -88,7 +94,7 @@ function Chip({ ev, view, dark, onOpen, height, ring }) {
   const context = !isRdv ? null
     : view === 'setter' ? (ev.assigned?.name ? `Chez ${ev.assigned.name}` : null)
       : view === 'director' ? null
-        : (ev.setter_name ? `Posé par ${ev.setter_name}` : null);
+        : (ev.setter_name ? `Posé par ${ev.setter_name}` : ev.lead_setter ? `Setter : ${ev.lead_setter}` : null);
   return (
     <button
       type="button"
@@ -119,7 +125,7 @@ function Chip({ ev, view, dark, onOpen, height, ring }) {
         {noShow && (view === 'director'
           ? <UserX size={13} color={OUTCOME.no_show.color} strokeWidth={2.2} style={{ flexShrink: 0 }} aria-label="No-show" />
           : <SoftTag color={OUTCOME.no_show.color}>No-show</SoftTag>)}
-        {isRdv && view === 'director' && (ev.handled_by === 'setter' ? <SetterTag name={ev.setter_name} /> : <MineTag />)}
+        {isRdv && view === 'director' && (ev.handled_by === 'setter' ? <SetterTag name={setterOf(ev)} /> : <MineTag />)}
       </div>
       {roomy && (
         <div style={{ fontSize: 11, opacity: 0.7, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -208,7 +214,7 @@ function Popover({ ev, rect, view, T, dark, onClose, onOpenLead, canOpenLead }) 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <SoftTag wide color={color}>{kindLabel}</SoftTag>
           {outcome && <SoftTag wide color={outcome.color} title={outcome.hint}>{outcome.label}</SoftTag>}
-          {view === 'director' && isRdv && (ev.handled_by === 'setter' ? <SetterTag name={ev.setter_name} /> : <MineTag />)}
+          {view === 'director' && isRdv && (ev.handled_by === 'setter' ? <SetterTag name={setterOf(ev)} /> : <MineTag />)}
         </div>
 
         {isRdv && ev.crm_start && (
@@ -225,7 +231,7 @@ function Popover({ ev, rect, view, T, dark, onClose, onOpenLead, canOpenLead }) 
         {view === 'director' && isRdv && (
           <div style={{ fontSize: 13, color: T.muted }}>
             {ev.handled_by === 'setter'
-              ? <>Suivi par <span style={{ color: T.ink }}>{ev.setter_name}</span>, qui a posé ce rendez-vous.</>
+              ? <>Suivi par <span style={{ color: T.ink }}>{setterOf(ev)}</span>, {ev.setter_name ? 'qui a posé ce rendez-vous.' : 'qui a apporté ce lead.'}</>
               : <><span style={{ color: T.ink }}>À relancer par vous</span> : aucun setter n'a posé ce rendez-vous.</>}
           </div>
         )}
@@ -243,10 +249,18 @@ function Popover({ ev, rect, view, T, dark, onClose, onOpenLead, canOpenLead }) 
             <span style={{ color: T.muted }}>{ev.channel === 'webinar_link' ? ', via le lien webinaire' : ', depuis le CRM'}</span>
           </Row>
         )}
+        {isRdv && view !== 'setter' && !ev.setter_name && ev.lead_setter && !/setter/i.test(ev.origin || '') && (
+          <Row icon={UserRoundCheck} T={T}>Lead apporté par {ev.lead_setter}</Row>
+        )}
         {isRdv && view === 'director' && ev.channel && (
           <Row icon={UserRoundCheck} T={T}>{ev.channel === 'webinar_link' ? 'Pris via le lien webinaire' : 'Posé depuis le CRM'}</Row>
         )}
-        {isRdv && ev.origin && <Row icon={CalendarDays} T={T}><span style={{ color: T.muted }}>Origine :</span> {ev.origin}</Row>}
+        {isRdv && ev.origin && (
+          <Row icon={CalendarDays} T={T}>
+            <span style={{ color: T.muted }}>Origine :</span> {ev.origin}
+            {/setter/i.test(ev.origin) && setterOf(ev) && view !== 'setter' ? `, ${setterOf(ev)}` : ''}
+          </Row>
+        )}
         {ev.location && <Row icon={MapPin} T={T}>{ev.location}</Row>}
         {ev.private && <Row icon={CalendarDays} T={T}><span style={{ color: T.muted }}>Créneau occupé, détail privé.</span></Row>}
       </div>
