@@ -2015,15 +2015,24 @@ export default function TrackingSheetSetter() {
     // No change → just close
     if (trimmed === (lead[field] || '').trim()) { setEditingField(null); return; }
     try {
-      await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, { [field]: trimmed || null });
+      const result = await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, { [field]: trimmed || null });
       setLeads(prev => prev.map(l => l.id === leadId ? { ...l, [field]: trimmed || null } : l));
+      if (field === 'email') {
+        showSetterToast(result?.calendar_email_updated > 0
+          ? 'Email corrigé et invitation Google Agenda mise à jour.'
+          : 'Email mis à jour.');
+      }
     } catch (err) {
       // Anti-doublon backend : email/tél déjà portés par un autre lead → pop-up,
       // la valeur n'est pas appliquée.
       if (err?.status === 409 && err?.data?.detail?.code === 'duplicate_lead') {
         setDuplicateLeadModal(true);
+      } else {
+        const detail = err?.data?.detail;
+        showSetterToast(typeof detail === 'string' ? detail : 'Modification non enregistrée. Réessayez.', 'err');
       }
       console.error('Erreur mise à jour champ:', err);
+      return; // Keep the corrected value available for retry.
     }
     setEditingField(null);
   };
