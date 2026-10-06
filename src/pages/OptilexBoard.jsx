@@ -1131,7 +1131,8 @@ export default function OptilexBoard({ embed = false }) {
       return { ...r, etat_manuel: etat, etat_date, pause_end_date: pe, pause_relance_date: pr };
     }));
     try {
-      await apiClient.post("/api/v1/optilex/etat-change", { numero_client: numero, etat, etat_date, pause_end_date: pe, pause_relance_date: pr });
+      const saved = await apiClient.post("/api/v1/optilex/etat-change", { numero_client: numero, etat, etat_date, pause_end_date: pe, pause_relance_date: pr });
+      setRows(prev => prev.map(r => r.numero_client === numero ? { ...r, finance_review_status: saved.finance_review?.status } : r));
       setEtatHistVersion((v) => v + 1);   // succès uniquement
     } catch (e) {
       console.error("etat-change failed", e);
@@ -2237,6 +2238,9 @@ function EtatSection({ row, num, changeEtat, compact = false }) {
     <div style={{ marginBottom: compact ? 0 : 22, minWidth: 0, ...(compact && (cfg || isEtatPending(row)) ? { gridColumn: "1 / -1" } : {}) }}>
       {compact ? <div style={{ fontSize: 12, color: MUTED, marginBottom: 5 }}>Situation du client</div> : <SecTitle icon="etat">État du client</SecTitle>}
       <EtatPicker etat={etat} disabled={!num} onPick={(v) => changeEtat(num, { etat: v })} />
+      {num && row.finance_review_status === 'pending' && <div style={{marginTop:9,padding:'8px 10px',borderRadius:8,background:'#fff8e9',color:'#866013',fontSize:12,lineHeight:1.5}}>
+        État déclaré · traitement financier à effectuer. Les montants restent inchangés jusqu’à la décision de la finance.
+      </div>}
       {num && isEtatPending(row) && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 9, padding: "6px 10px", borderRadius: 8, background: "#fff3e3", color: "#b45309", fontSize: 12, fontWeight: 600, lineHeight: 1.45 }}>
           <span style={{ flexShrink: 0 }}>⏳</span>
