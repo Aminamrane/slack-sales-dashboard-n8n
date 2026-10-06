@@ -517,7 +517,7 @@ function MeteoBadge({ score, context, showLabel = true }) {
 
 // Sélecteur météo CLIQUABLE : popup (portal) avec les 5 notes (sens + action) + une note
 // d'interaction. onSave(score, note). Read-only si disabled (badge seul).
-function MeteoPicker({ score, context, onSave, disabled }) {
+function MeteoPicker({ score, context, onSave, disabled, triggerLabel }) {
   const [open,setOpen]=useState(false);
   const button=useRef(null);
   const dialog=useRef(null);
@@ -526,7 +526,7 @@ function MeteoPicker({ score, context, onSave, disabled }) {
       if(e.key==='Tab'){const nodes=[...dialog.current.querySelectorAll('button:not(:disabled),textarea,input,summary')].filter(el=>el.getClientRects().length);const first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}};
     const oldOverflow=document.body.style.overflow;document.body.style.overflow='hidden';
     window.addEventListener('keydown',key);return()=>{window.removeEventListener('keydown',key);document.body.style.overflow=oldOverflow;};},[open]);
-  return <span onClick={e=>e.stopPropagation()}><button ref={button} type="button" disabled={disabled} onClick={()=>setOpen(true)} aria-label="Mettre à jour la météo" style={{border:0,background:'transparent',cursor:disabled?'default':'pointer'}}><MeteoBadge score={score} context={context}/></button>
+  return <span onClick={e=>e.stopPropagation()}><button ref={button} type="button" disabled={disabled} onClick={()=>setOpen(true)} aria-label={triggerLabel || "Mettre à jour la météo"} className={triggerLabel ? "wc-add-weather" : undefined} style={triggerLabel ? undefined : {border:0,background:'transparent',cursor:disabled?'default':'pointer'}}>{triggerLabel ? <><MeteoIcon score={5} size={18}/>{triggerLabel}</> : <MeteoBadge score={score} context={context}/>}</button>
     {open && createPortal(<div role="presentation" style={{position:'fixed',inset:0,zIndex:10050,background:'#15251f66',display:'grid',placeItems:'center',padding:16}} onMouseDown={e=>{if(e.target===e.currentTarget){setOpen(false);button.current?.focus();}}}><div ref={dialog} role="dialog" aria-modal="true" aria-label="Mettre à jour la météo client" style={{width:'min(680px,100%)',maxHeight:'90vh',overflowY:'auto',background:'white',borderRadius:18,padding:24,boxShadow:'0 20px 80px #142c2540'}}><WeatherCaseComposer onSave={async payload=>{const ok=await onSave(payload);if(ok!==false){setOpen(false);button.current?.focus();}return ok;}} onCancel={()=>{setOpen(false);button.current?.focus();}}/></div></div>,document.body)}
   </span>;
 }
@@ -1479,7 +1479,7 @@ export default function OptilexBoard({ embed = false }) {
                       </div>
                     </td>
                     <td style={td}>
-                      <MeteoPicker score={r.meteo_score} context={r.meteo_context} disabled={!r.numero_client || !meteoSettable()}
+                      <MeteoPicker score={r.meteo_score} context={r.meteo_context} disabled={!r.numero_client}
                         onSave={payload => recordMeteo(r.numero_client, payload)} />
                     </td>
                     {/* État daté (Résiliation, Pause…) posé depuis la table -> on ouvre la fiche
@@ -3051,14 +3051,13 @@ function JalonRow({ label, done, date, onToggle, onDate, alwaysDate = false, tog
 }
 
 // Section météo de la fiche : note courante (badge + qui/quand), saisie inline (Owner
-// uniquement pour l'instant : score + note d'interaction), et historique des notations.
+// et cabinet : tous les rôles autorisés sur le board), et historique des notations.
 function MeteoSection({ row, num, recordMeteo, version, onChanged }) {
   const [hist,setHist]=useState([]);
   const [loaded,setLoaded]=useState(false);
   const [error,setError]=useState('');
   const [refresh,setRefresh]=useState(0);
-  const [open,setOpen]=useState(false);
-  const settable=meteoSettable();
+
   useEffect(()=>{let alive=true;setError('');apiClient.get(`/api/v1/optilex/meteo-history?numero_client=${encodeURIComponent(num)}`).then(r=>{if(alive){setHist(r.history||[]);setLoaded(true);}}).catch(()=>{if(alive)setError('Impossible de charger les notations.');});return()=>{alive=false;};},[num,version,refresh]);
   const current=loaded?hist[0]:{score:row.meteo_score,weather_context:row.meteo_context,author_name:row.meteo_by,created_at:row.meteo_at};
   return <div>
@@ -3066,10 +3065,9 @@ function MeteoSection({ row, num, recordMeteo, version, onChanged }) {
     <p style={{fontSize:12,color:MUTED,lineHeight:1.5,margin:'0 0 10px'}}>À mettre à jour à chaque échange avec le client, avant ou après l’onboarding.</p>
     {weatherPresentation(current?.score,current?.weather_context)?.legacy && <p className="wc-legacy-notice">Cette évaluation utilise l’ancienne échelle. Elle est conservée telle qu’elle a été saisie. La prochaine météo utilisera les 5 niveaux ci-dessous.</p>}
     <WeatherScaleGuide/>
-    {settable && (open ? <WeatherCaseComposer onCancel={()=>setOpen(false)} onSave={async payload=>{const ok=await recordMeteo(num,payload);if(ok!==false){setOpen(false);setRefresh(v=>v+1);}return ok;}}/> : <button type="button" className="wc-reply-button" onClick={()=>setOpen(true)}>Mettre à jour la météo</button>)}
     {error && <p role="alert">{error} <button onClick={()=>setRefresh(v=>v+1)}>Réessayer</button></p>}
     <SecTitle icon="comments">Échanges et notations</SecTitle>
-    <CommentThread numero={num} ratings={hist} ratingsLoading={!loaded&&!error} onRatingEdited={updated=>{setHist(items=>items.map(item=>item.id===updated.id?updated:item));onChanged();}} onRatingDeleted={()=>{setRefresh(v=>v+1);onChanged();}} onRatingConflict={()=>setRefresh(v=>v+1)}/>
+    <CommentThread numero={num} onAddWeather={async payload=>{const ok=await recordMeteo(num,payload);if(ok!==false)setRefresh(v=>v+1);return ok;}} ratings={hist} ratingsLoading={!loaded&&!error} onRatingEdited={updated=>{setHist(items=>items.map(item=>item.id===updated.id?updated:item));onChanged();}} onRatingDeleted={()=>{setRefresh(v=>v+1);onChanged();}} onRatingConflict={()=>setRefresh(v=>v+1)}/>
   </div>;
 }
 
@@ -3135,7 +3133,7 @@ function RatingHistoryActions({ rating, numero, onEdited, onDeleted, onConflict 
   </div>;
 }
 
-function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingEdited, onRatingDeleted, onRatingConflict }) {
+function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = false, onRatingEdited, onRatingDeleted, onRatingConflict }) {
   const me = useMemo(() => apiClient.getUser() || {}, []);
   const meName = me.name || me.full_name || me.first_name || me.email || "Moi";
   const [comments, setComments] = useState([]);
@@ -3246,7 +3244,9 @@ function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingE
       {/* Espace commun : le composer est toujours visible et nommé, pour que chacun sache où écrire
           (retour dev 25/09). Ouvert à tous les rôles du board, finance_team comprise. */}
       <div style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: "12px 14px", marginBottom: comments.length ? 18 : 4, background: "#fafbfc" }}>
-        <div style={{ fontSize: 12.5, fontWeight: 700, color: TEXT }}>Écrire dans l’espace commun</div>
+        <div className="wc-comment-heading"><div style={{ fontSize: 12.5, fontWeight: 700, color: TEXT }}>Écrire dans l’espace commun</div>
+          {onAddWeather && <MeteoPicker triggerLabel="Ajouter une météo" onSave={onAddWeather} disabled={!numero}/>}
+        </div>
         <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8, lineHeight: 1.45 }}>Visible par Owner, Opti’Lex et la finance. Tapez @ pour prévenir quelqu’un : il reçoit un e-mail et une notification.</div>
       {replyTo && <div className="wc-reply-context"><span>Réponse à la météo {weatherRatingLabel(replyTo.score,replyTo.weather_context)}</span><button type="button" onClick={()=>setReplyTo(null)}>Annuler</button></div>}
       <div style={{ display: "flex", gap: 10 }}>
