@@ -1,3 +1,4 @@
+import SalePaymentMode from '../components/SalePaymentMode';
 import {canRescheduleAfterSale} from '../utils/saleRescheduling';
 import OnboardingReschedule from '../components/integrationPreview/OnboardingReschedule';
 import { generateSavedNda } from '../contracts/ndaGeneration.js';
@@ -9411,22 +9412,7 @@ export default function TrackingSheet() {
                     />
                   </div>
 
-                  {/* Payment toggle */}
-                  <div style={{ marginBottom: 14 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: C.secondary, display: 'block', marginBottom: 6 }}>Mode de paiement</label>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      {[{ key: 'M', label: 'Mensuel' }, { key: 'A', label: 'Annuel' }].map(opt => (
-                        <button key={opt.key} onClick={() => setSaleForm(p => ({ ...p, paymentModality: opt.key }))}
-                          style={{
-                            flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
-                            border: `1px solid ${saleForm.paymentModality === opt.key ? C.accent : C.border}`,
-                            background: saleForm.paymentModality === opt.key ? (darkMode ? C.accent + '20' : '#f0f1ff') : 'transparent',
-                            color: saleForm.paymentModality === opt.key ? C.accent : C.muted,
-                            transition: 'all 0.2s',
-                          }}>{opt.label}</button>
-                      ))}
-                    </div>
-                  </div>
+                  <SalePaymentMode leadId={showSaleModal} value={saleForm.paymentModality} onChange={value => setSaleForm(p => ({ ...p, paymentModality: value }))} />
 
                   {/* Employee range grid */}
                   <div style={{ marginBottom: 18 }}>
