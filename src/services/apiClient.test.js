@@ -222,3 +222,21 @@ test('a resource 403 does not erase a valid session', async t => {
   assert.equal(values.get('refresh_token'), 'refresh-0');
   assert.equal(window.location.href, '/tracking-sheet');
 });
+
+test('writes are counted so a background reload can tell it overlapped a user edit', async t => {
+  const { client } = setup(t);
+  const gate = deferred();
+  globalThis.fetch = async (_url, options = {}) => { if (options.method !== 'GET') await gate.promise; return json(200, { ok: true }); };
+  const before = client.writeSeq;
+  await client.get('/read');
+  assert.equal(client.writeSeq, before, 'a read is not a write');
+  const pending = client.patch('/tracking/leads/1', { notes: 'x' });
+  assert.equal(client.pendingWrites, 1);
+  assert.notEqual(client.writeSeq, before);
+  gate.resolve();
+  await pending;
+  assert.equal(client.pendingWrites, 0);
+  globalThis.fetch = async () => json(500, { detail: 'boom' });
+  await assert.rejects(client.post('/x', {}));
+  assert.equal(client.pendingWrites, 0, 'a failed write is not left pending');
+});

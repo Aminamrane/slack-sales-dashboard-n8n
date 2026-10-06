@@ -14,9 +14,11 @@ import React, { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
-import { CalendarCheck2, ChevronRight, Building2, UserRoundCheck, ArrowRight, PhoneCall, UserSearch, ListChecks } from 'lucide-react';
+import { CalendarCheck2, ChevronRight, Building2, UserRoundCheck, ArrowRight, PhoneCall, UserSearch, ListChecks, SlidersHorizontal } from 'lucide-react';
 import SalesProspection from "../components/setter/prospection/SalesProspection.jsx";
 import R1QualificationDialog from '../components/salesJourney/R1QualificationDialog';
+import DailyQualificationDeck from '../components/salesJourney/DailyQualificationDeck';
+import { rdvsToQualify } from '../utils/dailyQualification';
 import QualificationDialog from '../components/salesJourney/QualificationDialog';
 import ContactQualificationDialog from '../components/salesJourney/ContactQualificationDialog';
 import {contactQualificationPatch} from '../utils/contactQualification';
@@ -29,6 +31,7 @@ import { qualificationPatch } from '../utils/r2Qualification';
 import { presentContractError } from "../utils/contractErrors";
 import { IntegrationRollout, IntegrationButton, IntegrationDialog, SalesJourneySteps } from "../components/integrationPreview/TrackingIntegration";
 import { leadAvatar } from "../utils/leadAvatar";
+import { originDisplay } from "../utils/sectors";
 import { supabase } from "../lib/supabaseClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import LeadsManagement from "./LeadsManagement.jsx";
@@ -37,6 +40,7 @@ import CommonVoicemailPool from "../components/CommonVoicemailPool.jsx";
 import ReproLinkRow from "../components/booking/ReproLinkRow.jsx";
 import BookingSettings from "../components/booking/BookingSettings.jsx";
 import MyWeeklyBilan from "../components/MyWeeklyBilan.jsx";
+import SalesPreferences from "../components/salesPreferences/SalesPreferences.jsx";
 import "../index.css";
 
 // ── SIDEBAR ICONS ────────────────────────────────────────────────────────────
@@ -525,13 +529,25 @@ export default function TrackingSheet() {
   const [intakeJourneys, setIntakeJourneys] = useState({});
   const [saleOnboardingOnly, setSaleOnboardingOnly] = useState(false);
   const [qualificationDialog, setQualificationDialog] = useState(null);
+  const [qualifyDeck, setQualifyDeck] = useState(null);
+  const qualifyDeckChecked = useRef(false);
   const [contactDialog, setContactDialog] = useState(null);
   const [commentLeadId, setCommentLeadId] = useState(null);
   const [notesError, setNotesError] = useState(null);
   const isSignedPilot = lead => !!intakeJourneys[lead?.id]?.onboarding_only;
   const isGuidedLead = lead => hasGuidedSalesJourney(intakeRollout, lead, intakeContexts[lead?.id]);
-  const saveQualification = async ({result,attended,date,continueContract,followUp}) => {
-    const {lead,stage} = qualificationDialog;
+  // Qualification depuis le calendrier (06/10/2026) : même fenêtre et même enregistrement que dans la sheet.
+  const openCalendarQualification = async (ev) => {
+    const stage = ['r1', 'r2', 'r3'].includes(ev?.rdv_type) ? ev.rdv_type : null;
+    if (!stage || !ev.lead_id) return;
+    let lead = leads.find(l => l.id === ev.lead_id);
+    if (!lead) {
+      try { lead = await apiClient.get(`/api/v1/tracking/leads/${ev.lead_id}`); } catch { lead = null; }
+    }
+    if (lead) setQualificationDialog({ lead, stage, fromCalendar: true });
+  };
+  // `quiet` : appel depuis le pop-up des RDV à qualifier, sans changer d'onglet ni de fiche.
+  const saveQualificationFor = async (lead, stage, {result,attended,date,continueContract,followUp}, {quiet=false}={}) => {
     const patch=qualificationPatch(lead,stage,{result,attended,date,followUp});
     try {
       const response=await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`,patch);
@@ -544,6 +560,7 @@ export default function TrackingSheet() {
     }
     catch(error) { throw new Error(error.status===409 ? 'Ce créneau est indisponible. Vérifiez l’agenda avant de choisir une autre date.' : 'La qualification n’a pas pu être enregistrée. Vos choix sont conservés ; réessayez.'); }
     setLeads(previous=>previous.map(l=>l.id===lead.id?{...l,...patch,...(patch.r1_date?{r1:patch.r1_date}:{}),...(patch.r2_date?{r2:patch.r2_date}:{}),...(patch.r3_date?{r3:patch.r3_date}:{})}:l));
+    if(quiet)return;
     setQualificationDialog(null);
     if(patch.status==='r2'||patch.status==='r3'){
       triggerLeadMovedNotif(lead,patch.status);
@@ -557,6 +574,7 @@ export default function TrackingSheet() {
       else await handleSendContract({...lead,...patch});
     }
   };
+  const saveQualification = (payload) => saveQualificationFor(qualificationDialog.lead, qualificationDialog.stage, payload);
   useEffect(() => {
     let alive = true;
     const refresh = async () => {
@@ -1391,6 +1409,24 @@ export default function TrackingSheet() {
   const canManageLeads = currentUser?.role === 'admin' || currentUser?.role === 'head_of_sales_manager';
   const isAdmin = currentUser?.role === 'admin';
 
+  // Pop-up des RDV à qualifier (06/10/2026) : à l'ouverture de sa propre sheet, une fois par chargement ;
+  // « Plus tard » ou la fermeture le reportent de 2 h (préférence locale du navigateur).
+  const QUALIFY_DECK_SNOOZE_MS = 2 * 60 * 60 * 1000;
+  useEffect(() => {
+    if (qualifyDeckChecked.current || isAdminView || !leads.length || !currentUser?.id) return;
+    if (!['sales', 'head_of_sales', 'head_of_sales_manager'].includes(currentUser.role)) return;
+    qualifyDeckChecked.current = true;
+    let snoozedUntil = 0;
+    try { snoozedUntil = Number(localStorage.getItem(`owner_qualify_deck_snooze_${currentUser.id}`) || 0); } catch { /* stockage indisponible */ }
+    if (Date.now() < snoozedUntil) return;
+    const items = rdvsToQualify(leads);
+    if (items.length) setQualifyDeck(items);
+  }, [leads, isAdminView, currentUser]);
+  const closeQualifyDeck = () => {
+    setQualifyDeck(null);
+    try { localStorage.setItem(`owner_qualify_deck_snooze_${currentUser?.id}`, String(Date.now() + QUALIFY_DECK_SNOOZE_MS)); } catch { /* stockage indisponible */ }
+  };
+
   const fetchAllSheets = async () => {
     setSheetsLoading(true);
     try {
@@ -1934,7 +1970,7 @@ export default function TrackingSheet() {
     const dx = (destRect.left + destRect.width / 2) - (sourceRect.left + sourceRect.width / 2);
     const dy = (destRect.top + destRect.height / 2) - (sourceRect.top + sourceRect.height / 2);
     setFlyingCard({
-      lead: { full_name: lead.full_name, origin: lead.origin },
+      lead: { full_name: lead.full_name, origin: lead.origin, cc_sector: lead.cc_sector },
       sourceRect: { left: sourceRect.left, top: sourceRect.top, width: sourceRect.width, height: sourceRect.height },
       dx, dy,
       catColor: CATEGORIES[destCatIdx].color,
@@ -3042,7 +3078,7 @@ export default function TrackingSheet() {
               color: (ORIGIN_COLORS[flyingCard.lead.origin] || DEFAULT_ORIGIN).text,
               flexShrink: 0,
             }}>
-              {flyingCard.lead.origin}
+              {originDisplay(flyingCard.lead.origin, flyingCard.lead.cc_sector)}
             </span>
           </div>
           {/* Expanded: subtle content placeholder lines */}
@@ -3143,6 +3179,13 @@ export default function TrackingSheet() {
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.9 4.9L18.8 9.8 13.9 11.7 12 16.6 10.1 11.7 5.2 9.8 10.1 7.9z"/><path d="M18.5 14.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>
               ) },
               { key: 'kpis', label: 'KPIs & Stats', iconSrc: iconKpis, accent: '#6366f1' },
+              // Préférences de secteur (06/10/2026) : le dev les voit et les modifie toutes, chaque sales les siennes.
+              ...(currentUser?.role === 'admin' ? [{ key: 'sales_prefs', label: 'Préférences sales', accent: C.accent, iconNode: (active) => (
+                <SlidersHorizontal size={19} strokeWidth={2} color={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} />
+              ) }] : []),
+              ...(!isAdminView && ['sales', 'head_of_sales', 'head_of_sales_manager'].includes(currentUser?.role) ? [{ key: 'my_prefs', label: 'Mes préférences', accent: C.accent, iconNode: (active) => (
+                <SlidersHorizontal size={19} strokeWidth={2} color={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} />
+              ) }] : []),
               ...(['head_of_sales_manager', 'admin'].includes(currentUser?.role) ? [{ key: 'autoassign', label: 'Auto-affectation', accent: '#2563eb', iconNode: (active) => (
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></svg>
               ) }] : []),
@@ -3393,6 +3436,18 @@ export default function TrackingSheet() {
         {sidebarView === 'kpis' && ['admin', 'head_of_sales', 'head_of_sales_manager'].includes(currentUser?.role) && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'tabFadeIn 0.3s ease-out both' }}>
             <PerfSalesTable darkMode={darkMode} C={C} />
+          </div>
+        )}
+
+        {/* ════ VIEW: PRÉFÉRENCES DE SECTEUR (dev : toutes ; sales : les siennes) ═══ */}
+        {sidebarView === 'sales_prefs' && currentUser?.role === 'admin' && (
+          <div style={{ flex: 1, overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
+            <SalesPreferences mode="all" C={C} darkMode={darkMode} />
+          </div>
+        )}
+        {sidebarView === 'my_prefs' && !isAdminView && ['sales', 'head_of_sales', 'head_of_sales_manager'].includes(currentUser?.role) && (
+          <div style={{ flex: 1, overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
+            <SalesPreferences mode="me" C={C} darkMode={darkMode} />
           </div>
         )}
 
@@ -3726,6 +3781,7 @@ export default function TrackingSheet() {
               asUser={isAdminView ? viewingSheetId : undefined}
               reloadKey={calendarReload}
               onOpenLead={(leadId) => { setSidebarView('leads'); setTimeout(() => setSelectedLead(leadId), 100); }}
+              onQualify={isAdminView ? undefined : (ev) => openCalendarQualification(ev)}
               toolbarExtra={(
                 <button onClick={() => setShowVacationModal(true)}
                   style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: myUnavailability.length > 0 ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)') : 'transparent', color: C.text, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}
@@ -5521,7 +5577,7 @@ export default function TrackingSheet() {
                         background: origin.bg, color: origin.text,
                         flexShrink: 0,
                       }}>
-                        {lead.origin}
+                        {originDisplay(lead.origin, lead.cc_sector)}
                       </span>
 
                       {/* Compact info pills */}
@@ -6153,7 +6209,7 @@ export default function TrackingSheet() {
                   padding: '1px 7px', borderRadius: 50, fontSize: 10, fontWeight: 600,
                   background: origin.bg, color: origin.text, marginBottom: 3, alignSelf: 'flex-start',
                 }}>
-                  {lead.origin}
+                  {originDisplay(lead.origin, lead.cc_sector)}
                 </span>
                 {/* Name (editable) */}
                 {editingField?.leadId === lead.id && editingField?.field === 'full_name' ? (
@@ -9331,7 +9387,11 @@ export default function TrackingSheet() {
         await handleWorkflowSubmit(current.id, patch, {strict:true});
         setContactDialog(null);
       }}/>}
-      {qualificationDialog && (qualificationDialog.stage==='r1'?<R1QualificationDialog {...qualificationDialog} dark={darkMode} onClose={()=>setQualificationDialog(null)} onSave={saveQualification}/>:<QualificationDialog {...qualificationDialog} dark={darkMode} canPlaceR3={calSettings?.r3_enabled===true} onClose={()=>setQualificationDialog(null)} onSave={saveQualification}/>)}
+      {qualifyDeck && <DailyQualificationDeck items={qualifyDeck} dark={darkMode}
+        onSave={(lead, stage, payload) => saveQualificationFor(lead, stage, payload, { quiet: true })}
+        onOpenLead={(id) => { closeQualifyDeck(); setSidebarView('leads'); setTimeout(() => setSelectedLead(id), 100); }}
+        onClose={closeQualifyDeck} />}
+      {qualificationDialog && (()=>{const {fromCalendar,...dialogProps}=qualificationDialog;const onSave=async payload=>{await saveQualification(payload);if(fromCalendar)setCalendarReload(v=>v+1);};return dialogProps.stage==='r1'?<R1QualificationDialog {...dialogProps} dark={darkMode} onClose={()=>setQualificationDialog(null)} onSave={onSave}/>:<QualificationDialog {...dialogProps} dark={darkMode} canPlaceR3={calSettings?.r3_enabled===true} onClose={()=>setQualificationDialog(null)} onSave={onSave}/>;})()}
       {intakeDialog && <IntegrationDialog key={intakeDialog.lead_id} context={intakeDialog}
         contractDetails={{
           email: leads.find(l => l.id === intakeDialog.lead_id)?.email,

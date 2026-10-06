@@ -112,7 +112,9 @@ function ListDetail({ C, darkMode, listId, onBack, onToast, onOpenLeads, teamSal
   // RDV pris au téléphone : le lead de cette seule entreprise naît avec son R1 (rien si la pose échoue).
   const book = async (item, action) => {
     try {
-      const r = await prospectionApi.placeR1(item.id, action.body, action.email);
+      const r = action.single
+        ? await prospectionApi.bookR1(item.id, action.body, action.email)
+        : await prospectionApi.placeR1(item.id, action.body, action.email);
       onToast?.(`R1 placé le ${fmtWallDateTime(r.r1_date)} avec ${r.sales?.name || r.sales?.email} pour ${item.company.name}.`);
       await refresh();
     } catch (err) {
@@ -220,7 +222,7 @@ function ListDetail({ C, darkMode, listId, onBack, onToast, onOpenLeads, teamSal
 
       {exportResult && <ExportResult C={C} darkMode={darkMode} result={exportResult} onClose={() => setExportResult(null)} onOpenLeads={onOpenLeads} />}
       {rdvItem && (
-        <SetterJourneyDialog prospect={{ name: rdvItem.company.name }} teamSales={teamSales} dark={darkMode}
+        <SetterJourneyDialog prospect={{ name: rdvItem.company.name, itemId: rdvItem.id }} teamSales={teamSales} dark={darkMode}
           onBook={(action) => book(rdvItem, action)} onClose={() => setRdvItem(null)} />
       )}
       {confirmDelete && (

@@ -8,6 +8,7 @@ import apiClient from "../services/apiClient";
 import { supabase } from "../lib/supabaseClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import { leadAvatar } from "../utils/leadAvatar";
+import { originDisplay } from "../utils/sectors";
 import LeadsManagement from "./LeadsManagement.jsx";
 // ── Setter modales (Option B duplication intégrale TrackingSheet) ──────────
 import SetterJourneyDialog from "../components/setter/SetterJourneyDialog.jsx";
@@ -344,7 +345,16 @@ export default function TrackingSheetSetter() {
   // voicemail > mine. Implémentation : on insère par ordre croissant de priorité
   // dans une Map keyed by lead.id ; chaque insert écrase la précédente, ce qui
   // garantit que le bucket le plus prioritaire l'emporte au final.
+  // Rechargements concurrents (demande dev 06/10/2026 : « le commentaire disparaît puis réapparaît ») :
+  // une lecture partie AVANT une modification de l'utilisateur (commentaire, date, statut) et revenue
+  // APRÈS écrasait la modification avec l'ancienne version. On ignore donc une lecture qui a chevauché
+  // une écriture de cet onglet (on relit juste après) ou qu'un rechargement plus récent a dépassée.
+  const refreshSeqRef = useRef(0);
+  const refreshRetryRef = useRef(null);
+  useEffect(() => () => clearTimeout(refreshRetryRef.current), []);
   const refreshData = useCallback(async () => {
+    const seq = ++refreshSeqRef.current;
+    const writesAtStart = apiClient.writeSeq;
     try {
       // Ghost CEO : si on consulte le compte d'un setter (sheet_id + ghost=true),
       // on impersonne ce setter en lecture via ?as_setter=<email>. En usage normal
@@ -362,6 +372,13 @@ export default function TrackingSheetSetter() {
         apiClient.get('/api/v1/tracking/setter/scope-rdv' + _q).catch((e) => ({ __err: e })),
         apiClient.get('/api/v1/tracking/setter/my-team-sales' + _q).catch((e) => ({ __err: e })),
       ]);
+
+      if (seq !== refreshSeqRef.current) return;                      // un rechargement plus récent est parti
+      if (apiClient.writeSeq !== writesAtStart || apiClient.pendingWrites > 0) {
+        clearTimeout(refreshRetryRef.current);                            // lecture périmée : on relit après l'écriture
+        refreshRetryRef.current = setTimeout(() => { refreshData().catch(() => {}); }, 1500);
+        return;
+      }
 
       const extractList = (resp) => {
         if (!resp || resp.__err) return [];
@@ -1477,7 +1494,7 @@ export default function TrackingSheetSetter() {
     const dx = (destRect.left + destRect.width / 2) - (sourceRect.left + sourceRect.width / 2);
     const dy = (destRect.top + destRect.height / 2) - (sourceRect.top + sourceRect.height / 2);
     setFlyingCard({
-      lead: { full_name: lead.full_name, origin: lead.origin },
+      lead: { full_name: lead.full_name, origin: lead.origin, cc_sector: lead.cc_sector },
       sourceRect: { left: sourceRect.left, top: sourceRect.top, width: sourceRect.width, height: sourceRect.height },
       dx, dy,
       catColor: CATEGORIES[destCatIdx].color,
@@ -2470,7 +2487,7 @@ export default function TrackingSheetSetter() {
               color: (ORIGIN_COLORS[flyingCard.lead.origin] || DEFAULT_ORIGIN).text,
               flexShrink: 0,
             }}>
-              {flyingCard.lead.origin}
+              {originDisplay(flyingCard.lead.origin, flyingCard.lead.cc_sector)}
             </span>
           </div>
           {/* Expanded: subtle content placeholder lines */}
@@ -5173,7 +5190,7 @@ export default function TrackingSheetSetter() {
                           background: origin.bg, color: origin.text,
                           flexShrink: 0,
                         }}>
-                          {lead.origin}
+                          {originDisplay(lead.origin, lead.cc_sector)}
                         </span>
                       )}
 
@@ -5927,7 +5944,7 @@ export default function TrackingSheetSetter() {
                     padding: '1px 7px', borderRadius: 50, fontSize: 10, fontWeight: 600,
                     background: origin.bg, color: origin.text, marginBottom: 3, alignSelf: 'flex-start',
                   }}>
-                    {lead.origin}
+                    {originDisplay(lead.origin, lead.cc_sector)}
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
                     <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>

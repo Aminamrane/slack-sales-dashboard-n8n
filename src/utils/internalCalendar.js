@@ -153,6 +153,20 @@ export function splitEvents(events, days) {
   return { allDay, timed };
 }
 
+// Heures affichées (demande dev 06/10/2026 : « il faut que ça affiche les heures où il y a des trucs ») :
+// de 7 h à 21 h, élargies à l'heure entière du premier début et de la dernière fin s'ils en sortent.
+export const DEFAULT_HOURS = { start: 7, end: 21 };
+
+export function hourWindow(segments, base = DEFAULT_HOURS) {
+  let lo = base.start * 60;
+  let hi = base.end * 60;
+  for (const s of segments || []) {
+    lo = Math.min(lo, s.segStart);
+    hi = Math.max(hi, s.segEnd);
+  }
+  return { start: Math.max(0, Math.floor(lo / 60)), end: Math.min(24, Math.ceil(hi / 60)) };
+}
+
 export function hasWeekendEvents(events, monday) {
   const sat = addDays(monday, 5);
   const mon = addDays(monday, 7);
@@ -295,6 +309,7 @@ export const OUTCOME = {
   no_show: { label: 'No-show', color: '#dc2626', hint: 'Le prospect ne s\'est pas présenté.' },
   to_qualify: { label: 'À qualifier', color: '#d97706', hint: 'Rendez-vous passé : le résultat n\'est pas encore saisi.' },
   removed: { label: 'Retiré', color: '#94a3b8', hint: 'Le rendez-vous a été retiré de la fiche, sans résultat.' },
+  cancelled: { label: 'Annulé', color: '#94a3b8', hint: 'Le commercial a indiqué que le rendez-vous est annulé.' },
 };
 
 function channels(hex) {
