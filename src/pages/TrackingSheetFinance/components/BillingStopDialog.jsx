@@ -56,12 +56,12 @@ export default function BillingStopDialog({
   }, [open, billingLastMonth, autoLast]);
 
   // Ce qu'on enregistrerait : null = règle automatique.
-  const target = mode === 'keep' ? (month || null) : null;
+  const target = mode === 'keep' ? (month || null) : (autoLast || null);
   const unchanged = (target || null) === (billingLastMonth || null);
 
   // Aperçu serveur, à chaque changement de choix (léger délai de frappe).
   useEffect(() => {
-    if (!open || (mode === 'keep' && !month)) return undefined;
+    if (!open || !target) { setPreview(null); return undefined; }
     let live = true;
     setLoading(true);
     setError('');
@@ -85,7 +85,7 @@ export default function BillingStopDialog({
   const quick = useMemo(() => (autoLast ? [1, 2, 3].map((n) => shiftMonth(autoLast, n)) : []), [autoLast]);
 
   const save = async () => {
-    if (saving || unchanged) return;
+    if (saving || unchanged || !target) return;
     setSaving(true);
     setError('');
     try {
@@ -172,7 +172,7 @@ export default function BillingStopDialog({
             {option('auto', 'Arrêter à la date d’effet',
               autoLast
                 ? <>Dernier mois facturé : <strong>{formatMonthLabel(autoLast).toLowerCase()}</strong>. Plus aucun attendu ensuite.</>
-                : 'Sans date d’effet, la facturation s’arrête tout de suite.')}
+                : 'Renseignez une date d’effet ou choisissez le dernier mois facturé.')}
             {option('keep', 'Conserver les attendus jusqu’à…',
               'Le client reste redevable jusqu’au mois choisi, inclus (préavis, engagement…).',
               <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 9 }}>
