@@ -494,10 +494,9 @@ const MINE_FILTERS = [
   },
 ];
 
-// `salesOptions` : liste [{email, name}] des commerciaux auxquels confier le
-// lead. Fournie pour un setter, qui ne garde pas de leads mais pose un RDV POUR
-// quelqu'un ; absente pour un sales, qui récupère le lead pour lui-même.
-export default function CommonVoicemailPool({ leads = [], loading = false, claimingId = null, onClaim, canClaim = true, salesOptions = null, C, darkMode }) {
+// Pool commun des commerciaux : le sales récupère le lead pour lui-même. Plus de mode setter depuis le
+// 06/10/2026 (le pool commun est réservé aux commerciaux).
+export default function CommonVoicemailPool({ leads = [], loading = false, claimingId = null, onClaim, canClaim = true, C, darkMode }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   const [busyId, setBusyId] = useState(null);      // claim en cours
@@ -505,7 +504,6 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
   const [rdvFor, setRdvFor] = useState(null);      // lead_id du mini-formulaire RDV ouvert
   const [rdvDate, setRdvDate] = useState("");
   const [rdvKind, setRdvKind] = useState("r1"); // le sales choisit R1 ou R2 au claim
-  const [rdvSales, setRdvSales] = useState("");   // setter : commercial destinataire
   const [claimedMsg, setClaimedMsg] = useState(null);
   const [commentsFor, setCommentsFor] = useState(null); // lead dont le fil de messages est ouvert
   const [q, setQ] = useState("");
@@ -576,9 +574,7 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
     if (!rdvDate) return;
     setBusyId(id);
     try {
-      await apiClient.post(`/api/v1/tracking/pools/traitement/${id}/claim`,
-        salesOptions ? { r1_date: rdvDate, rdv_kind: rdvKind, sales_email: rdvSales }
-                     : { r1_date: rdvDate, rdv_kind: rdvKind });
+      await apiClient.post(`/api/v1/tracking/pools/traitement/${id}/claim`, { r1_date: rdvDate, rdv_kind: rdvKind });
       setClaimedMsg(`Lead récupéré avec son RDV, il est dans vos ${rdvKind === "r2" ? "R2" : "R1"} placés.`);
       setRdvFor(null); setRdvDate("");
       fetchPools();
@@ -861,20 +857,16 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                                 style={{ padding: "5px 9px", borderRadius: 7, border: `1px solid ${C.border}`, background: calledFlash[lead.id] ? "#3e7d5a" : "transparent", color: calledFlash[lead.id] ? "#fff" : C.text, fontSize: 11, fontWeight: 650, cursor: "pointer", fontFamily: "inherit", transition: "background 0.2s, color 0.2s", whiteSpace: "nowrap" }}>
                                 {calledFlash[lead.id] ? "Noté ✓" : "J'ai appelé"}
                               </button>
-                              {/* Réservé aux sales : un setter ne garde pas de leads
-                                  (il passe par la prise avec un RDV pour quelqu'un). */}
-                              {!salesOptions && (
-                                <button onClick={() => claimCallback(lead.id)} disabled={busyId === lead.id}
-                                  title="Le prospect a demandé à être rappelé : récupérer ce lead dans votre onglet « À rappeler » pour 3 jours, sans poser de RDV"
-                                  style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 7, border: "1px solid #fcd9a8", background: busyId === lead.id ? "#f3e8d8" : "#fdf4e7", color: "#b45309", fontSize: 11, fontWeight: 700, cursor: busyId === lead.id ? "wait" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                    <polyline points="16 2 16 8 22 8" /><line x1="22" y1="2" x2="16" y2="8" />
-                                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
-                                  </svg>
-                                  {busyId === lead.id ? "…" : "Demande à être rappelé"}
-                                </button>
-                              )}
-                              <button onClick={() => { setRdvFor(rdvFor === lead.id ? null : lead.id); setRdvDate(""); setRdvSales(""); setRdvKind("r1"); }}
+                              <button onClick={() => claimCallback(lead.id)} disabled={busyId === lead.id}
+                                title="Le prospect a demandé à être rappelé : récupérer ce lead dans votre onglet « À rappeler » pour 3 jours, sans poser de RDV"
+                                style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 7, border: "1px solid #fcd9a8", background: busyId === lead.id ? "#f3e8d8" : "#fdf4e7", color: "#b45309", fontSize: 11, fontWeight: 700, cursor: busyId === lead.id ? "wait" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="16 2 16 8 22 8" /><line x1="22" y1="2" x2="16" y2="8" />
+                                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
+                                </svg>
+                                {busyId === lead.id ? "…" : "Demande à être rappelé"}
+                              </button>
+                              <button onClick={() => { setRdvFor(rdvFor === lead.id ? null : lead.id); setRdvDate(""); setRdvKind("r1"); }}
                                 style={{ padding: "5px 10px", borderRadius: 7, border: `1px solid ${rdvFor === lead.id ? "#3e7d5a" : "#cfe8d9"}`, background: rdvFor === lead.id ? "#3e7d5a" : "#e9f5ee", color: rdvFor === lead.id ? "#fff" : "#2f7a53", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
                                 Prendre avec un RDV
                               </button>
@@ -901,15 +893,6 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                                 ))}
                               </div>
                               <span style={{ fontSize: 12, color: C.muted }}>le</span>
-                              {salesOptions && (
-                                <select value={rdvSales} onChange={(e) => setRdvSales(e.target.value)}
-                                  style={{ padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: darkMode ? "rgba(255,255,255,0.04)" : "#fff", color: C.text, fontSize: 12.5, fontFamily: "inherit", outline: "none" }}>
-                                  <option value="">Pour quel commercial ?</option>
-                                  {salesOptions.map((s) => (
-                                    <option key={s.email} value={s.email}>{s.name || s.email}</option>
-                                  ))}
-                                </select>
-                              )}
                               {(() => {
                                 const rdvDay = (rdvDate || "").slice(0, 10);
                                 const rdvTime = (rdvDate || "").length >= 16 ? rdvDate.slice(11, 16) : "";
@@ -929,8 +912,8 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                                   </>
                                 );
                               })()}
-                              <button onClick={() => claimTrt(lead.id)} disabled={!rdvDate || rdvDate.length < 16 || (salesOptions && !rdvSales) || busyId === lead.id}
-                                style={{ padding: "7px 14px", borderRadius: 8, border: "none", background: (!rdvDate || (salesOptions && !rdvSales)) ? C.muted : "#3e7d5a", color: "#fff", fontSize: 12, fontWeight: 700, cursor: (!rdvDate || (salesOptions && !rdvSales)) ? "default" : "pointer", fontFamily: "inherit" }}>
+                              <button onClick={() => claimTrt(lead.id)} disabled={!rdvDate || rdvDate.length < 16 || busyId === lead.id}
+                                style={{ padding: "7px 14px", borderRadius: 8, border: "none", background: !rdvDate ? C.muted : "#3e7d5a", color: "#fff", fontSize: 12, fontWeight: 700, cursor: !rdvDate ? "default" : "pointer", fontFamily: "inherit" }}>
                                 {busyId === lead.id ? "…" : "Confirmer le RDV et récupérer"}
                               </button>
                             </div>
