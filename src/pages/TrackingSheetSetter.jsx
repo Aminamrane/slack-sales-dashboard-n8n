@@ -7,7 +7,6 @@ import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import { supabase } from "../lib/supabaseClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
-import CommonVoicemailPool from "../components/CommonVoicemailPool.jsx";
 import { leadAvatar } from "../utils/leadAvatar";
 import LeadsManagement from "./LeadsManagement.jsx";
 // ── Setter modales (Option B duplication intégrale TrackingSheet) ──────────
@@ -2549,10 +2548,7 @@ export default function TrackingSheetSetter() {
                 Le reste (Notifications, Relance, Campagnes, KPIs) reste accessible. */}
             {[
               { key: 'leads', label: 'Mes leads', iconSrc: iconMyLead, accent: C.accent, keepColor: true },
-              // Barrage répondeur commun — pool TRAITEMENT uniquement (la
-              // réactivité reste aux sales). Le setter y récupère un lead en
-              // posant un R1 pour l'un de ses commerciaux.
-              { key: 'barrage', label: 'Barrage', iconSrc: iconMyLead, accent: '#0891b2' },
+              // Pas de barrage répondeur commun : réservé aux commerciaux depuis le 06/10/2026.
               // Agenda (05/10/2026) : les RDV posés chez les commerciaux (no-show visible) et les rappels.
               { key: 'agenda', label: 'Agenda', icon: <CalendarDays size={20} strokeWidth={1.8} style={{ display: 'block', margin: '0 auto' }} />, accent: C.accent },
               ...(webinarRdv?.has_tunnel ? [{ key: 'webinar_rdv', label: 'RDV webinaire', icon: <Video size={20} strokeWidth={1.8} style={{ display: 'block', margin: '0 auto' }} />, accent: C.accent }] : []),
@@ -2835,26 +2831,6 @@ export default function TrackingSheetSetter() {
 
 
         {/* ════ VIEW: KPIs (mockup) ═══════════════════════════════════════════ */}
-        {sidebarView === 'barrage' && (
-          <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
-              Barrage répondeur commun
-            </h2>
-            <p style={{ fontSize: 13, color: C.muted, margin: '0 0 24px' }}>
-              Passez un maximum d'appels. Dès que vous avez le gérant, posez le rendez-vous
-              en choisissant le commercial : le lead lui est attribué et le RDV se pose dans son agenda.
-            </p>
-            <CommonVoicemailPool
-              C={C}
-              darkMode={darkMode}
-              salesOptions={teamSales.map(s => ({
-                email: s.email || s,
-                name: s.full_name || s.name || s.email || s,
-              }))}
-            />
-          </div>
-        )}
-
         {sidebarView === 'agenda' && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '20px 28px', animation: 'tabFadeIn 0.3s ease-out both' }}>
             <InternalCalendar
