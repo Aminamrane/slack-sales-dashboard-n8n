@@ -12,7 +12,8 @@ import { originDisplay } from "../utils/sectors";
 import LeadsManagement from "./LeadsManagement.jsx";
 // ── Setter modales (Option B duplication intégrale TrackingSheet) ──────────
 import SetterJourneyDialog from "../components/setter/SetterJourneyDialog.jsx";
-import {Phone, CalendarDays, ChevronRight, UserSearch, ListChecks, UsersRound, Video} from "lucide-react";
+import {Phone, CalendarDays, ChevronRight, UserSearch, ListChecks, UsersRound, Video, RotateCcw} from "lucide-react";
+import SecondChance from "../components/setter/secondChance/SecondChance.jsx";
 import ProspectSearch from "../components/setter/prospection/ProspectSearch.jsx";
 import ProspectLists from "../components/setter/prospection/ProspectLists.jsx";
 import PilotageSetting from "../components/setter/PilotageSetting.jsx";
@@ -2568,6 +2569,8 @@ export default function TrackingSheetSetter() {
               // Pas de barrage répondeur commun : réservé aux commerciaux depuis le 06/10/2026.
               // Agenda (05/10/2026) : les RDV posés chez les commerciaux (no-show visible) et les rappels.
               { key: 'agenda', label: 'Agenda', icon: <CalendarDays size={20} strokeWidth={1.8} style={{ display: 'block', margin: '0 auto' }} />, accent: C.accent },
+              // Seconde chance (06/10/2026) : les leads que les commerciaux n'ont pas concrétisés, à reprendre.
+              { key: 'second_chance', label: 'Seconde chance', icon: <RotateCcw size={20} strokeWidth={1.8} style={{ display: 'block', margin: '0 auto' }} />, accent: C.accent },
               ...(webinarRdv?.has_tunnel ? [{ key: 'webinar_rdv', label: 'RDV webinaire', icon: <Video size={20} strokeWidth={1.8} style={{ display: 'block', margin: '0 auto' }} />, accent: C.accent }] : []),
               // Prospection : recherche d'entreprises (API Leads) et listes réservées.
               { key: 'prospect_search', label: 'Trouver des contacts', icon: <UserSearch size={20} strokeWidth={1.8} style={{ display: 'block', margin: '0 auto' }} />, accent: C.accent },
@@ -2858,6 +2861,20 @@ export default function TrackingSheetSetter() {
               canOpenLead={(leadId) => leads.some((l) => l.id === leadId)}
               onOpenLead={(leadId) => { setSidebarView('leads'); setTimeout(() => setSelectedLead(leadId), 100); }}
             />
+          </div>
+        )}
+
+        {sidebarView === 'second_chance' && (
+          <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
+              Seconde chance
+            </h2>
+            <p style={{ fontSize: 13, color: C.muted, margin: '0 0 24px', maxWidth: 760, lineHeight: 1.5 }}>
+              Des prospects qui n'ont pas abouti chez les commerciaux : rendez-vous annulé ou « pas intéressé » après l'audit.
+              Lisez tout leur parcours, reprenez ceux qui méritent un nouvel appel et reposez un rendez-vous.
+            </p>
+            <SecondChance C={C} darkMode={darkMode} teamSales={teamSales} onToast={showSetterToast}
+              asSetter={urlParams.get('ghost') === 'true' ? viewingSheetId : null} />
           </div>
         )}
 
