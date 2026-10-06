@@ -18,7 +18,7 @@ import { apiClient } from '../../services/apiClient';
 import { originDisplay } from '../../utils/sectors';
 import {
   ABSENCE_COLOR, CALLBACK_COLOR, DAY_MINUTES, GOOGLE_COLOR, GOOGLE_COLOR_DARK, HANDLED, OUTCOME, RDV_COLORS, addDays, chipColors,
-  dayOf, eventColor, filterHandled, fmtDayHead, fmtLongDate, fmtDayTitle, fmtRange, fmtSince, fmtTime, fmtWeekLabel, groupBySales, hasWeekendEvents,
+  dayOf, eventColor, filterHandled, fmtDayHead, fmtLongDate, hourWindow, fmtDayTitle, fmtRange, fmtSince, fmtTime, fmtWeekLabel, groupBySales, hasWeekendEvents,
   layoutDay, mondayOf, parisNow, rdvLabel, splitEvents, stepWorkday, weekDays,
 } from '../../utils/internalCalendar.js';
 
@@ -85,7 +85,7 @@ function SetterTag({ name }) {
   return first ? <SoftTag color="#475569" title={`Suivi par ${name}`}>{first}</SoftTag> : null;
 }
 
-function Chip({ ev, view, dark, onOpen, height, ring }) {
+function Chip({ ev, view, dark, onOpen, height, ring, offset = 0 }) {
   const tone = chipColors(eventColor(ev, dark), dark);
   const isRdv = ev.kind === 'rdv';
   const noShow = isRdv && ev.outcome === 'no_show';
@@ -105,7 +105,7 @@ function Chip({ ev, view, dark, onOpen, height, ring }) {
       onClick={(e) => { e.stopPropagation(); onOpen(ev, e.currentTarget.getBoundingClientRect()); }}
       title={`${isRdv ? `${rdvLabel(ev)} · ` : ''}${eventTitle(ev)}${noShow ? ' · No-show' : ''}${ev.crm_start ? ' · Date différente dans le CRM' : ''}`}
       style={{
-        position: 'absolute', top: (ev.segStart / 60) * HOUR_HEIGHT, height: Math.max(20, height),
+        position: 'absolute', top: ((ev.segStart - offset) / 60) * HOUR_HEIGHT, height: Math.max(20, height),
         left: `${ev.leftPct}%`, width: `calc(${ev.widthPct}% - ${toRight ? 12 : 2}px)`, zIndex: ev.zIndex,
         boxSizing: 'border-box', margin: 0, padding: roomy ? '6px 8px' : '3px 8px', textAlign: 'left',
         border: 'none', borderRadius: 10, boxShadow: `inset 0 0 0 2px ${ring}`,
@@ -340,10 +340,6 @@ export default function InternalCalendar({ view = 'sales', C, darkMode = false, 
   }, [load]);
 
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = 7 * HOUR_HEIGHT;      // 7 h, comme Tedeles
-  }, []);
-
-  useEffect(() => {
     if (!notice) return undefined;
     const t = setTimeout(() => setNotice(null), 5000);
     return () => clearTimeout(t);
@@ -376,6 +372,8 @@ export default function InternalCalendar({ view = 'sales', C, darkMode = false, 
   }, [byDay, events, anchor]);
 
   const hasAllDay = columns.some((c) => c.allDay.length > 0);
+  const hours = useMemo(() => hourWindow(columns.flatMap((c) => c.items)), [columns]);
+  const hourList = Array.from({ length: hours.end - hours.start }, (_, i) => hours.start + i);
   const counts = useMemo(() => {
     const out = { setter: 0, direction: 0 };
     for (const ev of data?.events || []) if (ev.kind === 'rdv' && ev.handled_by in out) out[ev.handled_by] += 1;
@@ -537,42 +535,42 @@ export default function InternalCalendar({ view = 'sales', C, darkMode = false, 
             </div>
 
             {/* Grille horaire */}
-            <div style={{ display: 'grid', gridTemplateColumns: cols, height: 24 * HOUR_HEIGHT, position: 'relative' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: cols, height: hourList.length * HOUR_HEIGHT, position: 'relative' }}>
               <div style={{ position: 'sticky', left: 0, zIndex: 45, background: T.surface }}>
-                {Array.from({ length: 24 }, (_, h) => h > 0 && (
-                  <div key={h} style={{ position: 'absolute', top: h * HOUR_HEIGHT - 6, right: 8, fontSize: 10, color: T.faint, fontVariantNumeric: 'tabular-nums' }}>
+                {hourList.map((h, i) => (
+                  <div key={h} style={{ position: 'absolute', top: Math.max(3, i * HOUR_HEIGHT - 6), right: 8, fontSize: 10, color: T.faint, fontVariantNumeric: 'tabular-nums' }}>
                     {h}h
                   </div>
                 ))}
               </div>
               {columns.map((c) => (
                 <div key={c.key} style={{ position: 'relative', borderLeft: `1px solid ${T.line}`, background: c.weekend ? (darkMode ? 'rgba(255,255,255,0.02)' : 'rgba(246,247,249,0.6)') : 'transparent' }}>
-                  {Array.from({ length: 24 }, (_, h) => (
+                  {hourList.map((h, i) => (
                     <div key={h}>
-                      {h > 0 && <div style={{ position: 'absolute', left: 0, right: 0, top: h * HOUR_HEIGHT, borderTop: `1px solid ${hourLine}`, pointerEvents: 'none' }} />}
-                      <div style={{ position: 'absolute', left: 0, right: 0, top: h * HOUR_HEIGHT + HOUR_HEIGHT / 2, borderTop: `1px solid ${halfLine}`, pointerEvents: 'none' }} />
+                      {i > 0 && <div style={{ position: 'absolute', left: 0, right: 0, top: i * HOUR_HEIGHT, borderTop: `1px solid ${hourLine}`, pointerEvents: 'none' }} />}
+                      <div style={{ position: 'absolute', left: 0, right: 0, top: i * HOUR_HEIGHT + HOUR_HEIGHT / 2, borderTop: `1px solid ${halfLine}`, pointerEvents: 'none' }} />
                     </div>
                   ))}
                   {c.absences.map((a) => {
-                    const from = a.period === 'pm' ? 13 : 0;
-                    const to = a.period === 'am' ? 13 : 24;
-                    return <div key={a.id} style={{ position: 'absolute', left: 0, right: 0, top: from * HOUR_HEIGHT, height: (to - from) * HOUR_HEIGHT, background: ABSENCE_HATCH, pointerEvents: 'none' }} />;
+                    const from = Math.max(hours.start, a.period === 'pm' ? 13 : 0);
+                    const to = Math.min(hours.end, a.period === 'am' ? 13 : 24);
+                    return to > from && <div key={a.id} style={{ position: 'absolute', left: 0, right: 0, top: (from - hours.start) * HOUR_HEIGHT, height: (to - from) * HOUR_HEIGHT, background: ABSENCE_HATCH, pointerEvents: 'none' }} />;
                   })}
                   {c.items.map((ev) => (
-                    <Chip key={ev.id} ev={ev} view={view} dark={darkMode} ring={ring} onOpen={openPopover}
+                    <Chip key={ev.id} ev={ev} view={view} dark={darkMode} ring={ring} onOpen={openPopover} offset={hours.start * 60}
                       height={((ev.segEnd - ev.segStart) / 60) * HOUR_HEIGHT} />
                   ))}
                 </div>
               ))}
               {!columns.length && !loading && (
-                <div style={{ position: 'absolute', left: RULER, right: 0, top: 9 * HOUR_HEIGHT, textAlign: 'center', fontSize: 13, color: T.muted }}>
+                <div style={{ position: 'absolute', left: RULER, right: 0, top: 2 * HOUR_HEIGHT, textAlign: 'center', fontSize: 13, color: T.muted }}>
                   Aucun rendez-vous ce jour-là.
                 </div>
               )}
 
               {/* Heure courante (Tedeles : trait sur la colonne du jour + pastille de l'heure) */}
-              {showNow && now.minutes < DAY_MINUTES && (() => {
-                const y = (now.minutes / 60) * HOUR_HEIGHT;
+              {showNow && now.minutes >= hours.start * 60 && now.minutes < Math.min(DAY_MINUTES, hours.end * 60) && (() => {
+                const y = (now.minutes / 60 - hours.start) * HOUR_HEIGHT;
                 const n = Math.max(1, columns.length);
                 const left = byDay ? `${RULER}px` : `calc(${RULER}px + (100% - ${RULER}px) * ${nowCol} / ${n})`;
                 const width = byDay ? `calc(100% - ${RULER}px)` : `calc((100% - ${RULER}px) / ${n})`;

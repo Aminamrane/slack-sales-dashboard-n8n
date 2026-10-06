@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   addDays, chipColors, countByOutcome, eventColor, filterHandled, fmtDayTitle, fmtRange, fmtWeekLabel, groupBySales,
-  hasWeekendEvents, layoutDay, mondayOf, parisNow, splitEvents, stepWorkday, weekDays,
+  hasWeekendEvents, hourWindow, layoutDay, mondayOf, parisNow, splitEvents, stepWorkday, weekDays,
 } from './internalCalendar.js';
 
 test('la semaine commence le lundi, y compris depuis un dimanche', () => {
@@ -98,4 +98,11 @@ test('vue direction : un jour à la fois, une colonne par commercial', () => {
     { kind: 'google' },
   ]);
   assert.deepEqual(groups.map((g) => [g.name, g.events.length]), [['Ambre', 1], ['Vincent', 2], ['Non affecté', 1]]);
+});
+
+test('la grille montre 7 h-21 h, élargie seulement si un rendez-vous en sort', () => {
+  assert.deepEqual(hourWindow([]), { start: 7, end: 21 });
+  assert.deepEqual(hourWindow([{ segStart: 9 * 60, segEnd: 10 * 60 }]), { start: 7, end: 21 });
+  assert.deepEqual(hourWindow([{ segStart: 6 * 60 + 30, segEnd: 7 * 60 }, { segStart: 21 * 60, segEnd: 22 * 60 + 15 }]), { start: 6, end: 23 });
+  assert.deepEqual(hourWindow([{ segStart: 0, segEnd: 1440 }]), { start: 0, end: 24 });
 });

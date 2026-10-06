@@ -345,7 +345,16 @@ export default function TrackingSheetSetter() {
   // voicemail > mine. Implémentation : on insère par ordre croissant de priorité
   // dans une Map keyed by lead.id ; chaque insert écrase la précédente, ce qui
   // garantit que le bucket le plus prioritaire l'emporte au final.
+  // Rechargements concurrents (demande dev 06/10/2026 : « le commentaire disparaît puis réapparaît ») :
+  // une lecture partie AVANT une modification de l'utilisateur (commentaire, date, statut) et revenue
+  // APRÈS écrasait la modification avec l'ancienne version. On ignore donc une lecture qui a chevauché
+  // une écriture de cet onglet (on relit juste après) ou qu'un rechargement plus récent a dépassée.
+  const refreshSeqRef = useRef(0);
+  const refreshRetryRef = useRef(null);
+  useEffect(() => () => clearTimeout(refreshRetryRef.current), []);
   const refreshData = useCallback(async () => {
+    const seq = ++refreshSeqRef.current;
+    const writesAtStart = apiClient.writeSeq;
     try {
       // Ghost CEO : si on consulte le compte d'un setter (sheet_id + ghost=true),
       // on impersonne ce setter en lecture via ?as_setter=<email>. En usage normal
@@ -363,6 +372,13 @@ export default function TrackingSheetSetter() {
         apiClient.get('/api/v1/tracking/setter/scope-rdv' + _q).catch((e) => ({ __err: e })),
         apiClient.get('/api/v1/tracking/setter/my-team-sales' + _q).catch((e) => ({ __err: e })),
       ]);
+
+      if (seq !== refreshSeqRef.current) return;                      // un rechargement plus récent est parti
+      if (apiClient.writeSeq !== writesAtStart || apiClient.pendingWrites > 0) {
+        clearTimeout(refreshRetryRef.current);                            // lecture périmée : on relit après l'écriture
+        refreshRetryRef.current = setTimeout(() => { refreshData().catch(() => {}); }, 1500);
+        return;
+      }
 
       const extractList = (resp) => {
         if (!resp || resp.__err) return [];

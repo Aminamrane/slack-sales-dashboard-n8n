@@ -18,6 +18,11 @@ class ApiClient {
   constructor() {
     this.baseUrl = API_URL;
     this._refreshPromise = null;
+    // Écritures de cet onglet (POST/PATCH/PUT/DELETE) : `writeSeq` avance au début et à la fin de chacune,
+    // `pendingWrites` compte celles en cours. Une page qui recharge en tâche de fond s'en sert pour ignorer
+    // une lecture qui a chevauché une modification de l'utilisateur (sinon l'ancienne version l'écrase).
+    this.writeSeq = 0;
+    this.pendingWrites = 0;
   }
 
   getToken() {
@@ -142,22 +147,28 @@ class ApiClient {
   }
 
   async request(endpoint, options = {}) {
-    const response = await this._authenticatedFetch(`${this.baseUrl}${endpoint}`, {
-      ...options,
-      headers: { 'Content-Type': 'application/json', ...options.headers },
-    });
+    const write = (options.method || 'GET').toUpperCase() !== 'GET';
+    if (write) { this.pendingWrites += 1; this.writeSeq += 1; }
+    try {
+      const response = await this._authenticatedFetch(`${this.baseUrl}${endpoint}`, {
+        ...options,
+        headers: { 'Content-Type': 'application/json', ...options.headers },
+      });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      console.error('[API] Error:', error);
-      const err = new Error(error.detail || 'Erreur API');
-      err.status = response.status;
-      err.data = error;
-      throw err;
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        console.error('[API] Error:', error);
+        const err = new Error(error.detail || 'Erreur API');
+        err.status = response.status;
+        err.data = error;
+        throw err;
+      }
+
+      if (response.status === 204) return null;
+      return response.json();
+    } finally {
+      if (write) { this.pendingWrites -= 1; this.writeSeq += 1; }
     }
-
-    if (response.status === 204) return null;
-    return response.json();
   }
 
   // ============ GENERIC HTTP METHODS ============
