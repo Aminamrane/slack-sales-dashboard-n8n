@@ -23,11 +23,11 @@ export default function SalesProspection({ view, C, darkMode, onNavigate, onOpen
       </h2>
       <p style={{ fontSize: 13, color: C.muted, margin: '0 0 24px' }}>
         {search
-          ? "Choisissez une activité (code NAF) et un département, puis réservez les entreprises dans une liste : personne d'autre ne les appellera."
+          ? "Saisissez un code NAF, puis réservez les entreprises dans une liste : personne d'autre ne les appellera."
           : "Suivez votre prospection entreprise par entreprise. « Exporter vers CRM » crée les leads dans vos Nouveaux leads, où vous posez le R1."}
       </p>
       {search ? (
-        <ProspectSearch C={C} darkMode={darkMode} onToast={onToast}
+        <ProspectSearch C={C} darkMode={darkMode} onToast={onToast} nafOnly
           onOpenList={(id) => { setListId(id); onNavigate('prospect_lists'); }} />
       ) : (
         <ProspectLists C={C} darkMode={darkMode} onToast={onToast} canBook={false}
