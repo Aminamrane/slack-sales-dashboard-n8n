@@ -1,3 +1,5 @@
+import WeatherCaseComposer, { WeatherQualification } from '../components/WeatherCaseComposer';
+import { WEATHER, weatherPresentation, weatherFilter } from '../utils/weatherCase';
 import AppointmentConfirmation from "../components/booking/AppointmentConfirmation";
 import BoardIntegrationSheet from "../components/BoardIntegrationSheet";
 import BoardContactsEditor from "../components/BoardContactsEditor";
@@ -300,7 +302,7 @@ const rowToCsvCells = (r) => {
   const { first, last } = splitName(person);
   const phone = ov(r, "phone_ovr", "contact_phone") || "";
   const email = ov(r, "email_ovr", "email") || "";
-  const band = r.meteo_score != null ? meteoBandOf(r.meteo_score) : "";
+  const band = weatherPresentation(r.meteo_score, r.meteo_context)?.label || "";
   const meteoAt = r.meteo_at ? String(r.meteo_at).slice(0, 16).replace("T", " ") : "";
   return [client, r.meteo_score ?? "", "", "", phone, first, last, email, band, r.meteo_note || "", r.meteo_by || "", meteoAt];
 };
@@ -494,8 +496,8 @@ function EtatPicker({ etat, onPick, disabled }) {
 }
 
 // Badge météo : note colorée très visible (1-2 rouge / 3 orange / 4-5 vert).
-function MeteoBadge({ score, showLabel = true }) {
-  const s = meteoStyle(score);
+function MeteoBadge({ score, context, showLabel = true }) {
+  const s = weatherPresentation(score, context);
   if (!s) return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#b6bdc9", fontSize: 12, fontWeight: 600 }}>
       <span style={{ width: 26, height: 26, borderRadius: 8, border: "1.5px dashed #cbd2e0", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#cbd2e0" }}>?</span>
@@ -514,91 +516,18 @@ function MeteoBadge({ score, showLabel = true }) {
 
 // Sélecteur météo CLIQUABLE : popup (portal) avec les 5 notes (sens + action) + une note
 // d'interaction. onSave(score, note). Read-only si disabled (badge seul).
-const METEO_MENU_H = 420;
-function MeteoPicker({ score, onSave, disabled }) {
-  const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState(null);
-  const [sel, setSel] = useState(score || null);
-  const [note, setNote] = useState("");
-  const [saving, setSaving] = useState(false);
-  const btnRef = useRef(null);
-  useEffect(() => {
-    if (!open) return undefined;
-    const close = () => setOpen(false);
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
-    return () => { window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); };
-  }, [open]);
-  if (disabled) return <MeteoBadge score={score} />;
-  const toggle = (e) => {
-    e.stopPropagation();
-    if (open) { setOpen(false); return; }
-    setSel(score || null); setNote("");
-    const r = btnRef.current.getBoundingClientRect();
-    const up = r.bottom + METEO_MENU_H > window.innerHeight && r.top > METEO_MENU_H;
-    setPos({ top: up ? r.top - 4 : r.bottom + 4, left: r.left, up });
-    setOpen(true);
-  };
-  const noteRequired = meteoNoteRequired(sel);
-  const canSave = !!sel && !saving && (!noteRequired || !!note.trim());
-  const save = async () => {
-    if (!canSave) return;
-    setSaving(true);
-    try { await onSave(sel, note.trim() || null); setOpen(false); }
-    finally { setSaving(false); }
-  };
-  return (
-    <span onClick={(e) => e.stopPropagation()}>
-      <button ref={btnRef} type="button" onClick={toggle} title="Noter le client"
-        style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4 }}>
-        <MeteoBadge score={score} />
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
-          style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.16s ease", flexShrink: 0 }}>
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
-      {open && pos && createPortal(
-        <>
-          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 10050 }} />
-          <div style={{ position: "fixed", ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }), left: pos.left, zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 8px 28px rgba(17,24,39,0.14)", padding: 14, width: 300, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", animation: "obMenuIn 0.15s cubic-bezier(0.16,1,0.3,1) both", transformOrigin: pos.up ? "bottom left" : "top left" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Météo du client</div>
-            <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-              {[1, 2, 3, 4, 5].map((n) => {
-                const st = METEO_BANDS[meteoBandOf(n)];
-                const on = sel === n;
-                return (
-                  <button key={n} type="button" onClick={() => setSel(n)}
-                    style={{ flex: 1, padding: "9px 0", borderRadius: 9, border: on ? `2px solid ${st.color}` : `1px solid ${BORDER}`, background: on ? st.bg : CARD, color: on ? st.color : TEXT, fontSize: 15, fontWeight: 800, cursor: "pointer", fontFamily: "inherit", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                  <MeteoIcon score={n} size={19} color={on ? st.color : "#9aa0ab"} />{n}</button>
-                );
-              })}
-            </div>
-            {sel && (
-              <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 10, lineHeight: 1.45 }}>
-                <span style={{ fontWeight: 700, color: METEO_BANDS[meteoBandOf(sel)].color }}>{METEO_MEANING[sel].txt}.</span>
-                {METEO_MEANING[sel].action ? ` → ${METEO_MEANING[sel].action}` : ""}
-              </div>
-            )}
-            <textarea value={note} onChange={(e) => setNote(e.target.value)}
-              placeholder="Commentaire obligatoire : expliquez la situation du client…" rows={2}
-              style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.45, marginBottom: noteRequired && !note.trim() ? 6 : 10, ...(noteRequired && !note.trim() ? { border: "1px solid #dc2626" } : {}) }} />
-            {noteRequired && !note.trim() && (
-              <div style={{ fontSize: 11, color: "#dc2626", fontWeight: 600, marginBottom: 10 }}>
-                Ajoutez un commentaire pour enregistrer cette météo.
-              </div>
-            )}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button type="button" onClick={() => setOpen(false)}
-                style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: MUTED, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Annuler</button>
-              <button type="button" onClick={save} disabled={!canSave}
-                style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: canSave ? NAVY : "#e5e7eb", color: canSave ? "#fff" : MUTED, fontSize: 12.5, fontWeight: 600, cursor: canSave ? "pointer" : "default", fontFamily: "inherit" }}>{saving ? "…" : "Enregistrer"}</button>
-            </div>
-          </div>
-        </>,
-        document.body,
-      )}
-    </span>
-  );
+function MeteoPicker({ score, context, onSave, disabled }) {
+  const [open,setOpen]=useState(false);
+  const button=useRef(null);
+  const dialog=useRef(null);
+  useEffect(()=>{if(!open)return; dialog.current?.querySelector('button')?.focus();
+    const key=e=>{if(e.key==='Escape'){e.stopPropagation();setOpen(false);button.current?.focus();}
+      if(e.key==='Tab'){const nodes=[...dialog.current.querySelectorAll('button:not(:disabled),textarea,input,summary')].filter(el=>el.getClientRects().length);const first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}};
+    const oldOverflow=document.body.style.overflow;document.body.style.overflow='hidden';
+    window.addEventListener('keydown',key);return()=>{window.removeEventListener('keydown',key);document.body.style.overflow=oldOverflow;};},[open]);
+  return <span onClick={e=>e.stopPropagation()}><button ref={button} type="button" disabled={disabled} onClick={()=>setOpen(true)} aria-label="Mettre à jour la météo" style={{border:0,background:'transparent',cursor:disabled?'default':'pointer'}}><MeteoBadge score={score} context={context}/></button>
+    {open && createPortal(<div role="presentation" style={{position:'fixed',inset:0,zIndex:10050,background:'#15251f66',display:'grid',placeItems:'center',padding:16}} onMouseDown={e=>{if(e.target===e.currentTarget){setOpen(false);button.current?.focus();}}}><div ref={dialog} role="dialog" aria-modal="true" aria-label="Mettre à jour la météo client" style={{width:'min(680px,100%)',maxHeight:'90vh',overflowY:'auto',background:'white',borderRadius:18,padding:24,boxShadow:'0 20px 80px #142c2540'}}><WeatherCaseComposer onSave={async payload=>{const ok=await onSave(payload);if(ok!==false){setOpen(false);button.current?.focus();}return ok;}} onCancel={()=>{setOpen(false);button.current?.focus();}}/></div></div>,document.body)}
+  </span>;
 }
 
 function FunnelIcon({ size = 13, color = "currentColor" }) {
@@ -1073,7 +1002,7 @@ export default function OptilexBoard({ embed = false }) {
     const c = { venir: 0, done: 0, todo: 0, recaler: 0, total: 0 };
     for (const r of rows) {
       if (!viewFilter.passes(r, false)) continue;
-      if (meteoFilter.length > 0 && !meteoFilter.includes(meteoBandOf(r.meteo_score) || "none")) continue;
+      if (meteoFilter.length > 0 && !meteoFilter.includes(weatherFilter(r.meteo_score, r.meteo_context))) continue;
       const situation = viewFilter.situationOf(r);
       if (!situation) continue;
       c[situation] += 1;
@@ -1086,8 +1015,8 @@ export default function OptilexBoard({ embed = false }) {
   // Compteurs par bande météo (rouge 1-2 / orange 3 / vert 4-5 / "none" = non noté), calculés
   // sur la base pré-météo -> le nombre affiché sur chaque chip ne bouge pas quand on coche.
   const meteoCounts = useMemo(() => {
-    const c = { rouge: 0, orange: 0, vert: 0, none: 0 };
-    for (const r of preMeteoRows) c[meteoBandOf(r.meteo_score) || "none"]++;
+    const c = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, none: 0 };
+    for (const r of preMeteoRows) c[weatherFilter(r.meteo_score, r.meteo_context)]++;
     return c;
   }, [preMeteoRows]);
 
@@ -1095,7 +1024,7 @@ export default function OptilexBoard({ embed = false }) {
   const filtered = useMemo(() => {
     const base = meteoFilter.length === 0
       ? preMeteoRows
-      : preMeteoRows.filter((r) => meteoFilter.includes(meteoBandOf(r.meteo_score) || "none"));
+      : preMeteoRows.filter((r) => meteoFilter.includes(weatherFilter(r.meteo_score, r.meteo_context)));
     // 1) Tri MANUEL par en-tête de colonne (clic) : prioritaire sur tout.
     if (sortCol && SORT_ACCESSORS[sortCol]) {
       return [...base].sort(byDateSort(SORT_ACCESSORS[sortCol], sortDir));
@@ -1206,7 +1135,8 @@ export default function OptilexBoard({ embed = false }) {
   // rollback. La dernière note = la météo courante (badge/filtre/CSV). Bump la version pour
   // rafraîchir l'historique dans la fiche.
   const [meteoHistVersion, setMeteoHistVersion] = useState(0);
-  const recordMeteo = useCallback(async (numero, score, note) => {
+  const recordMeteo = useCallback(async (numero, payload) => {
+    const {score,note,qualification}=payload;
     if (!numero || !score) return;
     mutSeq.current += 1;
     const u = apiClient.getUser() || {};
@@ -1216,10 +1146,10 @@ export default function OptilexBoard({ embed = false }) {
     setRows((prev) => prev.map((r) => {
       if (r.numero_client !== numero) return r;
       snapshot = r;
-      return { ...r, meteo_score: score, meteo_note: note || null, meteo_by: by, meteo_at: at };
+      return { ...r, meteo_score: score, meteo_context: {version:2,qualification}, meteo_note: note || null, meteo_by: by, meteo_at: at };
     }));
     try {
-      await apiClient.post("/api/v1/optilex/meteo", { numero_client: numero, score, note: note || null });
+      await apiClient.post("/api/v1/optilex/weather-cases", { numero_client: numero, ...payload });
       setMeteoHistVersion((v) => v + 1);
       return true;
     } catch (e) {
@@ -1352,10 +1282,10 @@ export default function OptilexBoard({ embed = false }) {
         {/* Météo client : de retour en chips DIRECTES (demande dev 2026-09-03) —
             Critique / Mécontent / Satisfait / Non noté, multi-sélection = union. */}
         <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
-        {["rouge", "orange", "vert", "none"].map((b) => {
+        {["5", "4", "3", "2", "1", "none"].map((b) => {
           const st = b === "none"
             ? { label: "Non noté", bg: "#eef1f6", fg: MUTED, dot: "#cbd2e0" }
-            : { label: METEO_BANDS[b].label, bg: METEO_BANDS[b].bg, fg: METEO_BANDS[b].color, dot: METEO_BANDS[b].dot };
+            : { label: WEATHER[b].label, bg: WEATHER[b].bg, fg: WEATHER[b].color, dot: WEATHER[b].color };
           const on = meteoFilter.includes(b);
           const n = meteoCounts[b] || 0;
           return (
@@ -1366,7 +1296,7 @@ export default function OptilexBoard({ embed = false }) {
               style={{ padding: "7px 12px", borderRadius: 20, border: `1px solid ${on ? st.dot : BORDER}`, background: on ? st.bg : CARD, color: on ? st.fg : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
               {b === "none"
                 ? <span style={{ width: 12, height: 12, borderRadius: "50%", border: `1.5px dashed ${st.dot}`, display: "inline-block", flexShrink: 0 }} />
-                : <MeteoIcon score={{ rouge: 1, orange: 3, vert: 5 }[b]} size={14} color={on ? st.fg : st.dot} />}
+                : <MeteoIcon score={Number(b)} size={14} color={on ? st.fg : st.dot} />}
               {st.label}
               <span style={{ fontSize: 11, fontWeight: 700, color: on ? st.fg : MUTED }}>{n}</span>
             </motion.button>
@@ -1538,8 +1468,8 @@ export default function OptilexBoard({ embed = false }) {
                       </div>
                     </td>
                     <td style={td}>
-                      <MeteoPicker score={r.meteo_score} disabled={!r.numero_client || !meteoSettable()}
-                        onSave={(sc, note) => recordMeteo(r.numero_client, sc, note)} />
+                      <MeteoPicker score={r.meteo_score} context={r.meteo_context} disabled={!r.numero_client || !meteoSettable()}
+                        onSave={payload => recordMeteo(r.numero_client, payload)} />
                     </td>
                     {/* État daté (Résiliation, Pause…) posé depuis la table -> on ouvre la fiche
                         pour saisir la date dans la foulée. + rappel sous le badge si la pause est
@@ -3121,98 +3051,21 @@ function JalonRow({ label, done, date, onToggle, onDate, alwaysDate = false, tog
 // Section météo de la fiche : note courante (badge + qui/quand), saisie inline (Owner
 // uniquement pour l'instant : score + note d'interaction), et historique des notations.
 function MeteoSection({ row, num, recordMeteo, version, onChanged }) {
-  const [hist, setHist] = useState([]);
-  const [historyLoaded, setHistoryLoaded] = useState(false);
-  const [historyError, setHistoryError] = useState("");
-  const [historyVersion, setHistoryVersion] = useState(0);
-  const refreshHistory = () => setHistoryVersion((v) => v + 1);
-  const [sel, setSel] = useState(null);
-  const [note, setNote] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [saveError, setSaveError] = useState("");
-  const settable = meteoSettable();
-  useEffect(() => {
-    let alive = true;
-    setHistoryError("");
-    apiClient.get(`/api/v1/optilex/meteo-history?numero_client=${encodeURIComponent(num)}`)
-      .then((r) => { if (alive) { setHist(r.history || []); setHistoryLoaded(true); } })
-      .catch(() => { if (alive) setHistoryError("Impossible de charger les notations. Réessayez."); });
-    return () => { alive = false; };
-  }, [num, version, historyVersion]);
-  const current = historyLoaded ? (hist[0] || null) : (row.meteo_score != null
-    ? { score: row.meteo_score, note: row.meteo_note, author_name: row.meteo_by, created_at: row.meteo_at }
-    : null);
-  const noteRequired = meteoNoteRequired(sel);
-  const canSave = !!sel && !saving && (!noteRequired || !!note.trim());
-  const save = async () => {
-    if (!canSave) return;
-    setSaving(true);
-    try {
-      setSaveError("");
-      const saved = await recordMeteo(num, sel, note.trim() || null);
-      if (saved === false) { setSaveError("La notation n’a pas pu être enregistrée. Votre texte est conservé."); return; }
-      setSel(null); setNote(""); setComposerOpen(false); refreshHistory();
-    } catch { setSaveError("La notation n’a pas pu être enregistrée. Réessayez."); }
-    finally { setSaving(false); }
-  };
-  return (
-    <div>
-      {/* Météo courante */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: settable ? 16 : (hist.length ? 16 : 4) }}>
-        <button type="button" className="ob-weather-current" disabled={!settable} onClick={() => { setComposerOpen(true); setSel(current?.score || null); }} aria-label="Modifier la météo client"><MeteoBadge score={current ? current.score : null} /></button>
-        {current
-          ? <span style={{ fontSize: 12, color: MUTED }}>dernière notation{current.author_name ? ` par ${current.author_name}` : ""} · {timeAgo(current.created_at)}</span>
-          : <span style={{ fontSize: 12.5, color: "#b6bdc9" }}>Aucune notation pour l'instant.</span>}
-      </div>
-
-      {/* Saisie (Owner uniquement pour l'instant) */}
-      {settable && (
-        <div style={{ background: "#f7f8fa", border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, marginBottom: hist.length ? 18 : 4 }}>
-          <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-            {[1, 2, 3, 4, 5].map((n) => {
-              const st = METEO_BANDS[meteoBandOf(n)];
-              const on = sel === n;
-              return (
-                <button key={n} type="button" aria-label={`Météo ${n} : ${METEO_MEANING[n].txt}`} aria-pressed={sel === n} onClick={() => { setSel(n); setComposerOpen(true); }}
-                  style={{ flex: 1, padding: "9px 0", borderRadius: 9, border: on ? `2px solid ${st.color}` : `1px solid ${BORDER}`, background: on ? st.bg : CARD, color: on ? st.color : TEXT, fontSize: 15, fontWeight: 800, cursor: "pointer", fontFamily: "inherit", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                  <MeteoIcon score={n} size={19} color={on ? st.color : "#9aa0ab"} />{n}</button>
-              );
-            })}
-          </div>
-          {composerOpen && <>
-          {sel && (
-            <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 10, lineHeight: 1.45 }}>
-              <span style={{ fontWeight: 700, color: METEO_BANDS[meteoBandOf(sel)].color }}>{METEO_MEANING[sel].txt}.</span>
-              {METEO_MEANING[sel].action ? ` → ${METEO_MEANING[sel].action}` : ""}
-            </div>
-          )}
-          <textarea value={note} onChange={(e) => setNote(e.target.value)}
-            aria-label="Commentaire de la météo" placeholder="Commentaire obligatoire : expliquez la situation du client…" rows={3} maxLength={4000} required
-            style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.45, ...(noteRequired && !note.trim() ? { border: "1px solid #dc2626" } : {}) }} />
-          {noteRequired && !note.trim() && (
-            <div style={{ fontSize: 11.5, color: "#dc2626", fontWeight: 600, marginTop: 6 }}>
-              Ajoutez un commentaire pour enregistrer cette météo.
-            </div>
-          )}
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
-            <button type="button" onClick={save} disabled={!canSave}
-              style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: canSave ? NAVY : "#e5e7eb", color: canSave ? "#fff" : MUTED, fontSize: 13, fontWeight: 600, cursor: canSave ? "pointer" : "default", fontFamily: "inherit" }}>{saving ? "…" : "Enregistrer la note"}</button>
-          </div>
-          </>}
-        </div>
-      )}
-
-      {saveError && <p role="alert" style={{ color: "#b91c1c", fontSize: 12 }}>{saveError}</p>}
-      {historyError && <div role="alert" style={{ color: "#b91c1c", marginBottom: 10 }}>
-        {historyError} <button type="button" onClick={refreshHistory}>Réessayer</button>
-      </div>}
-      <SecTitle icon="comments">Échanges et notations</SecTitle>
-      <CommentThread numero={num} ratings={hist} ratingsLoading={!historyLoaded && !historyError}
-        onRatingEdited={(updated) => { setHist(items => items.map(item => item.id === updated.id ? updated : item)); onChanged(); }}
-        onRatingDeleted={() => { refreshHistory(); onChanged(); }} onRatingConflict={refreshHistory} />
-    </div>
-  );
+  const [hist,setHist]=useState([]);
+  const [loaded,setLoaded]=useState(false);
+  const [error,setError]=useState('');
+  const [refresh,setRefresh]=useState(0);
+  const [open,setOpen]=useState(false);
+  const settable=meteoSettable();
+  useEffect(()=>{let alive=true;setError('');apiClient.get(`/api/v1/optilex/meteo-history?numero_client=${encodeURIComponent(num)}`).then(r=>{if(alive){setHist(r.history||[]);setLoaded(true);}}).catch(()=>{if(alive)setError('Impossible de charger les notations.');});return()=>{alive=false;};},[num,version,refresh]);
+  const current=loaded?hist[0]:{score:row.meteo_score,weather_context:row.meteo_context,author_name:row.meteo_by,created_at:row.meteo_at};
+  return <div>
+    <div style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}><MeteoBadge score={current?.score} context={current?.weather_context}/>{current?.author_name && <span style={{fontSize:11,color:MUTED}}>Par {current.author_name} · {timeAgo(current.created_at)}</span>}</div>
+    {settable && (open ? <WeatherCaseComposer onCancel={()=>setOpen(false)} onSave={async payload=>{const ok=await recordMeteo(num,payload);if(ok!==false){setOpen(false);setRefresh(v=>v+1);}return ok;}}/> : <button type="button" className="wc-reply-button" onClick={()=>setOpen(true)}>Mettre à jour la météo</button>)}
+    {error && <p role="alert">{error} <button onClick={()=>setRefresh(v=>v+1)}>Réessayer</button></p>}
+    <SecTitle icon="comments">Échanges et notations</SecTitle>
+    <CommentThread numero={num} ratings={hist} ratingsLoading={!loaded&&!error} onRatingEdited={updated=>{setHist(items=>items.map(item=>item.id===updated.id?updated:item));onChanged();}} onRatingDeleted={()=>{setRefresh(v=>v+1);onChanged();}} onRatingConflict={()=>setRefresh(v=>v+1)}/>
+  </div>;
 }
 
 // Editing preserves the score and original chronology. Capabilities come from the API.
@@ -3248,7 +3101,7 @@ function RatingHistoryActions({ rating, numero, onEdited, onDeleted, onConflict 
   };
   const actionStyle = { border: "none", background: "transparent", padding: "5px 0", fontSize: 12, color: MUTED, cursor: "pointer", fontFamily: "inherit" };
   return <div>
-    {rating.note && <DetailText text={rating.note} />}
+    {rating.weather_context?.qualification ? <WeatherQualification context={rating.weather_context}/> : rating.note && <DetailText text={rating.note} />}
     {rating.note_updated_at && <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>
       Commentaire modifié{rating.note_updated_by_name ? ` par ${rating.note_updated_by_name}` : ""} · {timeAgo(rating.note_updated_at)}
     </div>}
@@ -3282,6 +3135,7 @@ function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingE
   const meName = me.name || me.full_name || me.first_name || me.email || "Moi";
   const [comments, setComments] = useState([]);
   const [draft, setDraft] = useState("");
+  const [replyTo,setReplyTo]=useState(null);
   const [expanded, setExpanded] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -3313,6 +3167,7 @@ function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingE
   const [notice, setNotice] = useState("");
   const [searchParams] = useSearchParams();
   const focusComments = searchParams.get("focus") === "comments";
+  const focusRating = searchParams.get("rating");
   const rootRef = useRef(null);
   useEffect(() => {
     let alive = true;
@@ -3324,9 +3179,9 @@ function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingE
   useEffect(() => {
     if (!focusComments || loading) return undefined;
     setExpanded(true);
-    const timer = setTimeout(() => rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
+    const timer = setTimeout(() => (focusRating && document.getElementById(`weather-${focusRating}`) || rootRef.current)?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
     return () => clearTimeout(timer);
-  }, [focusComments, loading]);
+  }, [focusComments, focusRating, loading, ratings]);
   useEffect(() => {
     if (!notice) return undefined;
     const timer = setTimeout(() => setNotice(""), 8000);
@@ -3363,16 +3218,16 @@ function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingE
     if (!body || posting) return;
     setPosting(true);
     try {
-      const created = await apiClient.post("/api/v1/optilex/comments", { numero_client: numero, body, mentions: mentionedIds(body, people) });
+      const created = await apiClient.post("/api/v1/optilex/comments", { numero_client: numero, body, mentions: mentionedIds(body, people), rating_id: replyTo?.id || null });
       setComments((prev) => [created, ...prev]);
-      setDraft("");
+      setDraft(""); setReplyTo(null);
       setNotice(notifiedSummary(created.notified));
     } catch (e) { setError("Le commentaire n’a pas pu être publié. Votre texte est conservé."); }
     finally { setPosting(false); }
   };
 
   const entries = [
-    ...comments.map(c => ({ ...c, kind: "comment", key: `comment-${c.id}` })),
+    ...comments.filter(c=>!c.rating_id || !ratings.some(r=>r.id===c.rating_id)).map(c => ({ ...c, kind: "comment", key: `comment-${c.id}` })),
     ...ratings.map(c => ({ ...c, kind: "rating", key: `rating-${c.id}` })),
   ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at) || (a.kind === b.kind ? b.id - a.id : a.kind.localeCompare(b.kind)));
   const shown = expanded ? entries : entries.slice(0, 3);
@@ -3388,6 +3243,7 @@ function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingE
       <div style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: "12px 14px", marginBottom: comments.length ? 18 : 4, background: "#fafbfc" }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: TEXT }}>Écrire dans l’espace commun</div>
         <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8, lineHeight: 1.45 }}>Visible par Owner, Opti’Lex et la finance. Tapez @ pour prévenir quelqu’un : il reçoit un e-mail et une notification.</div>
+      {replyTo && <div className="wc-reply-context"><span>Réponse à la météo {replyTo.score}/5 · {weatherPresentation(replyTo.score,replyTo.weather_context)?.label}</span><button type="button" onClick={()=>setReplyTo(null)}>Annuler</button></div>}
       <div style={{ display: "flex", gap: 10 }}>
         <Avatar name={meName} src={me.avatar_url} size={32} />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -3410,15 +3266,17 @@ function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingE
       {/* Fil */}
       <AnimatePresence initial={false}>
         {shown.map((c) => c.kind === "rating" ? (
-          <motion.div key={c.key} initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: "flex", gap: 10, padding: "14px 0", borderBottom: `1px solid ${BORDER}` }}>
-            <span style={{ width: 32, height: 32, borderRadius: 10, background: (meteoStyle(c.score) || {}).bg, display: "grid", placeItems: "center", flexShrink: 0 }}><MeteoIcon score={c.score} size={18} /></span>
+          <motion.div key={c.key} id={`weather-${c.id}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: "flex", gap: 10, padding: "14px 0", borderBottom: `1px solid ${BORDER}` }}>
+            <span style={{ width: 32, height: 32, borderRadius: 10, background: weatherPresentation(c.score,c.weather_context)?.bg, display: "grid", placeItems: "center", flexShrink: 0 }}><MeteoIcon score={c.score} size={18} /></span>
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ display: "flex", gap: 7, alignItems: "baseline", flexWrap: "wrap", fontSize: 12 }}>
                 <strong>{c.author_name || c.author_email || "—"}</strong>
-                <span style={{ color: (meteoStyle(c.score) || {}).color, fontWeight: 600 }}>Météo · {c.score}/5</span>
+                <span style={{ color: weatherPresentation(c.score,c.weather_context)?.color, fontWeight: 600 }}>Météo · {c.score}/5 · {weatherPresentation(c.score,c.weather_context)?.label}</span>
                 <span title={fmt(c.created_at)} style={{ color: MUTED }}>{timeAgo(c.created_at)}</span>
               </div>
               <RatingHistoryActions rating={c} numero={numero} onEdited={onRatingEdited} onDeleted={onRatingDeleted} onConflict={onRatingConflict} />
+              <button type="button" className="wc-reply-button" onClick={()=>{setReplyTo(c);rootRef.current?.scrollIntoView({behavior:'smooth',block:'start'});}}>Répondre à cette météo{comments.filter(r=>r.rating_id===c.id).length ? ` (${comments.filter(r=>r.rating_id===c.id).length})` : ''}</button>
+              {comments.filter(r=>r.rating_id===c.id).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).map(reply=><div className="wc-linked-reply" key={reply.id}><p style={{fontSize:11,color:MUTED}}><strong>{reply.author_name||reply.author_email}</strong> · {timeAgo(reply.created_at)}</p>{editingId===reply.id ? <div><MentionTextarea value={editDraft} onChange={setEditDraft} people={people} rows={2} maxLength={4000}/><button type="button" className="wc-reply-button" disabled={savingEdit||!editDraft.trim()} onClick={saveEdit}>Enregistrer</button><button type="button" className="wc-reply-button" onClick={()=>setEditingId(null)}>Annuler</button></div> : <DetailText text={<MentionedText text={reply.body} mentions={reply.mentions}/>} measureKey={reply.body}/>}{canEdit(reply)&&editingId!==reply.id&&<div><button type="button" className="wc-reply-button" onClick={()=>{setEditingId(reply.id);setEditDraft(reply.body);}}>Modifier</button>{confirmDeleteId===reply.id?<><button type="button" className="wc-reply-button" disabled={!!deletingId} onClick={()=>deleteComment(reply.id)}>Confirmer la suppression</button><button type="button" className="wc-reply-button" onClick={()=>setConfirmDeleteId(null)}>Annuler</button></>:<button type="button" className="wc-reply-button" onClick={()=>setConfirmDeleteId(reply.id)}>Supprimer</button>}</div>}</div>)}
             </div>
           </motion.div>
         ) : (
