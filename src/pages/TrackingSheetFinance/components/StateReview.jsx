@@ -12,7 +12,7 @@ export function StateReviewQueue({ onOpenClient }) {
   useEffect(() => {load();const t=setInterval(load,30000);return()=>clearInterval(t);},[load]);
   return <section style={{padding:24}}>
     <div style={{display:'flex',justifyContent:'space-between',gap:12}}><h3 style={{margin:0}}>États à traiter · {items.length}</h3><button style={button} onClick={load}><RefreshCw size={15}/>Actualiser</button></div>
-    <p style={{color:'#787774'}}>Les situations déclarées dans le board attendent une décision financière. Les montants restent inchangés jusqu’au traitement.</p>
+    <p style={{color:'#787774'}}>Le CEO acte la rétractation ou la résiliation dans le dashboard. La finance en traite ensuite les conséquences sur les montants, sans revalider la décision du CEO.</p>
     {error && <p role="alert" style={{color:'#b42318'}}>{error}</p>}
     {!error && !items.length && <p>Aucun état en attente de traitement financier.</p>}
     {items.map(r=><article key={r.client_id} style={box}>
@@ -42,9 +42,9 @@ export default function StateReview({ clientId, version, canProcess, onChanged, 
   if (review?.status==='none' || (review?.status==='processed' && !review.reviewed_at && !review.finance_withdrawn_at)) return null;
   const pending=review?.status==='pending', loss=review?.active_loss, state=review?.requested_state;
   return <section style={{...box,background:pending?'#fffcf4':'#f6faf7',borderColor:pending?'#e6d7b2':'#d9e6dc'}} aria-label="Traitement financier de la situation">
-    <div style={{display:'flex',gap:8,alignItems:'center',fontWeight:650}}>{pending?<Clock3 size={17}/>:<ClipboardCheck size={17}/>} {pending?'Traitement financier à effectuer':'Situation examinée en finance'}</div>
-    {!pending && review?.decision && <p>Décision : {({withdrawal:'rétractation traitée', 'billing-stop':'fin de facturation fixée', resume:'facturation rétablie', keep:'traitement financier conservé, aucun montant modifié'})[review.decision]} · {review.reviewed_by}</p>}
-    {pending && <p style={{margin:'8px 0'}}><strong>{state || 'Retour automatique'}</strong> : déclaration enregistrée dans le board. Les montants restent ceux du dernier traitement financier.</p>}
+    <div style={{display:'flex',gap:8,alignItems:'center',fontWeight:650}}>{pending?<Clock3 size={17}/>:<ClipboardCheck size={17}/>} {pending?'Traitement financier à effectuer':'Traitement financier effectué'}</div>
+    {!pending && review?.decision && <p>Traitement effectué : {({withdrawal:'rétractation traitée', 'billing-stop':'fin de facturation fixée', resume:'facturation rétablie', keep:'traitement financier conservé, aucun montant modifié'})[review.decision]} · {review.reviewed_by}</p>}
+    {pending && <p style={{margin:'8px 0'}}><strong>{state || 'Retour automatique'}</strong> : situation enregistrée dans le board. Le traitement des montants reste à effectuer par la finance, sans modifier cette situation.</p>}
     {review?.finance_withdrawn_at && <p>Rétractation déjà traitée en finance, avec effet au {formatDateFR(review.finance_withdrawn_at)}. Un changement dans le board ne restaure pas les attendus.</p>}
     {review?.linked_loss_id && <p style={{display:'flex',gap:6,alignItems:'center'}}><Link2 size={15}/>Perte n°{review.linked_loss_id} rattachée et conservée.</p>}
     {pending && loss && <div style={{padding:12,background:'#fff',border:'1px solid #e6e3dc',borderRadius:8,margin:'12px 0'}}>
@@ -56,9 +56,9 @@ export default function StateReview({ clientId, version, canProcess, onChanged, 
       {loss.snapshot?.periods?.length>0 && <details><summary style={{cursor:'pointer'}}>Voir les échéances concernées</summary>{loss.snapshot.periods.map(p=><div key={p.period}>{formatDateFR(p.period)} · Owner {formatEUR(p.expected_owner)} → {formatEUR(p.new_expected_owner)} · Opti’Lex {formatEUR(p.expected_optilex_ttc)} → {formatEUR(p.new_expected_optilex_ttc)}</div>)}</details>}
     </div>}
     {pending && canProcess && <div style={{display:'grid',gap:10}}>
-      <label>Décision financière<select aria-label="Décision financière" value={action} onChange={e=>{setAction(e.target.value);setConfirmed(false);}} style={{...button,display:'block',width:'100%',marginTop:5}}>
+      <label>Traitement financier<select aria-label="Traitement financier" value={action} onChange={e=>{setAction(e.target.value);setConfirmed(false);}} style={{...button,display:'block',width:'100%',marginTop:5}}>
         <option value="">Choisir le traitement…</option>
-        {state==='Rétractation' && <option value="withdrawal">Acter la rétractation en finance</option>}
+        {state==='Rétractation' && <option value="withdrawal">Appliquer les conséquences financières de la rétractation</option>}
         {terminal.has(state) && <option value="billing-stop">Fixer le dernier mois facturé</option>}
         {!terminal.has(state) && state!=='Rétractation' && !review.finance_withdrawn_at && <option value="resume">Rétablir la facturation</option>}
         <option value="keep">Conserver le traitement financier actuel</option>
@@ -67,8 +67,8 @@ export default function StateReview({ clientId, version, canProcess, onChanged, 
       {action==='withdrawal' && <p>Les attendus sont annulés depuis la signature. Les encaissements et remboursements sont conservés. {loss ? 'La perte existante sera conservée, sans doublon.' : 'Une perte de rétractation sera enregistrée.'}</p>}
       {loss && action && <label style={{display:'flex',gap:8,alignItems:'flex-start'}}><input type="checkbox" checked={link} onChange={e=>{setLink(e.target.checked);setConfirmed(false);}}/>J’ai vérifié le périmètre : cette perte correspond à la situation déclarée. La rattacher.</label>}
       {action==='resume' && <p>Le calendrier sera recalculé selon le contrat ; les montants fixés manuellement et les encaissements seront conservés.</p>}
-      {action==='keep' && <p>La situation sera marquée comme examinée, sans modifier les montants ni annuler une opération existante.</p>}
-      {action && <label style={{display:'flex',gap:8}}><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>Je confirme cette décision financière.</label>}
+      {action==='keep' && <p>Le suivi financier sera marqué comme traité, sans modifier les montants ni la situation actée dans le board.</p>}
+      {action && <label style={{display:'flex',gap:8}}><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>Je confirme ce traitement des montants. La situation du client reste inchangée.</label>}
       <button style={{...button,justifyContent:'center',background:'#292b31',color:'#fff',opacity:(!confirmed || busy) ? 0.5 : 1}} disabled={!confirmed || busy || (action==='withdrawal' && loss && !link) || (action==='billing-stop' && !/^(0[1-9]|1[0-2])\/\d{4}$/.test(month))} onClick={process}>{busy?'Enregistrement…':'Enregistrer le traitement financier'}</button>
     </div>}
     {pending && !canProcess && <p>La direction financière peut traiter cet état depuis cette fiche.</p>}
