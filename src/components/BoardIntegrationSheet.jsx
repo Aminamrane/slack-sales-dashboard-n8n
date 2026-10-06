@@ -1,3 +1,5 @@
+import WeatherCaseComposer from './WeatherCaseComposer';
+import { weatherPresentation } from '../utils/weatherCase';
 import { useEffect, useRef, useState } from 'react';
 import { Download, FileText, LoaderCircle } from 'lucide-react';
 import apiClient from '../services/apiClient';
@@ -11,37 +13,15 @@ const fmtDate = (iso) => { try { return iso ? new Date(iso).toLocaleDateString('
 
 // Notation d'onboarding : 5 niveaux + description obligatoire. Réutilisé par le parcours
 // « Faire l'onboarding » ; ici il apparaît dès que la partie commerciale est terminée.
-export function OnboardingRatingForm({ numero, onSaved, compact = false }) {
-  const [weather, setWeather] = useState(null);
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const canSave = !!weather && note.trim().length > 0 && !busy;
-  async function save() {
-    if (!canSave) return;
-    setBusy(true); setError('');
-    try {
-      const data = await apiClient.put('/api/v1/optilex/integration-sheet/onboarding', { numero_client: numero, weather, weather_note: note.trim() });
-      onSaved?.(data);
-    } catch (e) {
-      const detail = e?.response?.data?.detail || e?.data?.detail || e?.message;
-      setError(typeof detail === 'string' ? detail : 'Enregistrement impossible, réessayez.');
-    } finally { setBusy(false); }
-  }
-  return <div style={{ marginTop: compact ? 0 : 12, padding: compact ? 0 : 12, borderRadius:10, border: compact ? 'none' : '1px dashed #b9c9c6', background: compact ? 'transparent' : '#fff' }}>
-    {!compact && <div style={{ fontSize:12.5, fontWeight:700, color:'#1e2330', marginBottom:6 }}>Votre météo d’onboarding</div>}
-    {/* Même sélecteur, mêmes icônes et couleurs que la météo client du board : c'est la même météo. */}
-    <MeteoPicker value={weather} onChange={setWeather} />
-    <div style={{ margin:'8px 0' }}><MeteoMeaning value={weather} /></div>
-    <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} maxLength={2000}
-      placeholder="Ce que vous retenez de l’onboarding : situation, points d’attention, prochaines étapes (obligatoire)"
-      style={{ width:'100%', boxSizing:'border-box', padding:'8px 10px', borderRadius:8, border:'1px solid #dce3e1', fontSize:12.5, fontFamily:'inherit', resize:'vertical', marginBottom:8 }} />
-    <button type="button" disabled={!canSave} onClick={save}
-      style={{ ...buttonStyle, width:'100%', background: canSave ? '#253f3d' : '#e9ebf0', color: canSave ? '#fff' : '#8a93a4', border:'none', cursor: canSave ? 'pointer' : 'default' }}>
-      {busy ? <LoaderCircle size={15}/> : <FileText size={15}/>}{busy ? 'Enregistrement…' : 'Enregistrer et finaliser la fiche'}
-    </button>
-    {error && <p role="alert" style={{ margin:'8px 0 0', fontSize:12, color:'#b42318' }}>{error}</p>}
-  </div>;
+export function OnboardingRatingForm({ numero, onSaved }) {
+  return <WeatherCaseComposer requireNote saveLabel="Enregistrer et finaliser la fiche" onSave={async payload=>{
+    const data=await apiClient.put('/api/v1/optilex/integration-sheet/onboarding', {
+      numero_client:numero, weather:payload.score, weather_note:payload.note,
+      weather_context:{version:2,qualification:payload.qualification},request_key:payload.request_key,mentions:payload.mentions,
+    });
+    onSaved?.(data);
+    return true;
+  }}/>;
 }
 
 // `compact` (onglet Détails du board, dev 25/09) : une ligne statut + PDF. La météo
@@ -118,7 +98,7 @@ export default function BoardIntegrationSheet({ numero, onRated, compact = false
       <div style={{ margin:'10px 0 0', fontSize:11.5, lineHeight:1.6, color:'#687483' }}>
         <div>Partie commerciale : {state.author_name || 'commercial'}{state.updated_at ? ` · ${fmtDate(state.updated_at)}` : ''}</div>
         <div>Onboarding : {onboarding?.completed
-          ? <>{onboarding.author_name || 'Client Success'}{onboarding.completed_at ? ` · ${fmtDate(onboarding.completed_at)}` : ''}{onboarding.weather ? ` · météo ${onboarding.weather}/5, ${METEO_MEANING[onboarding.weather]?.txt || ''}` : ''}</>
+          ? <>{onboarding.author_name || 'Client Success'}{onboarding.completed_at ? ` · ${fmtDate(onboarding.completed_at)}` : ''}{onboarding.weather ? ` · météo ${onboarding.weather}/5, ${weatherPresentation(onboarding.weather,onboarding.weather_context)?.label || ''}` : ''}</>
           : <span style={{ color:'#b45309', fontWeight:600 }}>météo d’onboarding en attente</span>}</div>
       </div>
       {canRate && <OnboardingRatingForm numero={numero} onSaved={onRatingSaved} />}
