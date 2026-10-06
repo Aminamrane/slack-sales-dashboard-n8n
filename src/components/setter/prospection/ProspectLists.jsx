@@ -1,5 +1,7 @@
-// « Mes listes » : les listes d'entreprises réservées par le setter, leur entonnoir de prospection,
-// les fiches société, l'export CSV et l'export vers le CRM (leads dans « Mes leads »).
+// « Mes listes » : les listes d'entreprises réservées par le setter ou le commercial (06/10/2026), leur
+// entonnoir de prospection, les fiches société, l'export CSV et l'export vers le CRM (leads dans « Mes
+// leads »). `canBook` : prise de RDV depuis la liste (parcours setter ; un commercial pose son R1 depuis
+// sa sheet après l'export).
 import { useCallback, useEffect, useState } from 'react';
 import {
   Building2, CalendarDays, FileText, Mail, Send, MessageCircle, ChevronRight, ChevronDown, Download, Upload,
@@ -11,7 +13,7 @@ import { prospectionApi, errorMessage } from './prospectionApi';
 import { Card, Chip, Button, Modal, IconButton, ProspectionStyles } from './ui';
 import { MONO, fmtInt, fmtDay, fmtWallDateTime, inputStyle, STATUS_META, chipColors } from './format';
 
-export default function ProspectLists({ C, darkMode, onToast, openListId, onOpenList, onOpenLeads, teamSales = [] }) {
+export default function ProspectLists({ C, darkMode, onToast, openListId, onOpenList, onOpenLeads, teamSales = [], canBook = true }) {
   const [lists, setLists] = useState(null);
   const [error, setError] = useState('');
 
@@ -21,7 +23,7 @@ export default function ProspectLists({ C, darkMode, onToast, openListId, onOpen
   useEffect(() => { if (!openListId) load(); }, [openListId, load]);
 
   if (openListId) {
-    return <ListDetail C={C} darkMode={darkMode} listId={openListId} onBack={() => onOpenList(null)} onToast={onToast} onOpenLeads={onOpenLeads} teamSales={teamSales} />;
+    return <ListDetail C={C} darkMode={darkMode} listId={openListId} onBack={() => onOpenList(null)} onToast={onToast} onOpenLeads={onOpenLeads} teamSales={teamSales} canBook={canBook} />;
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -76,7 +78,7 @@ function Funnel({ C, counts, compact }) {
   );
 }
 
-function ListDetail({ C, darkMode, listId, onBack, onToast, onOpenLeads, teamSales }) {
+function ListDetail({ C, darkMode, listId, onBack, onToast, onOpenLeads, teamSales, canBook }) {
   const [list, setList] = useState(null);
   const [items, setItems] = useState(null);
   const [q, setQ] = useState('');
@@ -205,7 +207,7 @@ function ListDetail({ C, darkMode, listId, onBack, onToast, onOpenLeads, teamSal
       {items?.items.length === 0 && <div style={{ color: C.muted, fontSize: 14 }}>Aucune entreprise ne correspond.</div>}
       {items?.items.map((item) => (
         <CompanyCard key={item.id} C={C} darkMode={darkMode} item={item} onStatus={(s) => changeStatus(item, s)}
-          onBook={list.is_owner ? () => setRdvItem(item) : null}
+          onBook={canBook && list.is_owner ? () => setRdvItem(item) : null}
           onExport={() => exportCrm([item.id])} onRemove={() => removeItem(item)} onOpenLeads={onOpenLeads} busy={busy === 'crm'} />
       ))}
       {items && items.pages > 1 && (
@@ -224,7 +226,7 @@ function ListDetail({ C, darkMode, listId, onBack, onToast, onOpenLeads, teamSal
       {confirmDelete && (
         <Modal C={C} darkMode={darkMode} title="Supprimer la liste ?" onClose={() => setConfirmDelete(false)}>
           <p style={{ marginTop: 0, fontSize: 14, color: C.muted, lineHeight: 1.6 }}>
-            {list.to_release > 0 && <>{fmtInt(list.to_release)} entreprise{list.to_release > 1 ? 's' : ''} jamais contactée{list.to_release > 1 ? 's' : ''} redevien{list.to_release > 1 ? 'nent' : 't'} disponible{list.to_release > 1 ? 's' : ''} pour les autres setters. </>}
+            {list.to_release > 0 && <>{fmtInt(list.to_release)} entreprise{list.to_release > 1 ? 's' : ''} jamais contactée{list.to_release > 1 ? 's' : ''} redevien{list.to_release > 1 ? 'nent' : 't'} disponible{list.to_release > 1 ? 's' : ''} pour les autres. </>}
             {list.to_consume > 0 && <>{fmtInt(list.to_consume)} déjà traitée{list.to_consume > 1 ? 's' : ''} {list.to_consume > 1 ? 'sont marquées' : 'est marquée'} comme utilisée{list.to_consume > 1 ? 's' : ''} dans l'outil et ne {list.to_consume > 1 ? 'seront' : 'sera'} plus proposée{list.to_consume > 1 ? 's' : ''} à personne. </>}
             Les leads déjà créés dans le CRM restent dans « Mes leads ».
           </p>
@@ -326,7 +328,7 @@ function CompanyCard({ C, darkMode, item, onStatus, onBook, onExport, onRemove, 
                 title={c.phone ? 'Exporter cette entreprise vers le CRM, sans rendez-vous' : 'Pas de téléphone : export impossible'}><Upload size={19} /></IconButton>}
           {!item.crm_lead_id && (
             <IconButton C={C} darkMode={darkMode} tone="danger" onClick={onRemove}
-              title={item.manual_status === 'a_contacter' ? "Retirer de la liste : l'entreprise redevient disponible pour les autres setters"
+              title={item.manual_status === 'a_contacter' ? "Retirer de la liste : l'entreprise redevient disponible pour les autres"
                 : 'Retirer de la liste : déjà traitée, elle ne sera plus proposée à personne'}><Trash2 size={19} /></IconButton>
           )}
         </span>

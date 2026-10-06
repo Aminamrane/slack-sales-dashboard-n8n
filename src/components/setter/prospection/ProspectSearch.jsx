@@ -256,7 +256,7 @@ function CreateListModal({ C, darkMode, criteria, total, max, onClose, onCreate 
             style={{ ...inputStyle(C), width: 160, marginTop: 6, display: 'block' }} />
         </label>
         <p style={{ margin: 0, fontSize: 13, color: C.muted, lineHeight: 1.55 }}>
-          Les entreprises sont prises dans le stock avec ces mêmes critères et vous sont réservées : aucun autre setter ne les
+          Les entreprises sont prises dans le stock avec ces mêmes critères et vous sont réservées : personne d'autre ne les
           recevra. {fmtInt(max)} au plus par liste. Si d'autres réservations passent entre-temps, la liste peut en contenir un peu moins.
         </p>
         {error && <div role="alert" style={{ color: '#b42318', fontSize: 13 }}>{error}</div>}
