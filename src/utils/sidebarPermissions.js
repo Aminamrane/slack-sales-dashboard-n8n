@@ -47,8 +47,9 @@ const ITEM_ROLE_GATE = {
   leads_management: new Set(["ceo", "admin", "head_of_acquisition"]),
   // « Leads < 100 k€ » : Paul (ceo) et les admins (données de contact de leads non affectés).
   small_leads: new Set(["ceo", "admin"]),
-  // « Setters » : RDV posés par les setters et clients amenés (05/10), Paul (ceo) et les admins.
-  setters_stats: new Set(["ceo", "admin"]),
+  // « Setters » : RDV posés par les setters et clients amenés (05/10), Paul (ceo), les admins et Gaylord
+  // (acquisition_director, 06/10).
+  setters_stats: new Set(["ceo", "admin", "acquisition_director"]),
   // « Agenda des RDV » : Paul (ceo), Gaylord (acquisition_director), Timothy (head_of_acquisition), admins.
   // Même liste que l'API (calendar_internal.DIRECTOR_ROLES).
   acquisition_agenda: new Set(["ceo", "admin", "acquisition_director", "head_of_acquisition"]),
