@@ -336,6 +336,7 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
             <span className="ti-review-eyebrow">PRÉPARER LE CONTRAT</span>
             <h1>Commençons par l’essentiel</h1>
             <p>Confirmez le nombre de salariés et les coordonnées du signataire.</p>
+            <p style={{fontSize:13, marginBottom:12}}>Paiement mensuel · choisissez la tranche salariale.</p>
             <fieldset className="ti-band-field" id="ti-employee_range" tabIndex={-1} aria-invalid={!!fieldErrors.employee_range} aria-describedby={fieldErrors.employee_range ? "ti-employee_range-error" : undefined}><legend>Nombre de salariés</legend>
               <div className="ti-band-options">{bands.map(band => <button type="button" key={band} aria-pressed={preparation.employee_range === band} disabled={setupBusy} onClick={() => updatePreparation("employee_range", band)}>{band}</button>)}</div>
               {fieldErrors.employee_range && <p className="ti-field-error" id="ti-employee_range-error" role="alert">{fieldErrors.employee_range}</p>}
