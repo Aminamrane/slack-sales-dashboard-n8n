@@ -12,6 +12,12 @@ export function WeatherQualification({ context }) {
   return <dl className="wc-summary">{QUALIFICATION_FIELDS.map(([key,label]) => <div key={key}><dt>{label}</dt><dd>{context.qualification[key]}</dd></div>)}</dl>;
 }
 
+export function WeatherScaleGuide() {
+  return <details className="wc-scale-guide"><summary>Comprendre les 5 niveaux de météo</summary>
+    <dl>{[5,4,3,2,1].map(score => <div key={score}><dt style={{color:WEATHER[score].color}}>{score} · {WEATHER[score].label}</dt><dd>{WEATHER[score].description}</dd></div>)}</dl>
+  </details>;
+}
+
 export default function WeatherCaseComposer({ onSave, onCancel, requireNote = false, saveLabel = "Enregistrer et partager" }) {
   const [score, setScore] = useState(null);
   const [form, setForm] = useState({reason:'',expectation:'',actions:''});
@@ -38,8 +44,8 @@ export default function WeatherCaseComposer({ onSave, onCancel, requireNote = fa
     finally {setBusy(false);}
   };
   return <section className="wc-composer" aria-label="Nouvelle météo client">
-    <div className="wc-heading"><span className="wc-symbol"><ClipboardList size={21}/></span><div><h3>Faire le point sur le client</h3><p>Une météo, un contexte partagé, un suivi commun.</p></div></div>
-    <div className="wc-choices" role="group" aria-label="Choisir la météo">{[5,4,3,2,1].map(n => <button type="button" key={n} aria-pressed={score===n} onClick={() => setScore(n)} style={{'--wc-color':WEATHER[n].color,'--wc-bg':WEATHER[n].bg}}><MeteoIcon score={n} size={24} color={WEATHER[n].color}/><strong>{n} · {WEATHER[n].label}</strong></button>)}</div>
+    <div className="wc-heading"><span className="wc-symbol"><ClipboardList size={21}/></span><div><h3>Faire le point sur le client</h3><p>À chaque échange avec le client, avant ou après l’onboarding.</p></div></div>
+    <div className="wc-choices" role="group" aria-label="Choisir la météo">{[5,4,3,2,1].map(n => <button type="button" key={n} title={WEATHER[n].description} aria-pressed={score===n} onClick={() => setScore(n)} style={{'--wc-color':WEATHER[n].color,'--wc-bg':WEATHER[n].bg}}><MeteoIcon score={n} size={24} color={WEATHER[n].color}/><strong>{n} · {WEATHER[n].label}</strong></button>)}</div>
     {score && <p className="wc-description"><ArrowDownRight size={16}/>{WEATHER[score].description}</p>}
     {score<=3 && score ? <div className="wc-form"><div className="wc-form-heading"><MessageSquare size={18}/><strong>Qualifier la situation</strong><span>3 champs obligatoires</span></div>{QUALIFICATION_FIELDS.map(([field,label,question]) => <label key={field}>{label}<MentionTextarea value={form[field]} onChange={value=>setForm({...form,[field]:value})} people={people} placeholder={question} rows={2} maxLength={1000}/></label>)}</div> : score ? <label className="wc-note">Commentaire<MentionTextarea value={note} onChange={setNote} people={people} rows={2} placeholder="Contexte utile à partager…" maxLength={4000}/></label> : null}
     {score && <details className="wc-recipients"><summary><Users size={16}/>Mentionner un collègue {tagged.length>0?`(${tagged.length})`:''}</summary><div>{people.map(p=><label key={p.id}><input type="checkbox" checked={tagged.includes(p.id)} onChange={e=>setTagged(e.target.checked?[...tagged,p.id]:tagged.filter(id=>id!==p.id))}/><span>{p.name}<small>{p.group}</small></span></label>)}</div></details>}

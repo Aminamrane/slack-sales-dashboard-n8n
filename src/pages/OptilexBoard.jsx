@@ -1,5 +1,5 @@
-import WeatherCaseComposer, { WeatherQualification } from '../components/WeatherCaseComposer';
-import { WEATHER, weatherPresentation, weatherFilter } from '../utils/weatherCase';
+import WeatherCaseComposer, { WeatherQualification, WeatherScaleGuide } from '../components/WeatherCaseComposer';
+import { WEATHER, weatherPresentation, weatherFilter, weatherRatingLabel } from '../utils/weatherCase';
 import AppointmentConfirmation from "../components/booking/AppointmentConfirmation";
 import BoardIntegrationSheet from "../components/BoardIntegrationSheet";
 import BoardContactsEditor from "../components/BoardContactsEditor";
@@ -510,7 +510,7 @@ function MeteoBadge({ score, context, showLabel = true }) {
       <span style={{ width: 26, height: 26, borderRadius: 8, background: s.bg, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <MeteoIcon score={score} size={16} color={s.color} />
       </span>
-      {showLabel && <span style={{ fontSize: 12, fontWeight: 700, color: s.color, whiteSpace: "nowrap" }}>{score} · {s.label}</span>}
+      {showLabel && <span style={{ fontSize: 12, fontWeight: 700, color: s.color }}>{s.legacy ? <>{s.label}<small style={{display:'block',fontSize:10,fontWeight:400,color:MUTED,marginTop:2}}>Ancienne échelle · {score}/5</small></> : `${score} · ${s.label}`}</span>}
     </span>
   );
 }
@@ -3063,6 +3063,9 @@ function MeteoSection({ row, num, recordMeteo, version, onChanged }) {
   const current=loaded?hist[0]:{score:row.meteo_score,weather_context:row.meteo_context,author_name:row.meteo_by,created_at:row.meteo_at};
   return <div>
     <div style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}><MeteoBadge score={current?.score} context={current?.weather_context}/>{current?.author_name && <span style={{fontSize:11,color:MUTED}}>Par {current.author_name} · {timeAgo(current.created_at)}</span>}</div>
+    <p style={{fontSize:12,color:MUTED,lineHeight:1.5,margin:'0 0 10px'}}>À mettre à jour à chaque échange avec le client, avant ou après l’onboarding.</p>
+    {weatherPresentation(current?.score,current?.weather_context)?.legacy && <p className="wc-legacy-notice">Cette évaluation utilise l’ancienne échelle. Elle est conservée telle qu’elle a été saisie. La prochaine météo utilisera les 5 niveaux ci-dessous.</p>}
+    <WeatherScaleGuide/>
     {settable && (open ? <WeatherCaseComposer onCancel={()=>setOpen(false)} onSave={async payload=>{const ok=await recordMeteo(num,payload);if(ok!==false){setOpen(false);setRefresh(v=>v+1);}return ok;}}/> : <button type="button" className="wc-reply-button" onClick={()=>setOpen(true)}>Mettre à jour la météo</button>)}
     {error && <p role="alert">{error} <button onClick={()=>setRefresh(v=>v+1)}>Réessayer</button></p>}
     <SecTitle icon="comments">Échanges et notations</SecTitle>
@@ -3245,7 +3248,7 @@ function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingE
       <div style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: "12px 14px", marginBottom: comments.length ? 18 : 4, background: "#fafbfc" }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: TEXT }}>Écrire dans l’espace commun</div>
         <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8, lineHeight: 1.45 }}>Visible par Owner, Opti’Lex et la finance. Tapez @ pour prévenir quelqu’un : il reçoit un e-mail et une notification.</div>
-      {replyTo && <div className="wc-reply-context"><span>Réponse à la météo {replyTo.score}/5 · {weatherPresentation(replyTo.score,replyTo.weather_context)?.label}</span><button type="button" onClick={()=>setReplyTo(null)}>Annuler</button></div>}
+      {replyTo && <div className="wc-reply-context"><span>Réponse à la météo {weatherRatingLabel(replyTo.score,replyTo.weather_context)}</span><button type="button" onClick={()=>setReplyTo(null)}>Annuler</button></div>}
       <div style={{ display: "flex", gap: 10 }}>
         <Avatar name={meName} src={me.avatar_url} size={32} />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -3273,7 +3276,7 @@ function CommentThread({ numero, ratings = [], ratingsLoading = false, onRatingE
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ display: "flex", gap: 7, alignItems: "baseline", flexWrap: "wrap", fontSize: 12 }}>
                 <strong>{c.author_name || c.author_email || "—"}</strong>
-                <span style={{ color: weatherPresentation(c.score,c.weather_context)?.color, fontWeight: 600 }}>Météo · {c.score}/5 · {weatherPresentation(c.score,c.weather_context)?.label}</span>
+                <span style={{ color: weatherPresentation(c.score,c.weather_context)?.color, fontWeight: 600 }}>Météo · {weatherRatingLabel(c.score,c.weather_context)}</span>
                 <span title={fmt(c.created_at)} style={{ color: MUTED }}>{timeAgo(c.created_at)}</span>
               </div>
               <RatingHistoryActions rating={c} numero={numero} onEdited={onRatingEdited} onDeleted={onRatingDeleted} onConflict={onRatingConflict} />

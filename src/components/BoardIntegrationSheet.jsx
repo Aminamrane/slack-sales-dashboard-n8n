@@ -1,5 +1,5 @@
 import WeatherCaseComposer from './WeatherCaseComposer';
-import { weatherPresentation } from '../utils/weatherCase';
+import { weatherRatingLabel } from '../utils/weatherCase';
 import { useEffect, useRef, useState } from 'react';
 import { Download, FileText, LoaderCircle } from 'lucide-react';
 import apiClient from '../services/apiClient';
@@ -98,7 +98,7 @@ export default function BoardIntegrationSheet({ numero, onRated, compact = false
       <div style={{ margin:'10px 0 0', fontSize:11.5, lineHeight:1.6, color:'#687483' }}>
         <div>Partie commerciale : {state.author_name || 'commercial'}{state.updated_at ? ` · ${fmtDate(state.updated_at)}` : ''}</div>
         <div>Onboarding : {onboarding?.completed
-          ? <>{onboarding.author_name || 'Client Success'}{onboarding.completed_at ? ` · ${fmtDate(onboarding.completed_at)}` : ''}{onboarding.weather ? ` · météo ${onboarding.weather}/5, ${weatherPresentation(onboarding.weather,onboarding.weather_context)?.label || ''}` : ''}</>
+          ? <>{onboarding.author_name || 'Client Success'}{onboarding.completed_at ? ` · ${fmtDate(onboarding.completed_at)}` : ''}{onboarding.weather ? ` · météo ${weatherRatingLabel(onboarding.weather,onboarding.weather_context)}` : ''}</>
           : <span style={{ color:'#b45309', fontWeight:600 }}>météo d’onboarding en attente</span>}</div>
       </div>
       {canRate && <OnboardingRatingForm numero={numero} onSaved={onRatingSaved} />}
