@@ -1,11 +1,12 @@
 // Préférences de secteur des sales (dev 06/10/2026). Elles guident l'auto-affectation des RDV posés
 // par les setters : à créneau égal, le sales qui préfère le secteur du lead passe devant, et un
-// secteur refusé l'écarte. Deux usages :
+// secteur refusé l'écarte. Un sales « prioritaire » (dev 07/10/2026, réglé par l'admin seul) passe avant
+// tous les autres, quel que soit le secteur, et reçoit seul les leads webinaire des setters. Deux usages :
 //   mode="all" : le dev (admin) voit et modifie les préférences de tous les sales ;
 //   mode="me"  : chaque sales voit et modifie seulement les siennes.
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Check, X, Ban, Star } from 'lucide-react';
+import { Pencil, Check, X, Ban, Star, ChevronsUp } from 'lucide-react';
 import apiClient from '../../services/apiClient';
 import { sectorMeta } from '../../utils/sectors';
 
@@ -28,6 +29,7 @@ const fmtUpdated = (iso) => {
 };
 
 const ROLE_LABEL = { head_of_sales: 'Head of sales', head_of_sales_manager: 'Head of sales manager' };
+const PRIORITY_COLOR = '#3e7d5a';
 
 function tint(hex, alpha) {
   const h = (hex || '#8b94a6').replace('#', '');
@@ -122,7 +124,39 @@ function SectorRow({ sector, value, onChange, C, darkMode, disabled }) {
   );
 }
 
-function Editor({ pref, sectors, C, darkMode, saving, error, onSave, onCancel, columns = 1 }) {
+function PriorityBadge() {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: PRIORITY_COLOR,
+      background: tint(PRIORITY_COLOR, 0.12), border: `1px solid ${tint(PRIORITY_COLOR, 0.35)}`, borderRadius: 6, padding: '2px 7px' }}>
+      <ChevronsUp size={12} strokeWidth={2.4} />Prioritaire RDV setters
+    </span>
+  );
+}
+
+function PriorityToggle({ on, onChange, C, darkMode, disabled }) {
+  return (
+    <label style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 14px', borderRadius: 12, cursor: disabled ? 'default' : 'pointer',
+      border: `1px solid ${on ? tint(PRIORITY_COLOR, 0.45) : C.border}`, background: on ? tint(PRIORITY_COLOR, darkMode ? 0.16 : 0.07) : 'transparent',
+      transition: 'all 0.2s ease' }}>
+      <input type="checkbox" checked={on} disabled={disabled} onChange={(e) => onChange(e.target.checked)}
+        style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }} />
+      <span aria-hidden="true" style={{ width: 34, height: 20, borderRadius: 999, flexShrink: 0, marginTop: 1, position: 'relative',
+        background: on ? PRIORITY_COLOR : (darkMode ? '#3a3b48' : '#d6dae3'), transition: 'background 0.2s ease' }}>
+        <span style={{ position: 'absolute', top: 2, left: on ? 16 : 2, width: 16, height: 16, borderRadius: 999, background: '#fff',
+          boxShadow: '0 1px 2px rgba(16,24,40,0.25)', transition: 'left 0.22s cubic-bezier(0.22, 1, 0.36, 1)' }} />
+      </span>
+      <span style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>Prioritaire sur les RDV setters</span>
+        <span style={{ fontSize: 12.5, color: C.secondary, lineHeight: 1.45 }}>
+          Passe avant les autres sales sur tous les rendez-vous posés par les setters, quel que soit le secteur. Seuls les
+          sales prioritaires reçoivent les leads webinaire des setters.
+        </span>
+      </span>
+    </label>
+  );
+}
+
+function Editor({ pref, sectors, C, darkMode, saving, error, onSave, onCancel, columns = 1, canPrioritize = false }) {
   const [choice, setChoice] = useState(() => {
     const init = {};
     (pref.preferred || []).forEach((k) => { init[k] = 'preferred'; });
@@ -130,10 +164,12 @@ function Editor({ pref, sectors, C, darkMode, saving, error, onSave, onCancel, c
     return init;
   });
   const [note, setNote] = useState(pref.note || '');
+  const [priority, setPriority] = useState(Boolean(pref.setter_priority));
   const pick = (kind) => sectors.map((s) => s.key).filter((k) => choice[k] === kind);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {canPrioritize && <PriorityToggle on={priority} onChange={setPriority} C={C} darkMode={darkMode} disabled={saving} />}
       <div style={{ display: 'grid', gridTemplateColumns: columns > 1 ? 'repeat(auto-fit, minmax(390px, 1fr))' : '1fr', columnGap: 28 }}>
         {sectors.map((s) => (
           <SectorRow key={s.key} sector={s} value={choice[s.key] || 'none'} C={C} darkMode={darkMode} disabled={saving}
@@ -147,7 +183,8 @@ function Editor({ pref, sectors, C, darkMode, saving, error, onSave, onCancel, c
       {error && <div style={{ fontSize: 12.5, color: '#c25555', fontWeight: 600 }}>{error}</div>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <button type="button" disabled={saving}
-          onClick={() => onSave({ preferred: pick('preferred'), excluded: pick('excluded'), note: note.trim() || null })}
+          onClick={() => onSave({ preferred: pick('preferred'), excluded: pick('excluded'), note: note.trim() || null,
+            ...(canPrioritize ? { setter_priority: priority } : {}) })}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 9, border: 'none',
             background: darkMode ? '#eef0f6' : '#1e2330', color: darkMode ? '#1e2330' : '#fff', fontSize: 13, fontWeight: 600,
             fontFamily: 'inherit', cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.7 : 1 }}>
@@ -230,6 +267,7 @@ function SalesCard({ pref, sectors, endpoint, C, darkMode, showName, onSaved, st
               {ROLE_LABEL[pref.role] && (
                 <span style={{ fontSize: 11, fontWeight: 600, color: C.secondary, background: C.subtle, borderRadius: 6, padding: '2px 7px' }}>{ROLE_LABEL[pref.role]}</span>
               )}
+              {pref.setter_priority && <PriorityBadge />}
             </div>
           )}
           {!(editing && !showName) && pref.note && <div style={{ fontSize: 12.5, color: C.secondary, marginTop: showName ? 4 : 0 }}>{pref.note}</div>}
@@ -249,7 +287,7 @@ function SalesCard({ pref, sectors, endpoint, C, darkMode, showName, onSaved, st
       {editing && showName && (
         <EditDialog title={pref.full_name || pref.email} subtitle="Secteurs reçus en priorité, et secteurs jamais attribués, quand un setter pose un rendez-vous."
           busy={saving} C={C} darkMode={darkMode} onClose={() => { setEditing(false); setError(''); }}>
-          <Editor pref={pref} sectors={sectors} C={C} darkMode={darkMode} saving={saving} error={error} columns={2}
+          <Editor pref={pref} sectors={sectors} C={C} darkMode={darkMode} saving={saving} error={error} columns={2} canPrioritize
             onSave={save} onCancel={() => { setEditing(false); setError(''); }} />
         </EditDialog>
       )}
@@ -286,7 +324,11 @@ export default function SalesPreferences({ mode = 'all', C, darkMode }) {
   const replace = (fresh) => setRows((prev) => (prev || []).map((r) => (r.user_id === fresh.user_id ? fresh : r)));
   const counts = useMemo(() => {
     const list = rows || [];
-    return { total: list.length, open: list.filter((r) => !(r.preferred || []).length && !(r.excluded || []).length).length };
+    return {
+      total: list.length,
+      open: list.filter((r) => !(r.preferred || []).length && !(r.excluded || []).length).length,
+      priority: list.filter((r) => r.setter_priority).map((r) => r.full_name || r.email),
+    };
   }, [rows]);
 
   return (
@@ -298,7 +340,7 @@ export default function SalesPreferences({ mode = 'all', C, darkMode }) {
         <p style={{ fontSize: 13, color: C.secondary, margin: '6px 0 0', lineHeight: 1.5, maxWidth: 680 }}>
           {mode === 'me'
             ? 'Les secteurs que vous voulez recevoir en priorité quand un setter pose un rendez-vous, et ceux que vous ne voulez jamais.'
-            : `Quand un setter pose un rendez-vous, le créneau va d'abord à un sales qui préfère le secteur du lead, puis au moins servi de la semaine. « Jamais » écarte le sales pour ce secteur.${rows ? ` ${counts.total} sales, dont ${counts.open} ouverts à tout.` : ''}`}
+            : `Quand un setter pose un rendez-vous, le créneau va d'abord aux sales prioritaires libres, quel que soit le secteur, puis à un sales qui préfère le secteur du lead, puis au moins servi de la semaine. « Jamais » écarte le sales pour ce secteur. Les leads webinaire des setters ne vont qu'aux sales prioritaires.${rows ? ` ${counts.total} sales, dont ${counts.open} ouverts à tout${counts.priority.length ? ` ; prioritaires : ${counts.priority.join(', ')}` : ''}.` : ''}`}
         </p>
       </div>
       {error && <div style={{ fontSize: 13, color: '#c25555', fontWeight: 600 }}>{error}</div>}

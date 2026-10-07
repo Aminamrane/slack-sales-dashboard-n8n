@@ -1,6 +1,6 @@
 // Monitoring de l'auto-affectation des RDV setters (dev 06/10/2026), lecture seule : qui reçoit les RDV posés
-// par les setters depuis l'agenda unique, pourquoi (préférence de secteur, équité, lead déjà suivi) et
-// l'équilibre de la semaine. Même langage visuel que LeadAssignmentLive (charte makeCharte).
+// par les setters depuis l'agenda unique, pourquoi (sales prioritaire, préférence de secteur, équité, lead déjà
+// suivi) et l'équilibre de la semaine. Même langage visuel que LeadAssignmentLive (charte makeCharte).
 import { useCallback, useEffect, useState } from "react";
 import apiClient from "../services/apiClient";
 import { makeCharte } from "../styles/charte.js";
@@ -10,6 +10,7 @@ const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text"
 const REFRESH_MS = 60000;
 
 const REASON = {
+  priority: { label: "Prioritaire", color: "#3e7d5a" },
   preference: { label: "Préférence", color: "#bf945f" },
   equity: { label: "Équité", color: "#5b7fc4" },
   owner: { label: "Déjà suivi", color: "#8b94a6" },
@@ -95,7 +96,8 @@ export default function SetterAutoAssignMonitor({ darkMode = false }) {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.55, maxWidth: 760 }}>
           Semaine du {dayLabel(data.week.start)} au {dayLabel(data.week.end)}. Quand un setter pose un R1 depuis l'agenda unique, le créneau va
-          d'abord à un sales qui préfère le secteur du lead{data.mode === "exclusive" ? " (exclusivement)" : ""}, sinon au moins servi de la semaine ; un lead déjà suivi garde son commercial.
+          d'abord aux sales prioritaires libres, quel que soit le secteur, puis à un sales qui préfère le secteur du lead{data.mode === "exclusive" ? " (exclusivement)" : ""},
+          sinon au moins servi de la semaine ; un lead déjà suivi garde son commercial. Un lead webinaire ne va qu'aux prioritaires.
         </div>
         <span style={{ fontSize: 12, color: C.muted }}>Mis à jour {ago(loadedAt)}</span>
       </div>
@@ -104,6 +106,7 @@ export default function SetterAutoAssignMonitor({ darkMode = false }) {
         {[
           { l: "Aujourd'hui", v: t.today, s: "RDV setters attribués", color: C.accent },
           { l: "Cette semaine", v: t.week, s: "sur les créneaux de la semaine", color: C.ok },
+          { l: "Prioritaires", v: t.priority, s: pct(t.priority || 0) + " de la semaine", color: REASON.priority.color },
           { l: "Par préférence", v: t.preference, s: pct(t.preference) + " de la semaine", color: REASON.preference.color },
           { l: "Par équité", v: t.equity, s: pct(t.equity) + " de la semaine", color: REASON.equity.color },
           { l: "Déjà suivis", v: t.owner, s: "gardés par leur commercial", color: REASON.owner.color },
@@ -148,7 +151,10 @@ export default function SetterAutoAssignMonitor({ darkMode = false }) {
               <tbody>
                 {sales.map((s) => (
                   <tr key={s.email} className="sam-row">
-                    <td style={{ fontSize: 13, fontWeight: 650, color: C.text, whiteSpace: "nowrap" }}>{s.full_name || s.email}</td>
+                    <td style={{ fontSize: 13, fontWeight: 650, color: C.text, whiteSpace: "nowrap" }}>
+                      {s.full_name || s.email}
+                      {s.setter_priority && <span style={{ marginLeft: 6 }}><Pill color={REASON.priority.color}>Prioritaire</Pill></span>}
+                    </td>
                     <td>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 4, color: C.text2 }}>
                         {s.preferred.length === 0 && s.excluded.length === 0 && <span style={{ fontSize: 12, color: C.muted }}>Ouvert à tout</span>}
@@ -159,6 +165,7 @@ export default function SetterAutoAssignMonitor({ darkMode = false }) {
                     <td style={{ width: 150 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <div style={{ flex: 1, height: 6, borderRadius: 999, background: darkMode ? "rgba(255,255,255,0.06)" : "#eef0f4", overflow: "hidden", display: "flex" }}>
+                          <div title="Prioritaires" style={{ width: `${((s.priority || 0) / max) * 100}%`, height: "100%", background: REASON.priority.color, transition: "width .5s ease" }} />
                           <div title="Par préférence" style={{ width: `${(s.preference / max) * 100}%`, height: "100%", background: REASON.preference.color, transition: "width .5s ease" }} />
                           <div title="Par équité" style={{ width: `${(s.equity / max) * 100}%`, height: "100%", background: REASON.equity.color, transition: "width .5s ease" }} />
                           <div title="Déjà suivis" style={{ width: `${(s.owner / max) * 100}%`, height: "100%", background: REASON.owner.color, transition: "width .5s ease" }} />
