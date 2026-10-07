@@ -337,3 +337,16 @@
   .ti-dialog:has(.ti-saved-view) .ti-dialog-head { display:none; }
   .ti-saved-view { max-width:none; padding:0; }
 }
+
+.ti-nda-edit { padding: 12px 24px; display: flex; justify-content: flex-end; }
+.ti-nda-edit button, .ti-recovery button { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #cedbd7; background: #fff; color: #254b44; border-radius: 9px; padding: 10px 14px; font: inherit; font-size: 13px; cursor: pointer; }
+.ti-nda-edit button:disabled { opacity: .5; cursor: default; }
+.ti-recovery { font: 14px/1.5 Inter, sans-serif; margin: 20px 24px; padding: 22px; background: #f4f8f6; border: 1px solid #cedbd7; border-radius: 14px; color: #20312c; }
+.ti-recovery h2 { margin: 0 0 10px; font-size: 20px; }
+.ti-recovery h3 { font-size: 15px; }
+.ti-recovery-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.ti-recovery-choices section { min-width: 0; padding: 16px; border-radius: 10px; background: #fff; overflow-wrap: anywhere; }
+.ti-recovery ul { padding-left: 18px; font-size: 13px; }
+.ti-recovery li { margin-bottom: 10px; }
+.ti-recovery small { display: block; margin-top: 4px; color: #52665e; }
+@media (max-width: 600px) { .ti-recovery-choices { grid-template-columns: 1fr; } .ti-recovery { font: 14px/1.5 Inter, sans-serif; margin: 12px; padding: 14px; } .ti-nda-edit { padding: 12px; } }

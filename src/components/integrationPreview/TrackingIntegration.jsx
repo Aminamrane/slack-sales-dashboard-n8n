@@ -6,6 +6,7 @@ import { presentContractError, validateContractPreparation } from "../../utils/c
 import IntegrationPreviewStudio, { IntegrationSummary } from "./IntegrationPreviewStudio";
 import "./trackingIntegration.css";
 import PortalAccess from "../salesJourney/PortalAccess";
+import { intakeDraft, isStaleIntake, mergeIntakeDraft } from "./draftRecovery.js";
 
 export function IntegrationRollout({ state, onChange }) {
   const [confirming, setConfirming] = useState(false);
@@ -143,7 +144,20 @@ export function SalesJourneySteps({ phase = "intake", compact = false, salePart 
   </ol>;
 }
 
-export function IntegrationDialog({ context, onClose, onSaved, contractDetails = {}, onSend, onPrepared, onContractDateChange }) {
+function RecoveryValue({ value }) {
+  if (value.companies) return <ul>{value.companies.map(company => <li key={company.id}>
+    <strong>{company.name}</strong> · {company.selected ? "Accompagnée" : "Non retenue"}
+    <small>{value.directors.filter(d => d.companies.includes(company.id)).map(d => `${d.name}${d.provisional_access ? " · accès demandé" : ""}`).join(" / ") || "Sans dirigeant lié"}</small>
+  </li>)}</ul>;
+  return <p>{Object.values(value).map(v => Array.isArray(v) ? v.join(", ") : typeof v === "boolean" ? (v ? "Oui" : "Non") : String(v ?? "Non renseigné")).join(" · ") || "Non renseigné"}</p>;
+}
+
+export function IntegrationDialog({ context: initialContext, onClose, onSaved, contractDetails = {}, onSend, onPrepared, onContractDateChange, onEditNda }) {
+  const [context, setContext] = useState(initialContext);
+  const [recovery, setRecovery] = useState(null);
+  const [recoveryNotice, setRecoveryNotice] = useState("");
+  const [persisting, setPersisting] = useState(false);
+  const persistBusy = useRef(false);
   const [stage, setStage] = useState(context.nextAction ? "setup" : "intake");
   const [preparation, setPreparation] = useState(context.preparation || {});
   const [setupBusy, setSetupBusy] = useState(false);
@@ -181,10 +195,7 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
     }
     finally { setSetupBusy(false); }
   }
-  const initial = context.readOnly ? context.draft : { ...context.draft, flow_version: 2,
-    companies: context.draft.companies.map(c => ({...c, in_registration: c.in_registration || context.source_draft?.companies.find(row => row.id === c.id)?.in_registration || false})),
-    directors: context.draft.directors.map(d => ({...d, email: d.email || context.source_draft?.directors.find(row => row.id === d.id)?.email || ""})),
-  };
+  const initial = context.readOnly ? context.draft : intakeDraft(context);
   const [sourceDraft, setSourceDraft] = useState(initial);
   const [portalState, setPortalState] = useState(null);
   const [portalError, setPortalError] = useState("");
@@ -269,24 +280,65 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
       previous?.focus();
     };
   }, []);
-  async function persist(draft, validate) {
-    const result = await apiClient.put(
-      `/api/v1/owner-integration/leads/${context.lead_id}`,
-      {
-        draft,
-        validate,
-        revision: revision.current,
-        source_fingerprint: context.source_fingerprint,
-      },
-    );
-    if (result.saved) {
-      revision.current = result.revision;
-      saved.current = JSON.stringify(draft);
-      setSourceDraft(draft);
-      setValidated(result.ready);
-      onSaved(result);
+  function showDraft(draft) {
+    setSourceDraft(draft); current.current = JSON.stringify(draft);
+    setValidated(false); setSourceReset(n => n + 1);
+  }
+  function chooseRecovery(conflict, side) {
+    const draft = { ...recovery.draft, ...conflict[side] };
+    const conflicts = recovery.conflicts.filter(c => c.key !== conflict.key);
+    if (conflicts.length) setRecovery({ draft, conflicts });
+    else {
+      setRecovery(null); showDraft(draft);
+      setRecoveryNotice("Vos choix sont repris. Vérifiez le périmètre puis validez pour enregistrer.");
     }
-    return result;
+  }
+  async function persist(draft, validate) {
+    if (persistBusy.current || recovery) return { saved: false, ready: false, errors: ["Terminez la reprise de la fiche avant de continuer."] };
+    persistBusy.current = true; setPersisting(true);
+    try {
+      const result = await apiClient.put(`/api/v1/owner-integration/leads/${context.lead_id}`, {
+        draft, validate, revision: revision.current, source_fingerprint: context.source_fingerprint,
+      });
+      if (result.saved) {
+        revision.current = result.revision;
+        saved.current = JSON.stringify(draft);
+        setSourceDraft(draft); setValidated(result.ready); setRecoveryNotice("");
+        setContext(previous => ({ ...previous, source_changed: false }));
+        onSaved(result);
+      }
+      return result;
+    } catch (error) {
+      if (!isStaleIntake(error)) throw error;
+      let latest;
+      try { latest = await apiClient.get(`/api/v1/owner-integration/leads/${context.lead_id}`); }
+      catch { throw new Error("La fiche a été mise à jour. Votre saisie est conservée ; réessayez pour récupérer la dernière version."); }
+      if (!latest.required || !latest.draft) throw new Error("Le parcours du dossier a changé. Votre saisie est conservée ; vérifiez le contrat depuis la tracking sheet.");
+      const remote = intakeDraft(latest);
+      const merged = mergeIntakeDraft(JSON.parse(saved.current), JSON.parse(current.current), remote);
+      revision.current = latest.revision;
+      saved.current = JSON.stringify(remote);
+      setContext(previous => ({ ...previous, ...latest }));
+      setValidated(false);
+      if (merged.conflicts.length) {
+        setRecovery(merged); setRecoveryNotice("");
+      } else {
+        showDraft(merged.draft);
+        setRecoveryNotice("La dernière version de la fiche a été récupérée. Vos modifications compatibles sont conservées : vérifiez puis validez.");
+      }
+      return { saved: false, ready: false, errors: ["Fiche mise à jour : vérifiez les informations affichées avant de valider."] };
+    } finally { persistBusy.current = false; setPersisting(false); }
+  }
+  async function editNda() {
+    if (persistBusy.current || recovery || setupBusy) return;
+    if (preparationCurrent.current !== preparationSaved.current && !window.confirm("Les salariés et coordonnées modifiés ici ne sont pas encore enregistrés. Ouvrir le NDA quand même ?")) return;
+    try {
+      if (current.current !== saved.current) {
+        const result = await persist(JSON.parse(current.current), false);
+        if (!result.saved) return;
+      }
+      onEditNda?.();
+    } catch (error) { setRecoveryNotice(error.message || "Votre saisie est conservée. Réessayez avant de modifier le NDA."); }
   }
   return createPortal(
     <div className="ti-overlay">
@@ -308,7 +360,20 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
             <X size={20} />
           </button>
         </header>
-        {context.source_changed && (
+        {!context.readOnly && onEditNda && <div className="ti-nda-edit"><button disabled={persisting || setupBusy || !!recovery} onClick={editNda}><PenLine size={16} /> Modifier ou régénérer le NDA</button></div>}
+        {recoveryNotice && <p className="ti-source-note" role="status">{recoveryNotice}</p>}
+        {recovery && <section className="ti-recovery" aria-labelledby="ti-recovery-title">
+          <h2 id="ti-recovery-title">La fiche a été mise à jour</h2>
+          <p>Votre saisie est conservée. Choisissez les informations à reprendre ; rien ne sera écrasé automatiquement.</p>
+          {recovery.conflicts.map(conflict => <div key={conflict.key}>
+            <h3>{conflict.key === "companies" ? "Sociétés et dirigeants" : "Informations du dossier"}</h3>
+            <div className="ti-recovery-choices">{[["remote", "Version enregistrée", "Reprendre la version enregistrée"], ["local", "Votre saisie", "Conserver ma saisie"]].map(([side, title, label]) => <section key={side}>
+              <strong>{title}</strong><RecoveryValue value={conflict[side]} />
+              <button onClick={() => chooseRecovery(conflict, side)}>{label}</button>
+            </section>)}</div>
+          </div>)}
+        </section>}
+        {context.source_changed && !recovery && (
           <p className="ti-source-note">
             Le NDA a évolué depuis la dernière validation. Vérifiez les sociétés
             et les dirigeants avant de valider à nouveau.{" "}
@@ -330,7 +395,7 @@ export function IntegrationDialog({ context, onClose, onSaved, contractDetails =
           </p>
         )}
         {context.nextAction && <SalesJourneySteps phase={stage} />}
-        {context.readOnly ? <div className="integration-preview ti-saved-view"><IntegrationSummary draft={context.draft} clientName={context.client_name} validated={context.validated} /></div> : stage === "setup" ? (
+        {recovery ? null : context.readOnly ? <div className="integration-preview ti-saved-view"><IntegrationSummary draft={context.draft} clientName={context.client_name} validated={context.validated} /></div> : stage === "setup" ? (
           <form className="ti-contract-review ti-preparation" onSubmit={prepare} noValidate>
             <div className="ti-review-icon"><UsersRound size={30} strokeWidth={1.6} /></div>
             <span className="ti-review-eyebrow">PRÉPARER LE CONTRAT</span>
