@@ -6216,21 +6216,21 @@ export default function TrackingSheet() {
                   <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 3, paddingRight: 52 }}>
                     {/* paddingRight : la coche et la croix s'arrêtent avant le
                         tampon Meta (position absolue au coin), sinon il les recouvre. */}
-                    <input ref={editInputRef} value={editingField.value} onChange={(e) => setEditingField(prev => ({ ...prev, value: e.target.value }))}
+                    <input aria-label="Nom et prénom du lead" ref={editInputRef} value={editingField.value} onChange={(e) => setEditingField(prev => ({ ...prev, value: e.target.value }))}
                       onKeyDown={(e) => { if (e.key === 'Enter') saveFieldEdit(); if (e.key === 'Escape') cancelFieldEdit(); }}
                       style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.02em', border: `1px solid ${C.accent}`, borderRadius: 8, padding: '3px 8px', background: C.bg, fontFamily: 'inherit', outline: 'none' }}
                     />
-                    <button onClick={saveFieldEdit} style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: C.accent, color: '#fff', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✓</button>
-                    <button onClick={cancelFieldEdit} style={{ width: 26, height: 26, borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                    <button aria-label="Enregistrer le nom" title="Enregistrer le nom" onClick={saveFieldEdit} style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 6, border: 'none', background: C.accent, color: '#fff', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✓</button>
+                    <button aria-label="Annuler la modification du nom" title="Annuler la modification du nom" onClick={cancelFieldEdit} style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
                   </div>
                 ) : (
                   <>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
-                    <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3, paddingRight: 52 }}>
+                    <h3 style={{ margin: 0, minWidth: 0, overflowWrap: 'anywhere', fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>
                       {lead.full_name}
                     </h3>
                     <button onClick={() => startFieldEdit(lead.id, 'full_name', lead.full_name)} title="Modifier le nom"
-                      style={{ width: 22, height: 22, borderRadius: 5, border: 'none', background: 'transparent', color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.4, transition: 'opacity 0.15s' }}
+                      style={{ width: 22, height: 22, flexShrink: 0, borderRadius: 5, border: 'none', background: 'transparent', color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.4, transition: 'opacity 0.15s' }}
                       onMouseEnter={(e) => { e.currentTarget.style.opacity = 1; }} onMouseLeave={(e) => { e.currentTarget.style.opacity = 0.4; }}
                     >
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
