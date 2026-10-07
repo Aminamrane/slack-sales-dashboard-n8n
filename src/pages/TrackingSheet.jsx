@@ -2574,8 +2574,8 @@ export default function TrackingSheet() {
   ];
   const toSchemaLegalForm = (lf) => (lf === "EI" ? "Autre" : lf);
 
-  const openNdaPopup = (lead, nextAction = null) => {
-    setNdaPopup({ leadId: lead.id, nextAction });
+  const openNdaPopup = (lead, nextAction = null, returnToIntake = false) => {
+    setNdaPopup({ leadId: lead.id, nextAction, returnToIntake, regenerating: !!lead.has_client_data || returnToIntake });
     setNdaPappersUrl('');
     setNdaData({
       legalName: lead.company_name || '',
@@ -2742,8 +2742,9 @@ export default function TrackingSheet() {
       // Convention v2 : récupère via Pappers TOUTES les sociétés des dirigeants
       // retenus (Annexe 1, tout coché par défaut) — fire-and-forget, décochable
       // ensuite dans l'onglet Options de la page Détails. Pas de fetch pour une
-      // société en création (pas de SIREN).
-      if (!ndaData.isInRegistration) {
+      // société en création (pas de SIREN). Une régénération conserve les choix
+      // existants : relancer la découverte les remplacerait par « tout coché ».
+      if (!ndaData.isInRegistration && !ndaPopup.regenerating) {
         const dirs = ndaData.representatives.map(r => (r.fullName || '').trim()).filter(Boolean);
         if (dirs.length) {
           const discovery = apiClient.post(`/api/v1/tracking/leads/${lead.id}/covered-companies/fetch`, { dirigeants: dirs });
@@ -2755,6 +2756,7 @@ export default function TrackingSheet() {
         const unchanged = await checkIntakeBeforeSend(lead.id,ndaPopup.nextAction);
         if (unchanged) throw new Error('Le parcours de ce dossier a changé. Fermez puis rouvrez le dossier avant de continuer.');
       }
+      if (!ndaPopup.nextAction && ndaPopup.returnToIntake) await openIntake(lead.id);
       // Success → close popup
       ndaRequest.current++;setNdaPopup(null);
       setNdaData(null);
@@ -7961,7 +7963,7 @@ export default function TrackingSheet() {
                     Commenter
                   </button>
                 )}
-                {!isGuidedLead(lead) && !(activeCat.key === 'signed' && isSignedPilot(lead)) && (() => {
+                {(() => {
                   const ndaDone = !!(lead.has_client_data);
                   const ndaColor = ndaDone ? '#10b981' : '#6366f1';
                   return (
@@ -7986,7 +7988,7 @@ export default function TrackingSheet() {
                       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
                     </svg>
                   )}
-                  {ndaDone ? 'NDA généré ✓' : 'Générer NDA'}
+                  {ndaDone ? 'Modifier / régénérer le NDA' : 'Générer NDA'}
                 </button>
                   );
                 })()}
@@ -9391,6 +9393,13 @@ export default function TrackingSheet() {
         onClose={closeQualifyDeck} />}
       {qualificationDialog && (()=>{const {fromCalendar,...dialogProps}=qualificationDialog;const onSave=async payload=>{await saveQualification(payload);if(fromCalendar)setCalendarReload(v=>v+1);};return dialogProps.stage==='r1'?<R1QualificationDialog {...dialogProps} dark={darkMode} onClose={()=>setQualificationDialog(null)} onSave={onSave}/>:<QualificationDialog {...dialogProps} dark={darkMode} canPlaceR3={calSettings?.r3_enabled===true} onClose={()=>setQualificationDialog(null)} onSave={onSave}/>;})()}
       {intakeDialog && <IntegrationDialog key={intakeDialog.lead_id} context={intakeDialog}
+        onEditNda={() => {
+          const lead = leads.find(l => l.id === intakeDialog.lead_id);
+          if (!lead) return;
+          const action = intakeDialog.nextAction;
+          setIntakeDialog(null);
+          openNdaPopup(lead, action, true);
+        }}
         contractDetails={{
           email: leads.find(l => l.id === intakeDialog.lead_id)?.email,
           employeeRange: leads.find(l => l.id === intakeDialog.lead_id)?.employee_range,

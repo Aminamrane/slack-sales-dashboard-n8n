@@ -959,7 +959,11 @@ export default function IntegrationPreviewStudio({
                 onClick={async () => {
                   setBusy(true);
                   try {
-                    await saveDraft(draft);
+                    const result = await saveDraft(draft);
+                    if (result?.saved === false) {
+                      setFeedback({ success: false, text: (result.errors || ["Vérifiez la fiche mise à jour."]).join(" ") });
+                      return;
+                    }
                     setValidated(null);
                     setFeedback({
                       success: true,
