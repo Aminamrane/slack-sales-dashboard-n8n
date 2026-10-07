@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import SalesEntryCard from '../SalesEntryCard';
+import { salesAssessmentResult } from '../../utils/salesAssessment';
 import {
   ArrowLeft,
   ArrowRight,
@@ -188,9 +190,10 @@ export function IntegrationSummary({ draft, clientName, validated = false, embed
                             <p>{v}</p>
                           </div>
                         ))}
-                      {phase !== "contract" && draft.weather && (
+                      {phase !== "contract" && draft.sales_assessment && <SalesEntryCard entry={{version:1,answers:draft.sales_assessment,...salesAssessmentResult(draft.sales_assessment)}}/>}
+                      {phase !== "contract" && !draft.sales_assessment && draft.weather && (
                         <>
-                          <h4>Météo client</h4>
+                          <h4>Ancienne note Sales · indépendante de la météo client</h4>
                           <div className="ip-summary-weather">
                             <WeatherIcon size={29} />
                             <div>

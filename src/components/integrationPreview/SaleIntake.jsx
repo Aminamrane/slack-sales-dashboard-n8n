@@ -1,13 +1,11 @@
-import WeatherIntakeFields from '../WeatherIntakeFields';
-import { qualificationComplete } from '../../utils/weatherCase';
+import SalesAssessmentFields from '../SalesAssessmentFields';
+import { salesAssessmentResult } from '../../utils/salesAssessment';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, CloudSun, Sun, Cloud, CloudRain, CloudLightning, FileCheck2, UsersRound, BriefcaseBusiness, ListChecks, LoaderCircle, Check } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CloudSun, FileCheck2, UsersRound, BriefcaseBusiness, ListChecks, LoaderCircle, Check } from 'lucide-react';
 import apiClient from '../../services/apiClient';
-import { WEATHER_LABELS } from './model';
 import './integrationPreview.css';
 export { default as SaleDocuments } from './SaleDocuments';
 
-const ICONS = [CloudLightning, CloudRain, Cloud, CloudSun, Sun];
 export function SaleIntake({ leadId, onBack, onSaved, backLabel = "Rendez-vous" }) {
   const [context, setContext] = useState(null), [draft, setDraft] = useState(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [reload, setReload] = useState(0);
@@ -22,16 +20,15 @@ export function SaleIntake({ leadId, onBack, onSaved, backLabel = "Rendez-vous" 
   }, [leadId, reload]);
   async function save() {
     if (busy) return;
-    if (!draft.personal_situation?.trim() || !draft.professional_situation?.trim() || !draft.weather || !draft.weather_note?.trim()) {
-      setError('Complétez les deux situations, choisissez la météo et ajoutez son commentaire.'); return;
+    if (!draft.personal_situation?.trim() || !draft.professional_situation?.trim() || !salesAssessmentResult(draft.sales_assessment)) {
+      setError('Complétez les deux situations et les cinq questions de préparation à l’onboarding.'); return;
     }
-    if (draft.weather_context?.version===2 && !qualificationComplete(draft.weather,draft.weather_context.qualification)) { setError('Complétez les trois champs de suivi météo.'); return; }
     setBusy(true); setError('');
     try {
       const saved = await apiClient.put(`/api/v1/owner-integration/leads/${leadId}/sale-intake`, {
         revision: context.revision, contract_id: context.contract_id,
         personal_situation: draft.personal_situation, professional_situation: draft.professional_situation,
-        weather: draft.weather, weather_note: draft.weather_note, weather_context: draft.weather_context || null,
+        sales_assessment: draft.sales_assessment,
         missions: (draft.missions || []).map(m => m.trim()).filter(Boolean),
       });
       onSaved(saved);
@@ -41,7 +38,7 @@ export function SaleIntake({ leadId, onBack, onSaved, backLabel = "Rendez-vous" 
   const update = (key, value) => setDraft(d => ({...d, [key]: value}));
   const missions = Array.from({length: Math.max(5, draft?.missions?.length || 0)}, (_, i) => draft?.missions?.[i] || '');
   return <section className="integration-preview ip-embedded si-handoff">
-    <header className="si-title"><span className="si-title-icon"><FileCheck2 size={26}/></span><div><small>PASSAGE DE RELAIS</small><h2>Finaliser la fiche d’intégration</h2><p>Complétez chaque rubrique obligatoire. Seules les missions potentielles sont facultatives.</p></div></header>
+    <header className="si-title"><span className="si-title-icon"><FileCheck2 size={26}/></span><div><small>PASSAGE DE RELAIS</small><h2>Finaliser la fiche d’intégration</h2><p>Complétez chaque rubrique obligatoire. Les points de vigilance et les missions potentielles sont facultatifs.</p></div></header>
     {context && <div className="si-client-caption"><Check size={15}/><strong>{context.client_name}</strong><span>Dossier signé</span></div>}
     {!draft && !error && <p role="status"><LoaderCircle size={18} className="ip-spin"/> Chargement de la fiche…</p>}
     {draft && <fieldset disabled={busy}>
@@ -49,8 +46,8 @@ export function SaleIntake({ leadId, onBack, onSaved, backLabel = "Rendez-vous" 
         <label className="ip-field"><span><UsersRound size={17}/> Situation personnelle des dirigeants · obligatoire</span><textarea required rows={3} maxLength={2000} value={draft.personal_situation || ''} onChange={e => update('personal_situation', e.target.value)} placeholder="Contexte utile, ou « Non communiqué »."/></label>
         <label className="ip-field"><span><BriefcaseBusiness size={17}/> Situation professionnelle des dirigeants · obligatoire</span><textarea required rows={3} maxLength={2000} value={draft.professional_situation || ''} onChange={e => update('professional_situation', e.target.value)} placeholder="Activité, organisation, projets et points d’attention."/></label>
       </div>
-      <section className="si-section"><div className="si-section-title"><CloudSun size={19}/><h3>Météo client</h3><span>Obligatoire</span></div>
-        <WeatherIntakeFields draft={draft} onChange={changes=>setDraft(d=>({...d,...changes}))}/>
+      <section className="si-section"><div className="si-section-title"><CloudSun size={19}/><h3>État du client à l’entrée</h3><span>Obligatoire</span></div>
+        <SalesAssessmentFields value={draft.sales_assessment || {}} onChange={value=>update('sales_assessment',value)}/>
       </section>
       <section className="si-section"><div className="si-section-title"><ListChecks size={19}/><h3>Missions potentielles</h3><span>Facultatif</span></div><p>Les sujets identifiés avec le client. Complétez uniquement les pistes utiles au cabinet.</p>
         <div className="si-missions">{missions.map((value, i) => <label key={i}><span>{String(i + 1).padStart(2, '0')}</span><input aria-label={`Mission potentielle ${i + 1}`} value={value} maxLength={200} placeholder={['Ex. Création d’une holding', 'Ex. Optimisation de la rémunération', 'Ex. Accompagnement social', 'Autre mission envisagée', 'Autre mission envisagée'][i] || 'Autre mission envisagée'} onChange={e => { const next = [...missions]; next[i] = e.target.value; update('missions', next); }}/></label>)}</div>
