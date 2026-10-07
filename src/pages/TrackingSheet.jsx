@@ -2,6 +2,7 @@ import SalePaymentMode from '../components/SalePaymentMode';
 import {canRescheduleAfterSale} from '../utils/saleRescheduling';
 import OnboardingReschedule from '../components/integrationPreview/OnboardingReschedule';
 import { generateSavedNda } from '../contracts/ndaGeneration.js';
+import { ndaRepresentatives, emptyRepresentative } from '../contracts/representatives.js';
 import SaleReservation from '../components/integrationPreview/SaleReservation';
 import { fetchContractsOfLead, contractSentLine } from '../utils/leadContracts.js';
 import { isTypingTarget } from '../utils/typingTarget.js';
@@ -2638,11 +2639,8 @@ export default function TrackingSheet() {
       if (data.business_type && NDA_BUSINESS_TYPES.includes(data.business_type)) {
         updates.businessType = data.business_type;
       }
-      const reps = (data.representatives || []).map(r => ({
-        fullName: r.full_name || '',
-        ...(r.first_name && r.last_name ? { firstName: r.first_name, lastName: r.last_name } : {}),
-        role: (r.role || 'Gérant').replace(/\s+d[eu']\s+\S+$/i, ''),
-      })).filter(r => r.fullName);
+      const reps = ndaRepresentatives(data);
+      setNdaError(data.representative_notice || '');
       setNdaData(prev => ({ ...prev, ...updates }));
       if (data.pappers_url) setNdaPappersUrl(data.pappers_url);
       setNdaSuccess(true);
@@ -2652,7 +2650,7 @@ export default function TrackingSheet() {
         setNdaSelectedDirs([]);
         setNdaStep('dirigeants');
       } else {
-        if (reps.length === 1) setNdaData(prev => ({ ...prev, representatives: reps }));
+        setNdaData(prev => ({ ...prev, representatives: reps.length ? reps : [emptyRepresentative()] }));
         setNdaStep('form');
       }
     } catch (err) {

@@ -1,4 +1,5 @@
 import { generateSavedNda } from '../contracts/ndaGeneration.js';
+import { ndaRepresentatives, emptyRepresentative } from '../contracts/representatives.js';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CompanySchema, normalizeSiren, isValidSiren } from "../contracts/schemas.js";
@@ -313,11 +314,10 @@ export default function ContractNew() {
         };
         if (data.address.line1) filled.push("Adresse");
       }
-      if (data.representatives?.length) {
-        updates.representatives = data.representatives.map(r => ({
-          fullName: r.full_name || "",
-          role: (r.role || "Gérant").replace(/\s+d[eu']\s+\S+$/i, ""),
-        }));
+      const representatives = ndaRepresentatives(data);
+      updates.representatives = representatives.length ? representatives : [emptyRepresentative()];
+      setAiError(data.representative_notice || '');
+      if (representatives.length) {
         filled.push("Représentant(s)");
       }
       if (data.business_type && BUSINESS_TYPES.includes(data.business_type)) {

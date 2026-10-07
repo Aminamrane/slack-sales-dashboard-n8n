@@ -270,6 +270,7 @@ export default function IntegrationPreviewStudio({
       if (!alive.current) return;
       if (companySiren(data?.siren) !== siren || !data?.legal_name?.trim()) throw new Error('Aucune société trouvée pour ce SIREN. Vérifiez le numéro.');
       setDraft(current => applyCompanyLookup(current, company.id, siren, data, () => crypto.randomUUID()));
+      if (data.representative_notice) setCompanyError({ id: company.id, message: data.representative_notice });
       setValidated(null);
     } catch (error) {
       if (alive.current) setCompanyError({ id: company.id, message:
