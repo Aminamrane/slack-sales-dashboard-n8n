@@ -1,5 +1,6 @@
 import SalePaymentMode from '../components/SalePaymentMode';
 import { generateSavedNda } from '../contracts/ndaGeneration.js';
+import { ndaRepresentatives, emptyRepresentative } from '../contracts/representatives.js';
 import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { fetchContractsOfLead, contractSentLine } from '../utils/leadContracts.js';
 import { createPortal } from "react-dom";
@@ -2112,12 +2113,9 @@ export default function TrackingSheetSetter() {
           country: data.address.country || 'France',
         };
       }
-      if (data.representatives?.length) {
-        updates.representatives = data.representatives.map(r => ({
-          fullName: r.full_name || '',
-          role: (r.role || 'Gérant').replace(/\s+d[eu']\s+\S+$/i, ''),
-        }));
-      }
+      const representatives = ndaRepresentatives(data);
+      updates.representatives = representatives.length ? representatives : [emptyRepresentative()];
+      setNdaError(data.representative_notice || '');
       if (data.business_type && NDA_BUSINESS_TYPES.includes(data.business_type)) {
         updates.businessType = data.business_type;
       }
