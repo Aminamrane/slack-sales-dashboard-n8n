@@ -7,6 +7,9 @@ export const SALES_QUESTIONS = [
 ];
 export const SALES_COLORS = ['green','orange','red'];
 export const SALES_LEVELS = {favorable:'Favorable',vigilance:'Vigilance',risk:'À risque'};
+export function salesAssessmentComplete(answers) {
+  return Boolean(salesAssessmentResult(answers) && answers?.priority_missions?.trim());
+}
 export function salesAssessmentResult(answers) {
   if (!SALES_QUESTIONS.every(({key}) => SALES_COLORS.includes(answers?.[key]))) return null;
   const score = SALES_QUESTIONS.reduce((sum,{key}) => sum + ({green:1,orange:.5,red:0}[answers[key]]),0);

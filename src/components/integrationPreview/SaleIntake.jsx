@@ -1,7 +1,7 @@
 import SalesAssessmentFields from '../SalesAssessmentFields';
-import { salesAssessmentResult } from '../../utils/salesAssessment';
+import { salesAssessmentComplete } from '../../utils/salesAssessment';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, CloudSun, FileCheck2, UsersRound, BriefcaseBusiness, ListChecks, LoaderCircle, Check } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CloudSun, FileCheck2, ListChecks, LoaderCircle, Check } from 'lucide-react';
 import apiClient from '../../services/apiClient';
 import './integrationPreview.css';
 export { default as SaleDocuments } from './SaleDocuments';
@@ -20,14 +20,13 @@ export function SaleIntake({ leadId, onBack, onSaved, backLabel = "Rendez-vous" 
   }, [leadId, reload]);
   async function save() {
     if (busy) return;
-    if (!draft.personal_situation?.trim() || !draft.professional_situation?.trim() || !salesAssessmentResult(draft.sales_assessment)) {
-      setError('Complétez les deux situations et les cinq questions de préparation à l’onboarding.'); return;
+    if (!salesAssessmentComplete(draft.sales_assessment)) {
+      setError('Répondez aux cinq questions et précisez les missions que le client souhaite prioriser.'); return;
     }
     setBusy(true); setError('');
     try {
       const saved = await apiClient.put(`/api/v1/owner-integration/leads/${leadId}/sale-intake`, {
         revision: context.revision, contract_id: context.contract_id,
-        personal_situation: draft.personal_situation, professional_situation: draft.professional_situation,
         sales_assessment: draft.sales_assessment,
         missions: (draft.missions || []).map(m => m.trim()).filter(Boolean),
       });
@@ -42,10 +41,6 @@ export function SaleIntake({ leadId, onBack, onSaved, backLabel = "Rendez-vous" 
     {context && <div className="si-client-caption"><Check size={15}/><strong>{context.client_name}</strong><span>Dossier signé</span></div>}
     {!draft && !error && <p role="status"><LoaderCircle size={18} className="ip-spin"/> Chargement de la fiche…</p>}
     {draft && <fieldset disabled={busy}>
-      <div className="si-context-grid">
-        <label className="ip-field"><span><UsersRound size={17}/> Situation personnelle des dirigeants · obligatoire</span><textarea required rows={3} maxLength={2000} value={draft.personal_situation || ''} onChange={e => update('personal_situation', e.target.value)} placeholder="Contexte utile, ou « Non communiqué »."/></label>
-        <label className="ip-field"><span><BriefcaseBusiness size={17}/> Situation professionnelle des dirigeants · obligatoire</span><textarea required rows={3} maxLength={2000} value={draft.professional_situation || ''} onChange={e => update('professional_situation', e.target.value)} placeholder="Activité, organisation, projets et points d’attention."/></label>
-      </div>
       <section className="si-section"><div className="si-section-title"><CloudSun size={19}/><h3>État du client à l’entrée</h3><span>Obligatoire</span></div>
         <SalesAssessmentFields value={draft.sales_assessment || {}} onChange={value=>update('sales_assessment',value)}/>
       </section>

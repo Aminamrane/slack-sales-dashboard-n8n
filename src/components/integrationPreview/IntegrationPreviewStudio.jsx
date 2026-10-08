@@ -137,11 +137,9 @@ export function IntegrationSummary({ draft, clientName, validated = false, embed
                           </div>
                         </div>
                       ))}
-                      {phase !== "contract" && <div className="ip-handoff-summary">
-                        <h4>Situation personnelle des dirigeants</h4>
-                        <p>{draft.personal_situation || "Non renseignée"}</p>
-                        <h4>Situation professionnelle des dirigeants</h4>
-                        <p>{draft.professional_situation || "Non renseignée"}</p>
+                      {phase !== "contract" && (draft.personal_situation || draft.professional_situation) && <div className="ip-handoff-summary">
+                        {draft.personal_situation && <><h4>Situation personnelle des dirigeants · historique</h4><p>{draft.personal_situation}</p></>}
+                        {draft.professional_situation && <><h4>Situation professionnelle des dirigeants · historique</h4><p>{draft.professional_situation}</p></>}
                       </div>}
                       {phase === "contract" && <div className="ip-soft-note"><LockKeyhole size={20} /><p>{directors.filter(d => d.provisional_access).length} accès provisoire(s) sélectionné(s). Les dirigeants non sélectionnés restent associés au dossier, sans compte. Le passage de relais et la météo seront complétés à la déclaration.</p></div>}
                       {draft.priorities && (

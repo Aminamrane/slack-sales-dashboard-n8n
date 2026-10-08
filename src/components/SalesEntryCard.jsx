@@ -11,6 +11,7 @@ export default function SalesEntryCard({entry}) {
     {entry&&<details><summary>Consulter la transmission commerciale<ChevronDown size={15}/></summary><div className="sales-entry-content">
       <p>Évaluation à l’entrée, conservée indépendamment des météos CSM et cabinet.</p>
       {current?<dl>{SALES_QUESTIONS.map(q=><div key={q.key}><dt>{q.title}</dt><dd className={`sales-${entry.answers[q.key]}`}><span className="sales-dot"/>{q.options[SALES_COLORS.indexOf(entry.answers[q.key])]}</dd></div>)}</dl>:<p>Ancienne note Sales conservée sans recalcul. Les réponses au questionnaire ne sont pas disponibles.</p>}
+      {current&&<><strong>Missions à prioriser</strong><p className="sales-entry-note">{entry.answers.priority_missions||'Non renseignées dans ce questionnaire historique.'}</p></>}
       <strong>Points de vigilance pour le CSM</strong><p className="sales-entry-note">{(current?entry.answers.vigilance_note:entry.legacy_note)||'Aucun point particulier signalé.'}</p>
     </div></details>}
   </section>;
