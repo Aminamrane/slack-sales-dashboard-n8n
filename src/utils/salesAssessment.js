@@ -7,6 +7,19 @@ export const SALES_QUESTIONS = [
 ];
 export const SALES_COLORS = ['green','orange','red'];
 export const SALES_LEVELS = {favorable:'Favorable',vigilance:'Vigilance',risk:'À risque'};
+export function rankedMissions(value) {
+  return (Array.isArray(value) ? value : typeof value === 'string' ? [value] : []).filter(v => typeof v === 'string').map(v => v.trim()).filter(Boolean);
+}
+export function moveMission(missions, from, to) {
+  const next = [...missions];
+  if (from < 0 || to < 0 || from >= next.length || to >= next.length) return next;
+  next.splice(to, 0, next.splice(from, 1)[0]);
+  return next;
+}
+export function salesAssessmentComplete(answers) {
+  const missions = rankedMissions(answers?.priority_missions);
+  return Boolean(salesAssessmentResult(answers) && missions.length > 0 && missions.length <= 20 && missions.every(m => m.length <= 200));
+}
 export function salesAssessmentResult(answers) {
   if (!SALES_QUESTIONS.every(({key}) => SALES_COLORS.includes(answers?.[key]))) return null;
   const score = SALES_QUESTIONS.reduce((sum,{key}) => sum + ({green:1,orange:.5,red:0}[answers[key]]),0);
