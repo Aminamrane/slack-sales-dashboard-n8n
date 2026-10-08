@@ -148,7 +148,7 @@ export function IntegrationSummary({ draft, clientName, validated = false, embed
                           <p>{draft.priorities}</p>
                         </>
                       )}
-                      {!!draft.missions?.length && (
+                      {!!draft.missions?.length && !draft.sales_assessment?.priority_missions?.length && (
                         <>
                           <h4>Missions recommandées</h4>
                           <div className="ip-summary-tags">

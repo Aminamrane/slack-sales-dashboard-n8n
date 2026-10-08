@@ -1,6 +1,6 @@
-import { useId } from 'react';
-import { BookOpen, UsersRound, Smile, Clock3, Route, Target, MessageSquareText, Check } from 'lucide-react';
-import { SALES_QUESTIONS, SALES_COLORS, SALES_LEVELS, salesAssessmentResult, salesScore } from '../utils/salesAssessment';
+import { useId, useState } from 'react';
+import { BookOpen, UsersRound, Smile, Clock3, Route, Target, MessageSquareText, Check, ArrowUp, ArrowDown, Plus, X } from 'lucide-react';
+import { SALES_QUESTIONS, SALES_COLORS, SALES_LEVELS, salesAssessmentResult, salesScore, rankedMissions, moveMission } from '../utils/salesAssessment';
 import './salesAssessment.css';
 
 const QUESTION_ICONS = [BookOpen, UsersRound, Smile, Clock3, Route];
@@ -30,7 +30,9 @@ export default function SalesAssessmentFields({ value = {}, onChange }) {
   const id = useId();
   const result = salesAssessmentResult(value);
   const scoredAnswers = SALES_QUESTIONS.filter(({ key }) => SALES_COLORS.includes(value?.[key])).length;
-  const answered = scoredAnswers + (value?.priority_missions?.trim() ? 1 : 0);
+  const missions = Array.isArray(value?.priority_missions) && value.priority_missions.length ? value.priority_missions : rankedMissions(value?.priority_missions).length ? rankedMissions(value.priority_missions) : [''];
+  const [orderMessage, setOrderMessage] = useState('');
+  const answered = scoredAnswers + (rankedMissions(missions).length ? 1 : 0);
   const set = (key, answer) => onChange({ ...value, [key]: answer });
 
   return <div className="sales-assessment">
@@ -54,11 +56,23 @@ export default function SalesAssessmentFields({ value = {}, onChange }) {
         </label>)}</div>
       </fieldset>;
     })}
-    <div className="sales-written-question sales-priority">
-      <label htmlFor={`${id}-priority`} className="sales-written-title"><span className="sales-question-icon"><Target size={20} strokeWidth={1.6}/></span><span><small>QUESTION 06 <span>· Obligatoire</span></small>Quelles missions le client souhaite-t-il prioriser ?</span></label>
-      <p id={`${id}-priority-help`}>Avec ses mots, précisez ce qu’il souhaite traiter en premier et pourquoi. Cela guidera son onboarding.</p>
-      <textarea id={`${id}-priority`} required rows={3} maxLength={4000} aria-describedby={`${id}-priority-help`} value={value?.priority_missions || ''} onChange={e => set('priority_missions', e.target.value)} placeholder="Ex. Sécuriser l’embauche de son premier salarié avant la fin du mois, puis revoir sa rémunération."/>
-    </div>
+    <section className="sales-written-question sales-priority" aria-labelledby={`${id}-priority-title`}>
+      <h3 id={`${id}-priority-title`} className="sales-written-title"><span className="sales-question-icon"><Target size={20} strokeWidth={1.6}/></span><span><small>QUESTION 06 <span>· Obligatoire</span></small>Quelles missions le client souhaite-t-il prioriser ?</span></h3>
+      <p id={`${id}-priority-help`}>Ajoutez au moins une mission, puis classez-les par priorité. La première sera à traiter en premier.</p>
+      <ol className="sales-mission-list" aria-label="Missions classées par priorité">
+        {missions.map((mission, index) => <li className="sales-mission-row" key={index}>
+          <span className="sales-mission-rank" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+          <input aria-label={`Mission en priorité ${index + 1}`} aria-describedby={`${id}-priority-help`} aria-required={!rankedMissions(missions).length} value={mission} maxLength={200} placeholder={index === 0 ? 'Ex. Sécuriser la prochaine embauche' : 'Autre mission à prioriser'} onChange={e => set('priority_missions', missions.map((m, i) => i === index ? e.target.value : m))}/>
+          <div className="sales-mission-actions">
+            <button type="button" aria-label={`Monter la mission ${index + 1}`} title="Monter" disabled={index === 0} onClick={() => {set('priority_missions', moveMission(missions, index, index - 1)); setOrderMessage(`Mission déplacée en priorité ${index}.`);}}><ArrowUp size={16}/></button>
+            <button type="button" aria-label={`Descendre la mission ${index + 1}`} title="Descendre" disabled={index === missions.length - 1} onClick={() => {set('priority_missions', moveMission(missions, index, index + 1)); setOrderMessage(`Mission déplacée en priorité ${index + 2}.`);}}><ArrowDown size={16}/></button>
+            <button type="button" aria-label={`Supprimer la mission ${index + 1}`} title="Supprimer" disabled={missions.length === 1 && !mission} onClick={() => {set('priority_missions', missions.length === 1 ? [''] : missions.filter((_, i) => i !== index)); setOrderMessage('Mission retirée de la liste.');}}><X size={16}/></button>
+          </div>
+        </li>)}
+      </ol>
+      <button type="button" className="sales-add-mission" disabled={missions.length >= 20} onClick={() => set('priority_missions', [...missions, ''])}><Plus size={16}/> Ajouter une mission</button>
+      <span className="sales-order-status" role="status">{orderMessage}</span>
+    </section>
     <div className="sales-written-question sales-vigilance">
       <label htmlFor={`${id}-vigilance`} className="sales-written-title"><span className="sales-question-icon"><MessageSquareText size={19} strokeWidth={1.6}/></span><span><small>QUESTION 07 <span>· Facultatif</span></small>Points de vigilance pour le CSM</span></label>
       <p id={`${id}-vigilance-help`}>Y a-t-il un élément particulier à connaître avant l’onboarding ?</p>
