@@ -75,7 +75,7 @@
 .sales-assessment .sales-mission-actions button:not(:disabled):hover { background:#e4ecf5; }
 .sales-assessment .sales-mission-actions button:focus-visible, .sales-assessment .sales-add-mission:focus-visible { outline:2px solid #587f73; outline-offset:2px; }
 .sales-order-status { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
-.sales-entry-content ol { padding-left:22px; line-height:1.8; }
+.sales-entry-content ol { list-style:decimal; padding-left:22px; line-height:1.8; }
 @media(max-width:560px) {
   .sales-assessment .sales-mission-row { grid-template-columns:24px minmax(0,1fr); }
   .sales-mission-actions { grid-column:2; justify-content:flex-end; }
