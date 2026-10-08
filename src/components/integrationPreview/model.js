@@ -69,6 +69,15 @@ export const freshDraft = () => ({
   contact: "",
   preferences: "",
 });
+export function selectSoleDirectorAccess(draft) {
+  if (draft.flow_version < 2 || draft.flow_version == null) return draft;
+  const selectedIds = new Set(draft.companies.filter(c => c.selected).map(c => c.id));
+  const eligible = draft.directors.filter(d => d.companies.some(id => selectedIds.has(id)));
+  if (eligible.length !== 1 || eligible[0].provisional_access) return draft;
+  return { ...draft, directors: draft.directors.map(d => d.id === eligible[0].id
+    ? { ...d, provisional_access: true } : d) };
+}
+
 export function completeness(draft) {
   const companies = draft.companies.filter((c) => c.selected);
   const directors = draft.directors.filter((d) =>
@@ -95,8 +104,8 @@ export function completeness(draft) {
           ),
       },
       ...(draft.flow_version >= 2 ? [{
-        label: "Accès des dirigeants",
-        done: draft.directors.filter(d => d.provisional_access).every(d =>
+        label: "Au moins un accès dirigeant",
+        done: directors.some(d => d.provisional_access) && draft.directors.filter(d => d.provisional_access).every(d =>
           /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((d.email || '').trim()) && d.name.trim().split(/\s+/).length >= 2
           && d.companies.some(id => companies.some(c => c.id === id)))
           && new Set(draft.directors.filter(d => d.provisional_access).map(d => (d.email || '').trim().toLowerCase())).size === draft.directors.filter(d => d.provisional_access).length,
