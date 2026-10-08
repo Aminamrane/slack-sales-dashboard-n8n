@@ -4,6 +4,7 @@ import {
   canSeeIntegrationPreview,
   completeness,
   freshDraft,
+  selectSoleDirectorAccess,
 } from "../components/integrationPreview/model.js";
 
 test("seul Youcef voit l’entrée privée, pas tous les administrateurs", () => {
@@ -89,12 +90,15 @@ test('le périmètre avant contrat ne demande pas le passage de relais', () => {
   const d = freshDraft();
   d.flow_version = 2;
   d.companies.forEach(c => { c.in_registration = true; });
+  assert.equal(completeness(d).checks.every(c => c.done), false);
+  d.directors[0].provisional_access = true;
+  d.directors[0].email = 'camille@example.com';
   assert.equal(completeness(d).checks.every(c => c.done), true);
   d.companies[0].in_registration = false;
   assert.equal(completeness(d).checks[0].done, false);
   d.companies[0].siren = '123456789';
   assert.equal(completeness(d).checks.every(c => c.done), true);
-  d.directors[0].provisional_access = true;
+  d.directors[0].email = '';
   assert.equal(completeness(d).checks[2].done, false);
   d.directors[0].email = 'camille@example.com';
   assert.equal(completeness(d).checks[2].done, true);
@@ -142,4 +146,28 @@ test('l’état civil complet du registre ne crée pas un second dirigeant pour 
   assert.equal(result.directors[1].name,'Léa Durand');
   assert.equal(samePerson('MARTIN Camille','Camille Martin'),true);
   assert.equal(samePerson('Martin','MARTIN Camille'),false);
+});
+
+
+test('le seul dirigeant accompagné a un accès obligatoire sans inventer son email', () => {
+  const d = { flow_version: 2, companies: [{ id: 'c', name: 'Société', siren: '123456789', selected: true }],
+    directors: [{ id: 'p', name: 'Camille Martin', companies: ['c'], email: '', provisional_access: false }] };
+  const selected = selectSoleDirectorAccess(d);
+  assert.equal(selected.directors[0].provisional_access, true);
+  assert.equal(selected.directors[0].email, '');
+  assert.equal(completeness(selected).checks[2].done, false);
+  assert.equal(d.directors[0].provisional_access, false);
+  selected.directors[0].email = 'camille@example.com';
+  assert.equal(completeness(selected).checks.every(c => c.done), true);
+  assert.equal(selectSoleDirectorAccess(selected), selected);
+});
+
+test('plusieurs dirigeants nécessitent un choix explicite lié au périmètre', () => {
+  const d = freshDraft(); d.flow_version = 2;
+  assert.equal(selectSoleDirectorAccess(d), d);
+  assert.equal(completeness(d).checks[2].done, false);
+  d.directors.push({ id: 'outside', name: 'Hors Périmètre', companies: ['unselected'], email: 'outside@example.com', provisional_access: true });
+  assert.equal(completeness(d).checks[2].done, false);
+  const legacy = freshDraft();
+  assert.equal(selectSoleDirectorAccess(legacy), legacy);
 });

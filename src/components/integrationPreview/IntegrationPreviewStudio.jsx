@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import {
   completeness,
+  selectSoleDirectorAccess,
   freshDraft,
   WEATHER_LABELS,
 } from "./model";
@@ -237,7 +238,8 @@ export default function IntegrationPreviewStudio({
   continueLabel,
 }) {
   const stepIds = phase === "contract" ? [0, 3] : [0, 1, 2, 3];
-  const [draft, setDraft] = useState(() => uniqueCompanies(initialDraft || readDraft())),
+  const requireSoleAccess = value => phase === "contract" && !accessLocked ? selectSoleDirectorAccess(value) : value;
+  const [draft, setDraft] = useState(() => requireSoleAccess(uniqueCompanies(initialDraft || readDraft()))),
     [step, setStep] = useState(0),
     [future, setFuture] = useState(false),
     [view, setView] = useState("form");
@@ -267,7 +269,7 @@ export default function IntegrationPreviewStudio({
       const data = await lookupCompany(siren);
       if (!alive.current) return;
       if (companySiren(data?.siren) !== siren || !data?.legal_name?.trim()) throw new Error('Aucune société trouvée pour ce SIREN. Vérifiez le numéro.');
-      setDraft(current => applyCompanyLookup(current, company.id, siren, data, () => crypto.randomUUID()));
+      setDraft(current => requireSoleAccess(applyCompanyLookup(current, company.id, siren, data, () => crypto.randomUUID())));
       if (data.representative_notice) setCompanyError({ id: company.id, message: data.representative_notice });
       setValidated(null);
     } catch (error) {
@@ -282,7 +284,8 @@ export default function IntegrationPreviewStudio({
   }
   const { companies, directors, checks } = completeness(draft);
   const count = checks.filter((c) => c.done).length;
-  const ready = validated === JSON.stringify(draft);
+  const hasRequiredAccess = phase !== "contract" || draft.flow_version == null || draft.flow_version < 2 || directors.some(d => d.provisional_access);
+  const ready = hasRequiredAccess && validated === JSON.stringify(draft);
   useEffect(() => {
     try {
       if (!embedded) sessionStorage.setItem(STORAGE, JSON.stringify(draft));
@@ -291,7 +294,7 @@ export default function IntegrationPreviewStudio({
     onDirty(JSON.stringify(draft));
   }, [draft]);
   const change = (key, value) => {
-    setDraft((d) => ({ ...d, [key]: value }));
+    setDraft((d) => requireSoleAccess({ ...d, [key]: value }));
     setValidated(null);
   };
   const updateCompany = (id, key, value) =>
@@ -320,6 +323,10 @@ export default function IntegrationPreviewStudio({
   };
   const validate = async () => {
     if (lookupPending.current || busy) return;
+    if (!hasRequiredAccess) {
+      setFeedback({ success: false, text: "Sélectionnez au moins un dirigeant avec ouverture de compte." });
+      return;
+    }
     setBusy(true);
     setFeedback(null);
     try {
@@ -651,7 +658,7 @@ export default function IntegrationPreviewStudio({
                             </button>
                           </div>
                           {phase === "contract" && <section className={`ip-director-access ${d.provisional_access ? "is-active" : ""}`}>
-                            <label><input type="checkbox" checked={!!d.provisional_access} disabled={accessLocked} onChange={e => updateDirector(d.id, "provisional_access", e.target.checked)} /><LockKeyhole size={18} /><span><strong>Ouvrir un compte provisoire · 15 jours</strong><small>{d.provisional_access ? "Accès nominatif, conservé à la déclaration de vente." : "Dirigeant associé au dossier, sans accès à l’espace client."}</small></span></label>
+                            <label><input type="checkbox" checked={!!d.provisional_access} disabled={accessLocked || (draft.flow_version >= 2 && directors.length === 1 && directors[0].id === d.id)} onChange={e => updateDirector(d.id, "provisional_access", e.target.checked)} /><LockKeyhole size={18} /><span><strong>Ouvrir un compte provisoire · 15 jours</strong><small>{d.provisional_access ? "Accès nominatif, conservé à la déclaration de vente." : "Dirigeant associé au dossier, sans accès à l’espace client."}</small></span></label>
                             {d.provisional_access && <label className="ip-field"><span>Email personnel de connexion · obligatoire</span><input type="email" autoComplete="off" maxLength={254} value={d.email || ""} disabled={accessLocked} placeholder="prenom.nom@entreprise.fr" onChange={e => updateDirector(d.id, "email", e.target.value)} /></label>}
                             {accessLocked && <small>Demande d’accès déjà enregistrée. Le choix est conservé pour éviter tout doublon.</small>}
                           </section>}
