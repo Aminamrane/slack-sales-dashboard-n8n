@@ -1374,6 +1374,10 @@
 .si-document-slots { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
 .si-document-slot { display:flex; flex-direction:column; gap:7px; border:1px dashed #ccd2dd; border-radius:10px; padding:12px; color:#737e91; font-size:12px; }
 .si-document-slot small { font-size:10px; }
+.si-account-holder {display:grid;gap:12px;padding:14px 0;border-bottom:1px solid #e7e9ef;}
+.si-account-holder:last-child {border-bottom:0;}
+.si-account-choice {display:flex;align-items:center;gap:10px;cursor:pointer;}
+.si-account-choice input[type=checkbox] {width:18px;height:18px;accent-color:#202532;}
 .si-handoff, .si-documents { animation:si-enter .22s ease-out; }
 @keyframes si-enter { from {opacity:0; transform:translateY(7px);} to {opacity:1; transform:translateY(0);} }
 @media(max-width:600px) { .si-document-slots {grid-template-columns:1fr;} .si-title h2 {font-size:18px;} .si-actions > button {flex:1; justify-content:center;} }
@@ -1435,4 +1439,3 @@
 .si-waiver-reasons button:hover {border-color:#9aa6c2;}
 .si-waiver-reasons button.is-selected {background:#1e2330;border-color:#1e2330;color:#fff;}
 @media(max-width:600px) {.si-waiver-reasons {margin-left:0;}}
-
