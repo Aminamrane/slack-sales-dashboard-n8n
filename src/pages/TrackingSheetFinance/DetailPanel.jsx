@@ -99,6 +99,9 @@ import { ETAT_STYLE, displayEtat } from '../OptilexBoard.jsx';
 import BoardEtatCell from './components/BoardEtatCell.jsx';
 import ExitClientDialog from './components/ExitClientDialog.jsx';
 import StateReview from './components/StateReview.jsx';
+import { reviewedInstallment } from './installmentFollowup.js';
+import InstallmentFollowup from './components/InstallmentFollowup.jsx';
+import LatestClientCall from './components/LatestClientCall.jsx';
 import DoNotCallControl from './components/DoNotCallControl.jsx';
 import PromiseDialog from './components/PromiseDialog.jsx';
 import BillingStopDialog from './components/BillingStopDialog.jsx';
@@ -144,6 +147,7 @@ export default function DetailPanel({
   onPromiseChanged, // () → le parent recharge la ligne (promesse de règlement)
   rows,            // current period rows (so we can find focused row immediately)
   scope = 'global', // vision active du tableau : 'owner' | 'optilex' | 'global'
+  canViewCalls = false,
   formulaCheck = null, // client « À vérifier » : montant déclaré sans tranche dans sa modalité
   onContractSaved,     // () → le parent recharge la liste « À vérifier »
 }) {
@@ -491,6 +495,11 @@ export default function DetailPanel({
       else if (month > nowMonth) status = 'upcoming';
       else if (month === nowMonth) status = scopedOverdueCurrent(p, scope) > 0 ? 'late' : 'upcoming';
       else status = 'late';
+      const extraDue = Object.fromEntries(['owner', 'optilex'].map(entity => {
+        const d = deferralsByMonth(profile?.deferrals, entity)[month];
+        return [entity, (d?.in || 0) - (d?.out || 0)];
+      }));
+      if (reviewedInstallment(p, scope, profile?.installment_followups, extraDue)) status = 'regularized';
       list.push({
         id: p.id, n: list.length + 1, month, status, ...a,
         deferredOut, deferredIn,
@@ -500,7 +509,7 @@ export default function DetailPanel({
       });
     }
     return list;
-  }, [visiblePeriods, scope, deferred, reported]);
+  }, [visiblePeriods, scope, deferred, reported, profile?.installment_followups, profile?.deferrals]);
 
   // (Le forfait mensuel dérivé des échéances a été retiré avec le « N × … »
   // de la modalité — 2026-08-25. La Formule affiche la tranche seule.)
@@ -801,6 +810,7 @@ export default function DetailPanel({
               onOpenExit={() => openExit(null)}
             />
 
+            {canViewCalls && <LatestClientCall key={clientId} clientId={clientId}/>}
             <DoNotCallControl key={clientId} clientId={clientId}
               value={!!profile?.do_not_call} loaded={String(profile?.client_id) === String(clientId)} canEdit={canEdit}
               onChanged={(value) => {
@@ -919,6 +929,12 @@ export default function DetailPanel({
                 focusedRowId={rowId}
                 onSelectRow={onSelectRow}
               />
+              {canEdit && focusedRow?.id && String(profile?.client_id) === String(clientId) &&
+                <InstallmentFollowup key={`${clientId}-${focusedRow.id}-${scope}`} clientId={clientId} period={focusedRow}
+                  scope={scope} reviews={profile.installment_followups || []} onChanged={reviews => {
+                    setProfile(previous => ({ ...previous, installment_followups: reviews })); reloadAfterExit();
+                  }}/>
+              }
             </Section>
 
             {/* Saisie et ventilation par structure. Les structures viennent du
@@ -2082,6 +2098,7 @@ const PAYMENT_DAY_LABELS = Object.fromEntries(
 
 // ── État de compte (échéancier) ─────────────────────────────────────────────
 const INSTALLMENT_BADGES = {
+  regularized: { label: 'Payée', bg: '#e9f9f0', fg: '#15794a' },
   paid:     { label: 'Encaissée', bg: '#e9f9f0', fg: '#15794a' },
   partial:  { label: 'Partielle', bg: '#fff3e3', fg: '#b45309' },
   late:     { label: 'En retard', bg: '#fdecec', fg: '#b42318' },

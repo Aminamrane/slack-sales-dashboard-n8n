@@ -115,6 +115,7 @@ export function describeAction({ field, from, to, period = null, effectiveOn = n
       if (to === 'levée automatiquement') return `a levé la promesse de règlement (${to})`;
       // Depuis le 28/09 la pose enregistre son commentaire (obligatoire).
       return `a noté une promesse de règlement : « ${to} »`;
+    case 'installment_followup': return `Suivi de l’échéance : ${to || ''}`;
     case 'do_not_call':
       return to === 'Oui' ? 'a indiqué que le client ne doit pas être rappelé' : 'a retiré la consigne « Ne pas rappeler »';
     case 'responsible':
