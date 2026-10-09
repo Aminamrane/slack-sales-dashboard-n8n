@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PhoneOff, Phone } from 'lucide-react';
 import apiClient from '../../../services/apiClient.js';
 
 export default function DoNotCallControl({ clientId, value, loaded, canEdit, onChanged }) {
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const change = async () => {
@@ -10,7 +12,7 @@ export default function DoNotCallControl({ clientId, value, loaded, canEdit, onC
     setBusy(true); setError('');
     try {
       const result = await apiClient.put(`/api/v1/finance-periods/client/${clientId}/do-not-call`, { enabled: !value });
-      onChanged?.(result.do_not_call);
+      if (mounted.current) onChanged?.(result.do_not_call);
     } catch (e) {
       setError(e?.data?.detail || 'La consigne de rappel n’a pas été enregistrée. Réessayez.');
     } finally { setBusy(false); }

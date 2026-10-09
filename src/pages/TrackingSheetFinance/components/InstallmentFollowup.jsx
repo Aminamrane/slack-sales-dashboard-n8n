@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import apiClient from '../../../services/apiClient.js';
 import { formatMonthLabel } from '../constants.js';
 
 export default function InstallmentFollowup({ clientId, period, scope, reviews, onChanged }) {
   const [entity, setEntity] = useState(scope === 'optilex' ? 'optilex' : 'owner');
   const [note, setNote] = useState('');
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const selectedEntity = scope === 'global' ? entity : scope;
@@ -17,7 +19,7 @@ export default function InstallmentFollowup({ clientId, period, scope, reviews, 
       const data = await apiClient.put(`/api/v1/finance-periods/client/${clientId}/installments/${period.id}/followup`, {
         entity: selectedEntity, regularized: !active, note,
       });
-      onChanged(data.installment_followups); setNote('');
+      if (mounted.current) { onChanged(data.installment_followups); setNote(''); }
     } catch (e) { setError(e?.data?.detail || 'La confirmation n’a pas été enregistrée. Réessayez.'); }
     finally { setBusy(false); }
   };

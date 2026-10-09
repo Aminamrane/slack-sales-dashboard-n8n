@@ -16,7 +16,7 @@ export default function LatestClientCall({ clientId }) {
   }, [clientId, revision]);
   const call = data?.call;
   return <div style={{ border: '1px solid #e9e9e7', borderRadius: 10, padding: 14, marginBottom: 22, fontSize: 12.5 }}>
-    <strong style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Phone size={15}/> Dernier appel Allo</strong>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}><strong style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Phone size={15}/> Dernier appel Allo</strong><button type="button" disabled={!data && !error} onClick={() => setRevision(r => r + 1)} style={{ border: 0, background: 'none', font: 'inherit', cursor: 'pointer', color: '#787774' }}>Actualiser l’appel</button></div>
     <p style={{ color: '#787774', margin: '6px 0' }}>Appels de votre périmètre · rapprochement par les téléphones de cette fiche</p>
     {error ? <p role="alert">{error} <button onClick={() => setRevision(r => r + 1)}>Réessayer</button></p> : !data ? <p role="status">Recherche du dernier appel…</p> : !call ?
       <p>{data.has_phone ? 'Aucun appel trouvé pour ces numéros.' : 'Aucun numéro de téléphone exploitable dans cette fiche.'}</p> : <>
