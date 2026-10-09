@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { PhoneOff, Phone } from 'lucide-react';
 import apiClient from '../../../services/apiClient.js';
 
-export default function DoNotCallControl({ clientId, value, loaded, canEdit, onChanged }) {
+export default function DoNotCallControl({ clientId, value, loaded, canEdit, onChanged, compact = false }) {
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [busy, setBusy] = useState(false);
@@ -18,8 +18,8 @@ export default function DoNotCallControl({ clientId, value, loaded, canEdit, onC
     } finally { setBusy(false); }
   };
   const Icon = value ? Phone : PhoneOff;
-  return <div style={{ marginTop: -16, marginBottom: 24, fontSize: 12.5 }}>
-    {value && <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#92400e', marginBottom: 8 }}>
+  return <div style={{ marginTop: compact ? 0 : -16, marginBottom: compact ? 0 : 24, fontSize: 12.5 }}>
+    {value && !compact && <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#92400e', marginBottom: 8 }}>
       <PhoneOff size={15}/><strong>Client à ne pas rappeler</strong><span>· Consigne partagée avec l’équipe Finance</span>
     </div>}
     {canEdit && <button type="button" disabled={busy || !loaded} onClick={change}

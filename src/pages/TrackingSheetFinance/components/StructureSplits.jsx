@@ -51,7 +51,8 @@ export default function StructureSplits({
   const [saving, setSaving] = useState(false);
   const [renaming, setRenaming] = useState(null);
 
-  const entity = scope === 'optilex' ? 'optilex' : 'owner';
+  const [selectedEntity, setSelectedEntity] = useState('owner');
+  const entity = scope === 'global' ? selectedEntity : scope === 'optilex' ? 'optilex' : 'owner';
 
   const load = useCallback(() => {
     if (!clientId) return;
@@ -212,6 +213,7 @@ export default function StructureSplits({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {scope === 'global' && <label>Règlements de <select aria-label="Entité des règlements à ventiler" value={selectedEntity} disabled={saving} onChange={e => setSelectedEntity(e.target.value)}><option value="owner">Owner</option><option value="optilex">Opti’Lex</option></select></label>}
       <div style={{
         display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap',
       }}>

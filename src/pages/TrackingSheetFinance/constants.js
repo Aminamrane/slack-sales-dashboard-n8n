@@ -705,6 +705,8 @@ export const CONTACT_LABEL_OPTIONS = [
 
 // Libellés FR du journal de la fiche client (finance_sheet_change).
 export const PROFILE_CHANGE_LABELS = {
+  billing_company_owner: 'Société de facturation Owner',
+  billing_company_optilex: 'Société de facturation Opti’Lex',
   employee_range: 'Effectif',
   siren:          'SIREN',
   contact_email:  'Email',
