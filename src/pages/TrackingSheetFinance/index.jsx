@@ -34,7 +34,7 @@ import {
   Edit3, Plus, Filter, ArrowUpDown, MoreHorizontal, Share2,
   CheckCircle, Sparkles, FileText, Users, Settings, Clock,
   XCircle, CircleDot, FilterX, Eye, Check, Star, Handshake, TriangleAlert, Download, Phone,
-  CircleDashed, MailCheck,
+  CircleDashed, MailCheck, PhoneOff,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
@@ -68,6 +68,7 @@ import TableView from './TableView.jsx';
 import DetailPanel from './DetailPanel.jsx';
 // `displayEtat` : règle métier unique de l'état affiché sur le board
 // Owner/Opti'Lex (import read-only — OptilexBoard n'est pas modifié).
+import { matchesLateOnboarding, matchesAnnualRenewal } from './followupFilters.js';
 import { displayEtat, MeteoIcon, METEO_BANDS, meteoBandOf } from '../OptilexBoard.jsx';
 import {
   ALLOWED_ROLES,
@@ -295,6 +296,7 @@ const VIEW_FILTERS = [
   { key: 'all',         label: 'Tous' },
   { key: 'a_jour',      label: 'À jour' },
   { key: 'retard_mois', label: 'Retard du mois' },
+  { key: 'annual_renewals', label: 'Renouvellements annuels du mois' },
   { key: 'creances',    label: 'Créances antérieures' },
   // Trop-perçu reporté (backend `credit_*`) : action finance à faire —
   // déduire de la prochaine échéance ou rembourser.
@@ -509,6 +511,16 @@ export default function TrackingSheetFinance() {
   const [viewFilter, setViewFilter] = useState('all');
   // Vue « Onboarding » : phase ('past' | 'upcoming') puis, pour les passés,
   // les mois d'onboarding cochés (aucun = tous).
+  const [lateOnboarding, setLateOnboarding] = useState('all');
+  const [renewals, setRenewals] = useState(() => new Map());
+  const [renewalsError, setRenewalsError] = useState('');
+  useEffect(() => {
+    let live = true; setRenewals(new Map()); setRenewalsError('');
+    apiClient.get(`/api/v1/finance-periods/annual-renewals?period=${period}`)
+      .then(data => { if (live) setRenewals(new Map((data.items || []).map(item => [item.client_id, item.entities]))); })
+      .catch(() => { if (live) setRenewalsError('Les renouvellements n’ont pas pu être chargés. Actualisez la page pour réessayer.'); });
+    return () => { live = false; };
+  }, [period, rows]);
   const [onboardingPhase, setOnboardingPhase] = useState('past');
   const [relanceMonths, setRelanceMonths] = useState(() => new Set());
   // Vue « Attente Opti'Lex » : 'all' | 'done' | 'past' | 'upcoming' | 'none'.
@@ -555,7 +567,8 @@ export default function TrackingSheetFinance() {
         // antérieures relève de la vue « Créances antérieures », plus de
         // celle-ci : les deux vues sont disjointes (dev 2026-09-18, n°164 :
         // 2 400 € d'antérieur, sortait encore en « retard du mois »).
-        return scopedOverdueCurrent(r, scope) > 0 && scopedOverdueCum(r, scope) <= 0;
+        return scopedOverdueCurrent(r, scope) > 0 && scopedOverdueCum(r, scope) <= 0 && matchesLateOnboarding(r, lateOnboarding);
+      case 'annual_renewals': return matchesAnnualRenewal(r, scope, renewals);
       case 'creances':
         // Les dossiers réglés restent dans leur cohorte et leur tranche d’ancienneté.
         return matchesPriorDebt(r, scope, creanceAge, period);
@@ -601,7 +614,7 @@ export default function TrackingSheetFinance() {
       default:
         return true; // 'all'
     }
-  }, [scope, boardMap, boardEtatOf, relanceMonths, creanceAge, onboardingPhase, optilexPhase, period, formulaChecks]);
+  }, [scope, boardMap, boardEtatOf, relanceMonths, creanceAge, onboardingPhase, optilexPhase, period, formulaChecks, lateOnboarding, renewals]);
 
   // Filtre « Météo client » (menu Filtre), réservé à deux personnes : les
   // bandes du board avec leur volume, plus « Sans météo ».
@@ -742,6 +755,7 @@ export default function TrackingSheetFinance() {
       if (tableFilters.has('overdue_current_and_past') && overdueCurrent > 0 && overdueCumul > 0) return true;
       if (tableFilters.has('overdue_past_only') && overdueCurrent === 0 && overdueCumul > 0) return true;
       if (tableFilters.has('payment_promise') && r.client?.payment_promise) return true;
+      if (tableFilters.has('do_not_call') && r.client?.do_not_call) return true;
       if (tableFilters.has('loss') && r.client?.is_loss) return true;
       const automationFilter = financeAutomationFilter(r.auto_debit);
       if (automationFilter && tableFilters.has(automationFilter)) return true;
@@ -1349,6 +1363,7 @@ export default function TrackingSheetFinance() {
                 active={viewFilter}
                 onChange={setViewFilter}
                 counts={viewCounts}
+                lateOnboarding={lateOnboarding} onLateOnboardingChange={setLateOnboarding}
                 onboardingPhase={onboardingPhase}
                 onOnboardingPhaseChange={setOnboardingPhase}
                 relanceMonths={relanceMonths}
@@ -1359,6 +1374,7 @@ export default function TrackingSheetFinance() {
                 onOptilexPhaseChange={setOptilexPhase}
                 optilexPhaseCounts={optilexPhaseCounts}
               />
+              {viewFilter === 'annual_renewals' && renewalsError && <p role="alert">{renewalsError}</p>}
               {viewFilter === 'creances' && (
                 <CreancesExitBanner
                   count={liquidationCount}
@@ -1446,6 +1462,7 @@ export default function TrackingSheetFinance() {
       </div>
 
       <DetailPanel
+        canViewCalls={canViewCalls}
         open={panelOpen}
         clientId={panelClientId}
         rowId={panelRowId}
@@ -2354,7 +2371,7 @@ function RelanceMonthPicker({ selected, onChange }) {
   );
 }
 
-function ViewChips({ active, onChange, counts, onboardingPhase, onOnboardingPhaseChange,
+function ViewChips({ active, onChange, counts, lateOnboarding, onLateOnboardingChange, onboardingPhase, onOnboardingPhaseChange,
   relanceMonths, onRelanceMonthsChange, creanceAge, onCreanceAgeChange,
   optilexPhase = 'all', onOptilexPhaseChange, optilexPhaseCounts }) {
   return (
@@ -2431,6 +2448,14 @@ function ViewChips({ active, onChange, counts, onboardingPhase, onOnboardingPhas
           </motion.div>
         )}
       </AnimatePresence>
+      {active === 'retard_mois' && (
+        <select aria-label="Onboarding des clients en retard" value={lateOnboarding} onChange={e => onLateOnboardingChange(e.target.value)}
+          style={{ border: '1px solid #e9e9e7', borderRadius: 16, padding: '5px 10px', font: 'inherit', fontSize: 12, background: '#fff' }}>
+          <option value="all">Tous les onboardings</option>
+          <option value="past">Avec onboarding passé</option>
+          <option value="not_past">Sans onboarding passé (à venir ou sans date)</option>
+        </select>
+      )}
       {active === 'creances' && (
         <CreanceAgePicker value={creanceAge} onChange={onCreanceAgeChange} />
       )}
@@ -2583,6 +2608,7 @@ const FILTER_OPTIONS = [
   // Clients qui se sont engagés à régler : la liste qu'on rappelle en
   // priorité, et qu'on n'a pas besoin de relancer comme les autres.
   { value: 'payment_promise',          label: 'Promesse de règlement',            Icon: Handshake   },
+  { value: 'do_not_call',              label: 'Client à ne pas rappeler',          Icon: PhoneOff    },
   // Clients sortis des attendus : ils restent dans la liste, sans montant.
   // Le filtre sert à les retrouver — et à les exclure du reste d'un coup d'œil.
   { value: 'loss',                     label: 'Perte actée',                      Icon: TriangleAlert },

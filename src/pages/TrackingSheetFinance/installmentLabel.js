@@ -15,6 +15,8 @@ export function installmentSubline(inst) {
       ? ` · dont ${inst.reportedFrom.map((r) => `${formatEUR(r.amount)} reportés ${deMonthLabel(r.month)}`).join(', ')}`
       : '');
   switch (inst.status) {
+    case 'regularized':
+      return `${monthLabel} · régularisation confirmée`;
     case 'deferred':
       return inst.reportedTo?.length
         ? `${monthLabel} · attendu reporté sur ${inst.reportedTo.map((r) => formatMonthLabel(r.month).toLowerCase()).join(', ')}`

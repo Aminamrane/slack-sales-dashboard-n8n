@@ -80,7 +80,7 @@ export default function CallsView({ operators = [] }) {
   </section>;
 }
 
-function CallDetail({ id, onClose }) {
+export function CallDetail({ id, onClose }) {
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState('');
   const dialog = useRef(null);
