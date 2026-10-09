@@ -114,9 +114,9 @@ function History({ providedId, numero }) {
   }
   return <section className="client-history" aria-label="Documents et appels partagés avec le CSM">
     <h3><Paperclip size={17}/> Documents et appels partagés</h3>
-    <p className="history-hint">Consultables par Vincent, l’équipe CSM et la Finance Owner. Ajoutez une copie d’email EML ou HTML pour conserver sa présentation.</p>
+    <p className="history-hint">Consultables par l’équipe CSM et la Finance Owner. Ajoutez une copie d’email EML ou HTML pour conserver sa présentation.</p>
     {error && <p role="alert" className="history-error">{error} <button type="button" disabled={busy} onClick={() => setVersion(v => v + 1)}>Actualiser</button></p>}
-    <textarea aria-label="Contexte de la pièce jointe" placeholder="Un contexte pour Vincent… (facultatif)" maxLength={2000} rows={2} value={note} disabled={busy} onChange={e => setNote(e.target.value)}/>
+    <textarea aria-label="Contexte de la pièce jointe" placeholder="Un contexte pour l’équipe CSM… (facultatif)" maxLength={2000} rows={2} value={note} disabled={busy} onChange={e => setNote(e.target.value)}/>
     <div className="history-actions">
       <label className={`history-button ${busy || !base || loading ? 'is-disabled' : ''}`}><Paperclip size={15}/> Joindre un document ou un email
         <input type="file" aria-label="Joindre un document ou un email" accept=".pdf,.png,.jpg,.jpeg,.eml,.html,.htm,.mp3,.wav,.m4a" disabled={busy || !base || loading}

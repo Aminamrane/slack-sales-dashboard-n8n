@@ -959,7 +959,7 @@ export default function DetailPanel({
               <CommonSpaceThread numero={client?.numero_client} onShowToast={onShowToast} />
             </DetailDisclosure>
 
-            <DetailDisclosure key={`files-${clientId}`} title="Documents, emails et appels" description="Pièces jointes et appels choisis, consultables par Vincent et le CSM">
+            <DetailDisclosure key={`files-${clientId}`} title="Documents, emails et appels" description="Pièces jointes et appels choisis, consultables par l’équipe CSM">
             {canViewCalls && <LatestClientCall key={`call-${clientId}`} clientId={clientId}/>}
               <ClientHistoryAttachments clientId={clientId}/>
             </DetailDisclosure>
