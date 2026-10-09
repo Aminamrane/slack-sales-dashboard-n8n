@@ -1,3 +1,6 @@
+import DetailDisclosure from './components/DetailDisclosure.jsx';
+import ClientHistoryAttachments from '../../components/ClientHistoryAttachments.jsx';
+import BillingCompanies from './components/BillingCompanies.jsx';
 import {formatDateLongFR} from './constants.js';
 import {installmentSubline} from './installmentLabel.js';
 // DetailPanel.jsx — Notion-style slide-in right panel for a client + period.
@@ -160,6 +163,9 @@ export default function DetailPanel({
   // l'accordéon. Une requête de moins par changement de row.
   const [error, setError] = useState(null);
   const [fullscreen, setFullscreen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsAnchor = useRef(null);
+  useEffect(() => setActionsOpen(false), [clientId, open]);
   // Fiche client (profil) : SIREN, contacts typés, effectif courant, état
   // hérité du board, fin de contrat, journal des changements de la fiche.
   const [profile, setProfile] = useState(null);
@@ -538,7 +544,7 @@ export default function DetailPanel({
     setPdfGenerating(structure ? `st-${structure.id}` : entity);
     try {
       const { timeline: statementTimeline, profile: statementProfile, splits: statementSplits,
-        structures: statementStructures, structure: selectedStructure } = await loadStatementData(
+        structures: statementStructures, structure: selectedStructure, billingCompanies } = await loadStatementData(
         url => apiClient.get(url), clientId, structure?.id,
       );
       const statementPeriods = statementTimeline.periods;
@@ -547,7 +553,10 @@ export default function DetailPanel({
       // Société découpée + personne(s) (source unique splitSocieteRep) ;
       // numero_client arrive préfixé « n° » en base → strip (le PDF pose
       // son propre « n° »).
-      const recipient = statementRecipient({ client, profile: statementProfile, structure: selectedStructure });
+      const link = billingCompanies?.[entity];
+      const billingStructure = link ? statementStructures.find(s => String(s.id) === String(link.structure_id)) : null;
+      if (!selectedStructure && link && (!billingStructure || link.unavailable)) throw new Error('La société de facturation a été retirée. Choisissez son nouveau rattachement avant de générer le PDF.');
+      const recipient = statementRecipient({ client, profile: statementProfile, structure: selectedStructure || billingStructure });
 
       const nowMonth = currentPeriod();
       const latestExpected = [...statementPeriods].sort((a,b) => String(b.period).localeCompare(String(a.period)))
@@ -752,7 +761,38 @@ export default function DetailPanel({
             {/* Header client synthétique (phase 3) : avatar + nom + statut
                 paiement + Modifier. L'État board reste ici — action
                 fréquente, jamais dans l'accordéon. */}
-            <ClientHeader client={client} />
+            <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12}}>
+              <ClientHeader client={client} />
+              {(canEdit || canEditMoney || canProposeMoney) && <button type="button" ref={actionsAnchor} aria-expanded={actionsOpen} onClick={() => setActionsOpen(v => !v)} style={{display:'flex',alignItems:'center',gap:6,border:'1px solid #e3e2e0',borderRadius:7,padding:'7px 10px',background:'#fff',font:'inherit',fontSize:12,cursor:'pointer'}}><SlidersHorizontal size={14}/> Actions <ChevronDown size={12}/></button>}
+            </div>
+            <PortalDropdown open={actionsOpen} anchorRef={actionsAnchor} onClose={() => setActionsOpen(false)} align="right" minWidth={260}>
+              <div style={{padding:10}}>
+            <ActionsBar compact
+              canManageMoney={canEditMoney}
+              canProposeMoney={canProposeMoney}
+              canEdit={canEdit}
+              promise={!!focusedRow?.client?.payment_promise}
+              onTogglePromise={() => { setActionsOpen(false); togglePromise(); }}
+              onOpenExpected={() => { setActionsOpen(false); setExpectedOpen(true); }}
+              exitDue={exitDue}
+              onOpenExit={() => { setActionsOpen(false); openExit(null); }}
+            />
+
+            <DoNotCallControl compact key={`no-call-${clientId}`} clientId={clientId}
+              value={!!profile?.do_not_call} loaded={String(profile?.client_id) === String(clientId)} canEdit={canEdit}
+              onChanged={(value) => {
+                setProfile(previous => previous ? { ...previous, do_not_call: value } : previous);
+                reloadAfterExit();
+              }}/>
+              </div>
+            </PortalDropdown>
+            {profile?.do_not_call && <p style={{fontSize:12,color:'#92400e',margin:'10px 0 0'}}>Client à ne pas rappeler</p>}
+
+            <div style={{display:'flex',flexWrap:'wrap',gap:'5px 14px',marginTop:10,fontSize:12,color:N.textMuted,overflowWrap:'anywhere'}}>
+              {client?.numero_client && <span>Client n°{client.numero_client}</span>}
+              {client?.email && <span>{client.email}</span>}
+              {client?.phone && <span>{client.phone}</span>}
+            </div>
 
             {/* Bandeau de situation, deux cases : l'état du client et qui le
                 suit. Rien d'autre — le numéro, la date de signature et le
@@ -776,78 +816,8 @@ export default function DetailPanel({
               onShowToast={onShowToast}
             />
 
-            <StateReview clientId={clientId} version={profile} canProcess={canEditMoney} onReview={setStateReview} onChanged={reloadAfterExit}/>
-            {/* Error state */}
-            {error && (
-              <div style={{
-                marginTop: 20, padding: 12, background: N.redBg,
-                color: N.red, borderRadius: 6, fontSize: 13,
-              }}>
-                {error}
-              </div>
-            )}
-
-            {/* Les faits : SIREN, échéance ou sortie de contrat, perte,
-                promesse posée. Puis les actions, toutes au même endroit —
-                plus de bouton isolé à l'autre bout de la fiche. */}
-            <FactsRow
-              stateReview={stateReview}
-              profile={profile}
-              boardRow={boardRow}
-              loss={profile?.loss || null}
-              promise={!!focusedRow?.client?.payment_promise}
-              billingLastMonth={profile?.billing_last_month || null}
-              onEditBilling={canEditMoney ? () => setBillingOpen(true) : null}
-            />
-            <ActionsBar
-              canManageMoney={canEditMoney}
-              canProposeMoney={canProposeMoney}
-              canEdit={canEdit}
-              promise={!!focusedRow?.client?.payment_promise}
-              onTogglePromise={togglePromise}
-              onOpenExpected={() => setExpectedOpen(true)}
-              exitDue={exitDue}
-              onOpenExit={() => openExit(null)}
-            />
-
-            {canViewCalls && <LatestClientCall key={`call-${clientId}`} clientId={clientId}/>}
-            <DoNotCallControl key={`no-call-${clientId}`} clientId={clientId}
-              value={!!profile?.do_not_call} loaded={String(profile?.client_id) === String(clientId)} canEdit={canEdit}
-              onChanged={(value) => {
-                setProfile(previous => previous ? { ...previous, do_not_call: value } : previous);
-                reloadAfterExit();
-              }}/>
-
-            {/* 4 tuiles KPI contrat (scope-aware, dérivées de la timeline).
-                « Restant dû » = tout ce que le contrat doit encore
-                rapporter (mois à venir inclus) ; « Retard à date » = ce qui
-                est réellement en retard aujourd'hui (mois courant + créances
-                antérieures) — deux notions distinctes, à ne pas confondre. */}
-            <KpiTiles
-              kpis={kpis}
-              overdueCurrent={focusedRow ? scopedOverdueCurrent(focusedRow, scope) : 0}
-              overdueCum={focusedRow ? scopedOverdueCum(focusedRow, scope) : 0}
-              credit={focusedRow ? scopedCredit(focusedRow, scope) : 0}
-              loading={loadingTimeline}
-              onRefund={canEditMoney ? openRefund : null}
-            />
-
-            {/* Remboursement d'un trop-perçu — l'encaissement reste intact,
-                un ajustement daté vient l'éteindre. Direction seulement. */}
-            {refund && (
-              <RefundPrompt
-                value={refund}
-                onChange={setRefund}
-                onCancel={() => setRefund(null)}
-                onSubmit={submitRefund}
-              />
-            )}
-
-            {/* Section : Informations contractuelles.
-                Le crayon ouvre l'édition sur place (demande dev 2026-08-27) :
-                c'est ici qu'on corrige la fiche, plus dans l'accordéon. */}
             <Section
-              title="Informations contractuelles"
+              title="Identité, contacts et contrat"
               delay={0.08}
               action={canEdit ? (
                 <button
@@ -888,10 +858,6 @@ export default function DetailPanel({
                 onCopied={onCopied}
               />
             </Section>
-
-            {/* Section : Contrats signés — le contrat Owner et la convention
-                Opti'lex tels que signés sur Yousign, consultables dans une
-                pop-up (demande dev 2026-09-08). Lecture seule. */}
             <Section title="Contrats signés" delay={0.105}>
               <SignedContracts
                 clientId={clientId}
@@ -900,10 +866,60 @@ export default function DetailPanel({
               />
             </Section>
 
-            {/* Section : État de compte (échéancier) — bouton(s) PDF à côté
-                du titre. Le document suit la vision active ; en Globale les
-                deux entités sont proposées séparément (jamais fusionnées).
-                Toujours actif, même sans échéance facturée. */}
+            <Section title="Sociétés de facturation" delay={0.1}>
+              <BillingCompanies key={`billing-${clientId}`} clientId={clientId} canEdit={canEdit} reloadKey={profile?.companies?.length || 0} />
+            </Section>
+
+            <StateReview clientId={clientId} version={profile} canProcess={canEditMoney} onReview={setStateReview} onChanged={reloadAfterExit}/>
+            {/* Error state */}
+            {error && (
+              <div style={{
+                marginTop: 20, padding: 12, background: N.redBg,
+                color: N.red, borderRadius: 6, fontSize: 13,
+              }}>
+                {error}
+              </div>
+            )}
+
+            {/* Les faits : SIREN, échéance ou sortie de contrat, perte,
+                promesse posée. Puis les actions, toutes au même endroit —
+                plus de bouton isolé à l'autre bout de la fiche. */}
+            <FactsRow
+              stateReview={stateReview}
+              profile={profile}
+              boardRow={boardRow}
+              loss={profile?.loss || null}
+              promise={!!focusedRow?.client?.payment_promise}
+              billingLastMonth={profile?.billing_last_month || null}
+              onEditBilling={canEditMoney ? () => setBillingOpen(true) : null}
+            />
+
+
+            {/* 4 tuiles KPI contrat (scope-aware, dérivées de la timeline).
+                « Restant dû » = tout ce que le contrat doit encore
+                rapporter (mois à venir inclus) ; « Retard à date » = ce qui
+                est réellement en retard aujourd'hui (mois courant + créances
+                antérieures) — deux notions distinctes, à ne pas confondre. */}
+            <KpiTiles
+              kpis={kpis}
+              overdueCurrent={focusedRow ? scopedOverdueCurrent(focusedRow, scope) : 0}
+              overdueCum={focusedRow ? scopedOverdueCum(focusedRow, scope) : 0}
+              credit={focusedRow ? scopedCredit(focusedRow, scope) : 0}
+              loading={loadingTimeline}
+              onRefund={canEditMoney ? openRefund : null}
+            />
+
+            {/* Remboursement d'un trop-perçu — l'encaissement reste intact,
+                un ajustement daté vient l'éteindre. Direction seulement. */}
+            {refund && (
+              <RefundPrompt
+                value={refund}
+                onChange={setRefund}
+                onCancel={() => setRefund(null)}
+                onSubmit={submitRefund}
+              />
+            )}
+
             <Section
               title="État de compte"
               delay={0.11}
@@ -937,10 +953,21 @@ export default function DetailPanel({
               }
             </Section>
 
-            {/* Saisie et ventilation par structure. Les structures viennent du
-                classeur (« Paye / N sct ») ET des sociétés déclarées dans la
-                fiche : en ajouter une crée sa structure (dev 2026-09-18).
-                Demande dev 2026-09-01 : savoir QUELLE structure a payé. */}
+            <ClientComments key={`comments-${clientId}`} clientId={clientId} onShowToast={onShowToast} />
+
+            <DetailDisclosure key={`shared-${clientId}`} title="Échanges avec Owner et Opti’Lex" description="Commentaires partagés avec le cabinet et la Finance">
+              <CommonSpaceThread numero={client?.numero_client} onShowToast={onShowToast} />
+            </DetailDisclosure>
+
+            <DetailDisclosure key={`files-${clientId}`} title="Documents, emails et appels" description="Pièces jointes et appels choisis, consultables par Vincent et le CSM">
+            {canViewCalls && <LatestClientCall key={`call-${clientId}`} clientId={clientId}/>}
+              <ClientHistoryAttachments clientId={clientId}/>
+            </DetailDisclosure>
+
+
+
+            <DetailDisclosure key={`billing-${clientId}`} title="Ventilation des règlements" description="Répartir les encaissements entre les sociétés, mois par mois">
+
             <Section title="Structures & ventilation" delay={0.12}>
               <StructureSplits
                 clientId={clientId}
@@ -953,41 +980,12 @@ export default function DetailPanel({
                 onReceiptsChanged={reloadAfterExit}
               />
             </Section>
+            </DetailDisclosure>
 
-            {/* Section : Commentaires — remplace la timeline mensuelle
-                (2026-08-25) : celle-ci faisait doublon avec l'échéancier
-                « État de compte » et ne servait pas le travail réel de la
-                finance (recouvrement). Ici vit le contexte que seul un
-                humain écrit : « promesse de règlement au 15 », « en attente
-                retour cabinet ». Fil INTERNE Owner — le cabinet Opti'Lex
-                n'y a pas accès (aucun lien vers le fil du board). */}
-            {/* Historique des actions — SORTI de l'accordéon le 2026-08-28 :
-                il y vivait, donc personne ne le voyait, et le dev a cru
-                qu'un ajout d'email n'était pas tracé alors qu'il l'était.
-                Toute modification de la fiche doit se lire ici, avec son
-                auteur et sa date. La « Dernière action » est sa première
-                ligne, en phrase : il n'y a plus deux endroits qui pouvaient
-                désigner deux actions différentes (retour dev 2026-09-03). */}
-            <ActionsTimeline
-              audit={clientAudit}
-              operations={clientOps}
-              changes={profile?.changes}
-              etatHistory={etatHistory}
-            />
-
-            {/* Espace commun Owner / Opti'Lex / finance : le fil du board pour ce client, pour que la
-                finance réponde d'ici quand elle est mentionnée (demande dev 2026-09-25). Distinct du
-                fil interne ci-dessous, qui reste invisible pour le cabinet. */}
-            <CommonSpaceThread numero={client?.numero_client} onShowToast={onShowToast} />
-
-            <ClientComments clientId={clientId} onShowToast={onShowToast} />
-
-            {/* Section : Rendez-vous & juriste référent — vue synthétique
-                depuis le retour dev 2026-08-21 (sortie de l'accordéon).
-                Masquée si client hors board / aucune donnée agenda. */}
+            <DetailDisclosure key={`appointments-${clientId}`} title="Rendez-vous et interlocuteurs" description="Onboarding, cabinet et juriste référent">
             {boardRow && (clientAgenda?.reference_jurist || (clientAgenda?.rdv?.length || 0) > 0
               || boardRow.rdv_onboarding_date || boardRow.rdv_lancement_date
-              || boardRow.rdv_fiscal_date || boardRow.rdv_social_date) && (
+              || boardRow.rdv_fiscal_date || boardRow.rdv_social_date) ? (
               <Section title="Rendez-vous & juriste référent" delay={0.16}>
                 <RdvJuristeSection boardRow={boardRow} agenda={clientAgenda} onCopied={onCopied} />
                 {/* Validation FACTURATION du RDV d'onboarding + recalage (finance).
@@ -995,8 +993,18 @@ export default function DetailPanel({
                     le recalage, lui, déplace le RDV partagé (agendas liés). */}
                 <OnboardingFacturation numeroClient={numeroClient} boardRow={boardRow} />
               </Section>
-            )}
+            ) : <p style={{fontSize:12,color:N.textMuted}}>Aucun rendez-vous renseigné pour ce dossier.</p>}
 
+            </DetailDisclosure>
+
+            <DetailDisclosure key={`audit-${clientId}`} title="Historique des actions" description="Modifications de la fiche et opérations financières datées">
+            <ActionsTimeline
+              audit={clientAudit}
+              operations={clientOps}
+              changes={profile?.changes}
+              etatHistory={etatHistory}
+            />
+            </DetailDisclosure>
           </div>
 
           {/* Sortie client — acter un état daté, ou déclarer une perte.
@@ -1253,10 +1261,10 @@ function StatusStrip({
       style={{
         marginTop: 16,
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: 1,
-        background: N.borderSft,
-        border: `1px solid ${N.borderSft}`,
+        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+        gap: 8,
+        background: 'transparent',
+        border: 'none',
         borderRadius: 10,
         overflow: 'hidden',
       }}
@@ -1300,7 +1308,7 @@ function StatusStrip({
 
 function StripCell({ label, children }) {
   return (
-    <div style={{ background: '#fff', padding: '10px 14px', minWidth: 0 }}>
+    <div style={{ background: '#fff', padding: '3px 0', minWidth: 0, display:'flex', alignItems:'center', gap:8 }}>
       <div style={{
         fontSize: 10.5, fontWeight: 600, color: N.textFaint,
         textTransform: 'uppercase', letterSpacing: '0.04em',
@@ -3214,9 +3222,7 @@ const isoDay = (s) => {
 
 function FactsRow({ stateReview, profile, boardRow, loss = null, promise = false, billingLastMonth = null, onEditBilling = null }) {
   const items = [];
-  if (profile?.siren) {
-    items.push({ icon: <Landmark size={12} />, label: 'SIREN', value: profile.siren });
-  }
+
   // Sortie de contrat posée au board : elle prime sur le renouvellement —
   // un contrat qui s'arrête ne se renouvelle pas. La date vient de l'état
   // daté du board (`etat_date`), seul endroit où la résiliation est datée.
@@ -3337,7 +3343,7 @@ function FactsRow({ stateReview, profile, boardRow, loss = null, promise = false
 // sortie client (direction). Le bouton de sortie passe en avant quand elle
 // est DUE : fin de relation avec des créances antérieures non soldées.
 function ActionsBar({
-  canManageMoney, canProposeMoney = false, canEdit, promise, onTogglePromise, onOpenExpected, exitDue, onOpenExit,
+  canManageMoney, canProposeMoney = false, canEdit, promise, onTogglePromise, onOpenExpected, exitDue, onOpenExit, compact = false,
 }) {
   const items = [];
   if (canManageMoney || canProposeMoney) {
@@ -3369,7 +3375,7 @@ function ActionsBar({
   if (!items.length) return null;
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 12, marginBottom: 28 }}>
+    <div style={{ display: 'flex', flexDirection: compact ? 'column' : 'row', flexWrap: 'wrap', gap: 6, alignItems: compact ? 'stretch' : 'center', marginTop: compact ? 0 : 12, marginBottom: compact ? 8 : 28 }}>
       {items.map((it) => (
         <button
           key={it.key}
@@ -3461,8 +3467,8 @@ function formatAuditDate(iso) {
 //   PATCH  /finance-periods/client/{id}/comments/{cid}  {pinned}
 //   DELETE /finance-periods/client/{id}/comments/{cid}
 //
-// Toutes les mutations sont optimistes + rollback + toast, comme le reste de
-// la page. Les actions (épingler / supprimer) ne s'affichent que si le
+// Les créations et modifications attendent la confirmation du serveur.
+// Les actions (modifier / épingler / supprimer) ne s'affichent que si le
 // backend a calculé `can_moderate` sur l'entrée.
 //
 // Fil INTERNE Owner : aucun lien vers le fil du board (le cabinet Opti'Lex
@@ -3475,7 +3481,7 @@ const sortComments = (list) => [...list].sort((a, b) => {
   return String(b.created_at || '').localeCompare(String(a.created_at || ''));
 });
 
-function ClientComments({ clientId, onShowToast }) {
+export function ClientComments({ clientId, onShowToast }) {
   const [comments, setComments] = useState(null);   // null = en cours / indispo
   // Au-delà de quatre commentaires le fil noyait le reste de la fiche : on
   // n'affiche que les plus récents, le reste se déplie (demande dev
@@ -3495,6 +3501,9 @@ function ClientComments({ clientId, onShowToast }) {
     : (comments || []);
   const [available, setAvailable] = useState(true); // false = endpoint absent
   const [draft, setDraft] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [retry, setRetry] = useState(0);
+  const canPin = ['admin', 'ceo', 'finance_director'].includes(apiClient.getUser()?.role);
   const [posting, setPosting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null); // id en attente
   const taRef = useRef(null);
@@ -3506,7 +3515,7 @@ function ClientComments({ clientId, onShowToast }) {
     let cancelled = false;
     setComments(null);
     setAvailable(true);
-    setDraft('');
+    setLoadError('');
     setConfirmDelete(null);
     apiClient.get(base)
       .then((data) => {
@@ -3516,12 +3525,11 @@ function ClientComments({ clientId, onShowToast }) {
         setComments(sortComments(list));
       })
       .catch(() => {
-        // Endpoint pas encore déployé / erreur : section masquée, pas de
-        // composer inutilisable ni de crash.
-        if (!cancelled) { setAvailable(false); setComments([]); }
+        // Afficher l’erreur sans perdre le brouillon.
+        if (!cancelled) { setAvailable(false); setComments([]); setLoadError('Les commentaires n’ont pas pu être chargés. Votre texte est conservé.'); }
       });
     return () => { cancelled = true; };
-  }, [clientId, base]);
+  }, [clientId, base, retry]);
 
   // Textarea auto-grow (pas de scrollbar interne, la fiche scrolle déjà).
   const autoGrow = useCallback(() => {
@@ -3533,39 +3541,20 @@ function ClientComments({ clientId, onShowToast }) {
 
   const submit = useCallback(async () => {
     const body = draft.trim();
-    if (!body || posting || !base) return;
+    if (!body || posting || !base || comments === null || !available) return;
     setPosting(true);
-    // Optimiste : entrée temporaire en tête, remplacée par la réponse.
-    const tempId = `temp-${Date.now()}`;
-    const optimistic = {
-      id: tempId,
-      body,
-      // Même convention que CommentPopup.jsx : full_name > name > email.
-      author_name: (() => {
-        const u = apiClient.getUser();
-        return u?.full_name || u?.name || u?.email || 'Moi';
-      })(),
-      pinned: false,
-      created_at: new Date().toISOString(),
-      can_moderate: true,
-      _pending: true,
-    };
-    setComments((prev) => sortComments([...(prev || []), optimistic]));
-    setDraft('');
-    if (taRef.current) taRef.current.style.height = 'auto';
     try {
       const created = await apiClient.post(base, { body });
-      setComments((prev) => sortComments(
-        (prev || []).map((c) => (c.id === tempId ? { ...optimistic, ...created, _pending: false } : c))
-      ));
+      if (!created?.id || !created?.body) throw new Error('Réponse d’enregistrement incomplète');
+      setComments(prev => sortComments([created, ...(prev || []).filter(c => c.id !== created.id)]));
+      setDraft('');
+      if (taRef.current) taRef.current.style.height = 'auto';
     } catch (e) {
-      setComments((prev) => (prev || []).filter((c) => c.id !== tempId));
-      setDraft(body); // le texte n'est pas perdu
-      onShowToast?.(e?.data?.detail || 'Erreur lors de la publication du commentaire', 'error');
+      onShowToast?.(e?.data?.detail || 'Le commentaire n’a pas été confirmé. Votre texte est conservé.', 'error');
     } finally {
       setPosting(false);
     }
-  }, [draft, posting, base, onShowToast]);
+  }, [draft, posting, base, onShowToast, comments, available]);
 
   const togglePin = useCallback(async (comment) => {
     if (!base) return;
@@ -3595,10 +3584,15 @@ function ClientComments({ clientId, onShowToast }) {
     }
   }, [base, comments, onShowToast]);
 
-  if (!available) return null;
+  const saveBody = async (comment, body) => {
+    const updated = await apiClient.patch(`${base}/${comment.id}`, { body });
+    if (!updated?.id || !updated?.body) throw new Error('La modification n’a pas été confirmée.');
+    setComments(prev => sortComments((prev || []).map(c => c.id === updated.id ? updated : c)));
+  };
 
   return (
     <Section title="Commentaires internes finance" delay={0.14}>
+      {loadError && <div role="alert" style={{ color: '#b42318', marginBottom: 10 }}>{loadError} <button type="button" onClick={() => setRetry(v => v + 1)}>Réessayer</button></div>}
       {/* Composer */}
       <div style={{
         border: `1px solid ${N.borderSft}`,
@@ -3609,6 +3603,7 @@ function ClientComments({ clientId, onShowToast }) {
         <textarea
           ref={taRef}
           value={draft}
+          disabled={posting}
           onChange={(e) => { setDraft(e.currentTarget.value); autoGrow(); }}
           onKeyDown={(e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); submit(); }
@@ -3632,7 +3627,7 @@ function ClientComments({ clientId, onShowToast }) {
           <button
             type="button"
             onClick={submit}
-            disabled={!draft.trim() || posting}
+            disabled={!draft.trim() || posting || comments === null || !available}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 5,
               height: 26, padding: '0 12px',
@@ -3688,6 +3683,8 @@ function ClientComments({ clientId, onShowToast }) {
                   onCancelDelete={() => setConfirmDelete(null)}
                   onConfirmDelete={() => remove(c)}
                   onTogglePin={() => togglePin(c)}
+                  canPin={canPin}
+                  onSaveBody={body => saveBody(c, body)}
                 />
               ))}
             </AnimatePresence>
@@ -3720,12 +3717,23 @@ const COMMENT_AMBER = '#b45309';
 
 function CommentRow({
   comment, index, confirming,
-  onAskDelete, onCancelDelete, onConfirmDelete, onTogglePin,
+  onAskDelete, onCancelDelete, onConfirmDelete, onTogglePin, canPin, onSaveBody,
 }) {
   const [hover, setHover] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(comment.body);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  async function save() {
+    if (!draft.trim() || saving) return;
+    setSaving(true); setError('');
+    try { await onSaveBody(draft.trim()); setEditing(false); }
+    catch (e) { setError(e?.data?.detail || 'La modification n’a pas été enregistrée. Votre texte est conservé.'); }
+    finally { setSaving(false); }
+  }
   const av = avatarMeta(comment.author_name || comment.author_email || '?');
   const edited = comment.updated_at && comment.updated_at !== comment.created_at;
-  const showActions = comment.can_moderate && (hover || confirming);
+  const showActions = comment.can_moderate && !comment._pending && !editing;
 
   return (
     // Pas d'animation de mise en page (`layout`) ni de sortie en hauteur
@@ -3799,7 +3807,12 @@ function CommentRow({
           fontSize: 13, lineHeight: 1.5, color: N.text,
           whiteSpace: 'pre-wrap', wordBreak: 'break-word',
         }}>
-          {comment.body}
+          {editing ? <div>
+            <textarea aria-label="Modifier le commentaire" value={draft} disabled={saving} onChange={e => setDraft(e.target.value)} rows={4} style={{ width: '100%', boxSizing: 'border-box', font: 'inherit', padding: 8 }} />
+            {error && <p role="alert" style={{ color: '#b42318' }}>{error}</p>}
+            <button type="button" disabled={saving || !draft.trim()} onClick={save}>{saving ? 'Enregistrement…' : 'Enregistrer'}</button>{' '}
+            <button type="button" disabled={saving} onClick={() => setEditing(false)}>Annuler</button>
+          </div> : comment.body}
         </div>
       </div>
 
@@ -3833,7 +3846,9 @@ function CommentRow({
             </>
           ) : (
             <>
-              <button
+              <button type="button" title="Modifier le commentaire" aria-label="Modifier le commentaire" style={commentActionStyle}
+                onClick={() => { setDraft(comment.body); setError(''); setEditing(true); }}><Pencil size={12}/></button>
+              {canPin && <button
                 type="button"
                 title={comment.pinned ? 'Désépingler' : 'Épingler en tête'}
                 onClick={onTogglePin}
@@ -3842,7 +3857,7 @@ function CommentRow({
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
                 <Pin size={12} strokeWidth={2} />
-              </button>
+              </button>}
               <button
                 type="button"
                 title="Supprimer"

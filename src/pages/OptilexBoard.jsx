@@ -1,3 +1,4 @@
+import ClientHistoryAttachments from '../components/ClientHistoryAttachments.jsx';
 import WeatherCaseComposer, { WeatherQualification, WeatherScaleGuide } from '../components/WeatherCaseComposer';
 import { WEATHER, weatherPresentation, weatherFilter, weatherRatingLabel } from '../utils/weatherCase';
 import AppointmentConfirmation from "../components/booking/AppointmentConfirmation";
@@ -2729,6 +2730,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
               <MeteoSection key={num} row={row} num={num} recordMeteo={recordMeteo} version={meteoHistVersion} onChanged={reloadRatings} />
             </div>
           )}
+          {num && <ClientHistoryAttachments numero={num}/>}
           <DetailFold title="Historique de la situation"><EtatHistory num={num} version={etatHistVersion} /></DetailFold>
           <DetailFold title="Ambassadeur et parrainage">
           {/* Programme ambassadeur : client à valoriser / à solliciter pour un témoignage (case à cocher). */}
@@ -3218,7 +3220,7 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
 
   const submit = async () => {
     const body = draft.trim();
-    if (!body || posting) return;
+    if (!body || posting || loading) return;
     setPosting(true);
     try {
       const created = await apiClient.post("/api/v1/optilex/comments", { numero_client: numero, body, mentions: mentionedIds(body, people), rating_id: replyTo?.id || null });

@@ -17,7 +17,7 @@ export async function loadStatementData(get, clientId, structureId = null) {
   }
   const structure = structureId == null ? null : structures.items.find(s => String(s.id) === String(structureId));
   if (structureId != null && !structure) throw new Error('Cette société n’est plus disponible. Rouvrez la fiche pour actualiser la liste.');
-  return { timeline, profile, splits: splits.items, structures: structures.items, structure };
+  return { timeline, profile, splits: splits.items, structures: structures.items, structure, billingCompanies: structures.billing_companies || {} };
 }
 
 export function statementOptions(scope, structures = []) {

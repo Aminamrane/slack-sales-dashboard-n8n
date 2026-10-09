@@ -41,8 +41,10 @@ export default function StateReview({ clientId, version, canProcess, onChanged, 
   if (!review && !error) return null;
   if (review?.status==='none' || (review?.status==='processed' && !review.reviewed_at && !review.finance_withdrawn_at)) return null;
   const pending=review?.status==='pending', loss=review?.active_loss, state=review?.requested_state;
-  return <section style={{...box,background:pending?'#fffcf4':'#f6faf7',borderColor:pending?'#e6d7b2':'#d9e6dc'}} aria-label="Traitement financier de la situation">
-    <div style={{display:'flex',gap:8,alignItems:'center',fontWeight:650}}>{pending?<Clock3 size={17}/>:<ClipboardCheck size={17}/>} {pending?'Traitement financier à effectuer':'Traitement financier effectué'}</div>
+  const Wrapper = pending || error ? 'section' : 'details';
+  const Heading = pending || error ? 'div' : 'summary';
+  return <Wrapper style={{...box,padding:pending?16:10,background:pending?'#fffcf4':'#f6faf7',borderColor:pending?'#e6d7b2':'#d9e6dc'}} aria-label="Traitement financier de la situation">
+    <Heading style={{display:'flex',gap:8,alignItems:'center',fontWeight:600,cursor:pending?'default':'pointer',fontSize:12}}>{pending?<Clock3 size={17}/>:<ClipboardCheck size={17}/>} {pending?'Traitement financier à effectuer':'Traitement financier effectué · voir le détail'}</Heading>
     {!pending && review?.decision && <p>Traitement effectué : {({withdrawal:'rétractation traitée', 'billing-stop':'fin de facturation fixée', resume:'facturation rétablie', keep:'traitement financier conservé, aucun montant modifié'})[review.decision]} · {review.reviewed_by}</p>}
     {pending && <p style={{margin:'8px 0'}}><strong>{state || 'Retour automatique'}</strong> : situation enregistrée dans le board. Le traitement des montants reste à effectuer par la finance, sans modifier cette situation.</p>}
     {review?.finance_withdrawn_at && <p>Rétractation déjà traitée en finance, avec effet au {formatDateFR(review.finance_withdrawn_at)}. Un changement dans le board ne restaure pas les attendus.</p>}
@@ -73,5 +75,5 @@ export default function StateReview({ clientId, version, canProcess, onChanged, 
     </div>}
     {pending && !canProcess && <p>La direction financière peut traiter cet état depuis cette fiche.</p>}
     {error && <p role="alert" style={{color:'#b42318'}}>{error}</p>}
-  </section>;
+  </Wrapper>;
 }
