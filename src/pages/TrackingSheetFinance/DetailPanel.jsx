@@ -1,4 +1,5 @@
 import DetailDisclosure from './components/DetailDisclosure.jsx';
+import './components/DetailSummary.css';
 import ClientHistoryAttachments from '../../components/ClientHistoryAttachments.jsx';
 import BillingCompanies from './components/BillingCompanies.jsx';
 import {formatDateLongFR} from './constants.js';
@@ -794,10 +795,46 @@ export default function DetailPanel({
               {client?.phone && <span>{client.phone}</span>}
             </div>
 
-            {/* Bandeau de situation, deux cases : l'état du client et qui le
-                suit. Rien d'autre — le numéro, la date de signature et le
-                retard à date vivent déjà plus bas (retour dev 2026-09-03 :
-                « pas besoin de répéter »). */}
+            {/* Synthèse financière toujours visible dès l’ouverture de la fiche. */}
+            <section className="finance-detail-summary" aria-label="Synthèse financière">
+              <FactsRow
+                stateReview={stateReview}
+                profile={profile}
+                boardRow={boardRow}
+                loss={profile?.loss || null}
+                promise={!!focusedRow?.client?.payment_promise}
+                billingLastMonth={profile?.billing_last_month || null}
+                onEditBilling={canEditMoney ? () => setBillingOpen(true) : null}
+              />
+
+              {/* 4 tuiles KPI contrat (scope-aware, dérivées de la timeline).
+                  « Restant dû » = tout ce que le contrat doit encore
+                  rapporter (mois à venir inclus) ; « Retard à date » = ce qui
+                  est réellement en retard aujourd'hui (mois courant + créances
+                  antérieures) — deux notions distinctes, à ne pas confondre. */}
+              <KpiTiles
+                kpis={kpis}
+                overdueCurrent={focusedRow ? scopedOverdueCurrent(focusedRow, scope) : 0}
+                overdueCum={focusedRow ? scopedOverdueCum(focusedRow, scope) : 0}
+                credit={focusedRow ? scopedCredit(focusedRow, scope) : 0}
+                loading={loadingTimeline}
+                onRefund={canEditMoney ? openRefund : null}
+              />
+
+              {/* Remboursement d'un trop-perçu — l'encaissement reste intact,
+                  un ajustement daté vient l'éteindre. Direction seulement. */}
+              {refund && (
+                <RefundPrompt
+                  value={refund}
+                  onChange={setRefund}
+                  onCancel={() => setRefund(null)}
+                  onSubmit={submitRefund}
+                />
+              )}
+
+            </section>
+
+            {/* État du client et responsable, sous la synthèse financière. */}
             <StatusStrip
               boardRow={boardRow}
               client={client}
@@ -879,45 +916,6 @@ export default function DetailPanel({
               }}>
                 {error}
               </div>
-            )}
-
-            {/* Les faits : SIREN, échéance ou sortie de contrat, perte,
-                promesse posée. Puis les actions, toutes au même endroit —
-                plus de bouton isolé à l'autre bout de la fiche. */}
-            <FactsRow
-              stateReview={stateReview}
-              profile={profile}
-              boardRow={boardRow}
-              loss={profile?.loss || null}
-              promise={!!focusedRow?.client?.payment_promise}
-              billingLastMonth={profile?.billing_last_month || null}
-              onEditBilling={canEditMoney ? () => setBillingOpen(true) : null}
-            />
-
-
-            {/* 4 tuiles KPI contrat (scope-aware, dérivées de la timeline).
-                « Restant dû » = tout ce que le contrat doit encore
-                rapporter (mois à venir inclus) ; « Retard à date » = ce qui
-                est réellement en retard aujourd'hui (mois courant + créances
-                antérieures) — deux notions distinctes, à ne pas confondre. */}
-            <KpiTiles
-              kpis={kpis}
-              overdueCurrent={focusedRow ? scopedOverdueCurrent(focusedRow, scope) : 0}
-              overdueCum={focusedRow ? scopedOverdueCum(focusedRow, scope) : 0}
-              credit={focusedRow ? scopedCredit(focusedRow, scope) : 0}
-              loading={loadingTimeline}
-              onRefund={canEditMoney ? openRefund : null}
-            />
-
-            {/* Remboursement d'un trop-perçu — l'encaissement reste intact,
-                un ajustement daté vient l'éteindre. Direction seulement. */}
-            {refund && (
-              <RefundPrompt
-                value={refund}
-                onChange={setRefund}
-                onCancel={() => setRefund(null)}
-                onSubmit={submitRefund}
-              />
             )}
 
             <Section
@@ -1466,15 +1464,7 @@ function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loadin
     },
   ];
   return (
-    <div style={{
-      display: 'grid',
-      // 4 tuiles : `auto-fit` + minmax(160px) → 4 colonnes sur panneau large
-      // ou plein écran, bascule automatiquement en 2×2 sur panneau étroit
-      // (520 px) plutôt que d'écraser les montants.
-      gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-      gap: 10,
-      marginTop: 22,
-    }}>
+    <div className="finance-detail-kpis">
       {tiles.map((t, i) => (
         <motion.div
           key={t.label}
