@@ -99,6 +99,7 @@ import { ETAT_STYLE, displayEtat } from '../OptilexBoard.jsx';
 import BoardEtatCell from './components/BoardEtatCell.jsx';
 import ExitClientDialog from './components/ExitClientDialog.jsx';
 import StateReview from './components/StateReview.jsx';
+import DoNotCallControl from './components/DoNotCallControl.jsx';
 import PromiseDialog from './components/PromiseDialog.jsx';
 import BillingStopDialog from './components/BillingStopDialog.jsx';
 import StructureSplits from './components/StructureSplits.jsx';
@@ -799,6 +800,13 @@ export default function DetailPanel({
               exitDue={exitDue}
               onOpenExit={() => openExit(null)}
             />
+
+            <DoNotCallControl key={clientId} clientId={clientId}
+              value={!!profile?.do_not_call} loaded={String(profile?.client_id) === String(clientId)} canEdit={canEdit}
+              onChanged={(value) => {
+                setProfile(previous => previous ? { ...previous, do_not_call: value } : previous);
+                reloadAfterExit();
+              }}/>
 
             {/* 4 tuiles KPI contrat (scope-aware, dérivées de la timeline).
                 « Restant dû » = tout ce que le contrat doit encore

@@ -34,7 +34,7 @@ import {
   Edit3, Plus, Filter, ArrowUpDown, MoreHorizontal, Share2,
   CheckCircle, Sparkles, FileText, Users, Settings, Clock,
   XCircle, CircleDot, FilterX, Eye, Check, Star, Handshake, TriangleAlert, Download, Phone,
-  CircleDashed, MailCheck,
+  CircleDashed, MailCheck, PhoneOff,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
@@ -742,6 +742,7 @@ export default function TrackingSheetFinance() {
       if (tableFilters.has('overdue_current_and_past') && overdueCurrent > 0 && overdueCumul > 0) return true;
       if (tableFilters.has('overdue_past_only') && overdueCurrent === 0 && overdueCumul > 0) return true;
       if (tableFilters.has('payment_promise') && r.client?.payment_promise) return true;
+      if (tableFilters.has('do_not_call') && r.client?.do_not_call) return true;
       if (tableFilters.has('loss') && r.client?.is_loss) return true;
       const automationFilter = financeAutomationFilter(r.auto_debit);
       if (automationFilter && tableFilters.has(automationFilter)) return true;
@@ -2583,6 +2584,7 @@ const FILTER_OPTIONS = [
   // Clients qui se sont engagés à régler : la liste qu'on rappelle en
   // priorité, et qu'on n'a pas besoin de relancer comme les autres.
   { value: 'payment_promise',          label: 'Promesse de règlement',            Icon: Handshake   },
+  { value: 'do_not_call',              label: 'Client à ne pas rappeler',          Icon: PhoneOff    },
   // Clients sortis des attendus : ils restent dans la liste, sans montant.
   // Le filtre sert à les retrouver — et à les exclure du reste d'un coup d'œil.
   { value: 'loss',                     label: 'Perte actée',                      Icon: TriangleAlert },

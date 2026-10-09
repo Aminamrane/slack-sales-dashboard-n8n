@@ -55,7 +55,7 @@ import { motion } from 'framer-motion';
 import {
   GripVertical, Plus, Type, Hash, Calendar, Tag, CircleDot, AlignLeft,
   Square, Edit3, MessageSquare, Check,
-  EyeOff, Eye, Columns3, ChevronLeft, ChevronRight,
+  EyeOff, Eye, Columns3, ChevronLeft, ChevronRight, PhoneOff,
 } from 'lucide-react';
 import {
   ClientIcon, CycleIcon, BanknoteIcon, ReceivedIcon, DebtIcon, RecoveredPriorIcon,
@@ -1175,6 +1175,8 @@ function SocieteCell({ row, boardRow }) {
         >
           {societeName || <EmptyCell />}
         </span>
+        {row.client?.do_not_call && <span title="Client à ne pas rappeler" role="img" aria-label="Client à ne pas rappeler"
+          style={{ display: 'inline-flex', color: '#92400e', flexShrink: 0 }}><PhoneOff size={14}/></span>}
         {/* Contrat Opti'lex encore en vol (état du board) : même flag que
             les contrats sans numéro client, pour que la vue « Attente
             Opti'Lex » se lise d'un coup d'œil. */}

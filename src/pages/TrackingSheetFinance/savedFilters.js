@@ -59,6 +59,10 @@ export const FILTER_FIELDS = [
     get: (r) => (r.client?.payment_promise ? 'Oui' : 'Non'),
   },
   {
+    key: 'doNotCall', label: 'Client à ne pas rappeler', type: 'enum',
+    get: (r) => (r.client?.do_not_call ? 'Oui' : 'Non'),
+  },
+  {
     key: 'loss', label: 'Perte actée', type: 'enum',
     get: (r) => (r.client?.is_loss ? 'Oui' : 'Non'),
   },
