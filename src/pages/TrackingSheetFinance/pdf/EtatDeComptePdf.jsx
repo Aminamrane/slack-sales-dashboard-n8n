@@ -15,12 +15,9 @@
 //   - alignements propres, tabular-nums, en-tête de tableau répété sur
 //     chaque page (fixed), footer discret de pagination
 //
-// Document EXCLUSIVEMENT OWNER (décision dev 2026-08-21) : Opti'lex gère
-// ses propres états de compte — les montants sont toujours les montants
-// Owner, quelle que soit la vision active du panneau.
-//
-// Génération 100 % frontend via @react-pdf/renderer, depuis les données déjà
-// chargées par le DetailPanel (aucun appel réseau ici). Module chargé en
+// Documents séparés par émetteur Owner / Opti’Lex, et par société choisie.
+// Génération frontend via @react-pdf/renderer, depuis les données relues
+// par le DetailPanel (aucun appel réseau ici). Module chargé en
 // LAZY (dynamic import) : @react-pdf/renderer part dans un chunk séparé.
 //
 // Piège encodage géré : Helvetica (font standard PDF, WinAnsi) ne connaît
@@ -109,16 +106,16 @@ const styles = StyleSheet.create({
   issueDate: {
     fontFamily: 'Helvetica-Bold',
     fontSize: 7.5,
-    marginBottom: 18,
+    marginBottom: 10,
   },
   // 4-5. Blocs parties
   partiesRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 26,
+    marginBottom: 18,
   },
   partyBlockLeft: { width: '44%' },
-  partyBlockRight: { width: '38%', paddingTop: 26 }, // Recipient décalé, comme la référence
+  partyBlockRight: { width: '38%', paddingTop: 12 },
   partyTitle: {
     fontFamily: 'Helvetica-BoldOblique',
     fontSize: 11,
@@ -222,7 +219,10 @@ function PartyLine({ label, value, bold = false }) {
   );
 }
 
-function EtatDeComptePdf({ issuer, recipient, rows, issueDate, paymentsOnly = false }) {
+function EtatDeComptePdf({ issuer, recipient, rows, issueDate, paymentsOnly = false, allocations = [] }) {
+  const widths = paymentsOnly
+    ? { period: '24%', offre: '32%', paid: '22%', remaining: '22%' } : COLW;
+  const totalWidth = paymentsOnly ? '78%' : TOTAL_BAR_W;
   // « Restant dû » = SOLDE CUMULÉ après chaque période (logique comptable,
   // retour dev ZILWA n°637 2026-08-21) : solde += facturé − payé ligne à
   // ligne. Un paiement excédentaire régularise les mois précédents (le solde
@@ -257,7 +257,7 @@ function EtatDeComptePdf({ issuer, recipient, rows, issueDate, paymentsOnly = fa
 
         {/* 2. Titre — orthographe verbatim de la référence */}
         <Text style={styles.title}>{paymentsOnly ? 'Relevé des règlements par société' : 'Etat de compte'}</Text>
-        {paymentsOnly && <Text style={{ fontSize: 8, color: MUTED, marginBottom: 8 }}>Règlements attribués à cette société uniquement. Les factures et remboursements globaux ne sont pas ventilés : ce document ne détermine pas un solde dû.</Text>}
+        {paymentsOnly && <Text style={{ fontSize: 8, color: MUTED, marginBottom: 8 }}>Ce relevé présente uniquement les règlements attribués à cette société. Les montants non ventilés et les remboursements du dossier ne sont pas inclus. Aucun reste dû par société n’est calculé.</Text>}
 
         {/* 3. Date d'émission */}
         <Text style={styles.issueDate}>{pdfSafe(issueDate)}</Text>
@@ -282,16 +282,16 @@ function EtatDeComptePdf({ issuer, recipient, rows, issueDate, paymentsOnly = fa
             <Text style={styles.partyTitle}>Entreprise</Text>
             <PartyLine value={recipient.company} bold />
             <PartyLine
-              label="Client"
+              label={recipient.clientLabel || 'Client'}
               value={[
                 recipient.person || null,
                 recipient.clientNumber ? `n°${recipient.clientNumber}` : null,
               ].filter(Boolean).join(' · ')}
             />
             {/* Valeurs vides tolérées : le libellé reste affiché (modèle). */}
-            <PartyLine label="Adresse postale" value={recipient.address} />
-            <PartyLine label="Adresse mail" value={recipient.email} />
-            <PartyLine label="Siret" value={recipient.siret} />
+            {(!paymentsOnly || recipient.address) && <PartyLine label="Adresse postale" value={recipient.address} />}
+            {(!paymentsOnly || recipient.email) && <PartyLine label="Adresse mail" value={recipient.email} />}
+            <PartyLine label={recipient.identifierLabel || 'SIRET'} value={recipient.siret || 'Non renseigné'} />
           </View>
         </View>
 
@@ -299,11 +299,11 @@ function EtatDeComptePdf({ issuer, recipient, rows, issueDate, paymentsOnly = fa
         <View style={styles.table}>
           {/* En-tête répété sur chaque page (amélioration assumée) */}
           <View style={styles.tableHeader} fixed>
-            <Text style={[styles.th, { width: COLW.period }]}>Période</Text>
-            <Text style={[styles.th, { width: COLW.offre }]}>Offre</Text>
-            <Text style={[styles.th, { width: COLW.billed }]}>Montant facturé</Text>
-            <Text style={[styles.th, { width: COLW.paid }]}>Montant payé</Text>
-            <Text style={[styles.th, styles.thLast, { width: COLW.remaining }]}>{paymentsOnly ? 'Cumul réglé' : 'Restant dû'}</Text>
+            <Text style={[styles.th, { width: widths.period }]}>Période</Text>
+            <Text style={[styles.th, { width: widths.offre }]}>{paymentsOnly ? 'Nature du règlement' : 'Offre'}</Text>
+            {!paymentsOnly && <Text style={[styles.th, { width: widths.billed }]}>Montant facturé</Text>}
+            <Text style={[styles.th, { width: widths.paid }]}>Montant payé</Text>
+            <Text style={[styles.th, styles.thLast, { width: widths.remaining }]}>{paymentsOnly ? 'Cumul réglé' : 'Restant dû'}</Text>
           </View>
 
           {/* Aucune échéance facturée sur le périmètre : le document sort
@@ -320,13 +320,13 @@ function EtatDeComptePdf({ issuer, recipient, rows, issueDate, paymentsOnly = fa
 
           {computed.map((r, i) => (
             <View key={i} style={styles.tr} wrap={false}>
-              <Text style={[styles.td, styles.tdFirst, styles.tdBold, { width: COLW.period }]}>
+              <Text style={[styles.td, styles.tdFirst, styles.tdBold, { width: widths.period }]}>
                 {pdfSafe(r.periodLabel)}
               </Text>
-              <Text style={[styles.td, styles.tdBold, { width: COLW.offre }]}>{pdfSafe(r.offre)}</Text>
-              <Text style={[styles.td, { width: COLW.billed }]}>{paymentsOnly ? 'Non ventilé' : eur(r.billed)}</Text>
-              <Text style={[styles.td, { width: COLW.paid }]}>{eur(r.paid)}</Text>
-              <Text style={[styles.td, { width: COLW.remaining, color: r.solde < 0 ? GREEN : INK }]}>
+              <Text style={[styles.td, styles.tdBold, { width: widths.offre }]}>{pdfSafe(r.offre)}</Text>
+              {!paymentsOnly && <Text style={[styles.td, { width: widths.billed }]}>{eur(r.billed)}</Text>}
+              <Text style={[styles.td, { width: widths.paid }]}>{eur(r.paid)}</Text>
+              <Text style={[styles.td, { width: widths.remaining, color: r.solde < 0 ? GREEN : INK }]}>
                 {r.solde < 0 ? `-${eur(-r.solde)}` : eur(r.solde)}
               </Text>
             </View>
@@ -334,10 +334,10 @@ function EtatDeComptePdf({ issuer, recipient, rows, issueDate, paymentsOnly = fa
 
           {/* 7. Total = solde final : rouge si dû, vert si crédit, noir si 0 */}
           <View style={styles.totalRow} wrap={false}>
-            <View style={[styles.totalBar, { width: TOTAL_BAR_W }]}>
-              <Text style={styles.totalBarText}>Total</Text>
+            <View style={[styles.totalBar, { width: totalWidth }]}>
+              <Text style={styles.totalBarText}>{paymentsOnly ? 'Total réglé par cette société' : 'Total'}</Text>
             </View>
-            <View style={[styles.totalCell, { width: COLW.remaining }]}>
+            <View style={[styles.totalCell, { width: widths.remaining }]}>
               <Text style={[
                 styles.totalCellText,
                 { color: paymentsOnly ? INK : totalRemaining > 0 ? RED : totalRemaining < 0 ? GREEN : INK },
@@ -357,6 +357,36 @@ function EtatDeComptePdf({ issuer, recipient, rows, issueDate, paymentsOnly = fa
           }
         />
       </Page>
+      {!paymentsOnly && allocations.length > 0 && (
+        <Page size="A4" orientation="landscape" style={styles.page}>
+          <View style={styles.banner}><Text style={styles.bannerText}>{pdfSafe(issuer.name)}</Text></View>
+          <Text style={styles.title}>Répartition des règlements par société</Text>
+          <Text style={{ fontSize: 9, marginBottom: 8 }}>{pdfSafe(recipient.company)} · Dossier n°{pdfSafe(recipient.clientNumber)} · {pdfSafe(issueDate)}</Text>
+          <Text style={{ fontSize: 8, color: MUTED, marginBottom: 12 }}>Les montants « Non ventilé » restent au niveau du dossier. Cette répartition détaille les encaissements ; les remboursements du dossier figurent dans l’état de compte précédent.</Text>
+          {allocations.some(r => r.mismatch) && <Text style={{ fontSize: 8, color: RED, marginBottom: 10 }}>Un écart négatif indique une ventilation supérieure à l’encaissement enregistré. Il reste à vérifier et ne constitue pas un remboursement.</Text>}
+          <View style={styles.table}>
+            <View style={styles.tableHeader} fixed>
+              <Text style={[styles.th, { width: '18%' }]}>Période</Text>
+              <Text style={[styles.th, { width: '38%' }]}>Société</Text>
+              <Text style={[styles.th, { width: '22%' }]}>Nature du règlement</Text>
+              <Text style={[styles.th, styles.thLast, { width: '22%' }]}>Montant</Text>
+            </View>
+            {allocations.map((r, i) => (
+              <View key={i} style={styles.tr} wrap={false}>
+                <Text style={[styles.td, styles.tdFirst, { width: '18%' }]}>{pdfSafe(r.periodLabel)}</Text>
+                <Text style={[styles.td, { width: '38%', textAlign: 'left', color: r.mismatch ? RED : INK }]}>{pdfSafe(r.company)}{r.identifier ? `\nSIREN : ${pdfSafe(r.identifier)}` : ''}</Text>
+                <Text style={[styles.td, { width: '22%' }]}>{pdfSafe(r.kindLabel)}</Text>
+                <Text style={[styles.td, { width: '22%', color: r.mismatch ? RED : INK }]}>{eur(r.paid)}</Text>
+              </View>
+            ))}
+            <View style={styles.totalRow} wrap={false}>
+              <View style={[styles.totalBar, { width: '78%' }]}><Text style={styles.totalBarText}>Total des encaissements du dossier, hors remboursements</Text></View>
+              <View style={[styles.totalCell, { width: '22%' }]}><Text style={styles.totalCellText}>{eur(allocations.reduce((sum, r) => sum + r.paid, 0))}</Text></View>
+            </View>
+          </View>
+          <Text style={styles.footer} fixed render={({ pageNumber, totalPages }) => `page ${pageNumber} / ${totalPages}`} />
+        </Page>
+      )}
     </Document>
   );
 }
