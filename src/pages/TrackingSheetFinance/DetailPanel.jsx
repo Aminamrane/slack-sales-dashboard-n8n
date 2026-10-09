@@ -810,8 +810,8 @@ export default function DetailPanel({
               onOpenExit={() => openExit(null)}
             />
 
-            {canViewCalls && <LatestClientCall key={clientId} clientId={clientId}/>}
-            <DoNotCallControl key={clientId} clientId={clientId}
+            {canViewCalls && <LatestClientCall key={`call-${clientId}`} clientId={clientId}/>}
+            <DoNotCallControl key={`no-call-${clientId}`} clientId={clientId}
               value={!!profile?.do_not_call} loaded={String(profile?.client_id) === String(clientId)} canEdit={canEdit}
               onChanged={(value) => {
                 setProfile(previous => previous ? { ...previous, do_not_call: value } : previous);
