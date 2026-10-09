@@ -86,7 +86,7 @@ import {
   deferralsByMonth,
   reportsByMonth,
 } from './constants.js';
-import { statementRows } from './pdf/statementRows.js';
+import { statementRows, statementOptions, statementRecipient, statementAllocationRows, loadStatementData } from './pdf/statementRows.js';
 import { describeAction } from './actionLabel.js';
 import {
   EditableNumber, EditableDate, EditableSelect, EditableText, CopyButton,
@@ -510,7 +510,7 @@ export default function DetailPanel({
   // de fusion). En vision Globale, les deux sont proposés séparément.
   // Le bouton est TOUJOURS actif : un client sans échéance facturée obtient
   // quand même son document (en-tête + bloc client + tableau vide).
-  // Génération 100 % frontend depuis les données déjà chargées, module PDF
+  // Génération frontend après relecture des données et ventilations, module PDF
   // chargé en lazy (dynamic import → chunk séparé pour @react-pdf/renderer).
 
   // `entity` : 'owner' | 'optilex' — pilote émetteur ET champs de montants.
@@ -527,22 +527,17 @@ export default function DetailPanel({
     if (pdfGenerating) return;
     setPdfGenerating(structure ? `st-${structure.id}` : entity);
     try {
-      const [statementTimeline, statementProfile, statementSplits] = await Promise.all([
-        apiClient.get(`/api/v1/finance-periods/client/${clientId}/timeline`),
-        apiClient.get(`/api/v1/finance-periods/client/${clientId}/profile`),
-        structure ? apiClient.get(`/api/v1/finance-periods/client/${clientId}/splits`) : Promise.resolve(null),
-      ]);
-      if (!Array.isArray(statementTimeline?.periods) || !statementProfile || (structure && !Array.isArray(statementSplits?.items))) {
-        throw new Error('Les données de l’état de compte n’ont pas pu être chargées. Fermez puis rouvrez la fiche et réessayez.');
-      }
+      const { timeline: statementTimeline, profile: statementProfile, splits: statementSplits,
+        structures: statementStructures, structure: selectedStructure } = await loadStatementData(
+        url => apiClient.get(url), clientId, structure?.id,
+      );
       const statementPeriods = statementTimeline.periods;
       const { generateEtatDeCompte } = await import('./pdf/EtatDeComptePdf.jsx');
 
       // Société découpée + personne(s) (source unique splitSocieteRep) ;
       // numero_client arrive préfixé « n° » en base → strip (le PDF pose
       // son propre « n° »).
-      const { societeName, representant: repFromSociete } = splitClientIdentity(client);
-      const personne = client?.representative_name || repFromSociete;
+      const recipient = statementRecipient({ client, profile: statementProfile, structure: selectedStructure });
 
       const nowMonth = currentPeriod();
       const latestExpected = [...statementPeriods].sort((a,b) => String(b.period).localeCompare(String(a.period)))
@@ -557,44 +552,27 @@ export default function DetailPanel({
       const offre = range ? `${range} salariés` : (price ? formatEUR(price) : '—');
 
       const rows = statementRows({ periods: statementPeriods, entity, month: nowMonth, offer: offre,
-        structure, splits: statementSplits?.items || [], refunds: statementProfile?.refunds || [],
+        structure: selectedStructure, splits: statementSplits, refunds: statementProfile?.refunds || [],
         priorDebts: statementProfile?.prior_debts || [] });
-
-      // Adresse client : exposée par le profil (backend 2026-08-25) —
-      // code défensif, les champs peuvent ne pas encore être présents.
-      const addressLine = [
-        statementProfile?.address_line1 || null,
-        [statementProfile?.postal_code, statementProfile?.city].filter(Boolean).join(' ') || null,
-      ].filter(Boolean).join(', ');
+      const allocations = !selectedStructure && (statementStructures.length > 1 || statementSplits.length > 0)
+        ? statementAllocationRows({ periods: statementPeriods, entity, month: nowMonth,
+          splits: statementSplits, structures: statementStructures }) : [];
 
       const blob = await generateEtatDeCompte({
         entity,
-        paymentsOnly: !!structure,
-        recipient: {
-          company: structure ? `${societeName} — ${structure.name}` : societeName,
-          person: personne || '',
-          clientNumber: client?.numero_client
-            ? String(client.numero_client).replace(/^n°\s*/i, '')
-            : '',
-          address: addressLine,
-          email: client?.email || '',
-          // Siret du modèle : `profile.siret` (14 chiffres, backend
-          // 2026-08-25) → repli sur le SIREN connu → vide (libellé
-          // conservé, comme le modèle).
-          siret: statementProfile?.siret || statementProfile?.siren || '',
-        },
-        rows,
+        paymentsOnly: !!selectedStructure,
+        recipient,
+        rows, allocations,
         // Date courte DD/MM/YY — format de la référence.
         issueDate: new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }),
       });
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      const safeName = (societeName || 'Client').replace(/[\\/:*?"<>|]/g, '-').trim();
-      const entityLabel = (entity === 'optilex' ? "Opti'lex" : 'Owner')
-      + (structure ? ` - ${structure.name}` : '');
+      const safeName = (recipient.company || 'Client').replace(/[\\/:*?"<>|]/g, '-').trim();
+      const entityLabel = entity === 'optilex' ? "Opti'lex" : 'Owner';
       a.href = url;
-      a.download = `Etat de compte ${entityLabel} - ${safeName} - ${new Date().toISOString().slice(0, 10)}.pdf`;
+      a.download = `${selectedStructure ? 'Releve des reglements' : 'Etat de compte'} ${entityLabel} - ${safeName} - ${new Date().toISOString().slice(0, 10)}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -602,7 +580,7 @@ export default function DetailPanel({
       onShowToast?.('État de compte prêt. Le lien reste disponible sous le bouton.', 'success');
     } catch (e) {
       console.error('[DetailPanel pdf]', e);
-      onShowToast?.('Impossible de télécharger l’état de compte. Vérifiez la connexion puis réessayez ; si le problème persiste, actualisez la page.', 'error');
+      onShowToast?.(e.message || 'Impossible de télécharger l’état de compte. Réessayez après avoir actualisé la page.', 'error');
     } finally {
       setPdfGenerating(null);
     }
@@ -1326,22 +1304,9 @@ function StatementMenu({ scope, structures = [], busy = null, onDownload }) {
   // clients multi-structures (demande dev 2026-09-01). Tout dans UN menu :
   // aligner cinq boutons sur la ligne du titre débordait et cachait les
   // structures (retour dev 2026-09-03).
-  const entities = scope === 'global' ? ['owner', 'optilex'] : [scope];
-  const items = [
-    ...entities.map((entity) => ({
-      key: entity,
-      label: entity === 'optilex' ? "État de compte Opti'lex" : 'État de compte Owner',
-      run: () => onDownload(entity),
-    })),
-    ...(scope !== 'global' && structures.length > 1
-      ? structures.map((st) => ({
-        key: `st-${st.id}`,
-        label: `${st.name} seulement`,
-        hint: 'ventilation de cette société',
-        run: () => onDownload(scope, st),
-      }))
-      : []),
-  ];
+  const items = statementOptions(scope, structures).map(option => ({ ...option,
+    run: () => onDownload(option.entity, option.structure),
+  }));
   const single = items.length === 1;
   const generating = !!busy;
 
@@ -1383,7 +1348,8 @@ function StatementMenu({ scope, structures = [], busy = null, onDownload }) {
   return (
     <>
       {trigger}
-      <PortalDropdown open={open} anchorRef={anchorRef} onClose={() => setOpen(false)} align="right" minWidth={240}>
+      <PortalDropdown open={open} anchorRef={anchorRef} onClose={() => setOpen(false)} align="right" minWidth={240}
+        maxHeight="min(420px, calc(100vh - 16px))" panelStyle={{ maxWidth: 'calc(100vw - 16px)' }}>
         <div style={{ padding: 4 }}>
           {items.map((it) => (
             <button
