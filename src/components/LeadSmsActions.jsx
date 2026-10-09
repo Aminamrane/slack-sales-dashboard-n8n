@@ -1,7 +1,9 @@
-// Boutons SMS de la fiche lead : « SMS Lapin » et « SMS Répondeur » (dev 08/10/2026).
-// Le Lapin ne part plus jamais tout seul : seulement ici. Chaque bouton affiche son état
-// réel, calculé par l'API (GET /tracking/leads/{id}/sms-history → sms_actions) : prêt,
-// envoyé et à quelle heure, en file, en échec (réessayable) ou indisponible et pourquoi.
+// Boutons SMS de la fiche lead : « SMS Lapin » et « SMS Répondeur ».
+// Le Lapin part au clic « Lapin » de la qualification (dev 09/10/2026) : son bouton confirme
+// l'envoi, ou l'envoie s'il n'est pas parti. Le Répondeur ne part qu'ici (dev 08/10/2026).
+// Chaque bouton affiche son état réel, calculé par l'API (GET /tracking/leads/{id}/sms-history
+// → sms_actions) : prêt, envoyé et à quelle heure, en file, en échec (réessayable) ou
+// indisponible et pourquoi.
 // Utilisé tel quel par la fiche sales (TrackingSheet) et la fiche setter (TrackingSheetSetter).
 import { useCallback, useEffect, useRef, useState } from "react";
 import apiClient from "../services/apiClient";
@@ -13,6 +15,7 @@ const QUEUE = "#5b6abf";
 const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 const POLL_MS = 6000;
 const POLL_MAX = 25;
+const JUST_SENT_MS = 60000;   // SMS parti il y a moins d'une minute : la coche s'anime à l'ouverture
 
 // La section s'affiche là où un SMS a du sens : répondeur, à rappeler, RDV qualifié Lapin,
 // ou SMS déjà envoyé. Même règle pour les deux fiches.
@@ -123,6 +126,7 @@ function nextSlotLabel(iso) {
 
 const UNAVAILABLE = {
   no_rdv: () => "Aucun RDV manqué",
+  not_qualified: () => "Part quand le RDV est qualifié Lapin",
   rdv_upcoming: (a) => `Possible après le ${a.rdv_label}`,
   no_phone: () => "Pas de numéro",
   not_french_mobile: () => "Numéro fixe ou étranger : pas de SMS",
@@ -153,8 +157,9 @@ function describe(type, action, flash) {
     case "unavailable":
       return { text: (UNAVAILABLE[action.reason] || (() => "Indisponible"))(action), tone: null };
     default:
+      // Lapin qualifié mais SMS pas parti (échec Brevo au clic, Lapin d'avant le 09/10).
       return type === "sms_noshow"
-        ? { text: `Absent au ${action.rdv_label}`, tone: null }
+        ? { text: "Pas parti : cliquer pour l'envoyer", tone: LAPIN }
         : { text: "Après un appel sans réponse", tone: null };
   }
 }
@@ -227,9 +232,18 @@ export default function LeadSmsActions({ lead, catKey, C, darkMode, onUpdate }) 
   const pollRef = useRef({ timer: null, count: 0 });
   const leadId = lead.id;
 
-  const apply = useCallback((resp) => {
-    if (resp?.sms_actions) setData({ actions: resp.sms_actions, history: resp.sms_history || [] });
+  const celebrate = useCallback((type) => {
+    setJustSent(type);
+    setTimeout(() => setJustSent((cur) => (cur === type ? null : cur)), 2400);
   }, []);
+
+  const apply = useCallback((resp) => {
+    if (!resp?.sms_actions) return;
+    setData({ actions: resp.sms_actions, history: resp.sms_history || [] });
+    // SMS Lapin parti à l'instant au clic « Lapin » de la qualification : la coche s'anime aussi ici.
+    const lapin = resp.sms_actions.sms_noshow;
+    if (lapin?.state === "sent" && Date.now() - new Date(lapin.sent_at).getTime() < JUST_SENT_MS) celebrate("sms_noshow");
+  }, [celebrate]);
 
   const load = useCallback(async () => {
     try {
@@ -268,8 +282,7 @@ export default function LeadSmsActions({ lead, catKey, C, darkMode, onUpdate }) 
       // Compteur « SMS reçu » de la ligne du lead dans la sheet.
       if (resp?.sms_actions) onUpdate?.({ sms_count: resp.sms_count, sms_history: resp.sms_history || [] });
       if (resp.sent || resp.queued) {
-        setJustSent(type);
-        setTimeout(() => setJustSent((cur) => (cur === type ? null : cur)), 2400);
+        celebrate(type);
       } else if (resp.reason && !UNAVAILABLE[resp.reason]) {
         const msg = SEND_ERRORS[resp.reason] || (String(resp.reason).startsWith("brevo_") ? "Brevo a refusé l'envoi, réessaie" : "Envoi impossible");
         setFlash((f) => ({ ...f, [type]: msg }));
