@@ -77,6 +77,24 @@ const EMAIL_KIND_LABELS = {
   email_post08_j2: 'Post-live J+2',
   email_post08_j3: 'Post-live J+3',
   email_post08_j4: 'Post-live J+4',
+  // 22 octobre (TPE/PME). Les relances post-live (email_post22_*) sont dans
+  // « Séquences post-webinaire » : la landing ne les remonte pas ici.
+  email_oct22_invite_j14: 'Invitation J-14',
+  email_oct22_invite_j8: 'Invitation J-8',
+  email_oct22_invite_j1: 'Invitation J-1',
+  email_oct22_invite_j0: 'Invitation jour J',
+  email_oct22_remuneration: 'Parlons de votre rémunération',
+  email_oct22_decouvrir: 'Ce que vous allez découvrir',
+  email_oct22_holding: 'TPE/PME : une holding peut-elle avoir du sens ?',
+  email_oct22_simulateur: 'Redevance de marque · simulateur',
+  email_oct22_pertes: 'Combien perdez-vous chaque année ?',
+  email_oct22_j7: 'J-7 · dernière ligne droite',
+  email_oct22_j3: 'J-3 · confirmez votre présence',
+  email_oct22_j1: 'J-1 · demain',
+  email_oct22_morning: 'Matin J',
+  email_oct22_h1: 'H-1',
+  email_oct22_live: 'On est en live',
+  email_oct22_live15: 'Live +15 min',
 };
 
 // Ordre chronologique d'envoi. Une cohorte ne remonte que ses propres kinds,
@@ -143,6 +161,23 @@ const EMAIL_KIND_ORDER = [
   'email_post08_j2',
   'email_post08_j3',
   'email_post08_j4',
+  // 22 octobre
+  'email_oct22_invite_j14',
+  'email_oct22_invite_j8',
+  'email_oct22_invite_j1',
+  'email_oct22_invite_j0',
+  'email_oct22_remuneration',
+  'email_oct22_decouvrir',
+  'email_oct22_holding',
+  'email_oct22_simulateur',
+  'email_oct22_pertes',
+  'email_oct22_j7',
+  'email_oct22_j3',
+  'email_oct22_j1',
+  'email_oct22_morning',
+  'email_oct22_h1',
+  'email_oct22_live',
+  'email_oct22_live15',
 ];
 
 /**
