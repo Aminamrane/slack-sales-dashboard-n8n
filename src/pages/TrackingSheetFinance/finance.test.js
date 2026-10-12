@@ -24,7 +24,45 @@ import {
   scopedOverdueCurrent, scopedOverdueCum, computeKpis, creanceAgeMonths,
   isExitCandidate,
   financeAutomationFilter,
+  matchesNonAutomated,
 } from './constants.js';
+
+test('non automatisé : sans attendu du mois, le client est exclu même avec une dette antérieure', () => {
+  for (const expected of [0, '0.00', null, undefined, -50]) {
+    const r = { auto_debit: 'NON', expected_owner: expected, expected_optilex_ttc: expected,
+      overdue_owner_cumulative: 300, overdue_optilex_cumulative: 100 };
+    for (const scope of ['owner', 'optilex', 'global']) {
+      assert.equal(matchesNonAutomated(r, scope), false, `${scope}: ${expected}`);
+    }
+  }
+});
+
+test('non automatisé : un attendu Opti’Lex ne fait pas apparaître le client dans la vue Owner', () => {
+  const r = { auto_debit: 'NON', expected_owner: 0, expected_optilex_ttc: '108.00' };
+  assert.equal(matchesNonAutomated(r, 'owner'), false);
+  assert.equal(matchesNonAutomated(r, 'optilex'), true);
+  assert.equal(matchesNonAutomated(r, 'global'), true);
+  const inverse = { ...r, expected_owner: 231, expected_optilex_ttc: 0 };
+  assert.equal(matchesNonAutomated(inverse, 'owner'), true);
+  assert.equal(matchesNonAutomated(inverse, 'optilex'), false);
+  assert.equal(matchesNonAutomated(inverse, 'global'), true);
+});
+
+test('non automatisé : un attendu payé reste à automatiser, les prélèvements actifs restent exclus', () => {
+  const r = { expected_owner: 231, received_owner: 231, expected_optilex_ttc: 108,
+    received_optilex_ttc: 108, auto_debit: 'Non souhaitais' };
+  assert.equal(matchesNonAutomated(r, 'owner'), true);
+  assert.equal(matchesNonAutomated(r, 'global'), true);
+  for (const status of ['OUI', 'En attend', null, 'inconnu']) {
+    for (const scope of ['owner', 'optilex', 'global']) {
+      assert.equal(matchesNonAutomated({ ...r, auto_debit: status }, scope), false);
+    }
+  }
+  const partial = { ...r, auto_debit: 'Partiellement Owner' };
+  assert.equal(matchesNonAutomated(partial, 'owner'), false);
+  assert.equal(matchesNonAutomated(partial, 'optilex'), true);
+  assert.equal(matchesNonAutomated(partial, 'global'), false);
+});
 
 test('filtres Finances : Owner seul, Opti’Lex seul et les deux ne se mélangent pas', () => {
   assert.equal(financeAutomationFilter('Partiellement Owner'), 'finance:auto_owner');
