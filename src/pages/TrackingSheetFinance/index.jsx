@@ -77,7 +77,7 @@ import {
   shiftMonth,
   currentPeriod,
   parseDateFR,
-  autoDebitPastilles,
+  matchesNonAutomated,
   FINANCE_AUTOMATION_FILTERS,
   financeAutomationFilter,
   TERMINATED_BOARD_ETATS,
@@ -588,13 +588,8 @@ export default function TrackingSheetFinance() {
         const m = `${onboarding.getFullYear()}-${String(onboarding.getMonth() + 1).padStart(2, '0')}`;
         return relanceMonths.has(m);
       }
-      case 'non_auto': {
-        // Pastille rouge du scope actif (les deux rouges en Globale).
-        const p = autoDebitPastilles(r.auto_debit);
-        if (scope === 'owner') return p.owner === 'red';
-        if (scope === 'optilex') return p.optilex === 'red';
-        return p.owner === 'red' && p.optilex === 'red';
-      }
+      case 'non_auto':
+        return matchesNonAutomated(r, scope);
       case 'resilies': {
         const numero = r.client?.numero_client;
         const br = (numero && boardMap) ? boardMap.get(numero) : null;

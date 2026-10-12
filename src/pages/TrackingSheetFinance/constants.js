@@ -287,6 +287,16 @@ export const financeAutomationFilter = (value) => {
   return null;
 };
 
+// Le suivi « Non automatisé » concerne uniquement les clients avec un attendu
+// positif sur le mois et la vision affichés, même s'ils ont déjà réglé ce mois.
+export const matchesNonAutomated = (row, scope) => {
+  if (!(scopedPeriodAmounts(row, scope).expected > 0)) return false;
+  const p = autoDebitPastilles(row.auto_debit);
+  if (scope === 'owner') return p.owner === 'red';
+  if (scope === 'optilex') return p.optilex === 'red';
+  return p.owner === 'red' && p.optilex === 'red';
+};
+
 // ── Vision Owner / Opti'lex / Global (phase 2-3) ─────────────────────────
 //
 // Champs backend par entité — source UNIQUE du mapping vision → colonnes.
