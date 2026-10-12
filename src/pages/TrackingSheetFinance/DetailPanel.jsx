@@ -759,9 +759,7 @@ export default function DetailPanel({
             flex: 1, overflowY: 'auto',
             padding: '24px 32px 64px',
           }}>
-            {/* Header client synthétique (phase 3) : avatar + nom + statut
-                paiement + Modifier. L'État board reste ici — action
-                fréquente, jamais dans l'accordéon. */}
+            {/* Nom du client et actions. */}
             <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12}}>
               <ClientHeader client={client} />
               {(canEdit || canEditMoney || canProposeMoney) && <button type="button" ref={actionsAnchor} aria-expanded={actionsOpen} onClick={() => setActionsOpen(v => !v)} style={{display:'flex',alignItems:'center',gap:6,border:'1px solid #e3e2e0',borderRadius:7,padding:'7px 10px',background:'#fff',font:'inherit',fontSize:12,cursor:'pointer'}}><SlidersHorizontal size={14}/> Actions <ChevronDown size={12}/></button>}
@@ -794,6 +792,25 @@ export default function DetailPanel({
               {client?.email && <span>{client.email}</span>}
               {client?.phone && <span>{client.phone}</span>}
             </div>
+
+            {/* État du client et responsable, juste sous l’identité et les coordonnées. */}
+            <StatusStrip
+              boardRow={boardRow}
+              client={client}
+              inheritedEtat={inheritedEtat}
+              // L'état du client (Signé, résiliation…) est une décision
+              // engageante : direction financière et direction seulement.
+              canEditEtat={canEditMoney}
+              onBoardEtatChange={onBoardEtatChange}
+              onActedEtat={openExit}
+              clientId={clientId}
+              profile={profile}
+              // Le responsable, lui, est une organisation de travail : toute
+              // l'équipe finance peut se désigner ou reprendre un dossier.
+              canEditTeam={canEdit}
+              onResponsibleChanged={onResponsibleChanged}
+              onShowToast={onShowToast}
+            />
 
             {/* Synthèse financière toujours visible dès l’ouverture de la fiche. */}
             <section className="finance-detail-summary" aria-label="Synthèse financière">
@@ -833,25 +850,6 @@ export default function DetailPanel({
               )}
 
             </section>
-
-            {/* État du client et responsable, sous la synthèse financière. */}
-            <StatusStrip
-              boardRow={boardRow}
-              client={client}
-              inheritedEtat={inheritedEtat}
-              // L'état du client (Signé, résiliation…) est une décision
-              // engageante : direction financière et direction seulement.
-              canEditEtat={canEditMoney}
-              onBoardEtatChange={onBoardEtatChange}
-              onActedEtat={openExit}
-              clientId={clientId}
-              profile={profile}
-              // Le responsable, lui, est une organisation de travail : toute
-              // l'équipe finance peut se désigner ou reprendre un dossier.
-              canEditTeam={canEdit}
-              onResponsibleChanged={onResponsibleChanged}
-              onShowToast={onShowToast}
-            />
 
             <Section
               title="Identité, contacts et contrat"
