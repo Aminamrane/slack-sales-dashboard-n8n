@@ -759,26 +759,7 @@ export default function DetailPanel({
             flex: 1, overflowY: 'auto',
             padding: '24px 32px 64px',
           }}>
-            {/* État du client et responsable, visibles en haut à gauche dès l’ouverture. */}
-            <StatusStrip
-              boardRow={boardRow}
-              client={client}
-              inheritedEtat={inheritedEtat}
-              // L'état du client (Signé, résiliation…) est une décision
-              // engageante : direction financière et direction seulement.
-              canEditEtat={canEditMoney}
-              onBoardEtatChange={onBoardEtatChange}
-              onActedEtat={openExit}
-              clientId={clientId}
-              profile={profile}
-              // Le responsable, lui, est une organisation de travail : toute
-              // l'équipe finance peut se désigner ou reprendre un dossier.
-              canEditTeam={canEdit}
-              onResponsibleChanged={onResponsibleChanged}
-              onShowToast={onShowToast}
-            />
-
-            {/* Nom du client et actions, après le statut et le responsable. */}
+            {/* Nom du client et actions. */}
             <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12}}>
               <ClientHeader client={client} />
               {(canEdit || canEditMoney || canProposeMoney) && <button type="button" ref={actionsAnchor} aria-expanded={actionsOpen} onClick={() => setActionsOpen(v => !v)} style={{display:'flex',alignItems:'center',gap:6,border:'1px solid #e3e2e0',borderRadius:7,padding:'7px 10px',background:'#fff',font:'inherit',fontSize:12,cursor:'pointer'}}><SlidersHorizontal size={14}/> Actions <ChevronDown size={12}/></button>}
@@ -811,6 +792,25 @@ export default function DetailPanel({
               {client?.email && <span>{client.email}</span>}
               {client?.phone && <span>{client.phone}</span>}
             </div>
+
+            {/* État du client et responsable, juste sous l’identité et les coordonnées. */}
+            <StatusStrip
+              boardRow={boardRow}
+              client={client}
+              inheritedEtat={inheritedEtat}
+              // L'état du client (Signé, résiliation…) est une décision
+              // engageante : direction financière et direction seulement.
+              canEditEtat={canEditMoney}
+              onBoardEtatChange={onBoardEtatChange}
+              onActedEtat={openExit}
+              clientId={clientId}
+              profile={profile}
+              // Le responsable, lui, est une organisation de travail : toute
+              // l'équipe finance peut se désigner ou reprendre un dossier.
+              canEditTeam={canEdit}
+              onResponsibleChanged={onResponsibleChanged}
+              onShowToast={onShowToast}
+            />
 
             {/* Synthèse financière toujours visible dès l’ouverture de la fiche. */}
             <section className="finance-detail-summary" aria-label="Synthèse financière">
@@ -1255,7 +1255,7 @@ function StatusStrip({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: 0.04, ease: [0.4, 0, 0.2, 1] }}
       style={{
-        marginBottom: 16,
+        marginTop: 16,
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
         gap: 8,
