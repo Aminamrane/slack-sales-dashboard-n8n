@@ -37,6 +37,16 @@ const LABELS_BY_COHORT = {
     email_post21_j3: { day: 'Jeu 24/09 · 11h', subject: 'Combien votre entreprise sort pour vous payer ?' },
     email_post21_j4: { day: 'Ven 25/09 · 11h', subject: 'Dernier mail sur le sujet' },
   },
+  // 22 octobre (TPE/PME) : absents / présents le jour du live, puis J+1 → J+4.
+  // Sujets seulement : la date affichée est l'horodatage réel renvoyé par la landing.
+  'webinar-2026-10-22': {
+    email_post22_missed:   { subject: 'Vous avez raté quelque chose…' },
+    email_post22_attended: { subject: 'Merci pour votre présence' },
+    email_post22_j1: { subject: 'Payez-vous trop de charges ? Voici comment le savoir' },
+    email_post22_j2: { subject: '3 façons de garantir que vous perdez de l\'argent' },
+    email_post22_j3: { subject: 'Combien votre entreprise sort pour vous payer ?' },
+    email_post22_j4: { subject: 'Dernier mail sur le sujet' },
+  },
 };
 
 // Cohorte sans jeu d'étiquettes (20/07, 07/09…) : le sujet retombe sur le kind
