@@ -440,37 +440,12 @@ body.dark-mode .board-frame {
   contain: layout paint;
 }
 
-.chart--weeks{
-  display:flex; flex-direction:column; overflow:hidden;
-}
-.chart--weeks .chart-header{
-  display:flex; align-items:center; justify-content:space-between;
-  margin-bottom:.35rem;
-}
-.chart--weeks .chart-title{ font-weight:600; font-size:1.05rem; }
-.chart--weeks .chart-body{ flex:1; min-height:0; }
-.chart--weeks .chart-key{
-  display:flex; gap:1rem; align-items:center;
-  padding-top:.35rem; font-size:.85rem; color:#6b7280;
-  flex-wrap:wrap;
-}
-
 .key{ display:flex; align-items:center; gap:.4rem; }
 .key.current{ font-weight:700; color:#111; }
 .dot{ width:.6rem; height:.6rem; border-radius:50%; display:inline-block; }
 .dot-w2{ background:#6b7280; }
 .dot-w1{ background:#ef4444; }
 .dot-w0{ background:#1d4ed8; }
-
-.trend-badge{
-  display:inline-block; background:#f3f4f6; border-radius:.65rem;
-  padding:.45rem .7rem; line-height:1.1; width:fit-content;
-  max-width: var(--trend-badge-max); white-space:nowrap;
-  font-weight:700; font-size:.95rem;
-}
-.trend-up{   color:#16a34a; }
-.trend-down{ color:#dc2626; }
-.trend-flat{ color:#6b7280; }
 
 .chart--full{
   flex:1 1 100%;
@@ -499,18 +474,6 @@ body.dark-mode .board-frame {
   max-height:58%; 
   display:block; 
 }
-
-.chart--weeks{
-  height: var(--card-h-lg);
-  display:flex; flex-direction:column;
-}
-
-.chart-key{
-  display:flex; gap:1rem; align-items:center;
-  padding-top:.35rem; font-size:.85rem; color:#6b7280; flex-wrap:wrap;
-}
-
-.trend-badge .row{ display:block; }
 
 .chart--full{ flex:1 1 100%; height: var(--card-h-sm); }
 
@@ -576,24 +539,91 @@ body.dark-mode .tile-count {
   color: #9ba3af;
 }
 
-/* Canaux d'acquisition (Suivi des ventes) : tous les canaux tiennent dans la carte (hauteur fixe), 4 par ligne */
-.chart--channels canvas{ max-height:34%; }
-.gauge-tiles.gauge-tiles--channels{
-  display:grid;
-  grid-template-columns:repeat(4, minmax(0, 1fr));
-  gap:.45rem .9rem;
-  justify-items:start;
-  align-items:start;
+/* Canaux d'acquisition (Suivi des ventes) : jauge SVG + légende alignée, dans la hauteur fixe de la carte. */
+.chart-card.chart--channels{ height: var(--card-h-lg); display:flex; flex-direction:column; --cb-text:#111827; --cb-muted:#6b7280;
+  --cb-track:#eef2ff; --cb-row-hover:rgba(99,102,241,.07); --cb-bar:#f1f5f9; }
+body.dark-mode .chart-card.chart--channels{ --cb-text:#e5e7eb; --cb-muted:#9ca3af; --cb-track:rgba(148,163,184,.14);
+  --cb-row-hover:rgba(129,140,248,.14); --cb-bar:rgba(148,163,184,.15); }
+.cb-head{ text-align:center; margin-bottom:.4rem; }
+.cb{ flex:1; min-height:0; display:grid; grid-template-columns:minmax(150px, .85fr) 1.15fr; gap:1.1rem; align-items:center; }
+.cb-gauge svg{ width:100%; max-width:280px; display:block; margin:0 auto; overflow:visible; }
+.cb-track{ fill:none; stroke:var(--cb-track); stroke-width:20; }
+.cb-seg{ stroke-width:20; cursor:pointer; }
+.cb-seg.is-hover{ stroke-width:24; }
+.cb-seg.is-dim{ opacity:.35; }
+.cb-total{ text-anchor:middle; font-size:34px; font-weight:800; fill:var(--cb-text); font-variant-numeric:tabular-nums; }
+.cb-unit{ text-anchor:middle; font-size:11px; font-weight:500; fill:var(--cb-muted); }
+.cb-legend{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:1px; }
+.cb-row{ width:100%; display:grid; grid-template-columns:10px minmax(0,1fr) 2ch 48px 3.8ch; align-items:center; gap:.5rem;
+  padding:.32rem .5rem; border:0; border-radius:9px; background:transparent; color:var(--cb-text); font:inherit; text-align:left;
+  transition:background .18s ease, opacity .18s ease; }
+button.cb-row{ cursor:pointer; }
+.cb-row.is-hover, .cb-row.is-active{ background:var(--cb-row-hover); }
+.cb-row.is-zero{ opacity:.45; }
+.cb-dot{ width:10px; height:10px; border-radius:50%; }
+.cb-label{ font-size:.84rem; font-weight:600; line-height:1.15; min-width:0; }
+.cb-label small{ display:block; font-size:.7rem; font-weight:500; color:var(--cb-muted); margin-top:1px; }
+.cb-count{ font-size:.95rem; font-weight:800; text-align:right; font-variant-numeric:tabular-nums; }
+.cb-bar{ height:6px; border-radius:999px; background:var(--cb-bar); overflow:hidden; }
+.cb-bar i{ display:block; height:100%; border-radius:inherit; }
+.cb-pct{ font-size:.75rem; color:var(--cb-muted); text-align:right; font-variant-numeric:tabular-nums; }
+@media (max-width: 640px){
+  .chart-card.chart--channels{ height:auto; }
+  .cb{ grid-template-columns:1fr; }
 }
-.gauge-tiles--channels .gauge-tile{ justify-content:flex-start; min-width:0; gap:.45rem; }
-.gauge-tiles--channels .tile-dot{ width:12px; height:12px; flex:none; }
-.gauge-tiles--channels .tile-label{ font-size:.78rem; }
-.gauge-tiles--channels .tile-value{ font-size:.95rem; white-space:nowrap; }
-.gauge-tiles--channels .tile-count{ font-size:.72rem; margin-left:.15rem; }
-.gauge-tiles--channels .tile-parts{ font-size:.68rem; line-height:1.25; color:#6b7280; margin-top:.15rem; }
-body.dark-mode .gauge-tiles--channels .tile-parts{ color:#9ca3af; }
-.gauge-tile--clickable{ cursor:pointer; border-radius:10px; padding:2px 4px; margin:-2px -4px; }
-.gauge-tile--clickable:hover, .gauge-tile--clickable.is-active{ background:rgba(99,102,241,.08); }
+
+/* Pilotage du mois (CEO et admins) sous la barre d'objectif : ventes / objectif, TR, on pace, jour d'atteinte. */
+.pace{ display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:.5rem 1.4rem; margin-top:12px;
+  --pace-text:#111827; --pace-muted:#6b7280; --pace-up:#047857; --pace-up-bg:#ecfdf5; --pace-down:#b91c1c; --pace-down-bg:#fef2f2; }
+body.dark-mode .pace{ --pace-text:#e5e7eb; --pace-muted:#9ca3af; --pace-up:#6ee7b7; --pace-up-bg:rgba(16,185,129,.14);
+  --pace-down:#fca5a5; --pace-down-bg:rgba(239,68,68,.14); }
+.pace-kpi{ display:flex; align-items:baseline; gap:.4rem; }
+.pace-kpi span{ font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--pace-muted); }
+.pace-kpi strong{ font-size:17px; font-weight:800; color:var(--pace-text); font-variant-numeric:tabular-nums; }
+.pace-kpi em{ font-style:normal; font-size:13px; font-weight:600; color:var(--pace-muted); margin-left:1px; }
+.pace-reach{ font-size:12px; font-weight:700; padding:.22rem .65rem; border-radius:999px; color:var(--pace-muted); background:rgba(148,163,184,.12); }
+.pace-reach.is-up{ color:var(--pace-up); background:var(--pace-up-bg); }
+.pace-reach.is-down{ color:var(--pace-down); background:var(--pace-down-bg); }
+/* Entrées douces, en décalé (easing doux, sans rebond), coupées si l'utilisateur réduit les animations. */
+@keyframes owner-rise{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:none; } }
+.pace > *{ animation:owner-rise .55s cubic-bezier(.22,1,.36,1) both; }
+.pace > *:nth-child(2){ animation-delay:.06s; } .pace > *:nth-child(3){ animation-delay:.12s; } .pace > *:nth-child(4){ animation-delay:.2s; }
+.cb-legend li{ animation:owner-rise .5s cubic-bezier(.22,1,.36,1) both; }
+.cb-legend li:nth-child(2){ animation-delay:.05s; } .cb-legend li:nth-child(3){ animation-delay:.1s; } .cb-legend li:nth-child(4){ animation-delay:.15s; }
+.cb-legend li:nth-child(5){ animation-delay:.2s; } .cb-legend li:nth-child(6){ animation-delay:.25s; } .cb-legend li:nth-child(7){ animation-delay:.3s; }
+.rp-chips .rp-chip{ animation:owner-rise .5s cubic-bezier(.22,1,.36,1) both; } .rp-chips .rp-chip:nth-child(2){ animation-delay:.08s; }
+@media (prefers-reduced-motion: reduce){
+  .pace > *, .cb-legend li, .rp-chips .rp-chip{ animation:none; }
+  .cb-seg, .cb-bar i{ transition:none !important; }
+}
+
+/* Rythme du mois (Suivi des ventes) : revenu signé au même jour que les mois précédents + projection. */
+.chart-card.chart--pace{ height: var(--card-h-lg); display:flex; --rp-text:#111827; --rp-muted:#6b7280; --rp-up:#047857;
+  --rp-up-bg:#ecfdf5; --rp-down:#b91c1c; --rp-down-bg:#fef2f2; --rp-line:#e5e7eb; }
+body.dark-mode .chart-card.chart--pace{ --rp-text:#e5e7eb; --rp-muted:#9ca3af; --rp-up:#6ee7b7; --rp-up-bg:rgba(16,185,129,.14);
+  --rp-down:#fca5a5; --rp-down-bg:rgba(239,68,68,.14); --rp-line:rgba(148,163,184,.25); }
+.rp{ flex:1; min-width:0; display:flex; flex-direction:column; color:var(--rp-text); }
+.rp-empty{ margin:auto; color:var(--rp-muted); font-size:.85rem; }
+.rp-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; }
+.rp-label{ font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--rp-muted); }
+.rp-value{ font-size:28px; font-weight:800; line-height:1.1; font-variant-numeric:tabular-nums; margin-top:2px; }
+.rp-sub{ font-size:12px; color:var(--rp-muted); margin-top:2px; }
+.rp-projection{ text-align:right; display:flex; flex-direction:column; gap:1px; }
+.rp-projection span{ font-size:11px; color:var(--rp-muted); }
+.rp-projection strong{ font-size:17px; font-weight:800; font-variant-numeric:tabular-nums; }
+.rp-projection small{ font-size:11px; color:var(--rp-muted); }
+.rp-chips{ display:flex; flex-wrap:wrap; gap:.4rem; margin:.6rem 0 .2rem; }
+.rp-chip{ display:inline-flex; align-items:center; gap:.4rem; padding:.28rem .6rem; border-radius:999px; font-size:12px;
+  color:var(--rp-muted); background:var(--rp-line); }
+.rp-chip i{ width:8px; height:8px; border-radius:50%; }
+.rp-chip b{ font-weight:800; }
+.rp-chip.is-up{ background:var(--rp-up-bg); } .rp-chip.is-up b{ color:var(--rp-up); }
+.rp-chip.is-down{ background:var(--rp-down-bg); } .rp-chip.is-down b{ color:var(--rp-down); }
+.rp-chart{ flex:1; min-height:0; position:relative; }
+.rp-key{ display:flex; flex-wrap:wrap; gap:.9rem; font-size:11px; color:var(--rp-muted); margin-top:.35rem; }
+.rp-key span{ display:inline-flex; align-items:center; gap:.35rem; }
+.rp-key i{ width:14px; height:3px; border-radius:2px; display:inline-block; }
+.rp-key i.is-dashed{ height:0; border-top:2px dashed; background:none; }
 
 /* Détail des ventes par canal (admins et CEO) */
 .chart-card.channel-detail{ flex:1 1 100%; overflow:visible; contain:none; }
@@ -674,14 +704,6 @@ body.dark-mode .kpi-card {
   box-shadow: 0 22px 45px rgba(15, 23, 42, 0.75);
 }
 
-.kpi-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 8px;
-}
-
 .kpi-label {
   font-size: 12px;
   text-transform: uppercase;
@@ -710,39 +732,6 @@ body.dark-mode .kpi-value {
 }
 
 body.dark-mode .kpi-sub {
-  color: #9ca3af;
-}
-
-.chart-title-small {
-  font-size: 13px;
-  color: #374151;
-  opacity: 0.8;
-  margin-bottom: 8px;
-}
-
-body.dark-mode .chart-title-small {
-  color: #e5e7eb;
-}
-
-.chart-body--glass {
-  position: relative;
-  border-radius: 18px;
-  padding: 4px 6px 0;
-  background: #f9fafb;
-}
-
-body.dark-mode .chart-body--glass {
-  background: radial-gradient(circle at top, rgba(15, 23, 42, 0.95), transparent);
-}
-
-.chart-footnote {
-  margin-top: 8px;
-  font-size: 11px;
-  color: #6b7280;
-  opacity: 0.9;
-}
-
-body.dark-mode .chart-footnote {
   color: #9ca3af;
 }
 
@@ -1013,19 +1002,6 @@ body.dark-mode .kpi-sub {
   color: #8b8fa0 !important;
 }
 
-body.dark-mode .chart-title-small {
-  color: #eef0f6 !important;
-}
-
-body.dark-mode .chart-body--glass {
-  background: #1e1f28 !important;
-  border: 1px solid #2a2b36 !important;
-}
-
-body.dark-mode .chart-footnote {
-  color: #8b8fa0 !important;
-}
-
 /* Gauge */
 body.dark-mode .gauge-title {
   color: #eef0f6 !important;
@@ -1048,36 +1024,6 @@ body.dark-mode .tile-value {
 }
 
 body.dark-mode .tile-count {
-  color: #8b8fa0 !important;
-}
-
-/* Trend badges - SaaS palette */
-body.dark-mode .trend-badge {
-  background: #1e1f28 !important;
-  border: 1px solid #2a2b36 !important;
-  color: #eef0f6 !important;
-}
-
-body.dark-mode .trend-badge.trend-up {
-  background: rgba(50, 215, 75, 0.15) !important;
-  border-color: rgba(50, 215, 75, 0.3) !important;
-  color: #32d74b !important; /* green */
-}
-
-body.dark-mode .trend-badge.trend-down {
-  background: rgba(255, 69, 58, 0.15) !important;
-  border-color: rgba(255, 69, 58, 0.3) !important;
-  color: #ff453a !important; /* red */
-}
-
-body.dark-mode .trend-badge.trend-flat {
-  background: #1e1f28 !important;
-  border-color: #2a2b36 !important;
-  color: #8b8fa0 !important;
-}
-
-/* Chart key */
-body.dark-mode .chart-key {
   color: #8b8fa0 !important;
 }
 
@@ -1316,34 +1262,6 @@ body {
   color: #1e2330 !important;
 }
 
-/* Trend badge - Plus élégant */
-.trend-badge {
-  background: #eef0f6 !important;
-  border: 1px solid #e2e6ef !important;
-  border-radius: 10px !important;
-  padding: 8px 14px !important;
-  font-weight: 600 !important;
-}
-
-.trend-badge.trend-up {
-  background: #e8f7ee !important;
-  color: #30d158 !important;
-  border-color: #c3ecd0 !important;
-}
-
-.trend-badge.trend-down {
-  background: #ffe8e8 !important;
-  color: #ff3b30 !important;
-  border-color: #ffc9c9 !important;
-}
-
-/* Chart glass background */
-.chart-body--glass {
-  background: #f9fafd !important;
-  border-radius: 16px !important;
-  border: 1px solid #eef1f6 !important;
-}
-
 /* Avatar - Bordure plus subtile */
 .avatar {
   border: 2px solid #eef0f6 !important;
@@ -1474,11 +1392,6 @@ body.dark-mode .kpi-value,
 body.dark-mode .tile-value,
 body.dark-mode .tile-label {
   color: #eef0f6 !important;
-}
-
-body.dark-mode .chart-body--glass {
-  background: #1e1f28 !important;
-  border-color: #2a2b36 !important;
 }
 
 /* FORCE Sales alignment - CENTRER SOUS LE MOT */

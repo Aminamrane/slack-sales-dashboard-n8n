@@ -37,12 +37,15 @@ import airportFont from "../assets/Airport.otf";
 import shipIcon from "../assets/ship.png";
 import flameIcon from "../assets/flame.png";
 import SharedNavbar from "../components/SharedNavbar.jsx";
+import ChannelBreakdown from "../components/leaderboard/ChannelBreakdown.jsx";
+import RevenuePace from "../components/leaderboard/RevenuePace.jsx";
+import PacePanel from "../components/leaderboard/PacePanel.jsx";
 
 import Chart from "chart.js/auto";
 
 import ChartDataLabels from "chartjs-plugin-datalabels";
 
-import { Doughnut, Line } from "react-chartjs-2";
+import { Doughnut } from "react-chartjs-2";
 
 import "../index.css";
 
@@ -527,76 +530,6 @@ function normalizeTunnelLabel(raw) {
    Tiny hooks / chips
 
 ──────────────────────────────────────────────────────────────────────────── */
-
-function useAutoFit(ref, { max = 240, minFont = 12, maxFont = 16, step = 0.5 } = {}) {
-
-  useEffect(() => {
-
-    const el = ref.current;
-
-    if (!el) return;
-
-    el.style.fontSize = `${maxFont}px`;
-
-    const originalMaxWidth = el.style.maxWidth;
-
-    el.style.maxWidth = `${max}px`;
-
-    const fits = () => el.scrollWidth <= max;
-
-    let size = maxFont;
-
-    while (!fits() && size > minFont) {
-
-      size -= step;
-
-      el.style.fontSize = `${size}px`;
-
-    }
-
-    return () => { el.style.maxWidth = originalMaxWidth; };
-
-  }, [ref, max, minFont, maxFont, step]);
-
-}
-
-function TrendBadge({ deltaAbs, deltaPct }) {
-
-  const isUp = deltaAbs > 0;
-
-  const isDown = deltaAbs < 0;
-
-  const ref = useRef(null);
-
-  useAutoFit(ref, { max: 240, minFont: 12, maxFont: 16, step: 0.5 });
-
-  const pctText = deltaPct === null ? "N-1 = 0 €" : `${Math.abs(deltaPct).toFixed(2)}%`;
-
-  return (
-
-    <div
-
-      ref={ref}
-
-      className={`trend-badge ${isUp ? "trend-up" : isDown ? "trend-down" : "trend-flat"}`}
-
-      title="Comparaison mois en cours vs mois précédent (même période)"
-
-    >
-
-      <span className="row">
-
-        {isUp ? "↑" : isDown ? "↓" : "→"} {Math.abs(deltaAbs).toLocaleString("fr-FR")} €
-
-      </span>
-
-      <span className="row">({pctText})</span>
-
-    </div>
-
-  );
-
-}
 
 /* ────────────────────────────────────────────────────────────────────────────
 
@@ -1802,36 +1735,50 @@ export default function Leaderboard() {
 
   // ── Acquisition gauge ───────────────────────────────────────────────────────
 
+  // Jauge de secours : canal déclaré par les sales, tant que l'API ne sert pas `channels` (ancienne image).
   const gauge = useMemo(() => {
 
-    // Canaux d'acquisition (dev 13/10/2026) : canal = origine réelle du lead de chaque vente, calculé par l'API.
-    // Les six canaux suivis sont toujours affichés, même à zéro ; Autre seulement s'il compte (Konket et Lead Club = Ads).
-    // Repli sur le canal déclaré (ancienne API) tant que le champ `channels` n'est pas servi.
-    const fromApi = channels.length > 0;
-    const entries = fromApi
-      ? channels.filter(c => CORE_CHANNELS.includes(c.key) || c.sales > 0).map(c => [c.label, c.sales, CHANNEL_COLORS[c.key], c.key, c.breakdown || []])
-      : Object.entries(tunnelStats).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([l, v], i) => {
-          const label = /^ads$/i.test(l) ? "ADS" : /^cc$/i.test(l) ? "CC" : /link/i.test(l) ? "LinkedIn" : l;
-          const color = label === "ADS" ? COLORS.primary : label === "CC" ? COLORS.secondary : label === "LinkedIn" ? COLORS.tertiary
-            : [COLORS.primary, COLORS.secondary, COLORS.tertiary][i] || COLORS.gray;
-          return [label, v, color, null, []];
-        });
+    const entries = Object.entries(tunnelStats);
 
-    const total = fromApi ? channels.reduce((sum, c) => sum + c.sales, 0) : entries.reduce((sum, [, v]) => sum + v, 0);
+    const total = entries.reduce((s, [,v]) => s + v, 0) || 1;
 
-    const labels = entries.map(([l]) => l);
+    const top3 = entries.sort((a,b) => b[1] - a[1]).slice(0, 3);
 
-    const counts = entries.map(([, v]) => v);
+    
+    
+    const display = (l) => {
 
-    const pct = counts.map(v => (total ? (v / total) * 100 : 0));
+      if (/^ads$/i.test(l)) return "ADS";
 
-    const colors = entries.map(([, , c]) => c);
+      if (/^cc$/i.test(l)) return "CC";
+
+      if (/link/i.test(l)) return "LinkedIn";
+
+      return l;
+
+    };
+
+    
+    
+    const labels = top3.map(([l]) => display(l));
+
+    const counts = top3.map(([,v]) => v);
+
+    const pct = counts.map(v => (v / total) * 100);
+
+    const colors = labels.map((lbl, i) => {
+
+      if (lbl === "ADS") return COLORS.primary;
+
+      if (lbl === "CC")  return COLORS.secondary;
+
+      if (lbl === "LinkedIn") return COLORS.tertiary;
+
+      return [COLORS.primary, COLORS.secondary, COLORS.tertiary][i] || COLORS.gray;
+
+    });
 
     const tiles = labels.map((l, i) => ({
-
-      key: entries[i][3],
-
-      parts: entries[i][4],
 
       label: l,
 
@@ -1854,8 +1801,6 @@ export default function Leaderboard() {
     return {
 
       total,
-
-      fromApi,
 
       main,
 
@@ -1913,7 +1858,13 @@ export default function Leaderboard() {
 
     };
 
-  }, [channels, tunnelStats, darkMode]);
+  }, [tunnelStats, darkMode]);
+
+  // Canaux d'acquisition réels (dev 13/10/2026) : les six suivis toujours, Autre seulement s'il compte.
+  const shownChannels = useMemo(
+    () => channels.filter(c => CORE_CHANNELS.includes(c.key) || c.sales > 0),
+    [channels],
+  );
 
   const gaugeOptions = useMemo(() => ({
 
@@ -1981,223 +1932,6 @@ export default function Leaderboard() {
 
   }), [darkMode]);
 
-  // ── Last 3 months comparison (CUMULATIVE) ──────────────────────────────────
-
-  const threeMonths = useMemo(() => {
-    if (!chartSales || !chartSales.current_month) {
-      // Données par défaut si pas encore chargées
-      const today = new Date();
-      const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-      const labels = Array.from({ length: daysInMonth }, (_, i) => (i + 1).toString());
-
-      return {
-        data: {
-          labels,
-          datasets: []
-        },
-        sums: { m0: 0, m1: 0, m2: 0 },
-        monthNames: { m0: '', m1: '', m2: '' },
-        currentDay: today.getDate()
-      };
-    }
-
-    const today = new Date();
-    const currentDay = chartSales.current_day || today.getDate();
-    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-    const labels = Array.from({ length: daysInMonth }, (_, i) => (i + 1).toString());
-
-    // Extraire les données cumulatives du backend
-    const m0Data = chartSales.current_month.data.map(d => d.value);
-    const m1Data = chartSales.previous_month.data.map(d => d.value);
-    const m2Data = chartSales.two_months_ago.data.map(d => d.value);
-
-    const data = {
-      labels,
-      datasets: [
-        {
-          label: `${chartSales.two_months_ago.month_label} (N-2)`,
-          data: m2Data.slice(0, daysInMonth),
-          borderColor: COLORS.gray,
-          backgroundColor: "transparent",
-          borderWidth: 1.5,
-          tension: 0.4,
-          pointRadius: 0,
-          fill: false,
-        },
-        {
-          label: `${chartSales.previous_month.month_label} (N-1)`,
-          data: m1Data.slice(0, daysInMonth),
-          borderColor: COLORS.secondary,
-          backgroundColor: "transparent",
-          borderWidth: 2,
-          tension: 0.4,
-          pointRadius: 0,
-          fill: false,
-        },
-        {
-          label: `${chartSales.current_month.month_label} (N)`,
-          data: m0Data.slice(0, daysInMonth),
-          borderColor: COLORS.primary,
-          backgroundColor: "transparent",
-          borderWidth: 3,
-          tension: 0.45,
-          pointRadius: labels.map((_, i) => (i === currentDay - 1 ? 4 : 0)),
-          pointHoverRadius: 6,
-          fill: false,
-        },
-      ],
-    };
-
-    return {
-      data,
-      sums: {
-        m0: chartSales.current_month.total,
-        m1: chartSales.previous_month.total,
-        m2: chartSales.two_months_ago.total
-      },
-      monthNames: {
-        m0: chartSales.current_month.month_label,
-        m1: chartSales.previous_month.month_label,
-        m2: chartSales.two_months_ago.month_label
-      },
-      currentDay
-    };
-  }, [chartSales, darkMode]);
-
-  const lineOptions = useMemo(() => ({
-
-    responsive: true,
-
-    maintainAspectRatio: false,
-
-    // Pas de resizeDelay : avec un délai, Chart.js dessine le graphique avant sa première mise à jour quand
-    // l'onglet Charts s'ouvre, et le plugin datalabels (enregistré globalement) plante → page blanche (13/10/2026).
-
-    animation: { duration: 250 },
-
-    layout: { padding: { top: 8, bottom: 12, left: 8, right: 8 } },
-
-    plugins: {
-
-      title: { display: false },
-
-      legend: { display: false },
-
-      tooltip: {
-
-        callbacks: {
-
-          label: (ctx) => {
-
-            const value = ctx.parsed.y || 0;
-
-            return `${ctx.dataset.label} : ${value.toLocaleString("fr-FR")} € cumulés`;
-
-          },
-
-        },
-
-        backgroundColor: darkMode ? "#020617" : "#ffffff",
-
-        titleColor: darkMode ? "#e5e7eb" : "#000000",
-
-        bodyColor: darkMode ? "#f9fafb" : "#000000",
-
-        borderColor: darkMode ? "#1f2937" : "#e5e7eb",
-
-        borderWidth: 1,
-
-        padding: 10,
-
-        cornerRadius: 6,
-
-      },
-
-      datalabels: { display: false },
-
-    },
-
-    interaction: { mode: "index", intersect: false },
-
-    scales: {
-
-      y: {
-
-        beginAtZero: true,
-
-        grace: "5%",
-
-        ticks: {
-
-          font: { size: 11 },
-
-          callback: (v) => `${Number(v).toLocaleString("fr-FR")} €`,
-
-          color: darkMode ? "#9ba3af" : "#4b5563",
-
-        },
-
-        grid: {
-
-          color: darkMode ? "rgba(148, 163, 184, 0.15)" : "rgba(209, 213, 219, 0.5)",
-
-        },
-
-      },
-
-      x: {
-
-        ticks: {
-
-          font: { size: 10 },
-
-          padding: 6,
-
-          color: darkMode ? "#9ba3af" : "#4b5563",
-
-          maxRotation: 0,
-
-          autoSkip: true,
-
-          maxTicksLimit: 10,
-
-        },
-
-        grid: { display: false },
-
-      },
-
-    },
-
-    elements: {
-
-      line: {
-
-        borderCapStyle: "round",
-
-        borderJoinStyle: "round",
-
-      },
-
-      point: {
-
-        radius: 0,
-
-        hoverRadius: 5,
-
-        hitRadius: 10,
-
-      },
-
-    },
-
-  }), [darkMode]);
-
-  const prev = threeMonths.sums.m1;
-
-  const deltaAbs = threeMonths.sums.m0 - prev;
-
-  const deltaPct = prev ? (deltaAbs / prev) * 100 : null;
 
   // Trophy system - Monthly winners since September 2025
 
@@ -2691,6 +2425,10 @@ export default function Leaderboard() {
               }} />
             </div>
           </div>
+          {/* Pilotage du mois en cours (CEO et admins) : ventes / objectif, TR, on pace, jour d'atteinte. */}
+          {canSeeChannelDetail && viewingMonth === new Date().toISOString().slice(0, 7) && monthlyObjectives[viewingMonth] && (
+            <PacePanel sales={totals.ventes} objective={monthlyObjectives[viewingMonth]} />
+          )}
         </div>
 
         {/* ── KPI Cards Row ── */}
@@ -2913,143 +2651,76 @@ export default function Leaderboard() {
 
             {/* FIX: Utiliser les mêmes classes que la carte KPI */}
 
-            <div className={`chart-card kpi-card chart--gauge${gauge.fromApi ? " chart--channels" : ""}`}>
+            {shownChannels.length > 0 ? (
 
-              <div className="gauge-header">
+              <div className="chart-card kpi-card chart--channels">
 
-                <div className="gauge-title">{gauge.fromApi ? "Canaux d'acquisition" : "Tunnel d'acquisition"}</div>
+                <div className="cb-head">
 
-                <div className="gauge-subtitle">
+                  <div className="gauge-title">Canaux d'acquisition</div>
 
-                  {gauge.fromApi
-                    ? `${gauge.total} vente${gauge.total > 1 ? "s" : ""} · origine du lead, CCS si un setter a posé ou reprogrammé le R1`
-                    : `Top 3 canaux – ${gauge.total} dossiers`}
+                  <div className="gauge-subtitle">Origine du lead · CCS si un setter a posé ou reprogrammé le R1</div>
 
                 </div>
 
+                <ChannelBreakdown channels={shownChannels} colors={CHANNEL_COLORS} partLabels={CCS_KIND_SHORT}
+                  activeKey={channelDetail ? detailChannel : null} onSelect={channelDetail ? setDetailChannel : null} />
+
               </div>
 
-              <Doughnut data={gauge.data} options={gaugeOptions} />
+            ) : (
 
-              <div className="gauge-sep" />
+              <div className="chart-card kpi-card chart--gauge">
 
-              <div className={`gauge-tiles${gauge.fromApi ? " gauge-tiles--channels" : ""}`}>
+                <div className="gauge-header">
 
-                {gauge.tiles.map((t) => (
+                  <div className="gauge-title">Tunnel d'acquisition</div>
 
-                  <div key={t.label} className={`gauge-tile${channelDetail && t.key ? " gauge-tile--clickable" : ""}${channelDetail && t.key === detailChannel ? " is-active" : ""}`}
-                    role={channelDetail && t.key ? "button" : undefined} tabIndex={channelDetail && t.key ? 0 : undefined}
-                    onClick={channelDetail && t.key ? () => setDetailChannel(t.key) : undefined}
-                    onKeyDown={channelDetail && t.key ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetailChannel(t.key); } } : undefined}>
+                  <div className="gauge-subtitle">
 
-                    <span className="tile-dot" style={{ background: t.color }} />
+                    Top 3 canaux – {gauge.total} dossiers
 
-                    <div className="tile-text">
+                  </div>
 
-                      <div className="tile-label">{t.label}</div>
+                </div>
 
-                      <div className="tile-value">
+                <Doughnut data={gauge.data} options={gaugeOptions} />
 
-                        {gauge.fromApi
-                          ? <>{t.count} vente{t.count > 1 ? "s" : ""} <span className="tile-count">{Math.round(t.pct)} %</span></>
-                          : <>{Math.round(t.pct)}% <span className="tile-count">({t.count} dossiers)</span></>}
+                <div className="gauge-sep" />
+
+                <div className="gauge-tiles">
+
+                  {gauge.tiles.map((t) => (
+
+                    <div key={t.label} className="gauge-tile">
+
+                      <span className="tile-dot" style={{ background: t.color }} />
+
+                      <div className="tile-text">
+
+                        <div className="tile-label">{t.label}</div>
+
+                        <div className="tile-value">
+
+                          {Math.round(t.pct)}% <span className="tile-count">({t.count} dossiers)</span>
+
+                        </div>
+
                       </div>
-                      {/* CCS en global, détaillé : cold call setter / Seconde chance setter (dev 13/10/2026). */}
-                      {t.count > 0 && t.parts?.length > 0 && (
-                        <div className="tile-parts">{t.parts.map(p => <div key={p.key}>{p.sales} {CCS_KIND_SHORT[p.key] || p.label}</div>)}</div>
-                      )}
 
                     </div>
 
-                  </div>
-
-                ))}
-
-              </div>
-
-            </div>
-
-            <div className="chart-card chart--weeks kpi-card">
-
-              <div className="chart-header kpi-header">
-
-                <div>
-
-                  <div className="kpi-label">
-
-                    Revenu cumulé&nbsp;({threeMonths.monthNames.m0.toUpperCase()} – N)
-
-                  </div>
-
-                  <div className="kpi-value">
-
-                    {threeMonths.sums.m0.toLocaleString("fr-FR")} €
-
-                  </div>
-
-                  <div className="kpi-sub">
-
-                    Comparé aux {threeMonths.currentDay} premiers jours de{" "}
-
-                    {threeMonths.monthNames.m1.toUpperCase()} (N-1)
-
-                  </div>
+                  ))}
 
                 </div>
 
-                <TrendBadge deltaAbs={deltaAbs} deltaPct={deltaPct} />
-
               </div>
 
-              <div className="chart-title-small">
+            )}
 
-                Performance des 3 derniers mois (revenu cumulé €/jour)
+            <div className="chart-card kpi-card chart--pace">
 
-              </div>
-
-              <div className="chart-body chart-body--glass">
-
-                <Line data={threeMonths.data} options={lineOptions} />
-
-              </div>
-
-              <div className="chart-key">
-
-                <span className="key">
-
-                  <i className="dot" style={{ background: COLORS.gray }} />{" "}
-
-                  {threeMonths.monthNames.m2.toUpperCase()} (N-2)
-
-                </span>
-
-                <span className="key">
-
-                  <i className="dot" style={{ background: COLORS.secondary }} />{" "}
-
-                  {threeMonths.monthNames.m1.toUpperCase()} (N-1)
-
-                </span>
-
-                <span className="key current">
-
-                  <i className="dot" style={{ background: COLORS.primary }} />{" "}
-
-                  {threeMonths.monthNames.m0.toUpperCase()} (N)
-
-                </span>
-
-              </div>
-
-              <div className="chart-footnote">
-
-                Lecture : chaque courbe représente le <strong>CA cumulé</strong> jour par jour.
-
-                On compare les {threeMonths.currentDay} premiers jours de chaque mois
-
-                (N, N-1, N-2).
-
-              </div>
+              <RevenuePace chart={chartSales} dark={darkMode} />
 
             </div>
 
