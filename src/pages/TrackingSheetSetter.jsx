@@ -14,6 +14,7 @@ import { originDisplay } from "../utils/sectors";
 import LeadsManagement from "./LeadsManagement.jsx";
 // ── Setter modales (Option B duplication intégrale TrackingSheet) ──────────
 import SetterJourneyDialog from "../components/setter/SetterJourneyDialog.jsx";
+import SetterRescheduleR1Dialog from "../components/setter/SetterRescheduleR1Dialog.jsx";
 import {Phone, CalendarDays, ChevronRight, UserSearch, ListChecks, UsersRound, Video, RotateCcw} from "lucide-react";
 import SecondChance from "../components/setter/secondChance/SecondChance.jsx";
 import ProspectSearch from "../components/setter/prospection/ProspectSearch.jsx";
@@ -6138,7 +6139,10 @@ export default function TrackingSheetSetter() {
                       border: `1px solid ${darkMode ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.12)'}`,
                     }}>
                       <span style={{ fontSize: 9, fontWeight: 700, color: '#3b82f6', textTransform: 'uppercase' }}>R1</span>
-                      <DateTimePicker value={toDatetimeLocal(lead.r1)} onChange={(val) => handleDateChange(lead.id, 'r1', val)} color="#3b82f6" C={C} darkMode={darkMode} />
+                      {/* Setter : le R1 se déplace par « Reporter » (agenda du commercial), pas en saisie libre. */}
+                      {isSetter
+                        ? <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{formatDateTimeFR(lead.r1)}</span>
+                        : <DateTimePicker value={toDatetimeLocal(lead.r1)} onChange={(val) => handleDateChange(lead.id, 'r1', val)} color="#3b82f6" C={C} darkMode={darkMode} />}
                     </div>
                   )}
                   {lead.r2 && (
@@ -6783,7 +6787,8 @@ export default function TrackingSheetSetter() {
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                           {wfPill('Lapin', '#f59e0b', rabbitIcon, 30, () => handleWorkflowSubmit(lead.id, { r1_result: 'no_show' }), true)}
-                          {wfPill('Reporter', '#3b82f6', '↻', 70, () => setActiveWorkflow(prev => ({ ...prev, r1Result: 'rescheduled', newDate: '' })))}
+                          {/* Setter (dev 13/10/2026) : report dans l'agenda du seul commercial du R1, créneaux libres uniquement. */}
+                          {wfPill('Reporter', '#3b82f6', '↻', 70, () => isSetter ? setSetterModal({ kind: 'rescheduleR1', lead }) : setActiveWorkflow(prev => ({ ...prev, r1Result: 'rescheduled', newDate: '' })))}
                           {wfPill('R1 effectué', '#10b981', '✓', 110, () => handleWorkflowSubmit(lead.id, { r1_result: 'done', r1_completed_at: new Date().toISOString() }))}
                           {wfPill('Annulé', '#ef4444', '✕', 150, () => handleWorkflowSubmit(lead.id, { r1_result: 'cancelled' }))}
                         </div>
@@ -8563,6 +8568,13 @@ export default function TrackingSheetSetter() {
       {showSetterAvailability && <SetterJourneyDialog browseOnly dark={darkMode} asSetter={urlParams.get('ghost') === 'true' ? viewingSheetId : null} onClose={() => setShowSetterAvailability(false)}/>}
       {isSetter && (
         <>
+          {setterModal?.kind === 'rescheduleR1' && <SetterRescheduleR1Dialog key={setterModal.lead.id} lead={setterModal.lead} dark={darkMode} onClose={() => setSetterModal(null)}
+            onConfirm={async (r1Date) => {
+              await apiClient.patch(`/api/v1/tracking/leads/${setterModal.lead.id}`, { r1_result: 'rescheduled', r1_date: r1Date });
+              setActiveWorkflow(null);
+              showSetterToast(`R1 reporté au ${formatDateTimeFR(r1Date)}.`);
+              refreshData().catch(() => {});
+            }}/>}
           {setterModal?.kind === 'qualify' && <SetterJourneyDialog key={setterModal.lead.id} lead={setterModal.lead} teamSales={teamSales} currentEmail={userMeta?.email} dark={darkMode} onClose={() => setSetterModal(null)} onSaved={message => {showSetterToast(message);refreshData().catch(() => {});}}/>}
           <CreateColdLeadModal
             open={setterModal?.kind === 'createCold'}
