@@ -57,7 +57,9 @@ const REQUIRED_TEAM = import.meta.env.VITE_SLACK_TEAM_ID || "";
 
 // Canaux d'acquisition du Suivi des ventes (clés de l'API /leaderboard, dev 13/10/2026).
 const CORE_CHANNELS = ["ads", "linkedin", "cold_call", "cold_call_setter", "referral", "webinar"];
-const CCS_KIND_SHORT = { cold_call: "cold call", second_chance: "seconde chance" };
+// Types du CCS (dev 13/10/2026) : lead créé par le setter, lead ads au R1 posé par un setter, reprise Seconde chance.
+const CCS_KIND_SHORT = { cold_call: "cold call", ads_setter: "ads traités", second_chance: "seconde chance" };
+const CCS_KIND_LABEL = { cold_call: "Cold call", ads_setter: "Lead ads traité", second_chance: "Seconde chance" };
 const CHANNEL_COLORS = {
   ads: "#6366f1", linkedin: "#0a66c2", cold_call: "#fb923c", cold_call_setter: "#e11d48",
   referral: "#10b981", webinar: "#8b5cf6", other: "#94a3b8",
@@ -2774,7 +2776,7 @@ export default function Leaderboard() {
 
                             <tr key={r.sale_id}>
 
-                              <td>{fmtDate(r.date)}</td><td>{r.client_name || "—"}</td><td>{r.sold_by || "—"}</td><td>{r.setter || "—"}</td>{current.key === "cold_call_setter" && <td>{r.ccs_kind === "second_chance" ? "Seconde chance" : "Cold call"}</td>}
+                              <td>{fmtDate(r.date)}</td><td>{r.client_name || "—"}</td><td>{r.sold_by || "—"}</td><td>{r.setter || "—"}</td>{current.key === "cold_call_setter" && <td>{CCS_KIND_LABEL[r.ccs_kind] || "—"}</td>}
 
                               <td>{r.origin || (r.declared_channel ? `Déclaré : ${r.declared_channel}` : "—")}</td>{current.key === "referral" && <td>{r.referrer || "—"}</td>}
 

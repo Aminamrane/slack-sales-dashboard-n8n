@@ -74,7 +74,11 @@ export default function ChannelBreakdown({ channels, colors, partLabels = {}, ac
                 <span className="cb-label">
                   {c.label}
                   {c.sales > 0 && parts.length > 0 && (
-                    <small>{parts.map(p => `${p.sales} ${partLabels[p.key] || p.label}`).join(' · ')}</small>
+                    <small>{parts.map((p, i) => (
+                      <React.Fragment key={p.key}>
+                        {i > 0 && ' · '}<span className="cb-part">{p.sales} {partLabels[p.key] || p.label}</span>
+                      </React.Fragment>
+                    ))}</small>
                   )}
                 </span>
                 <span className="cb-count">{c.sales}</span>
