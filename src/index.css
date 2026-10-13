@@ -576,6 +576,43 @@ body.dark-mode .tile-count {
   color: #9ba3af;
 }
 
+/* Canaux d'acquisition (Suivi des ventes) : tous les canaux tiennent dans la carte (hauteur fixe), 4 par ligne */
+.chart--channels canvas{ max-height:44%; }
+.gauge-tiles.gauge-tiles--channels{
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0, 1fr));
+  gap:.55rem .9rem;
+  justify-items:start;
+}
+.gauge-tiles--channels .gauge-tile{ justify-content:flex-start; min-width:0; gap:.45rem; }
+.gauge-tiles--channels .tile-dot{ width:12px; height:12px; flex:none; }
+.gauge-tiles--channels .tile-label{ font-size:.78rem; }
+.gauge-tiles--channels .tile-value{ font-size:.95rem; white-space:nowrap; }
+.gauge-tiles--channels .tile-count{ font-size:.72rem; margin-left:.15rem; }
+.gauge-tile--clickable{ cursor:pointer; border-radius:10px; padding:2px 4px; margin:-2px -4px; }
+.gauge-tile--clickable:hover, .gauge-tile--clickable.is-active{ background:rgba(99,102,241,.08); }
+
+/* Détail des ventes par canal (admins et CEO) */
+.chart-card.channel-detail{ flex:1 1 100%; overflow:visible; contain:none; }
+.channel-detail__head{ margin-bottom:.6rem; }
+.channel-detail__pills{ display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:.8rem; }
+.channel-pill{ display:inline-flex; align-items:center; gap:.4rem; padding:.35rem .7rem; border-radius:999px;
+  border:1px solid #e5e7eb; background:#fff; color:#374151; font:600 .8rem/1 inherit; cursor:pointer; }
+.channel-pill i{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+.channel-pill span{ color:#6b7280; font-weight:500; }
+.channel-pill.is-active{ border-color:#6366f1; background:#eef2ff; color:#3730a3; }
+.channel-detail__scroll{ width:100%; overflow-x:auto; }
+.channel-detail__table{ width:100%; border-collapse:collapse; font-size:.82rem; }
+.channel-detail__table th{ text-align:left; font-weight:600; color:#6b7280; font-size:.72rem; text-transform:uppercase;
+  letter-spacing:.04em; padding:.45rem .6rem; border-bottom:1px solid #e5e7eb; white-space:nowrap; }
+.channel-detail__table td{ padding:.5rem .6rem; border-bottom:1px solid #f1f5f9; color:#111827; vertical-align:top; }
+.channel-detail__table .num{ text-align:right; white-space:nowrap; }
+.channel-detail__empty{ color:#6b7280; font-size:.85rem; margin:.4rem 0 0; }
+body.dark-mode .channel-pill{ background:transparent; border-color:rgba(148,163,184,.4); color:#e5e7eb; }
+body.dark-mode .channel-pill.is-active{ background:rgba(99,102,241,.2); border-color:#818cf8; color:#e0e7ff; }
+body.dark-mode .channel-detail__table th{ color:#9ca3af; border-color:rgba(148,163,184,.3); }
+body.dark-mode .channel-detail__table td{ color:#e5e7eb; border-color:rgba(148,163,184,.15); }
+
 /* Health indicator badge */
 .health-indicator {
   display: inline-flex;
