@@ -572,6 +572,19 @@ button.cb-row{ cursor:pointer; }
   .cb{ grid-template-columns:1fr; }
 }
 
+/* Pilotage du mois (CEO et admins) sous la barre d'objectif : ventes / objectif, TR, on pace, jour d'atteinte. */
+.pace{ display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:.5rem 1.4rem; margin-top:12px;
+  --pace-text:#111827; --pace-muted:#6b7280; --pace-up:#047857; --pace-up-bg:#ecfdf5; --pace-down:#b91c1c; --pace-down-bg:#fef2f2; }
+body.dark-mode .pace{ --pace-text:#e5e7eb; --pace-muted:#9ca3af; --pace-up:#6ee7b7; --pace-up-bg:rgba(16,185,129,.14);
+  --pace-down:#fca5a5; --pace-down-bg:rgba(239,68,68,.14); }
+.pace-kpi{ display:flex; align-items:baseline; gap:.4rem; }
+.pace-kpi span{ font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--pace-muted); }
+.pace-kpi strong{ font-size:17px; font-weight:800; color:var(--pace-text); font-variant-numeric:tabular-nums; }
+.pace-kpi em{ font-style:normal; font-size:13px; font-weight:600; color:var(--pace-muted); margin-left:1px; }
+.pace-reach{ font-size:12px; font-weight:700; padding:.22rem .65rem; border-radius:999px; color:var(--pace-muted); background:rgba(148,163,184,.12); }
+.pace-reach.is-up{ color:var(--pace-up); background:var(--pace-up-bg); }
+.pace-reach.is-down{ color:var(--pace-down); background:var(--pace-down-bg); }
+
 /* Rythme du mois (Suivi des ventes) : revenu signé au même jour que les mois précédents + projection. */
 .chart-card.chart--pace{ height: var(--card-h-lg); display:flex; --rp-text:#111827; --rp-muted:#6b7280; --rp-up:#047857;
   --rp-up-bg:#ecfdf5; --rp-down:#b91c1c; --rp-down-bg:#fef2f2; --rp-line:#e5e7eb; }

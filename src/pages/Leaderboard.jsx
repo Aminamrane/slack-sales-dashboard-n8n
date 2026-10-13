@@ -39,6 +39,7 @@ import flameIcon from "../assets/flame.png";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import ChannelBreakdown from "../components/leaderboard/ChannelBreakdown.jsx";
 import RevenuePace from "../components/leaderboard/RevenuePace.jsx";
+import PacePanel from "../components/leaderboard/PacePanel.jsx";
 
 import Chart from "chart.js/auto";
 
@@ -2424,6 +2425,10 @@ export default function Leaderboard() {
               }} />
             </div>
           </div>
+          {/* Pilotage du mois en cours (CEO et admins) : ventes / objectif, TR, on pace, jour d'atteinte. */}
+          {canSeeChannelDetail && viewingMonth === new Date().toISOString().slice(0, 7) && monthlyObjectives[viewingMonth] && (
+            <PacePanel sales={totals.ventes} objective={monthlyObjectives[viewingMonth]} />
+          )}
         </div>
 
         {/* ── KPI Cards Row ── */}

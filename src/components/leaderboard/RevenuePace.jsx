@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Line } from 'react-chartjs-2';
+import { monthClock, projectToMonthEnd } from '../../utils/salesPace';
 
 // Rythme du mois (dev 13/10/2026) : où en est le mois, comparé aux deux précédents AU MÊME JOUR, et où il finira au
 // rythme actuel. Données : /api/v1/leaderboard/chart (cumul jour par jour de chaque mois, `current_day`).
@@ -69,7 +70,8 @@ export default function RevenuePace({ chart, dark = false }) {
     const daysInMonth = n0.length || 31;
     const day = Math.min(chart.current_day || new Date().getDate(), daysInMonth);
     const today = valueAt(n0, day), previous = valueAt(n1, day), older = valueAt(n2, day);
-    const projected = day > 0 ? (today / day) * daysInMonth : today;
+    // Rythme sur le temps réellement écoulé (heure de Paris), même règle que le bandeau objectif.
+    const projected = projectToMonthEnd(today, { ...monthClock(), daysInMonth }) ?? today;
     const previousTotal = n1.length ? n1[n1.length - 1] : 0;
     const length = Math.max(daysInMonth, n1.length, n2.length);
     const projection = Array.from({ length }, (_, i) =>
