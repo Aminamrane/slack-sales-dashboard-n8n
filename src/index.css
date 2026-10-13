@@ -576,24 +576,38 @@ body.dark-mode .tile-count {
   color: #9ba3af;
 }
 
-/* Canaux d'acquisition (Suivi des ventes) : tous les canaux tiennent dans la carte (hauteur fixe), 4 par ligne */
-.chart--channels canvas{ max-height:34%; }
-.gauge-tiles.gauge-tiles--channels{
-  display:grid;
-  grid-template-columns:repeat(4, minmax(0, 1fr));
-  gap:.45rem .9rem;
-  justify-items:start;
-  align-items:start;
+/* Canaux d'acquisition (Suivi des ventes) : jauge SVG + légende alignée, dans la hauteur fixe de la carte. */
+.chart-card.chart--channels{ height: var(--card-h-lg); display:flex; flex-direction:column; --cb-text:#111827; --cb-muted:#6b7280;
+  --cb-track:#eef2ff; --cb-row-hover:rgba(99,102,241,.07); --cb-bar:#f1f5f9; }
+body.dark-mode .chart-card.chart--channels{ --cb-text:#e5e7eb; --cb-muted:#9ca3af; --cb-track:rgba(148,163,184,.14);
+  --cb-row-hover:rgba(129,140,248,.14); --cb-bar:rgba(148,163,184,.15); }
+.cb-head{ text-align:center; margin-bottom:.4rem; }
+.cb{ flex:1; min-height:0; display:grid; grid-template-columns:minmax(150px, .85fr) 1.15fr; gap:1.1rem; align-items:center; }
+.cb-gauge svg{ width:100%; max-width:280px; display:block; margin:0 auto; overflow:visible; }
+.cb-track{ fill:none; stroke:var(--cb-track); stroke-width:20; }
+.cb-seg{ stroke-width:20; cursor:pointer; }
+.cb-seg.is-hover{ stroke-width:24; }
+.cb-seg.is-dim{ opacity:.35; }
+.cb-total{ text-anchor:middle; font-size:34px; font-weight:800; fill:var(--cb-text); font-variant-numeric:tabular-nums; }
+.cb-unit{ text-anchor:middle; font-size:11px; font-weight:500; fill:var(--cb-muted); }
+.cb-legend{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:1px; }
+.cb-row{ width:100%; display:grid; grid-template-columns:10px minmax(0,1fr) 2ch 48px 3.8ch; align-items:center; gap:.5rem;
+  padding:.32rem .5rem; border:0; border-radius:9px; background:transparent; color:var(--cb-text); font:inherit; text-align:left;
+  transition:background .18s ease, opacity .18s ease; }
+button.cb-row{ cursor:pointer; }
+.cb-row.is-hover, .cb-row.is-active{ background:var(--cb-row-hover); }
+.cb-row.is-zero{ opacity:.45; }
+.cb-dot{ width:10px; height:10px; border-radius:50%; }
+.cb-label{ font-size:.84rem; font-weight:600; line-height:1.15; min-width:0; }
+.cb-label small{ display:block; font-size:.7rem; font-weight:500; color:var(--cb-muted); margin-top:1px; }
+.cb-count{ font-size:.95rem; font-weight:800; text-align:right; font-variant-numeric:tabular-nums; }
+.cb-bar{ height:6px; border-radius:999px; background:var(--cb-bar); overflow:hidden; }
+.cb-bar i{ display:block; height:100%; border-radius:inherit; }
+.cb-pct{ font-size:.75rem; color:var(--cb-muted); text-align:right; font-variant-numeric:tabular-nums; }
+@media (max-width: 640px){
+  .chart-card.chart--channels{ height:auto; }
+  .cb{ grid-template-columns:1fr; }
 }
-.gauge-tiles--channels .gauge-tile{ justify-content:flex-start; min-width:0; gap:.45rem; }
-.gauge-tiles--channels .tile-dot{ width:12px; height:12px; flex:none; }
-.gauge-tiles--channels .tile-label{ font-size:.78rem; }
-.gauge-tiles--channels .tile-value{ font-size:.95rem; white-space:nowrap; }
-.gauge-tiles--channels .tile-count{ font-size:.72rem; margin-left:.15rem; }
-.gauge-tiles--channels .tile-parts{ font-size:.68rem; line-height:1.25; color:#6b7280; margin-top:.15rem; }
-body.dark-mode .gauge-tiles--channels .tile-parts{ color:#9ca3af; }
-.gauge-tile--clickable{ cursor:pointer; border-radius:10px; padding:2px 4px; margin:-2px -4px; }
-.gauge-tile--clickable:hover, .gauge-tile--clickable.is-active{ background:rgba(99,102,241,.08); }
 
 /* Détail des ventes par canal (admins et CEO) */
 .chart-card.channel-detail{ flex:1 1 100%; overflow:visible; contain:none; }

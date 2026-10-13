@@ -37,6 +37,7 @@ import airportFont from "../assets/Airport.otf";
 import shipIcon from "../assets/ship.png";
 import flameIcon from "../assets/flame.png";
 import SharedNavbar from "../components/SharedNavbar.jsx";
+import ChannelBreakdown from "../components/leaderboard/ChannelBreakdown.jsx";
 
 import Chart from "chart.js/auto";
 
@@ -1802,36 +1803,50 @@ export default function Leaderboard() {
 
   // ── Acquisition gauge ───────────────────────────────────────────────────────
 
+  // Jauge de secours : canal déclaré par les sales, tant que l'API ne sert pas `channels` (ancienne image).
   const gauge = useMemo(() => {
 
-    // Canaux d'acquisition (dev 13/10/2026) : canal = origine réelle du lead de chaque vente, calculé par l'API.
-    // Les six canaux suivis sont toujours affichés, même à zéro ; Autre seulement s'il compte (Konket et Lead Club = Ads).
-    // Repli sur le canal déclaré (ancienne API) tant que le champ `channels` n'est pas servi.
-    const fromApi = channels.length > 0;
-    const entries = fromApi
-      ? channels.filter(c => CORE_CHANNELS.includes(c.key) || c.sales > 0).map(c => [c.label, c.sales, CHANNEL_COLORS[c.key], c.key, c.breakdown || []])
-      : Object.entries(tunnelStats).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([l, v], i) => {
-          const label = /^ads$/i.test(l) ? "ADS" : /^cc$/i.test(l) ? "CC" : /link/i.test(l) ? "LinkedIn" : l;
-          const color = label === "ADS" ? COLORS.primary : label === "CC" ? COLORS.secondary : label === "LinkedIn" ? COLORS.tertiary
-            : [COLORS.primary, COLORS.secondary, COLORS.tertiary][i] || COLORS.gray;
-          return [label, v, color, null, []];
-        });
+    const entries = Object.entries(tunnelStats);
 
-    const total = fromApi ? channels.reduce((sum, c) => sum + c.sales, 0) : entries.reduce((sum, [, v]) => sum + v, 0);
+    const total = entries.reduce((s, [,v]) => s + v, 0) || 1;
 
-    const labels = entries.map(([l]) => l);
+    const top3 = entries.sort((a,b) => b[1] - a[1]).slice(0, 3);
 
-    const counts = entries.map(([, v]) => v);
+    
+    
+    const display = (l) => {
 
-    const pct = counts.map(v => (total ? (v / total) * 100 : 0));
+      if (/^ads$/i.test(l)) return "ADS";
 
-    const colors = entries.map(([, , c]) => c);
+      if (/^cc$/i.test(l)) return "CC";
+
+      if (/link/i.test(l)) return "LinkedIn";
+
+      return l;
+
+    };
+
+    
+    
+    const labels = top3.map(([l]) => display(l));
+
+    const counts = top3.map(([,v]) => v);
+
+    const pct = counts.map(v => (v / total) * 100);
+
+    const colors = labels.map((lbl, i) => {
+
+      if (lbl === "ADS") return COLORS.primary;
+
+      if (lbl === "CC")  return COLORS.secondary;
+
+      if (lbl === "LinkedIn") return COLORS.tertiary;
+
+      return [COLORS.primary, COLORS.secondary, COLORS.tertiary][i] || COLORS.gray;
+
+    });
 
     const tiles = labels.map((l, i) => ({
-
-      key: entries[i][3],
-
-      parts: entries[i][4],
 
       label: l,
 
@@ -1854,8 +1869,6 @@ export default function Leaderboard() {
     return {
 
       total,
-
-      fromApi,
 
       main,
 
@@ -1913,7 +1926,13 @@ export default function Leaderboard() {
 
     };
 
-  }, [channels, tunnelStats, darkMode]);
+  }, [tunnelStats, darkMode]);
+
+  // Canaux d'acquisition réels (dev 13/10/2026) : les six suivis toujours, Autre seulement s'il compte.
+  const shownChannels = useMemo(
+    () => channels.filter(c => CORE_CHANNELS.includes(c.key) || c.sales > 0),
+    [channels],
+  );
 
   const gaugeOptions = useMemo(() => ({
 
@@ -2913,61 +2932,72 @@ export default function Leaderboard() {
 
             {/* FIX: Utiliser les mêmes classes que la carte KPI */}
 
-            <div className={`chart-card kpi-card chart--gauge${gauge.fromApi ? " chart--channels" : ""}`}>
+            {shownChannels.length > 0 ? (
 
-              <div className="gauge-header">
+              <div className="chart-card kpi-card chart--channels">
 
-                <div className="gauge-title">{gauge.fromApi ? "Canaux d'acquisition" : "Tunnel d'acquisition"}</div>
+                <div className="cb-head">
 
-                <div className="gauge-subtitle">
+                  <div className="gauge-title">Canaux d'acquisition</div>
 
-                  {gauge.fromApi
-                    ? `${gauge.total} vente${gauge.total > 1 ? "s" : ""} · origine du lead, CCS si un setter a posé ou reprogrammé le R1`
-                    : `Top 3 canaux – ${gauge.total} dossiers`}
+                  <div className="gauge-subtitle">Origine du lead · CCS si un setter a posé ou reprogrammé le R1</div>
+
+                </div>
+
+                <ChannelBreakdown channels={shownChannels} colors={CHANNEL_COLORS} partLabels={CCS_KIND_SHORT}
+                  activeKey={channelDetail ? detailChannel : null} onSelect={channelDetail ? setDetailChannel : null} />
+
+              </div>
+
+            ) : (
+
+              <div className="chart-card kpi-card chart--gauge">
+
+                <div className="gauge-header">
+
+                  <div className="gauge-title">Tunnel d'acquisition</div>
+
+                  <div className="gauge-subtitle">
+
+                    Top 3 canaux – {gauge.total} dossiers
+
+                  </div>
+
+                </div>
+
+                <Doughnut data={gauge.data} options={gaugeOptions} />
+
+                <div className="gauge-sep" />
+
+                <div className="gauge-tiles">
+
+                  {gauge.tiles.map((t) => (
+
+                    <div key={t.label} className="gauge-tile">
+
+                      <span className="tile-dot" style={{ background: t.color }} />
+
+                      <div className="tile-text">
+
+                        <div className="tile-label">{t.label}</div>
+
+                        <div className="tile-value">
+
+                          {Math.round(t.pct)}% <span className="tile-count">({t.count} dossiers)</span>
+
+                        </div>
+
+                      </div>
+
+                    </div>
+
+                  ))}
 
                 </div>
 
               </div>
 
-              <Doughnut data={gauge.data} options={gaugeOptions} />
-
-              <div className="gauge-sep" />
-
-              <div className={`gauge-tiles${gauge.fromApi ? " gauge-tiles--channels" : ""}`}>
-
-                {gauge.tiles.map((t) => (
-
-                  <div key={t.label} className={`gauge-tile${channelDetail && t.key ? " gauge-tile--clickable" : ""}${channelDetail && t.key === detailChannel ? " is-active" : ""}`}
-                    role={channelDetail && t.key ? "button" : undefined} tabIndex={channelDetail && t.key ? 0 : undefined}
-                    onClick={channelDetail && t.key ? () => setDetailChannel(t.key) : undefined}
-                    onKeyDown={channelDetail && t.key ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetailChannel(t.key); } } : undefined}>
-
-                    <span className="tile-dot" style={{ background: t.color }} />
-
-                    <div className="tile-text">
-
-                      <div className="tile-label">{t.label}</div>
-
-                      <div className="tile-value">
-
-                        {gauge.fromApi
-                          ? <>{t.count} vente{t.count > 1 ? "s" : ""} <span className="tile-count">{Math.round(t.pct)} %</span></>
-                          : <>{Math.round(t.pct)}% <span className="tile-count">({t.count} dossiers)</span></>}
-                      </div>
-                      {/* CCS en global, détaillé : cold call setter / Seconde chance setter (dev 13/10/2026). */}
-                      {t.count > 0 && t.parts?.length > 0 && (
-                        <div className="tile-parts">{t.parts.map(p => <div key={p.key}>{p.sales} {CCS_KIND_SHORT[p.key] || p.label}</div>)}</div>
-                      )}
-
-                    </div>
-
-                  </div>
-
-                ))}
-
-              </div>
-
-            </div>
+            )}
 
             <div className="chart-card chart--weeks kpi-card">
 
