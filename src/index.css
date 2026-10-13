@@ -440,37 +440,12 @@ body.dark-mode .board-frame {
   contain: layout paint;
 }
 
-.chart--weeks{
-  display:flex; flex-direction:column; overflow:hidden;
-}
-.chart--weeks .chart-header{
-  display:flex; align-items:center; justify-content:space-between;
-  margin-bottom:.35rem;
-}
-.chart--weeks .chart-title{ font-weight:600; font-size:1.05rem; }
-.chart--weeks .chart-body{ flex:1; min-height:0; }
-.chart--weeks .chart-key{
-  display:flex; gap:1rem; align-items:center;
-  padding-top:.35rem; font-size:.85rem; color:#6b7280;
-  flex-wrap:wrap;
-}
-
 .key{ display:flex; align-items:center; gap:.4rem; }
 .key.current{ font-weight:700; color:#111; }
 .dot{ width:.6rem; height:.6rem; border-radius:50%; display:inline-block; }
 .dot-w2{ background:#6b7280; }
 .dot-w1{ background:#ef4444; }
 .dot-w0{ background:#1d4ed8; }
-
-.trend-badge{
-  display:inline-block; background:#f3f4f6; border-radius:.65rem;
-  padding:.45rem .7rem; line-height:1.1; width:fit-content;
-  max-width: var(--trend-badge-max); white-space:nowrap;
-  font-weight:700; font-size:.95rem;
-}
-.trend-up{   color:#16a34a; }
-.trend-down{ color:#dc2626; }
-.trend-flat{ color:#6b7280; }
 
 .chart--full{
   flex:1 1 100%;
@@ -499,18 +474,6 @@ body.dark-mode .board-frame {
   max-height:58%; 
   display:block; 
 }
-
-.chart--weeks{
-  height: var(--card-h-lg);
-  display:flex; flex-direction:column;
-}
-
-.chart-key{
-  display:flex; gap:1rem; align-items:center;
-  padding-top:.35rem; font-size:.85rem; color:#6b7280; flex-wrap:wrap;
-}
-
-.trend-badge .row{ display:block; }
 
 .chart--full{ flex:1 1 100%; height: var(--card-h-sm); }
 
@@ -609,6 +572,34 @@ button.cb-row{ cursor:pointer; }
   .cb{ grid-template-columns:1fr; }
 }
 
+/* Rythme du mois (Suivi des ventes) : revenu signé au même jour que les mois précédents + projection. */
+.chart-card.chart--pace{ height: var(--card-h-lg); display:flex; --rp-text:#111827; --rp-muted:#6b7280; --rp-up:#047857;
+  --rp-up-bg:#ecfdf5; --rp-down:#b91c1c; --rp-down-bg:#fef2f2; --rp-line:#e5e7eb; }
+body.dark-mode .chart-card.chart--pace{ --rp-text:#e5e7eb; --rp-muted:#9ca3af; --rp-up:#6ee7b7; --rp-up-bg:rgba(16,185,129,.14);
+  --rp-down:#fca5a5; --rp-down-bg:rgba(239,68,68,.14); --rp-line:rgba(148,163,184,.25); }
+.rp{ flex:1; min-width:0; display:flex; flex-direction:column; color:var(--rp-text); }
+.rp-empty{ margin:auto; color:var(--rp-muted); font-size:.85rem; }
+.rp-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; }
+.rp-label{ font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--rp-muted); }
+.rp-value{ font-size:28px; font-weight:800; line-height:1.1; font-variant-numeric:tabular-nums; margin-top:2px; }
+.rp-sub{ font-size:12px; color:var(--rp-muted); margin-top:2px; }
+.rp-projection{ text-align:right; display:flex; flex-direction:column; gap:1px; }
+.rp-projection span{ font-size:11px; color:var(--rp-muted); }
+.rp-projection strong{ font-size:17px; font-weight:800; font-variant-numeric:tabular-nums; }
+.rp-projection small{ font-size:11px; color:var(--rp-muted); }
+.rp-chips{ display:flex; flex-wrap:wrap; gap:.4rem; margin:.6rem 0 .2rem; }
+.rp-chip{ display:inline-flex; align-items:center; gap:.4rem; padding:.28rem .6rem; border-radius:999px; font-size:12px;
+  color:var(--rp-muted); background:var(--rp-line); }
+.rp-chip i{ width:8px; height:8px; border-radius:50%; }
+.rp-chip b{ font-weight:800; }
+.rp-chip.is-up{ background:var(--rp-up-bg); } .rp-chip.is-up b{ color:var(--rp-up); }
+.rp-chip.is-down{ background:var(--rp-down-bg); } .rp-chip.is-down b{ color:var(--rp-down); }
+.rp-chart{ flex:1; min-height:0; position:relative; }
+.rp-key{ display:flex; flex-wrap:wrap; gap:.9rem; font-size:11px; color:var(--rp-muted); margin-top:.35rem; }
+.rp-key span{ display:inline-flex; align-items:center; gap:.35rem; }
+.rp-key i{ width:14px; height:3px; border-radius:2px; display:inline-block; }
+.rp-key i.is-dashed{ height:0; border-top:2px dashed; background:none; }
+
 /* Détail des ventes par canal (admins et CEO) */
 .chart-card.channel-detail{ flex:1 1 100%; overflow:visible; contain:none; }
 .channel-detail__head{ margin-bottom:.6rem; }
@@ -688,14 +679,6 @@ body.dark-mode .kpi-card {
   box-shadow: 0 22px 45px rgba(15, 23, 42, 0.75);
 }
 
-.kpi-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 8px;
-}
-
 .kpi-label {
   font-size: 12px;
   text-transform: uppercase;
@@ -724,39 +707,6 @@ body.dark-mode .kpi-value {
 }
 
 body.dark-mode .kpi-sub {
-  color: #9ca3af;
-}
-
-.chart-title-small {
-  font-size: 13px;
-  color: #374151;
-  opacity: 0.8;
-  margin-bottom: 8px;
-}
-
-body.dark-mode .chart-title-small {
-  color: #e5e7eb;
-}
-
-.chart-body--glass {
-  position: relative;
-  border-radius: 18px;
-  padding: 4px 6px 0;
-  background: #f9fafb;
-}
-
-body.dark-mode .chart-body--glass {
-  background: radial-gradient(circle at top, rgba(15, 23, 42, 0.95), transparent);
-}
-
-.chart-footnote {
-  margin-top: 8px;
-  font-size: 11px;
-  color: #6b7280;
-  opacity: 0.9;
-}
-
-body.dark-mode .chart-footnote {
   color: #9ca3af;
 }
 
@@ -1027,19 +977,6 @@ body.dark-mode .kpi-sub {
   color: #8b8fa0 !important;
 }
 
-body.dark-mode .chart-title-small {
-  color: #eef0f6 !important;
-}
-
-body.dark-mode .chart-body--glass {
-  background: #1e1f28 !important;
-  border: 1px solid #2a2b36 !important;
-}
-
-body.dark-mode .chart-footnote {
-  color: #8b8fa0 !important;
-}
-
 /* Gauge */
 body.dark-mode .gauge-title {
   color: #eef0f6 !important;
@@ -1062,36 +999,6 @@ body.dark-mode .tile-value {
 }
 
 body.dark-mode .tile-count {
-  color: #8b8fa0 !important;
-}
-
-/* Trend badges - SaaS palette */
-body.dark-mode .trend-badge {
-  background: #1e1f28 !important;
-  border: 1px solid #2a2b36 !important;
-  color: #eef0f6 !important;
-}
-
-body.dark-mode .trend-badge.trend-up {
-  background: rgba(50, 215, 75, 0.15) !important;
-  border-color: rgba(50, 215, 75, 0.3) !important;
-  color: #32d74b !important; /* green */
-}
-
-body.dark-mode .trend-badge.trend-down {
-  background: rgba(255, 69, 58, 0.15) !important;
-  border-color: rgba(255, 69, 58, 0.3) !important;
-  color: #ff453a !important; /* red */
-}
-
-body.dark-mode .trend-badge.trend-flat {
-  background: #1e1f28 !important;
-  border-color: #2a2b36 !important;
-  color: #8b8fa0 !important;
-}
-
-/* Chart key */
-body.dark-mode .chart-key {
   color: #8b8fa0 !important;
 }
 
@@ -1330,34 +1237,6 @@ body {
   color: #1e2330 !important;
 }
 
-/* Trend badge - Plus élégant */
-.trend-badge {
-  background: #eef0f6 !important;
-  border: 1px solid #e2e6ef !important;
-  border-radius: 10px !important;
-  padding: 8px 14px !important;
-  font-weight: 600 !important;
-}
-
-.trend-badge.trend-up {
-  background: #e8f7ee !important;
-  color: #30d158 !important;
-  border-color: #c3ecd0 !important;
-}
-
-.trend-badge.trend-down {
-  background: #ffe8e8 !important;
-  color: #ff3b30 !important;
-  border-color: #ffc9c9 !important;
-}
-
-/* Chart glass background */
-.chart-body--glass {
-  background: #f9fafd !important;
-  border-radius: 16px !important;
-  border: 1px solid #eef1f6 !important;
-}
-
 /* Avatar - Bordure plus subtile */
 .avatar {
   border: 2px solid #eef0f6 !important;
@@ -1488,11 +1367,6 @@ body.dark-mode .kpi-value,
 body.dark-mode .tile-value,
 body.dark-mode .tile-label {
   color: #eef0f6 !important;
-}
-
-body.dark-mode .chart-body--glass {
-  background: #1e1f28 !important;
-  border-color: #2a2b36 !important;
 }
 
 /* FORCE Sales alignment - CENTRER SOUS LE MOT */
