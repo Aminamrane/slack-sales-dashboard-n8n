@@ -563,6 +563,7 @@ button.cb-row{ cursor:pointer; }
 .cb-dot{ width:10px; height:10px; border-radius:50%; }
 .cb-label{ font-size:.84rem; font-weight:600; line-height:1.15; min-width:0; }
 .cb-label small{ display:block; font-size:.7rem; font-weight:500; color:var(--cb-muted); margin-top:1px; }
+.cb-part{ white-space:nowrap; }
 .cb-count{ font-size:.95rem; font-weight:800; text-align:right; font-variant-numeric:tabular-nums; }
 .cb-bar{ height:6px; border-radius:999px; background:var(--cb-bar); overflow:hidden; }
 .cb-bar i{ display:block; height:100%; border-radius:inherit; }
