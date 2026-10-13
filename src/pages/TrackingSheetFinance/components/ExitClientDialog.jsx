@@ -245,10 +245,11 @@ export default function ExitClientDialog({
   const submitEtat = () => run('etat', async () => {
     const result = await onEtatChange({ etat, etat_date: effectiveDate || null });
     if (result?.error) throw new Error(result.error);
+    if (result?.cancelled) return;
     // Confirmation explicite (retour dev 2026-08-28) : acter un état est une
     // décision lourde, on ne se contente pas de refermer une liste. On répète
     // ce qui a été posé ET quand ça prendra effet — la nuance qui compte.
-    setEtatDone({ etat, date: result?.etat_date || effectiveDate });
+    setEtatDone({ etat, date: result?.etat_date || effectiveDate, financeProcessed: result?.finance_review?.status === 'processed' });
     // Fin de facturation : seulement si elle diffère de la règle automatique
     // (ou si un choix existait déjà et qu'on le change).
     if (billingChoice && onBillingStop && chosenLastBilled && (chosenLastBilled !== defaultLastBilled || billingLastMonth)) {
@@ -352,7 +353,7 @@ export default function ExitClientDialog({
                   {etatDone.date && new Date(etatDone.date) > new Date()
                     ? <>Le client basculera le {formatDateFR(etatDone.date)} ; d’ici là il reste actif.</>
                     : <>Effective depuis le {formatDateFR(etatDone.date)}.</>}
-                  {etatDone.etat === 'Rétractation' && ' Déclaration enregistrée. La finance doit maintenant traiter les conséquences financières dans la fiche client.'}
+                  {etatDone.financeProcessed ? ' Décision appliquée en Finance.' : etatDone.etat === 'Rétractation' && ' Déclaration enregistrée. La finance doit maintenant traiter les conséquences financières dans la fiche client.'}
                 </span>
               </motion.div>
             )}

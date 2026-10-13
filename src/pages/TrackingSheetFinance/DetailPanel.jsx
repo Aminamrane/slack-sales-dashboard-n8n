@@ -801,7 +801,11 @@ export default function DetailPanel({
               // L'état du client (Signé, résiliation…) est une décision
               // engageante : direction financière et direction seulement.
               canEditEtat={canEditMoney}
-              onBoardEtatChange={onBoardEtatChange}
+              onBoardEtatChange={async (...args) => {
+                const result = await onBoardEtatChange?.(...args);
+                if (result && !result.error && !result.cancelled) reloadAfterExit();
+                return result;
+              }}
               onActedEtat={openExit}
               clientId={clientId}
               profile={profile}

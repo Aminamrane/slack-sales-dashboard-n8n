@@ -1,3 +1,5 @@
+import { confirmBoardFinanceExit } from '../../components/BoardFinanceExitDialog.jsx';
+import { requiresExitDecision } from '../../utils/boardFinanceExit.js';
 // TrackingSheetFinance/index.jsx — Tracking Finance page (production).
 //
 // Plugged into the new backend (Phase 1+2) :
@@ -1003,7 +1005,12 @@ export default function TrackingSheetFinance() {
   // `changeEtat` d'OptilexBoard : optimiste + ROLLBACK si le POST échoue, les
   // dates de pause ne valent que pour « Pause ». L'historique (auteur inclus)
   // est écrit côté backend par l'endpoint — rien à faire ici.
-  const onBoardEtatChange = useCallback(async (numero, { etat = null, etat_date = null, pause_end_date = null, pause_relance_date = null }) => {
+  const onBoardEtatChange = useCallback(async (numero, payload) => {
+    if (requiresExitDecision(apiClient.getUser()?.role, payload.etat)) {
+      payload = await confirmBoardFinanceExit(numero, payload);
+      if (!payload) return { cancelled: true };
+    }
+    const { etat = null, etat_date = null, pause_end_date = null, pause_relance_date = null, finance_decision = null } = payload;
     if (!numero) return;
     const pe = etat === 'Pause' ? pause_end_date : null;
     const pr = etat === 'Pause' ? pause_relance_date : null;
@@ -1019,7 +1026,7 @@ export default function TrackingSheetFinance() {
     });
     try {
       const response = await apiClient.post('/api/v1/optilex/etat-change', {
-        numero_client: numero, etat, etat_date, pause_end_date: pe, pause_relance_date: pr,
+        numero_client: numero, etat, etat_date, pause_end_date: pe, pause_relance_date: pr, finance_decision,
       });
       setBoardMap((prev) => {
         const next = new Map(prev || []);
