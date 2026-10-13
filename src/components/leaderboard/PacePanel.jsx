@@ -11,10 +11,12 @@ export default function PacePanel({ sales, objective }) {
   const clock = monthClock();
   const pace = salesPace({ sales, objective, clock });
   const perDay = clock.elapsed > 0 ? sales / clock.elapsed : 0;
+  // 80 est un objectif, pas un plafond (dev 13/10/2026) : au-delà, on affiche l'avance ; en dessous, ce qui manque.
+  const ahead = pace.onPace != null ? pace.onPace - objective : null;
   const reach = {
-    reached: { label: 'Objectif atteint', tone: 'is-up' },
-    on_track: { label: `Objectif vers le ${pace.reachDay} ${MONTH()}`, tone: 'is-up' },
-    behind: { label: `Objectif hors d'atteinte à ce rythme (manque ${Math.max(0, objective - (pace.onPace ?? 0))})`, tone: 'is-down' },
+    reached: { label: `Objectif atteint${sales > objective ? ` (+${sales - objective})` : ''}`, tone: 'is-up' },
+    on_track: { label: `Objectif vers le ${pace.reachDay} ${MONTH()}${ahead > 0 ? ` · +${ahead} à ce rythme` : ''}`, tone: 'is-up' },
+    behind: { label: `À ce rythme : ${pace.onPace} ventes, il en manquerait ${Math.max(0, objective - (pace.onPace ?? 0))}`, tone: 'is-down' },
     too_early: { label: 'Projection dès midi le 1er', tone: '' },
   }[pace.status];
 
