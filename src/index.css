@@ -577,18 +577,21 @@ body.dark-mode .tile-count {
 }
 
 /* Canaux d'acquisition (Suivi des ventes) : tous les canaux tiennent dans la carte (hauteur fixe), 4 par ligne */
-.chart--channels canvas{ max-height:44%; }
+.chart--channels canvas{ max-height:34%; }
 .gauge-tiles.gauge-tiles--channels{
   display:grid;
   grid-template-columns:repeat(4, minmax(0, 1fr));
-  gap:.55rem .9rem;
+  gap:.45rem .9rem;
   justify-items:start;
+  align-items:start;
 }
 .gauge-tiles--channels .gauge-tile{ justify-content:flex-start; min-width:0; gap:.45rem; }
 .gauge-tiles--channels .tile-dot{ width:12px; height:12px; flex:none; }
 .gauge-tiles--channels .tile-label{ font-size:.78rem; }
 .gauge-tiles--channels .tile-value{ font-size:.95rem; white-space:nowrap; }
 .gauge-tiles--channels .tile-count{ font-size:.72rem; margin-left:.15rem; }
+.gauge-tiles--channels .tile-parts{ font-size:.68rem; line-height:1.25; color:#6b7280; margin-top:.15rem; }
+body.dark-mode .gauge-tiles--channels .tile-parts{ color:#9ca3af; }
 .gauge-tile--clickable{ cursor:pointer; border-radius:10px; padding:2px 4px; margin:-2px -4px; }
 .gauge-tile--clickable:hover, .gauge-tile--clickable.is-active{ background:rgba(99,102,241,.08); }
 

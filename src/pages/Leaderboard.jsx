@@ -54,6 +54,7 @@ const REQUIRED_TEAM = import.meta.env.VITE_SLACK_TEAM_ID || "";
 
 // Canaux d'acquisition du Suivi des ventes (clés de l'API /leaderboard, dev 13/10/2026).
 const CORE_CHANNELS = ["ads", "linkedin", "cold_call", "cold_call_setter", "referral", "webinar"];
+const CCS_KIND_SHORT = { cold_call: "cold call", second_chance: "seconde chance" };
 const CHANNEL_COLORS = {
   ads: "#6366f1", linkedin: "#0a66c2", cold_call: "#fb923c", cold_call_setter: "#e11d48",
   referral: "#10b981", webinar: "#8b5cf6", other: "#94a3b8",
@@ -1808,12 +1809,12 @@ export default function Leaderboard() {
     // Repli sur le canal déclaré (ancienne API) tant que le champ `channels` n'est pas servi.
     const fromApi = channels.length > 0;
     const entries = fromApi
-      ? channels.filter(c => CORE_CHANNELS.includes(c.key) || c.sales > 0).map(c => [c.label, c.sales, CHANNEL_COLORS[c.key], c.key])
+      ? channels.filter(c => CORE_CHANNELS.includes(c.key) || c.sales > 0).map(c => [c.label, c.sales, CHANNEL_COLORS[c.key], c.key, c.breakdown || []])
       : Object.entries(tunnelStats).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([l, v], i) => {
           const label = /^ads$/i.test(l) ? "ADS" : /^cc$/i.test(l) ? "CC" : /link/i.test(l) ? "LinkedIn" : l;
           const color = label === "ADS" ? COLORS.primary : label === "CC" ? COLORS.secondary : label === "LinkedIn" ? COLORS.tertiary
             : [COLORS.primary, COLORS.secondary, COLORS.tertiary][i] || COLORS.gray;
-          return [label, v, color, null];
+          return [label, v, color, null, []];
         });
 
     const total = fromApi ? channels.reduce((sum, c) => sum + c.sales, 0) : entries.reduce((sum, [, v]) => sum + v, 0);
@@ -1829,6 +1830,8 @@ export default function Leaderboard() {
     const tiles = labels.map((l, i) => ({
 
       key: entries[i][3],
+
+      parts: entries[i][4],
 
       label: l,
 
@@ -2919,7 +2922,7 @@ export default function Leaderboard() {
                 <div className="gauge-subtitle">
 
                   {gauge.fromApi
-                    ? `${gauge.total} vente${gauge.total > 1 ? "s" : ""} · canal = origine du lead`
+                    ? `${gauge.total} vente${gauge.total > 1 ? "s" : ""} · origine du lead, CCS si un setter a posé ou reprogrammé le R1`
                     : `Top 3 canaux – ${gauge.total} dossiers`}
 
                 </div>
@@ -2950,8 +2953,11 @@ export default function Leaderboard() {
                         {gauge.fromApi
                           ? <>{t.count} vente{t.count > 1 ? "s" : ""} <span className="tile-count">{Math.round(t.pct)} %</span></>
                           : <>{Math.round(t.pct)}% <span className="tile-count">({t.count} dossiers)</span></>}
-
                       </div>
+                      {/* CCS en global, détaillé : cold call setter / Seconde chance setter (dev 13/10/2026). */}
+                      {t.count > 0 && t.parts?.length > 0 && (
+                        <div className="tile-parts">{t.parts.map(p => <div key={p.key}>{p.sales} {CCS_KIND_SHORT[p.key] || p.label}</div>)}</div>
+                      )}
 
                     </div>
 
@@ -3089,7 +3095,7 @@ export default function Leaderboard() {
 
                       <table className="channel-detail__table">
 
-                        <thead><tr><th>Date</th><th>Client</th><th>Vendu par</th><th>Setter (1er RDV)</th><th>{current.key === "webinar" ? "Webinaire" : "Origine"}</th>{current.key === "referral" && <th>Parrain</th>}<th className="num">Montant</th></tr></thead>
+                        <thead><tr><th>Date</th><th>Client</th><th>Vendu par</th><th>Setter (1er RDV)</th>{current.key === "cold_call_setter" && <th>Type</th>}<th>{current.key === "webinar" ? "Webinaire" : "Origine"}</th>{current.key === "referral" && <th>Parrain</th>}<th className="num">Montant</th></tr></thead>
 
                         <tbody>
 
@@ -3097,7 +3103,7 @@ export default function Leaderboard() {
 
                             <tr key={r.sale_id}>
 
-                              <td>{fmtDate(r.date)}</td><td>{r.client_name || "—"}</td><td>{r.sold_by || "—"}</td><td>{r.setter || "—"}</td>
+                              <td>{fmtDate(r.date)}</td><td>{r.client_name || "—"}</td><td>{r.sold_by || "—"}</td><td>{r.setter || "—"}</td>{current.key === "cold_call_setter" && <td>{r.ccs_kind === "second_chance" ? "Seconde chance" : "Cold call"}</td>}
 
                               <td>{r.origin || (r.declared_channel ? `Déclaré : ${r.declared_channel}` : "—")}</td>{current.key === "referral" && <td>{r.referrer || "—"}</td>}
 
