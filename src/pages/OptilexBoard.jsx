@@ -1,3 +1,5 @@
+import { confirmBoardFinanceExit } from '../components/BoardFinanceExitDialog.jsx';
+import { requiresExitDecision } from '../utils/boardFinanceExit.js';
 import ClientHistoryAttachments from '../components/ClientHistoryAttachments.jsx';
 import WeatherCaseComposer, { WeatherQualification, WeatherScaleGuide } from '../components/WeatherCaseComposer';
 import { WEATHER, weatherPresentation, weatherFilter, weatherRatingLabel } from '../utils/weatherCase';
@@ -1119,7 +1121,12 @@ export default function OptilexBoard({ embed = false }) {
   // "a l'air posé" mais ne l'est pas est inacceptable pour un outil d'audit) ; la timeline ne
   // se rafraîchit qu'en cas de succès.
   const [etatHistVersion, setEtatHistVersion] = useState(0);
-  const changeEtat = useCallback(async (numero, { etat = null, etat_date = null, pause_end_date = null, pause_relance_date = null }) => {
+  const changeEtat = useCallback(async (numero, payload) => {
+    if (requiresExitDecision(apiClient.getUser()?.role, payload.etat)) {
+      payload = await confirmBoardFinanceExit(numero, payload);
+      if (!payload) return { cancelled: true };
+    }
+    const { etat = null, etat_date = null, pause_end_date = null, pause_relance_date = null, finance_decision = null } = payload;
     if (!numero) return;
     if (isFinanceTeam() && !FINANCE_TEAM_ETATS.includes(etat)) return; // finance_team : seulement les 2 "en cours"
     mutSeq.current += 1;
@@ -1132,7 +1139,7 @@ export default function OptilexBoard({ embed = false }) {
       return { ...r, etat_manuel: etat, etat_date, pause_end_date: pe, pause_relance_date: pr };
     }));
     try {
-      const saved = await apiClient.post("/api/v1/optilex/etat-change", { numero_client: numero, etat, etat_date, pause_end_date: pe, pause_relance_date: pr });
+      const saved = await apiClient.post("/api/v1/optilex/etat-change", { numero_client: numero, etat, etat_date, pause_end_date: pe, pause_relance_date: pr, finance_decision });
       setRows(prev => prev.map(r => r.numero_client === numero ? { ...r, finance_review_status: saved.finance_review?.status } : r));
       setEtatHistVersion((v) => v + 1);   // succès uniquement
     } catch (e) {

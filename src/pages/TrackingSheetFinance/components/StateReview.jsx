@@ -12,7 +12,7 @@ export function StateReviewQueue({ onOpenClient }) {
   useEffect(() => {load();const t=setInterval(load,30000);return()=>clearInterval(t);},[load]);
   return <section style={{padding:24}}>
     <div style={{display:'flex',justifyContent:'space-between',gap:12}}><h3 style={{margin:0}}>États à traiter · {items.length}</h3><button style={button} onClick={load}><RefreshCw size={15}/>Actualiser</button></div>
-    <p style={{color:'#787774'}}>Le CEO acte la rétractation ou la résiliation dans le dashboard. La finance en traite ensuite les conséquences sur les montants, sans revalider la décision du CEO.</p>
+    <p style={{color:'#787774'}}>Les décisions de sortie de la direction appliquent les montants directement en Finance. Cette liste rassemble les autres situations et les anciennes déclarations restant à traiter.</p>
     {error && <p role="alert" style={{color:'#b42318'}}>{error}</p>}
     {!error && !items.length && <p>Aucun état en attente de traitement financier.</p>}
     {items.map(r=><article key={r.client_id} style={box}>
@@ -45,7 +45,7 @@ export default function StateReview({ clientId, version, canProcess, onChanged, 
   const Heading = pending || error ? 'div' : 'summary';
   return <Wrapper style={{...box,padding:pending?16:10,background:pending?'#fffcf4':'#f6faf7',borderColor:pending?'#e6d7b2':'#d9e6dc'}} aria-label="Traitement financier de la situation">
     <Heading style={{display:'flex',gap:8,alignItems:'center',fontWeight:600,cursor:pending?'default':'pointer',fontSize:12}}>{pending?<Clock3 size={17}/>:<ClipboardCheck size={17}/>} {pending?'Traitement financier à effectuer':'Traitement financier effectué · voir le détail'}</Heading>
-    {!pending && review?.decision && <p>Traitement effectué : {({withdrawal:'rétractation traitée', 'billing-stop':'fin de facturation fixée', resume:'facturation rétablie', keep:'traitement financier conservé, aucun montant modifié'})[review.decision]} · {review.reviewed_by}</p>}
+    {!pending && review?.decision && <p>Traitement effectué : {({withdrawal:'rétractation traitée', 'board-loss':'perte choisie depuis le board, reste à recouvrer conservé', 'billing-stop':'fin de facturation fixée', resume:'facturation rétablie', keep:'traitement financier conservé, aucun montant modifié'})[review.decision]} · {review.reviewed_by}</p>}
     {pending && <p style={{margin:'8px 0'}}><strong>{state || 'Retour automatique'}</strong> : situation enregistrée dans le board. Le traitement des montants reste à effectuer par la finance, sans modifier cette situation.</p>}
     {review?.finance_withdrawn_at && <p>Rétractation déjà traitée en finance, avec effet au {formatDateFR(review.finance_withdrawn_at)}. Un changement dans le board ne restaure pas les attendus.</p>}
     {review?.linked_loss_id && <p style={{display:'flex',gap:6,alignItems:'center'}}><Link2 size={15}/>Perte n°{review.linked_loss_id} rattachée et conservée.</p>}
