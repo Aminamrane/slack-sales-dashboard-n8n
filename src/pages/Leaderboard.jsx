@@ -52,6 +52,14 @@ const REQUIRED_TEAM = import.meta.env.VITE_SLACK_TEAM_ID || "";
 
 // Unified color palette
 
+// Canaux d'acquisition du Suivi des ventes (clés de l'API /leaderboard, dev 13/10/2026).
+const CORE_CHANNELS = ["ads", "linkedin", "cold_call", "cold_call_setter", "referral", "webinar"];
+const CCS_KIND_SHORT = { cold_call: "cold call", second_chance: "seconde chance" };
+const CHANNEL_COLORS = {
+  ads: "#6366f1", linkedin: "#0a66c2", cold_call: "#fb923c", cold_call_setter: "#e11d48",
+  referral: "#10b981", webinar: "#8b5cf6", other: "#94a3b8",
+};
+
 const COLORS = {
 
   primary: "#6366f1",   // Indigo
@@ -1576,6 +1584,15 @@ export default function Leaderboard() {
 
   const [tunnelStats, setTunnelStats] = useState({});
 
+  const [channels, setChannels] = useState([]);
+
+  // Détail des ventes par canal (dev 13/10/2026) : admins et CEO seulement, l'API refuse les autres rôles.
+  const canSeeChannelDetail = ["admin", "ceo"].includes(apiClient.getUser()?.role);
+
+  const [channelDetail, setChannelDetail] = useState(null);
+
+  const [detailChannel, setDetailChannel] = useState("ads");
+
   const [totals, setTotals] = useState({ cash: 0, revenu: 0, ventes: 0 });
 
   const [loading, setLoading] = useState(true);
@@ -1597,6 +1614,24 @@ export default function Leaderboard() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
   });
+
+  useEffect(() => {
+
+    if (view !== "charts" || !canSeeChannelDetail) return undefined;
+
+    let disposed = false;
+
+    setChannelDetail(null);
+
+    apiClient.get(`/api/v1/leaderboard/channels/detail?period=${encodeURIComponent(range)}`)
+
+      .then((data) => { if (!disposed) setChannelDetail(data); })
+
+      .catch(() => { if (!disposed) setChannelDetail(null); }); // API pas encore livrée : le détail reste masqué
+
+    return () => { disposed = true; };
+
+  }, [view, range, canSeeChannelDetail]);
 
   const [sales, setSales] = useState([]);
 
@@ -1742,6 +1777,8 @@ export default function Leaderboard() {
         });
         setTunnelStats(tunnel);
 
+        setChannels(Array.isArray(data.channels) ? data.channels : []);
+
         // Pour compatibilité avec le reste du code, garder sales
         setSales(data.all_sellers || []);
 
@@ -1767,47 +1804,34 @@ export default function Leaderboard() {
 
   const gauge = useMemo(() => {
 
-    const entries = Object.entries(tunnelStats);
+    // Canaux d'acquisition (dev 13/10/2026) : canal = origine réelle du lead de chaque vente, calculé par l'API.
+    // Les six canaux suivis sont toujours affichés, même à zéro ; Autre seulement s'il compte (Konket et Lead Club = Ads).
+    // Repli sur le canal déclaré (ancienne API) tant que le champ `channels` n'est pas servi.
+    const fromApi = channels.length > 0;
+    const entries = fromApi
+      ? channels.filter(c => CORE_CHANNELS.includes(c.key) || c.sales > 0).map(c => [c.label, c.sales, CHANNEL_COLORS[c.key], c.key, c.breakdown || []])
+      : Object.entries(tunnelStats).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([l, v], i) => {
+          const label = /^ads$/i.test(l) ? "ADS" : /^cc$/i.test(l) ? "CC" : /link/i.test(l) ? "LinkedIn" : l;
+          const color = label === "ADS" ? COLORS.primary : label === "CC" ? COLORS.secondary : label === "LinkedIn" ? COLORS.tertiary
+            : [COLORS.primary, COLORS.secondary, COLORS.tertiary][i] || COLORS.gray;
+          return [label, v, color, null, []];
+        });
 
-    const total = entries.reduce((s, [,v]) => s + v, 0) || 1;
+    const total = fromApi ? channels.reduce((sum, c) => sum + c.sales, 0) : entries.reduce((sum, [, v]) => sum + v, 0);
 
-    const top3 = entries.sort((a,b) => b[1] - a[1]).slice(0, 3);
+    const labels = entries.map(([l]) => l);
 
-    
-    
-    const display = (l) => {
+    const counts = entries.map(([, v]) => v);
 
-      if (/^ads$/i.test(l)) return "ADS";
+    const pct = counts.map(v => (total ? (v / total) * 100 : 0));
 
-      if (/^cc$/i.test(l)) return "CC";
-
-      if (/link/i.test(l)) return "LinkedIn";
-
-      return l;
-
-    };
-
-    
-    
-    const labels = top3.map(([l]) => display(l));
-
-    const counts = top3.map(([,v]) => v);
-
-    const pct = counts.map(v => (v / total) * 100);
-
-    const colors = labels.map((lbl, i) => {
-
-      if (lbl === "ADS") return COLORS.primary;
-
-      if (lbl === "CC")  return COLORS.secondary;
-
-      if (lbl === "LinkedIn") return COLORS.tertiary;
-
-      return [COLORS.primary, COLORS.secondary, COLORS.tertiary][i] || COLORS.gray;
-
-    });
+    const colors = entries.map(([, , c]) => c);
 
     const tiles = labels.map((l, i) => ({
+
+      key: entries[i][3],
+
+      parts: entries[i][4],
 
       label: l,
 
@@ -1830,6 +1854,8 @@ export default function Leaderboard() {
     return {
 
       total,
+
+      fromApi,
 
       main,
 
@@ -1887,7 +1913,7 @@ export default function Leaderboard() {
 
     };
 
-  }, [tunnelStats, darkMode]);
+  }, [channels, tunnelStats, darkMode]);
 
   const gaugeOptions = useMemo(() => ({
 
@@ -2044,7 +2070,8 @@ export default function Leaderboard() {
 
     maintainAspectRatio: false,
 
-    resizeDelay: 150,
+    // Pas de resizeDelay : avec un délai, Chart.js dessine le graphique avant sa première mise à jour quand
+    // l'onglet Charts s'ouvre, et le plugin datalabels (enregistré globalement) plante → page blanche (13/10/2026).
 
     animation: { duration: 250 },
 
@@ -2886,15 +2913,17 @@ export default function Leaderboard() {
 
             {/* FIX: Utiliser les mêmes classes que la carte KPI */}
 
-            <div className="chart-card kpi-card chart--gauge">
+            <div className={`chart-card kpi-card chart--gauge${gauge.fromApi ? " chart--channels" : ""}`}>
 
               <div className="gauge-header">
 
-                <div className="gauge-title">Tunnel d'acquisition</div>
+                <div className="gauge-title">{gauge.fromApi ? "Canaux d'acquisition" : "Tunnel d'acquisition"}</div>
 
                 <div className="gauge-subtitle">
 
-                  Top 3 canaux – {gauge.total} dossiers
+                  {gauge.fromApi
+                    ? `${gauge.total} vente${gauge.total > 1 ? "s" : ""} · origine du lead, CCS si un setter a posé ou reprogrammé le R1`
+                    : `Top 3 canaux – ${gauge.total} dossiers`}
 
                 </div>
 
@@ -2904,11 +2933,14 @@ export default function Leaderboard() {
 
               <div className="gauge-sep" />
 
-              <div className="gauge-tiles">
+              <div className={`gauge-tiles${gauge.fromApi ? " gauge-tiles--channels" : ""}`}>
 
                 {gauge.tiles.map((t) => (
 
-                  <div key={t.label} className="gauge-tile">
+                  <div key={t.label} className={`gauge-tile${channelDetail && t.key ? " gauge-tile--clickable" : ""}${channelDetail && t.key === detailChannel ? " is-active" : ""}`}
+                    role={channelDetail && t.key ? "button" : undefined} tabIndex={channelDetail && t.key ? 0 : undefined}
+                    onClick={channelDetail && t.key ? () => setDetailChannel(t.key) : undefined}
+                    onKeyDown={channelDetail && t.key ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetailChannel(t.key); } } : undefined}>
 
                     <span className="tile-dot" style={{ background: t.color }} />
 
@@ -2918,9 +2950,14 @@ export default function Leaderboard() {
 
                       <div className="tile-value">
 
-                        {Math.round(t.pct)}% <span className="tile-count">({t.count} dossiers)</span>
-
+                        {gauge.fromApi
+                          ? <>{t.count} vente{t.count > 1 ? "s" : ""} <span className="tile-count">{Math.round(t.pct)} %</span></>
+                          : <>{Math.round(t.pct)}% <span className="tile-count">({t.count} dossiers)</span></>}
                       </div>
+                      {/* CCS en global, détaillé : cold call setter / Seconde chance setter (dev 13/10/2026). */}
+                      {t.count > 0 && t.parts?.length > 0 && (
+                        <div className="tile-parts">{t.parts.map(p => <div key={p.key}>{p.sales} {CCS_KIND_SHORT[p.key] || p.label}</div>)}</div>
+                      )}
 
                     </div>
 
@@ -3015,6 +3052,80 @@ export default function Leaderboard() {
               </div>
 
             </div>
+
+            {channelDetail && (() => {
+
+              const current = channelDetail.channels.find(c => c.key === detailChannel) || channelDetail.channels[0];
+
+              const shown = channelDetail.channels.filter(c => CORE_CHANNELS.includes(c.key) || c.sales.length > 0);
+
+              const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "2-digit", month: "2-digit", year: "numeric" }) : "—");
+
+              return (
+
+                <div className="chart-card kpi-card channel-detail">
+
+                  <div className="channel-detail__head">
+
+                    <div className="gauge-title">Détail des ventes par canal</div>
+
+                    <div className="gauge-subtitle">{channelDetail.total} vente{channelDetail.total > 1 ? "s" : ""} · visible par les admins et le CEO</div>
+
+                  </div>
+
+                  <div className="channel-detail__pills" role="tablist" aria-label="Canal">
+
+                    {shown.map(c => (
+
+                      <button key={c.key} type="button" role="tab" aria-selected={c.key === current.key}
+
+                        className={`channel-pill${c.key === current.key ? " is-active" : ""}`} onClick={() => setDetailChannel(c.key)}>
+
+                        <i style={{ background: CHANNEL_COLORS[c.key] }} />{c.label}<span>{c.sales.length}</span>
+
+                      </button>
+
+                    ))}
+
+                  </div>
+
+                  {current.sales.length === 0 ? <p className="channel-detail__empty">Aucune vente {current.label} sur la période.</p> : (
+
+                    <div className="channel-detail__scroll">
+
+                      <table className="channel-detail__table">
+
+                        <thead><tr><th>Date</th><th>Client</th><th>Vendu par</th><th>Setter (1er RDV)</th>{current.key === "cold_call_setter" && <th>Type</th>}<th>{current.key === "webinar" ? "Webinaire" : "Origine"}</th>{current.key === "referral" && <th>Parrain</th>}<th className="num">Montant</th></tr></thead>
+
+                        <tbody>
+
+                          {current.sales.map(r => (
+
+                            <tr key={r.sale_id}>
+
+                              <td>{fmtDate(r.date)}</td><td>{r.client_name || "—"}</td><td>{r.sold_by || "—"}</td><td>{r.setter || "—"}</td>{current.key === "cold_call_setter" && <td>{r.ccs_kind === "second_chance" ? "Seconde chance" : "Cold call"}</td>}
+
+                              <td>{r.origin || (r.declared_channel ? `Déclaré : ${r.declared_channel}` : "—")}</td>{current.key === "referral" && <td>{r.referrer || "—"}</td>}
+
+                              <td className="num">{Math.round(r.amount).toLocaleString("fr-FR")} €</td>
+
+                            </tr>
+
+                          ))}
+
+                        </tbody>
+
+                      </table>
+
+                    </div>
+
+                  )}
+
+                </div>
+
+              );
+
+            })()}
 
             {teamStats.length > 0 && (
 
