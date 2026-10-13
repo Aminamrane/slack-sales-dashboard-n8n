@@ -14,12 +14,13 @@ export function BoardFinanceExitDialog({ numero, payload, onResolve }) {
   const [date, setDate] = useState(payload.etat_date || new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' }));
   const [values, setValues] = useState({ past: '', current: '', future: '' });
   const [linked, setLinked] = useState(false), [reason, setReason] = useState('');
+  const [allRemaining, setAllRemaining] = useState(false);
   const [version, setVersion] = useState(0);
   const dialog = useRef(null);
   const withdrawal = payload.etat === 'Rétractation';
   useEffect(() => {
     let alive = true;
-    setPreview(null); setError(''); setLinked(false);
+    setPreview(null); setError(''); setLinked(false); setAllRemaining(false);
     apiClient.get(`/api/v1/optilex/exit-finance-preview?numero_client=${encodeURIComponent(numero)}`)
       .then(data => {
         if (!alive) return;
@@ -62,9 +63,12 @@ export function BoardFinanceExitDialog({ numero, payload, onResolve }) {
           <p>Choisissez les montants à passer en perte. <strong>Le reste demeure à recouvrer.</strong></p>
           {Object.entries(labels).map(([key, label]) => <label key={key} style={{ display: 'grid', gridTemplateColumns: '1fr 130px', gap: 12, alignItems: 'center', marginTop: 12 }}>
             <span>{label}<small style={{ display: 'block', color: '#647084' }}>Disponible : {money(preview.amounts[key])}</small>{amounts && <small style={{ display: 'block', color: '#24735a' }}>Restant : {money(Number(preview.amounts[key]) - amounts[`amount_${key}`])}</small>}</span>
-            <span><input aria-label={`Perte · ${label}`} inputMode="decimal" value={values[key]} disabled={Boolean(loss)} placeholder="0,00" style={{ ...input, textAlign: 'right' }} onChange={e => setValues(v => ({ ...v, [key]: e.target.value }))}/></span>
+            <span><input aria-label={`Perte · ${label}`} inputMode="decimal" value={values[key]} disabled={Boolean(loss)} placeholder="0,00" style={{ ...input, textAlign: 'right' }} onChange={e => { setAllRemaining(false); setValues(v => ({ ...v, [key]: e.target.value })); }}/></span>
           </label>)}
-          {!loss && <button style={{ ...button, marginTop: 12, fontSize: 12 }} onClick={() => setValues({ past: '0', current: '0', future: '0' })}>Conserver tous les montants · 0 € de perte</button>}
+          {!loss && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+            <button style={{ ...button, fontSize: 12, borderColor: '#efc8c3', color: '#a32b22' }} onClick={() => { setAllRemaining(true); setValues(Object.fromEntries(Object.entries(preview.amounts).map(([k, v]) => [k, Number(v).toFixed(2)]))); }}>Tout passer en perte</button>
+            <button style={{ ...button, fontSize: 12 }} onClick={() => { setAllRemaining(false); setValues({ past: '0', current: '0', future: '0' }); }}>Conserver les montants · 0 € de perte</button>
+          </div>}
           <p style={{ fontSize: 12, color: '#647084' }}>La répartition Owner / Opti’Lex est conservée. La fin de facturation configurée reste inchangée ; elle est ajustable dans la fiche Finance.</p>
           <label>Motif (facultatif)<textarea maxLength={2000} value={reason} onChange={e => setReason(e.target.value)} style={{ ...input, marginTop: 6 }} rows={2}/></label>
           <div style={{ background: '#f5f7fa', padding: 14, borderRadius: 10, marginTop: 12, display: 'flex', justifyContent: 'space-between' }}><strong>Nouvelle perte</strong><strong>{total === null ? 'À renseigner' : money(total)}</strong></div>
@@ -79,7 +83,7 @@ export function BoardFinanceExitDialog({ numero, payload, onResolve }) {
       </>}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 22 }}>
         <button style={button} onClick={() => onResolve(null)}>Annuler</button>
-        <button disabled={!canConfirm} style={{ ...button, background: '#1e293b', color: '#fff', opacity: canConfirm ? 1 : 0.45 }} onClick={() => onResolve({ ...payload, etat_date: date, finance_decision: { token: preview.token, ...(withdrawal ? {} : amounts), reason, link_loss_id: linked ? loss?.id : null } })}>Confirmer et appliquer en Finance</button>
+        <button disabled={!canConfirm} style={{ ...button, background: '#1e293b', color: '#fff', opacity: canConfirm ? 1 : 0.45 }} onClick={() => onResolve({ ...payload, etat_date: date, finance_decision: { token: preview.token, ...(withdrawal ? {} : { ...amounts, all_remaining: allRemaining }), reason, link_loss_id: linked ? loss?.id : null } })}>Confirmer et appliquer en Finance</button>
       </div>
     </section>
   </div>;
