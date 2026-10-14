@@ -1408,23 +1408,17 @@ export default function TrackingSheet() {
   const canManageLeads = currentUser?.role === 'admin' || currentUser?.role === 'head_of_sales_manager';
   const isAdmin = currentUser?.role === 'admin';
 
-  // Pop-up des RDV à qualifier (06/10/2026) : à l'ouverture de sa propre sheet, une fois par chargement ;
-  // « Plus tard » ou la fermeture le reportent de 2 h (préférence locale du navigateur).
-  const QUALIFY_DECK_SNOOZE_MS = 2 * 60 * 60 * 1000;
+  // Pop-up des RDV à qualifier (06/10/2026) : à l'ouverture de sa propre sheet, une fois par chargement.
+  // Obligatoire depuis le 15/10/2026 (dev : « s'ils ne qualifient pas tous leurs rendez-vous, ils ne pourront pas
+  // accéder à leur tracking sheet ») : plus de report, la fenêtre ne se ferme qu'une fois tout qualifié.
   useEffect(() => {
     if (qualifyDeckChecked.current || isAdminView || !leads.length || !currentUser?.id) return;
     if (!['sales', 'head_of_sales', 'head_of_sales_manager'].includes(currentUser.role)) return;
     qualifyDeckChecked.current = true;
-    let snoozedUntil = 0;
-    try { snoozedUntil = Number(localStorage.getItem(`owner_qualify_deck_snooze_${currentUser.id}`) || 0); } catch { /* stockage indisponible */ }
-    if (Date.now() < snoozedUntil) return;
     const items = rdvsToQualify(leads);
     if (items.length) setQualifyDeck(items);
   }, [leads, isAdminView, currentUser]);
-  const closeQualifyDeck = () => {
-    setQualifyDeck(null);
-    try { localStorage.setItem(`owner_qualify_deck_snooze_${currentUser?.id}`, String(Date.now() + QUALIFY_DECK_SNOOZE_MS)); } catch { /* stockage indisponible */ }
-  };
+  const closeQualifyDeck = useCallback(() => setQualifyDeck(null), []);
 
   const fetchAllSheets = async () => {
     setSheetsLoading(true);
@@ -9123,7 +9117,6 @@ export default function TrackingSheet() {
       }}/>}
       {qualifyDeck && <DailyQualificationDeck items={qualifyDeck} dark={darkMode}
         onSave={(lead, stage, payload) => saveQualificationFor(lead, stage, payload, { quiet: true })}
-        onOpenLead={(id) => { closeQualifyDeck(); setSidebarView('leads'); setTimeout(() => setSelectedLead(id), 100); }}
         onClose={closeQualifyDeck} />}
       {qualificationDialog && (()=>{const {fromCalendar,...dialogProps}=qualificationDialog;const onSave=async payload=>{await saveQualification(payload);if(fromCalendar)setCalendarReload(v=>v+1);};return dialogProps.stage==='r1'?<R1QualificationDialog {...dialogProps} dark={darkMode} onClose={()=>setQualificationDialog(null)} onSave={onSave}/>:<QualificationDialog {...dialogProps} dark={darkMode} canPlaceR3={calSettings?.r3_enabled===true} onClose={()=>setQualificationDialog(null)} onSave={onSave}/>;})()}
       {intakeDialog && <IntegrationDialog key={intakeDialog.lead_id} context={intakeDialog}

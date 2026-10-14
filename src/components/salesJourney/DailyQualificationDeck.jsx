@@ -2,12 +2,17 @@
 // quelques clics les rendez-vous passés restés sans résultat, un par slide. Mêmes résultats et même
 // enregistrement que la qualification de la sheet : `onSave(lead, stage, payload)` passe par
 // qualificationPatch puis le PATCH du lead, côté TrackingSheet.
-import React, { useRef, useState } from 'react';
+// Obligatoire (dev 14/10/2026 : « s'ils ne qualifient pas tous leurs rendez-vous, ils ne pourront pas accéder à
+// leur tracking sheet » ; « il n'y a pas de "je passe" ») : ni croix, ni Échap, ni clic à côté, ni « Passer » ; chaque
+// RDV est qualifié dans l'ordre et seule la fin, tout qualifié, ouvre la sheet. L'accueil ne liste plus les RDV : deux clients qui attendent (animations du dev,
+// After Effects).
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowRight, CalendarCheck2, CalendarClock, CalendarPlus, Check, CircleX, Clock3, UserRoundCheck, UserRoundX, X } from 'lucide-react';
+import { AnimatePresence, motion as Motion } from 'framer-motion';
+import { ArrowRight, CalendarCheck2, CalendarClock, CalendarPlus, Check, CircleX, Clock3, UserRoundCheck, UserRoundX } from 'lucide-react';
 import { ParisDateTimeInput } from './FrenchDateInput';
 import { RESULTS, useDialogFocus } from './QualificationDialog';
+import { ActionButton, Celebration, CountUp, PickCheck, ProgressSegments, Stamp } from './DailyQualificationMotion';
 import { rdvLabel } from '../../utils/dailyQualification';
 import './salesJourney.css';
 
@@ -40,13 +45,38 @@ const who = (lead) => lead.company_name || lead.company || lead.full_name || `Le
 
 function Options({ items, value, onPick, disabled }) {
   return (
-    <div className="sj-options">
-      {items.map(([key, title, desc, Icon]) => (
-        <button key={key} type="button" disabled={disabled} aria-pressed={value === key} className={value === key ? 'is-selected' : ''} onClick={() => onPick(key)}>
-          <Icon size={21} /><span><strong>{title}</strong><small>{desc}</small></span>{value === key && <Check size={16} />}
-        </button>
-      ))}
-    </div>
+    <Motion.div className="sj-options" initial="hidden" animate="shown" variants={{ hidden: {}, shown: { transition: { staggerChildren: 0.05 } } }}>
+      {items.map(([key, title, desc, icon]) => {
+        const Icon = icon;
+        const on = value === key;
+        return (
+          <Motion.button key={key} type="button" disabled={disabled} aria-pressed={on} className={`dq-option${on ? ' is-selected' : ''}`} onClick={() => onPick(key)}
+            variants={{
+              hidden: { opacity: 0, y: 10 },
+              shown: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.32, ease: EASE } },
+              picked: { opacity: 1, y: 0, scale: [1, 1.025, 1], transition: { duration: 0.3, ease: EASE } },
+            }}
+            animate={on ? 'picked' : 'shown'} whileHover={disabled ? undefined : { y: -2 }} whileTap={disabled ? undefined : { scale: 0.97 }}>
+            <Motion.span className="dq-option-icon" animate={{ scale: on ? 1.08 : 1 }} transition={{ type: 'spring', stiffness: 380, damping: 18 }}><Icon size={21} /></Motion.span>
+            <span><strong>{title}</strong><small>{desc}</small></span>
+            <PickCheck on={on} />
+          </Motion.button>
+        );
+      })}
+    </Motion.div>
+  );
+}
+
+// Question suivante qui se déplie sous la précédente. Le débord n'est masqué que pendant l'animation : ensuite, le
+// calendrier de la date (fenêtre flottante) doit pouvoir passer par-dessus les cartes.
+function Reveal({ children }) {
+  const [settled, setSettled] = useState(false);
+  return (
+    <Motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+      transition={{ duration: 0.32, ease: EASE }} style={{ overflow: settled ? 'visible' : 'hidden' }}
+      onAnimationStart={() => setSettled(false)} onAnimationComplete={() => setSettled(true)}>
+      {children}
+    </Motion.div>
   );
 }
 
@@ -67,25 +97,118 @@ export function deckPayload(stage, { choice, next, result, date }) {
   return { result: choice, attended: false, date: choice === 'reporte' ? date : '' };
 }
 
-export default function DailyQualificationDeck({ items, onSave, onClose, onOpenLead, dark = false }) {
-  const [index, setIndex] = useState(0);                 // 0 = intro, 1..n = RDV, n + 1 = fin
+const ASSETS = '/qualification/';
+const RISE = { hidden: { opacity: 0, y: 12 }, shown: { opacity: 1, y: 0, transition: { duration: 0.42, ease: EASE } } };
+const reduceMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+// Les deux clients qui attendent : chacun joue son entrée (1re vidéo, une fois), puis sa boucle (2e vidéo, qui se
+// referme sur elle-même sans saut). Les quatre vidéos partagent le même cadrage : superposées, elles retrouvent la
+// composition d'After Effects. La fille passe DEVANT l'ambulancier : un petit canvas WebGL compose les deux couches et
+// rend transparent le fond blanc de la fille (ce qui est en couleur la masque). Sans WebGL : les vidéos fondues
+// (multiply), la fille en dernier.
+const VERTEX = 'attribute vec2 p;varying vec2 v;void main(){v=vec2(p.x*.5+.5,.5-p.y*.5);gl_Position=vec4(p,0.,1.);}';
+const FRAGMENT = 'precision mediump float;varying vec2 v;uniform sampler2D back;uniform sampler2D front;'
+  + 'void main(){vec3 b=texture2D(back,v).rgb;vec3 f=texture2D(front,v).rgb;'
+  + 'float a=1.-smoothstep(.9,.985,min(min(f.r,f.g),f.b));gl_FragColor=vec4(mix(b,f,a),1.);}';
+
+function compositor(canvas) {
+  const gl = canvas.getContext('webgl', { premultipliedAlpha: false, preserveDrawingBuffer: false });
+  if (!gl) return null;
+  const shader = (type, src) => { const sh = gl.createShader(type); gl.shaderSource(sh, src); gl.compileShader(sh); return sh; };
+  const prog = gl.createProgram();
+  gl.attachShader(prog, shader(gl.VERTEX_SHADER, VERTEX));
+  gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, FRAGMENT));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
+  gl.useProgram(prog);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'p');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const textures = ['back', 'front'].map((name, unit) => {
+    const tex = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.uniform1i(gl.getUniformLocation(prog, name), unit);
+    return tex;
+  });
+  return (back, front) => {
+    [back, front].forEach((video, unit) => {
+      gl.activeTexture(gl.TEXTURE0 + unit);
+      gl.bindTexture(gl.TEXTURE_2D, textures[unit]);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, video);
+    });
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  };
+}
+
+function WaitingClients() {
+  const canvas = useRef(null);
+  const videos = useRef({});
+  const [mode, setMode] = useState('canvas');           // canvas | fallback
+  const [looping, setLooping] = useState(() => (reduceMotion() ? { ambulancier: true, fille: true } : {}));
+  const phase = useRef(looping);
+  phase.current = looping;
+  const toLoop = (who) => {
+    const v = videos.current[`${who}-boucle`];
+    setLooping((s) => ({ ...s, [who]: true }));
+    v?.play().catch(() => {});
+  };
+  useEffect(() => {
+    const draw = canvas.current && compositor(canvas.current);
+    if (!draw) { setMode('fallback'); return undefined; }
+    let raf = 0;
+    const tick = () => {
+      const pick = (who) => videos.current[`${who}-${phase.current[who] ? 'boucle' : 'intro'}`];
+      const back = pick('ambulancier'), front = pick('fille');
+      if (back?.readyState >= 2 && front?.readyState >= 2) draw(back, front);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const layer = (who, kind) => {
+    const on = (kind === 'boucle') === !!looping[who];
+    return (
+      <video key={`${who}-${kind}`} ref={(el) => { videos.current[`${who}-${kind}`] = el; }}
+        className={`dq-layer${mode === 'fallback' && on ? ' is-on' : ''}`} src={`${ASSETS}${who}-${kind}.mp4`} muted playsInline preload="auto"
+        autoPlay={kind === 'intro' && !reduceMotion()} loop={kind === 'boucle'} onEnded={kind === 'intro' ? () => toLoop(who) : undefined} />
+    );
+  };
+  return (
+    <div className="dq-stage" aria-hidden="true">
+      {['ambulancier', 'fille'].flatMap((who) => (reduceMotion() ? [layer(who, 'boucle')] : [layer(who, 'intro'), layer(who, 'boucle')]))}
+      {mode === 'canvas' && <canvas ref={canvas} width={384} height={552} className="dq-canvas" />}
+    </div>
+  );
+}
+
+export default function DailyQualificationDeck({ items, onSave, onClose, dark = false }) {
+  const [index, setIndex] = useState(0);                 // 0 = accueil, 1..n = RDV, n + 1 = fin
   const [dir, setDir] = useState(1);
   const [form, setForm] = useState({});
   const [done, setDone] = useState({});                  // clé du RDV → libellé du résultat
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const [stamp, setStamp] = useState(null);             // résultat affiché un instant après l'enregistrement
   const ref = useRef(null);
-  useDialogFocus(ref, onClose, busy);
-
   const total = items.length;
+  const doneCount = Object.keys(done).length;
+  const finished = total > 0 && doneCount === total;
+  // Obligatoire : la fenêtre ne se ferme qu'une fois tout qualifié.
+  const requestClose = () => { if (finished && !busy) onClose(); };
+  useDialogFocus(ref, requestClose, busy);
+  useEffect(() => { if (!total) onClose(); }, [total, onClose]);
+
   const current = index >= 1 && index <= total ? items[index - 1] : null;
   const payload = current ? deckPayload(current.stage, form) : null;
-  const doneCount = Object.keys(done).length;
 
   const go = (to) => { setDir(to > index ? 1 : -1); setIndex(to); setForm({}); setError(''); };
-  const nextOpen = (from) => {
-    for (let i = from; i <= total; i += 1) if (!done[items[i - 1].key]) return i;
-    return total + 1;
-  };
 
   async function save() {
     if (!current || !payload || busy) return;
@@ -96,7 +219,10 @@ export default function DailyQualificationDeck({ items, onSave, onClose, onOpenL
         ? ATTENDANCE.r1.find(([k]) => k === payload.result)?.[1]
         : (payload.attended ? RESULTS.find(([k]) => k === payload.result)?.[1] : ATTENDANCE.later.find(([k]) => k === payload.result)?.[1]);
       setDone((prev) => ({ ...prev, [current.key]: label || 'Qualifié' }));
-      go(nextOpen(index + 1));
+      setStamp(label || 'Qualifié');
+      await new Promise((r) => setTimeout(r, reduceMotion() ? 0 : 620));
+      setStamp(null);
+      go(index + 1);                                    // pas de « Passer » : chaque RDV est qualifié dans l'ordre
     } catch (e) {
       setError(e.message || 'La qualification n’a pas été enregistrée. Réessayez.');
     } finally {
@@ -109,39 +235,31 @@ export default function DailyQualificationDeck({ items, onSave, onClose, onOpenL
     || (current.stage !== 'r1' && form.choice === 'reporte'));
 
   return createPortal(
-    <div className={`sj-overlay ${dark ? 'sj-dark' : ''}`} onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
-      <section ref={ref} tabIndex={-1} className="sj-dialog" role="dialog" aria-modal="true" aria-labelledby="dq-title" style={{ overflowX: 'hidden' }}>
-        <header className="sj-head">
-          <span className="sj-icon"><CalendarCheck2 size={24} /></span>
-          <div>
-            <small>{current ? `RENDEZ-VOUS ${index} SUR ${total}` : 'QUALIFICATION DES RENDEZ-VOUS'}</small>
-            <h2 id="dq-title">{current ? `${stageName} · ${who(current.lead)}` : 'Vos rendez-vous à qualifier'}</h2>
-            <p>{current ? rdvLabel(current.at) : `${total} rendez-vous passé${total > 1 ? 's' : ''} sans résultat`}</p>
-          </div>
-          <button className="sj-close" disabled={busy} onClick={onClose} aria-label="Fermer"><X size={20} /></button>
-        </header>
-        <div style={{ height: 3, background: 'var(--sj-soft)' }}>
-          <motion.div initial={false} animate={{ width: `${total ? (doneCount / total) * 100 : 0}%` }} transition={{ duration: 0.45, ease: EASE }}
-            style={{ height: 3, background: '#3e7d5a' }} />
-        </div>
-        <div className="sj-body" style={{ position: 'relative', minHeight: 260 }}>
+    <div className={`sj-overlay ${dark ? 'sj-dark' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
+      <section ref={ref} tabIndex={-1} className={`sj-dialog${index === 0 || index === total + 1 ? ' dq-welcome' : ''}`} role="dialog" aria-modal="true" aria-labelledby="dq-title" style={{ overflowX: 'hidden' }}>
+        {current && (
+          <header className="sj-head">
+            <span className="sj-icon"><CalendarCheck2 size={24} /></span>
+            <div>
+              <small>{`RENDEZ-VOUS ${index} SUR ${total}`}</small>
+              <h2 id="dq-title">{`${stageName} · ${who(current.lead)}`}</h2>
+              <p>{rdvLabel(current.at)}</p>
+            </div>
+          </header>
+        )}
+        {current && <ProgressSegments total={total} current={index} done={doneCount} />}
+        <div className={current ? 'sj-body' : 'dq-welcome-body'} style={{ position: 'relative', minHeight: current ? 260 : 0 }}>
           <AnimatePresence mode="wait" custom={dir} initial={false}>
-            <motion.div key={index} custom={dir} variants={slide} initial="enter" animate="center" exit="exit">
+            <Motion.div key={index} custom={dir} variants={slide} initial="enter" animate="center" exit="exit">
               {index === 0 && (
-                <>
-                  <p style={{ margin: '0 0 14px', fontSize: 14, lineHeight: 1.55 }}>
-                    Indiquez pour chacun si le client s’est présenté. Un absent sur un R1 posé par un setter le prévient tout de suite, pour qu’il relance le client.
-                  </p>
-                  <div style={{ display: 'grid', gap: 6 }}>
-                    {items.map((it) => (
-                      <div key={it.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, background: 'var(--sj-soft)', fontSize: 13 }}>
-                        <strong style={{ minWidth: 26 }}>{it.stage.toUpperCase()}</strong>
-                        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{who(it.lead)}</span>
-                        <span style={{ color: 'var(--sj-muted)', whiteSpace: 'nowrap' }}>{rdvLabel(it.at)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
+                <Motion.div className="dq-intro" initial="hidden" animate="shown" variants={{ hidden: {}, shown: { transition: { staggerChildren: 0.09, delayChildren: 0.05 } } }}>
+                  <Motion.div variants={{ hidden: { opacity: 0, scale: 0.94, y: 8 }, shown: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.5, ease: EASE } } }}>
+                    <WaitingClients />
+                  </Motion.div>
+                  <Motion.h2 id="dq-title" variants={RISE}><CountUp value={total} /> rendez-vous vous attendent</Motion.h2>
+                  <Motion.p variants={RISE}>Qualifiez-les pour ouvrir votre Tracking Sheet.</Motion.p>
+                  <Motion.div variants={RISE}><ActionButton className="is-big" launch onClick={() => go(1)}>Commencer</ActionButton></Motion.div>
+                </Motion.div>
               )}
               {current && (
                 <>
@@ -151,59 +269,42 @@ export default function DailyQualificationDeck({ items, onSave, onClose, onOpenL
                   <h3 style={{ marginTop: 0 }}>Le client s’est-il présenté ?</h3>
                   <Options items={current.stage === 'r1' ? ATTENDANCE.r1 : ATTENDANCE.later} value={form.choice} disabled={busy}
                     onPick={(choice) => { setForm({ choice }); setError(''); }} />
-                  {current.stage === 'r1' && form.choice === 'done' && (
-                    <>
-                      <h3>Quelle est la prochaine étape ?</h3>
-                      <Options items={R1_NEXT} value={form.next} disabled={busy} onPick={(next) => { setForm((f) => ({ ...f, next, date: '' })); setError(''); }} />
-                    </>
-                  )}
-                  {current.stage !== 'r1' && form.choice === 'present' && (
-                    <>
-                      <h3>Où en est le client ?</h3>
-                      <Options items={RESULTS} value={form.result} disabled={busy} onPick={(result) => { setForm((f) => ({ ...f, result })); setError(''); }} />
-                    </>
-                  )}
-                  {needsDate && (
-                    <ParisDateTimeInput key={`${form.choice}-${form.next || ''}`} disabled={busy} value={form.date || ''}
-                      label={form.next === 'r2_set' ? 'Date et heure du R2' : `Nouvelle date du ${stageName}`}
-                      onChange={(date) => { setForm((f) => ({ ...f, date })); setError(''); }} />
-                  )}
-                  {onOpenLead && (
-                    <button type="button" className="sj-contract-alternative" disabled={busy} onClick={() => onOpenLead(current.lead.id)} style={{ marginTop: 16 }}>
-                      <span>Le client est prêt à signer, ou il faut plus de détails<strong>Ouvrir la fiche</strong></span><ArrowRight size={17} />
-                    </button>
-                  )}
+                  <AnimatePresence initial={false}>
+                    {current.stage === 'r1' && form.choice === 'done' && (
+                      <Reveal key="next">
+                        <h3>Quelle est la prochaine étape ?</h3>
+                        <Options items={R1_NEXT} value={form.next} disabled={busy} onPick={(next) => { setForm((f) => ({ ...f, next, date: '' })); setError(''); }} />
+                      </Reveal>
+                    )}
+                    {current.stage !== 'r1' && form.choice === 'present' && (
+                      <Reveal key="result">
+                        <h3>Où en est le client ?</h3>
+                        <Options items={RESULTS} value={form.result} disabled={busy} onPick={(result) => { setForm((f) => ({ ...f, result })); setError(''); }} />
+                      </Reveal>
+                    )}
+                    {needsDate && (
+                      <Reveal key={`date-${form.choice}-${form.next || ''}`}>
+                        <ParisDateTimeInput disabled={busy} value={form.date || ''}
+                          label={form.next === 'r2_set' ? 'Date et heure du R2' : `Nouvelle date du ${stageName}`}
+                          onChange={(date) => { setForm((f) => ({ ...f, date })); setError(''); }} />
+                      </Reveal>
+                    )}
+                  </AnimatePresence>
                 </>
               )}
               {index === total + 1 && (
-                <div style={{ textAlign: 'center', padding: '24px 0 8px' }}>
-                  <motion.div initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 260, damping: 18 }}
-                    style={{ width: 56, height: 56, borderRadius: 999, margin: '0 auto 14px', display: 'grid', placeItems: 'center', background: 'rgba(62,125,90,0.14)', color: '#3e7d5a' }}>
-                    <Check size={28} strokeWidth={2.6} />
-                  </motion.div>
-                  <h3 style={{ margin: '0 0 6px', fontSize: 17 }}>{doneCount === total ? 'Tout est qualifié, merci.' : `${doneCount} sur ${total} qualifiés.`}</h3>
-                  <p style={{ margin: 0, fontSize: 13, color: 'var(--sj-muted)' }}>
-                    {doneCount === total ? 'Vos setters et vos chiffres sont à jour.' : 'Les autres restent dans vos conteneurs « En attente ».'}
-                  </p>
-                </div>
+                <Celebration total={total}><ActionButton className="is-big" launch onClick={requestClose}>Ouvrir ma Tracking Sheet</ActionButton></Celebration>
               )}
-            </motion.div>
+            </Motion.div>
           </AnimatePresence>
           {error && <p className="sj-error" role="alert">{error}</p>}
+          <Stamp label={stamp} />
         </div>
-        <footer className="sj-footer">
-          {index === 0 && <>
-            <button type="button" onClick={onClose}>Plus tard</button>
-            <button type="button" className="sj-primary" onClick={() => go(1)}>Commencer<ArrowRight size={17} /></button>
-          </>}
-          {current && <>
-            <button type="button" disabled={busy} onClick={() => go(Math.min(index + 1, total + 1))}>Passer</button>
-            <button type="button" className="sj-primary" disabled={busy || !payload} onClick={save}>
-              {busy ? 'Enregistrement…' : index === total ? 'Enregistrer' : 'Enregistrer et continuer'}<ArrowRight size={17} />
-            </button>
-          </>}
-          {index === total + 1 && <button type="button" className="sj-primary" onClick={onClose}>Fermer</button>}
-        </footer>
+        {current && (
+          <footer className="sj-footer">
+            <ActionButton disabled={!payload} busy={busy && !stamp} onClick={save}>{index < total ? 'Enregistrer et continuer' : 'Enregistrer'}</ActionButton>
+          </footer>
+        )}
       </section>
     </div>,
     document.body,
