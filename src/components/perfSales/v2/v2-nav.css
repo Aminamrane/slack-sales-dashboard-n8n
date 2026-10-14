@@ -1,0 +1,86 @@
+/* Performance Sales v2 : onglets à icônes et frise des semaines (dev 14/10/2026). Chargé après v2.css, dont il reprend
+   les variables (--ink, --soft, --muted, --line, --card, --blue-bg, --good-strong, --low-strong…) et la courbe unique. */
+
+.ps2 { --ease-out: cubic-bezier(.22, 1, .36, 1); }
+
+/* ── Onglets ─────────────────────────────────────────────────────────────── */
+/* Le rail défile horizontalement s'il manque de place ; la marge négative laisse de l'air à l'ombre et au focus. */
+.ps2 .ps2-tabbar { overflow-x: auto; overflow-y: hidden; margin: -10px; padding: 10px; scrollbar-width: none; }
+.ps2 .ps2-tabbar::-webkit-scrollbar { display: none; }
+.ps2 .ps2-tabs {
+  display: inline-flex; flex-wrap: nowrap; gap: 2px; padding: 4px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--card); box-shadow: 0 1px 2px rgba(18, 27, 53, .04), 0 8px 24px -18px rgba(18, 27, 53, .28);
+}
+.ps2.is-dark .ps2-tabs { box-shadow: 0 1px 2px rgba(0, 0, 0, .25); }
+.ps2 .ps2-tab {
+  flex: 0 0 auto; display: inline-flex; align-items: center; padding: 7px 13px 7px 11px; border: 0; border-radius: 999px;
+  background: transparent; color: var(--soft); font-size: 13px; font-weight: 500; line-height: 18px; white-space: nowrap;
+  -webkit-tap-highlight-color: transparent; transition: color .3s var(--ease-out), background-color .25s var(--ease-out);
+}
+.ps2 .ps2-tab:hover { color: var(--ink); background: var(--blue-bg); border-color: transparent; }
+.ps2 .ps2-tab[aria-selected="true"] { color: #fff; background: transparent; transition: color .28s var(--ease-out) .1s, background-color .25s var(--ease-out); }
+.ps2.is-dark .ps2-tab[aria-selected="true"] { color: #121b35; }
+.ps2 .ps2-tab:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.ps2 .ps2-tab .ps2-tab-pill {
+  inset: 0; background: var(--ink);
+  box-shadow: 0 4px 12px -5px rgba(18, 27, 53, .55), inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+.ps2.is-dark .ps2-tab .ps2-tab-pill { box-shadow: 0 4px 12px -5px rgba(0, 0, 0, .7); }
+.ps2 .ps2-tab .ps2-tab-label { display: inline-flex; align-items: center; gap: 7px; transition: transform .2s var(--ease-out); }
+.ps2 .ps2-tab:active .ps2-tab-label { transform: scale(.96); }
+
+.ps2-tab-ico { display: inline-flex; flex: none; width: 16px; height: 16px; color: var(--muted); transition: color .3s var(--ease-out), transform .35s var(--ease-out); }
+.ps2-tab-ico svg { display: block; overflow: visible; }
+.ps2-tab:hover .ps2-tab-ico, .ps2-tab[aria-selected="true"] .ps2-tab-ico { color: inherit; }
+.ps2-tab:not([aria-selected="true"]):hover .ps2-tab-ico { transform: translateY(-1px); }
+
+/* ── Frise des semaines ──────────────────────────────────────────────────── */
+/* Sous la largeur utile (176 px par semaine), la frise défile horizontalement ; la marge négative garde de la place au
+   halo et au survol, que le défilement rognerait. */
+.ps2-wk { position: relative; overflow-x: auto; overflow-y: hidden; margin: -14px -4px -6px; padding: 14px 4px 6px; scrollbar-width: none; }
+.ps2-wk::-webkit-scrollbar { display: none; }
+.ps2-wk-inner { position: relative; display: grid; grid-template-columns: repeat(var(--n, 5), minmax(0, 1fr)); min-width: calc(var(--n, 5) * 176px); }
+.ps2-wk-rail { position: absolute; top: 15px; height: 2px; pointer-events: none; }
+.ps2-wk-base, .ps2-wk-fill { position: absolute; top: 0; left: 0; height: 2px; border-radius: 2px; display: block; transform-origin: left center; }
+.ps2-wk-base { right: 0; background: var(--line); }
+.ps2-wk-fill { background: var(--good-strong); }
+
+.ps2-wk-col { position: relative; z-index: 1; display: flex; justify-content: center; min-width: 0; }
+.ps2-wk-item { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 0 4px 2px; border-radius: 12px; text-align: center; color: inherit; }
+
+.ps2-wk-node { position: relative; width: 32px; height: 32px; display: grid; place-items: center; }
+.ps2-wk-dot {
+  width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--card);
+  border: 2px solid var(--line); transition: transform .35s var(--ease-out), box-shadow .35s var(--ease-out);
+}
+.ps2-wk-dot.is-ok { background: var(--good-strong); border-color: var(--good-strong); color: var(--card); box-shadow: 0 4px 10px -5px rgba(62, 125, 90, .8); }
+.ps2-wk-dot.is-low { border-color: var(--low-strong); }
+.ps2-wk-dot.is-low i { width: 8px; height: 8px; border-radius: 50%; background: var(--low-strong); }
+.ps2.is-dark .ps2-wk-dot.is-ok { box-shadow: none; }
+
+/* Semaine en cours : anneau rempli au prorata des jours ouvrés écoulés, cœur plein, onde qui respire. */
+.ps2-wk-ring { position: relative; width: 32px; height: 32px; display: grid; place-items: center; color: var(--good-strong); transition: transform .35s var(--ease-out); }
+.ps2-wk-ring.is-low { color: var(--low-strong); }
+.ps2-wk-ring svg { position: absolute; inset: 0; overflow: visible; }
+.ps2-wk-ring .ps2-wk-ring-track { fill: var(--card); stroke: var(--line); stroke-width: 2.5; }
+.ps2-wk-ring .ps2-wk-ring-arc { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; }
+.ps2-wk-core { position: relative; width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
+.ps2-wk-halo { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid currentColor; opacity: 0; pointer-events: none; }
+.ps2-wk.is-on .ps2-wk-halo { animation: ps2WkHalo 2.4s cubic-bezier(.25, .6, .35, 1) var(--halo-delay, 1.4s) infinite; }
+@keyframes ps2WkHalo { 0% { transform: scale(.95); opacity: .55; } 100% { transform: scale(1.75); opacity: 0; } }
+
+.ps2-wk-text { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.ps2-wk-title { font-size: 13px; color: var(--soft); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ps2-wk-title b, .ps2-wk-title em { color: var(--ink); font-weight: 600; font-style: normal; }
+.ps2-wk-stat { font-size: 12px; color: var(--soft); white-space: nowrap; }
+.ps2-wk-stat b { color: var(--ink); font-weight: 600; }
+.ps2-wk-stat.is-alert, .ps2-wk-stat.is-alert b { color: var(--low-strong); font-weight: 600; }
+.ps2-wk-item.is-future .ps2-wk-title, .ps2-wk-item.is-future .ps2-wk-title b, .ps2-wk-item.is-future .ps2-wk-stat { color: var(--muted); }
+
+button.ps2-wk-item:hover .ps2-wk-dot, button.ps2-wk-item:hover .ps2-wk-ring { transform: scale(1.1); }
+button.ps2-wk-item:hover .ps2-wk-title { color: var(--ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ps2-wk.is-on .ps2-wk-halo { animation: none; }
+  .ps2-tab-ico, .ps2 .ps2-tab .ps2-tab-label, .ps2-wk-dot, .ps2-wk-ring { transition: none; }
+}

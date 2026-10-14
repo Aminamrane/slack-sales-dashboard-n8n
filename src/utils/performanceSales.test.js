@@ -42,3 +42,24 @@ test('footer and cards reconcile including setters and weighted ratios',async()=
  assert.equal(t.r1_placed,12);assert.equal(t.r1_done,7);assert.equal(t.r1p_s,4);assert.equal(t.r1_cc_setter_done,2);assert.equal(t.closing_r1,7/12*100);
  assert.equal(performanceTotals([]).closing_r1,null);
 });
+
+test('presence is computed on past appointments only, upcoming ones no longer lower it', async () => {
+ const {performanceTotals}=await import('./performanceSales.js');
+ const data={global_view:{by_person:[person('Pierre',{r1p:10,r1r:4,r1_due:6,r1_done_due:3,r1_open:2,r2p:4,r2r:2,r2_due:2,r2_done_due:2})]}};
+ const rows=performanceRows(data,null,'global',key),t=performanceTotals(rows);
+ assert.equal(rows[0].conv_r1p_to_r1r,50); assert.equal(t.closing_r1,50); assert.equal(t.closing_r2,100); assert.equal(t.r1_open,2);
+});
+test('R1 on the phone is kept apart from R1 placed in the CRM', async () => {
+ const {performanceTotals}=await import('./performanceSales.js');
+ const rows=performanceRows({global_view:{by_person:[person('Léo',{r1p:3,r1_phone:2,r2p:4})]}},null,'global',key);
+ assert.equal(rows[0].r1_placed,3); assert.equal(rows[0].r1_phone,2); assert.equal(performanceTotals(rows).r1_phone,2);
+});
+test('Allo calls: answer rate uses human answers, sales outside Allo are not counted as zero', async () => {
+ const {performanceTotals}=await import('./performanceSales.js');
+ const p={global_view:{by_person:[person('Alex',{r1p:1,leads_assigned:4}),person('Yanis',{r1p:1,leads_assigned:5}),person('Paul',{nbr_signed:1})]}};
+ const calls={calls_source:'allo',by_sales:[{sales:'Alex',calls_source:'allo',calls_available:true,total:{appels:200,appels_repondus:80,repondu:30}},
+   {sales:'Yanis',calls_source:'allo',calls_available:false,total:{appels:0,appels_repondus:0,repondu:12}}]};
+ const rows=performanceRows(p,calls,'global',key),t=performanceTotals(rows);
+ assert.equal(rows.find(r=>r.salesName==='Alex').conv_calls_to_answered,40);
+ assert.equal(t.calls,200); assert.equal(t.calls_human,80); assert.equal(t.conv_calls_to_answered,40); assert.deepEqual(t.calls_missing,['Yanis']);
+});
