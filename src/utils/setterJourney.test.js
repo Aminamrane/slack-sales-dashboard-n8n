@@ -1,9 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setterAction, availableSelection, bookingSalesChoices, singleBookingAction } from './setterJourney.js';
+import { setterAction, availableSelection, bookingSalesChoices, singleBookingAction, canRescheduleSetterR1 } from './setterJourney.js';
 const owned = { id: 7, assigned_to: 'a@example.com', email: 'client@example.com' };
 const mine = { ...owned, created_by_setter: 'setter@example.com' };
 const slot = { email: 'a@example.com', date: '2026-09-24', time: '10:30' };
+test('a missed or pending R1 remains reschedulable in transverse setter views', () => {
+ for (const bucket of ['r1_placed', 'confirm', 'mine', 'lapins', 'r1_late', 'to_do']) {
+  for (const result of [null, 'no_show', 'rescheduled', 'cancelled']) {
+   assert.equal(canRescheduleSetterR1({ ...owned, status: bucket, _setter_bucket: bucket, _lead_status: 'r1', r1: '2026-10-13T16:30:00', r1_result: result }, { isSetter: true }), true);
+  }
+ }
+});
+test('rescheduling shortcut preserves read-only, completed and later-stage restrictions', () => {
+ const lead={...owned,r1:'2026-10-13T16:30:00',_setter_bucket:'r1_placed'};
+ assert.equal(canRescheduleSetterR1(lead),false);
+ assert.equal(canRescheduleSetterR1(lead,{isSetter:true,readOnly:true}),false);
+ for (const patch of [{r1:null},{assigned_to:null},{r1_result:'done'},{r1_result:'showed_up'},{r2:'2026-10-15T10:00'},{r2_date:'2026-10-15T10:00'},{r3:'2026-10-15T10:00'},{status:'signed'},{_lead_status:'signed'},{_setter_bucket:'r2_placed'},{setter_disqualified_at:'2026-10-14'}]) {
+  assert.equal(canRescheduleSetterR1({...lead,...patch},{isSetter:true}),false,JSON.stringify(patch));
+ }
+});
 test('existing and setter-created leads both send the explicitly selected sales', () => {
  for (const lead of [owned,mine]) {
   const action=setterAction({lead,outcome:'r1',slot:{...slot,email:'other@example.com'}});
