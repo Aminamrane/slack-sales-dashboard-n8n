@@ -354,7 +354,7 @@ function signalRow(s) {
   switch (s.key) {
     case 'pace': return { name: 'Ventes par jour', period: 'cette semaine', now: fr(v.now?.value, 1), ref: fr(v.before?.value, 1), refLabel: v.before?.label,
       delta: s.figure, bars: [v.before?.value, v.now?.value] };
-    case 'leads': return { name: 'Leads reçus', period: s.period?.split(',')[0], now: fr(v.value), ref: fr(v.target), refLabel: 'attendus à date', delta: s.figure, bars: [v.target, v.value] };
+    case 'leads': return { name: 'Leads chez les sales', period: s.period?.split(',')[0], now: fr(v.value), ref: fr(v.target), refLabel: 'attendus à date', delta: s.figure, bars: [v.target, v.value] };
     case 'no_show': return { name: 'No-show R1', period: v.now?.label, now: `${fr(v.now?.value)} %`, ref: v.before ? `${fr(v.before.value)} %` : '–', refLabel: v.before?.label,
       delta: v.before ? `${v.now.value - v.before.value > 0 ? '+' : ''}${v.now.value - v.before.value} pts` : null, bars: v.before ? [v.before.value, v.now.value] : null };
     case 'r2_no_sale': return { name: 'R2 effectués sans vente', period: s.period?.split(',')[0], now: fr(v.value), ref: fr(v.total), refLabel: 'R2 effectués du mois',
@@ -429,7 +429,7 @@ function Teams({ teams, onPilot, days }) {
             <Info className="ps2-team" label={`${t.team}, détail`}
               detail={(dismiss) => <Detail kicker={t.team} title={`${t.people} sales`} value={`${t.nbr_signature}${t.objective ? ` / ${t.objective}` : ''} ventes`}
                 action={onPilot && <button type="button" className="ps2-link" onClick={() => { dismiss(); onPilot(t.team); }}>Piloter l’équipe</button>}
-                rows={[['CA déclaré', euro(t.total_revenue)], ['Signatures', fr(t.nbr_signed)], ['Leads reçus', fr(t.leads_assigned)], ['R1 effectués', fr(t.r1r)],
+                rows={[['CA déclaré', euro(t.total_revenue)], ['Signatures', fr(t.nbr_signed)], ['Leads chez les sales', fr(t.leads_assigned)], ['R1 effectués', fr(t.r1r)],
                   ['R2 effectués', fr(t.r2r)], ['Ventes / R2 effectué', closing == null ? '–' : `${closing} %`], ['No-show R1', noshow == null ? '–' : `${noshow} %`],
                   ['R2 effectués sans vente', fr(t.r2e_without_sale)], ['RDV passés pas qualifiés', fr((t.r1_open || 0) + (t.r2_open || 0))]]} />}>
               <span className="ps2-team-name"><i style={{ background: t.color || TEAM_COLORS[i % TEAM_COLORS.length] }} />{t.team.replace('Équipe ', '')}<small>{t.people} sales</small></span>
@@ -572,7 +572,7 @@ function Channels({ model, onOpen }) {
         </Motion.div>
         <div style={{ overflowX: 'auto', marginTop: 12 }}>
           <Motion.table className="ps2-table" style={{ minWidth: 640 }} variants={{ hidden: {}, shown: { transition: { staggerChildren: 0.05, delayChildren: 0.15 } } }}>
-            <thead><tr><th>Canal</th><th>Leads reçus</th><th>R1 effectués</th><th>R2 effectués</th><th>Signatures</th><th>Ventes</th><th style={{ textAlign: 'left', width: 160 }}>Ventes / leads</th></tr></thead>
+            <thead><tr><th>Canal</th><th>Leads chez les sales</th><th>R1 effectués</th><th>R2 effectués</th><th>Signatures</th><th>Ventes</th><th style={{ textAlign: 'left', width: 160 }}>Ventes / leads</th></tr></thead>
             <tbody>
               <tr className="is-group"><td colSpan={7}>Origine du lead</td></tr>
               {rowsFor('origin').map((s) => <Row key={s.key} s={s} />)}

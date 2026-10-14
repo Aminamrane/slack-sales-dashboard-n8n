@@ -121,9 +121,14 @@ export function FunnelFlow({ model, onOpen, source = null }) {
                   ? `dont ${fr(model.journeys[source].received || 0)} reçus en ${monthName(model)}`
                   : share == null ? ' ' : cohortMode ? `${share} % des reçus` : `${share} % du global`}</div>
               ) : (
-                <div className={`ps2-stage-note ${m.gap == null ? 'ps2-soft' : m.gap >= 0 ? 'ps2-good' : 'ps2-low'}`}>
-                  {m.gap == null ? (k === 'signed' ? 'sur Yousign' : ' ') : `${signedNum(m.gap)} sur l'attendu (${fr(m.expected)})`}
-                </div>
+                <>
+                  <div className={`ps2-stage-note ${m.gap == null ? 'ps2-soft' : m.gap >= 0 ? 'ps2-good' : 'ps2-low'}`}>
+                    {m.gap == null ? (k === 'signed' ? 'sur Yousign' : ' ') : `${signedNum(m.gap)} sur l'attendu (${fr(m.expected)})`}
+                  </div>
+                  {k === 'leads' && model.bridge?.given > 0 && (
+                    <div className="ps2-stage-note ps2-soft ps2-num ps2-stage-bridge">{fr(model.bridge.given)} affectés{model.bridge.pool ? ` · ${fr(model.bridge.pool)} au pool` : ''}</div>
+                  )}
+                </>
               )}
             </button>
           );
