@@ -3,9 +3,11 @@ import { ArrowLeft, ArrowRight, FileUp, FileText, UsersRound, Building2, Check, 
 import apiClient from '../../services/apiClient';
 import { validateIntakeFile, documentStatus, hasRequiredSaleDocuments, canDeclareSale, DOCUMENT_WAIVERS } from '../../utils/intakeDocuments';
 
-export default function SaleDocuments({ leadId, draft, onBack, onContinue, continueLabel = "Continuer vers la facturation", submitting = false }) {
+// `standalone` : dépôt hors de la déclaration (fiche du lead), avant la signature comme après la
+// déclaration. Même circuit et mêmes règles ; seuls la dispense et « Déclarer la vente » disparaissent.
+export default function SaleDocuments({ leadId, draft, onBack, onContinue, continueLabel = "Continuer vers la facturation", submitting = false, standalone = false, onClose }) {
   const [files, setFiles] = useState([]), [platform, setPlatform] = useState(null);
-  const [account, setAccount] = useState(null);
+  const [account, setAccount] = useState(null), [scope, setScope] = useState(null);
   const uploading = useRef(false);
   const [busy, setBusy] = useState(''), [loading, setLoading] = useState(true), [error, setError] = useState('');
   const [otherType, setOtherType] = useState('other'), [otherCompany, setOtherCompany] = useState('');
@@ -13,19 +15,20 @@ export default function SaleDocuments({ leadId, draft, onBack, onContinue, conti
   const [waiverOn, setWaiverOn] = useState(false), [waiver, setWaiver] = useState('');
   const hasDocuments = hasRequiredSaleDocuments(files);
   const chosenWaiver = !hasDocuments && waiverOn ? waiver : '';
-  const companies = draft?.companies?.filter(c => c.selected) || [];
-  const directors = draft?.directors?.filter(d => d.companies?.some(id => companies.some(c => c.id === id))) || [];
+  const dossier = draft || scope?.draft;
+  const companies = dossier?.companies?.filter(c => c.selected) || [];
+  const directors = dossier?.directors?.filter(d => d.companies?.some(id => companies.some(c => c.id === id))) || [];
   const root = `/api/v1/owner-integration/leads/${leadId}/sale-documents`;
   useEffect(() => { if (hasDocuments) { setWaiverOn(false); setWaiver(''); } }, [hasDocuments]);
   useEffect(() => {
     let live = true;
-    apiClient.get(root + '?remote=true').then(result => {if (live) {setFiles(result.documents);setPlatform(result.platform);setAccount(result.account);}})
+    apiClient.get(root + '?remote=true').then(result => {if (live) {setFiles(result.documents);setPlatform(result.platform);setAccount(result.account);setScope(result);if (result.available === false) setError(result.reason || 'Le dépôt n’est pas encore ouvert pour ce dossier.');}})
       .catch(e => {if(live) setError(e.message);}).finally(() => {if(live) setLoading(false);});
     return () => {live = false;};
   }, [root]);
   async function refresh() {
     if (busy) return;setLoading(true);setError('');
-    try {const result = await apiClient.get(root + '?remote=true');setFiles(result.documents);setPlatform(result.platform);setAccount(result.account);}
+    try {const result = await apiClient.get(root + '?remote=true');setFiles(result.documents);setPlatform(result.platform);setAccount(result.account);setScope(result);}
     catch(e) {setError(e.message);} finally {setLoading(false);}
   }
   async function upload(selection, meta) {
@@ -68,7 +71,7 @@ export default function SaleDocuments({ leadId, draft, onBack, onContinue, conti
     </label>;
   }
   return <section className="integration-preview ip-embedded si-documents">
-    <header className="si-title"><span className="si-title-icon"><FileUp size={26}/></span><div><small>PIÈCES DU DOSSIER</small><h2>Ajouter les documents</h2><p>Étape obligatoire : ajoutez au moins un document pour poursuivre la déclaration de vente. Société en création ou trop récente : cochez la case en bas de l’étape.</p></div></header>
+    <header className="si-title"><span className="si-title-icon"><FileUp size={26}/></span><div><small>PIÈCES DU DOSSIER</small><h2>{standalone ? 'Documents du client' : 'Ajouter les documents'}</h2><p>{standalone ? standaloneIntro(scope?.phase) : 'Étape obligatoire : ajoutez au moins un document pour poursuivre la déclaration de vente. Société en création ou trop récente : cochez la case en bas de l’étape.'}</p></div></header>
     {account && <div className="si-account-state"><UsersRound size={20}/><div><strong>{account.label}</strong><p>{account.detail}</p></div></div>}
     <div className="si-section-title"><UsersRound size={19}/><h3>Pour chaque dirigeant</h3></div>
     <div className="si-upload-grid">{directors.map(d => <article key={d.id}><h4>{d.name}</h4>{drop('Avis d’imposition', {document_type:'tax_notice', director_id:d.id}, FileText)}</article>)}</div>
@@ -86,17 +89,23 @@ export default function SaleDocuments({ leadId, draft, onBack, onContinue, conti
       {platform?.reason && <p className="si-delivery-note">{platform.reason}</p>}
     </section>
     {platform?.available && <details className="si-other-docs"><summary>État dans l’espace client · {platform.documents?.total || 0} document(s)</summary><p>Une pièce est complète lorsque son analyse est terminée.</p>{platform.expected?.map((piece,i) => <div className="si-checklist" key={`${piece.key}-${i}`}><span>{piece.label}{piece.company?.name ? ` · ${piece.company.name}` : ''}</span><small>{piece.status==='received' ? 'Analysé' : 'À compléter / analyse en attente'}</small></div>)}</details>}
-    {!loading && !hasDocuments && <div className={`si-waiver ${waiverOn ? 'is-on' : ''}`}>
+    {!standalone && !loading && !hasDocuments && <div className={`si-waiver ${waiverOn ? 'is-on' : ''}`}>
       <label className="si-waiver-check"><input type="checkbox" checked={waiverOn} disabled={!!busy || submitting} onChange={e => {setWaiverOn(e.target.checked); setWaiver(''); setError('');}}/>
         <FileX2 size={20}/><span><strong>Le client n’a pas encore de documents</strong><small>Société en cours de création, ou trop récente pour avoir un bilan ou un avis d’imposition : la vente peut être déclarée sans pièce.</small></span></label>
       {waiverOn && <div className="si-waiver-reasons" role="radiogroup" aria-label="Situation de la société">{DOCUMENT_WAIVERS.map(([value, label]) =>
         <button type="button" key={value} role="radio" aria-checked={waiver === value} className={waiver === value ? 'is-selected' : ''} disabled={!!busy || submitting} onClick={() => {setWaiver(value); setError('');}}>{waiver === value && <Check size={14}/>}{label}</button>)}</div>}
     </div>}
-    {!loading && !hasDocuments && (chosenWaiver
+    {!standalone && !loading && !hasDocuments && (chosenWaiver
       ? <p role="status">Déclaration sans pièce : {DOCUMENT_WAIVERS.find(([value]) => value === chosenWaiver)?.[1]}. La dispense sera visible par l’équipe d’onboarding.</p>
       : <p role="status">{waiverOn ? 'Choisissez la situation de la société pour continuer.' : 'Un document doit être enregistré avant de continuer. Les dépôts refusés doivent être corrigés.'}</p>)}
     {error && <div className="si-error" role="alert">{error}</div>}
-    <footer className="si-actions"><button className="ip-secondary" disabled={!!busy || submitting} onClick={onBack}><ArrowLeft size={16}/> Fiche</button><button className="ip-primary" disabled={!!busy || submitting || loading || !canDeclareSale(files, chosenWaiver)} onClick={continueToBilling}>{submitting ? "Déclaration…" : continueLabel}<ArrowRight size={17}/></button></footer>
+    {standalone ? <footer className="si-actions"><span/><button className="ip-primary" disabled={!!busy} onClick={onClose}>Terminé<Check size={17}/></button></footer>
+    : <footer className="si-actions"><button className="ip-secondary" disabled={!!busy || submitting} onClick={onBack}><ArrowLeft size={16}/> Fiche</button><button className="ip-primary" disabled={!!busy || submitting || loading || !canDeclareSale(files, chosenWaiver)} onClick={continueToBilling}>{submitting ? "Déclaration…" : continueLabel}<ArrowRight size={17}/></button></footer>}
   </section>;
 }
 function FileCheckIcon(){return <FileText size={19}/>;}
+function standaloneIntro(phase) {
+  if (phase === 'declared') return 'Ajoutez des pièces au dossier : elles partent directement dans le compte du client.';
+  if (phase === 'signed') return 'Les pièces déposées ici comptent pour la déclaration de vente et partiront dans le compte du client.';
+  return 'Déposez les pièces dès maintenant : elles partiront dans le compte du client dès son ouverture, et compteront pour la déclaration de vente.';
+}

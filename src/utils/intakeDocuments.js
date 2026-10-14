@@ -32,3 +32,25 @@ export function canDeclareSale(files, waiver) {
   return hasRequiredSaleDocuments(files) || DOCUMENT_WAIVERS.some(([value]) => value === waiver);
 }
 
+
+// Suivi des pièces dans la fiche du lead (dev 14/10/2026) : ce que le sales a déjà donné.
+export const DOCUMENT_LABELS = {
+  tax_notice: 'Avis d’imposition', balance_sheet: 'Bilan', payslip: 'Bulletin de paie', dsn: 'DSN',
+  employment_contract: 'Contrat de travail', duerp: 'DUERP', other: 'Autre document',
+};
+
+export function documentsSummary(files) {
+  const list = Array.isArray(files) ? files : [];
+  const count = status => list.filter(file => file.status === status).length;
+  return { total: list.length, sent: count('sent'), pending: count('waiting') + count('sending'), rejected: count('rejected') };
+}
+
+export function shortDocumentStatus(file) {
+  return { sent: 'Transmise', sending: 'Envoi en cours', waiting: 'En attente', rejected: 'À corriger' }[file?.status] || 'En attente';
+}
+
+export function documentOwner(file, draft) {
+  if (file?.director_id) return draft?.directors?.find(d => d.id === file.director_id)?.name || 'Dirigeant';
+  return draft?.companies?.find(c => file?.company_siren && c.siren?.replace(/\s/g, '') === file.company_siren)?.name
+    || (draft?.companies?.length === 1 ? draft.companies[0].name : 'Dossier client');
+}
