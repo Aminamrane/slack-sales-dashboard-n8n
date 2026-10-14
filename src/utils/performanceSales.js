@@ -1,34 +1,45 @@
 // The API owns identities, periods and channel membership. Never replace
 // channel-specific appointments with the global tracking-sheet counters.
 export const ratio = (numerator, denominator) => denominator > 0 ? numerator / denominator * 100 : null;
+// Présence sur les rendez-vous PASSÉS (date prévue dépassée, heure de Paris) : ceux à venir du mois ne la font plus
+// baisser (dev 13/10/2026). Mois sans ce détail (avant avril 2026) : ancien calcul, effectués ÷ placés.
+export const presence = (doneDue, due, done, placed) => due > 0 ? ratio(doneDue, due) : ratio(done, placed);
 
 export function performanceRows(perfData, callsData, canal, keyForName) {
   const view = perfData?.[`${canal === 'global' ? 'global' : canal}_view`];
   const calls = new Map((callsData?.by_sales || []).map(row => [keyForName(row.sales), row]));
   return (view?.by_person || []).filter(p => isPerformanceSalesPerson(p.name)).filter(p =>
-    ['leads_assigned', 'nbr_appel', 'r1p', 'r1r', 'r2p', 'r2r', 'nbr_signature', 'total_revenue', 'total_cash'].some(k => Number(p[k] || 0) !== 0)
+    ['leads_assigned', 'nbr_appel', 'r1p', 'r1r', 'r2p', 'r2r', 'nbr_signature', 'nbr_signed', 'total_revenue', 'total_cash'].some(k => Number(p[k] || 0) !== 0)
   ).map(p => {
     const cr = calls.get(keyForName(p.name));
     const c = cr?.[canal === 'global' ? 'total' : canal];
     const r1p = p.r1p || 0, r2p = p.r2p || 0, r1d = p.r1r || 0, r2d = p.r2r || 0;
     const ct = c?.appels ?? p.nbr_appel ?? 0, ca = c?.repondu ?? p.nbr_appel_d ?? 0;
     const sig = p.nbr_signature || 0, la = p.leads_assigned || 0;
+    // Allo (septembre 2026+) : appels sortants et appels répondus par une personne, répondeurs détectés exclus.
+    const allo = (cr?.calls_source || callsData?.calls_source) === 'allo';
+    const human = allo ? (c?.appels_repondus ?? 0) : ca;
+    const due = {r1_due:p.r1_due||0, r1_done_due:p.r1_done_due||0, r1_open:p.r1_open||0,
+      r2_due:p.r2_due||0, r2_done_due:p.r2_done_due||0, r2_open:p.r2_open||0};
     return {
-      salesName: p.name, salesKey: keyForName(p.name), calls_total: ct, calls_answered: ca,
+      salesName: p.name, salesKey: keyForName(p.name), calls_total: ct, calls_answered: ca, calls_human: human,
       calls_available: cr ? cr.calls_available !== false : perfData.calls_available !== false,
-      r1_placed: r1p, r1_done: r1d, r2_placed: r2p, r2_done: r2d,
+      calls_source: cr?.calls_source || callsData?.calls_source || null,
+      r1_placed: r1p, r1_done: r1d, r2_placed: r2p, r2_done: r2d, ...due,
+      r1_phone: p.r1_phone || 0, r1_phone_s: p.r1_phone_s || 0,
       r1p_self: p.r1p_self ?? r1p, r1p_s: p.r1p_s ?? 0, r1r_s: p.r1r_s ?? 0,
       r2p_self: p.r2p_self ?? r2p, r2p_s: p.r2p_s ?? 0, r2r_s: p.r2r_s ?? 0,
       r1_cc_setter_placed:p.r1_cc_setter_placed||0, r1_cc_setter_done:p.r1_cc_setter_done||0,
       r2_cc_setter_placed:p.r2_cc_setter_placed||0, r2_cc_setter_done:p.r2_cc_setter_done||0,
-      signatures: sig, revenue: p.total_revenue || 0, cashCollected: p.total_cash || 0,
+      signatures: sig, signed: p.nbr_signed || 0, revenue: p.total_revenue || 0, cashCollected: p.total_cash || 0,
       leads_assigned: la, leads_ads: p.leads_ads || 0, leads_cc: p.leads_cc || 0,
       unique_attempted: p.unique_attempted || 0, unique_answered: c?.repondu_lead ?? p.unique_answered ?? 0,
       r1_from_answered: c?.r1_from_answered ?? r1p,
       repondeur: c?.repondeur ?? 0, qualif: c?.qualif ?? 0,
-      conv_global: ratio(sig, la), conv_calls_to_answered: ratio(ca, ct),
+      conv_global: ratio(sig, la), conv_calls_to_answered: ratio(human, ct),
       conv_answered_to_r1p: ratio(c?.r1_from_answered ?? r1p, c?.repondu_lead ?? ca),
-      conv_r1p_to_r1r: ratio(r1d, r1p), conv_r2p_to_r2r: ratio(r2d, r2p), conv_sales: ratio(sig, r2d),
+      conv_r1p_to_r1r: presence(due.r1_done_due, due.r1_due, r1d, r1p),
+      conv_r2p_to_r2r: presence(due.r2_done_due, due.r2_due, r2d, r2p), conv_sales: ratio(sig, r2d),
     };
   }).sort((a, b) => b.signatures - a.signatures || b.conv_global - a.conv_global || a.salesName.localeCompare(b.salesName, 'fr'));
 }
@@ -54,15 +65,25 @@ export function visibleHeadcount(data) {
 // Cards and footer use exactly the same visible rows; rates are recomputed,
 // never averaged between sellers.
 export function performanceTotals(rows) {
-  const fields = ['calls_total','calls_answered','repondeur','qualif','r1_placed','r1_done','r2_placed','r2_done',
+  const fields = ['calls_total','calls_answered','calls_human','repondeur','qualif','r1_placed','r1_done','r2_placed','r2_done',
+    'r1_due','r1_done_due','r1_open','r2_due','r2_done_due','r2_open','r1_phone','r1_phone_s',
     'r1p_self','r1p_s','r1r_s','r2p_self','r2p_s','r2r_s','r1_cc_setter_placed','r1_cc_setter_done',
-    'r2_cc_setter_placed','r2_cc_setter_done','signatures','revenue','cashCollected','leads_assigned',
+    'r2_cc_setter_placed','r2_cc_setter_done','signatures','signed','revenue','cashCollected','leads_assigned',
     'leads_ads','leads_cc','unique_attempted','unique_answered','r1_from_answered'];
   const t = Object.fromEntries(fields.map(k=>[k,rows.reduce((sum,r)=>sum+(Number(r[k])||0),0)]));
-  return {...t, calls:t.calls_total, answered:t.calls_answered, calls_available:rows.every(r=>r.calls_available),
-    lead_qualifie:ratio(t.qualif,t.calls_answered), closing_r1:ratio(t.r1_done,t.r1_placed),
-    closing_r2:ratio(t.r2_done,t.r2_placed), closing_audit:ratio(t.signatures,t.r2_done),
-    conv_global:ratio(t.signatures,t.leads_assigned), conv_calls_to_answered:ratio(t.calls_total? t.calls_answered:0,t.calls_total),
-    conv_answered_to_r1p:ratio(t.r1_from_answered,t.unique_answered), conv_r1p_to_r1r:ratio(t.r1_done,t.r1_placed),
-    conv_r2p_to_r2r:ratio(t.r2_done,t.r2_placed), conv_sales:ratio(t.signatures,t.r2_done)};
+  // Appels : seulement les sales dont les appels sont relevés (un sales hors Allo n'ajoute pas un faux zéro).
+  const measured = rows.filter(r => r.calls_available);
+  const callsTotal = measured.reduce((sum, r) => sum + (Number(r.calls_total) || 0), 0);
+  const callsHuman = measured.reduce((sum, r) => sum + (Number(r.calls_human) || 0), 0);
+  return {...t, calls:callsTotal, answered:t.calls_answered, calls_human:callsHuman,
+    calls_available:rows.every(r=>r.calls_available), calls_measured:measured.length > 0,
+    // « Non relevés » : les sales qui ont des leads mais aucun appel Allo (un dirigeant qui signe un contrat n'en est pas un).
+    calls_missing:rows.filter(r=>!r.calls_available && r.leads_assigned > 0).map(r=>r.salesName),
+    lead_qualifie:ratio(t.qualif,t.calls_answered),
+    closing_r1:presence(t.r1_done_due,t.r1_due,t.r1_done,t.r1_placed),
+    closing_r2:presence(t.r2_done_due,t.r2_due,t.r2_done,t.r2_placed), closing_audit:ratio(t.signatures,t.r2_done),
+    conv_global:ratio(t.signatures,t.leads_assigned), conv_calls_to_answered:ratio(callsHuman,callsTotal),
+    conv_answered_to_r1p:ratio(t.r1_from_answered,t.unique_answered),
+    conv_r1p_to_r1r:presence(t.r1_done_due,t.r1_due,t.r1_done,t.r1_placed),
+    conv_r2p_to_r2r:presence(t.r2_done_due,t.r2_due,t.r2_done,t.r2_placed), conv_sales:ratio(t.signatures,t.r2_done)};
 }

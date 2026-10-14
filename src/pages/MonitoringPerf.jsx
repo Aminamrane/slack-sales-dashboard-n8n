@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
-import { motion } from "framer-motion";
+import { motion as Motion } from "framer-motion";
 import apiClient from "../services/apiClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import companyLogo from "../assets/my_image.png";
@@ -12,10 +12,71 @@ import iconGlobal from "../assets/global.png";
 import iconFinance from "../assets/finance.png";
 import "../index.css";
 import { performanceRows, performanceTotals, ratio, isPerformanceSalesPerson, visibleHeadcount } from "../utils/performanceSales.js";
-import RdvHeatmap from "../components/RdvHeatmap.jsx";
+import PerfSalesV2 from "../components/perfSales/v2/PerfSalesV2.jsx";
+import PresenceGrid from "../components/perfSales/v2/PresenceGrid.jsx";
+import Reactivity, { PeriodBar } from "../components/perfSales/v2/Reactivity.jsx";
+import { Reveal, RevealBlock } from "../components/perfSales/motion.jsx";
+import "../components/perfSales/perfSales.css";
 
 const percent = (value, digits=1) => value == null ? '—' : value.toLocaleString('fr-FR', {minimumFractionDigits:digits, maximumFractionDigits:digits}) + '%';
 const parisMonth = () => new Intl.DateTimeFormat('fr-CA',{year:'numeric',month:'2-digit',timeZone:'Europe/Paris'}).format(new Date()).slice(0,7);
+
+// Lecture de /tracking/rdv-analytics sur une période au choix (dev 14/10/2026 : Réactivité et présence par jour et heure) :
+// « mois affiché » réutilise la réponse du mois (rien n'est lu) ; sinon 7 ou 30 derniers jours, mois précédent, dates libres.
+function usePeriodAnalytics(enabled, period, range, refreshKey) {
+  const [state, setState] = useState({ data: null, loading: false, error: false });
+  useEffect(() => {
+    if (!enabled || period.key === 'month') return undefined;
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(new Date());
+    const back = (n) => { const d = new Date(today + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - n); return d.toISOString().slice(0, 10); };
+    const base = /^\d{4}-\d{2}$/.test(range) ? range : parisMonth();
+    const prev = (() => { const [y, m] = base.split('-').map(Number); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`; })();
+    const query = period.key === '7d' ? `start=${back(6)}&end=${today}` : period.key === '30d' ? `start=${back(29)}&end=${today}`
+      : period.key === 'prev' ? `month=${prev}` : period.start && period.end && period.start <= period.end ? `start=${period.start}&end=${period.end}` : null;
+    if (!query) return undefined;
+    let cancelled = false;
+    setState(d => ({ ...d, loading: true, error: false }));
+    apiClient.get('/api/v1/tracking/rdv-analytics?' + query)
+      .then(data => { if (!cancelled) setState({ data, loading: false, error: false }); })
+      .catch(() => { if (!cancelled) setState({ data: null, loading: false, error: true }); });
+    return () => { cancelled = true; };
+  }, [enabled, period, range, refreshKey]);
+  return state;
+}
+// Période de l'onglet Sales (dev 15/10/2026 : « dans Sales, on ne peut pas sélectionner une période ») : le mois affiché, le
+// mois précédent, ou une période libre « AAAA-MM-JJ..AAAA-MM-JJ » (7 ou 30 derniers jours, dates choisies).
+function salesPeriodRange(period, range) {
+  if (period.key === 'month') return range;
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(new Date());
+  const back = (n) => { const d = new Date(today + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - n); return d.toISOString().slice(0, 10); };
+  const base = /^\d{4}-\d{2}$/.test(range) ? range : parisMonth();
+  if (period.key === '7d') return `${back(6)}..${today}`;
+  if (period.key === '30d') return `${back(29)}..${today}`;
+  if (period.key === 'prev') { const [y, m] = base.split('-').map(Number); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`; }
+  return period.start && period.end && period.start <= period.end ? `${period.start}..${period.end}` : null;
+}
+// Chiffres de la page (et, pour l'onglet Sales, les appels) relus pour une période autre que le mois affiché.
+function usePerfPeriod(enabled, periodRange, range, withCalls, refreshKey) {
+  const own = periodRange !== range;
+  const [state, setState] = useState({ perf: null, calls: null, loading: false, error: false });
+  useEffect(() => {
+    if (!enabled || !own) { setState({ perf: null, calls: null, loading: false, error: false }); return undefined; }
+    let cancelled = false;
+    setState(s => ({ ...s, loading: true, error: false }));
+    const [d0, d1] = periodRange.split('..');
+    const calls = withCalls && periodRange >= '2026-05'
+      ? apiClient.get('/api/v1/tracking/sales-calls-crm?' + (d1 ? `start=${d0}&end=${d1}` : `month=${periodRange}`)).catch(() => ({ by_sales: [], calls_error: 'Appels indisponibles' }))
+      : Promise.resolve(null);
+    Promise.all([apiClient.get('/api/v1/monitoring/performance/v2?period=' + encodeURIComponent(periodRange)), calls])
+      .then(([perf, crm]) => { if (!cancelled) setState({ perf, calls: crm, loading: false, error: false }); })
+      .catch(() => { if (!cancelled) setState(s => ({ ...s, loading: false, error: true })); });
+    return () => { cancelled = true; };
+  }, [enabled, own, periodRange, withCalls, refreshKey]);
+  return { ...state, own };
+}
+const nextDay = (iso) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
+const rangeLabelFR = (r) => (String(r).includes('..') ? r.split('..').map(d => d.split('-').reverse().slice(0, 2).join('/')).join(' → ') : monthLabelFR(r));
+
 const COLORS = { primary: "#6366f1", secondary: "#fb923c", tertiary: "#10b981" };
 const MONTHS_FR = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
 const monthLabelFR = (ym) => { const p = String(ym || '').split('-'); return (MONTHS_FR[(+p[1] || 1) - 1] || '') + ' ' + (p[0] || ''); };
@@ -50,20 +111,8 @@ const NAME_VARIANTS_TO_CANONICAL = {
   "youcef": "youcef amrane", "youcef amran": "youcef amrane", "youcef amrane": "youcef amrane", "amran": "youcef amrane", "amrane": "youcef amrane", "yamraneownertechnologycom": "youcef amrane"
 };
 
-const CANONICAL_DISPLAY_NAMES = {
-  "yohan debowski": "Yohan Debowski", "leo mafrici": "L\u00e9o Mafrici", "mourad derradji": "Mourad Derradji",
-  "youness el boukhrissi": "Youness El Boukhrissi", "yanis zairi": "Yanis Za\u00efri", "alex gaudrillet": "Alex Gaudrillet",
-  "sebastien itema": "S\u00e9bastien ITEMA", "selim kouay": "Selim Kouay", "eva meilhac": "Eva Meilhac", "david dubois": "David Dubois",
-  "aurelie briquet": "Aur\u00e9lie Briquet", "gwenael": "Gwena\u00ebl Derouet", "quentin rattez": "Quentin Rattez",
-  "mehdi bouffessil": "Mehdi BOUFFESSIL", "mehdi mestiri": "Mehdi Mestiri", "sarah amroune": "Sarah Amroune", "sara benabid": "Sara BENABID",
-  "mohamed bouaksa": "Mohamed Bouaksa", "kail": "Ka\u00efl", "youcef amrane": "Youcef Amrane"
-};
 
 const getCanonicalKey = (rawName) => { const n = normalizeSalesKey(rawName); return NAME_VARIANTS_TO_CANONICAL[n] || n; };
-const displaySalesName = (rawName) => { const k = getCanonicalKey(rawName); return CANONICAL_DISPLAY_NAMES[k] || (rawName ? rawName.trim() : "Unknown"); };
-const EXCLUDED_KEYS = new Set(['youcef amrane']);
-const VENTES_BRACKETS = ['1-2', '3-5', '6-10', '11-19', '20+', 'autre'];
-const VENTES_BRACKET_LABEL = { '1-2': '1-2', '3-5': '3-5', '6-10': '6-10', '11-19': '11-19', '20+': '20+', 'autre': 'Autre' };
 
 function CalcTip({ text, rect, darkMode }) {
   const [typed, setTyped] = useState('');
@@ -81,19 +130,19 @@ function CalcTip({ text, rect, darkMode }) {
   const left = Math.min(Math.max(rect.left + rect.width / 2, 175), W - 175);
   return createPortal(
     <div style={{ position:'fixed', left, top: rect.bottom + 10, transform:'translateX(-50%)', zIndex:99999, pointerEvents:'none' }}>
-      <motion.div initial={{ opacity:0, scale:0.85, y:-6 }} animate={{ opacity:1, scale:1, y:0 }} transition={{ type:'spring', stiffness:420, damping:28 }} style={{ transformOrigin:'top center' }}>
+      <Motion.div initial={{ opacity:0, scale:0.85, y:-6 }} animate={{ opacity:1, scale:1, y:0 }} transition={{ type:'spring', stiffness:420, damping:28 }} style={{ transformOrigin:'top center' }}>
         <div style={{ position:'relative', background:GLASS_BG, backdropFilter:'blur(14px)', WebkitBackdropFilter:'blur(14px)', border:`1px solid ${GLASS_BORDER}`, borderRadius:11, padding:'0 14px', boxShadow: darkMode ? '0 8px 30px rgba(0,0,0,0.4), 0 0 0 1px rgba(124,138,219,0.10)' : '0 8px 28px rgba(0,0,0,0.08), 0 0 0 1px rgba(91,106,191,0.05)', minWidth:180, maxWidth:300, overflow:'hidden' }}>
-          <motion.div animate={{ height: contentH || 'auto' }} transition={{ duration:0.25, ease:[0.22,0.68,0.35,1.05] }} style={{ overflow:'hidden' }}>
+          <Motion.div animate={{ height: contentH || 'auto' }} transition={{ duration:0.25, ease:[0.22,0.68,0.35,1.05] }} style={{ overflow:'hidden' }}>
             <div ref={contentRef} style={{ padding:'8px 0' }}>
               <span style={{ fontSize:'12px', fontWeight:500, fontFamily:"'Inter', system-ui, sans-serif", color: darkMode ? '#c8cbda' : '#3a3f54', lineHeight:1.45, letterSpacing:'-0.01em', whiteSpace:'pre-wrap', textAlign:'center', display:'block' }}>
                 {typed}
-                <motion.span animate={{ opacity:[1,0] }} transition={{ duration:0.5, repeat:Infinity, repeatType:'reverse' }} style={{ color: darkMode ? '#7c8adb' : '#5b6abf', fontWeight:300 }}>|</motion.span>
+                <Motion.span animate={{ opacity:[1,0] }} transition={{ duration:0.5, repeat:Infinity, repeatType:'reverse' }} style={{ color: darkMode ? '#7c8adb' : '#5b6abf', fontWeight:300 }}>|</Motion.span>
               </span>
             </div>
-          </motion.div>
+          </Motion.div>
           <div style={{ position:'absolute', top:-5, left:'50%', marginLeft:-5, width:10, height:10, background:GLASS_BG, backdropFilter:'blur(14px)', WebkitBackdropFilter:'blur(14px)', border:`1px solid ${GLASS_BORDER}`, borderBottom:'none', borderRight:'none', transform:'rotate(45deg)', borderRadius:'2px 0 0 0' }} />
         </div>
-      </motion.div>
+      </Motion.div>
     </div>,
     document.body
   );
@@ -127,6 +176,7 @@ export default function MonitoringPerf() {
   const [perfData, setPerfData] = useState(null);
   const [callsCrm, setCallsCrm] = useState(null); // /tracking/sales-calls-crm (appels/répondu/répondeur hybride, mai+)
   const [dataLoading, setDataLoading] = useState(true);
+  const [callsLoading, setCallsLoading] = useState(false);
   const [dataError, setDataError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [sectionErrors, setSectionErrors] = useState({});
@@ -136,6 +186,10 @@ export default function MonitoringPerf() {
   const [selectedOrigins, setSelectedOrigins] = useState([]);
   const [range, setRange] = useState(parisMonth);
   const [canal, setCanal] = useState("global");
+  // Période de l'onglet Sales (voir salesPeriodRange) : lue par le tableau, ses détails et ses KPI.
+  const [salesPeriod, setSalesPeriod] = useState({ key: 'month' });
+  const salesRange = useMemo(() => salesPeriodRange(salesPeriod, range) || range, [salesPeriod, range]);
+  const salesOwn = salesRange !== range;
   const [adsDetailView, setAdsDetailView] = useState(false);
   const [headcountData, setHeadcountData] = useState(null);
   const [headcountLoading, setHeadcountLoading] = useState(false);
@@ -150,10 +204,9 @@ export default function MonitoringPerf() {
   // Appointment figures are supplied by the selected performance channel.
   const [rdvAnalytics, setRdvAnalytics] = useState(null); // from /tracking/rdv-analytics (délai R1→R2 + heatmap no-show)
   const [salesBreakdown, setSalesBreakdown] = useState(null); // from /tracking/sales-breakdown (vue Ventes)
-  const [perfView, setPerfView] = useState('default'); // 'default' (tableau perf) | 'ventes' (ventilation salariés/paiement)
-  const [autreModal, setAutreModal] = useState(null); // { name, items: [{societe, headcount}] } — détail des ventes "Autre"
-  const [settersPerf, setSettersPerf] = useState(null); // from /tracking/setters-perf (vue Setters)
-  const [setterModal, setSetterModal] = useState(null); // détail d'un setter (par sales)
+  // Onglet de la Performance Sales v2 ; « Ventes » et « Setters » sont deux de ses onglets (dev 14/10/2026).
+  const [v2Tab, setV2Tab] = useState('overview');
+  const perfView = ['ventes', 'setters'].includes(v2Tab) ? v2Tab : 'default';
   const [heatmapSales, setHeatmapSales] = useState('global'); // taux de présence : global | nom d'un sales
 
   const [appointmentDetail, setAppointmentDetail] = useState(null);
@@ -162,40 +215,42 @@ export default function MonitoringPerf() {
     const request = ++appointmentRequest.current;
     setAppointmentDetail({person,stage,loading:true});
     try {
-      const data = await apiClient.get(`/api/v1/monitoring/performance/appointments?person_name=${encodeURIComponent(person)}&period=${range}&channel=${canal}&stage=${stage}`);
+      const data = await apiClient.get(`/api/v1/monitoring/performance/appointments?person_name=${encodeURIComponent(person)}&period=${encodeURIComponent(salesRange)}&channel=${canal}&stage=${stage}`);
       if(request===appointmentRequest.current)setAppointmentDetail({person,stage,data});
     } catch {if(request===appointmentRequest.current)setAppointmentDetail({person,stage,error:true});}
   };
-  useEffect(()=>{++appointmentRequest.current;setAppointmentDetail(null);},[range,canal]);
+  useEffect(()=>{++appointmentRequest.current;setAppointmentDetail(null);},[salesRange,canal]);
   const detailRequest = useRef(0);
   const openDetail = async (personName) => {
     if (!['ads', 'cc'].includes(canal)) return;
     const request = ++detailRequest.current;
     setDetailModal({personName, type: canal, data: null, loading: true});
     try {
-      const res = await apiClient.get(`/api/v1/monitoring/performance/detail/${canal}?person_name=${encodeURIComponent(personName)}&period=${range}`);
+      const res = await apiClient.get(`/api/v1/monitoring/performance/detail/${canal}?person_name=${encodeURIComponent(personName)}&period=${encodeURIComponent(salesRange)}`);
       if (request === detailRequest.current) setDetailModal(prev => prev ? {...prev, data: res, loading: false} : null);
     } catch {
       if (request === detailRequest.current) setDetailModal(prev => prev ? {...prev, loading: false} : null);
     }
   };
-  useEffect(() => { ++detailRequest.current; setDetailModal(null); setSetterModal(null); setAutreModal(null); setHeatmapSales('global'); }, [range, canal]);
+  useEffect(() => { ++detailRequest.current; setDetailModal(null); setHeatmapSales('global'); }, [salesRange, canal]);
 
-  useEffect(() => { if (!adsDetailView || canal !== "ads") return; let c = false; (async () => { setHeadcountLoading(true); try { const res = await apiClient.get('/api/v1/monitoring/performance/detail/ads/headcount?period=' + range); if (!c) setHeadcountData(visibleHeadcount(res)); } catch { if (!c) setHeadcountData(null); } finally { if (!c) setHeadcountLoading(false); } })(); return () => { c = true; }; }, [adsDetailView, range, canal, refreshKey]);
+  useEffect(() => { if (!adsDetailView || canal !== "ads") return; let c = false; (async () => { setHeadcountLoading(true); try { const res = await apiClient.get('/api/v1/monitoring/performance/detail/ads/headcount?period=' + encodeURIComponent(salesRange)); if (!c) setHeadcountData(visibleHeadcount(res)); } catch { if (!c) setHeadcountData(null); } finally { if (!c) setHeadcountLoading(false); } })(); return () => { c = true; }; }, [adsDetailView, salesRange, canal, refreshKey]);
 
   useEffect(() => {
     if (!hasAccess) return;
     let cancelled = false;
     setDataLoading(true); setDataError(''); setPerfData(null); setCallsCrm(null);
     const crm = /^\d{4}-\d{2}$/.test(range) && range >= '2026-05';
-    Promise.all([
-      apiClient.get('/api/v1/monitoring/performance/v2?period=' + range),
-      crm ? apiClient.get('/api/v1/tracking/sales-calls-crm?month=' + range) : Promise.resolve(null),
-    ]).then(([performance, calls]) => {
-      if (!cancelled) { setPerfData(performance); setCallsCrm(calls); }
-    }).catch(() => {
-      if (!cancelled) setDataError('Les performances n’ont pas pu être chargées. Réessayez.');
-    }).finally(() => { if (!cancelled) setDataLoading(false); });
+    // Les appels viennent d'Allo (lecture plus lente) : la page s'affiche sans les attendre.
+    setCallsLoading(crm);
+    if (crm) apiClient.get('/api/v1/tracking/sales-calls-crm?month=' + range)
+      .then(calls => { if (!cancelled) setCallsCrm(calls); })
+      .catch(() => { if (!cancelled) setCallsCrm({by_sales:[], calls_error:'Appels indisponibles'}); })
+      .finally(() => { if (!cancelled) setCallsLoading(false); });
+    apiClient.get('/api/v1/monitoring/performance/v2?period=' + range)
+      .then(performance => { if (!cancelled) setPerfData(performance); })
+      .catch(() => { if (!cancelled) setDataError('Les performances n’ont pas pu être chargées. Réessayez.'); })
+      .finally(() => { if (!cancelled) setDataLoading(false); });
     return () => { cancelled = true; };
   }, [hasAccess, range, refreshKey]);
 
@@ -209,14 +264,27 @@ export default function MonitoringPerf() {
     return () => { cancelled = true; };
   }, [hasAccess, range, refreshKey]);
 
+  // Réactivité et présence par jour et heure, chacune sur sa période (dev 14/10/2026).
+  const [reactPeriod, setReactPeriod] = useState({ key: 'month' });
+  const reactData = usePeriodAnalytics(hasAccess, reactPeriod, range, refreshKey);
+  const [presencePeriod, setPresencePeriod] = useState({ key: 'month' });
+  const presenceData = usePeriodAnalytics(hasAccess, presencePeriod, range, refreshKey);
+  // Onglet Sales sur sa propre période : chiffres de la page et appels relus pour cette période ; le mois affiché réutilise
+  // les réponses déjà chargées.
+  const salesSide = usePerfPeriod(hasAccess, salesRange, range, true, refreshKey);
+  // Onglet Rendez-vous : UNE période pour tout l'onglet (dev 15/10/2026 : « on ne peut pas sélectionner de période » ;
+  // cohérence) : cartes R1/R2, shows par canal et présence par jour et heure.
+  const rdvRange = useMemo(() => salesPeriodRange(presencePeriod, range) || range, [presencePeriod, range]);
+  const rdvSide = usePerfPeriod(hasAccess, rdvRange, range, false, refreshKey);
+  const rdvPerf = rdvSide.own ? rdvSide.perf : perfData;
+
   useEffect(() => {
     let cancelled = false;
-    setSalesBreakdown(null); setSettersPerf(null); setSectionErrors(e => ({...e, extra: false}));
-    if (!hasAccess || range === 'all' || !['ventes', 'setters'].includes(perfView)) return;
-    if (perfView === 'setters' && range < '2026-05') return;
-    const endpoint = perfView === 'ventes' ? 'sales-breakdown' : 'setters-perf';
-    apiClient.get('/api/v1/tracking/' + endpoint + '?month=' + range)
-      .then(d => { if (!cancelled) (perfView === 'ventes' ? setSalesBreakdown : setSettersPerf)(d); })
+    // Onglet Ventes : la ventilation des ventes déclarées (l'onglet Setters lit ses propres données).
+    setSalesBreakdown(null); setSectionErrors(e => ({...e, extra: false}));
+    if (!hasAccess || range === 'all' || perfView !== 'ventes') return;
+    apiClient.get('/api/v1/tracking/sales-breakdown?month=' + range)
+      .then(d => { if (!cancelled) setSalesBreakdown(d); })
       .catch(() => { if (!cancelled) setSectionErrors(e => ({...e, extra: true})); });
     return () => { cancelled = true; };
   }, [hasAccess, perfView, range, refreshKey]);
@@ -225,41 +293,28 @@ export default function MonitoringPerf() {
 
   const isCrmMonth = !!(range && /^\d{4}-\d{2}$/.test(range) && range >= '2026-05');
   const perfRows = useMemo(() => performanceRows(perfData, callsCrm, canal, getCanonicalKey), [perfData, callsCrm, canal]);
-  const callsAvailable = perfData?.calls_available !== false && perfRows.every(r => r.calls_available);
 
   const totals = useMemo(() => {const t=performanceTotals(perfRows); return {...t,lead_qualifie:isCrmMonth?t.lead_qualifie:ratio(t.unique_answered,t.leads_assigned)};}, [perfRows,isCrmMonth]);
+  const salesPerf = salesOwn ? salesSide.perf : perfData;
+  const sCrm = !!(salesRange && salesRange !== 'all' && salesRange >= '2026-05');
+  const sLoading = salesOwn ? salesSide.loading && !salesSide.perf : dataLoading;
+  const sCallsLoading = salesOwn ? salesSide.loading : callsLoading;
+  const sRows = useMemo(() => performanceRows(salesPerf, salesOwn ? salesSide.calls : callsCrm, canal, getCanonicalKey), [salesPerf, salesOwn, salesSide.calls, callsCrm, canal]);
+  const sTotals = useMemo(() => {const t=performanceTotals(sRows); return {...t,lead_qualifie:sCrm?t.lead_qualifie:ratio(t.unique_answered,t.leads_assigned)};}, [sRows,sCrm]);
+  // Performance Sales v2 (dev 14/10/2026) : onglets ; le canal ADS/CC ne sert plus qu'au tableau de l'onglet Sales.
+  const changeV2Tab = (t) => { setV2Tab(t); if (t !== 'sales') { setCanal('global'); setAdsDetailView(false); } };
+  const v2Front = useMemo(() => ({
+    calls: { measured: totals.calls_measured, total: totals.calls, rate: totals.calls ? (totals.calls_human / totals.calls) * 100 : null,
+      missing: totals.calls_missing || [], loading: callsLoading },
+    callsMissing: callsLoading ? [] : (totals.calls_missing || []),
+    avatarFor: (name) => avatarMap[getCanonicalKey(name)]?.av || null,
+    me: session?.user?.user_metadata?.name || null,
+  }), [totals, callsLoading, avatarMap, session]);
 
-  // Vue Ventes : fusionne les rapporteurs bruts par clé canonique (mêmes
-  // exclusions/affichage que le tableau Perf Sales), somme tranches & paiement.
-  const ventesData = useMemo(() => {
-    const empty = { '1-2': 0, '3-5': 0, '6-10': 0, '11-19': 0, '20+': 0, 'autre': 0 };
-    if (!salesBreakdown?.by_rapporteur) return { rows: [], totals: { ventes: 0, cc: 0, ads: 0, hc: { ...empty }, mensuel: 0, annuel: 0 } };
-    const byKey = {};
-    salesBreakdown.by_rapporteur.forEach(r => {
-      const key = getCanonicalKey(r.rapporteur);
-      if (EXCLUDED_KEYS.has(key)) return;
-      if (!byKey[key]) byKey[key] = { key, name: displaySalesName(r.rapporteur), ventes: 0, cc: 0, ads: 0, hc: { ...empty }, mensuel: 0, annuel: 0, autreDetail: [] };
-      const a = byKey[key];
-      a.ventes += r.ventes || 0;
-      a.cc += r.cc || 0;
-      a.ads += r.ads || 0;
-      VENTES_BRACKETS.forEach(b => { a.hc[b] += (r.headcount?.[b] || 0); });
-      a.mensuel += r.mensuel || 0;
-      a.annuel += r.annuel || 0;
-      if (r.autre_detail && r.autre_detail.length) a.autreDetail.push(...r.autre_detail);
-    });
-    const rows = Object.values(byKey).sort((x, y) => y.ventes - x.ventes);
-    const totals = rows.reduce((acc, r) => {
-      acc.ventes += r.ventes; acc.cc += r.cc; acc.ads += r.ads; acc.mensuel += r.mensuel; acc.annuel += r.annuel;
-      VENTES_BRACKETS.forEach(b => { acc.hc[b] += r.hc[b]; });
-      return acc;
-    }, { ventes: 0, cc: 0, ads: 0, hc: { ...empty }, mensuel: 0, annuel: 0 });
-    return { rows, totals };
-  }, [salesBreakdown]);
 
   const gcColor = (tx) => tx>=5?COLORS.tertiary:tx>=2?COLORS.secondary:C.text;
-  const dcColor = (tx) => tx>=80?COLORS.tertiary:tx>=50?COLORS.secondary:'#ff453a';
   const rxColor = (tx) => tx>=80?COLORS.tertiary:tx>=50?COLORS.secondary:'#ff453a';
+  const arColor = (tx) => tx>=50?COLORS.tertiary:tx>=35?COLORS.secondary:'#ff453a';   // taux de réponse d'appels
   const cvColor = (tx) => tx>=40?COLORS.tertiary:tx>=20?COLORS.secondary:C.text;
   const r1pColor = (tx) => tx>=30?COLORS.tertiary:tx>=15?COLORS.secondary:C.text;
   const cColor = (r) => r>=10?COLORS.tertiary:r>=5?COLORS.secondary:C.text;
@@ -269,22 +324,10 @@ export default function MonitoringPerf() {
 
   const monthOpts = (sy,sm) => { const o=[]; const td=new Date(parisMonth()+'-15T12:00:00'); const c=new Date(sy,sm-1); const ym=td.getFullYear()*100+td.getMonth(); while(true){ const y=c.getFullYear()*100+c.getMonth(); if(y>ym) break; const v=c.getFullYear()+'-'+String(c.getMonth()+1).padStart(2,'0'); const l=new Intl.DateTimeFormat('fr-FR',{month:'long',year:'numeric'}).format(c); o.unshift({value:v,label:l.charAt(0).toUpperCase()+l.slice(1)}); c.setMonth(c.getMonth()+1); } return o; };
   const selS = { fontSize:12, fontWeight:500, padding:'6px 10px', borderRadius:8, border:'1px solid '+C.border, background:darkMode?C.subtle:'#fff', color:C.text, cursor:'pointer', outline:'none' };
-  const pillS = (a) => ({ fontSize:11.5, fontWeight:a?600:500, padding:'5px 14px', borderRadius:8, border:'1px solid '+(a?C.accent:C.border), background:a?(darkMode?C.accent+'25':C.accent+'12'):'transparent', color:a?C.accent:C.secondary, cursor:'pointer', transition:'all 0.15s', whiteSpace:'nowrap' });
   const thS = { whiteSpace:'nowrap', textAlign:'center' };
   const tdS = { textAlign:'center', fontVariantNumeric:'tabular-nums' };
-  const pctPill = (txt,color)=><span style={{display:'inline-block',padding:'3px 11px',borderRadius:8,fontSize:12.5,fontWeight:600,color,background:color+'22',fontVariantNumeric:'tabular-nums'}}>{txt}</span>;
-  const KPI_ICONS = {
-    phone:['M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z'],
-    check:['M22 11.08V12a10 10 0 1 1-5.93-9.14','M22 4 12 14.01l-3-3'],
-    voicemail:['M5.5 8a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z','M18.5 8a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z','M5.5 15h13'],
-    calendar:['M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z','M16 2v4','M8 2v4','M3 10h18'],
-    calcheck:['M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z','M16 2v4','M8 2v4','M3 10h18','M9 15l2 2 4-4'],
-    users:['M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2','M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'],
-    trophy:['M6 9H4.5a2.5 2.5 0 0 1 0-5H6','M18 9h1.5a2.5 2.5 0 0 0 0-5H18','M4 22h16','M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22','M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22','M18 2H6v7a6 6 0 0 0 12 0V2z'],
-    trending:['M23 6l-9.5 9.5-5-5L1 18','M17 6h6v6'],
-    card:['M21 4H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z','M1 10h22'],
-  };
-  const kpiIcon = (n) => { const a=KPI_ICONS[n]; return a ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">{a.map((d,i)=><path key={i} d={d} />)}</svg> : null; };
+  // Un taux absent (« — ») reste neutre : ni rouge ni vert.
+  const pctPill = (txt,color)=>{const c=txt==='—'?C.muted:color;return <span style={{display:'inline-block',padding:'3px 11px',borderRadius:8,fontSize:12.5,fontWeight:600,color:c,background:txt==='—'?'transparent':c+'22',fontVariantNumeric:'tabular-nums'}}>{txt}</span>;};
 
   const metricButton = {border:0,background:'none',color:C.accent,font:'inherit',cursor:'pointer',padding:'4px 6px',textDecoration:'underline',textUnderlineOffset:3};
   const perfColumns = [
@@ -292,39 +335,54 @@ export default function MonitoringPerf() {
     { key:'sales', label:'Sales', tip:'Commercial', always:true, cell:(s,i,k)=>{const meta=avatarMap[s.salesKey]||{};const av=meta.av;const rl={sales:'Sales',head_of_sales:'Head of Sales',head_of_sales_manager:'Manager',admin:'Admin'}[meta.role]||'';return <td key={k} style={{...tdS,textAlign:'left',paddingLeft:8}}><div style={{display:'flex',alignItems:'center',gap:11}}>{av?<img src={av} alt="" style={{width:36,height:36,borderRadius:'50%',objectFit:'cover',flexShrink:0,border:'1px solid '+C.border}} />:<div style={{width:36,height:36,borderRadius:'50%',background:i===0?COLORS.tertiary:i===1?COLORS.secondary:COLORS.primary,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,color:'#fff',fontWeight:600,flexShrink:0}}>{s.salesName.charAt(0).toUpperCase()}</div>}<div style={{minWidth:0}}><div style={{fontWeight:650,fontSize:13.5,color:C.text,whiteSpace:'nowrap',letterSpacing:'-0.01em',...(canal!=='global'?{cursor:'pointer'}:{})}} onClick={()=>canal!=='global'&&openDetail(s.salesName)}>{s.salesName}</div>{rl&&<div style={{fontSize:11,color:C.muted,marginTop:1}}>{rl}</div>}</div></div></td>;} },
     { key:'leads', label:'Leads', tip:'Leads reçus (créés) dans le mois', cell:(s,i,k)=><td key={k} style={{...tdS,fontWeight:700}}>{canal==='ads'?(s.leads_ads||0):canal==='cc'?(s.leads_cc||0):(s.leads_assigned||0)}</td> },
     { key:'conv', label:'Conv.%', tip:'Ventes déclarées dans la période ÷ leads reçus dans la période. Ce ratio d’activité ne suit pas une même cohorte de clients.', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_global,2),gcColor(s.conv_global))}</td> },
-    { key:'appels', label:'Appels', tip:'Volume des appels', cell:(s,i,k)=><td key={k} style={tdS}>{s.calls_available?s.calls_total.toLocaleString('fr-FR'):'—'}</td> },
-    { key:'rep', label:isCrmMonth?'Rép.':'Décr.', tip:isCrmMonth?'Leads répondu (atteints), vérité CRM':'Décrochés (OnOff)', cell:(s,i,k)=><td key={k} style={isCrmMonth?{...tdS,color:COLORS.tertiary,fontWeight:600}:tdS}>{s.calls_answered.toLocaleString('fr-FR')}</td> },
+    { key:'appels', label:'Appels', tip:'Appels sortants passés depuis Allo dans la période. « Non relevé » : le sales n’appelle pas depuis Allo, ses appels ne sont pas comptés.', cell:(s,i,k)=><td key={k} style={tdS}>{sCallsLoading&&i>=0?<span style={{color:C.muted}}>…</span>:s.calls_available?s.calls_total.toLocaleString('fr-FR'):<span style={{fontSize:11.5,color:C.muted}}>non relevé</span>}</td> },
+    { key:'rep', label:sCrm?'Rép.':'Décr.', tip:sCrm?'Leads répondu (atteints), vérité CRM':'Décrochés (OnOff)', cell:(s,i,k)=><td key={k} style={sCrm?{...tdS,color:COLORS.tertiary,fontWeight:600}:tdS}>{s.calls_answered.toLocaleString('fr-FR')}</td> },
     { key:'repondeur', label:'Répondeur', tip:'Tombés sur répondeur / messagerie', crmOnly:true, cell:(s,i,k)=><td key={k} style={{...tdS,color:C.muted}}>{s.repondeur!=null?s.repondeur.toLocaleString('fr-FR'):'—'}</td> },
-    { key:'txrep', label:isCrmMonth?'Tx Rép.':'Tx Décr.', tip:isCrmMonth?'Répondu ÷ Appels':'Décrochés ÷ Appels', cell:(s,i,k)=><td key={k} style={tdS}>{s.calls_available?pctPill(percent(s.conv_calls_to_answered,1),dcColor(s.conv_calls_to_answered)):'—'}</td> },
-    { key:'r1rep', label:isCrmMonth?'R1/Rép':'R1/Décr', tip:isCrmMonth?'Parmi les contacts atteints dans la période : part ayant un R1 planifié dans cette même période':'R1 placés ÷ Décrochés', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_answered_to_r1p,1),r1pColor(s.conv_answered_to_r1p))}</td> },
+    { key:'txrep', label:sCrm?'Tx Rép.':'Tx Décr.', tip:sCrm?'Taux de réponse Allo : appels répondus par une personne ÷ appels sortants (répondeurs détectés exclus)':'Décrochés ÷ Appels', cell:(s,i,k)=><td key={k} style={tdS}>{(s.calls_measured ?? s.calls_available)&&!sCallsLoading?pctPill(percent(s.conv_calls_to_answered,1),arColor(s.conv_calls_to_answered)):'—'}</td> },
+    { key:'r1rep', label:sCrm?'R1/Rép':'R1/Décr', tip:sCrm?'Parmi les contacts atteints dans la période : part ayant un R1 planifié dans cette même période':'R1 placés ÷ Décrochés', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_answered_to_r1p,1),r1pColor(s.conv_answered_to_r1p))}</td> },
     { key:'r1p', label:'R1 placés', tip:'Tous les R1 planifiés dans la période, sales et setters inclus. Cliquer pour voir les dossiers.', cell:(s,i,k)=><td key={k} style={tdS}><button onClick={()=>openAppointments(s.salesName,'r1')} style={metricButton}>{s.r1_placed}</button></td> },
+    { key:'r1tel', label:'R1 tél.', tip:'R1 faits au téléphone : un R2 posé sans R1 dans le CRM, compté au mois du R2. À part des R1 placés. Cliquer pour voir les dossiers.', crmOnly:true, cell:(s,i,k)=><td key={k} style={tdS}>{s.r1_phone?<button onClick={()=>openAppointments(s.salesName,'r1_phone')} style={metricButton}>{s.r1_phone}</button>:<span style={{color:C.muted}}>0</span>}</td> },
     { key:'r1s', label:'Dont setter', tip:'R1 placés par le setter', crmOnly:true, cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.primary,fontWeight:600}}>{s.r1p_s}</td> },
     { key:'r1e', label:'R1 effectués', tip:'R1 planifiés dans la période et qualifiés comme effectués', cell:(s,i,k)=><td key={k} style={tdS}>{s.r1_done}</td> },
     { key:'r1se', label:'Dont setter effectués', tip:'R1 placés par un setter et réellement effectués ; sous-ensemble des R1 effectués', crmOnly:true, cell:(s,i,k)=><td key={k} style={tdS}>{s.r1r_s}</td> },
-    { key:'txr1', label:'Tx R1', tip:'R1 effectués ÷ R1 placés', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_r1p_to_r1r,0),rxColor(s.conv_r1p_to_r1r))}</td> },
+    { key:'txr1', label:'Tx R1', tip:'Présence R1 : R1 effectués ÷ R1 passés (date prévue dépassée). Les R1 à venir du mois ne comptent pas.', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_r1p_to_r1r,0),rxColor(s.conv_r1p_to_r1r))}</td> },
     { key:'r2p', label:'R2 placés', tip:'Tous les R2 planifiés dans la période, sales et setters inclus. Cliquer pour voir les dossiers.', cell:(s,i,k)=><td key={k} style={tdS}><button onClick={()=>openAppointments(s.salesName,'r2')} style={metricButton}>{s.r2_placed}</button></td> },
     { key:'r2s', label:'Dont setter', tip:'R2 placés par le setter', crmOnly:true, cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.primary,fontWeight:600}}>{s.r2p_s}</td> },
     { key:'r2e', label:'R2 effectués', tip:'R2 planifiés dans la période et qualifiés comme effectués, y compris réflexion ou refus après rendez-vous', cell:(s,i,k)=><td key={k} style={tdS}>{s.r2_done}</td> },
     { key:'r2se', label:'Dont setter effectués', tip:'R2 placés par un setter et réellement effectués ; sous-ensemble des R2 effectués', crmOnly:true, cell:(s,i,k)=><td key={k} style={tdS}>{s.r2r_s}</td> },
-    { key:'txr2', label:'Tx R2', tip:'R2 effectués ÷ R2 placés', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_r2p_to_r2r,0),rxColor(s.conv_r2p_to_r2r))}</td> },
-    ...((canal!=='ads'&&isCrmMonth)?[{key:'ccs1',label:'CC setter R1 effectués',tip:'R1 effectués du canal CC, issus du setter ; inclus dans R1 effectués',cell:(s,i,k)=><td key={k} style={tdS}>{s.r1_cc_setter_done}</td>},{key:'ccs2',label:'CC setter R2 effectués',tip:'R2 effectués issus du CC setter, même si le sales a placé le R2 ; inclus dans R2 effectués',cell:(s,i,k)=><td key={k} style={tdS}>{s.r2_cc_setter_done}</td>}]:[]),
-    { key:'ventes', label:'Ventes', tip:'Nombre de ventes', cell:(s,i,k)=><td key={k} style={{...tdS,fontWeight:800,fontSize:15,color:COLORS.tertiary}}>{s.signatures}</td> },
+    { key:'txr2', label:'Tx R2', tip:'Présence R2 : R2 effectués ÷ R2 passés (date prévue dépassée). Les R2 à venir du mois ne comptent pas.', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_r2p_to_r2r,0),rxColor(s.conv_r2p_to_r2r))}</td> },
+    ...((canal!=='ads'&&sCrm)?[{key:'ccs1',label:'CC setter R1 effectués',tip:'R1 effectués du canal CC, issus du setter ; inclus dans R1 effectués',cell:(s,i,k)=><td key={k} style={tdS}>{s.r1_cc_setter_done}</td>},{key:'ccs2',label:'CC setter R2 effectués',tip:'R2 effectués issus du CC setter, même si le sales a placé le R2 ; inclus dans R2 effectués',cell:(s,i,k)=><td key={k} style={tdS}>{s.r2_cc_setter_done}</td>}]:[]),
+    { key:'signes', label:'Signatures', tip:'Contrats Owner signés sur Yousign dans la période, au commercial du contrat ; un contrat signé peut ne pas être encore déclaré.', cell:(s,i,k)=><td key={k} style={{...tdS,fontWeight:750,color:'#f59e0b'}}>{s.signed}</td> },
+    { key:'ventes', label:'Ventes', tip:'Ventes déclarées dans la période (déclaration de vente)', cell:(s,i,k)=><td key={k} style={{...tdS,fontWeight:800,fontSize:15,color:COLORS.tertiary}}>{s.signatures}</td> },
     { key:'convv', label:'Conv.V.', tip:'Conversion ventes : Ventes ÷ R2 effectués', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_sales,1),cvColor(s.conv_sales))}</td> },
     { key:'revenue', label:'Revenu', tip:'Revenu enregistré dans les déclarations de vente', cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.secondary}}>{s.revenue.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})}</td> },
     { key:'cash', label:'Cash déclaré', tip:'Cash déclaré à la vente ; ce montant ne constitue pas un encaissement bancaire', cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.tertiary}}>{s.cashCollected.toLocaleString('fr-FR',{style:'currency',currency:'EUR'})}</td> },
   ];
 
+  // Ligne d'en-tête des groupes : chaque colonne visible appartient à un thème, les colonnes voisines du même thème
+  // sont fusionnées (le tableau reste lisible quand des colonnes sont masquées).
+  const COLUMN_GROUP = { leads:'activity', conv:'activity', appels:'activity', rep:'activity', repondeur:'activity', txrep:'activity', r1rep:'activity',
+    r1p:'r1', r1tel:'r1', r1s:'r1', r1e:'r1', r1se:'r1', txr1:'r1', r2p:'r2', r2s:'r2', r2e:'r2', r2se:'r2', txr2:'r2', ccs1:'r1', ccs2:'r2',
+    signes:'result', ventes:'result', convv:'result', revenue:'result', cash:'result' };
+  const GROUP_LABEL = { activity:['Activité','#64748b'], r1:['Premier rendez-vous','#6366f1'], r2:['Second rendez-vous','#0284c7'], result:['Résultat','#10b981'] };
+  const columnGroups = (cols) => cols.reduce((acc, c) => {
+    const key = COLUMN_GROUP[c.key] || null, last = acc[acc.length - 1];
+    if (last && last.key === key) last.span += 1;
+    else acc.push({ key, span: 1, label: key ? GROUP_LABEL[key][0] : '', color: key ? GROUP_LABEL[key][1] : undefined });
+    return acc;
+  }, []);
+
   const appointmentDialog = appointmentDetail && createPortal(
     <div onClick={()=>{++appointmentRequest.current;setAppointmentDetail(null);}} style={{position:'fixed',inset:0,zIndex:12000,background:'rgba(20,25,35,.35)',backdropFilter:'blur(5px)',display:'grid',placeItems:'center',padding:20}}>
-      <motion.section role="dialog" aria-modal="true" aria-label="Détail des rendez-vous" initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} onClick={e=>e.stopPropagation()} style={{background:C.bg,color:C.text,borderRadius:20,width:'min(900px,100%)',maxHeight:'85dvh',overflow:'auto',padding:24,boxShadow:'0 20px 60px #0002'}}>
-        <div style={{display:'flex',justifyContent:'space-between',gap:20}}><div><h2 style={{margin:0,fontSize:20}}>{appointmentDetail.stage.toUpperCase()} · {appointmentDetail.person}</h2><p style={{color:C.secondary}}>{monthLabelFR(range)} · {canal.toUpperCase()} · heure de Paris</p></div><button aria-label="Fermer" onClick={()=>{++appointmentRequest.current;setAppointmentDetail(null);}} style={metricButton}>Fermer</button></div>
+      <Motion.section role="dialog" aria-modal="true" aria-label="Détail des rendez-vous" initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} onClick={e=>e.stopPropagation()} style={{background:C.bg,color:C.text,borderRadius:20,width:'min(900px,100%)',maxHeight:'85dvh',overflow:'auto',padding:24,boxShadow:'0 20px 60px #0002'}}>
+        <div style={{display:'flex',justifyContent:'space-between',gap:20}}><div><h2 style={{margin:0,fontSize:20}}>{appointmentDetail.stage==='r1_phone'?'R1 au téléphone':appointmentDetail.stage.toUpperCase()} · {appointmentDetail.person}</h2><p style={{color:C.secondary}}>{rangeLabelFR(salesRange)} · {canal.toUpperCase()} · heure de Paris</p></div><button aria-label="Fermer" onClick={()=>{++appointmentRequest.current;setAppointmentDetail(null);}} style={metricButton}>Fermer</button></div>
         {appointmentDetail.loading?<p>Chargement des rendez-vous…</p>:appointmentDetail.error?<p>Le détail n’a pas pu être chargé.</p>:<>
-          <p><strong>{appointmentDetail.data.total} placés · {appointmentDetail.data.done} effectués · {appointmentDetail.data.setter} placés par un setter</strong></p>
+          <p><strong>{appointmentDetail.stage==='r1_phone'?`${appointmentDetail.data.total} R1 faits au téléphone (R2 posé sans R1) · ${appointmentDetail.data.setter} R2 posés par un setter`:`${appointmentDetail.data.total} placés · ${appointmentDetail.data.done} effectués · ${appointmentDetail.data.setter} placés par un setter`}</strong></p>
           {appointmentDetail.data.historical_partial&&<p>Le détail des rendez-vous est disponible depuis avril 2026 ; les agrégats antérieurs ne contiennent pas de dossiers individuels.</p>}
-          <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}><thead><tr>{['Dossier','Date prévue','Origine','Placement','Résultat'].map(t=><th key={t} style={{textAlign:'left',padding:10,borderBottom:'1px solid '+C.border}}>{t}</th>)}</tr></thead><tbody>{appointmentDetail.data.appointments.map(r=><tr key={r.lead_id}><td style={{padding:10}}>{r.name||'Dossier'} <small>#{r.lead_id}</small></td><td style={{padding:10,whiteSpace:'nowrap'}}>{r.scheduled_at.slice(0,10).split('-').reverse().join('/')} à {r.scheduled_at.slice(11,16)}</td><td style={{padding:10}}>{r.origin||'—'}</td><td style={{padding:10}}>{r.setter?'Setter':'Sales'}</td><td style={{padding:10}}>{r.done?'Effectué':({no_show:'Absent',rescheduled:'Reporté',cancelled:'Annulé',annule:'Annulé',reporte:'Reporté'}[r.result]||'Non effectué')}</td></tr>)}</tbody></table>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}><thead><tr>{['Dossier','Date prévue','Origine','Placement','Résultat'].map(t=><th key={t} style={{textAlign:'left',padding:10,borderBottom:'1px solid '+C.border}}>{t}</th>)}</tr></thead><tbody>{appointmentDetail.data.appointments.map(r=><tr key={r.lead_id}><td style={{padding:10}}>{r.name||'Dossier'} <small>#{r.lead_id}</small></td><td style={{padding:10,whiteSpace:'nowrap'}}>{r.scheduled_at.slice(0,10).split('-').reverse().join('/')} à {r.scheduled_at.slice(11,16)}</td><td style={{padding:10}}>{r.origin||'—'}</td><td style={{padding:10}}>{r.setter?'Setter':'Sales'}</td><td style={{padding:10}}>{r.result==='phone'?'Au téléphone':r.done?'Effectué':!r.due?'À venir':({no_show:'Absent',rescheduled:'Reporté',cancelled:'Annulé',annule:'Annulé',reporte:'Reporté'}[r.result]||'Non qualifié')}</td></tr>)}</tbody></table>
           {!appointmentDetail.data.total&&<p>Aucun rendez-vous dans cette sélection.</p>}
         </>}
-      </motion.section>
+      </Motion.section>
     </div>,document.body);
 
   if (loading) return <div style={{minHeight:'100vh',background:C.surface}} />;
@@ -335,7 +393,7 @@ export default function MonitoringPerf() {
       {appointmentDialog}
       {!embedMode && <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />}
       {tip && <CalcTip text={tip.t} rect={tip.r} darkMode={darkMode} />}
-      <style>{`@keyframes pageReveal{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@keyframes sidebarReveal{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:none}}@keyframes rowIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}html,body{background:${darkMode?'#13141b':'#ffffff'}}.perfv2{border-collapse:separate;border-spacing:0;background:${C.bg};border-radius:14px}.perfv2 th{padding:14px 12px;font-size:12px;font-weight:600;color:${C.secondary};border-bottom:1px solid ${C.border}}.perfv2 td{padding:13px 12px;font-size:13px;border-bottom:1px solid ${C.border};white-space:nowrap}.perfv2 tbody tr:hover{background:${C.subtle}}.mp-scroll::-webkit-scrollbar{width:3px;height:3px}.mp-scroll::-webkit-scrollbar-track{background:transparent}.mp-scroll::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:4px}`}</style>
+      <style>{`@keyframes pageReveal{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@keyframes sidebarReveal{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:none}}@keyframes rowIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}html,body{background:${darkMode?'#13141b':'#ffffff'}}.perfv2{border-collapse:separate;border-spacing:0;background:${C.bg};border-radius:14px}.perfv2 th{padding:14px 12px;font-size:12px;font-weight:600;color:${C.secondary};border-bottom:1px solid ${C.border}}.perfv2 .perfv2-groups th{padding:10px 12px 6px;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;border-bottom:1px solid transparent}.perfv2 .perfv2-groups th.is-group{border-bottom:2px solid}.perfv2 td{padding:13px 12px;font-size:13px;border-bottom:1px solid ${C.border};white-space:nowrap}.perfv2 tbody tr:hover{background:${C.subtle}}.mp-scroll::-webkit-scrollbar{width:3px;height:3px}.mp-scroll::-webkit-scrollbar-track{background:transparent}.mp-scroll::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:4px}`}</style>
 
       <div style={{animation:'pageReveal 0.5s cubic-bezier(0.4,0,0.2,1) both',fontFamily:"'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"}}>
         <div style={{display:'flex',alignItems:'stretch',minHeight:'100vh'}}>
@@ -366,21 +424,9 @@ export default function MonitoringPerf() {
           {/* RIGHT */}
           <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column',padding:'8px 8px 8px 0',gap:12}}>
 
-            {/* FILTERS HEADER */}
-            <div style={{minHeight:76,flexWrap:'wrap',background:darkMode?C.bg:'#f6f7f9',borderRadius:8,flexShrink:0,border:'1px solid '+C.border,marginLeft:8,display:'flex',alignItems:'center',padding:'12px 20px',gap:10}}>
-              {viewMode==='perf_sales' ? (<>
-                <select aria-label="Période des performances" value={range} onChange={e=>setRange(e.target.value)} style={selS}>
-                  {monthOpts(2025,9).map(m=><option key={m.value} value={m.value}>{m.label}</option>)}
-                  <option value="all">Toutes les périodes</option>
-                </select>
-                <div style={{width:1,height:28,background:C.border}} />
-                {perfView === 'default' && ['global','ads','cc'].map(c=>(<button key={c} onClick={()=>{setCanal(c);if(c!=='ads')setAdsDetailView(false);}} style={pillS(canal===c)}>{c==='global'?'Global':c.toUpperCase()}</button>))}
-                {perfView === 'default' && canal==='ads' && (<><div style={{width:1,height:28,background:C.border}} /><button onClick={()=>setAdsDetailView(v=>!v)} style={pillS(adsDetailView)}>{adsDetailView?'Funnel':'D\u00e9tail'}</button></>)}
-                <div style={{flex:1}} />
-                <button onClick={()=>setRefreshKey(k=>k+1)} style={selS} disabled={dataLoading}>Actualiser</button>
-                <button onClick={()=>setPerfView(v=>v==='ventes'?'default':'ventes')} style={pillS(perfView==='ventes')}>Ventes</button>
-                <button onClick={()=>setPerfView(v=>v==='setters'?'default':'setters')} style={pillS(perfView==='setters')}>Setters</button>
-              </>) : (<>
+            {/* FILTERS HEADER : la Performance Sales porte son mois et l'actualisation dans son en-tête (dev 14/10/2026) */}
+            {viewMode!=='perf_sales' && <div style={{minHeight:76,flexWrap:'wrap',background:darkMode?C.bg:'#f6f7f9',borderRadius:8,flexShrink:0,border:'1px solid '+C.border,marginLeft:8,display:'flex',alignItems:'center',padding:'12px 20px',gap:10}}>
+              <>
                 <select value={leadQualityRange} onChange={e=>setLeadQualityRange(e.target.value)} style={selS}>
                   {monthOpts(2026,1).map(m=><option key={m.value} value={m.value}>{m.label}</option>)}
                 </select>
@@ -395,150 +441,47 @@ export default function MonitoringPerf() {
                     </div>)}
                   </div>
                 )}
-              </>)}
-            </div>
+              </>
+            </div>}
 
             {/* CONTENT */}
             <div style={{flex:1,marginLeft:8}}>
-              <div className="mp-scroll" style={{background:darkMode?C.bg:'#f6f7f9',borderRadius:8,border:'1px solid '+C.border,overflow:'auto',minHeight:'calc(100vh - 120px)',maxHeight:'calc(100vh - 120px)'}}>
+              <div className="mp-scroll" style={{background:darkMode?C.bg:'#f6f7f9',borderRadius:8,border:'1px solid '+C.border,overflow:'auto',minHeight:viewMode==='perf_sales'?'calc(100vh - 16px)':'calc(100vh - 120px)',maxHeight:viewMode==='perf_sales'?'calc(100vh - 16px)':'calc(100vh - 120px)'}}>
 
-                {viewMode==='perf_sales' && (<div style={{padding:'20px 20px 28px'}}>
-                  <h2 style={{fontSize:20,fontWeight:700,color:C.text,margin:'0 0 4px'}}>Performance Sales</h2>
-                  <p style={{color:C.secondary,fontSize:13,margin:"8px 0 20px"}}>Les ventes déclarées et les rendez-vous planifiés dans la période sélectionnée.</p>
+                {viewMode==='perf_sales' && (<div className={'ps' + (darkMode ? ' ps-dark' : '')} style={{padding:'20px 20px 28px'}}>
                   {dataError && <div role="alert" style={{padding:16,color:C.text,border:`1px solid ${C.border}`,borderRadius:12}}>{dataError} <button onClick={()=>setRefreshKey(k=>k+1)} style={selS}>Réessayer</button></div>}
                   {sectionErrors.extra && <p role="alert" style={{color:C.secondary}}>Cette vue n’a pas pu être chargée. Utilisez « Actualiser » pour réessayer.</p>}
 
-                  {perfView === 'ventes' ? (
-                    <div style={{padding:'4px 0 8px'}}>
-                      {range==='all' ? (
-                        <div style={{textAlign:'center',padding:48,color:C.muted}}>S&eacute;lectionne un mois pr&eacute;cis pour la vue Ventes.</div>
-                      ) : sectionErrors.extra ? null : !salesBreakdown ? (
-                        <div style={{textAlign:'center',padding:48,color:C.muted}}>Chargement&hellip;</div>
-                      ) : ventesData.rows.length===0 ? (
-                        <div style={{textAlign:'center',padding:48,color:C.muted}}>Aucune vente sur ce mois.</div>
-                      ) : (
-                        <div style={{overflowX:'auto'}}>
-                          <table className="leaderboard" style={{width:'100%',minWidth:900}}>
-                            <thead><tr>{['#','Commercial','Ventes','Cold call','ADS',...VENTES_BRACKETS.map(b=>VENTES_BRACKET_LABEL[b]),'Annuel','Mensuel'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead>
-                            <tbody>
-                              {ventesData.rows.map((r,i)=>(
-                                <tr key={r.key}>
-                                  <td style={tdS}>{i+1}</td>
-                                  <td style={{...tdS,textAlign:'left',paddingLeft:12,fontWeight:600}}>{r.name}</td>
-                                  <td style={{...tdS,fontWeight:800,fontSize:14}}>{r.ventes}</td>
-                                  <td style={{...tdS,color:r.cc?C.accent:C.muted,fontWeight:700}}>{r.cc||'—'}</td>
-                                  <td style={{...tdS,color:r.ads?C.text:C.muted,fontWeight:600}}>{r.ads||'—'}</td>
-                                  {VENTES_BRACKETS.map(b=>{ const clk=b==='autre'&&r.hc[b]>0; return <td key={b} onClick={clk?()=>setAutreModal({name:r.name,items:r.autreDetail||[]}):undefined} style={{...tdS,color:r.hc[b]?C.text:C.muted,...(clk?{cursor:'pointer',textDecoration:'underline dotted',textUnderlineOffset:'3px'}:{})}}>{r.hc[b]||'—'}</td>; })}
-                                  <td style={{...tdS,color:COLORS.primary,fontWeight:600}}>{r.annuel||'—'}</td>
-                                  <td style={{...tdS,color:COLORS.secondary,fontWeight:600}}>{r.mensuel||'—'}</td>
-                                </tr>
-                              ))}
-                              <tr style={{borderTop:'2px solid '+C.border,fontWeight:700,background:darkMode?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.02)'}}>
-                                <td style={tdS}></td>
-                                <td style={{...tdS,textAlign:'left',paddingLeft:12}}>Total</td>
-                                <td style={tdS}>{ventesData.totals.ventes}</td>
-                                <td style={{...tdS,color:C.accent}}>{ventesData.totals.cc}</td>
-                                <td style={tdS}>{ventesData.totals.ads}</td>
-                                {VENTES_BRACKETS.map(b=><td key={b} style={tdS}>{ventesData.totals.hc[b]}</td>)}
-                                <td style={tdS}>{ventesData.totals.annuel}</td>
-                                <td style={tdS}>{ventesData.totals.mensuel}</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                      {autreModal && (
-                        <div onClick={()=>setAutreModal(null)} style={{position:'fixed',inset:0,background:'rgba(15,18,30,0.45)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-                          <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:14,padding:'18px 20px',minWidth:340,maxWidth:520,maxHeight:'72vh',overflowY:'auto',boxShadow:'0 10px 40px rgba(0,0,0,0.25)',border:'1px solid '+C.border}}>
-                            <div style={{fontSize:15,fontWeight:700,color:C.text}}>D&eacute;tail &laquo;&nbsp;Autre&nbsp;&raquo; &mdash; {autreModal.name}</div>
-                            <div style={{fontSize:12,color:C.muted,margin:'2px 0 14px'}}>Salari&eacute;s non classables (valeur brute du CRM) &middot; {autreModal.items.length} vente{autreModal.items.length>1?'s':''}</div>
-                            <table style={{width:'100%',fontSize:13,borderCollapse:'collapse'}}>
-                              <thead><tr><th style={{textAlign:'left',color:C.muted,fontWeight:600,padding:'4px 8px',borderBottom:'1px solid '+C.border}}>Soci&eacute;t&eacute;</th><th style={{textAlign:'left',color:C.muted,fontWeight:600,padding:'4px 8px',borderBottom:'1px solid '+C.border}}>Salari&eacute;s (brut)</th></tr></thead>
-                              <tbody>
-                                {autreModal.items.map((it,i)=>(<tr key={i}><td style={{padding:'7px 8px',color:C.text,borderBottom:'1px solid '+C.subtle}}>{it.societe}</td><td style={{padding:'7px 8px',color:C.text,borderBottom:'1px solid '+C.subtle,fontStyle:'italic'}}>{it.headcount}</td></tr>))}
-                              </tbody>
-                            </table>
-                            <button onClick={()=>setAutreModal(null)} style={{marginTop:16,padding:'7px 16px',borderRadius:8,border:'1px solid '+C.border,background:C.surface,color:C.text,cursor:'pointer',fontSize:13,fontWeight:600,fontFamily:'inherit'}}>Fermer</button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : perfView === 'setters' ? (
-                    <div style={{padding:'4px 0 8px'}}>
-                      {range==='all' ? (
-                        <div style={{textAlign:'center',padding:48,color:C.muted}}>Sélectionne un mois précis pour la vue Setters.</div>
-                      ) : range < '2026-05' ? (
-                        <div style={{textAlign:'center',padding:48,color:C.muted}}>Données setter disponibles à partir de mai 2026.</div>
-                      ) : sectionErrors.extra ? null : !settersPerf ? (
-                        <div style={{textAlign:'center',padding:48,color:C.muted}}>Chargement…</div>
-                      ) : (settersPerf.by_setter||[]).length===0 ? (
-                        <div style={{textAlign:'center',padding:48,color:C.muted}}>Aucun setter sur ce mois.</div>
-                      ) : (
-                        <div style={{overflowX:'auto'}}>
-                          <table className="leaderboard" style={{width:'100%',minWidth:800}}>
-                            <thead><tr>{['#','Setter','Appels','Répondu','Non aboutis','R1 placés','R2 placés','Signés'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead>
-                            <tbody>
-                              {[...settersPerf.by_setter].sort((a,b)=>(b.signes-a.signes)||(b.appels-a.appels)).map((s,i)=>(
-                                <tr key={s.setter} onClick={()=>setSetterModal(s)} style={{cursor:'pointer'}}>
-                                  <td style={tdS}>{i+1}</td>
-                                  <td style={{...tdS,textAlign:'left',paddingLeft:12,fontWeight:600,color:C.accent,textDecoration:'underline dotted',textUnderlineOffset:'3px'}}>{s.setter}</td>
-                                  <td style={{...tdS,fontWeight:800,fontSize:14}}>{s.appels}</td>
-                                  <td style={{...tdS,color:COLORS.tertiary,fontWeight:700}}>{s.repondu}</td>
-                                  <td style={{...tdS,color:C.muted}}>{s.repondeur}</td>
-                                  <td style={tdS}>{s.r1_places||'—'}</td>
-                                  <td style={tdS}>{s.r2_places||'—'}</td>
-                                  <td style={{...tdS,color:COLORS.secondary,fontWeight:800,fontSize:14}}>{s.signes||'—'}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                          <p style={{fontSize:12,color:C.secondary}}>Appels : compteurs cumulés des dossiers contactés ce mois-ci. Les rendez-vous suivent leur date planifiée et les signatures leur date de signature.</p><div style={{fontSize:11.5,color:C.muted,marginTop:10,fontStyle:'italic'}}>Clique un setter pour le détail par commercial.</div>
-                        </div>
-                      )}
-                      {setterModal && (
-                        <div onClick={()=>setSetterModal(null)} style={{position:'fixed',inset:0,background:'rgba(15,18,30,0.45)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-                          <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:14,padding:'18px 20px',minWidth:420,maxWidth:640,maxHeight:'75vh',overflowY:'auto',boxShadow:'0 10px 40px rgba(0,0,0,0.25)',border:'1px solid '+C.border}}>
-                            <div style={{fontSize:15,fontWeight:700,color:C.text}}>Détail — {setterModal.setter}</div>
-                            <div style={{fontSize:12,color:C.muted,margin:'2px 0 14px'}}>Par commercial · {setterModal.appels} appels · {setterModal.repondu} répondu · {setterModal.r1_places} R1 · {setterModal.r2_places} R2 · {setterModal.signes} signés</div>
-                            <table style={{width:'100%',fontSize:13,borderCollapse:'collapse'}}>
-                              <thead><tr>{['Commercial','Appels','Répondu','Non aboutis','R1 placés','R2 placés'].map((h,i)=><th key={h} style={{textAlign:i===0?'left':'center',color:C.muted,fontWeight:600,padding:'4px 8px',borderBottom:'1px solid '+C.border}}>{h}</th>)}</tr></thead>
-                              <tbody>
-                                {setterModal.detail.filter(d=>isPerformanceSalesPerson(displaySalesName(d.sales))).map((d,i)=>(<tr key={i}><td style={{padding:'7px 8px',color:C.text,borderBottom:'1px solid '+C.subtle}}>{displaySalesName(d.sales)}</td><td style={{padding:'7px 8px',textAlign:'center',color:C.text,fontWeight:600,borderBottom:'1px solid '+C.subtle}}>{d.appels}</td><td style={{padding:'7px 8px',textAlign:'center',color:COLORS.tertiary,fontWeight:600,borderBottom:'1px solid '+C.subtle}}>{d.repondu}</td><td style={{padding:'7px 8px',textAlign:'center',color:C.muted,borderBottom:'1px solid '+C.subtle}}>{d.repondeur}</td><td style={{padding:'7px 8px',textAlign:'center',color:C.text,borderBottom:'1px solid '+C.subtle}}>{d.r1_places||'—'}</td><td style={{padding:'7px 8px',textAlign:'center',color:C.text,borderBottom:'1px solid '+C.subtle}}>{d.r2_places||'—'}</td></tr>))}
-                              </tbody>
-                            </table>
-                            <button onClick={()=>setSetterModal(null)} style={{marginTop:16,padding:'7px 16px',borderRadius:8,border:'1px solid '+C.border,background:C.surface,color:C.text,cursor:'pointer',fontSize:13,fontWeight:600,fontFamily:'inherit'}}>Fermer</button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (<>
-
-                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(165px, 1fr))',gap:10,marginBottom:16}}>
-                    {[{l:'Appels',v:callsAvailable?totals.calls.toLocaleString('fr-FR'):'—',ic:'phone'},...(isCrmMonth?[{l:'Répondu',v:totals.answered.toLocaleString('fr-FR'),a:COLORS.tertiary,ic:'check'},{l:'Répondeur',v:totals.repondeur.toLocaleString('fr-FR'),ic:'voicemail'}]:[{l:'Décrochés',v:totals.answered.toLocaleString('fr-FR'),ic:'check'}]),{l:'R1 placé',v:totals.r1_placed.toLocaleString('fr-FR'),ic:'calendar'},{l:'R1 effectué',v:totals.r1_done.toLocaleString('fr-FR'),ic:'calcheck'},{l:'R2 placé',v:totals.r2_placed.toLocaleString('fr-FR'),ic:'calendar'},{l:'R2 effectué',v:totals.r2_done.toLocaleString('fr-FR'),ic:'calcheck'},...(canal!=='ads'&&isCrmMonth?[{l:'CC setter · R1 effectués',v:totals.r1_cc_setter_done.toLocaleString('fr-FR'),ic:'calcheck'},{l:'CC setter · R2 effectués',v:totals.r2_cc_setter_done.toLocaleString('fr-FR'),ic:'calcheck'}]:[]),{l:'Leads',v:totals.leads_assigned.toLocaleString('fr-FR'),ic:'users'},{l:'Ventes',v:totals.signatures.toLocaleString('fr-FR'),a:COLORS.tertiary,ic:'trophy'},{l:'Revenu',v:totals.revenue.toLocaleString('fr-FR',{style:'currency',currency:'EUR'}),a:COLORS.secondary,ic:'trending'},{l:'Cash déclaré',v:totals.cashCollected.toLocaleString('fr-FR',{style:'currency',currency:'EUR'}),a:COLORS.tertiary,ic:'card'}].map(k=>(<div key={k.l} style={{padding:'14px 16px',borderRadius:14,background:C.bg,border:'1px solid '+C.border,boxShadow:darkMode?'none':'0 1px 2px rgba(0,0,0,0.03)'}}><div style={{display:'flex',alignItems:'center',gap:6,marginBottom:9,color:C.muted}}>{kpiIcon(k.ic)}<span style={{fontSize:10,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.07em'}}>{k.l}</span></div><div style={{fontSize:22,fontWeight:700,color:k.a||C.text,letterSpacing:'-0.02em',fontVariantNumeric:'tabular-nums'}}>{dataLoading || dataError ? '—' : k.v}</div></div>))}
-                  </div>
-
-                  <div style={{display:'flex',justifyContent:'center',flexWrap:'wrap',gap:0,marginBottom:20,borderRadius:10,border:'1px solid '+C.border,overflow:'hidden',background:darkMode?C.subtle:'#fff'}}>
-                    {[
-                      ...(canal!=='cc' ? [{l:'Lead Qualifi\u00e9',v:percent(totals.lead_qualifie,1),f:isCrmMonth?'Leads qualifi\u00e9s (ont atteint un R1 ou R2) \u00f7 R\u00e9pondu':'D\u00e9croch\u00e9s uniques \u00f7 Leads affect\u00e9s'}] : []),
-                      {l:'Présence R1',v:percent(totals.closing_r1,1),f:'R1 effectués ÷ R1 planifiés dans la période'},
-                      {l:'Présence R2',v:percent(totals.closing_r2,1),f:'R2 effectués ÷ R2 planifiés dans la période'},
-                      {l:'Ventes / R2',v:percent(totals.closing_audit,1),f:'Volumes de la période : ventes déclarées ÷ R2 effectués. Ces ventes peuvent provenir de rendez-vous antérieurs.'},
-                      {l:'Conv. Globale',v:percent(totals.conv_global,2),f:'Volumes de la période : ventes déclarées ÷ leads reçus. Les ventes peuvent provenir de leads plus anciens.'},
-                    ].map((k,i,arr)=>(<div key={k.l} onMouseEnter={e=>setTip({t:k.f,r:e.currentTarget.getBoundingClientRect()})} onMouseLeave={()=>setTip(null)} style={{flex:1,textAlign:'center',padding:'10px 16px',borderRight:i<arr.length-1?'1px solid '+C.border:'none',cursor:'help'}}><div style={{fontSize:12,fontWeight:500,color:C.muted,marginBottom:2}}>{k.l}</div><div style={{fontSize:17,fontWeight:700,color:C.text,fontVariantNumeric:'tabular-nums',letterSpacing:'-0.01em'}}>{dataLoading || dataError ? '—' : k.v}</div></div>))}
-                  </div>
+                  <>
 
                   {sectionErrors.rdv && <p role="alert" style={{fontSize:13,color:C.secondary}}>Les statistiques de rendez-vous n’ont pas pu être chargées.</p>}
-                  {dataLoading && <div style={{textAlign:'center',padding:60,color:C.muted}}>Chargement...</div>}
-
-                  {!dataLoading && canal==='ads' && adsDetailView && (headcountLoading ? <div style={{textAlign:'center',padding:60,color:C.muted}}>Chargement...</div> : !headcountData ? <div style={{textAlign:'center',padding:60,color:C.muted}}>Le détail des effectifs n’a pas pu être chargé. Utilisez Actualiser pour réessayer.</div> : <table className="leaderboard" style={{width:'100%'}}><thead><tr>{['#','Sales','Leads','1-2','3-4','5-6','7-10','11-19','20+','Inconnu'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>
+                  {(
+                    <PerfSalesV2 data={perfData} loading={dataLoading} dark={darkMode} period={range} tab={v2Tab} onTab={changeV2Tab} front={v2Front}
+                      rdvDelay={rdvAnalytics?.delay_by_month || null}
+                      controls={{ value: range, options: [...monthOpts(2025,9), { value: 'all', label: 'Toutes les périodes' }], onChange: setRange,
+                        onRefresh: () => setRefreshKey(k => k + 1), loading: dataLoading }}
+                      ventesData={salesBreakdown}
+                      salesData={salesPerf} salesRange={salesRange} salesLoading={salesOwn && salesSide.loading}
+                      rdvData={rdvPerf} rdvRange={rdvRange} rdvLoading={rdvSide.own && (rdvSide.loading || presenceData.loading)}
+                      rdvPeriodBar={<PeriodBar period={presencePeriod} onPeriod={setPresencePeriod}
+                        loading={rdvSide.own && (rdvSide.loading || presenceData.loading)} warning={rdvSide.error || presenceData.error ? 'Période non chargée' : null}
+                        analytics={rdvPerf?.period ? { period: { start: rdvPerf.period.start, end: nextDay(rdvPerf.period.end) } } : null} />}
+                      salesPeriodBar={<PeriodBar period={salesPeriod} onPeriod={setSalesPeriod} loading={salesSide.loading}
+                        warning={salesSide.error ? 'Période non chargée' : null}
+                        analytics={salesPerf?.period ? { period: { start: salesPerf.period.start, end: nextDay(salesPerf.period.end) } } : null} />}
+                      salesNode={<div style={{display:'flex',flexDirection:'column',gap:12}}>
+                        <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
+                          {/* Les canaux du tableau se choisissent au-dessus (vue par canal) ; ici, la répartition des leads ADS par effectif. */}
+                          <div className="ps2-segment"><button type="button" aria-pressed={adsDetailView} onClick={()=>{const on=!adsDetailView;setAdsDetailView(on);setCanal(on?'ads':'global');}}>{adsDetailView?'Retour au tableau':'Leads ADS par effectif'}</button></div>
+                        </div>
+                  {!sLoading && canal==='ads' && adsDetailView && (headcountLoading ? <div style={{textAlign:'center',padding:60,color:C.muted}}>Chargement...</div> : !headcountData ? <div style={{textAlign:'center',padding:60,color:C.muted}}>Le détail des effectifs n’a pas pu être chargé. Utilisez Actualiser pour réessayer.</div> : <table className="leaderboard" style={{width:'100%'}}><thead><tr>{['#','Sales','Leads','1-2','3-4','5-6','7-10','11-19','20+','Inconnu'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>
                     {[...(headcountData.by_person||[])].sort((a,b)=>(b.leads_assigned||0)-(a.leads_assigned||0)).map((p,i)=>{const hc=p.headcount_breakdown||{};return(<tr key={p.person_name} style={{animation:'rowIn 0.3s cubic-bezier(0.16,1,0.3,1) '+(i*40)+'ms both'}}><td style={tdS}>{medal(i)}</td><td style={{...tdS,textAlign:'left',fontWeight:i<3?700:500,paddingLeft:12}}>{p.person_name}</td><td style={{...tdS,fontWeight:700}}>{(p.leads_assigned||0).toLocaleString('fr-FR')}</td>{['1-2','3-4','5-6','7-10','11-19','20+'].map(b=><td key={b} style={tdS}>{hc[b]||0}</td>)}<td style={{...tdS,color:C.muted}}>{p.unknown||0}</td></tr>);})}
                     {headcountData.totals && <tr style={{borderTop:'2px solid '+C.border,fontWeight:700,background:darkMode?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.02)'}}><td style={tdS}></td><td style={{...tdS,textAlign:'left',paddingLeft:12}}>Total</td><td style={tdS}>{(headcountData.totals.leads_assigned||0).toLocaleString('fr-FR')}</td>{['1-2','3-4','5-6','7-10','11-19','20+'].map(b=><td key={b} style={tdS}>{(headcountData.totals.headcount_breakdown||{})[b]||0}</td>)}<td style={{...tdS,color:C.muted}}>{headcountData.totals.unknown||0}</td></tr>}
                   </tbody></table>)}
 
-                  <p style={{fontSize:12,color:C.secondary,lineHeight:1.6,margin:'14px 0'}}>Les colonnes « Dont setter » sont incluses dans les totaux R1/R2. Les rendez-vous sont comptés à leur date prévue, en heure de Paris. Les leads correspondent aux contacts reçus dans la période, y compris ceux revenus au pool. CC regroupe le cold call sales et setter ; les rendez-vous ADS pris par un setter restent en ADS.</p>
-                  {!dataLoading && perfRows.length>0 && !(canal==='ads'&&adsDetailView) && (()=>{
-                    const visCols = perfColumns.filter(c=>(!c.crmOnly||isCrmMonth)).filter(c=>c.always||!hiddenCols.has(c.key));
-                    const toggleable = perfColumns.filter(c=>!c.always && (!c.crmOnly||isCrmMonth));
+                  {!sLoading && sRows.length>0 && !(canal==='ads'&&adsDetailView) && (()=>{
+                    const visCols = perfColumns.filter(c=>(!c.crmOnly||sCrm)).filter(c=>c.always||!hiddenCols.has(c.key));
+                    const toggleable = perfColumns.filter(c=>!c.always && (!c.crmOnly||sCrm));
                     return (<>
                     <div style={{display:'flex',justifyContent:'flex-end',marginBottom:10,position:'relative'}}>
                       <button onClick={()=>setColMenuOpen(o=>!o)} style={{display:'flex',alignItems:'center',gap:6,padding:'7px 14px',borderRadius:9,border:'1px solid '+C.border,background:darkMode?'#16171e':'#fff',color:C.text,fontSize:12.5,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
@@ -559,131 +502,57 @@ export default function MonitoringPerf() {
                         </div>
                       </>)}
                     </div>
-                    <div style={{overflowX:'auto'}}><table className="perfv2" style={{width:'100%',minWidth:Math.max(700,visCols.length*82)}}><thead><tr>{visCols.map(c=><th key={c.key} style={{...thS,cursor:'help'}} onMouseEnter={e=>setTip({t:c.tip,r:e.currentTarget.getBoundingClientRect()})} onMouseLeave={()=>setTip(null)}>{c.label}</th>)}</tr></thead><tbody>
-                    {perfRows.map((s,i)=>(<tr key={canal+'-'+i+'-'+s.salesKey} style={{animation:'rowIn 0.3s cubic-bezier(0.16,1,0.3,1) '+(i*40)+'ms both'}}>{visCols.map(c=>c.cell(s,i,c.key))}</tr>))}
-                    <tr style={{fontWeight:750,background:C.subtle,borderTop:'2px solid '+C.border}}>{visCols.map(c=>c.key==='rank'?<td key={c.key} style={tdS}>Σ</td>:c.key==='sales'?<td key={c.key} style={{...tdS,textAlign:'left'}}>Total · {perfRows.length} lignes</td>:['r1p','r2p'].includes(c.key)?<td key={c.key} style={tdS}>{totals[c.key==='r1p'?'r1_placed':'r2_placed']}</td>:c.cell(totals,-1,c.key))}</tr>
-                    </tbody></table></div>
+                    <RevealBlock className="ps-rows" style={{overflowX:'auto'}}><table className="perfv2" style={{width:'100%',minWidth:Math.max(700,visCols.length*82)}}><thead>
+                    <tr className="perfv2-groups">{columnGroups(visCols).map((g,i)=><th key={i} colSpan={g.span} className={g.label?'is-group':''} style={g.label?{color:g.color,borderBottomColor:g.color}:undefined}>{g.label}</th>)}</tr>
+                    <tr>{visCols.map(c=><th key={c.key} style={{...thS,cursor:'help'}} onMouseEnter={e=>setTip({t:c.tip,r:e.currentTarget.getBoundingClientRect()})} onMouseLeave={()=>setTip(null)}>{c.label}</th>)}</tr></thead><tbody>
+                    {sRows.map((s,i)=>(<tr key={canal+'-'+i+'-'+s.salesKey} style={{'--i':i}}>{visCols.map(c=>c.cell(s,i,c.key))}</tr>))}
+                    <tr style={{'--i':sRows.length+1,fontWeight:750,background:C.subtle,borderTop:'2px solid '+C.border}}>{visCols.map(c=>c.key==='rank'?<td key={c.key} style={tdS}>Σ</td>:c.key==='sales'?<td key={c.key} style={{...tdS,textAlign:'left'}}>Total · {sRows.length} lignes</td>:['r1p','r2p','r1tel'].includes(c.key)?<td key={c.key} style={tdS}>{sTotals[{r1p:'r1_placed',r2p:'r2_placed',r1tel:'r1_phone'}[c.key]]}</td>:c.key==='appels'?<td key={c.key} style={tdS}>{sCallsLoading?'…':sTotals.calls_measured?sTotals.calls.toLocaleString('fr-FR'):'—'}</td>:c.cell(sTotals,-1,c.key))}</tr>
+                    </tbody></table></RevealBlock>
                     </>);
                   })()}
 
-                  {!dataLoading && !dataError && !perfRows.length && !adsDetailView && <div style={{textAlign:'center',padding:60,color:C.muted}}>Aucune donn&eacute;e disponible</div>}
-
-                  {rdvAnalytics && (
-                    <div style={{padding:'8px 20px 28px',display:'flex',flexDirection:'column',gap:20,borderTop:'1px solid '+C.border,marginTop:8}}>
-                      <p style={{fontSize:12,color:C.secondary,margin:0}}>Rendez-vous · toutes origines · heures de Paris. Présence calculée sur les qualifications renseignées.</p>
-                      <div>
-                        <h2 style={{fontSize:18,fontWeight:700,color:C.text,margin:'8px 0 2px'}}>D&eacute;lai moyen R1 &rarr; R2 (effectu&eacute;s)</h2>
-                        <div style={{fontSize:12,color:C.secondary,marginBottom:12}}>Temps &eacute;coul&eacute; entre un R1 et un R2 r&eacute;alis&eacute;s (par mois du R1).</div>
-                        <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
-                          {rdvAnalytics.delay_by_month.length===0 && <div style={{fontSize:13,color:C.muted}}>Pas encore de R1+R2 effectu&eacute;s.</div>}
-                          {rdvAnalytics.delay_by_month.map(m=>(
-                            <div key={m.month} style={{flex:'1 1 150px',minWidth:150,background:C.bg,border:'1px solid '+C.border,borderRadius:10,padding:'12px 16px',boxShadow:C.shadow}}>
-                              <div style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:'uppercase',letterSpacing:'0.04em'}}>{monthLabelFR(m.month)}</div>
-                              <div style={{fontSize:22,fontWeight:700,color:C.text,marginTop:2}}>{m.avg_days.toLocaleString('fr-FR',{maximumFractionDigits:1})}<span style={{fontSize:13,fontWeight:600,color:C.muted}}> j moy.</span></div>
-                              <div style={{fontSize:11.5,color:C.muted,marginTop:2}}>m&eacute;diane {m.median_days.toLocaleString('fr-FR',{maximumFractionDigits:1})} j &middot; {m.n} RDV</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      {rdvAnalytics.treatment_delay && (()=>{
-                        if (range && /^\d{4}-\d{2}$/.test(range) && range < '2026-04') return (
-                          <div>
-                            <h2 style={{fontSize:18,fontWeight:700,color:C.text,margin:'8px 0 2px'}}>D&eacute;lai affectation &rarr; 1er traitement</h2>
-                            <div style={{fontSize:13,color:darkMode?'#e6cf8f':'#92700e',marginTop:8,padding:'14px 16px',background:darkMode?'#2e2614':'#fffbeb',border:'1px solid '+(darkMode?'#4d3f1a':'#fde68a'),borderRadius:10,lineHeight:1.5}}>Donn&eacute;es fiables &agrave; partir d'avril 2026. En mars, le champ d'horodatage d'affectation a &eacute;t&eacute; rempli r&eacute;troactivement, donc le d&eacute;lai n'est pas repr&eacute;sentatif.</div>
-                          </div>
-                        );
-                        const td=rdvAnalytics.treatment_delay, g=td.global||{}, sales=(td.by_sales||[]).filter(s=>isPerformanceSalesPerson(s.sales));
-                        const fmtMin=(m)=> m==null?'—': m<60?`${m} min`:`${Math.floor(m/60)}h${String(Math.round(m%60)).padStart(2,'0')}`;
-                        const pct=(a,b)=> b?Math.round(100*a/b):0;
-                        const sdColor=(p)=> p==null?C.muted: p>=70?'#10b981': p>=50?'#fbbf24':'#ef4444';
+                  {!sLoading && !dataError && !sRows.length && !adsDetailView && <div style={{textAlign:'center',padding:60,color:C.muted}}>Aucune donn&eacute;e disponible</div>}
+                      </div>}
+                      rdvNode={rdvAnalytics ? (()=>{
+                        // Présence par jour et heure : toute l'équipe, une équipe ou un sales, sur la période choisie.
+                        const src=presencePeriod.key==='month'?rdvAnalytics:presenceData.data;
+                        const hbs=((src||rdvAnalytics).heatmap_by_sales||[]).filter(s=>isPerformanceSalesPerson(s.sales));
+                        const teamsList=perfData?.pilotage?.teams||[];
+                        const merge=(list,stage)=>{const m=new Map();for(const s of list)for(const c of (s[stage]||[])){const k=c.dow+'-'+c.hour;const v=m.get(k)||{dow:c.dow,hour:c.hour,showed:0,noshow:0};v.showed+=c.showed||0;v.noshow+=c.noshow||0;m.set(k,v);}return [...m.values()];};
+                        const team=heatmapSales.startsWith('team:')?teamsList.find(t=>t.team===heatmapSales.slice(5)):null;
+                        const picked=team?hbs.filter(s=>team.members?.includes(s.sales)):heatmapSales==='global'?null:hbs.filter(s=>s.sales===heatmapSales);
+                        const cellsR1=picked?merge(picked,'r1'):src?.heatmap_r1||[];
+                        const cellsR2=picked?merge(picked,'r2'):src?.heatmap_r2||[];
+                        // RDV sans heure : hors grille, comptés dans la présence (mêmes RDV que les cartes R1/R2).
+                        const untimedOf=(stage)=>picked?picked.reduce((a,s)=>({showed:a.showed+(s[stage+'_untimed']?.showed||0),noshow:a.noshow+(s[stage+'_untimed']?.noshow||0)}),{showed:0,noshow:0}):src?.heatmap_untimed?.[stage]||null;
+                        const who=heatmapSales==='global'?'Toute l’équipe':team?team.team:heatmapSales;
                         return (
-                        <div>
-                          <h2 style={{fontSize:18,fontWeight:700,color:C.text,margin:'8px 0 2px'}}>D&eacute;lai affectation &rarr; 1er traitement</h2>
-                          <div style={{fontSize:12,color:C.muted,marginBottom:12}}>D&eacute;lai entre l'affectation d'un lead <b>ADS</b> re&ccedil;u (hors cold call / setter) et sa 1&egrave;re action (appel, non-pertinent, R1&hellip;), par le sales ou son setter. Le d&eacute;lai <b>ouvr&eacute;</b> exclut nuits et week-ends (fen&ecirc;tre 9h-17h) = la r&eacute;activit&eacute; r&eacute;elle.</div>
-                          <div style={{display:'flex',gap:12,flexWrap:'wrap',marginBottom:16}}>
-                            <div style={{flex:'1 1 150px',minWidth:150,background:C.bg,border:'1px solid '+C.border,borderRadius:10,padding:'12px 16px',boxShadow:C.shadow}}>
-                              <div style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:'uppercase',letterSpacing:'0.04em'}}>Trait&eacute; le jour m&ecirc;me</div>
-                              <div style={{fontSize:22,fontWeight:700,color:C.text,marginTop:2}}>{g.same_day_pct!=null?g.same_day_pct.toLocaleString('fr-FR',{maximumFractionDigits:0}):'—'}<span style={{fontSize:13,fontWeight:600,color:C.muted}}>%</span></div>
-                              <div style={{fontSize:11.5,color:C.muted,marginTop:2}}>{g.n_treated} / {g.n_assigned} leads trait&eacute;s</div>
-                            </div>
-                            <div style={{flex:'1 1 150px',minWidth:150,background:C.bg,border:'1px solid '+C.border,borderRadius:10,padding:'12px 16px',boxShadow:C.shadow}}>
-                              <div style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:'uppercase',letterSpacing:'0.04em'}}>M&eacute;diane (leads appel&eacute;s)</div>
-                              <div style={{fontSize:22,fontWeight:700,color:C.text,marginTop:2}}>{fmtMin(g.median_minutes)}</div>
-                              <div style={{fontSize:11.5,color:C.muted,marginTop:2}}>moy. {fmtMin(g.mean_minutes)}</div>
-                            </div>
-                            <div style={{flex:'1 1 150px',minWidth:150,background:C.bg,border:'1px solid '+C.border,borderRadius:10,padding:'12px 16px',boxShadow:C.shadow}}>
-                              <div style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:'uppercase',letterSpacing:'0.04em'}}>M&eacute;diane ouvr&eacute;e (9h-17h)</div>
-                              <div style={{fontSize:22,fontWeight:700,color:'#10b981',marginTop:2}}>{fmtMin(g.median_biz_minutes)}</div>
-                              <div style={{fontSize:11.5,color:C.muted,marginTop:2}}>hors nuits &amp; week-ends</div>
-                            </div>
-                            {td.arrival && (
-                            <div style={{flex:'1 1 210px',minWidth:210,background:C.bg,border:'1px solid '+C.border,borderRadius:10,padding:'12px 16px',boxShadow:C.shadow}}>
-                              <div style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:'uppercase',letterSpacing:'0.04em'}}>Re&ccedil;us hors heures</div>
-                              <div style={{fontSize:22,fontWeight:700,color:C.text,marginTop:2}}>{td.arrival.out_pct!=null?td.arrival.out_pct.toLocaleString('fr-FR',{maximumFractionDigits:0}):'\u2014'}<span style={{fontSize:13,fontWeight:600,color:C.muted}}>%</span></div>
-                              <div style={{fontSize:11.5,color:C.muted,marginTop:2}}>{td.arrival.out_of_hours} / {td.arrival.n} leads ADS</div>
-                              <div style={{fontSize:11,color:C.muted,marginTop:3}}>apr&egrave;s 17h {td.arrival.after_close} &middot; nuit {td.arrival.before_open} &middot; week-end {td.arrival.weekend}</div>
-                            </div>
-                            )}
-                            <div style={{flex:'2 1 280px',minWidth:240,background:C.bg,border:'1px solid '+C.border,borderRadius:10,padding:'12px 16px',boxShadow:C.shadow}}>
-                              <div style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:'uppercase',letterSpacing:'0.04em',marginBottom:8}}>R&eacute;partition du d&eacute;lai</div>
-                              <div style={{display:'flex',height:10,borderRadius:5,overflow:'hidden',background:C.subtle}}>
-                                <div style={{width:pct(g.d0,g.n_treated)+'%',background:'#10b981'}} />
-                                <div style={{width:pct(g.d1,g.n_treated)+'%',background:'#fbbf24'}} />
-                                <div style={{width:pct(g.d2,g.n_treated)+'%',background:'#fb923c'}} />
-                                <div style={{width:pct(g.d3plus,g.n_treated)+'%',background:'#ef4444'}} />
-                              </div>
-                              <div style={{display:'flex',gap:12,flexWrap:'wrap',marginTop:8,fontSize:11,color:C.muted}}>
-                                <span style={{color:'#10b981',fontWeight:600}}>&bull; M&ecirc;me jour <b style={{color:C.text}}>{g.d0}</b></span>
-                                <span style={{color:'#fbbf24',fontWeight:600}}>&bull; J+1 <b style={{color:C.text}}>{g.d1}</b></span>
-                                <span style={{color:'#fb923c',fontWeight:600}}>&bull; J+2 <b style={{color:C.text}}>{g.d2}</b></span>
-                                <span style={{color:'#ef4444',fontWeight:600}}>&bull; J+3 et + <b style={{color:C.text}}>{g.d3plus}</b></span>
-                              </div>
-                            </div>
+                          <div className="ps2-grid">
+                            <Reveal as="section" key={heatmapSales+presencePeriod.key} className="ps2-card ps2-span-12" aria-labelledby="ps2-heat-title">
+                              <div className="ps2-card-head"><h2 id="ps2-heat-title">Présence par jour et heure</h2>
+                                <label className="ps2-month is-small"><span>{who}</span>
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                                  <select aria-label="Équipe ou sales" value={heatmapSales} onChange={e=>setHeatmapSales(e.target.value)}>
+                                    <option value="global">Toute l’équipe</option>
+                                    {teamsList.length>0 && <optgroup label="Équipes">{teamsList.map(t=><option key={t.team} value={'team:'+t.team}>{t.team}</option>)}</optgroup>}
+                                    <optgroup label="Sales">{hbs.map(s=><option key={s.sales} value={s.sales}>{s.sales}</option>)}</optgroup>
+                                  </select></label></div>
+                              {presencePeriod.key!=='month'&&presenceData.error ? <div className="ps2-empty" role="alert">Période non chargée</div> : (
+                                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(min(100%, 440px), 1fr))',gap:16,marginTop:14}}>
+                                  <PresenceGrid cells={cellsR1} title="R1" untimed={untimedOf('r1')} />
+                                  <PresenceGrid cells={cellsR2} title="R2" untimed={untimedOf('r2')} />
+                                </div>
+                              )}
+                            </Reveal>
                           </div>
-                          {sales.length>0 && (
-                            <div style={{overflowX:'auto'}}>
-                              <table style={{width:'100%',borderCollapse:'collapse'}}>
-                                <thead><tr>{['Sales','Leads','Jour même','Médiane','Méd. ouvrée','J+1','J+2','J+3+'].map((h,i)=><th key={h} style={{textAlign:i===0?'left':'center',color:C.muted,fontWeight:600,padding:'6px 10px',borderBottom:'1px solid '+C.border,fontSize:11.5,whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead>
-                                <tbody>
-                                  {sales.map(s=>(
-                                    <tr key={s.sales} style={{borderBottom:'1px solid '+C.subtle}}>
-                                      <td style={{textAlign:'left',padding:'7px 10px',fontWeight:600,color:C.text,whiteSpace:'nowrap'}}>{s.sales}</td>
-                                      <td style={{textAlign:'center',padding:'7px 10px',color:C.muted}}>{s.n}</td>
-                                      <td style={{textAlign:'center',padding:'7px 10px',fontWeight:700,color:sdColor(s.same_day_pct)}}>{s.same_day_pct!=null?s.same_day_pct+'%':'—'}</td>
-                                      <td style={{textAlign:'center',padding:'7px 10px',color:C.text}}>{fmtMin(s.median_minutes)}</td>
-                                      <td style={{textAlign:'center',padding:'7px 10px',fontWeight:600,color:'#10b981'}}>{fmtMin(s.median_biz_minutes)}</td>
-                                      <td style={{textAlign:'center',padding:'7px 10px',color:C.muted}}>{s.d1}</td>
-                                      <td style={{textAlign:'center',padding:'7px 10px',color:C.muted}}>{s.d2}</td>
-                                      <td style={{textAlign:'center',padding:'7px 10px',color:s.d3plus>0?'#ef4444':C.muted,fontWeight:s.d3plus>0?700:400}}>{s.d3plus}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-                        </div>
                         );
-                      })()}
-                      {(()=>{
-                        const hbs=(rdvAnalytics.heatmap_by_sales||[]).filter(s=>isPerformanceSalesPerson(s.sales));
-                        const sel=heatmapSales==='global'?null:hbs.find(s=>s.sales===heatmapSales);
-                        return (<>
-                          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,flexWrap:'wrap'}}>
-                            <span style={{fontSize:12,color:C.muted,fontWeight:600}}>Taux de pr&eacute;sence&nbsp;:</span>
-                            <select value={heatmapSales} onChange={e=>setHeatmapSales(e.target.value)} style={{padding:'6px 30px 6px 12px',borderRadius:8,border:'1px solid '+C.border,background:darkMode?'#16171e':'#fff',color:C.text,fontSize:13,fontWeight:600,cursor:'pointer',appearance:'none',WebkitAppearance:'none',fontFamily:'inherit',outline:'none',backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='${encodeURIComponent(C.muted)}' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,backgroundRepeat:'no-repeat',backgroundPosition:'right 10px center'}}>
-                              <option value="global">Global</option>
-                              {hbs.map(s=><option key={s.sales} value={s.sales}>{s.sales}</option>)}
-                            </select>
-                          </div>
-                          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(min(100%, 440px), 1fr))',gap:16}}>
-                            <RdvHeatmap cells={sel?sel.r1:rdvAnalytics.heatmap_r1} C={C} title="Pr&eacute;sence R1 &mdash; jour/heure" />
-                            <RdvHeatmap cells={sel?sel.r2:rdvAnalytics.heatmap_r2} C={C} title="Pr&eacute;sence R2 &mdash; jour/heure" />
-                          </div>
-                        </>);
-                      })()}
-                    </div>
+                      })() : null}
+                      reactivityNode={<Reactivity analytics={reactPeriod.key==='month'?rdvAnalytics:reactData.data} period={reactPeriod} onPeriod={setReactPeriod}
+                        loading={reactPeriod.key==='month'?!rdvAnalytics&&!sectionErrors.rdv:reactData.loading} error={reactPeriod.key==='month'?sectionErrors.rdv:reactData.error}
+                        warning={reactPeriod.key==='month' && /^\d{4}-\d{2}$/.test(range) && range < '2026-04' ? 'Délais fiables à partir d’avril 2026' : null}
+                        dark={darkMode} salesFilter={isPerformanceSalesPerson} />} />
                   )}
-                  </>)}
+                  </>
                 </div>)}
 
                 {viewMode==='lead_quality' && (<div style={{padding:'20px 20px 28px'}}>
