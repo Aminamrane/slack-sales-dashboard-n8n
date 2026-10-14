@@ -1,6 +1,7 @@
 // Monitoring de l'auto-affectation des RDV setters (dev 06/10/2026), lecture seule : qui reçoit les RDV posés
-// par les setters depuis l'agenda unique, pourquoi (sales prioritaire, préférence de secteur, équité, lead déjà
-// suivi) et l'équilibre de la semaine. Même langage visuel que LeadAssignmentLive (charte makeCharte).
+// par les setters depuis l'agenda unique, pourquoi (équité, lead déjà suivi, lead webinaire réservé aux prioritaires ;
+// « préférence » et « prioritaire » hors webinaire = règle d'avant le 14/10/2026) et l'équilibre de la semaine.
+// Même langage visuel que LeadAssignmentLive (charte makeCharte).
 import { useCallback, useEffect, useState } from "react";
 import apiClient from "../services/apiClient";
 import { makeCharte } from "../styles/charte.js";
@@ -39,6 +40,12 @@ const slotLabel = (wall) => {
   return `${day} · ${Number(wall.slice(11, 13))} h ${wall.slice(14, 16)}`;
 };
 const dayLabel = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("fr-FR", { timeZone: "UTC", day: "numeric", month: "long" });
+// Instant réel (avec fuseau) rendu à l'heure de Paris : « 14 octobre à 14 h 30 ».
+const instantLabel = (iso) => {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+    .formatToParts(new Date(iso)).map((x) => [x.type, x.value]));
+  return `${p.day} ${p.month} à ${Number(p.hour)} h${p.minute === "00" ? "" : " " + p.minute}`;
+};
 
 function tint(hex, a) {
   const n = parseInt((hex || "#8b94a6").replace("#", ""), 16);
@@ -95,9 +102,10 @@ export default function SetterAutoAssignMonitor({ darkMode = false }) {
 
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.55, maxWidth: 760 }}>
-          Semaine du {dayLabel(data.week.start)} au {dayLabel(data.week.end)}. Quand un setter pose un R1 depuis l'agenda unique, le créneau va
-          d'abord aux sales prioritaires libres, quel que soit le secteur, puis à un sales qui préfère le secteur du lead{data.mode === "exclusive" ? " (exclusivement)" : ""},
-          sinon au moins servi de la semaine ; un lead déjà suivi garde son commercial. Un lead webinaire ne va qu'aux prioritaires.
+          Semaine du {dayLabel(data.week.start)} au {dayLabel(data.week.end)}. Quand un setter pose un R1 depuis l'agenda unique, tous les
+          sales sont à égalité : le créneau va au sales libre qui a reçu le moins de RDV setters dans la semaine, puis au moins récemment
+          servi. Un lead déjà suivi garde son commercial, un secteur refusé écarte le sales, et un lead webinaire ne va qu'aux sales prioritaires.
+          {data.equity_since && <> Compteur remis à zéro le {instantLabel(data.equity_since)} : les RDV attribués avant ne comptent pas.</>}
         </div>
         <span style={{ fontSize: 12, color: C.muted }}>Mis à jour {ago(loadedAt)}</span>
       </div>
