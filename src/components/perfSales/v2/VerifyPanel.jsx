@@ -28,7 +28,13 @@ function Bars({ items, total, onPick }) {
   );
 }
 
-export default function VerifyPanel({ open, model, period, dark, onClose }) {
+// Une publicité = son libellé d'origine aux majuscules et espaces près (même clé que le serveur, perf_partition.ad_key).
+const adKey = (origin) => String(origin || '').split(/\s+/).filter(Boolean).join(' ').toLowerCase() || 'sans libellé';
+
+export default function VerifyPanel({ open, model: pageModel, period: pagePeriod, dark, onClose }) {
+  // L'onglet Sales peut ouvrir un chiffre sur sa propre période (son modèle et sa période accompagnent la demande).
+  const model = open?.model || pageModel;
+  const period = open?.period || pagePeriod;
   const metric = open ? model?.metrics?.[open.metric] : null;
   const [state, setState] = useState({ loading: false, rows: null, error: false });
   const [person, setPerson] = useState(open?.person || null);
@@ -55,8 +61,8 @@ export default function VerifyPanel({ open, model, period, dark, onClose }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  const rows = useMemo(() => (state.rows || []).filter((r) => (!person || r.sales === person) && (!source || r.source === source)),
-    [state.rows, person, source]);
+  const rows = useMemo(() => (state.rows || []).filter((r) => (!person || r.sales === person) && (!source || r.source === source)
+    && (!open?.ad || adKey(r.origin) === open.ad)), [state.rows, person, source, open?.ad]);
   const channelItems = metric ? Object.entries(metric.byChannel || {}).filter(([, v]) => v > 0)
     .map(([k, v]) => ({ key: k, label: sourceOf(k).label, color: sourceOf(k).color, value: v })).sort((a, b) => b.value - a.value) : [];
   const salesItems = metric ? metric.bySales.map((s) => ({ key: s.name, label: s.name, value: s.value })) : [];
@@ -98,7 +104,7 @@ export default function VerifyPanel({ open, model, period, dark, onClose }) {
               <div>
                 <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--soft)' }}>{open.dossiers === 'r1p' ? 'R1 posés' : open.dossiers === 'r2p' ? 'R2 posés' : metric.label}{person ? ` · ${person}` : ''}{source ? ` · ${sourceOf(source).label}` : ''}</h2>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginTop: 6, flexWrap: 'wrap' }}>
-                  <span className="ps2-num" style={{ fontSize: 52, fontWeight: 600, letterSpacing: '-.03em' }}>{fr(person || source ? rows.length : metric.value)}</span>
+                  <span className="ps2-num" style={{ fontSize: 52, fontWeight: 600, letterSpacing: '-.03em' }}>{fr(person || source || open?.ad ? rows.length : metric.value)}</span>
                   {!person && !source && metric.gap != null && (
                     <span style={{ padding: '4px 10px', borderRadius: 999, fontSize: 12.5, fontWeight: 600,
                       background: metric.gap >= 0 ? 'var(--good-bg)' : 'var(--low-bg)', color: metric.gap >= 0 ? 'var(--good)' : 'var(--low)' }}>

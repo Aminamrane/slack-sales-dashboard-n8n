@@ -43,6 +43,21 @@ function usePeriodAnalytics(enabled, period, range, refreshKey) {
   }, [enabled, period, range, refreshKey]);
   return state;
 }
+// Période de l'onglet Sales (dev 15/10/2026 : « dans Sales, on ne peut pas sélectionner une période ») : le mois affiché, le
+// mois précédent, ou une période libre « AAAA-MM-JJ..AAAA-MM-JJ » (7 ou 30 derniers jours, dates choisies).
+function salesPeriodRange(period, range) {
+  if (period.key === 'month') return range;
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(new Date());
+  const back = (n) => { const d = new Date(today + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - n); return d.toISOString().slice(0, 10); };
+  const base = /^\d{4}-\d{2}$/.test(range) ? range : parisMonth();
+  if (period.key === '7d') return `${back(6)}..${today}`;
+  if (period.key === '30d') return `${back(29)}..${today}`;
+  if (period.key === 'prev') { const [y, m] = base.split('-').map(Number); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`; }
+  return period.start && period.end && period.start <= period.end ? `${period.start}..${period.end}` : null;
+}
+const nextDay = (iso) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
+const rangeLabelFR = (r) => (String(r).includes('..') ? r.split('..').map(d => d.split('-').reverse().slice(0, 2).join('/')).join(' → ') : monthLabelFR(r));
+
 const COLORS = { primary: "#6366f1", secondary: "#fb923c", tertiary: "#10b981" };
 const MONTHS_FR = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
 const monthLabelFR = (ym) => { const p = String(ym || '').split('-'); return (MONTHS_FR[(+p[1] || 1) - 1] || '') + ' ' + (p[0] || ''); };
@@ -152,6 +167,10 @@ export default function MonitoringPerf() {
   const [selectedOrigins, setSelectedOrigins] = useState([]);
   const [range, setRange] = useState(parisMonth);
   const [canal, setCanal] = useState("global");
+  // Période de l'onglet Sales (voir salesPeriodRange) : lue par le tableau, ses détails et ses KPI.
+  const [salesPeriod, setSalesPeriod] = useState({ key: 'month' });
+  const salesRange = useMemo(() => salesPeriodRange(salesPeriod, range) || range, [salesPeriod, range]);
+  const salesOwn = salesRange !== range;
   const [adsDetailView, setAdsDetailView] = useState(false);
   const [headcountData, setHeadcountData] = useState(null);
   const [headcountLoading, setHeadcountLoading] = useState(false);
@@ -177,26 +196,26 @@ export default function MonitoringPerf() {
     const request = ++appointmentRequest.current;
     setAppointmentDetail({person,stage,loading:true});
     try {
-      const data = await apiClient.get(`/api/v1/monitoring/performance/appointments?person_name=${encodeURIComponent(person)}&period=${range}&channel=${canal}&stage=${stage}`);
+      const data = await apiClient.get(`/api/v1/monitoring/performance/appointments?person_name=${encodeURIComponent(person)}&period=${encodeURIComponent(salesRange)}&channel=${canal}&stage=${stage}`);
       if(request===appointmentRequest.current)setAppointmentDetail({person,stage,data});
     } catch {if(request===appointmentRequest.current)setAppointmentDetail({person,stage,error:true});}
   };
-  useEffect(()=>{++appointmentRequest.current;setAppointmentDetail(null);},[range,canal]);
+  useEffect(()=>{++appointmentRequest.current;setAppointmentDetail(null);},[salesRange,canal]);
   const detailRequest = useRef(0);
   const openDetail = async (personName) => {
     if (!['ads', 'cc'].includes(canal)) return;
     const request = ++detailRequest.current;
     setDetailModal({personName, type: canal, data: null, loading: true});
     try {
-      const res = await apiClient.get(`/api/v1/monitoring/performance/detail/${canal}?person_name=${encodeURIComponent(personName)}&period=${range}`);
+      const res = await apiClient.get(`/api/v1/monitoring/performance/detail/${canal}?person_name=${encodeURIComponent(personName)}&period=${encodeURIComponent(salesRange)}`);
       if (request === detailRequest.current) setDetailModal(prev => prev ? {...prev, data: res, loading: false} : null);
     } catch {
       if (request === detailRequest.current) setDetailModal(prev => prev ? {...prev, loading: false} : null);
     }
   };
-  useEffect(() => { ++detailRequest.current; setDetailModal(null); setHeatmapSales('global'); }, [range, canal]);
+  useEffect(() => { ++detailRequest.current; setDetailModal(null); setHeatmapSales('global'); }, [salesRange, canal]);
 
-  useEffect(() => { if (!adsDetailView || canal !== "ads") return; let c = false; (async () => { setHeadcountLoading(true); try { const res = await apiClient.get('/api/v1/monitoring/performance/detail/ads/headcount?period=' + range); if (!c) setHeadcountData(visibleHeadcount(res)); } catch { if (!c) setHeadcountData(null); } finally { if (!c) setHeadcountLoading(false); } })(); return () => { c = true; }; }, [adsDetailView, range, canal, refreshKey]);
+  useEffect(() => { if (!adsDetailView || canal !== "ads") return; let c = false; (async () => { setHeadcountLoading(true); try { const res = await apiClient.get('/api/v1/monitoring/performance/detail/ads/headcount?period=' + encodeURIComponent(salesRange)); if (!c) setHeadcountData(visibleHeadcount(res)); } catch { if (!c) setHeadcountData(null); } finally { if (!c) setHeadcountLoading(false); } })(); return () => { c = true; }; }, [adsDetailView, salesRange, canal, refreshKey]);
 
   useEffect(() => {
     if (!hasAccess) return;
@@ -231,6 +250,22 @@ export default function MonitoringPerf() {
   const reactData = usePeriodAnalytics(hasAccess, reactPeriod, range, refreshKey);
   const [presencePeriod, setPresencePeriod] = useState({ key: 'month' });
   const presenceData = usePeriodAnalytics(hasAccess, presencePeriod, range, refreshKey);
+  // Onglet Sales sur sa propre période : chiffres de la page et appels relus pour cette période ; le mois affiché réutilise
+  // les réponses déjà chargées.
+  const [salesSide, setSalesSide] = useState({ perf: null, calls: null, loading: false, error: false });
+  useEffect(() => {
+    if (!hasAccess || !salesOwn) { setSalesSide({ perf: null, calls: null, loading: false, error: false }); return undefined; }
+    let cancelled = false;
+    setSalesSide(s => ({ ...s, loading: true, error: false }));
+    const [d0, d1] = salesRange.split('..');
+    const calls = salesRange >= '2026-05'
+      ? apiClient.get('/api/v1/tracking/sales-calls-crm?' + (d1 ? `start=${d0}&end=${d1}` : `month=${salesRange}`)).catch(() => ({ by_sales: [], calls_error: 'Appels indisponibles' }))
+      : Promise.resolve(null);
+    Promise.all([apiClient.get('/api/v1/monitoring/performance/v2?period=' + encodeURIComponent(salesRange)), calls])
+      .then(([perf, crm]) => { if (!cancelled) setSalesSide({ perf, calls: crm, loading: false, error: false }); })
+      .catch(() => { if (!cancelled) setSalesSide(s => ({ ...s, loading: false, error: true })); });
+    return () => { cancelled = true; };
+  }, [hasAccess, salesOwn, salesRange, refreshKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -249,6 +284,12 @@ export default function MonitoringPerf() {
   const perfRows = useMemo(() => performanceRows(perfData, callsCrm, canal, getCanonicalKey), [perfData, callsCrm, canal]);
 
   const totals = useMemo(() => {const t=performanceTotals(perfRows); return {...t,lead_qualifie:isCrmMonth?t.lead_qualifie:ratio(t.unique_answered,t.leads_assigned)};}, [perfRows,isCrmMonth]);
+  const salesPerf = salesOwn ? salesSide.perf : perfData;
+  const sCrm = !!(salesRange && salesRange !== 'all' && salesRange >= '2026-05');
+  const sLoading = salesOwn ? salesSide.loading && !salesSide.perf : dataLoading;
+  const sCallsLoading = salesOwn ? salesSide.loading : callsLoading;
+  const sRows = useMemo(() => performanceRows(salesPerf, salesOwn ? salesSide.calls : callsCrm, canal, getCanonicalKey), [salesPerf, salesOwn, salesSide.calls, callsCrm, canal]);
+  const sTotals = useMemo(() => {const t=performanceTotals(sRows); return {...t,lead_qualifie:sCrm?t.lead_qualifie:ratio(t.unique_answered,t.leads_assigned)};}, [sRows,sCrm]);
   // Performance Sales v2 (dev 14/10/2026) : onglets ; le canal ADS/CC ne sert plus qu'au tableau de l'onglet Sales.
   const changeV2Tab = (t) => { setV2Tab(t); if (t !== 'sales') { setCanal('global'); setAdsDetailView(false); } };
   const v2Front = useMemo(() => ({
@@ -283,11 +324,11 @@ export default function MonitoringPerf() {
     { key:'sales', label:'Sales', tip:'Commercial', always:true, cell:(s,i,k)=>{const meta=avatarMap[s.salesKey]||{};const av=meta.av;const rl={sales:'Sales',head_of_sales:'Head of Sales',head_of_sales_manager:'Manager',admin:'Admin'}[meta.role]||'';return <td key={k} style={{...tdS,textAlign:'left',paddingLeft:8}}><div style={{display:'flex',alignItems:'center',gap:11}}>{av?<img src={av} alt="" style={{width:36,height:36,borderRadius:'50%',objectFit:'cover',flexShrink:0,border:'1px solid '+C.border}} />:<div style={{width:36,height:36,borderRadius:'50%',background:i===0?COLORS.tertiary:i===1?COLORS.secondary:COLORS.primary,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,color:'#fff',fontWeight:600,flexShrink:0}}>{s.salesName.charAt(0).toUpperCase()}</div>}<div style={{minWidth:0}}><div style={{fontWeight:650,fontSize:13.5,color:C.text,whiteSpace:'nowrap',letterSpacing:'-0.01em',...(canal!=='global'?{cursor:'pointer'}:{})}} onClick={()=>canal!=='global'&&openDetail(s.salesName)}>{s.salesName}</div>{rl&&<div style={{fontSize:11,color:C.muted,marginTop:1}}>{rl}</div>}</div></div></td>;} },
     { key:'leads', label:'Leads', tip:'Leads reçus (créés) dans le mois', cell:(s,i,k)=><td key={k} style={{...tdS,fontWeight:700}}>{canal==='ads'?(s.leads_ads||0):canal==='cc'?(s.leads_cc||0):(s.leads_assigned||0)}</td> },
     { key:'conv', label:'Conv.%', tip:'Ventes déclarées dans la période ÷ leads reçus dans la période. Ce ratio d’activité ne suit pas une même cohorte de clients.', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_global,2),gcColor(s.conv_global))}</td> },
-    { key:'appels', label:'Appels', tip:'Appels sortants passés depuis Allo dans la période. « Non relevé » : le sales n’appelle pas depuis Allo, ses appels ne sont pas comptés.', cell:(s,i,k)=><td key={k} style={tdS}>{callsLoading&&i>=0?<span style={{color:C.muted}}>…</span>:s.calls_available?s.calls_total.toLocaleString('fr-FR'):<span style={{fontSize:11.5,color:C.muted}}>non relevé</span>}</td> },
-    { key:'rep', label:isCrmMonth?'Rép.':'Décr.', tip:isCrmMonth?'Leads répondu (atteints), vérité CRM':'Décrochés (OnOff)', cell:(s,i,k)=><td key={k} style={isCrmMonth?{...tdS,color:COLORS.tertiary,fontWeight:600}:tdS}>{s.calls_answered.toLocaleString('fr-FR')}</td> },
+    { key:'appels', label:'Appels', tip:'Appels sortants passés depuis Allo dans la période. « Non relevé » : le sales n’appelle pas depuis Allo, ses appels ne sont pas comptés.', cell:(s,i,k)=><td key={k} style={tdS}>{sCallsLoading&&i>=0?<span style={{color:C.muted}}>…</span>:s.calls_available?s.calls_total.toLocaleString('fr-FR'):<span style={{fontSize:11.5,color:C.muted}}>non relevé</span>}</td> },
+    { key:'rep', label:sCrm?'Rép.':'Décr.', tip:sCrm?'Leads répondu (atteints), vérité CRM':'Décrochés (OnOff)', cell:(s,i,k)=><td key={k} style={sCrm?{...tdS,color:COLORS.tertiary,fontWeight:600}:tdS}>{s.calls_answered.toLocaleString('fr-FR')}</td> },
     { key:'repondeur', label:'Répondeur', tip:'Tombés sur répondeur / messagerie', crmOnly:true, cell:(s,i,k)=><td key={k} style={{...tdS,color:C.muted}}>{s.repondeur!=null?s.repondeur.toLocaleString('fr-FR'):'—'}</td> },
-    { key:'txrep', label:isCrmMonth?'Tx Rép.':'Tx Décr.', tip:isCrmMonth?'Taux de réponse Allo : appels répondus par une personne ÷ appels sortants (répondeurs détectés exclus)':'Décrochés ÷ Appels', cell:(s,i,k)=><td key={k} style={tdS}>{(s.calls_measured ?? s.calls_available)&&!callsLoading?pctPill(percent(s.conv_calls_to_answered,1),arColor(s.conv_calls_to_answered)):'—'}</td> },
-    { key:'r1rep', label:isCrmMonth?'R1/Rép':'R1/Décr', tip:isCrmMonth?'Parmi les contacts atteints dans la période : part ayant un R1 planifié dans cette même période':'R1 placés ÷ Décrochés', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_answered_to_r1p,1),r1pColor(s.conv_answered_to_r1p))}</td> },
+    { key:'txrep', label:sCrm?'Tx Rép.':'Tx Décr.', tip:sCrm?'Taux de réponse Allo : appels répondus par une personne ÷ appels sortants (répondeurs détectés exclus)':'Décrochés ÷ Appels', cell:(s,i,k)=><td key={k} style={tdS}>{(s.calls_measured ?? s.calls_available)&&!sCallsLoading?pctPill(percent(s.conv_calls_to_answered,1),arColor(s.conv_calls_to_answered)):'—'}</td> },
+    { key:'r1rep', label:sCrm?'R1/Rép':'R1/Décr', tip:sCrm?'Parmi les contacts atteints dans la période : part ayant un R1 planifié dans cette même période':'R1 placés ÷ Décrochés', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_answered_to_r1p,1),r1pColor(s.conv_answered_to_r1p))}</td> },
     { key:'r1p', label:'R1 placés', tip:'Tous les R1 planifiés dans la période, sales et setters inclus. Cliquer pour voir les dossiers.', cell:(s,i,k)=><td key={k} style={tdS}><button onClick={()=>openAppointments(s.salesName,'r1')} style={metricButton}>{s.r1_placed}</button></td> },
     { key:'r1tel', label:'R1 tél.', tip:'R1 faits au téléphone : un R2 posé sans R1 dans le CRM, compté au mois du R2. À part des R1 placés. Cliquer pour voir les dossiers.', crmOnly:true, cell:(s,i,k)=><td key={k} style={tdS}>{s.r1_phone?<button onClick={()=>openAppointments(s.salesName,'r1_phone')} style={metricButton}>{s.r1_phone}</button>:<span style={{color:C.muted}}>0</span>}</td> },
     { key:'r1s', label:'Dont setter', tip:'R1 placés par le setter', crmOnly:true, cell:(s,i,k)=><td key={k} style={{...tdS,color:COLORS.primary,fontWeight:600}}>{s.r1p_s}</td> },
@@ -299,7 +340,7 @@ export default function MonitoringPerf() {
     { key:'r2e', label:'R2 effectués', tip:'R2 planifiés dans la période et qualifiés comme effectués, y compris réflexion ou refus après rendez-vous', cell:(s,i,k)=><td key={k} style={tdS}>{s.r2_done}</td> },
     { key:'r2se', label:'Dont setter effectués', tip:'R2 placés par un setter et réellement effectués ; sous-ensemble des R2 effectués', crmOnly:true, cell:(s,i,k)=><td key={k} style={tdS}>{s.r2r_s}</td> },
     { key:'txr2', label:'Tx R2', tip:'Présence R2 : R2 effectués ÷ R2 passés (date prévue dépassée). Les R2 à venir du mois ne comptent pas.', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_r2p_to_r2r,0),rxColor(s.conv_r2p_to_r2r))}</td> },
-    ...((canal!=='ads'&&isCrmMonth)?[{key:'ccs1',label:'CC setter R1 effectués',tip:'R1 effectués du canal CC, issus du setter ; inclus dans R1 effectués',cell:(s,i,k)=><td key={k} style={tdS}>{s.r1_cc_setter_done}</td>},{key:'ccs2',label:'CC setter R2 effectués',tip:'R2 effectués issus du CC setter, même si le sales a placé le R2 ; inclus dans R2 effectués',cell:(s,i,k)=><td key={k} style={tdS}>{s.r2_cc_setter_done}</td>}]:[]),
+    ...((canal!=='ads'&&sCrm)?[{key:'ccs1',label:'CC setter R1 effectués',tip:'R1 effectués du canal CC, issus du setter ; inclus dans R1 effectués',cell:(s,i,k)=><td key={k} style={tdS}>{s.r1_cc_setter_done}</td>},{key:'ccs2',label:'CC setter R2 effectués',tip:'R2 effectués issus du CC setter, même si le sales a placé le R2 ; inclus dans R2 effectués',cell:(s,i,k)=><td key={k} style={tdS}>{s.r2_cc_setter_done}</td>}]:[]),
     { key:'signes', label:'Signatures', tip:'Contrats Owner signés sur Yousign dans la période, au commercial du contrat ; un contrat signé peut ne pas être encore déclaré.', cell:(s,i,k)=><td key={k} style={{...tdS,fontWeight:750,color:'#f59e0b'}}>{s.signed}</td> },
     { key:'ventes', label:'Ventes', tip:'Ventes déclarées dans la période (déclaration de vente)', cell:(s,i,k)=><td key={k} style={{...tdS,fontWeight:800,fontSize:15,color:COLORS.tertiary}}>{s.signatures}</td> },
     { key:'convv', label:'Conv.V.', tip:'Conversion ventes : Ventes ÷ R2 effectués', cell:(s,i,k)=><td key={k} style={tdS}>{pctPill(percent(s.conv_sales,1),cvColor(s.conv_sales))}</td> },
@@ -323,7 +364,7 @@ export default function MonitoringPerf() {
   const appointmentDialog = appointmentDetail && createPortal(
     <div onClick={()=>{++appointmentRequest.current;setAppointmentDetail(null);}} style={{position:'fixed',inset:0,zIndex:12000,background:'rgba(20,25,35,.35)',backdropFilter:'blur(5px)',display:'grid',placeItems:'center',padding:20}}>
       <Motion.section role="dialog" aria-modal="true" aria-label="Détail des rendez-vous" initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} onClick={e=>e.stopPropagation()} style={{background:C.bg,color:C.text,borderRadius:20,width:'min(900px,100%)',maxHeight:'85dvh',overflow:'auto',padding:24,boxShadow:'0 20px 60px #0002'}}>
-        <div style={{display:'flex',justifyContent:'space-between',gap:20}}><div><h2 style={{margin:0,fontSize:20}}>{appointmentDetail.stage==='r1_phone'?'R1 au téléphone':appointmentDetail.stage.toUpperCase()} · {appointmentDetail.person}</h2><p style={{color:C.secondary}}>{monthLabelFR(range)} · {canal.toUpperCase()} · heure de Paris</p></div><button aria-label="Fermer" onClick={()=>{++appointmentRequest.current;setAppointmentDetail(null);}} style={metricButton}>Fermer</button></div>
+        <div style={{display:'flex',justifyContent:'space-between',gap:20}}><div><h2 style={{margin:0,fontSize:20}}>{appointmentDetail.stage==='r1_phone'?'R1 au téléphone':appointmentDetail.stage.toUpperCase()} · {appointmentDetail.person}</h2><p style={{color:C.secondary}}>{rangeLabelFR(salesRange)} · {canal.toUpperCase()} · heure de Paris</p></div><button aria-label="Fermer" onClick={()=>{++appointmentRequest.current;setAppointmentDetail(null);}} style={metricButton}>Fermer</button></div>
         {appointmentDetail.loading?<p>Chargement des rendez-vous…</p>:appointmentDetail.error?<p>Le détail n’a pas pu être chargé.</p>:<>
           <p><strong>{appointmentDetail.stage==='r1_phone'?`${appointmentDetail.data.total} R1 faits au téléphone (R2 posé sans R1) · ${appointmentDetail.data.setter} R2 posés par un setter`:`${appointmentDetail.data.total} placés · ${appointmentDetail.data.done} effectués · ${appointmentDetail.data.setter} placés par un setter`}</strong></p>
           {appointmentDetail.data.historical_partial&&<p>Le détail des rendez-vous est disponible depuis avril 2026 ; les agrégats antérieurs ne contiennent pas de dossiers individuels.</p>}
@@ -409,19 +450,23 @@ export default function MonitoringPerf() {
                       controls={{ value: range, options: [...monthOpts(2025,9), { value: 'all', label: 'Toutes les périodes' }], onChange: setRange,
                         onRefresh: () => setRefreshKey(k => k + 1), loading: dataLoading }}
                       ventesData={salesBreakdown}
+                      salesData={salesPerf} salesRange={salesRange} salesLoading={salesOwn && salesSide.loading}
+                      salesPeriodBar={<PeriodBar period={salesPeriod} onPeriod={setSalesPeriod} loading={salesSide.loading}
+                        warning={salesSide.error ? 'Période non chargée' : null}
+                        analytics={salesPerf?.period ? { period: { start: salesPerf.period.start, end: nextDay(salesPerf.period.end) } } : null} />}
                       salesNode={<div style={{display:'flex',flexDirection:'column',gap:12}}>
                         <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
                           {/* Les canaux du tableau se choisissent au-dessus (vue par canal) ; ici, la répartition des leads ADS par effectif. */}
                           <div className="ps2-segment"><button type="button" aria-pressed={adsDetailView} onClick={()=>{const on=!adsDetailView;setAdsDetailView(on);setCanal(on?'ads':'global');}}>{adsDetailView?'Retour au tableau':'Leads ADS par effectif'}</button></div>
                         </div>
-                  {!dataLoading && canal==='ads' && adsDetailView && (headcountLoading ? <div style={{textAlign:'center',padding:60,color:C.muted}}>Chargement...</div> : !headcountData ? <div style={{textAlign:'center',padding:60,color:C.muted}}>Le détail des effectifs n’a pas pu être chargé. Utilisez Actualiser pour réessayer.</div> : <table className="leaderboard" style={{width:'100%'}}><thead><tr>{['#','Sales','Leads','1-2','3-4','5-6','7-10','11-19','20+','Inconnu'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>
+                  {!sLoading && canal==='ads' && adsDetailView && (headcountLoading ? <div style={{textAlign:'center',padding:60,color:C.muted}}>Chargement...</div> : !headcountData ? <div style={{textAlign:'center',padding:60,color:C.muted}}>Le détail des effectifs n’a pas pu être chargé. Utilisez Actualiser pour réessayer.</div> : <table className="leaderboard" style={{width:'100%'}}><thead><tr>{['#','Sales','Leads','1-2','3-4','5-6','7-10','11-19','20+','Inconnu'].map(h=><th key={h} style={thS}>{h}</th>)}</tr></thead><tbody>
                     {[...(headcountData.by_person||[])].sort((a,b)=>(b.leads_assigned||0)-(a.leads_assigned||0)).map((p,i)=>{const hc=p.headcount_breakdown||{};return(<tr key={p.person_name} style={{animation:'rowIn 0.3s cubic-bezier(0.16,1,0.3,1) '+(i*40)+'ms both'}}><td style={tdS}>{medal(i)}</td><td style={{...tdS,textAlign:'left',fontWeight:i<3?700:500,paddingLeft:12}}>{p.person_name}</td><td style={{...tdS,fontWeight:700}}>{(p.leads_assigned||0).toLocaleString('fr-FR')}</td>{['1-2','3-4','5-6','7-10','11-19','20+'].map(b=><td key={b} style={tdS}>{hc[b]||0}</td>)}<td style={{...tdS,color:C.muted}}>{p.unknown||0}</td></tr>);})}
                     {headcountData.totals && <tr style={{borderTop:'2px solid '+C.border,fontWeight:700,background:darkMode?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.02)'}}><td style={tdS}></td><td style={{...tdS,textAlign:'left',paddingLeft:12}}>Total</td><td style={tdS}>{(headcountData.totals.leads_assigned||0).toLocaleString('fr-FR')}</td>{['1-2','3-4','5-6','7-10','11-19','20+'].map(b=><td key={b} style={tdS}>{(headcountData.totals.headcount_breakdown||{})[b]||0}</td>)}<td style={{...tdS,color:C.muted}}>{headcountData.totals.unknown||0}</td></tr>}
                   </tbody></table>)}
 
-                  {!dataLoading && perfRows.length>0 && !(canal==='ads'&&adsDetailView) && (()=>{
-                    const visCols = perfColumns.filter(c=>(!c.crmOnly||isCrmMonth)).filter(c=>c.always||!hiddenCols.has(c.key));
-                    const toggleable = perfColumns.filter(c=>!c.always && (!c.crmOnly||isCrmMonth));
+                  {!sLoading && sRows.length>0 && !(canal==='ads'&&adsDetailView) && (()=>{
+                    const visCols = perfColumns.filter(c=>(!c.crmOnly||sCrm)).filter(c=>c.always||!hiddenCols.has(c.key));
+                    const toggleable = perfColumns.filter(c=>!c.always && (!c.crmOnly||sCrm));
                     return (<>
                     <div style={{display:'flex',justifyContent:'flex-end',marginBottom:10,position:'relative'}}>
                       <button onClick={()=>setColMenuOpen(o=>!o)} style={{display:'flex',alignItems:'center',gap:6,padding:'7px 14px',borderRadius:9,border:'1px solid '+C.border,background:darkMode?'#16171e':'#fff',color:C.text,fontSize:12.5,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
@@ -445,13 +490,13 @@ export default function MonitoringPerf() {
                     <RevealBlock className="ps-rows" style={{overflowX:'auto'}}><table className="perfv2" style={{width:'100%',minWidth:Math.max(700,visCols.length*82)}}><thead>
                     <tr className="perfv2-groups">{columnGroups(visCols).map((g,i)=><th key={i} colSpan={g.span} className={g.label?'is-group':''} style={g.label?{color:g.color,borderBottomColor:g.color}:undefined}>{g.label}</th>)}</tr>
                     <tr>{visCols.map(c=><th key={c.key} style={{...thS,cursor:'help'}} onMouseEnter={e=>setTip({t:c.tip,r:e.currentTarget.getBoundingClientRect()})} onMouseLeave={()=>setTip(null)}>{c.label}</th>)}</tr></thead><tbody>
-                    {perfRows.map((s,i)=>(<tr key={canal+'-'+i+'-'+s.salesKey} style={{'--i':i}}>{visCols.map(c=>c.cell(s,i,c.key))}</tr>))}
-                    <tr style={{'--i':perfRows.length+1,fontWeight:750,background:C.subtle,borderTop:'2px solid '+C.border}}>{visCols.map(c=>c.key==='rank'?<td key={c.key} style={tdS}>Σ</td>:c.key==='sales'?<td key={c.key} style={{...tdS,textAlign:'left'}}>Total · {perfRows.length} lignes</td>:['r1p','r2p','r1tel'].includes(c.key)?<td key={c.key} style={tdS}>{totals[{r1p:'r1_placed',r2p:'r2_placed',r1tel:'r1_phone'}[c.key]]}</td>:c.key==='appels'?<td key={c.key} style={tdS}>{callsLoading?'…':totals.calls_measured?totals.calls.toLocaleString('fr-FR'):'—'}</td>:c.cell(totals,-1,c.key))}</tr>
+                    {sRows.map((s,i)=>(<tr key={canal+'-'+i+'-'+s.salesKey} style={{'--i':i}}>{visCols.map(c=>c.cell(s,i,c.key))}</tr>))}
+                    <tr style={{'--i':sRows.length+1,fontWeight:750,background:C.subtle,borderTop:'2px solid '+C.border}}>{visCols.map(c=>c.key==='rank'?<td key={c.key} style={tdS}>Σ</td>:c.key==='sales'?<td key={c.key} style={{...tdS,textAlign:'left'}}>Total · {sRows.length} lignes</td>:['r1p','r2p','r1tel'].includes(c.key)?<td key={c.key} style={tdS}>{sTotals[{r1p:'r1_placed',r2p:'r2_placed',r1tel:'r1_phone'}[c.key]]}</td>:c.key==='appels'?<td key={c.key} style={tdS}>{sCallsLoading?'…':sTotals.calls_measured?sTotals.calls.toLocaleString('fr-FR'):'—'}</td>:c.cell(sTotals,-1,c.key))}</tr>
                     </tbody></table></RevealBlock>
                     </>);
                   })()}
 
-                  {!dataLoading && !dataError && !perfRows.length && !adsDetailView && <div style={{textAlign:'center',padding:60,color:C.muted}}>Aucune donn&eacute;e disponible</div>}
+                  {!sLoading && !dataError && !sRows.length && !adsDetailView && <div style={{textAlign:'center',padding:60,color:C.muted}}>Aucune donn&eacute;e disponible</div>}
                       </div>}
                       rdvNode={rdvAnalytics ? (()=>{
                         // Présence par jour et heure : toute l'équipe, une équipe ou un sales, sur la période choisie.

@@ -136,5 +136,34 @@ export function buildModel(data, front = {}) {
   const journeys = data.partition?.journeys || null;
   return { rows, totals: t, pilot, views, journeys, metrics, value, conversions, podium, checks, periodText, period,
     cohort: pilot?.cohort || null, calls: front.calls || null, avatarFor: front.avatarFor || null,
-    byPerson: data.partition?.by_person || null };
+    byPerson: data.partition?.by_person || null, ads: data.partition?.ads || null, byPersonAds: data.partition?.by_person_ads || null };
+}
+
+// Canaux détaillés par publicité (dev 15/10/2026 : « parmi les ads, filtrer par pub et voir vraiment les stats »).
+export const AD_SOURCES = ['affectation', 'pool'];
+
+// Chiffres d'une portée : Global (les totaux du tableau), un canal, ou une publicité d'un canal ADS. Mêmes règles partout :
+// la somme des canaux, et celle des publicités d'un canal, retombent sur le total (contrôlé côté serveur).
+const SCOPE = {
+  leads: ['received', 'leads_assigned'], r1p: ['r1', 'r1p'], r1_phone: ['r1_phone', 'r1_phone'], r1r: ['r1_done', 'r1r'],
+  r2p: ['r2', 'r2p'], r2r: ['r2_done', 'r2r'], signed: ['signed', 'nbr_signed'], sales: ['sales', 'nbr_signature'],
+  ...Object.fromEntries(['r1', 'r2'].flatMap((s) => ['_due', '_done_due', '_open', '_noshow'].map((x) => [`${s}${x}`, [`${s}${x}`, `${s}${x}`]]))),
+};
+export function scopeFigures(model, source = null, ad = null) {
+  if (!model) return null;
+  const pick = (get) => Object.fromEntries(Object.entries(SCOPE).map(([k, [step, field]]) => [k, Number(get(step, field)) || 0]));
+  if (!source) return pick((_step, field) => model.totals[field]);
+  if (ad) {
+    const entry = model.ads?.[source]?.find((a) => a.key === ad);
+    return pick((step) => entry?.steps?.[step]);
+  }
+  return pick((step) => model.views?.global?.[step]?.[source]);
+}
+
+// Lignes par sales d'une publicité, au format de `byPerson` ({sales: {étape: {source: n}}}) pour le tableau par canal.
+export function byPersonForAd(model, source, ad) {
+  return Object.fromEntries(Object.entries(model?.byPersonAds || {}).map(([name, sources]) => {
+    const steps = sources?.[source]?.[ad] || {};
+    return [name, Object.fromEntries(Object.entries(steps).map(([step, n]) => [step, { [source]: n }]))];
+  }));
 }

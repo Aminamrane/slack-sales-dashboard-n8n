@@ -11,8 +11,11 @@ import ChannelBoard from './ChannelBoard';
 import AutoAssignTab from './AutoAssignTab';
 import SettersTab from './SettersTab';
 import VentesTab from './VentesTab';
-import ChannelTable, { channelSources } from './ChannelTable';
-import { FUNNEL, SOURCES, buildModel, dm, euro, fr, initials, signedNum } from './model';
+import ChannelTable from './ChannelTable';
+import ChannelFilter from './ChannelFilter';
+import SalesKpis from './SalesKpis';
+import ShowsByChannel from './ShowsByChannel';
+import { FUNNEL, SOURCES, buildModel, byPersonForAd, dm, euro, fr, initials, scopeFigures, signedNum } from './model';
 import TabIcon from './TabIcons';
 import './v2.css';
 import './v2-nav.css';
@@ -708,11 +711,16 @@ function LaterBar({ label, total, later }) {
 
 // ── Rendez-vous ───────────────────────────────────────────────────────────
 
+// R1 et R2 du mois, filtrables par canal d'acquisition puis par pub (dev 15/10/2026 : « filtrer par canaux d'acquisition
+// et voir quels canaux font le plus de nos shows » ; « parmi les ads, filtrer par pub »), et le classement des canaux.
 function RdvSummary({ model, onOpen, dark, delay }) {
-  const t = model.totals;
+  const [scope, setScope] = useState({ source: null, ad: null });
+  const t = scopeFigures(model, scope.source, scope.ad);
+  const scopeLabel = scope.source ? [SOURCES.find((x) => x.key === scope.source)?.label, model.ads?.[scope.source]?.find((a) => a.key === scope.ad)?.label].filter(Boolean).join(' · ') : null;
   const track = dark ? 'rgba(148,163,184,.18)' : '#eef1f6';
   return (
     <div className="ps2-grid">
+      <div className="ps2-span-12"><ChannelFilter model={model} value={scope} onChange={setScope} steps={['r1', 'r2']} countStep="r1" id="ps2-rdv-scope" /></div>
       {[['r1', 'R1', 'r1e'], ['r2', 'R2', 'r2e']].map(([s, name, metric]) => {
         const placed = t[`${s}p`], due = t[`${s}_due`], done = t[`${s}_done_due`], open = t[`${s}_open`], noshow = t[`${s}_noshow`] || 0;
         const cancelled = Math.max(0, due - done - open - noshow), upcoming = Math.max(0, placed - due);
@@ -727,7 +735,8 @@ function RdvSummary({ model, onOpen, dark, delay }) {
         return (
           <Reveal as="section" key={s} className="ps2-card ps2-span-6" aria-label={`Rendez-vous ${name}`}>
             <Motion.div className="ps2-card-head" variants={ITEM}><h2>{name} du mois</h2>
-              <button type="button" className="ps2-link" onClick={() => onOpen(metric, { dossiers: `${s}p` })}>Dossiers</button></Motion.div>
+              {scopeLabel && <span className="ps2-chip-soft" style={{ marginRight: 'auto' }}>{scopeLabel}</span>}
+              <button type="button" className="ps2-link" onClick={() => onOpen(metric, { dossiers: `${s}p`, source: scope.source, ad: scope.ad })}>Dossiers</button></Motion.div>
             <Motion.div variants={ITEM} style={{ display: 'flex', gap: 26, alignItems: 'center', marginTop: 16, flexWrap: 'wrap' }}>
               <Info className="ps2-ring-btn" label={`Présence ${name}, détail`}
                 detail={<Detail kicker={`Présence ${name}`} value={presence == null ? '–' : `${presence} %`}
@@ -740,7 +749,7 @@ function RdvSummary({ model, onOpen, dark, delay }) {
               <div style={{ flex: '1 1 260px', minWidth: 0 }}>
                 <div className="ps2-num" style={{ fontSize: 30, fontWeight: 600, letterSpacing: '-.02em' }}><CountUp value={placed} /> <small style={{ fontSize: 14, color: 'var(--soft)', fontWeight: 500 }}>posés</small></div>
                 <Composition parts={parts} total={placed} />
-                {s === 'r2' && delay?.length > 0 && (
+                {s === 'r2' && !scope.source && delay?.length > 0 && (
                   <Info className="ps2-rdv-delay" label="Délai R1 → R2, détail"
                     detail={<Detail kicker="Délai entre R1 et R2 effectués" rows={delay.map((m) => [m.month, `${fr(m.avg_days, 1)} j en moyenne · médiane ${fr(m.median_days, 1)} j · ${m.n} RDV`])}
                       lines={['Temps écoulé entre le R1 et le R2 effectués d’un même lead, par mois du R1.']} />}>
@@ -753,6 +762,7 @@ function RdvSummary({ model, onOpen, dark, delay }) {
           </Reveal>
         );
       })}
+      <div className="ps2-span-12"><ShowsByChannel model={model} scope={scope} onPick={setScope} /></div>
     </div>
   );
 }
@@ -780,60 +790,56 @@ function Composition({ parts, total }) {
   );
 }
 
-// Vue Détail : Global = le tableau complet (appels, répondeur, RDV, ventes) ; un canal = le même tableau des sales,
-// restreint à ce canal (dev 14/10 : « tous les canaux dans le tableau » ; ADS = affectés, pas les reprises du pool).
-function DetailView({ model, salesNode, onOpen }) {
-  const [source, setSource] = useState(null);
-  const sources = channelSources(model.byPerson);
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {sources.length > 0 && (
-        <div className="ps2-picker" role="radiogroup" aria-label="Canal du tableau">
-          {[{ key: null, label: 'Global' }, ...sources].map((s) => (
-            <button type="button" key={s.key || 'global'} role="radio" aria-checked={source === s.key} className="ps2-pick" onClick={() => setSource(s.key)}>
-              {source === s.key && <Motion.span layoutId="ps2-detail-pill" className="ps2-pick-pill" transition={{ duration: 0.4, ease: EASE }} />}
-              <span className="ps2-pick-label">{s.color && <i style={{ background: s.color }} />}{s.label}</span>
-            </button>
-          ))}
-        </div>
-      )}
-      <AnimatePresence mode="wait" initial={false}>
-        <Motion.div key={source || 'global'} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.28, ease: EASE }}>
-          {source ? <Reveal as="section" className="ps2-card" aria-label="Tableau par canal"><ChannelTable byPerson={model.byPerson} source={source} avatarFor={model.avatarFor} onOpen={onOpen} /></Reveal> : salesNode}
-        </Motion.div>
-      </AnimatePresence>
-    </div>
-  );
-}
-
 // Onglet Sales (dev 14/10/2026 : « pas les deux tableaux l'un en dessous de l'autre ; le plus détaillé en premier, puis
-// une bascule animée vers l'autre ; et le détail par canaux d'acquisition ») : une bascule à trois positions.
+// une bascule animée vers l'autre ; et le détail par canaux d'acquisition » ; 15/10 : « on doit pouvoir choisir la
+// période ; des KPI R1 et R2 ; filtrer par canal, et parmi les ads par pub »). En tête : la vue, la période, le canal (et
+// la pub), puis les KPI de cette portée. Détail : Global = le tableau complet (appels, répondeur, RDV, ventes) ; un
+// canal ou une pub = le même tableau des sales restreint à ce périmètre. La frise des semaines reste celle du mois.
 const SALES_VIEWS = [['detail', 'Détail'], ['channels', 'Par canal'], ['weeks', 'Semaine par semaine']];
 
-function SalesTab({ model, salesNode, onOpen }) {
+function SalesTab({ model, salesData, salesRange, salesPeriodBar, salesLoading, front, salesNode, onOpen }) {
   const p = model.pilot;
+  const smodel = useMemo(() => (salesData && salesData !== model.raw ? buildModel(salesData, front) : null) || model, [salesData, front, model]);
   const [view, setView] = useState('detail');
+  const [scope, setScope] = useState({ source: null, ad: null });
   const index = SALES_VIEWS.findIndex(([k]) => k === view);
   const [dir, setDir] = useState(1);
   const pick = (k) => { setDir(SALES_VIEWS.findIndex(([x]) => x === k) >= index ? 1 : -1); setView(k); };
-  const views = SALES_VIEWS.filter(([k]) => k !== 'weeks' || p?.person_weeks?.length).filter(([k]) => k !== 'channels' || model.byPerson);
+  const views = SALES_VIEWS.filter(([k]) => k !== 'weeks' || p?.person_weeks?.length).filter(([k]) => k !== 'channels' || smodel.byPerson);
+  // Un chiffre ouvert depuis cet onglet se vérifie sur la période de l'onglet.
+  const openHere = (metric, extra = {}) => onOpen(metric, { ...extra, model: smodel, period: salesRange });
+  // « Par canal » compare les canaux entre eux : la pub ne s'y applique pas (ni au tableau, ni aux KPI).
+  const ad = view === 'channels' ? null : scope.ad;
+  const f = scopeFigures(smodel, scope.source, ad);
+  const scoped = scope.source ? (ad ? byPersonForAd(smodel, scope.source, ad) : smodel.byPerson) : null;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div className="ps2-switch" role="tablist" aria-label="Vue du tableau des sales">
-        {views.map(([k, l]) => (
-          <button type="button" key={k} role="tab" aria-selected={view === k} className="ps2-switch-btn" onClick={() => pick(k)}>
-            {view === k && <Motion.span layoutId="ps2-sales-switch" className="ps2-switch-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} />}
-            <span>{l}</span>
-          </button>
-        ))}
+    <div className={`ps2-sales${salesLoading ? ' is-loading' : ''}`} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="ps2-sales-top">
+        <div className="ps2-switch" role="tablist" aria-label="Vue du tableau des sales">
+          {views.map(([k, l]) => (
+            <button type="button" key={k} role="tab" aria-selected={view === k} className="ps2-switch-btn" onClick={() => pick(k)}>
+              {view === k && <Motion.span layoutId="ps2-sales-switch" className="ps2-switch-pill" transition={{ type: 'spring', stiffness: 380, damping: 32 }} />}
+              <span>{l}</span>
+            </button>
+          ))}
+        </div>
+        {view !== 'weeks' && salesPeriodBar}
       </div>
+      {view !== 'weeks' && (
+        <>
+          <ChannelFilter model={smodel} value={{ ...scope, ad }} onChange={setScope} steps={['received', 'r1', 'r1_phone', 'r2']} countStep="received" id="ps2-sales-scope" withAds={view !== 'channels'} />
+          <SalesKpis f={f} periodLabel={smodel.periodText} onDossiers={(metric, dossiers) => openHere(metric, { dossiers, source: scope.source, ad })} />
+        </>
+      )}
       <div style={{ position: 'relative', overflow: 'hidden' }}>
         <AnimatePresence mode="wait" initial={false} custom={dir}>
-          <Motion.div key={view} custom={dir}
+          <Motion.div key={`${view}-${scope.source || 'global'}-${ad || ''}`} custom={dir}
             variants={{ enter: (d) => ({ opacity: 0, x: 40 * d }), center: { opacity: 1, x: 0 }, exit: (d) => ({ opacity: 0, x: -40 * d }) }}
             initial="enter" animate="center" exit="exit" transition={{ duration: 0.32, ease: EASE }}>
-            {view === 'detail' && <DetailView model={model} salesNode={salesNode} onOpen={onOpen} />}
-            {view === 'channels' && <Reveal as="section" className="ps2-card" aria-label="Par canal"><ChannelBoard byPerson={model.byPerson} avatarFor={model.avatarFor} onOpen={onOpen} /></Reveal>}
+            {view === 'detail' && (scoped
+              ? <Reveal as="section" className="ps2-card" aria-label="Tableau par canal"><ChannelTable byPerson={scoped} source={scope.source} avatarFor={smodel.avatarFor} onOpen={openHere} /></Reveal>
+              : salesNode)}
+            {view === 'channels' && <Reveal as="section" className="ps2-card" aria-label="Par canal"><ChannelBoard byPerson={smodel.byPerson} focus={scope.source} avatarFor={smodel.avatarFor} onOpen={openHere} /></Reveal>}
             {view === 'weeks' && <Reveal as="section" className="ps2-card" aria-label="Semaine par semaine"><WeeksBoard people={p.person_weeks} weeks={p.weeks} avatarFor={model.avatarFor} /></Reveal>}
           </Motion.div>
         </AnimatePresence>
@@ -842,8 +848,9 @@ function SalesTab({ model, salesNode, onOpen }) {
   );
 }
 
-export default function PerfSalesV2({ data, dark, period, tab, onTab, front, controls, loading, salesNode, rdvNode, reactivityNode, ventesData, rdvDelay }) {
-  const model = useMemo(() => buildModel(data, front), [data, front]);
+export default function PerfSalesV2({ data, dark, period, tab, onTab, front, controls, loading, salesNode, rdvNode, reactivityNode, ventesData, rdvDelay,
+  salesData, salesRange, salesPeriodBar, salesLoading }) {
+  const model = useMemo(() => { const m = buildModel(data, front); return m && { ...m, raw: data }; }, [data, front]);
   const [verify, setVerify] = useState(null);
   const [team, setTeam] = useState(null);
   const myTeam = model?.pilot?.teams?.find((t) => front?.me && t.members?.includes(front.me))?.team;
@@ -866,7 +873,7 @@ export default function PerfSalesV2({ data, dark, period, tab, onTab, front, con
           <Motion.div key={tab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.35, ease: EASE }}>
             {tab === 'overview' && <Overview model={model} onOpen={open} onPilot={pilotTeam} />}
             {tab === 'channels' && <Channels model={model} onOpen={open} />}
-            {tab === 'sales' && <SalesTab model={model} salesNode={salesNode} onOpen={open} />}
+            {tab === 'sales' && <SalesTab model={model} salesData={salesData} salesRange={salesRange || period} salesPeriodBar={salesPeriodBar} salesLoading={salesLoading} front={front} salesNode={salesNode} onOpen={open} />}
             {tab === 'teams' && <TeamsTab model={model} team={team || myTeam} onTeam={setTeam} avatarFor={model.avatarFor} period={period} />}
             {tab === 'rdv' && <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}><RdvSummary model={model} onOpen={open} dark={dark} delay={rdvDelay} />{rdvNode}</div>}
             {tab === 'reactivity' && reactivityNode}

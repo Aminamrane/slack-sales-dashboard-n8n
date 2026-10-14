@@ -957,3 +957,63 @@ button.ps2-tile { font: inherit; color: var(--ink); width: 100%; min-height: 168
 .ps2-lever-sub-head span { color: var(--soft); font-weight: 600; } .ps2-lever-sub-head i { font-style: normal; } .ps2-lever-sub-head b { color: var(--ink); }
 .ps2-fc-val em { font-style: normal; font-weight: 650; }
 .ps2-fc-total { text-align: right; font-size: 13.5px; }
+
+/* ── Onglet Sales : en-tête (vue + période), filtre canal / pub, KPI R1-R2 (dev 15/10/2026) ───────────────────── */
+.ps2-sales-top { display: flex; align-items: center; justify-content: space-between; gap: 12px 18px; flex-wrap: wrap; }
+.ps2-sales-top .ps2-react-bar { margin: 0; }
+.ps2-cfilter { display: flex; flex-direction: column; gap: 10px; }
+.ps2-adrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-left: 4px; overflow: hidden; color: var(--c, var(--navy)); }
+.ps2-adrow-hook { flex: 0 0 auto; margin-right: 2px; opacity: .7; }
+.ps2-adchip { position: relative; border: 1px dashed color-mix(in srgb, var(--c, #1e3a7b) 45%, transparent); background: var(--card); border-radius: 9px;
+  padding: 5px 10px; font-size: 12px; font-weight: 550; color: var(--soft); cursor: pointer; transition: color .2s, border-color .2s; }
+.ps2-adchip:hover { color: var(--ink); border-style: solid; }
+.ps2-adchip[aria-checked="true"] { color: #fff; border-color: transparent; }
+.ps2-adchip-pill { position: absolute; inset: -1px; border-radius: 9px; background: var(--c, var(--navy)); z-index: 0; }
+.ps2-adchip-label { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 7px; }
+.ps2-adchip-label b { font-size: 11px; font-weight: 650; opacity: .75; }
+.ps2-adchip:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+.ps2-skpi { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.ps2-skpi-cell { min-width: 0; }
+.ps2-skpi-tile { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; text-align: left; cursor: pointer;
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px 13px; position: relative; overflow: hidden;
+  transition: transform .25s cubic-bezier(.22, 1, .36, 1), box-shadow .25s, border-color .25s; font: inherit; color: var(--ink); }
+.ps2-skpi-tile:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(18, 27, 53, .08); border-color: var(--muted); }
+.ps2-skpi-tile:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.ps2-skpi-cell.is-total .ps2-skpi-tile { background: linear-gradient(160deg, #f3f6fc 0%, var(--card) 70%); border-color: #c9d4ea; }
+.ps2.is-dark .ps2-skpi-cell.is-total .ps2-skpi-tile { background: linear-gradient(160deg, #232a40 0%, var(--card) 70%); border-color: #34405f; }
+.ps2-skpi-cell.is-r2 .ps2-skpi-tile::before, .ps2-skpi-cell.is-r1 .ps2-skpi-tile::before { content: ''; position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; border-radius: 0 3px 3px 0; }
+.ps2-skpi-cell.is-r1 .ps2-skpi-tile::before { background: #1e3a7b; }
+.ps2-skpi-cell.is-r2 .ps2-skpi-tile::before { background: #2f7fb8; }
+.ps2-skpi-label { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--soft); font-weight: 550; white-space: nowrap; }
+.ps2-skpi-label i { width: 7px; height: 7px; border-radius: 2px; }
+.ps2-skpi-value { font-size: 30px; font-weight: 650; letter-spacing: -.03em; line-height: 1; }
+.ps2-skpi-gauge { display: flex; width: 100%; height: 5px; border-radius: 3px; background: var(--line-2); overflow: hidden; }
+.ps2-skpi-gauge i { display: block; height: 100%; }
+.ps2-skpi-share { font-size: 11.5px; color: var(--ink); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.ps2-skpi-share span { color: var(--muted); font-weight: 500; }
+@media (max-width: 1180px) { .ps2-skpi { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .ps2-skpi { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.ps2-cb-head, .ps2-cb-cell { transition: opacity .35s cubic-bezier(.22, 1, .36, 1); }
+.ps2-cb-head.is-dim, .ps2-cb-cell.is-dim { opacity: .22; }
+
+/* ── Rendez-vous : shows par canal / par pub ───────────────────────────────────────────────────────────────────── */
+.ps2-shows .ps2-card-head { align-items: center; }
+.ps2-shows-rows { display: flex; flex-direction: column; gap: 4px; margin-top: 14px; }
+.ps2-shows-row { display: grid; grid-template-columns: minmax(150px, 210px) minmax(0, 1fr) 84px 58px; align-items: center; gap: 14px;
+  padding: 6px 8px; border-radius: 10px; transition: background .2s; }
+.ps2-shows-row:hover { background: var(--line-2); }
+.ps2-shows-row.is-on { background: var(--blue-bg); }
+.ps2-shows-name { display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; padding: 0; font: inherit; font-size: 13px; font-weight: 600;
+  color: var(--ink); cursor: pointer; text-align: left; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps2-shows-name i { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.ps2-shows-bar { display: block; border: 0; background: none; padding: 0; cursor: pointer; min-width: 0; }
+.ps2-shows-track { display: flex; height: 12px; border-radius: 4px; overflow: hidden; background: var(--line-2); min-width: 6px; transition: width .6s cubic-bezier(.22, 1, .36, 1); }
+.ps2-shows-track i { display: block; height: 100%; }
+.ps2-shows-done { text-align: right; font-size: 13px; } .ps2-shows-done b { font-weight: 650; } .ps2-shows-done small { color: var(--muted); margin-left: 3px; }
+.ps2-shows-pres { justify-self: end; font-size: 12px; font-weight: 650; padding: 3px 8px; border-radius: 7px; background: var(--line-2); color: var(--soft); }
+.ps2-shows-pres.is-good { background: #e3f0e8; color: #2c6448; } .ps2-shows-pres.is-mid { background: #e9eef6; color: #2f4f9e; } .ps2-shows-pres.is-low { background: #f8e6dc; color: #b23a0d; }
+.ps2.is-dark .ps2-shows-pres.is-good { background: #1d3328; color: #8fd0ab; } .ps2.is-dark .ps2-shows-pres.is-mid { background: #232a40; color: #9fb4ee; } .ps2.is-dark .ps2-shows-pres.is-low { background: #3a2219; color: #f0a07a; }
+@media (max-width: 720px) { .ps2-shows-row { grid-template-columns: minmax(110px, 1fr) minmax(0, 1.4fr) 70px; } .ps2-shows-pres { display: none; } }
+.ps2-sales.is-loading > :not(.ps2-sales-top) { opacity: .35; pointer-events: none; transition: opacity .25s; }

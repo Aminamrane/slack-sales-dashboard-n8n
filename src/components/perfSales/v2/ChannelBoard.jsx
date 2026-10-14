@@ -12,7 +12,8 @@ import { isPerformanceSalesPerson } from '../../../utils/performanceSales.js';
 const STEPS = [['received', 'Leads reçus'], ['r1_done', 'R1 effectués'], ['r2_done', 'R2 effectués'], ['signed', 'Signatures'], ['sales', 'Ventes']];
 const METRIC_OF = { received: 'leads', r1_done: 'r1e', r2_done: 'r2e', signed: 'signed', sales: 'sales' };
 
-export default function ChannelBoard({ byPerson, avatarFor, onOpen }) {
+export default function ChannelBoard({ byPerson, avatarFor, onOpen, focus = null }) {
+  const dim = (key) => (focus && key !== focus ? ' is-dim' : '');   // canal choisi en tête d'onglet : les autres s'estompent
   const on = useRevealed();
   const [step, setStep] = useState('sales');
   const people = Object.entries(byPerson || {}).filter(([name]) => isPerformanceSalesPerson(name));
@@ -35,7 +36,7 @@ export default function ChannelBoard({ byPerson, avatarFor, onOpen }) {
         <div className="ps2-cb-row is-head" role="row">
           <span role="columnheader" />
           {sources.map((s) => (
-            <span key={s.key} role="columnheader" className="ps2-cb-head"><i style={{ background: s.color }} />{s.label}</span>
+            <span key={s.key} role="columnheader" className={`ps2-cb-head${dim(s.key)}`}><i style={{ background: s.color }} />{s.label}</span>
           ))}
           <span role="columnheader" className="ps2-cb-head is-total">Mois</span>
         </div>
@@ -46,7 +47,7 @@ export default function ChannelBoard({ byPerson, avatarFor, onOpen }) {
             {sources.map((s, k) => {
               const v = val(r.steps, s.key);
               return (
-                <span key={s.key} role="cell" className="ps2-cb-cell">
+                <span key={s.key} role="cell" className={`ps2-cb-cell${dim(s.key)}`}>
                   {v ? (
                     <Info className="ps2-cb-hit" label={`${r.name}, ${s.label} : ${v} ${label.toLowerCase()}`}
                       detail={(dismiss) => (
