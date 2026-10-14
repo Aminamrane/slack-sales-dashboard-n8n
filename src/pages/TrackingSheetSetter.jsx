@@ -15,6 +15,7 @@ import LeadsManagement from "./LeadsManagement.jsx";
 // ── Setter modales (Option B duplication intégrale TrackingSheet) ──────────
 import SetterJourneyDialog from "../components/setter/SetterJourneyDialog.jsx";
 import SetterRescheduleR1Dialog from "../components/setter/SetterRescheduleR1Dialog.jsx";
+import { canRescheduleSetterR1 } from '../utils/setterJourney.js';
 import {Phone, CalendarDays, ChevronRight, UserSearch, ListChecks, UsersRound, Video, RotateCcw} from "lucide-react";
 import SecondChance from "../components/setter/secondChance/SecondChance.jsx";
 import ProspectSearch from "../components/setter/prospection/ProspectSearch.jsx";
@@ -393,6 +394,7 @@ export default function TrackingSheetSetter() {
       const annotate = (bucket) => (l) => ({
         ...l,
         _setter_bucket: bucket,
+        _lead_status: l.status,
         status: bucket,
         full_name: l.full_name || l.client || '',
         r1: l.r1_date || l.r1 || null,
@@ -6143,6 +6145,13 @@ export default function TrackingSheetSetter() {
                       {isSetter
                         ? <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{formatDateTimeFR(lead.r1)}</span>
                         : <DateTimePicker value={toDatetimeLocal(lead.r1)} onChange={(val) => handleDateChange(lead.id, 'r1', val)} color="#3b82f6" C={C} darkMode={darkMode} />}
+                      {canRescheduleSetterR1(lead, { isSetter, readOnly: urlParams.get('ghost') === 'true' }) && (
+                        <button type="button" onClick={() => setSetterModal({ kind: 'rescheduleR1', lead })}
+                          aria-label="Reprogrammer le R1"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 4, padding: '3px 6px', border: 'none', borderRadius: 5, background: darkMode ? 'rgba(59,130,246,0.16)' : 'rgba(59,130,246,0.08)', color: '#3b82f6', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          <RotateCcw size={13} aria-hidden="true" />Reprogrammer
+                        </button>
+                      )}
                     </div>
                   )}
                   {lead.r2 && (
