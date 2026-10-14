@@ -27,6 +27,7 @@ import {contactQualificationPatch} from '../utils/contactQualification';
 import NotesDialog from '../components/salesJourney/NotesDialog';
 import { SaleIntake, SaleDocuments } from "../components/integrationPreview/SaleIntake";
 import PortalAccess from '../components/salesJourney/PortalAccess';
+import LeadDocuments from '../components/salesJourney/LeadDocuments';
 import NdaProgress from '../components/salesJourney/NdaProgress';
 import SalesNotes, { SalesNotesView } from '../components/salesJourney/SalesNotes';
 import { qualificationPatch } from '../utils/r2Qualification';
@@ -6210,6 +6211,7 @@ export default function TrackingSheet() {
               </div>}
 
               {intakeRollout?.available && <PortalAccess key={lead.id} leadId={lead.id} revision={portalRevision} />}
+              {intakeRollout?.available && <LeadDocuments key={`docs-${lead.id}`} leadId={lead.id} revision={portalRevision} dark={darkMode} />}
               {/* ─── INFO DETAILS ─── */}
               <div style={{
                 display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14,
