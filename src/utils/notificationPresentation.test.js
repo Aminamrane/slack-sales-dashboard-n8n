@@ -29,3 +29,7 @@ test('poll and websocket duplicates never produce repeated notification previews
   assert.equal(freshNotifications([{id:'new',read:false},{id:'read',read:true}],seen).length,1);
   assert.equal(freshNotifications([{id:'new',read:false},{id:'read',read:true}],seen).length,0);
 });
+test('a no-show rescheduled by a setter opens the sales tracking sheet',()=>{
+  assert.equal(notificationTarget({type:'setter_rescheduled_no_show',data:{lead_id:7}}),'/tracking-sheet');
+  assert.equal(notificationTarget({type:'setter_placed_r1'}),'/tracking-sheet');
+});

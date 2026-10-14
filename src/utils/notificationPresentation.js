@@ -9,7 +9,8 @@ export function notificationTarget(notif) {
   if (notif.type === 'owner_rating_regression') return '/ceo/optilex-board' + (notif.data?.numero_client ? `?client=${encodeURIComponent(notif.data.numero_client)}` : '');
   if (notif.type === 'board_mention') return notif.data?.path || '/optilex-board';   // chemin choisi par le serveur selon le rôle
   if (notif.type === 'sheet_invitation') return '/tracking-sheet?view=notifications';
-  if (['setter_placed_r1','setter_placed_r2'].includes(notif.type)) return '/tracking-sheet';
+  // Lapin reprogrammé par un setter (dev 14/10/2026) : le commercial retrouve le lead dans sa sheet.
+  if (['setter_placed_r1','setter_placed_r2','setter_rescheduled_no_show'].includes(notif.type)) return '/tracking-sheet';
   return null;
 }
 export function notificationPlacement(nav, bell, viewportWidth, viewportHeight) {
