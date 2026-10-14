@@ -713,7 +713,10 @@ function LaterBar({ label, total, later }) {
 
 // R1 et R2 du mois, filtrables par canal d'acquisition puis par pub (dev 15/10/2026 : « filtrer par canaux d'acquisition
 // et voir quels canaux font le plus de nos shows » ; « parmi les ads, filtrer par pub »), et le classement des canaux.
-function RdvSummary({ model, onOpen, dark, delay }) {
+function RdvSummary({ model: pageModel, data, front, range, onOpen, dark, delay }) {
+  // Période de l'onglet (en tête) : le mois affiché réutilise le modèle de la page.
+  const model = useMemo(() => (data && data !== pageModel.raw ? buildModel(data, front) : null) || pageModel, [data, front, pageModel]);
+  const own = model !== pageModel;
   const [scope, setScope] = useState({ source: null, ad: null });
   const t = scopeFigures(model, scope.source, scope.ad);
   const scopeLabel = scope.source ? [SOURCES.find((x) => x.key === scope.source)?.label, model.ads?.[scope.source]?.find((a) => a.key === scope.ad)?.label].filter(Boolean).join(' · ') : null;
@@ -734,9 +737,9 @@ function RdvSummary({ model, onOpen, dark, delay }) {
         ];
         return (
           <Reveal as="section" key={s} className="ps2-card ps2-span-6" aria-label={`Rendez-vous ${name}`}>
-            <Motion.div className="ps2-card-head" variants={ITEM}><h2>{name} du mois</h2>
+            <Motion.div className="ps2-card-head" variants={ITEM}><h2>{name} {own ? 'de la période' : 'du mois'}</h2>
               {scopeLabel && <span className="ps2-chip-soft" style={{ marginRight: 'auto' }}>{scopeLabel}</span>}
-              <button type="button" className="ps2-link" onClick={() => onOpen(metric, { dossiers: `${s}p`, source: scope.source, ad: scope.ad })}>Dossiers</button></Motion.div>
+              <button type="button" className="ps2-link" onClick={() => onOpen(metric, { dossiers: `${s}p`, source: scope.source, ad: scope.ad, model, period: range })}>Dossiers</button></Motion.div>
             <Motion.div variants={ITEM} style={{ display: 'flex', gap: 26, alignItems: 'center', marginTop: 16, flexWrap: 'wrap' }}>
               <Info className="ps2-ring-btn" label={`Présence ${name}, détail`}
                 detail={<Detail kicker={`Présence ${name}`} value={presence == null ? '–' : `${presence} %`}
@@ -749,7 +752,7 @@ function RdvSummary({ model, onOpen, dark, delay }) {
               <div style={{ flex: '1 1 260px', minWidth: 0 }}>
                 <div className="ps2-num" style={{ fontSize: 30, fontWeight: 600, letterSpacing: '-.02em' }}><CountUp value={placed} /> <small style={{ fontSize: 14, color: 'var(--soft)', fontWeight: 500 }}>posés</small></div>
                 <Composition parts={parts} total={placed} />
-                {s === 'r2' && !scope.source && delay?.length > 0 && (
+                {s === 'r2' && !scope.source && !own && delay?.length > 0 && (
                   <Info className="ps2-rdv-delay" label="Délai R1 → R2, détail"
                     detail={<Detail kicker="Délai entre R1 et R2 effectués" rows={delay.map((m) => [m.month, `${fr(m.avg_days, 1)} j en moyenne · médiane ${fr(m.median_days, 1)} j · ${m.n} RDV`])}
                       lines={['Temps écoulé entre le R1 et le R2 effectués d’un même lead, par mois du R1.']} />}>
@@ -849,7 +852,7 @@ function SalesTab({ model, salesData, salesRange, salesPeriodBar, salesLoading, 
 }
 
 export default function PerfSalesV2({ data, dark, period, tab, onTab, front, controls, loading, salesNode, rdvNode, reactivityNode, ventesData, rdvDelay,
-  salesData, salesRange, salesPeriodBar, salesLoading }) {
+  salesData, salesRange, salesPeriodBar, salesLoading, rdvData, rdvRange, rdvPeriodBar, rdvLoading }) {
   const model = useMemo(() => { const m = buildModel(data, front); return m && { ...m, raw: data }; }, [data, front]);
   const [verify, setVerify] = useState(null);
   const [team, setTeam] = useState(null);
@@ -875,7 +878,12 @@ export default function PerfSalesV2({ data, dark, period, tab, onTab, front, con
             {tab === 'channels' && <Channels model={model} onOpen={open} />}
             {tab === 'sales' && <SalesTab model={model} salesData={salesData} salesRange={salesRange || period} salesPeriodBar={salesPeriodBar} salesLoading={salesLoading} front={front} salesNode={salesNode} onOpen={open} />}
             {tab === 'teams' && <TeamsTab model={model} team={team || myTeam} onTeam={setTeam} avatarFor={model.avatarFor} period={period} />}
-            {tab === 'rdv' && <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}><RdvSummary model={model} onOpen={open} dark={dark} delay={rdvDelay} />{rdvNode}</div>}
+            {tab === 'rdv' && (
+              <div className={`ps2-rdvtab${rdvLoading ? ' is-loading' : ''}`} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {rdvPeriodBar && <div className="ps2-sales-top" style={{ justifyContent: 'flex-end' }}>{rdvPeriodBar}</div>}
+                <RdvSummary model={model} data={rdvData} front={front} range={rdvRange || period} onOpen={open} dark={dark} delay={rdvDelay} />{rdvNode}
+              </div>
+            )}
             {tab === 'reactivity' && reactivityNode}
             {tab === 'cohort' && <Cohort model={model} />}
             {tab === 'ventes' && <VentesTab breakdown={ventesData} model={model} onOpen={open} />}

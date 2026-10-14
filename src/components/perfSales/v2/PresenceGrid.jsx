@@ -25,7 +25,9 @@ function inkFor(rate) {
   return rate != null && (rate < 0.25 || rate > 0.72) ? '#fff' : 'var(--ink)';
 }
 
-export default function PresenceGrid({ cells = [], title }) {
+// `untimed` : RDV passés sans heure saisie (00:00), sans case dans la grille mais comptés dans la présence du titre, pour
+// retomber sur les cartes R1/R2 (dev 15/10/2026 : cohérence des chiffres de la page).
+export default function PresenceGrid({ cells = [], title, untimed = null }) {
   const on = useRevealed();
   const [hover, setHover] = useState(null);
   const grid = useMemo(() => {
@@ -45,7 +47,9 @@ export default function PresenceGrid({ cells = [], title }) {
     return { m, hours, days, byDay: Object.fromEntries(days.map((d) => [d, sum((k) => k.startsWith(`${d}-`))])),
       byHour: Object.fromEntries(hours.map((h) => [h, sum((k) => k.endsWith(`-${h}`))])), all: sum(() => true) };
   }, [cells]);
-  const { m, hours, days, byDay, byHour, all } = grid;
+  const { m, hours, days, byDay, byHour } = grid;
+  const extra = { s: untimed?.showed || 0, n: (untimed?.showed || 0) + (untimed?.noshow || 0) };
+  const all = { s: grid.all.s + extra.s, n: grid.all.n + extra.n };
   const S = 38, G = 4, L = 42, T = 24, R = 56, B = 30;
   const W = L + hours.length * S + R, H = T + days.length * S + B;
   const rate = (v) => (v.n ? v.s / v.n : null);
@@ -54,7 +58,8 @@ export default function PresenceGrid({ cells = [], title }) {
     <div className="ps2-pgrid">
       <div className="ps2-pgrid-head">
         <b>{title}</b>
-        <span className="ps2-num">{all.n ? `${fr((all.s / all.n) * 100, 0)} %` : '–'} <small>de présence sur {fr(all.n)} RDV</small></span>
+        <span className="ps2-num">{all.n ? `${fr((all.s / all.n) * 100, 0)} %` : '–'} <small>de présence sur {fr(all.n)} RDV</small>
+          {extra.n > 0 && <small className="ps2-chip-soft" style={{ marginLeft: 8 }} title={`${fr(extra.n)} RDV sans heure saisie : comptés dans la présence, hors de la grille`}>+{fr(extra.n)} sans heure</small>}</span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${title} : présence par jour et heure sur ${fr(all.n)} RDV`} onMouseLeave={() => setHover(null)}>
         {hours.map((h, j) => <text key={h} x={L + j * S + S / 2} y={T - 9} textAnchor="middle" className="ps2-axis">{h} h</text>)}

@@ -1017,3 +1017,4 @@ button.ps2-tile { font: inherit; color: var(--ink); width: 100%; min-height: 168
 .ps2.is-dark .ps2-shows-pres.is-good { background: #1d3328; color: #8fd0ab; } .ps2.is-dark .ps2-shows-pres.is-mid { background: #232a40; color: #9fb4ee; } .ps2.is-dark .ps2-shows-pres.is-low { background: #3a2219; color: #f0a07a; }
 @media (max-width: 720px) { .ps2-shows-row { grid-template-columns: minmax(110px, 1fr) minmax(0, 1.4fr) 70px; } .ps2-shows-pres { display: none; } }
 .ps2-sales.is-loading > :not(.ps2-sales-top) { opacity: .35; pointer-events: none; transition: opacity .25s; }
+.ps2-rdvtab.is-loading > :not(.ps2-sales-top) { opacity: .35; pointer-events: none; transition: opacity .25s; }

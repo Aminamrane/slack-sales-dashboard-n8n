@@ -55,6 +55,25 @@ function salesPeriodRange(period, range) {
   if (period.key === 'prev') { const [y, m] = base.split('-').map(Number); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`; }
   return period.start && period.end && period.start <= period.end ? `${period.start}..${period.end}` : null;
 }
+// Chiffres de la page (et, pour l'onglet Sales, les appels) relus pour une période autre que le mois affiché.
+function usePerfPeriod(enabled, periodRange, range, withCalls, refreshKey) {
+  const own = periodRange !== range;
+  const [state, setState] = useState({ perf: null, calls: null, loading: false, error: false });
+  useEffect(() => {
+    if (!enabled || !own) { setState({ perf: null, calls: null, loading: false, error: false }); return undefined; }
+    let cancelled = false;
+    setState(s => ({ ...s, loading: true, error: false }));
+    const [d0, d1] = periodRange.split('..');
+    const calls = withCalls && periodRange >= '2026-05'
+      ? apiClient.get('/api/v1/tracking/sales-calls-crm?' + (d1 ? `start=${d0}&end=${d1}` : `month=${periodRange}`)).catch(() => ({ by_sales: [], calls_error: 'Appels indisponibles' }))
+      : Promise.resolve(null);
+    Promise.all([apiClient.get('/api/v1/monitoring/performance/v2?period=' + encodeURIComponent(periodRange)), calls])
+      .then(([perf, crm]) => { if (!cancelled) setState({ perf, calls: crm, loading: false, error: false }); })
+      .catch(() => { if (!cancelled) setState(s => ({ ...s, loading: false, error: true })); });
+    return () => { cancelled = true; };
+  }, [enabled, own, periodRange, withCalls, refreshKey]);
+  return { ...state, own };
+}
 const nextDay = (iso) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
 const rangeLabelFR = (r) => (String(r).includes('..') ? r.split('..').map(d => d.split('-').reverse().slice(0, 2).join('/')).join(' → ') : monthLabelFR(r));
 
@@ -252,20 +271,12 @@ export default function MonitoringPerf() {
   const presenceData = usePeriodAnalytics(hasAccess, presencePeriod, range, refreshKey);
   // Onglet Sales sur sa propre période : chiffres de la page et appels relus pour cette période ; le mois affiché réutilise
   // les réponses déjà chargées.
-  const [salesSide, setSalesSide] = useState({ perf: null, calls: null, loading: false, error: false });
-  useEffect(() => {
-    if (!hasAccess || !salesOwn) { setSalesSide({ perf: null, calls: null, loading: false, error: false }); return undefined; }
-    let cancelled = false;
-    setSalesSide(s => ({ ...s, loading: true, error: false }));
-    const [d0, d1] = salesRange.split('..');
-    const calls = salesRange >= '2026-05'
-      ? apiClient.get('/api/v1/tracking/sales-calls-crm?' + (d1 ? `start=${d0}&end=${d1}` : `month=${salesRange}`)).catch(() => ({ by_sales: [], calls_error: 'Appels indisponibles' }))
-      : Promise.resolve(null);
-    Promise.all([apiClient.get('/api/v1/monitoring/performance/v2?period=' + encodeURIComponent(salesRange)), calls])
-      .then(([perf, crm]) => { if (!cancelled) setSalesSide({ perf, calls: crm, loading: false, error: false }); })
-      .catch(() => { if (!cancelled) setSalesSide(s => ({ ...s, loading: false, error: true })); });
-    return () => { cancelled = true; };
-  }, [hasAccess, salesOwn, salesRange, refreshKey]);
+  const salesSide = usePerfPeriod(hasAccess, salesRange, range, true, refreshKey);
+  // Onglet Rendez-vous : UNE période pour tout l'onglet (dev 15/10/2026 : « on ne peut pas sélectionner de période » ;
+  // cohérence) : cartes R1/R2, shows par canal et présence par jour et heure.
+  const rdvRange = useMemo(() => salesPeriodRange(presencePeriod, range) || range, [presencePeriod, range]);
+  const rdvSide = usePerfPeriod(hasAccess, rdvRange, range, false, refreshKey);
+  const rdvPerf = rdvSide.own ? rdvSide.perf : perfData;
 
   useEffect(() => {
     let cancelled = false;
@@ -451,6 +462,10 @@ export default function MonitoringPerf() {
                         onRefresh: () => setRefreshKey(k => k + 1), loading: dataLoading }}
                       ventesData={salesBreakdown}
                       salesData={salesPerf} salesRange={salesRange} salesLoading={salesOwn && salesSide.loading}
+                      rdvData={rdvPerf} rdvRange={rdvRange} rdvLoading={rdvSide.own && (rdvSide.loading || presenceData.loading)}
+                      rdvPeriodBar={<PeriodBar period={presencePeriod} onPeriod={setPresencePeriod}
+                        loading={rdvSide.own && (rdvSide.loading || presenceData.loading)} warning={rdvSide.error || presenceData.error ? 'Période non chargée' : null}
+                        analytics={rdvPerf?.period ? { period: { start: rdvPerf.period.start, end: nextDay(rdvPerf.period.end) } } : null} />}
                       salesPeriodBar={<PeriodBar period={salesPeriod} onPeriod={setSalesPeriod} loading={salesSide.loading}
                         warning={salesSide.error ? 'Période non chargée' : null}
                         analytics={salesPerf?.period ? { period: { start: salesPerf.period.start, end: nextDay(salesPerf.period.end) } } : null} />}
@@ -508,6 +523,8 @@ export default function MonitoringPerf() {
                         const picked=team?hbs.filter(s=>team.members?.includes(s.sales)):heatmapSales==='global'?null:hbs.filter(s=>s.sales===heatmapSales);
                         const cellsR1=picked?merge(picked,'r1'):src?.heatmap_r1||[];
                         const cellsR2=picked?merge(picked,'r2'):src?.heatmap_r2||[];
+                        // RDV sans heure : hors grille, comptés dans la présence (mêmes RDV que les cartes R1/R2).
+                        const untimedOf=(stage)=>picked?picked.reduce((a,s)=>({showed:a.showed+(s[stage+'_untimed']?.showed||0),noshow:a.noshow+(s[stage+'_untimed']?.noshow||0)}),{showed:0,noshow:0}):src?.heatmap_untimed?.[stage]||null;
                         const who=heatmapSales==='global'?'Toute l’équipe':team?team.team:heatmapSales;
                         return (
                           <div className="ps2-grid">
@@ -520,12 +537,10 @@ export default function MonitoringPerf() {
                                     {teamsList.length>0 && <optgroup label="Équipes">{teamsList.map(t=><option key={t.team} value={'team:'+t.team}>{t.team}</option>)}</optgroup>}
                                     <optgroup label="Sales">{hbs.map(s=><option key={s.sales} value={s.sales}>{s.sales}</option>)}</optgroup>
                                   </select></label></div>
-                              <div style={{marginTop:12}}><PeriodBar period={presencePeriod} onPeriod={setPresencePeriod} analytics={src}
-                                loading={presencePeriod.key!=='month'&&presenceData.loading} /></div>
                               {presencePeriod.key!=='month'&&presenceData.error ? <div className="ps2-empty" role="alert">Période non chargée</div> : (
                                 <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(min(100%, 440px), 1fr))',gap:16,marginTop:14}}>
-                                  <PresenceGrid cells={cellsR1} title="R1" />
-                                  <PresenceGrid cells={cellsR2} title="R2" />
+                                  <PresenceGrid cells={cellsR1} title="R1" untimed={untimedOf('r1')} />
+                                  <PresenceGrid cells={cellsR2} title="R2" untimed={untimedOf('r2')} />
                                 </div>
                               )}
                             </Reveal>
