@@ -19,8 +19,8 @@ export const sourceOf = (key) => SOURCES.find((s) => s.key === key) || SOURCES[S
 
 // Étape du modèle → étape de la partition (canaux) et champ des lignes du tableau.
 export const METRICS = {
-  leads: { label: 'Leads reçus', step: 'received', field: 'leads_assigned', stage: 'leads',
-    definition: 'Leads attribués à un sales pour la première fois dans la période, une fois par sales et par contact',
+  leads: { label: 'Leads chez les sales', step: 'received', field: 'leads_assigned', stage: 'leads',
+    definition: 'Leads affectés dans la période et encore chez un sales aujourd’hui, une fois par sales et par contact ; un lead reparti au pool sans être repris ne compte pour personne',
     source: 'fiche lead · date de réception, commercial' },
   r1e: { label: 'R1 effectués', step: 'r1_done', field: 'r1r', stage: 'r1e',
     definition: 'R1 dont la date prévue tombe dans la période et qualifiés « effectué » sur la fiche',
@@ -51,6 +51,7 @@ export function buildModel(data, front = {}) {
   const t = Object.fromEntries(['leads_assigned', 'leads_ads', 'leads_cc', 'r1p', 'r1r', 'r1_due', 'r1_done_due', 'r1_open', 'r1_noshow', 'r2p', 'r2r',
     'r2_due', 'r2_done_due', 'r2_open', 'r2_noshow', 'nbr_signed', 'nbr_signature', 'total_revenue', 'total_cash', 'r1_phone'].map((k) => [k, sum(k)]));
   const pilot = data.pilotage || null;
+  const bridge = data.leads_bridge || null;   // { given, held, pool, other }
   const views = data.partition?.views || null;
   const stageOf = (key) => pilot?.stages?.find((s) => s.key === key) || null;
   const today = pilot?.days?.today;
@@ -84,15 +85,28 @@ export function buildModel(data, front = {}) {
       // entrantes du mois, celles jamais données à un sales (motif du moteur d'affectation), puis les leads de la page.
       const it = pilot?.intake;
       const nd = it?.not_given || {};
+      // Un seul pont, de Funnel Leads aux leads chez les sales (dev 15/10/2026 : « mettre que 500 ont été affectés et que 423
+      // sont actuellement chez les sales ») : fiches entrantes données, plus les leads créés par les sales et les setters,
+      // = affectés ; moins ceux repartis au pool sans repreneur = chez les sales.
+      const gap = it && bridge ? it.given - bridge.external : 0;
+      const by = bridge?.internal_by || {};
       return [
         ...(it ? [
           { text: `[${fr(it.created)} fiches entrantes créées (ADS, simulateur, webinaire, LinkedIn…), comme Funnel Leads]`, tone: 'strong' },
           ...[['small', 'moins de 100 k€, écartés par le moteur'], ['duplicate', 'doublons d’un contact déjà reçu'], ['webinar', 'inscrits webinaire pris par les setters'],
             ['unclassifiable', 'fiches non classables (tests)'], ['waiting', 'pas encore attribuées']]
             .filter(([k]) => nd[k]).map(([k, l]) => ({ text: `→ ${fr(nd[k])} ${l}`, indent: 1 })),
-          { text: `= ${fr(it.given)} données à un sales, ${fr(it.page_ads)} leads ADS ici (une fois par sales et par contact)`, tone: 'total' },
+          { text: `= ${fr(it.given)} fiches données à un sales`, tone: 'total' },
+          ...(gap > 0 ? [{ text: `→ ${fr(gap)} compte de test ou de démo, ou contact déjà reçu par le même sales`, indent: 1 }] : []),
         ] : []),
-        { text: `[${fr(t.leads_assigned)} leads reçus par les sales]`, tone: 'strong' },
+        ...(bridge ? [
+          ...(bridge.internal ? [{ text: `+ ${fr(bridge.internal)} leads créés par les sales et les setters (${[['setter', 'setters'], ['cc', 'cold call'], ['lien_sales', 'lien sales']]
+            .filter(([k]) => by[k]).map(([k, l]) => `${fr(by[k])} ${l}`).join(', ')})`, indent: 1 }] : []),
+          { text: `= ${fr(bridge.given)} leads affectés à un sales`, tone: 'total' },
+          ...(bridge.pool ? [{ text: `→ ${fr(bridge.pool)} repartis au pool, personne ne les a repris`, indent: 1 }] : []),
+          ...(bridge.other ? [{ text: `+ ${fr(bridge.other)} chez un sales sans affectation de la période`, indent: 1 }] : []),
+        ] : []),
+        { text: `= ${fr(t.leads_assigned)} leads actuellement chez les sales`, tone: 'total' },
         { text: `→ ${fr(t.leads_ads)} ADS`, indent: 1 },
         { text: `→ ${fr(t.leads_cc)} cold call et setters`, indent: 1 },
       ];
@@ -136,7 +150,7 @@ export function buildModel(data, front = {}) {
   const journeys = data.partition?.journeys || null;
   return { rows, totals: t, pilot, views, journeys, metrics, value, conversions, podium, checks, periodText, period,
     cohort: pilot?.cohort || null, calls: front.calls || null, avatarFor: front.avatarFor || null,
-    byPerson: data.partition?.by_person || null, ads: data.partition?.ads || null, byPersonAds: data.partition?.by_person_ads || null };
+    bridge, byPerson: data.partition?.by_person || null, ads: data.partition?.ads || null, byPersonAds: data.partition?.by_person_ads || null };
 }
 
 // Canaux détaillés par publicité (dev 15/10/2026 : « parmi les ads, filtrer par pub et voir vraiment les stats »).

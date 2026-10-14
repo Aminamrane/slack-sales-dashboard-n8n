@@ -1018,3 +1018,6 @@ button.ps2-tile { font: inherit; color: var(--ink); width: 100%; min-height: 168
 @media (max-width: 720px) { .ps2-shows-row { grid-template-columns: minmax(110px, 1fr) minmax(0, 1.4fr) 70px; } .ps2-shows-pres { display: none; } }
 .ps2-sales.is-loading > :not(.ps2-sales-top) { opacity: .35; pointer-events: none; transition: opacity .25s; }
 .ps2-rdvtab.is-loading > :not(.ps2-sales-top) { opacity: .35; pointer-events: none; transition: opacity .25s; }
+/* Les colonnes de l'entonnoir se lisent sur la même ligne, quelle que soit la hauteur de leurs notes (15/10). */
+.ps2-stage { display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; }
+.ps2-stage-bridge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
