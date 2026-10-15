@@ -1,61 +1,70 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FLOW, flowLayout } from './flowLayout.js';
+import { FLOW, flowLayout, ribbonAt } from './flowLayout.js';
+import { flowGraph, nodeDetail, nodeText } from './flowData.js';
 
-// Octobre 2026 en direct (15/10) : 497 fiches de Funnel Leads.
-const leaf = (key, value) => ({ key, value });
-const october = {
-  total: 497,
-  given: [leaf('ads_affectation', 255), leaf('ads_pool', 93), leaf('pool_waiting', 72), leaf('others', 13), leaf('demo', 1)],
-  notGiven: [leaf('not_given_small', 42), leaf('not_given_duplicate', 18), leaf('not_given_webinar', 2), leaf('not_given_unclassifiable', 1)],
-};
-const withTotals = (d) => ({ ...d, givenTotal: d.given.reduce((a, n) => a + n.value, 0), notGivenTotal: d.notGiven.reduce((a, n) => a + n.value, 0) });
-const cases = {
-  octobre: withTotals(october),
-  'un seul groupe': withTotals({ total: 40, given: [leaf('ads_affectation', 39), leaf('demo', 1)], notGiven: [] }),
-  'que des petites bandes': withTotals({ total: 12, given: [leaf('a', 1), leaf('b', 1), leaf('c', 1), leaf('d', 1), leaf('e', 1), leaf('f', 1)], notGiven: [leaf('g', 1), leaf('h', 1), leaf('i', 1), leaf('j', 1), leaf('k', 1), leaf('l', 1)] }),
-  'gros mois': withTotals({ total: 2400, given: [leaf('ads_affectation', 1900), leaf('ads_pool', 300)], notGiven: [leaf('not_given_small', 199), leaf('x', 1)] }),
-};
-const near = (a, b) => Math.abs(a - b) < 1e-6;
+// Octobre 2026 en direct (15/10, intake.links) : 497 fiches de Funnel Leads.
+const L = (channel, funnel, fate, n) => ({ channel, funnel, fate, n });
+const october = { created: 497, flow: { outside_affectation: 1 }, links: [
+  L('ads', 'fr', 'ads_affectation', 233), L('ads', 'fr', 'ads_pool', 92), L('ads', 'fr', 'pool_waiting', 76), L('ads', 'small', 'not_given_small', 42),
+  L('ads', 'fr', 'not_given_duplicate', 17), L('ads', 'non_fr', 'ads_affectation', 10), L('webinar', 'fr', 'other_webinar', 7), L('ads', 'small', 'ads_affectation', 5),
+  L('linkedin', 'fr', 'other_linkedin', 4), L('webinar', 'fr', 'not_given_webinar', 2), L('ads', 'small', 'ads_pool', 2), L('referral', 'fr', 'other_referral', 2),
+  L('ads', 'small', 'pool_waiting', 1), L('test', 'non_fr', 'demo', 1), L('ads', 'small', 'not_given_duplicate', 1), L('ads', 'non_fr', 'not_given_unclassifiable', 1),
+  L('ads', 'non_fr', 'pool_waiting', 1)] };
+const tiny = { created: 6, links: [L('ads', 'fr', 'ads_affectation', 1), L('ads', 'small', 'not_given_small', 1), L('ads', 'non_fr', 'pool_waiting', 1),
+  L('webinar', 'fr', 'other_webinar', 1), L('linkedin', 'fr', 'other_linkedin', 1), L('referral', 'fr', 'other_referral', 1)] };
+const adsOnly = { created: 40, links: [L('ads', 'fr', 'ads_affectation', 39), L('ads', 'fr', 'demo', 1)] };
+const big = { created: 2400, links: [L('ads', 'fr', 'ads_affectation', 1500), L('ads', 'fr', 'ads_pool', 400), L('ads', 'small', 'not_given_small', 300),
+  L('webinar', 'fr', 'other_webinar', 150), L('webinar', 'fr', 'not_given_webinar', 40), L('ccs', 'fr', 'other_ccs', 10)] };
 
-for (const [name, data] of Object.entries(cases)) {
-  for (const width of [700, 1000, 1300, 1900]) {
-    test(`${name}, ${width} px : étiquettes séparées, rubans dans leurs blocs, colonnes ordonnées`, () => {
-      const L = flowLayout(data, width);
-      L.leaves.slice(1).forEach((l, i) => assert.ok(l.cy - L.leaves[i].cy >= FLOW.LABEL_H, `${L.leaves[i].key} / ${l.key}`));
-      L.leaves.forEach((l) => assert.ok(l.y >= FLOW.HEAD && l.y + l.h <= L.height + 1e-6));
-      L.mids.slice(1).forEach((m, i) => assert.ok(m.y >= L.mids[i].y + L.mids[i].h, 'blocs du milieu disjoints'));
-      [L.src, ...L.mids].forEach((b) => assert.ok(b.y >= FLOW.HEAD - 1e-6 && b.y + b.h <= L.height + 1e-6));
-      assert.ok(L.x.mid > L.widths.src && L.x.mid + L.widths.mid < L.x.leaf && L.x.lane >= 230, JSON.stringify(L.x));
-      const within = (a, size, top, h) => a >= top - 1e-6 && a + size <= top + h + 1e-6;
-      for (const r of L.ribbons) {
-        if (r.leaf) {
-          const m = L.mids.find((x) => x.key === r.group);
-          const l = L.leaves.find((x) => x.key === r.leaf);
-          assert.ok(within(r.from, r.size, m.y, m.h) && within(r.to, r.size, l.y, l.h), r.key);
-        } else {
-          const m = L.mids.find((x) => x.key === r.group);
-          assert.ok(within(r.from, r.size, L.src.y, L.src.h) && within(r.to, r.size, m.y, m.h), r.key);
+test('octobre : mêmes chiffres que Funnel Leads, une fiche = une case', () => {
+  const g = flowGraph(october);
+  const by = (id) => g.nodes.find((n) => n.id === id);
+  assert.equal(by('root').value, 497);
+  assert.deepEqual(['ch:ads', 'ch:webinar', 'ch:linkedin', 'ch:referral', 'ch:test'].map((id) => by(id).value), [481, 9, 4, 2, 1]);
+  assert.deepEqual(['fun:fr', 'fun:non_fr', 'fun:small'].map((id) => by(id).value), [418, 12, 51]);
+  assert.deepEqual(g.funnel, { received: 497, small: 51, without: 446, clean: 433, cleanAds: 418 });   // Funnel Leads : Clean (tél FR) 433
+  assert.equal(by('ads:ads_affectation').value, 248);
+  assert.equal(nodeText(by('webinar:not_given_webinar')), 'Webinaire · prises par les setters');
+  const leaves = g.nodes.filter((n) => n.col === 3);
+  assert.equal(leaves.reduce((a, n) => a + n.value, 0), 497);
+  assert.ok(leaves.every((n) => n.group === 'ads' ? n.id.startsWith('ads:') : !n.id.startsWith('ads:')), 'aucun autre canal dans une case ADS');
+  const d = nodeDetail(g, 'ads:ads_affectation');
+  assert.deepEqual(d.rows.slice(1, 4).map((r) => r[1]), ['233', '10', '5']);
+  assert.ok(d.node.lines.some((l) => l.includes('« ADS affectés » du tableau : 249, dont 1 reçue')));
+  assert.equal(nodeDetail(g, 'root').rows[0][0], '→ ADS');
+});
+
+for (const [name, data] of Object.entries({ octobre: october, 'petites bandes': tiny, 'ADS seuls': adsOnly, 'gros mois': big })) {
+  for (const width of [760, 1000, 1300, 1900]) {
+    test(`${name}, ${width} px : étiquettes séparées, blocs disjoints, rubans dans leurs blocs, sauts sous les blocs`, () => {
+      const g = flowGraph(data);
+      const Lay = flowLayout(g, width);
+      const leaves = Lay.leaves;
+      leaves.slice(1).forEach((l, i) => assert.ok(l.cy - leaves[i].cy >= FLOW.LABEL_H, `${leaves[i].id} / ${l.id}`));
+      Lay.cols.forEach((col) => {
+        col.forEach((n) => assert.ok(n.y >= FLOW.HEAD - 1e-6 && n.y + n.h <= Lay.height + 1e-6, n.id));
+        col.slice(1).forEach((n, i) => assert.ok(n.y >= col[i].y + col[i].h - 1e-6, `${col[i].id} / ${n.id}`));
+      });
+      assert.ok(Lay.x.cols.every((v, i) => !i || v > Lay.x.cols[i - 1] + Lay.blockW[i - 1]), JSON.stringify(Lay.x));
+      assert.ok(Lay.x.lane >= 250, JSON.stringify(Lay.x));
+      const by = new Map(Lay.nodes.map((n) => [n.id, n]));
+      const inside = (a, size, n) => a >= n.y - 1e-6 && a + size <= n.y + n.h + 1e-6;
+      for (const r of Lay.ribbons) assert.ok(inside(r.from, r.size, by.get(r.source)) && inside(r.to, r.size, by.get(r.target)), r.key);
+      for (const n of Lay.nodes.filter((x) => x.col > 0 && x.col < 3)) {
+        const into = Lay.ribbons.filter((r) => r.target === n.id).reduce((a, r) => a + r.value, 0);
+        const out = Lay.ribbons.filter((r) => r.source === n.id).reduce((a, r) => a + r.value, 0);
+        assert.equal(into, n.value); assert.equal(out, n.value);
+      }
+      const skips = Lay.ribbons.filter((r) => by.get(r.target).col - by.get(r.source).col > 1);
+      for (const r of skips) {
+        for (const b of Lay.cols[2]) {
+          for (const xq of [Lay.x.cols[2], Lay.x.cols[2] + Lay.blockW[2]]) {
+            const [top, bottom] = ribbonAt(r, xq);
+            assert.ok(bottom <= b.y + 1e-6 || top >= b.y + b.h - 1e-6, `${r.key} traverse ${b.id}`);
+          }
         }
       }
-      // L'épaisseur garde l'échelle : un groupe = la somme de ses destinations, la source = le total.
-      L.mids.forEach((m) => assert.ok(near(m.ph, L.ribbons.filter((r) => r.leaf && r.group === m.key).reduce((a, r) => a + r.size, 0))));
-      assert.ok(near(L.src.ph, data.total * L.k));
     });
   }
 }
-
-test('flowNodes : chaque fiche du mois dans une seule destination (octobre en direct, 15/10)', async () => {
-  const { flowNodes, nodeText } = await import('./flowData.js');
-  const flow = { ads_affectation: 248, small_segment: 51, small_given: 8, pool_waiting: 78, not_given_duplicate: 18, ads_pool: 94, not_given_small: 42,
-    other_linkedin: 4, not_given_webinar: 2, demo: 1, other_webinar: 7, other_referral: 2, not_given_unclassifiable: 1, outside_affectation: 1 };
-  const d = flowNodes({ created: 497, flow });
-  assert.equal(d.givenTotal + d.notGivenTotal, 497);
-  assert.deepEqual([d.givenTotal, d.notGivenTotal], [434, 63]);
-  const others = d.given.find((n) => n.key === 'others');
-  assert.equal(others.value, 13);
-  assert.equal(nodeText(others), 'Autres canaux (LinkedIn 4 · webinaire 7 · parrainage 2)');
-  assert.ok(d.given.find((n) => n.key === 'ads_affectation').lines.some((l) => l.includes('« ADS affectés » : 249')));
-  const L = flowLayout(d, 1300);
-  assert.equal(L.leaves.length, 9);
-});

@@ -555,7 +555,7 @@ function Channels({ model, onOpen }) {
   const MONTH = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'][Number(String(model.period?.start || '').slice(5, 7)) - 1] || 'ce mois';
   return (
     <div className="ps2-grid">
-      {model.pilot?.intake?.flow && (
+      {model.pilot?.intake?.links?.length > 0 && (
         <Reveal as="section" className="ps2-card ps2-span-12" aria-labelledby="ps2-flow-title">
           <Motion.div className="ps2-card-head" variants={ITEM}><h2 id="ps2-flow-title">Fiches reçues en {MONTH}</h2>
             <span className="ps2-chip-soft">de Funnel Leads aux canaux</span></Motion.div>

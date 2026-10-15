@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion as Motion } from 'framer-motion';
 import { CountUp, EASE, EASE_CSS, useDrawn } from '../motion';
 import { FUNNEL, METRICS, SOURCES, fr, signedNum, sourceOf } from './model';
-import { flowNodes, nodeText } from './flowData';
+import { flowGraph, nodeText } from './flowData';
 import { Detail, usePop } from './Pop';
 
 // Graphiques SVG de la Performance Sales v2 (dev 14/10/2026 : « meilleur SVG, beau schéma qui représente »). Chacun se
@@ -51,7 +51,12 @@ const COHORT_STEPS = ['j_active', 'j_r1', 'j_r2', 'j_signed', 'j_sales'];
 // Puce « reçus » (dev 15/10/2026 : « les ADS reçues en octobre, ça doit être le total, même ce qui n'a pas été affecté ;
 // on l'a dans Funnel Leads ») : toutes les fiches entrantes du mois, comme Funnel Leads, et ce qu'elles ont produit à ce jour.
 const RECEIVED_STEPS = ['active', 'r1', 'r2', 'signed', 'sales'];
-const receivedJourney = (model) => (model.pilot?.intake?.journey ? RECEIVED_STEPS.map((k) => model.pilot.intake.journey[k] || 0) : null);
+// Puce « ADS reçus » : les fiches ADS du mois (canal ADS du schéma « Fiches reçues »), repli sur toutes les fiches.
+const receivedJourney = (model) => {
+  const intake = model.pilot?.intake;
+  const j = intake?.journey_by_channel?.ads || intake?.journey;
+  return j ? RECEIVED_STEPS.map((k) => j[k] || 0) : null;
+};
 function channelJourney(model, key) {
   if (isCohort(key)) return receivedJourney(model) || COHORT_STEPS.map((k) => model.cohort?.by_family?.ads?.[k] || 0);
   const j = model.journeys || {};
@@ -234,13 +239,15 @@ export function CohortBars({ steps }) {
 
 // Les fiches reçues du mois, de Funnel Leads à l'endroit où chacune se trouve aujourd'hui (calculé à l'unité par le serveur).
 function IntakeBridge({ model }) {
-  const data = flowNodes(model.pilot?.intake);
-  if (!data) return <Detail kicker="Fiches reçues" title="Pont non disponible" />;
+  const graph = flowGraph(model.pilot?.intake);
+  if (!graph) return <Detail kicker="Fiches reçues" title="Pont non disponible" />;
+  const of = (col) => graph.nodes.filter((n) => n.col === col);
+  const adsLeaves = of(3).filter((n) => n.group === 'ads');
   const rows = [
-    ['Fiches reçues (comme Funnel Leads)', fr(data.total), 'ps2-strong'],
-    ...data.notGiven.map((n) => [`− ${nodeText(n).toLowerCase()}`, fr(n.value)]),
-    ['= données à un sales', fr(data.givenTotal), 'ps2-strong'],
-    ...data.given.map((n) => [`→ ${nodeText(n).toLowerCase()}`, fr(n.value)]),
+    ['Fiches reçues (comme Funnel Leads)', fr(graph.total), 'ps2-strong'],
+    ...of(1).map((n) => [n.label, fr(n.value), n.group === 'ads' ? 'ps2-strong' : undefined]),
+    ...of(2).map((n) => [`… ADS ${nodeText(n).toLowerCase()}`, fr(n.value)]),
+    ...adsLeaves.map((n) => [`→ ${n.label.toLowerCase()}`, fr(n.value)]),
   ];
   return <Detail kicker={`Reçues en ${monthName(model)}`} title="De Funnel Leads aux sales" rows={rows}
     source="Le schéma complet est dans l’onglet Canaux" />;

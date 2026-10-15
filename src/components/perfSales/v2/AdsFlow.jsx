@@ -4,10 +4,9 @@ import { CountUp, EASE, useDrawn } from '../motion';
 import { usePop, Detail } from './Pop';
 import { fr } from './model';
 import { flowLayout } from './flowLayout';
-import { FLOW_GROUPS, flowNodes, nodeText } from './flowData';
+import { COLUMNS, flowGraph, nodeDetail, nodeText } from './flowData';
 
 // Schéma « Fiches reçues » : données dans flowData.js, agencement dans flowLayout.js.
-const SOURCE_COLOR = 'var(--flow-src)';   // #121b35, plus clair en thème sombre (v2.css)
 
 // Largeur réelle du conteneur : le schéma se dessine en pixels, textes et rubans dans le même repère.
 function useWidth() {
@@ -26,97 +25,118 @@ function useWidth() {
 }
 
 const NARROW = 760;
+// Blocs clairs : texte foncé ; les autres en blanc.
+const LIGHT = new Set(['#8b95a7', '#a3abbb', '#b9c0cc', '#c9cfda', '#e6b45a', '#d9b25f']);
 
 export default function AdsFlow({ intake, month }) {
-  const data = useMemo(() => flowNodes(intake), [intake]);
+  const graph = useMemo(() => flowGraph(intake), [intake]);
   const [ref, width] = useWidth();
-  const layout = useMemo(() => (data && width >= NARROW ? flowLayout(data, width) : null), [data, width]);
-  if (!data) return null;
+  const layout = useMemo(() => (graph && width >= NARROW ? flowLayout(graph, width) : null), [graph, width]);
+  if (!graph) return null;
   return (
     <div className="ps2-flowmap" ref={ref}>
-      {layout ? <Diagram data={data} layout={layout} month={month} /> : width > 0 && <FlowList data={data} />}
+      {layout ? <Diagram graph={graph} layout={layout} month={month} /> : width > 0 && <FlowList graph={graph} />}
     </div>
   );
 }
 
-function Diagram({ data, layout: L, month }) {
+// Tout ce qui passe par un nœud : ses liens en amont et en aval, de proche en proche.
+function pathOf(graph, id) {
+  const nodes = new Set([id]);
+  const links = new Set();
+  const walk = (dir) => {
+    const stack = [id];
+    const seen = new Set([id]);
+    while (stack.length) {
+      const cur = stack.pop();
+      for (const l of graph.links) {
+        if ((dir === 'up' ? l.target : l.source) !== cur) continue;
+        links.add(`${l.source}>${l.target}`);
+        const next = dir === 'up' ? l.source : l.target;
+        nodes.add(next);
+        if (!seen.has(next)) { seen.add(next); stack.push(next); }
+      }
+    }
+  };
+  walk('up');
+  walk('down');
+  return { nodes, links };
+}
+
+const safeId = (key) => key.replace(/[^a-z0-9]/gi, '_');
+
+function Diagram({ graph, layout: L, month }) {
   const drawn = useDrawn();
   const open = usePop();
   const uid = useId().replace(/:/g, '');
   const [hover, setHover] = useState(null);
-  const groupOf = (key) => L.leaves.find((l) => l.key === key)?.group || key;
-  const active = hover ? groupOf(hover) : null;
-  const lit = (r) => !hover || hover === 'all' || (r.leaf ? r.leaf === hover || hover === r.group : r.group === active);
-  const leafLit = (l) => !hover || hover === 'all' || hover === l.key || hover === l.group;
-  const colorOf = (key) => FLOW_GROUPS[key]?.color || L.leaves.find((l) => l.key === key)?.color;
-  const pct = (v) => `${fr((v / data.total) * 100, v / data.total < 0.1 ? 1 : 0)} %`;
-  const openNode = (e, n, kicker) => open(e.currentTarget, <Detail kicker={kicker} title={nodeText(n)} value={fr(n.value)}
-    rows={[['Part des fiches reçues', pct(n.value)]]} lines={n.lines || []} />);
-  const openSource = (e) => open(e.currentTarget, <Detail kicker="Funnel Leads" title={`Fiches reçues en ${month}`} value={fr(data.total)}
-    rows={[['Données à un sales', fr(data.givenTotal)], ['Jamais données', fr(data.notGivenTotal)], ['dont « 1 à 2 / moins de 100 k€ » de Funnel Leads', fr(data.small)], ['… données quand même', fr(data.smallGiven)]]}
-    lines={['Mêmes filtres et mêmes bornes que Funnel Leads : fiches entrantes créées dans le mois, hors cold call et setters.']} />);
-  const { src: SW, mid: MW, bar: BW } = L.widths;
+  const lit = useMemo(() => (hover ? pathOf(graph, hover) : null), [graph, hover]);
+  const byId = useMemo(() => new Map(L.nodes.map((n) => [n.id, n])), [L]);
+  const BW = L.widths.bar;
+  const full = L.x.leaf + BW;
+  const openNode = (e, id) => {
+    const { node, rows } = nodeDetail(graph, id);
+    const f = graph.funnel;
+    const extra = node.id === 'root'
+      ? [['Leads reçus de Funnel Leads', fr(f.received)], ['1 à 2 / moins de 100 k€', fr(f.small)], ['Sans 1 à 2 / moins de 100 k€', fr(f.without)],
+        ['Clean (tél FR)', fr(f.clean)], ['… dont ADS traitables', fr(f.cleanAds)], ['… dont autres canaux', fr(f.clean - f.cleanAds)]]
+      : node.funnel === 'fr' ? [['Clean (tél FR) de Funnel Leads, tous canaux', fr(f.clean)], ['… dont ADS', fr(f.cleanAds)]] : [];
+    const lines = node.id === 'root' ? ['Mêmes filtres et mêmes bornes que Funnel Leads : fiches entrantes créées dans le mois, hors cold call et setters.'] : node.lines || [];
+    open(e.currentTarget, <Detail kicker={COLUMNS[node.col]} title={node.id === 'root' ? `Fiches reçues en ${month}` : nodeText(node)} value={fr(node.value)}
+      rows={[...extra, ...rows]} lines={lines} />);
+  };
+  const dim = (id) => Boolean(lit) && !lit.nodes.has(id);
   const label = `Fiches reçues en ${month} : ${L.leaves.map((n) => `${nodeText(n)} ${n.value}`).join(', ')}`;
+  const pct = (v) => `${fr((v / graph.total) * 100, v / graph.total < 0.1 ? 1 : 0)} %`;
+  const delayOf = (col) => 0.1 + col * 0.32;
   return (
     <div className={`ps2-flow-stage${L.wide ? '' : ' is-compact'}`} style={{ height: L.height + 12 }} onMouseLeave={() => setHover(null)}>
       <div className="ps2-flow-heads" aria-hidden="true">
-        <span style={{ left: 0 }}>Reçues</span>
-        <span style={{ left: L.x.mid }}>Affectation</span>
-        <span style={{ left: L.x.leaf }}>Aujourd’hui</span>
+        {COLUMNS.map((c, i) => <span key={c} style={{ left: L.x.cols[i] }}>{c}</span>)}
       </div>
-      <svg width={L.x.leaf + BW} height={L.height} viewBox={`0 0 ${L.x.leaf + BW} ${L.height}`} role="img" aria-label={label}>
+      <svg width={full} height={L.height} viewBox={`0 0 ${full} ${L.height}`} role="img" aria-label={label}>
         <defs>
           {L.ribbons.map((r) => (
-            <linearGradient key={r.key} id={`${uid}-${r.key}`} gradientUnits="userSpaceOnUse" x1={r.leaf ? L.x.mid + MW : SW} x2={r.leaf ? L.x.leaf : L.x.mid} y1="0" y2="0">
-              <stop offset="0" style={{ stopColor: r.leaf ? colorOf(r.group) : SOURCE_COLOR }} />
-              <stop offset="1" stopColor={colorOf(r.leaf || r.group)} />
+            <linearGradient key={r.key} id={`${uid}-${safeId(r.key)}`} gradientUnits="userSpaceOnUse" x1={r.x0} x2={r.x1} y1="0" y2="0">
+              <stop offset="0" style={{ stopColor: byId.get(r.source).color }} />
+              <stop offset="1" style={{ stopColor: byId.get(r.target).color }} />
             </linearGradient>
           ))}
           <clipPath id={`${uid}-reveal`}>
-            <Motion.rect x="0" y="0" height={L.height} initial={{ width: 0 }} animate={{ width: drawn ? L.x.leaf + BW : 0 }}
-              transition={{ duration: 1.5, ease: EASE, delay: 0.15 }} />
+            <Motion.rect x="0" y="0" height={L.height} initial={{ width: 0 }} animate={{ width: drawn ? full : 0 }} transition={{ duration: 1.7, ease: EASE, delay: 0.15 }} />
           </clipPath>
         </defs>
         <g clipPath={`url(#${uid}-reveal)`}>
           {L.ribbons.map((r) => (
-            <path key={r.key} d={r.d} fill={`url(#${uid}-${r.key})`} opacity={lit(r) ? (hover ? 0.5 : 0.3) : 0.06}
-              style={{ transition: 'opacity .3s' }} />
+            <path key={r.key} d={r.d} fill={`url(#${uid}-${safeId(r.key)})`}
+              opacity={!lit ? 0.3 : lit.links.has(r.key) ? 0.55 : 0.05} style={{ transition: 'opacity .3s' }} />
           ))}
         </g>
         {L.leaves.map((l, i) => (
-          <Motion.rect key={l.key} x={L.x.leaf} y={l.y} width={BW} height={l.h} rx="2" fill={l.color}
+          <Motion.rect key={l.id} x={L.x.leaf} y={l.y} width={BW} height={l.h} rx="2" fill={l.color}
             style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-            initial={{ opacity: 0, scaleY: 0 }} animate={drawn ? { opacity: leafLit(l) ? 1 : 0.3, scaleY: 1 } : { opacity: 0, scaleY: 0 }}
-            transition={{ duration: 0.5, ease: EASE, delay: drawn && !hover ? 0.95 + i * 0.05 : 0 }} />
+            initial={{ opacity: 0, scaleY: 0 }} animate={drawn ? { opacity: dim(l.id) ? 0.3 : 1, scaleY: 1 } : { opacity: 0, scaleY: 0 }}
+            transition={{ duration: 0.5, ease: EASE, delay: drawn && !hover ? delayOf(3) + i * 0.04 : 0 }} />
         ))}
       </svg>
 
-      <Motion.button type="button" className="ps2-flow-block is-src" style={{ left: 0, top: L.src.y, width: SW, height: L.src.h, background: SOURCE_COLOR, color: '#fff' }}
-        initial={{ opacity: 0, scaleY: 0.7 }} animate={drawn ? { opacity: 1, scaleY: 1 } : {}} transition={{ duration: 0.6, ease: EASE }}
-        onMouseEnter={() => setHover('all')} onClick={openSource}>
-        <b className="ps2-num"><CountUp value={data.total} format={(v) => fr(Math.round(v))} /></b><span className="ps2-flow-block-label">fiches reçues</span>
-      </Motion.button>
-      {L.mids.map((m, i) => {
-        const g = FLOW_GROUPS[m.key];
-        return (
-          <Motion.button type="button" key={m.key} className={`ps2-flow-block is-${m.key}`}
-            style={{ left: L.x.mid, top: m.y, width: MW, height: m.h, background: g.color, color: g.ink }}
-            initial={{ opacity: 0, scaleY: 0.7 }} animate={drawn ? { opacity: hover && active !== m.key && hover !== 'all' ? 0.45 : 1, scaleY: 1 } : {}}
-            transition={{ duration: 0.6, ease: EASE, delay: drawn && !hover ? 0.45 + i * 0.1 : 0 }}
-            onMouseEnter={() => setHover(m.key)} onFocus={() => setHover(m.key)}
-            onClick={(e) => openNode(e, { ...m, label: g.label, lines: [] }, 'Fiches reçues')}>
-            <b className="ps2-num"><CountUp value={m.value} format={(v) => fr(Math.round(v))} delay={450} /></b><span className="ps2-flow-block-label">{g.label}</span>
-          </Motion.button>
-        );
-      })}
+      {L.nodes.filter((n) => n.col < 3).map((n) => (
+        <Motion.button type="button" key={n.id} className={`ps2-flow-block${n.twoLines ? '' : ' is-line'}${n.kind === 'root' ? ' is-src' : ''}`}
+          style={{ left: L.x.cols[n.col], top: n.y, width: L.blockW[n.col], height: n.h, background: n.color, color: LIGHT.has(n.color) ? '#121b35' : '#ffffff' }}
+          initial={{ opacity: 0, scaleY: 0.7 }} animate={drawn ? { opacity: dim(n.id) ? 0.4 : 1, scaleY: 1 } : {}}
+          transition={{ duration: 0.6, ease: EASE, delay: drawn && !hover ? delayOf(n.col) : 0 }}
+          onMouseEnter={() => setHover(n.id)} onFocus={() => setHover(n.id)} onClick={(e) => openNode(e, n.id)}>
+          <b className="ps2-num"><CountUp value={n.value} format={(v) => fr(Math.round(v))} delay={Math.round(delayOf(n.col) * 1000)} /></b>
+          <span className="ps2-flow-block-label">{n.label}</span>
+        </Motion.button>
+      ))}
       {L.leaves.map((l, i) => (
-        <Motion.button type="button" key={l.key} className="ps2-flow-leaf" style={{ left: L.x.label, top: l.cy, width: L.x.lane }}
-          initial={{ opacity: 0, x: -10 }} animate={drawn ? { opacity: leafLit(l) ? 1 : 0.4, x: 0 } : {}}
-          transition={{ duration: 0.5, ease: EASE, delay: drawn && !hover ? 1.05 + i * 0.05 : 0 }}
-          onMouseEnter={() => setHover(l.key)} onFocus={() => setHover(l.key)}
-          onClick={(e) => openNode(e, l, FLOW_GROUPS[l.group].label)}>
+        <Motion.button type="button" key={l.id} className="ps2-flow-leaf" style={{ left: L.x.label, top: l.cy, width: L.x.lane }}
+          initial={{ opacity: 0, x: -10 }} animate={drawn ? { opacity: dim(l.id) ? 0.4 : 1, x: 0 } : {}}
+          transition={{ duration: 0.5, ease: EASE, delay: drawn && !hover ? delayOf(3) + 0.1 + i * 0.04 : 0 }}
+          onMouseEnter={() => setHover(l.id)} onFocus={() => setHover(l.id)} onClick={(e) => openNode(e, l.id)}>
           <b className="ps2-num">{fr(l.value)}</b>
-          <span className="ps2-flow-leaf-text">{l.label}{l.sub && <em>{l.sub}</em>}</span>
+          <span className="ps2-flow-leaf-text">{l.label}</span>
           <span className="ps2-flow-leaf-pct ps2-num">{pct(l.value)}</span>
         </Motion.button>
       ))}
@@ -124,23 +144,25 @@ function Diagram({ data, layout: L, month }) {
   );
 }
 
-// Conteneur étroit (téléphone) : la même répartition en liste, le schéma n'y est pas lisible.
-function FlowList({ data }) {
+// Conteneur étroit (téléphone) : la même répartition en liste, colonne par colonne.
+function FlowList({ graph }) {
   const drawn = useDrawn();
-  const rows = [
-    { key: 'total', label: 'Reçues', value: data.total, color: SOURCE_COLOR, strong: true },
-    { key: 'given', label: FLOW_GROUPS.given.label, value: data.givenTotal, color: FLOW_GROUPS.given.color, strong: true }, ...data.given,
-    { key: 'not', label: FLOW_GROUPS.not.label, value: data.notGivenTotal, color: FLOW_GROUPS.not.color, strong: true }, ...data.notGiven,
-  ];
+  const rows = [];
+  COLUMNS.forEach((title, col) => {
+    const nodes = graph.nodes.filter((n) => n.col === col);
+    if (!nodes.length) return;
+    rows.push({ head: true, key: `h-${col}`, label: title });
+    nodes.forEach((n) => rows.push({ key: n.id, label: n.id === 'root' ? 'Fiches reçues' : nodeText(n), value: n.value, color: n.color }));
+  });
   return (
     <div className="ps2-flow-list" role="list">
-      {rows.map((n, i) => (
-        <div key={n.key} role="listitem" className={`ps2-flow-row${n.strong ? ' is-strong' : ''}`}>
-          <span>{nodeText(n)}</span><b className="ps2-num">{fr(n.value)}</b>
+      {rows.map((n, i) => (n.head ? <div key={n.key} className="ps2-flow-list-head">{n.label}</div> : (
+        <div key={n.key} role="listitem" className="ps2-flow-row">
+          <span>{n.label}</span><b className="ps2-num">{fr(n.value)}</b>
           <span className="ps2-flow-bar"><Motion.i style={{ background: n.color }} initial={{ width: 0 }}
-            animate={{ width: drawn ? `${(n.value / data.total) * 100}%` : 0 }} transition={{ duration: 0.8, ease: EASE, delay: 0.1 + i * 0.04 }} /></span>
+            animate={{ width: drawn ? `${(n.value / graph.total) * 100}%` : 0 }} transition={{ duration: 0.8, ease: EASE, delay: 0.1 + i * 0.03 }} /></span>
         </div>
-      ))}
+      )))}
     </div>
   );
 }
