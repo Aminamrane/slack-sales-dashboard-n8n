@@ -334,6 +334,7 @@ test('la vue Onboarding classe la date Owner en passée ou à venir, jamais sans
   assert.equal(onboardingPhaseOf({ client: { rdv_onboarding: '2026-09-19' } }, today), 'upcoming');
   assert.equal(onboardingPhaseOf({ client: {} }, today), null);
   assert.equal(canFilterMeteo({ id: '94b5dcc1-a1bb-41ac-94fe-14cf047cffef', role: 'finance_director' }), true);
+  assert.equal(canFilterMeteo({ id: '3402830c-035f-4617-ac0f-dc42fa00c8a6', role: 'admin' }), true);   // Ben Issa Amrane, comme le dev
   assert.equal(canFilterMeteo({ id: 'someone-else', role: 'finance_director' }), false);
   assert.equal(canFilterMeteo(null), false);
 });

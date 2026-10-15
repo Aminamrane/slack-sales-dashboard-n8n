@@ -43,6 +43,7 @@ const METEO_FILTER_USER_IDS = new Set([
   '6b32dc17-528d-4e01-b955-2c49a5f44b6a', // Paul (CEO)
   '6dfc7435-c938-4bd3-b143-a6516b2981bd', // Aurélie B
   '445a5b0d-61e3-4e3b-b1fc-77b04b66df12', // Youcef Amrane — le dev est toujours inclus (règle 2026-09-19)
+  '3402830c-035f-4617-ac0f-dc42fa00c8a6', // Ben Issa Amrane (admin) : mêmes accès que le dev (2026-10-15)
 ]);
 export const canFilterMeteo = (user) => METEO_FILTER_USER_IDS.has(user?.id);
 
