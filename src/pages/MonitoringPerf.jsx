@@ -395,7 +395,10 @@ export default function MonitoringPerf() {
       {tip && <CalcTip text={tip.t} rect={tip.r} darkMode={darkMode} />}
       <style>{`@keyframes pageReveal{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@keyframes sidebarReveal{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:none}}@keyframes rowIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}html,body{background:${darkMode?'#13141b':'#ffffff'}}.perfv2{border-collapse:separate;border-spacing:0;background:${C.bg};border-radius:14px}.perfv2 th{padding:14px 12px;font-size:12px;font-weight:600;color:${C.secondary};border-bottom:1px solid ${C.border}}.perfv2 .perfv2-groups th{padding:10px 12px 6px;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;border-bottom:1px solid transparent}.perfv2 .perfv2-groups th.is-group{border-bottom:2px solid}.perfv2 td{padding:13px 12px;font-size:13px;border-bottom:1px solid ${C.border};white-space:nowrap}.perfv2 tbody tr:hover{background:${C.subtle}}.mp-scroll::-webkit-scrollbar{width:3px;height:3px}.mp-scroll::-webkit-scrollbar-track{background:transparent}.mp-scroll::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:4px}`}</style>
 
-      <div style={{animation:'pageReveal 0.5s cubic-bezier(0.4,0,0.2,1) both',fontFamily:"'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"}}>
+      {/* « backwards », pas « both » : l'animation finie ne laisse aucune transformation sur ce bloc. Sinon il devient le repère
+          des éléments « fixed » de la page (bulles de détail) et, dans le shell CEO, les décale de la largeur de la barre
+          latérale et de la navbar : bulle coupée hors de l'écran (dev 15/10/2026). */}
+      <div style={{animation:'pageReveal 0.5s cubic-bezier(0.4,0,0.2,1) backwards',fontFamily:"'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"}}>
         <div style={{display:'flex',alignItems:'stretch',minHeight:'100vh'}}>
 
           {/* SIDEBAR \u2014 masqu\u00e9e en mode embed (sidebar du wrapper Ceo*View
