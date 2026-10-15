@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion as Motion } from 'framer-motion';
 import { CountUp, EASE, EASE_CSS, useDrawn } from '../motion';
 import { FUNNEL, METRICS, SOURCES, fr, signedNum, sourceOf } from './model';
-import { flowNodes } from './AdsFlow';
+import { flowNodes, nodeText } from './flowData';
 import { Detail, usePop } from './Pop';
 
 // Graphiques SVG de la Performance Sales v2 (dev 14/10/2026 : « meilleur SVG, beau schéma qui représente »). Chacun se
@@ -238,9 +238,9 @@ function IntakeBridge({ model }) {
   if (!data) return <Detail kicker="Fiches reçues" title="Pont non disponible" />;
   const rows = [
     ['Fiches reçues (comme Funnel Leads)', fr(data.total), 'ps2-strong'],
-    ...data.notGiven.map((n) => [`− ${n.label.toLowerCase()}`, fr(n.value)]),
+    ...data.notGiven.map((n) => [`− ${nodeText(n).toLowerCase()}`, fr(n.value)]),
     ['= données à un sales', fr(data.givenTotal), 'ps2-strong'],
-    ...data.given.map((n) => [`→ ${n.label.toLowerCase()}`, fr(n.value)]),
+    ...data.given.map((n) => [`→ ${nodeText(n).toLowerCase()}`, fr(n.value)]),
   ];
   return <Detail kicker={`Reçues en ${monthName(model)}`} title="De Funnel Leads aux sales" rows={rows}
     source="Le schéma complet est dans l’onglet Canaux" />;
