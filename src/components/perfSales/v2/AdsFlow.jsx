@@ -1,149 +1,168 @@
-import React, { useMemo, useState } from 'react';
+import React, { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion as Motion } from 'framer-motion';
-import { EASE, useDrawn } from '../motion';
+import { CountUp, EASE, useDrawn } from '../motion';
 import { usePop, Detail } from './Pop';
-import { fr, sourceOf } from './model';
+import { fr } from './model';
+import { flowLayout } from './flowLayout';
+import { COLUMNS, flowGraph, nodeDetail, nodeText } from './flowData';
 
-// Des fiches de Funnel Leads aux colonnes de l'onglet Canaux (dev 15/10/2026 : « ADS affectés 255, comment c'est
-// possible quand Funnel Leads nous dit 444 ? »). Chaque fiche entrante du mois est dans UNE bande, calculée à l'unité
-// par le serveur (`intake.flow`) : jamais donnée (motif du moteur), ou donnée et aujourd'hui chez le sales affecté, reprise
-// du pool par un autre sales, au pool sans repreneur, dans un autre canal. Les bandes « chez le sales affecté » et
-// « repris du pool » sont les colonnes ADS du tableau ci-dessous.
-const OTHER = { linkedin: 'LinkedIn', referral: 'parrainage', webinar: 'webinaire', cold_call: 'cold call', ccs: 'CCS', setter_rdv: 'setter', second_chance: 'seconde chance' };
+// Schéma « Fiches reçues » : données dans flowData.js, agencement dans flowLayout.js.
 
-export function flowNodes(intake) {
-  const f = intake?.flow;
-  if (!f || !intake.created) return null;
-  const others = Object.entries(f).filter(([k, v]) => k.startsWith('other_') && v);
-  const given = [
-    { key: 'ads_affectation', label: `Chez le sales affecté${f.outside_affectation ? ` · colonne ${fr((f.ads_affectation || 0) + f.outside_affectation)}` : ''}`, value: f.ads_affectation || 0, color: sourceOf('affectation').color,
-      lines: ['Le sales que le moteur a choisi l’a toujours (ou l’a reçu après un raté des 6 minutes d’un collègue).',
-        `Colonne « ADS affectés » : ${fr((f.ads_affectation || 0) + (f.outside_affectation || 0))}${f.outside_affectation ? ` (dont ${fr(f.outside_affectation)} reçu par la date du formulaire, fiche créée avant le mois)` : ''}.`] },
-    { key: 'ads_pool', label: `Repris du pool par un autre sales${f.outside_pool ? ` · colonne ${fr((f.ads_pool || 0) + f.outside_pool)}` : ''}`, value: f.ads_pool || 0, color: sourceOf('pool').color,
-      lines: ['Reparti au pool commun, puis repris par un autre sales.', `Colonne « ADS repris du pool » : ${fr((f.ads_pool || 0) + (f.outside_pool || 0))}.`] },
-    { key: 'pool_waiting', label: 'Au pool, personne ne l’a repris', value: f.pool_waiting || 0, color: '#c9cfda',
-      lines: ['Donné à un sales, reparti au pool commun, et pas encore repris : il ne compte pour aucun sales.'] },
-    { key: 'others', label: `Autres canaux (${others.map(([k, v]) => `${OTHER[k.slice(6)] || k.slice(6)} ${v}`).join(', ')})`,
-      value: others.reduce((a, [, v]) => a + v, 0), color: '#d4834a', lines: ['Fiches entrantes de LinkedIn, parrainage ou webinaire : dans leur canal, pas dans les ADS.'] },
-    { key: 'same_contact', label: 'Même contact déjà chez ce sales', value: f.same_contact || 0, color: '#aeb6c6', lines: ['Compté une fois par sales et par contact.'] },
-    { key: 'demo', label: 'Comptes de test ou de démo', value: f.demo || 0, color: '#e2e6ee', lines: ['Hors statistiques.'] },
-  ].filter((n) => n.value > 0);
-  const notGiven = [
-    { key: 'not_given_small', label: 'Moins de 100 k€, écartées', value: f.not_given_small || 0 },
-    { key: 'not_given_duplicate', label: 'Doublons d’un contact déjà reçu', value: f.not_given_duplicate || 0 },
-    { key: 'not_given_webinar', label: 'Inscrits webinaire pris par les setters', value: f.not_given_webinar || 0 },
-    { key: 'not_given_unclassifiable', label: 'Non classables (tests)', value: f.not_given_unclassifiable || 0 },
-    { key: 'not_given_waiting', label: 'Pas encore attribuées', value: f.not_given_waiting || 0 },
-  ].filter((n) => n.value > 0).map((n) => ({ ...n, color: '#e6b45a', lines: ['Jamais données à un sales : motif du moteur d’affectation (dernier passage).'] }));
-  const sum = (list) => list.reduce((a, n) => a + n.value, 0);
-  return { total: intake.created, given, notGiven, givenTotal: sum(given), notGivenTotal: sum(notGiven), small: f.small_segment || 0, smallGiven: f.small_given || 0 };
+// Largeur réelle du conteneur : le schéma se dessine en pixels, textes et rubans dans le même repère.
+function useWidth() {
+  const ref = useRef(null);
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    setWidth(Math.round(el.getBoundingClientRect().width));
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(([entry]) => setWidth(Math.round(entry.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, width];
 }
 
-const W = 1000, H = 330, NW = 14, GAP = 7, X = [0, 300, 640];
+const NARROW = 760;
+// Blocs clairs : texte foncé ; les autres en blanc.
+const LIGHT = new Set(['#8b95a7', '#a3abbb', '#b9c0cc', '#c9cfda', '#e6b45a', '#d9b25f']);
 
 export default function AdsFlow({ intake, month }) {
-  const data = useMemo(() => flowNodes(intake), [intake]);
+  const graph = useMemo(() => flowGraph(intake), [intake]);
+  const [ref, width] = useWidth();
+  const layout = useMemo(() => (graph && width >= NARROW ? flowLayout(graph, width) : null), [graph, width]);
+  if (!graph) return null;
+  return (
+    <div className="ps2-flowmap" ref={ref}>
+      {layout ? <Diagram graph={graph} layout={layout} month={month} /> : width > 0 && <FlowList graph={graph} />}
+    </div>
+  );
+}
+
+// Tout ce qui passe par un nœud : ses liens en amont et en aval, de proche en proche.
+function pathOf(graph, id) {
+  const nodes = new Set([id]);
+  const links = new Set();
+  const walk = (dir) => {
+    const stack = [id];
+    const seen = new Set([id]);
+    while (stack.length) {
+      const cur = stack.pop();
+      for (const l of graph.links) {
+        if ((dir === 'up' ? l.target : l.source) !== cur) continue;
+        links.add(`${l.source}>${l.target}`);
+        const next = dir === 'up' ? l.source : l.target;
+        nodes.add(next);
+        if (!seen.has(next)) { seen.add(next); stack.push(next); }
+      }
+    }
+  };
+  walk('up');
+  walk('down');
+  return { nodes, links };
+}
+
+const safeId = (key) => key.replace(/[^a-z0-9]/gi, '_');
+
+function Diagram({ graph, layout: L, month }) {
   const drawn = useDrawn();
   const open = usePop();
+  const uid = useId().replace(/:/g, '');
   const [hover, setHover] = useState(null);
-  if (!data) return null;
-  const leaves = [...data.given, ...data.notGiven];
-  const k = (H - GAP * (leaves.length - 1)) / data.total;
-  // Colonne 3 : chaque bande à l'échelle ; colonne 2 : donnés / pas donnés, alignés sur leurs bandes.
-  let y = 0;
-  const pos = leaves.map((n) => { const h = Math.max(2, n.value * k); const p = { ...n, y, h }; y += h + GAP; return p; });
-  const givenH = data.givenTotal * k, notH = data.notGivenTotal * k;
-  const mid = [
-    { key: 'given', label: 'Données à un sales', value: data.givenTotal, color: '#1e3a7b', y: 0, h: givenH },
-    { key: 'not', label: 'Jamais données', value: data.notGivenTotal, color: '#e6b45a', y: H - notH, h: notH },
-  ];
-  const root = { y: 0, h: H };
-  const band = (x0, x1, y0a, y0b, y1a, y1b) => {
-    const c = (x0 + x1) / 2;
-    return `M${x0},${y0a} C${c},${y0a} ${c},${y1a} ${x1},${y1a} L${x1},${y1b} C${c},${y1b} ${c},${y0b} ${x0},${y0b} Z`;
+  const lit = useMemo(() => (hover ? pathOf(graph, hover) : null), [graph, hover]);
+  const byId = useMemo(() => new Map(L.nodes.map((n) => [n.id, n])), [L]);
+  const BW = L.widths.bar;
+  const full = L.x.leaf + BW;
+  const openNode = (e, id) => {
+    const { node, rows } = nodeDetail(graph, id);
+    const f = graph.funnel;
+    const extra = node.id === 'root'
+      ? [['Leads reçus de Funnel Leads', fr(f.received)], ['1 à 2 / moins de 100 k€', fr(f.small)], ['Sans 1 à 2 / moins de 100 k€', fr(f.without)],
+        ['Clean (tél FR)', fr(f.clean)], ['… dont ADS traitables', fr(f.cleanAds)], ['… dont autres canaux', fr(f.clean - f.cleanAds)]]
+      : node.funnel === 'fr' ? [['Clean (tél FR) de Funnel Leads, tous canaux', fr(f.clean)], ['… dont ADS', fr(f.cleanAds)]] : [];
+    const lines = node.id === 'root' ? ['Mêmes filtres et mêmes bornes que Funnel Leads : fiches entrantes créées dans le mois, hors cold call et setters.'] : node.lines || [];
+    open(e.currentTarget, <Detail kicker={COLUMNS[node.col]} title={node.id === 'root' ? `Fiches reçues en ${month}` : nodeText(node)} value={fr(node.value)}
+      rows={[...extra, ...rows]} lines={lines} />);
   };
-  // Ruban racine → colonne 2 (une bande par groupe), puis colonne 2 → feuilles (dans l'ordre, empilées).
-  const ribbons = [];
-  let rootY = 0;
-  for (const m of mid) {
-    const h = m.value * k;
-    ribbons.push({ key: `r-${m.key}`, d: band(X[0] + NW, X[1], rootY, rootY + h, m.y, m.y + h), color: m.color, group: m.key, delay: 0.1 });
-    rootY += h;
-  }
-  const stack = { given: 0, not: 0 };
-  pos.forEach((n, i) => {
-    const group = i < data.given.length ? 'given' : 'not';
-    const m = mid.find((x) => x.key === group);
-    const h = n.value * k;
-    const y0 = m.y + stack[group];
-    stack[group] += h;
-    ribbons.push({ key: `l-${n.key}`, d: band(X[1] + NW, X[2], y0, y0 + h, n.y, n.y + Math.max(h, 2)), color: n.color, leaf: n.key, group, delay: 0.45 + i * 0.05 });
-  });
-  // Survol : une feuille éclaire sa bande et le chemin de son groupe ; un groupe éclaire toutes ses bandes.
-  const groupOf = (key) => (data.given.some((g) => g.key === key) ? 'given' : data.notGiven.some((g) => g.key === key) ? 'not' : key);
-  const active = hover ? groupOf(hover) : null;
-  const dim = (r) => hover && !(r.leaf ? r.leaf === hover || hover === r.group : r.group === active);
-  // Étiquettes des feuilles : à hauteur de leur bande, écartées d'au moins MIN pour ne jamais se chevaucher.
-  const MIN = 24;
-  const labelY = pos.map((n) => n.y + n.h / 2);
-  for (let i = 1; i < labelY.length; i += 1) labelY[i] = Math.max(labelY[i], labelY[i - 1] + MIN);
-  if (labelY.length && labelY[labelY.length - 1] > H - 6) {
-    labelY[labelY.length - 1] = H - 6;
-    for (let i = labelY.length - 2; i >= 0; i -= 1) labelY[i] = Math.min(labelY[i], labelY[i + 1] - MIN);
-  }
-  const openNode = (e, n, kicker) => open(e.currentTarget, <Detail kicker={kicker} title={n.label} value={fr(n.value)}
-    rows={[['Part des fiches reçues', `${fr((n.value / data.total) * 100, 1)} %`]]} lines={n.lines || []} />);
+  const dim = (id) => Boolean(lit) && !lit.nodes.has(id);
+  const label = `Fiches reçues en ${month} : ${L.leaves.map((n) => `${nodeText(n)} ${n.value}`).join(', ')}`;
+  const pct = (v) => `${fr((v / graph.total) * 100, v / graph.total < 0.1 ? 1 : 0)} %`;
+  const delayOf = (col) => 0.1 + col * 0.32;
   return (
-    <div className="ps2-flow">
-      <svg viewBox={`-2 -6 ${W + 4} ${H + 12}`} role="img" aria-label={`Fiches reçues en ${month} : ${leaves.map((n) => `${n.label} ${n.value}`).join(', ')}`}
-        onMouseLeave={() => setHover(null)}>
+    <div className={`ps2-flow-stage${L.wide ? '' : ' is-compact'}`} style={{ height: L.height + 12 }} onMouseLeave={() => setHover(null)}>
+      <div className="ps2-flow-heads" aria-hidden="true">
+        {COLUMNS.map((c, i) => <span key={c} style={{ left: L.x.cols[i] }}>{c}</span>)}
+      </div>
+      <svg width={full} height={L.height} viewBox={`0 0 ${full} ${L.height}`} role="img" aria-label={label}>
         <defs>
-          <clipPath id="ps2-flow-reveal"><Motion.rect x="-2" y="-6" height={H + 12} initial={{ width: 0 }} animate={{ width: drawn ? W + 4 : 0 }} transition={{ duration: 1.3, ease: EASE }} /></clipPath>
-        </defs>
-        <g clipPath="url(#ps2-flow-reveal)">
-          {ribbons.map((r) => (
-            <path key={r.key} d={r.d} fill={r.color} opacity={dim(r) ? 0.08 : 0.28} style={{ transition: 'opacity .25s' }} />
+          {L.ribbons.map((r) => (
+            <linearGradient key={r.key} id={`${uid}-${safeId(r.key)}`} gradientUnits="userSpaceOnUse" x1={r.x0} x2={r.x1} y1="0" y2="0">
+              <stop offset="0" style={{ stopColor: byId.get(r.source).color }} />
+              <stop offset="1" style={{ stopColor: byId.get(r.target).color }} />
+            </linearGradient>
           ))}
-          <rect x={X[0]} y={root.y} width={NW} height={root.h} rx="3" fill="#121b35" />
-          {mid.map((m) => <rect key={m.key} x={X[1]} y={m.y} width={NW} height={Math.max(2, m.h)} rx="3" fill={m.color} opacity={hover && active !== m.key ? 0.35 : 1} />)}
-          {pos.map((n, i) => (
-            <g key={n.key} opacity={hover && hover !== n.key && hover !== groupOf(n.key) ? 0.35 : 1}>
-              <rect x={X[2]} y={n.y} width={NW} height={n.h} rx="2" fill={n.color} />
-              <path d={`M${X[2] + NW + 2},${n.y + n.h / 2} L${X[2] + NW + 8},${labelY[i]}`} stroke={n.color} strokeWidth="1" fill="none" />
-            </g>
+          <clipPath id={`${uid}-reveal`}>
+            <Motion.rect x="0" y="0" height={L.height} initial={{ width: 0 }} animate={{ width: drawn ? full : 0 }} transition={{ duration: 1.7, ease: EASE, delay: 0.15 }} />
+          </clipPath>
+        </defs>
+        <g clipPath={`url(#${uid}-reveal)`}>
+          {L.ribbons.map((r) => (
+            <path key={r.key} d={r.d} fill={`url(#${uid}-${safeId(r.key)})`}
+              opacity={!lit ? 0.3 : lit.links.has(r.key) ? 0.55 : 0.05} style={{ transition: 'opacity .3s' }} />
           ))}
         </g>
-      </svg>
-      {/* Étiquettes en HTML (lisibles, cliquables) posées sur le schéma */}
-      <button type="button" className="ps2-flow-label is-root" style={{ left: `${((NW + 8) / W) * 100}%`, top: '50%' }} onClick={(e) => open(e.currentTarget, <Detail kicker="Funnel Leads" title={`Fiches reçues en ${month}`} value={fr(data.total)}
-        rows={[['Données à un sales', fr(data.givenTotal)], ['Jamais données', fr(data.notGivenTotal)], ['dont « 1 à 2 / moins de 100 k€ » de Funnel Leads', fr(data.small)], ['… données quand même', fr(data.smallGiven)]]}
-        lines={['Mêmes filtres et mêmes bornes que Funnel Leads : fiches entrantes créées dans le mois, hors cold call et setters.']} />)}>
-        <b className="ps2-num">{fr(data.total)}</b><span>reçues</span>
-      </button>
-      {mid.map((m) => (
-        <button type="button" key={m.key} className="ps2-flow-label is-mid" style={{ left: `${((X[1] + NW + 8) / W) * 100}%`, top: `${((m.y + m.h / 2 + 6) / (H + 12)) * 100}%` }}
-          onMouseEnter={() => setHover(m.key)} onMouseLeave={() => setHover(null)}
-          onClick={(e) => openNode(e, m, 'Fiches reçues')}><b className="ps2-num">{fr(m.value)}</b><span>{m.label}</span></button>
-      ))}
-      {pos.map((n) => (
-        <button type="button" key={n.key} className="ps2-flow-label is-leaf" style={{ left: `${((X[2] + NW + 10) / W) * 100}%`, top: `${((labelY[pos.indexOf(n)] + 6) / (H + 12)) * 100}%` }}
-          onMouseEnter={() => setHover(n.key)} onMouseLeave={() => setHover(null)}
-          onClick={(e) => openNode(e, n, data.given.some((g) => g.key === n.key) ? 'Données à un sales' : 'Jamais données')}>
-          <i style={{ background: n.color }} /><b className="ps2-num">{fr(n.value)}</b><span>{n.label}</span>
-        </button>
-      ))}
-      {/* Téléphone : la même répartition en liste (le schéma n'y est pas lisible). */}
-      <div className="ps2-flow-list" role="list">
-        {[{ key: 'total', label: 'Reçues', value: data.total, color: '#121b35', strong: true },
-          { key: 'given', label: 'Données à un sales', value: data.givenTotal, color: '#1e3a7b', strong: true }, ...data.given,
-          { key: 'not', label: 'Jamais données', value: data.notGivenTotal, color: '#e6b45a', strong: true }, ...data.notGiven].map((n, i) => (
-          <div key={n.key} role="listitem" className={`ps2-flow-row${n.strong ? ' is-strong' : ''}`}>
-            <span>{n.label}</span><b className="ps2-num">{fr(n.value)}</b>
-            <span className="ps2-flow-bar"><Motion.i style={{ background: n.color }} initial={{ width: 0 }}
-              animate={{ width: drawn ? `${(n.value / data.total) * 100}%` : 0 }} transition={{ duration: 0.8, ease: EASE, delay: 0.1 + i * 0.04 }} /></span>
-          </div>
+        {L.leaves.map((l, i) => (
+          <Motion.rect key={l.id} x={L.x.leaf} y={l.y} width={BW} height={l.h} rx="2" fill={l.color}
+            style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+            initial={{ opacity: 0, scaleY: 0 }} animate={drawn ? { opacity: dim(l.id) ? 0.3 : 1, scaleY: 1 } : { opacity: 0, scaleY: 0 }}
+            transition={{ duration: 0.5, ease: EASE, delay: drawn && !hover ? delayOf(3) + i * 0.04 : 0 }} />
         ))}
-      </div>
+      </svg>
+
+      {L.nodes.filter((n) => n.col < 3).map((n) => (
+        <Motion.button type="button" key={n.id} className={`ps2-flow-block${n.twoLines ? '' : ' is-line'}${n.kind === 'root' ? ' is-src' : ''}`}
+          style={{ left: L.x.cols[n.col], top: n.y, width: L.blockW[n.col], height: n.h, background: n.color, color: LIGHT.has(n.color) ? '#121b35' : '#ffffff' }}
+          initial={{ opacity: 0, scaleY: 0.7 }} animate={drawn ? { opacity: dim(n.id) ? 0.4 : 1, scaleY: 1 } : {}}
+          transition={{ duration: 0.6, ease: EASE, delay: drawn && !hover ? delayOf(n.col) : 0 }}
+          onMouseEnter={() => setHover(n.id)} onFocus={() => setHover(n.id)} onClick={(e) => openNode(e, n.id)}>
+          <b className="ps2-num"><CountUp value={n.value} format={(v) => fr(Math.round(v))} delay={Math.round(delayOf(n.col) * 1000)} /></b>
+          <span className="ps2-flow-block-label">{n.label}</span>
+        </Motion.button>
+      ))}
+      {L.leaves.map((l, i) => (
+        <Motion.button type="button" key={l.id} className="ps2-flow-leaf" style={{ left: L.x.label, top: l.cy, width: L.x.lane }}
+          initial={{ opacity: 0, x: -10 }} animate={drawn ? { opacity: dim(l.id) ? 0.4 : 1, x: 0 } : {}}
+          transition={{ duration: 0.5, ease: EASE, delay: drawn && !hover ? delayOf(3) + 0.1 + i * 0.04 : 0 }}
+          onMouseEnter={() => setHover(l.id)} onFocus={() => setHover(l.id)} onClick={(e) => openNode(e, l.id)}>
+          <b className="ps2-num">{fr(l.value)}</b>
+          <span className="ps2-flow-leaf-text">{l.label}</span>
+          <span className="ps2-flow-leaf-pct ps2-num">{pct(l.value)}</span>
+        </Motion.button>
+      ))}
+    </div>
+  );
+}
+
+// Conteneur étroit (téléphone) : la même répartition en liste, colonne par colonne.
+function FlowList({ graph }) {
+  const drawn = useDrawn();
+  const rows = [];
+  COLUMNS.forEach((title, col) => {
+    const nodes = graph.nodes.filter((n) => n.col === col);
+    if (!nodes.length) return;
+    rows.push({ head: true, key: `h-${col}`, label: title });
+    nodes.forEach((n) => rows.push({ key: n.id, label: n.id === 'root' ? 'Fiches reçues' : nodeText(n), value: n.value, color: n.color }));
+  });
+  return (
+    <div className="ps2-flow-list" role="list">
+      {rows.map((n, i) => (n.head ? <div key={n.key} className="ps2-flow-list-head">{n.label}</div> : (
+        <div key={n.key} role="listitem" className="ps2-flow-row">
+          <span>{n.label}</span><b className="ps2-num">{fr(n.value)}</b>
+          <span className="ps2-flow-bar"><Motion.i style={{ background: n.color }} initial={{ width: 0 }}
+            animate={{ width: drawn ? `${(n.value / graph.total) * 100}%` : 0 }} transition={{ duration: 0.8, ease: EASE, delay: 0.1 + i * 0.03 }} /></span>
+        </div>
+      )))}
     </div>
   );
 }

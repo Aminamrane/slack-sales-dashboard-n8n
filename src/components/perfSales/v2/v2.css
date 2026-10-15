@@ -1022,26 +1022,56 @@ button.ps2-tile { font: inherit; color: var(--ink); width: 100%; min-height: 168
 .ps2-stage { display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; }
 .ps2-stage-bridge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 
-/* ── Pont Funnel Leads → colonnes de l'onglet Canaux (15/10/2026) ───────────────────────────────────────────── */
-.ps2-flow { position: relative; margin-top: 18px; }
-.ps2-flow svg { display: block; width: 100%; height: auto; overflow: visible; }
-.ps2-flow-label { position: absolute; transform: translateY(-50%); display: inline-flex; align-items: center; gap: 7px; border: 0; cursor: pointer;
-  background: color-mix(in srgb, var(--card) 88%, transparent); border-radius: 8px; padding: 3px 8px; font: inherit; font-size: 12.5px; color: var(--soft);
-  white-space: nowrap; max-width: 34%; overflow: hidden; text-overflow: ellipsis; transition: background .2s, color .2s; }
-.ps2-flow-label:hover, .ps2-flow-label:focus-visible { background: var(--blue-bg); color: var(--ink); outline: none; }
-.ps2-flow-label b { color: var(--ink); font-size: 14px; font-weight: 650; }
-.ps2-flow-label i { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
-.ps2-flow-label.is-root { flex-direction: column; align-items: flex-start; gap: 0; padding: 6px 10px; }
-.ps2-flow-label.is-root b { font-size: 26px; letter-spacing: -.02em; }
-.ps2-flow-label.is-mid b { font-size: 16px; }
-@media (max-width: 760px) { .ps2-flow-label { font-size: 11px; max-width: 40%; } .ps2-flow-label span { display: none; } }
-.ps2-flow-list { display: none; flex-direction: column; gap: 8px; }
+/* ── Pont Funnel Leads → colonnes de l'onglet Canaux (15/10/2026) : trois colonnes, chaque texte dans son espace ───── */
+.ps2 { --flow-src: #121b35; } .ps2.is-dark { --flow-src: #3d4f86; }
+.ps2-flowmap { position: relative; margin-top: 14px; }
+.ps2-flow-stage { position: relative; }
+.ps2-flow-stage svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.ps2-flow-heads span { position: absolute; top: 0; font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.ps2-flow-block { position: absolute; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 2px; padding: 0 16px;
+  border: 0; border-radius: 10px; color: #fff; font: inherit; text-align: left; cursor: pointer; transform-origin: center;
+  box-shadow: 0 1px 2px rgba(18, 27, 53, .08); transition: box-shadow .25s, filter .25s; }
+.ps2-flow-block:hover, .ps2-flow-block:focus-visible { box-shadow: 0 6px 18px rgba(18, 27, 53, .18); filter: brightness(1.06); outline: none; }
+.ps2-flow-block b { font-size: 22px; font-weight: 650; letter-spacing: -.02em; line-height: 1.1; }
+.ps2-flow-block-label { font-size: 12px; opacity: .85; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.ps2-flow-block.is-line { flex-direction: row; align-items: center; justify-content: flex-start; gap: 7px; }
+.ps2-flow-block.is-line b { font-size: 14px; }
+.ps2-flow-list-head { margin-top: 6px; font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.ps2-flow-block.is-src b { font-size: 32px; }
+.ps2-flow-leaf { position: absolute; transform: translateY(-50%); display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: baseline; gap: 10px;
+  border: 0; background: none; padding: 2px 8px 2px 6px; margin-left: -6px; border-radius: 7px; font: inherit; font-size: 12.5px; line-height: 16px;
+  color: var(--soft); text-align: left; cursor: pointer; transition: background .2s, color .2s; }
+.ps2-flow-leaf:hover, .ps2-flow-leaf:focus-visible { background: var(--blue-bg); color: var(--ink); outline: none; }
+.ps2-flow-leaf b { color: var(--ink); font-size: 14px; font-weight: 650; text-align: right; }
+.ps2-flow-leaf-text { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ps2-flow-leaf-text em { font-style: normal; color: var(--muted); margin-left: 8px; }
+.ps2-flow-leaf-pct { color: var(--muted); font-size: 11.5px; }
+.ps2-flow-stage.is-compact .ps2-flow-leaf { grid-template-columns: 34px minmax(0, 1fr) auto; gap: 8px; }
+.ps2-flow-stage.is-compact .ps2-flow-leaf-text em { display: none; }
+.ps2-flow-stage.is-compact .ps2-flow-block b { font-size: 19px; } .ps2-flow-stage.is-compact .ps2-flow-block.is-src b { font-size: 26px; }
+.ps2-flow-stage.is-compact .ps2-flow-block { padding: 0 12px; }
+.ps2-flow-list { display: flex; flex-direction: column; gap: 8px; }
 .ps2-flow-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; font-size: 12.5px; color: var(--soft); }
 .ps2-flow-row b { color: var(--ink); font-weight: 650; }
 .ps2-flow-row.is-strong span:first-child { color: var(--ink); font-weight: 600; }
 .ps2-flow-bar { grid-column: 1 / -1; height: 5px; border-radius: 3px; background: var(--line-2); overflow: hidden; }
 .ps2-flow-bar i { display: block; height: 100%; }
-@media (max-width: 760px) {
-  .ps2-flow svg, .ps2-flow-label { display: none; }
-  .ps2-flow-list { display: flex; }
-}
+
+/* ── Éligibles aux RDV setters (15/10/2026) : une tuile par sales, son meilleur mois en carrés ────────────────── */
+.ps2-elig-count { display: inline-flex; align-items: baseline; gap: 6px; border: 0; background: none; cursor: pointer; padding: 2px 6px; border-radius: 8px; color: var(--soft); }
+.ps2-elig-count:hover { background: var(--blue-bg); }
+.ps2-elig-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 8px; margin-top: 14px; }
+.ps2-elig { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 10px; row-gap: 5px; align-items: center;
+  padding: 9px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); font: inherit; text-align: left; cursor: pointer;
+  transition: border-color .2s, box-shadow .2s, background .2s; }
+.ps2-elig:hover, .ps2-elig:focus-visible { border-color: var(--blue); box-shadow: 0 4px 14px rgba(18, 27, 53, .08); outline: none; }
+.ps2-elig > .ps2-avatar { grid-row: 1 / span 2; }
+.ps2-elig-name { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ps2-elig-pips { grid-column: 2; display: inline-flex; gap: 4px; }
+.ps2-elig-pips i { width: 12px; height: 12px; border-radius: 3px; background: var(--line-2); box-shadow: inset 0 0 0 1px var(--line); }
+.ps2-elig-pips i.is-on { background: #9fb3df; box-shadow: none; }
+.ps2-elig.is-in .ps2-elig-pips i.is-on { background: var(--good-strong); }
+.ps2-elig-state { grid-column: 3; grid-row: 1 / span 2; font-size: 11.5px; font-weight: 650; padding: 3px 8px; border-radius: 999px; background: var(--good-bg); color: var(--good); }
+.ps2-elig-state.is-out { background: var(--grey-bg); color: var(--soft); }
+.ps2-elig.is-blocked .ps2-elig-state { background: var(--warn-bg); color: var(--warn); }
+.ps2-elig:not(.is-in) .ps2-elig-name { color: var(--soft); }
