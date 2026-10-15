@@ -48,16 +48,18 @@ export function setterAction({ lead, outcome, slot, note = '', email = '', callb
   };
 }
 
-// R1 de l'agenda unique (06/10/2026) : pas de commercial dans la requête, le serveur l'attribue.
-export function singleBookingAction({ lead, slot, note = '', email = '', prospect = false }) {
+// Agenda unique (06/10/2026) : pas de commercial dans la requête, le serveur l'attribue. R1, ou R2 d'une Seconde
+// chance (15/10/2026 : « les R2 de seconde chance, c'est la même chose »).
+export function singleBookingAction({ lead, slot, note = '', email = '', prospect = false, kind = 'r1' }) {
   if (!slot?.date || !slot.time) throw new Error('Choisissez une date et une heure.');
   if (!validParisAppointment(`${slot.date}T${slot.time}`)) throw new Error('Choisissez une date et une heure valides en heure de Paris.');
   const mail = email.trim();
+  if (kind === 'r2' && !mail) throw new Error('L’email du prospect est obligatoire pour le R2.');
   if (mail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) throw new Error('Vérifiez l’adresse email du prospect.');
-  const body = { r1_date: `${slot.date}T${slot.time}`, notes: note.trim() || undefined };
+  const body = { [`${kind}_date`]: `${slot.date}T${slot.time}`, notes: note.trim() || undefined };
   if (prospect) return { single: true, body, email: mail || undefined };
   return {
-    single: true, path: `/api/v1/tracking/setter/leads/${lead.id}/book-r1`, body,
+    single: true, path: `/api/v1/tracking/setter/leads/${lead.id}/book-${kind}`, body,
     email: mail && mail.toLowerCase() !== (lead.email || '').trim().toLowerCase() ? mail : undefined,
   };
 }

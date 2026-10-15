@@ -1,7 +1,8 @@
 // « Seconde chance » (dev 06/10/2026) : les leads que les commerciaux n'ont pas concrétisés (R1 annulé, R2
 // annulé ou « pas intéressé »). Le setter lit tout le parcours (notes, appels, RDV, e-mails), reprend le lead
-// (réservé 3 jours, numéro visible ensuite) et repose un rendez-vous : R1 par l'agenda unique, R2 avec son
-// commercial. Les données viennent de /tracking/setter/second-chance.
+// (réservé 3 jours, numéro visible ensuite) et repose un rendez-vous, R1 comme R2, par l'agenda unique : le serveur
+// choisit un sales éprouvé, jamais le propriétaire historique (dev 15/10/2026). Les données viennent de
+// /tracking/setter/second-chance.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Ban, CalendarCheck2, CalendarPlus, CalendarX2, CheckCircle2, Clock3, Mail, MessageSquare, Phone, PhoneCall,
@@ -341,7 +342,7 @@ export default function SecondChance({ C, darkMode = false, teamSales = [], asSe
 
       {rebook && (
         <SetterJourneyDialog key={`${rebook.id}-${rebook.kind}`} lead={rebook} teamSales={teamSales} dark={darkMode} initialOutcome={rebook.kind}
-          lockSales={rebook.kind === 'r2' ? rebook.assigned_to : null}
+          autoAssign
           onClose={() => setRebook(null)}
           onSaved={async (message) => { onToast?.(message); setRebook(null); setSelectedId(null); await load(); }} />
       )}

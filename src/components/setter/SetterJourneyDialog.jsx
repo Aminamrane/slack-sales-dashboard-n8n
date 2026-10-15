@@ -21,8 +21,9 @@ const dateLabel = (day, opts = {}) => new Date(`${day}T12:00:00Z`).toLocaleDateS
 // Agenda unique (dev 06/10/2026) : pour un R1, le setter ne choisit plus le commercial. Il voit les créneaux où au
 // moins un sales est libre (sans nom) et le serveur attribue le RDV (préférence de secteur, puis équité).
 // `initialOutcome` : ouverture directe sur « Placer un R1 / R2 » (reprise d'un lead de Seconde chance) ;
-// `lockSales` : un R2 repris se repose avec son commercial, seul agenda proposé.
-export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onSaved, dark = false, browseOnly = false, asSetter = null, prospect = null, onBook = null, initialOutcome = null, lockSales = null }) {
+// `lockSales` : un R2 se repose avec ce commercial, seul agenda proposé.
+// `autoAssign` : R2 d'une Seconde chance par l'agenda unique, comme le R1 (dev 15/10/2026).
+export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onSaved, dark = false, browseOnly = false, asSetter = null, prospect = null, onBook = null, initialOutcome = null, lockSales = null, autoAssign = false }) {
   const [outcome, setOutcome] = useState(initialOutcome || (browseOnly || onBook ? 'r1' : ''));
   const [slot, setSlot] = useState(null), [note, setNote] = useState(''), [email, setEmail] = useState(lead?.email || '');
   const [callback, setCallback] = useState(''), [targetCalendar, setTargetCalendar] = useState('sales');
@@ -35,7 +36,7 @@ export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onS
   const submitting = useRef(false), ref = useRef(null);
   useDialogFocus(ref, onClose, busy);
   const booking = outcome === 'r1' || outcome === 'r2';
-  const single = outcome === 'r1';
+  const single = outcome === 'r1' || (autoAssign && outcome === 'r2');
   const query = () => {
     const params = new URLSearchParams({ kind: outcome });
     if (single && onBook && prospect?.itemId) return `/api/v1/prospection/items/${prospect.itemId}/agenda`;
@@ -69,12 +70,12 @@ export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onS
     submitting.current = true; setBusy(true); setError('');
     try {
       if (single && bookingMode === 'available') {
-        const action = singleBookingAction({ lead: lead || {}, slot: selectedSlot, note, email, prospect: !!onBook });
+        const action = singleBookingAction({ lead: lead || {}, slot: selectedSlot, note, email, prospect: !!onBook, kind: outcome });
         if (onBook) await onBook(action);
         else {
           if (action.email) await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { email: action.email });
           const booked = await apiClient.post(action.path, action.body);
-          onSaved?.(`R1 placé avec ${booked?.sales_full_name || booked?.sales_email || 'un commercial'}.`);
+          onSaved?.(`${outcome.toUpperCase()} placé avec ${booked?.sales_full_name || booked?.sales_email || 'un commercial'}.`);
           onClose();
           return;
         }

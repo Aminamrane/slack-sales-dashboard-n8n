@@ -78,3 +78,11 @@ test('R1 de l’agenda unique : aucun commercial dans la requête, email changé
   assert.throws(() => singleBookingAction({ lead: { id: 1 }, slot: null }), /date et une heure/);
   assert.throws(() => singleBookingAction({ lead: { id: 1 }, slot: { date: '2026-10-08', time: '10:30' }, email: 'pas-un-email' }), /email/);
 });
+
+test('R2 d’une Seconde chance par l’agenda unique : réservation book-r2, email obligatoire', () => {
+  const action = singleBookingAction({ lead: { id: 42, email: 'a@b.fr' }, slot: { date: '2026-10-20', time: '14:00' }, email: 'a@b.fr', kind: 'r2' });
+  assert.equal(action.path, '/api/v1/tracking/setter/leads/42/book-r2');
+  assert.deepEqual(action.body, { r2_date: '2026-10-20T14:00', notes: undefined });
+  assert.throws(() => singleBookingAction({ lead: { id: 42 }, slot: { date: '2026-10-20', time: '14:00' }, kind: 'r2' }), /obligatoire pour le R2/);
+  assert.equal(singleBookingAction({ lead: { id: 42 }, slot: { date: '2026-10-20', time: '14:00' } }).path, '/api/v1/tracking/setter/leads/42/book-r1');
+});
