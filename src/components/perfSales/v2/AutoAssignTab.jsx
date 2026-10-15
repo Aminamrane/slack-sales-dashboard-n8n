@@ -258,9 +258,16 @@ function SetterEngine({ d, avatarFor }) {
   const maxTotal = Math.max(1, ...d.people.map((p) => p.total));
   const maxSetter = Math.max(1, ...d.setters.map((s) => s.total));
   const presence = t.held + t.no_show ? (t.held / (t.held + t.no_show)) * 100 : null;
-  if (!t.total) return <div className="ps2-empty">Aucun RDV setter attribué sur la période</div>;
+  const elig = new Map((d.eligibility?.people || []).map((p) => [p.name, p]));
+  if (!t.total) return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {d.eligibility && <Eligibility e={d.eligibility} avatarFor={avatarFor} />}
+      <div className="ps2-empty">Aucun RDV setter attribué sur la période</div>
+    </div>
+  );
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {d.eligibility && <Eligibility e={d.eligibility} avatarFor={avatarFor} />}
       <div className="ps2-grid">
         <Reveal as="section" className="ps2-card ps2-span-5" aria-labelledby="ps2-auto-why">
           <Motion.div className="ps2-card-head" variants={ITEM}><h2 id="ps2-auto-why">RDV setters attribués</h2><b className="ps2-auto-total ps2-num"><CountUp value={t.total} /></b></Motion.div>
@@ -305,7 +312,8 @@ function SetterEngine({ d, avatarFor }) {
             <tbody>
               {d.people.map((p, i) => (
                 <Motion.tr key={p.name} initial={{ opacity: 0, y: 6 }} animate={on ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.4, ease: EASE, delay: 0.04 + i * 0.03 }}>
-                  <td style={{ textAlign: 'left' }}><span className="ps2-wb-name"><Face name={p.name} url={avatarFor?.(p.name)} /><span>{p.name}</span></span></td>
+                  <td style={{ textAlign: 'left' }}><span className="ps2-wb-name"><Face name={p.name} url={avatarFor?.(p.name)} /><span>{p.name}</span>
+                    {elig.get(p.name) && !elig.get(p.name).eligible && <span className="ps2-tag">non éligible</span>}</span></td>
                   <td style={{ textAlign: 'left' }}><Stack parts={REASONS.map(([k, l, c]) => ({ key: k, label: l, color: c, value: p[k] }))} width={(p.total / maxTotal) * 200} /></td>
                   <td className="is-key"><b>{fr(p.total)}</b></td>
                   <td style={{ textAlign: 'left' }}><Stack parts={STATES.map(([k, l, c]) => ({ key: k, label: l, color: c, value: p[k] }))} width={160} /></td>
@@ -317,6 +325,57 @@ function SetterEngine({ d, avatarFor }) {
         </div>
       </Reveal>
     </div>
+  );
+}
+
+// Éligibles aux RDV setters (dev 15/10/2026 : « au moins 5 ventes sur un mois, peu importe le mois » ; « mettre à jour la
+// page Perf Sales avec les sales qui sont éligibles, automatiquement ») : la règle du moteur, lue par le serveur.
+const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const monthText = (ym) => (ym ? `${MONTHS[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}` : null);
+
+function Eligibility({ e, avatarFor }) {
+  const on = useRevealed();
+  const rule = (
+    <Detail kicker="RDV setters" title="Qui peut en recevoir" lines={[
+      `Au moins un mois calendaire avec ${e.min} ventes déclarées, n’importe quel mois (mois de la déclaration), recalculé à chaque RDV.`,
+      'Depuis le 15 octobre : un lead déjà suivi reste à son sales ; une seconde chance passe par l’auto-affectation, jamais chez son propriétaire historique.',
+      'Un agenda non synchronisé empêche de recevoir, même éligible.']} />
+  );
+  return (
+    <Reveal as="section" className="ps2-card" aria-labelledby="ps2-auto-elig">
+      <Motion.div className="ps2-card-head" variants={ITEM}>
+        <h2 id="ps2-auto-elig">Éligibles aux RDV setters</h2>
+        <Info className="ps2-elig-count" label="Règle d’éligibilité" detail={rule}>
+          <b className="ps2-auto-total ps2-num"><CountUp value={e.eligible} /></b><span className="ps2-num">/ {fr(e.people.length)}</span>
+        </Info>
+      </Motion.div>
+      <div className="ps2-elig-grid">
+        {e.people.map((p, i) => {
+          const blocked = p.eligible && !p.calendar;
+          const detail = (
+            <Detail kicker="RDV setters" title={p.name} value={p.eligible ? (blocked ? 'Éligible, agenda à synchroniser' : 'Éligible') : 'Pas encore'}
+              rows={[['Meilleur mois', p.best_month ? `${monthText(p.best_month)} · ${fr(p.best)} vente${p.best > 1 ? 's' : ''}` : 'aucune vente'],
+                ['Mois à ' + e.min + ' ventes ou plus', fr(p.proven_months.length)],
+                ...(p.proven_months.length ? [['Dernier', monthText(p.proven_months[p.proven_months.length - 1])]] : []),
+                ['Ventes déclarées au total', fr(p.total)], ['Agenda synchronisé', p.calendar ? 'oui' : 'non']]} />
+          );
+          return (
+            <Info key={p.name} as="motion" className={`ps2-elig${p.eligible ? ' is-in' : ''}${blocked ? ' is-blocked' : ''}`} label={`${p.name}, détail`} detail={detail}
+              initial={{ opacity: 0, y: 8 }} animate={on ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.45, ease: EASE, delay: 0.05 + i * 0.035 }}>
+              <Face name={p.name} url={avatarFor?.(p.name)} />
+              <span className="ps2-elig-name">{p.name}</span>
+              <span className="ps2-elig-pips" aria-hidden="true">
+                {Array.from({ length: e.min }, (_, k) => (
+                  <Motion.i key={k} initial={{ scale: 0.4, opacity: 0 }} animate={on ? { scale: 1, opacity: 1 } : {}}
+                    transition={{ duration: 0.35, ease: EASE, delay: 0.25 + i * 0.035 + k * 0.05 }} className={k < Math.min(p.best, e.min) ? 'is-on' : ''} />
+                ))}
+              </span>
+              <span className={`ps2-elig-state ps2-num${p.eligible ? '' : ' is-out'}`}>{p.eligible ? (blocked ? 'sans agenda' : 'éligible') : `${fr(p.best)} / ${e.min}`}</span>
+            </Info>
+          );
+        })}
+      </div>
+    </Reveal>
   );
 }
 

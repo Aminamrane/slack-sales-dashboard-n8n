@@ -1056,3 +1056,22 @@ button.ps2-tile { font: inherit; color: var(--ink); width: 100%; min-height: 168
 .ps2-flow-row.is-strong span:first-child { color: var(--ink); font-weight: 600; }
 .ps2-flow-bar { grid-column: 1 / -1; height: 5px; border-radius: 3px; background: var(--line-2); overflow: hidden; }
 .ps2-flow-bar i { display: block; height: 100%; }
+
+/* ── Éligibles aux RDV setters (15/10/2026) : une tuile par sales, son meilleur mois en carrés ────────────────── */
+.ps2-elig-count { display: inline-flex; align-items: baseline; gap: 6px; border: 0; background: none; cursor: pointer; padding: 2px 6px; border-radius: 8px; color: var(--soft); }
+.ps2-elig-count:hover { background: var(--blue-bg); }
+.ps2-elig-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 8px; margin-top: 14px; }
+.ps2-elig { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 10px; row-gap: 5px; align-items: center;
+  padding: 9px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); font: inherit; text-align: left; cursor: pointer;
+  transition: border-color .2s, box-shadow .2s, background .2s; }
+.ps2-elig:hover, .ps2-elig:focus-visible { border-color: var(--blue); box-shadow: 0 4px 14px rgba(18, 27, 53, .08); outline: none; }
+.ps2-elig > .ps2-avatar { grid-row: 1 / span 2; }
+.ps2-elig-name { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ps2-elig-pips { grid-column: 2; display: inline-flex; gap: 4px; }
+.ps2-elig-pips i { width: 12px; height: 12px; border-radius: 3px; background: var(--line-2); box-shadow: inset 0 0 0 1px var(--line); }
+.ps2-elig-pips i.is-on { background: #9fb3df; box-shadow: none; }
+.ps2-elig.is-in .ps2-elig-pips i.is-on { background: var(--good-strong); }
+.ps2-elig-state { grid-column: 3; grid-row: 1 / span 2; font-size: 11.5px; font-weight: 650; padding: 3px 8px; border-radius: 999px; background: var(--good-bg); color: var(--good); }
+.ps2-elig-state.is-out { background: var(--grey-bg); color: var(--soft); }
+.ps2-elig.is-blocked .ps2-elig-state { background: var(--warn-bg); color: var(--warn); }
+.ps2-elig:not(.is-in) .ps2-elig-name { color: var(--soft); }
