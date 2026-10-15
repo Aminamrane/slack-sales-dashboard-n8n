@@ -15,6 +15,7 @@ import ChannelTable from './ChannelTable';
 import ChannelFilter from './ChannelFilter';
 import SalesKpis from './SalesKpis';
 import ShowsByChannel from './ShowsByChannel';
+import AdsFlow from './AdsFlow';
 import { FUNNEL, SOURCES, buildModel, byPersonForAd, dm, euro, fr, initials, scopeFigures, signedNum } from './model';
 import TabIcon from './TabIcons';
 import './v2.css';
@@ -551,11 +552,19 @@ function Channels({ model, onOpen }) {
       </Motion.tr>
     );
   };
+  const MONTH = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'][Number(String(model.period?.start || '').slice(5, 7)) - 1] || 'ce mois';
   return (
     <div className="ps2-grid">
+      {model.pilot?.intake?.flow && (
+        <Reveal as="section" className="ps2-card ps2-span-12" aria-labelledby="ps2-flow-title">
+          <Motion.div className="ps2-card-head" variants={ITEM}><h2 id="ps2-flow-title">Fiches reçues en {MONTH}</h2>
+            <span className="ps2-chip-soft">de Funnel Leads aux canaux</span></Motion.div>
+          <Motion.div variants={ITEM}><AdsFlow intake={model.pilot.intake} month={MONTH} /></Motion.div>
+        </Reveal>
+      )}
       <Reveal as="section" className="ps2-card ps2-span-4" aria-labelledby="ps2-mix-title">
         <Motion.h2 id="ps2-mix-title" variants={ITEM}>D’où viennent les leads</Motion.h2>
-        <Motion.div variants={ITEM} style={{ marginTop: 16 }}><Donut counts={received} total={model.value.leads} label="leads reçus" onPick={(k) => onOpen('leads', { source: k })} /></Motion.div>
+        <Motion.div variants={ITEM} style={{ marginTop: 16 }}><Donut counts={received} total={model.value.leads} label="chez les sales" onPick={(k) => onOpen('leads', { source: k })} /></Motion.div>
         <Motion.ul variants={ITEM} style={{ listStyle: 'none', margin: '18px 0 0', padding: 0, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px 14px', fontSize: 12.5 }}>
           {SOURCES.filter((s) => received[s.key]).map((s) => (
             <li key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span className="ps2-swatch" style={{ background: s.color }} />{s.label}<b className="ps2-num" style={{ marginLeft: 'auto' }}>{fr(received[s.key])}</b></li>
