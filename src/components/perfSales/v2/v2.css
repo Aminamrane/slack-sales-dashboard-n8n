@@ -1077,7 +1077,8 @@ button.ps2-tile { font: inherit; color: var(--ink); width: 100%; min-height: 168
 .ps2-elig:not(.is-in) .ps2-elig-name { color: var(--soft); }
 
 /* Graphique des ventes cumulées (15/10/2026) : la zone de tracé occupe la hauteur laissée par le simulateur, sans
-   déformer (la hauteur de la viewBox suit, Studio.usePlotHeight) ; jamais moins que le format 960 × 322. */
+   déformer (la hauteur de la viewBox suit, Studio.usePlotHeight) ; jamais moins que le format 960 × 322, hauteur minimale
+   posée en pixels par le composant (pas d'aspect-ratio : Safari en déduisait la largeur et le graphique débordait). */
 .ps2-studio-chart { display: flex; flex-direction: column; min-width: 0; }
-.ps2-studio-plot { position: relative; flex: 1 1 auto; aspect-ratio: 960 / 322; }
+.ps2-studio-plot { position: relative; flex: 1 1 auto; width: 100%; min-width: 0; min-height: 180px; overflow: hidden; }
 .ps2-studio-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; }

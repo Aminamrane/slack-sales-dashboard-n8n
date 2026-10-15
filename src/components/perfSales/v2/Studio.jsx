@@ -87,20 +87,26 @@ function spread(items, gap, lo, hi) {
 // d'espace blanc en bas ») : la largeur reste à 960 unités (mêmes textes, mêmes traits), la hauteur suit la place que
 // laisse le simulateur à droite ; jamais moins que l'ancien format 960 × 322.
 const PLOT_W = 960, PLOT_MIN_H = 322, PLOT_MAX_H = 620;   // au-delà, le tracé reste calé en haut
+// La largeur du bloc vient TOUJOURS de sa colonne ; seule sa hauteur s'étire. La hauteur minimale (format 960 × 322)
+// est posée en pixels depuis la largeur mesurée : pas d'aspect-ratio CSS, qui laisse certains navigateurs (Safari)
+// recalculer la largeur à partir de la hauteur étirée et faire déborder le graphique sur le simulateur.
 function usePlotHeight() {
   const ref = useRef(null);
-  const [height, setHeight] = useState(PLOT_MIN_H);
+  const [size, setSize] = useState({ units: PLOT_MIN_H, minPx: null });
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || typeof ResizeObserver === 'undefined') return undefined;
     const ro = new ResizeObserver(([entry]) => {
       const { width, height: h } = entry.contentRect;
-      if (width > 0) setHeight(Math.min(PLOT_MAX_H, Math.max(PLOT_MIN_H, Math.round((PLOT_W * h) / width))));
+      if (width <= 0) return;
+      const units = Math.min(PLOT_MAX_H, Math.max(PLOT_MIN_H, Math.round((PLOT_W * h) / width)));
+      const minPx = Math.round((width * PLOT_MIN_H) / PLOT_W);
+      setSize((prev) => (prev.units === units && prev.minPx === minPx ? prev : { units, minPx }));
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  return [ref, height];
+  return [ref, size.units, size.minPx];
 }
 
 export default function Studio({ model }) {
@@ -120,7 +126,7 @@ export default function Studio({ model }) {
   const [hoverDay, setHoverDay] = useState(null);
   // Les étiquettes n'apparaissent avec retard qu'au premier dessin ; ensuite elles suivent les curseurs sans délai.
   const [settled, setSettled] = useState(false);
-  const [plotRef, plotH] = usePlotHeight();
+  const [plotRef, plotH, plotMinPx] = usePlotHeight();
   useEffect(() => {
     if (!drawn || settled) return undefined;
     const t = setTimeout(() => setSettled(true), 2000);
@@ -179,7 +185,7 @@ export default function Studio({ model }) {
   return (
     <div className="ps2-studio">
       <div className="ps2-studio-chart">
-        <div className="ps2-studio-plot" ref={plotRef}>
+        <div className="ps2-studio-plot" ref={plotRef} style={plotMinPx ? { minHeight: plotMinPx } : undefined}>
         <svg viewBox={`0 0 ${PLOT_W} ${plotH}`} preserveAspectRatio="xMidYMin meet" role="img" aria-label={`Ventes cumulées : ${sold} au ${dm(pilot.series[li].date)} ; cadence actuelle ${cadence}${jevValue != null ? `, Jev ${jevValue}` : ''}${obj ? `, objectif ${obj}` : ''}`}
           onMouseLeave={() => setHoverDay(null)}>
           <defs>
