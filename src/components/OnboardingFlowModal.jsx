@@ -12,6 +12,7 @@ import { AlertCabinetBlock } from "./CabinetAlertBlock";
 import { parisInstantLabel } from "../utils/parisDates";
 import { OnboardingRatingForm } from "./BoardIntegrationSheet";
 import { METEO_MEANING, MeteoIcon, meteoStyle } from "./meteo.jsx";
+import { weatherPresentation } from "../utils/weatherCase";
 import BoardOnboardingDateCorrection from "./BoardOnboardingDateCorrection";
 import { onboardingDateOf } from "../utils/boardIntegration";
 
@@ -224,10 +225,12 @@ function MeteoStep({ brief, num, onRated, rated }) {
   }
   if (done) {
     const w = rated?.onboarding || sheet.onboarding;
-    const st = w?.weather ? meteoStyle(w.weather) : null;
+    const currentWeather = w?.weather_context?.version === 2;
+    const st = currentWeather ? weatherPresentation(w?.weather, w.weather_context) : meteoStyle(w?.weather);
+    const label = currentWeather ? st?.label : w?.weather ? `${w.weather}/5, ${METEO_MEANING[w.weather]?.txt || ""}` : null;
     return <Card title="Météo d'onboarding"><div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: TEXT, lineHeight: 1.5 }}>
       {st && <span style={{ width: 34, height: 34, borderRadius: 10, background: st.bg, display: "grid", placeItems: "center", flexShrink: 0 }}><MeteoIcon score={w.weather} size={20} color={st.color} /></span>}
-      <span>Fiche finalisée : {w?.weather ? `${w.weather}/5, ${METEO_MEANING[w.weather]?.txt || ""}` : "note enregistrée"}{w?.author_name ? ` par ${w.author_name}` : ""}{w?.completed_at ? ` le ${fmtDate(w.completed_at)}` : ""}.</span>
+      <span>Fiche finalisée : {label || "note enregistrée"}{w?.author_name ? ` par ${w.author_name}` : ""}{w?.completed_at ? ` le ${fmtDate(w.completed_at)}` : ""}.</span>
     </div></Card>;
   }
   return (
