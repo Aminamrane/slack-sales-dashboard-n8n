@@ -22,6 +22,16 @@ export default function ProspectLists({ C, darkMode, onToast, openListId, onOpen
   }, []);
   useEffect(() => { if (!openListId) load(); }, [openListId, load]);
 
+  // Un manager voit aussi les listes de l'équipe (dev 15/10/2026) : les siennes d'abord, puis celles des autres
+  // regroupées par propriétaire, pour qu'il ne les traite pas en doublon. Sans `is_owner` (ancien serveur), tout est à soi.
+  const mine = lists?.filter((list) => list.is_owner !== false) || [];
+  const others = lists?.filter((list) => list.is_owner === false) || [];
+  const owners = Object.values(others.reduce((acc, list) => {
+    const key = list.owner_email || '?';
+    (acc[key] ||= { email: key, name: list.owner_name || list.owner_email || 'Propriétaire inconnu', role: list.owner_role, lists: [] }).lists.push(list);
+    return acc;
+  }, {}));
+
   if (openListId) {
     return <ListDetail C={C} darkMode={darkMode} listId={openListId} onBack={() => onOpenList(null)} onToast={onToast} onOpenLeads={onOpenLeads} teamSales={teamSales} canBook={canBook} />;
   }
@@ -35,26 +45,78 @@ export default function ProspectLists({ C, darkMode, onToast, openListId, onOpen
           Aucune liste pour l'instant. Créez-en une depuis « Trouver des contacts ».
         </Card>
       )}
-      {lists?.map((list) => (
-        <Card key={list.id} C={C} darkMode={darkMode} style={{ padding: '16px 20px', cursor: 'pointer' }}>
-          <div role="button" tabIndex={0} onClick={() => onOpenList(list.id)} onKeyDown={(e) => { if (e.key === 'Enter') onOpenList(list.id); }}
-            style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
-            <div style={{ flex: '1 1 260px', minWidth: 0 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{list.name}</div>
-              <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Créée le {fmtDay(list.created_at)} · {fmtInt(list.total)} entreprise{list.total > 1 ? 's' : ''}</div>
-              {list.chips?.length > 0 && (
-                <div style={{ fontSize: 12, color: C.muted, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-                  title={list.chips.map((chip) => chip.label).join(' · ')}>
-                  {list.chips.map((chip) => chip.label).join(' · ')}
-                </div>
-              )}
+      {others.length === 0 && mine.map((list) => <ListCard key={list.id} C={C} darkMode={darkMode} list={list} onOpen={onOpenList} />)}
+      {others.length > 0 && (
+        <>
+          <SectionHead C={C} title="Mes listes" count={mine.length} />
+          {mine.length === 0 && <div style={{ color: C.muted, fontSize: 14 }}>Aucune liste à vous pour l'instant.</div>}
+          {mine.map((list) => <ListCard key={list.id} C={C} darkMode={darkMode} list={list} onOpen={onOpenList} />)}
+          <SectionHead C={C} title="Listes de l'équipe" count={others.length} note="Suivies par leurs propriétaires : ne pas les traiter." />
+          {owners.map((owner) => (
+            <div key={owner.email} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
+                <OwnerAvatar C={C} darkMode={darkMode} name={owner.name} />
+                <span style={{ fontSize: 15, fontWeight: 650, color: C.text }}>{owner.name}</span>
+                {ROLE_LABEL[owner.role] && <span style={{ fontSize: 12, color: C.muted }}>{ROLE_LABEL[owner.role]}</span>}
+                <span style={{ fontSize: 12, color: C.muted, fontFamily: MONO }}>· {owner.lists.length} liste{owner.lists.length > 1 ? 's' : ''}</span>
+              </div>
+              {owner.lists.map((list) => <ListCard key={list.id} C={C} darkMode={darkMode} list={list} onOpen={onOpenList} teammate />)}
             </div>
-            <Funnel C={C} counts={list} compact />
-            <ChevronRight size={18} color={C.muted} />
-          </div>
-        </Card>
-      ))}
+          ))}
+        </>
+      )}
     </div>
+  );
+}
+
+const ROLE_LABEL = { setter: 'setter', setter_manager: 'manager setters', sales: 'sales', admin: 'admin' };
+const firstName = (name) => (name || '').trim().split(/\s+/)[0] || '';
+
+function OwnerAvatar({ C, darkMode, name, size = 28, background }) {
+  const col = chipColors(C, darkMode);
+  const letters = (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+  return (
+    <span aria-hidden="true" style={{ flex: `0 0 ${size}px`, width: size, height: size, borderRadius: '50%', background: background || col.bg, color: col.text,
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.38, fontWeight: 700 }}>{letters}</span>
+  );
+}
+
+function SectionHead({ C, title, count, note }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginTop: 6 }}>
+      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: C.text }}>{title}</span>
+      <span style={{ fontSize: 13, color: C.muted, fontFamily: MONO }}>{count}</span>
+      {note && <span style={{ fontSize: 13, color: C.muted }}>{note}</span>}
+    </div>
+  );
+}
+
+// Carte d'une liste. `teammate` : liste d'un collègue, fond teinté, trait à gauche et nom du propriétaire en clair.
+function ListCard({ C, darkMode, list, onOpen, teammate = false }) {
+  const col = chipColors(C, darkMode);
+  return (
+    <Card C={C} darkMode={darkMode} style={{ padding: '16px 20px', cursor: 'pointer',
+      ...(teammate ? { background: C.subtle || (darkMode ? '#252636' : '#f4f6fb'), boxShadow: 'none', borderLeft: `4px solid ${col.close}` } : {}) }}>
+      <div role="button" tabIndex={0} onClick={() => onOpen(list.id)} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(list.id); }}
+        aria-label={teammate ? `${list.name}, liste de ${list.owner_name || list.owner_email}` : list.name}
+        style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{list.name}</div>
+          <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
+            {teammate && <><span style={{ color: col.text, fontWeight: 600 }}>Liste de {list.owner_name || list.owner_email}</span> · </>}
+            Créée le {fmtDay(list.created_at)} · {fmtInt(list.total)} entreprise{list.total > 1 ? 's' : ''}
+          </div>
+          {list.chips?.length > 0 && (
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+              title={list.chips.map((chip) => chip.label).join(' · ')}>
+              {list.chips.map((chip) => chip.label).join(' · ')}
+            </div>
+          )}
+        </div>
+        <Funnel C={C} counts={list} compact />
+        <ChevronRight size={18} color={C.muted} />
+      </div>
+    </Card>
   );
 }
 
@@ -75,6 +137,22 @@ function Funnel({ C, counts, compact }) {
       {arrow}
       {step(<MessageCircle size={size} color="#15803d" />, counts.repondu, 'ont répondu', '#15803d')}
     </span>
+  );
+}
+
+// Liste d'un collègue ouverte par un manager : à qui elle est, et qu'il ne faut pas la traiter (doublons).
+function TeammateBanner({ C, darkMode, list }) {
+  const col = chipColors(C, darkMode);
+  const owner = list.owner_name || list.owner_email;
+  return (
+    <div role="note" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', marginBottom: 16, borderRadius: 12,
+      background: col.bg, color: col.text, borderLeft: `4px solid ${col.close}` }}>
+      <OwnerAvatar C={C} darkMode={darkMode} name={owner} size={34} background={C.bg} />
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>Liste de {owner}{ROLE_LABEL[list.owner_role] ? <span style={{ fontWeight: 500 }}> · {ROLE_LABEL[list.owner_role]}</span> : null}</div>
+        <div style={{ fontSize: 13, marginTop: 2 }}>Suivie par {firstName(list.owner_name) || owner} : ne pas contacter ces entreprises, pour éviter les doublons.</div>
+      </div>
+    </div>
   );
 }
 
@@ -157,6 +235,7 @@ function ListDetail({ C, darkMode, listId, onBack, onToast, onOpenLeads, teamSal
       </button>
 
       <Card C={C} darkMode={darkMode} style={{ padding: '22px 28px' }}>
+        {list.is_owner === false && <TeammateBanner C={C} darkMode={darkMode} list={list} />}
         <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 14 }}>{list.name}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 28, flexWrap: 'wrap', paddingBottom: 18, borderBottom: `1px solid ${C.border}` }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 16, color: C.text }}>
