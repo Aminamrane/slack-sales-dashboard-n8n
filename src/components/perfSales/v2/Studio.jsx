@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion as Motion } from 'framer-motion';
 import { CountUp, EASE_CSS, useDrawn } from '../motion';
 import { Detail, Info } from './Pop';
@@ -83,6 +83,26 @@ function spread(items, gap, lo, hi) {
   return out;
 }
 
+// Hauteur du tracé (dev 15/10/2026 : « il pourrait prendre plus de place en gardant les proportions, il y a beaucoup
+// d'espace blanc en bas ») : la largeur reste à 960 unités (mêmes textes, mêmes traits), la hauteur suit la place que
+// laisse le simulateur à droite ; jamais moins que l'ancien format 960 × 322.
+const PLOT_W = 960, PLOT_MIN_H = 322, PLOT_MAX_H = 620;   // au-delà, le tracé reste calé en haut
+function usePlotHeight() {
+  const ref = useRef(null);
+  const [height, setHeight] = useState(PLOT_MIN_H);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height: h } = entry.contentRect;
+      if (width > 0) setHeight(Math.min(PLOT_MAX_H, Math.max(PLOT_MIN_H, Math.round((PLOT_W * h) / width))));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, height];
+}
+
 export default function Studio({ model }) {
   const drawn = useDrawn();
   const pilot = model.pilot;
@@ -100,6 +120,7 @@ export default function Studio({ model }) {
   const [hoverDay, setHoverDay] = useState(null);
   // Les étiquettes n'apparaissent avec retard qu'au premier dessin ; ensuite elles suivent les curseurs sans délai.
   const [settled, setSettled] = useState(false);
+  const [plotRef, plotH] = usePlotHeight();
   useEffect(() => {
     if (!drawn || settled) return undefined;
     const t = setTimeout(() => setSettled(true), 2000);
@@ -128,7 +149,7 @@ export default function Studio({ model }) {
   const open = remaining > 0;
 
   const top = Math.max(obj, projected, cadence, jevValue || 0, sold) * 1.12 || 10;
-  const X0 = 44, X1 = 760, Y0 = 290, Y1 = 16;
+  const X0 = 44, X1 = 760, Y0 = plotH - 32, Y1 = 16;
   const x = (i) => X0 + (i * (X1 - X0)) / Math.max(1, N - 1);
   const y = (val) => Y0 - (Math.max(0, Math.min(val, top)) / top) * (Y0 - Y1);
   const pts = pilot.series.map((p, i) => [x(i), y(p.sales)]);
@@ -158,7 +179,8 @@ export default function Studio({ model }) {
   return (
     <div className="ps2-studio">
       <div className="ps2-studio-chart">
-        <svg viewBox="0 0 960 322" role="img" aria-label={`Ventes cumulées : ${sold} au ${dm(pilot.series[li].date)} ; cadence actuelle ${cadence}${jevValue != null ? `, Jev ${jevValue}` : ''}${obj ? `, objectif ${obj}` : ''}`}
+        <div className="ps2-studio-plot" ref={plotRef}>
+        <svg viewBox={`0 0 ${PLOT_W} ${plotH}`} preserveAspectRatio="xMidYMin meet" role="img" aria-label={`Ventes cumulées : ${sold} au ${dm(pilot.series[li].date)} ; cadence actuelle ${cadence}${jevValue != null ? `, Jev ${jevValue}` : ''}${obj ? `, objectif ${obj}` : ''}`}
           onMouseLeave={() => setHoverDay(null)}>
           <defs>
             <linearGradient id="ps2-studio-area" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="var(--navy)" stopOpacity="0.16" /><stop offset="1" stopColor="var(--navy)" stopOpacity="0" /></linearGradient>
@@ -204,6 +226,7 @@ export default function Studio({ model }) {
             </g>
           ))}
         </svg>
+        </div>
         <div className="ps2-scenarios" role="list">
           {open && <Info role="listitem" className="ps2-scenario" label="Cadence actuelle, détail"
             detail={<Detail kicker="Cadence actuelle" title="Si le mois continue à ce rythme" value={cadence}
