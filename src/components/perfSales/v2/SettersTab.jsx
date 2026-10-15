@@ -41,14 +41,23 @@ export default function SettersTab({ period, days, avatarFor }) {
   const callsPerSaleTeam = teamSales ? callsTotal / teamSales : null;
   const remaining = days?.remaining ?? null;
   const presenceTeam = (team.rdv?.held || 0) + (team.rdv?.no_show || 0) ? team.rdv.held / (team.rdv.held + team.rdv.no_show) : null;
+  // Moyenne par jour ouvré des RDV (demande du 15/10/2026 : « le chiffre suivi de / et la moyenne par jour ») : le chiffre
+  // du mois ÷ les jours ouvrés écoulés, ceux de « jour ouvré 11 / 22 » de l'en-tête. Aucun jour écoulé : le chiffre seul.
+  const elapsed = days?.elapsed > 0 ? days.elapsed : null;
+  const withPerDay = (n) => (
+    <>
+      <CountUp value={n} />
+      {elapsed && <small title={`Moyenne par jour ouvré : ${fr(n)} ÷ ${elapsed} j ouvrés écoulés`}> / {fr(n / elapsed, 1)} par&nbsp;jour</small>}
+    </>
+  );
 
   return (
     <div className="ps2-grid">
       <Reveal as="section" className="ps2-span-12 ps2-setter-kpis" aria-label="Setters, le mois" variants={{ hidden: {}, shown: { transition: { staggerChildren: 0.07 } } }}>
         {[
           ['Appels', callsTotal ? <CountUp value={callsTotal} /> : (calls ? '–' : '…'), callsTotal ? `${fr((answeredTotal / callsTotal) * 100, 0)} % répondus` : 'Allo'],
-          ['RDV posés', <CountUp value={team.rdv?.total || 0} />, `${fr(team.rdv?.upcoming || 0)} à venir · ${fr(team.rdv?.to_qualify || 0)} à qualifier`],
-          ['RDV honorés', <CountUp value={team.rdv?.held || 0} />, presenceTeam == null ? '' : `${fr(presenceTeam * 100, 0)} % de présence`],
+          ['RDV posés', withPerDay(team.rdv?.total || 0), `${fr(team.rdv?.upcoming || 0)} à venir · ${fr(team.rdv?.to_qualify || 0)} à qualifier`],
+          ['RDV honorés', withPerDay(team.rdv?.held || 0), presenceTeam == null ? '' : `${fr(presenceTeam * 100, 0)} % de présence`],
           ['Ventes', <CountUp value={teamSales} />, euro(team.sales?.amount || 0)],
           ['Appels pour 1 vente', callsPerSaleTeam ? <CountUp value={callsPerSaleTeam} /> : '–', 'équipe setters, ce mois'],
         ].map(([l, v, n]) => (
