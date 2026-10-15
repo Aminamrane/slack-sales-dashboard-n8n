@@ -4133,6 +4133,7 @@ export default function TrackingSheetSetter() {
           const R1_TAGS = [
             { value: 'no_show', label: 'Lapin', color: '#f59e0b' },
             { value: 'rescheduled', label: 'Reporté', color: '#3b82f6' },
+            { value: 'to_reschedule', label: 'À reporter', color: '#64748b' },
             { value: 'done', label: 'R1 effectué', color: '#10b981' },
             { value: 'cancelled', label: 'Annulé', color: '#ef4444' },
           ];
@@ -4143,6 +4144,7 @@ export default function TrackingSheetSetter() {
             { value: 'reflexion', label: 'Réflexion', color: '#3b82f6' },
             { value: 'tresorerie', label: 'Trésorerie', color: '#f59e0b' },
             { value: 'reporte', label: 'Reporté', color: '#fb923c' },
+            { value: 'a_reporter', label: 'À reporter', color: '#64748b' },
             { value: 'pas_interesse', label: 'Pas intéressé', color: '#ef4444' },
             { value: 'annule', label: 'Annulé', color: '#ef4444' },
           ];
@@ -4572,6 +4574,7 @@ export default function TrackingSheetSetter() {
                 const R1_TAGS = [
                   { value: 'no_show', label: 'Lapin', color: '#f59e0b' },
                   { value: 'rescheduled', label: 'Reporté', color: '#3b82f6' },
+                  { value: 'to_reschedule', label: 'À reporter', color: '#64748b' },
                   { value: 'done', label: 'R1 effectué', color: '#10b981' },
                   { value: 'cancelled', label: 'Annulé', color: '#ef4444' },
                 ];
@@ -4582,6 +4585,7 @@ export default function TrackingSheetSetter() {
                   { value: 'reflexion', label: 'Réflexion', color: '#3b82f6' },
                   { value: 'tresorerie', label: 'Trésorerie', color: '#f59e0b' },
                   { value: 'reporte', label: 'Reporté', color: '#fb923c' },
+                  { value: 'a_reporter', label: 'À reporter', color: '#64748b' },
                   { value: 'pas_interesse', label: 'Pas intéressé', color: '#ef4444' },
                   { value: 'annule', label: 'Annulé', color: '#ef4444' },
                 ];
@@ -4659,6 +4663,7 @@ export default function TrackingSheetSetter() {
               const R1_TAGS = [
                 { value: 'no_show', label: 'Lapin', color: '#f59e0b' },
                 { value: 'rescheduled', label: 'Reporté', color: '#3b82f6' },
+                { value: 'to_reschedule', label: 'À reporter', color: '#64748b' },
                 { value: 'done', label: 'R1 effectué', color: '#10b981' },
                 { value: 'cancelled', label: 'Annulé', color: '#ef4444' },
               ];
@@ -4669,6 +4674,7 @@ export default function TrackingSheetSetter() {
                 { value: 'reflexion', label: 'Réflexion', color: '#3b82f6' },
                 { value: 'tresorerie', label: 'Trésorerie', color: '#f59e0b' },
                 { value: 'reporte', label: 'Reporté', color: '#fb923c' },
+                { value: 'a_reporter', label: 'À reporter', color: '#64748b' },
                 { value: 'pas_interesse', label: 'Pas intéressé', color: '#ef4444' },
                 { value: 'annule', label: 'Annulé', color: '#ef4444' },
               ];
@@ -4769,7 +4775,7 @@ export default function TrackingSheetSetter() {
             {(filterTags.length > 0 || filterStatuses.length > 0) && (
               <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
                 {filterTags.map(tag => {
-                  const label = tag === 'no_show' ? 'Lapin' : tag === 'rescheduled' ? 'Reporté' : tag === 'done' ? 'Effectué' : tag === 'cancelled' ? 'Annulé' : tag === 'comptable' ? 'Comptable' : tag === 'associe' ? 'Associé' : tag === 'reflexion' ? 'Réflexion' : tag === 'tresorerie' ? 'Trésorerie' : tag === 'reporte' ? 'Reporté R2' : tag === 'pas_interesse' ? 'Pas intéressé' : tag === 'annule' ? 'Annulé R2' : tag;
+                  const label = tag === 'no_show' ? 'Lapin' : tag === 'rescheduled' ? 'Reporté' : (tag === 'to_reschedule' || tag === 'a_reporter') ? 'À reporter' : tag === 'done' ? 'Effectué' : tag === 'cancelled' ? 'Annulé' : tag === 'comptable' ? 'Comptable' : tag === 'associe' ? 'Associé' : tag === 'reflexion' ? 'Réflexion' : tag === 'tresorerie' ? 'Trésorerie' : tag === 'reporte' ? 'Reporté R2' : tag === 'pas_interesse' ? 'Pas intéressé' : tag === 'annule' ? 'Annulé R2' : tag;
                   return (
                     <span key={`tag-${tag}`} onClick={() => setFilterTags(prev => prev.filter(v => v !== tag))} style={{
                       padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 600, cursor: 'pointer',
@@ -4824,21 +4830,21 @@ export default function TrackingSheetSetter() {
             const todayDate = new Date().toISOString().slice(0, 10);
             const isDatePast = (d) => { if (!d) return false; const ds = typeof d === 'string' ? d.slice(0, 10) : ''; return ds && ds < todayDate; };
             const r1Scheduled  = isR1Tab ? filteredLeads.filter(l => (!l.r1_result || l.r1_result === 'rescheduled') && !isDatePast(l.r1)) : [];
-            const r1Pending    = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'no_show' || ((!l.r1_result || l.r1_result === 'rescheduled') && isDatePast(l.r1))) : [];
+            const r1Pending    = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'no_show' || l.r1_result === 'to_reschedule' || ((!l.r1_result || l.r1_result === 'rescheduled') && isDatePast(l.r1))) : [];
             const r1Cancelled  = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'cancelled') : [];
             const r1Completed  = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'done') : [];
 
             // R2 groups
             const R2_PENDING_STATES = ['comptable', 'associe', 'reflexion', 'relire_contrat', 'pas_decision_jour', 'tresorerie'];
             const r2Scheduled  = isR2Tab ? filteredLeads.filter(l => (!l.r2_result || l.r2_result === 'reporte') && !isDatePast(l.r2)) : [];
-            const r2Pending    = isR2Tab ? filteredLeads.filter(l => R2_PENDING_STATES.includes(l.r2_result) || ((!l.r2_result || l.r2_result === 'reporte') && isDatePast(l.r2))) : [];
+            const r2Pending    = isR2Tab ? filteredLeads.filter(l => l.r2_result === 'a_reporter' || R2_PENDING_STATES.includes(l.r2_result) || ((!l.r2_result || l.r2_result === 'reporte') && isDatePast(l.r2))) : [];
             const r2Cancelled  = isR2Tab ? filteredLeads.filter(l => l.r2_result === 'pas_interesse' || l.r2_result === 'annule') : [];
             const r2Completed  = isR2Tab ? filteredLeads.filter(l => l.r2_result === 'done') : [];
 
             // R3 groups (same logic as R2)
             const R3_PENDING_STATES = ['comptable', 'associe', 'reflexion', 'relire_contrat', 'pas_decision_jour', 'tresorerie'];
             const r3Scheduled  = isR3Tab ? filteredLeads.filter(l => (!l.r3_result || l.r3_result === 'reporte') && !isDatePast(l.r3)) : [];
-            const r3Pending    = isR3Tab ? filteredLeads.filter(l => R3_PENDING_STATES.includes(l.r3_result) || ((!l.r3_result || l.r3_result === 'reporte') && isDatePast(l.r3))) : [];
+            const r3Pending    = isR3Tab ? filteredLeads.filter(l => l.r3_result === 'a_reporter' || R3_PENDING_STATES.includes(l.r3_result) || ((!l.r3_result || l.r3_result === 'reporte') && isDatePast(l.r3))) : [];
             const r3Cancelled  = isR3Tab ? filteredLeads.filter(l => l.r3_result === 'pas_interesse' || l.r3_result === 'annule') : [];
             const r3Completed  = isR3Tab ? filteredLeads.filter(l => l.r3_result === 'done') : [];
 
@@ -5134,6 +5140,7 @@ export default function TrackingSheetSetter() {
                         const R1_BADGES = {
                           no_show:     { icon: 'rabbit', label: 'Lapin',   color: '#f59e0b' },
                           rescheduled: { icon: '↻',  label: 'Reporté',     color: '#3b82f6' },
+                          to_reschedule: { icon: '↻',  label: 'À reporter',  color: '#64748b' },
                           done:        { icon: '✓',  label: 'R1 effectué', color: '#10b981' },
                           cancelled:   { icon: '✕',  label: 'Annulé',      color: '#ef4444' },
                         };
@@ -5167,6 +5174,7 @@ export default function TrackingSheetSetter() {
                           pas_decision_jour: { icon: '⏸', label: 'Pas de décision', color: '#94a3b8' },
                           tresorerie:      { icon: '💰', label: 'Trésorerie',    color: '#f59e0b' },
                           reporte:         { icon: '↻',  label: 'Reporté',       color: '#fb923c' },
+                          a_reporter:      { icon: '↻',  label: 'À reporter',    color: '#64748b' },
                           pas_interesse:   { icon: '✕',  label: 'Pas intéressé', color: '#ef4444' },
                           annule:          { icon: '🚫', label: 'Annulé',        color: '#ef4444' },
                         };

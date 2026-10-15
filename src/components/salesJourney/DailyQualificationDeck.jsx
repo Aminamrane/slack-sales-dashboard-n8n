@@ -14,19 +14,21 @@ import { ParisDateTimeInput } from './FrenchDateInput';
 import { RESULTS, useDialogFocus } from './QualificationDialog';
 import { ActionButton, Celebration, CountUp, PickCheck, ProgressSegments, Stamp } from './DailyQualificationMotion';
 import { rdvLabel } from '../../utils/dailyQualification';
+import { TO_RESCHEDULE, deckPayload, isReported, needsDeckDate } from '../../utils/deckPayload';
+import { RELANCE_CHOICES, REPORT_CHOICES } from './missedChoices';
 import './salesJourney.css';
 
 const ATTENDANCE = {
   r1: [
     ['done', 'Présent', 'Le rendez-vous a eu lieu', UserRoundCheck],
     ['no_show', 'Absent', 'Le client ne s’est pas présenté', UserRoundX],
-    ['rescheduled', 'Reporté', 'Choisir la nouvelle date', CalendarClock],
+    ['rescheduled', 'Reporté', 'Avec ou sans nouvelle date', CalendarClock],
     ['cancelled', 'Annulé', 'Le rendez-vous n’aura pas lieu', CircleX],
   ],
   later: [
     ['present', 'Présent', 'Le rendez-vous a eu lieu', UserRoundCheck],
     ['no_show', 'Absent', 'Le client ne s’est pas présenté', UserRoundX],
-    ['reporte', 'Reporté', 'Choisir la nouvelle date', CalendarClock],
+    ['reporte', 'Reporté', 'Avec ou sans nouvelle date', CalendarClock],
     ['annule', 'Annulé', 'Le rendez-vous n’aura pas lieu', CircleX],
   ],
 };
@@ -78,23 +80,6 @@ function Reveal({ children }) {
       {children}
     </Motion.div>
   );
-}
-
-// Payload attendu par qualificationPatch, ou null tant que la saisie est incomplète.
-export function deckPayload(stage, { choice, next, result, date }) {
-  if (!choice) return null;
-  if (stage === 'r1') {
-    if (choice === 'done') {
-      if (!next) return null;
-      if (next === 'r2_set' && !date) return null;
-      return { result: 'done', attended: true, date: next === 'r2_set' ? date : '', followUp: next };
-    }
-    if (choice === 'rescheduled' && !date) return null;
-    return { result: choice, attended: false, date: choice === 'rescheduled' ? date : '' };
-  }
-  if (choice === 'present') return result ? { result, attended: true, date: '' } : null;
-  if (choice === 'reporte' && !date) return null;
-  return { result: choice, attended: false, date: choice === 'reporte' ? date : '' };
 }
 
 const ASSETS = '/qualification/';
@@ -215,9 +200,10 @@ export default function DailyQualificationDeck({ items, onSave, onClose, dark = 
     setBusy(true); setError('');
     try {
       await onSave(current.lead, current.stage, payload);
-      const label = current.stage === 'r1'
-        ? ATTENDANCE.r1.find(([k]) => k === payload.result)?.[1]
-        : (payload.attended ? RESULTS.find(([k]) => k === payload.result)?.[1] : ATTENDANCE.later.find(([k]) => k === payload.result)?.[1]);
+      const label = payload.result === TO_RESCHEDULE[current.stage] ? 'À reporter'
+        : current.stage === 'r1'
+          ? ATTENDANCE.r1.find(([k]) => k === payload.result)?.[1]
+          : (payload.attended ? RESULTS.find(([k]) => k === payload.result)?.[1] : ATTENDANCE.later.find(([k]) => k === payload.result)?.[1]);
       setDone((prev) => ({ ...prev, [current.key]: label || 'Qualifié' }));
       setStamp(label || 'Qualifié');
       await new Promise((r) => setTimeout(r, reduceMotion() ? 0 : 620));
@@ -231,8 +217,7 @@ export default function DailyQualificationDeck({ items, onSave, onClose, dark = 
   }
 
   const stageName = current ? current.stage.toUpperCase() : '';
-  const needsDate = current && ((current.stage === 'r1' && (form.choice === 'rescheduled' || (form.choice === 'done' && form.next === 'r2_set')))
-    || (current.stage !== 'r1' && form.choice === 'reporte'));
+  const needsDate = current && needsDeckDate(current.stage, form);
 
   return createPortal(
     <div className={`sj-overlay ${dark ? 'sj-dark' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
@@ -276,6 +261,18 @@ export default function DailyQualificationDeck({ items, onSave, onClose, dark = 
                         <Options items={R1_NEXT} value={form.next} disabled={busy} onPick={(next) => { setForm((f) => ({ ...f, next, date: '' })); setError(''); }} />
                       </Reveal>
                     )}
+                    {form.choice === 'no_show' && (
+                      <Reveal key="relance">
+                        <h3>Relancer le client ?</h3>
+                        <Options items={RELANCE_CHOICES} value={form.relance} disabled={busy} onPick={(relance) => { setForm((f) => ({ ...f, relance })); setError(''); }} />
+                      </Reveal>
+                    )}
+                    {isReported(form.choice) && (
+                      <Reveal key="when">
+                        <h3>La nouvelle date ?</h3>
+                        <Options items={REPORT_CHOICES} value={form.when} disabled={busy} onPick={(when) => { setForm((f) => ({ ...f, when, date: '' })); setError(''); }} />
+                      </Reveal>
+                    )}
                     {current.stage !== 'r1' && form.choice === 'present' && (
                       <Reveal key="result">
                         <h3>Où en est le client ?</h3>
@@ -283,7 +280,7 @@ export default function DailyQualificationDeck({ items, onSave, onClose, dark = 
                       </Reveal>
                     )}
                     {needsDate && (
-                      <Reveal key={`date-${form.choice}-${form.next || ''}`}>
+                      <Reveal key={`date-${form.choice}-${form.next || form.when || ''}`}>
                         <ParisDateTimeInput disabled={busy} value={form.date || ''}
                           label={form.next === 'r2_set' ? 'Date et heure du R2' : `Nouvelle date du ${stageName}`}
                           onChange={(date) => { setForm((f) => ({ ...f, date })); setError(''); }} />

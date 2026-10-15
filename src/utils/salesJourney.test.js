@@ -100,3 +100,12 @@ test('onboarding recalage waits for the journey and the complete declaration',()
  assert.equal(canRescheduleAfterSale({rdv_lancement_date:'2026-09-30T10:00'},{onboarding_only:false}),true);
  assert.equal(canRescheduleAfterSale({rdv_lancement_date:'2026-09-30T10:00'},{onboarding_only:true}),false);
 });
+
+test('absent sans relance et RDV à reporter (dev 15/10/2026)', () => {
+ assert.deepEqual(qualificationPatch({},'r1',{result:'no_show',attended:false,relance:false}),{r1_result:'no_show',r1_completed_at:null,no_show_followup:false});
+ assert.deepEqual(qualificationPatch({},'r1',{result:'no_show',attended:false,relance:true}),{r1_result:'no_show',r1_completed_at:null});
+ assert.deepEqual(qualificationPatch({},'r1',{result:'to_reschedule',attended:false}),{r1_result:'to_reschedule',r1_completed_at:null});
+ assert.deepEqual(qualificationPatch({},'r2',{result:'a_reporter',attended:false}),{r2_result:'a_reporter',r2_completed_at:null});
+ assert.deepEqual(qualificationPatch({},'r2',{result:'no_show',attended:false,relance:false}),{r2_result:'no_show',r2_completed_at:null,no_show_followup:false});
+ assert.throws(()=>qualificationPatch({},'r2',{result:'a_reporter',attended:true}));
+});

@@ -1,9 +1,11 @@
 import {validParisAppointment} from './parisDates.js';
 const attendedResults=new Set(['done','comptable','associe','reflexion','relire_contrat','pas_decision_jour','tresorerie','pas_interesse']);
-const missedResults=new Set(['no_show','reporte','annule']);
-export function qualificationPatch(lead,stage,{result,attended,date,followUp},now=new Date().toISOString()){
+// « a_reporter » : reporté, date à fixer (dev 15/10/2026).
+const missedResults=new Set(['no_show','reporte','annule','a_reporter']);
+// `relance` false : client absent sans relance (ni SMS ni e-mail), le setter derrière le RDV reste alerté (dev 15/10/2026).
+export function qualificationPatch(lead,stage,{result,attended,date,followUp,relance},now=new Date().toISOString()){
  if(stage==='r1'){
-  const allowed=attended?new Set(['done']):new Set(['no_show','rescheduled','cancelled']);
+  const allowed=attended?new Set(['done']):new Set(['no_show','rescheduled','to_reschedule','cancelled']);
   if(!allowed.has(result))throw new Error('Choisissez un résultat pour ce rendez-vous.');
   const patch={r1_result:result,r1_completed_at:attended?(lead.r1_completed_at||now):null};
   if(followUp && !['r2_set','later','contract'].includes(followUp))throw new Error('Choisissez la prochaine étape.');
@@ -14,6 +16,7 @@ export function qualificationPatch(lead,stage,{result,attended,date,followUp},no
    if(followUp==='r2_set'){patch.r2_date=date;patch.r1_follow_up='r2_set';patch.status='r2';}
    else patch.r1_date=date;
   }
+  if(result==='no_show'&&relance===false)patch.no_show_followup=false;
   return patch;
  }
  if(!['r2','r3'].includes(stage)||!(attended?attendedResults:missedResults).has(result))throw new Error('Choisissez un résultat pour ce rendez-vous.');
@@ -23,6 +26,7 @@ export function qualificationPatch(lead,stage,{result,attended,date,followUp},no
   if(!validParisAppointment(date))throw new Error('Choisissez une date et une heure valides.');
   patch[`${stage}_date`]=date;
  }
+ if(result==='no_show'&&relance===false)patch.no_show_followup=false;
  // R3 posé depuis la qualification du R2 (dev 2026-09-29), comme le R2 depuis le R1.
  if(followUp==='r3_set'){
   if(stage!=='r2'||!attended||result==='pas_interesse')throw new Error('Le R3 se pose après un R2 effectué.');

@@ -551,8 +551,8 @@ export default function TrackingSheet() {
     if (lead) setQualificationDialog({ lead, stage, fromCalendar: true });
   };
   // `quiet` : appel depuis le pop-up des RDV à qualifier, sans changer d'onglet ni de fiche.
-  const saveQualificationFor = async (lead, stage, {result,attended,date,continueContract,followUp}, {quiet=false}={}) => {
-    const patch=qualificationPatch(lead,stage,{result,attended,date,followUp});
+  const saveQualificationFor = async (lead, stage, {result,attended,date,continueContract,followUp,relance}, {quiet=false}={}) => {
+    const patch=qualificationPatch(lead,stage,{result,attended,date,followUp,relance});
     try {
       const response=await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`,patch);
       for(const field of ['r1_meet_link','r2_meet_link','r1_event_id','r2_event_id','r3_event_id']){
@@ -4558,6 +4558,7 @@ export default function TrackingSheet() {
           const R1_TAGS = [
             { value: 'no_show', label: 'Lapin', color: '#f59e0b' },
             { value: 'rescheduled', label: 'Reporté', color: '#3b82f6' },
+            { value: 'to_reschedule', label: 'À reporter', color: '#64748b' },
             { value: 'done', label: 'R1 effectué', color: '#10b981' },
             { value: 'cancelled', label: 'Annulé', color: '#ef4444' },
           ];
@@ -4569,6 +4570,7 @@ export default function TrackingSheet() {
             { value: 'reflexion', label: 'Réflexion', color: '#3b82f6' },
             { value: 'tresorerie', label: 'Trésorerie', color: '#f59e0b' },
             { value: 'reporte', label: 'Reporté', color: '#fb923c' },
+            { value: 'a_reporter', label: 'À reporter', color: '#64748b' },
             { value: 'pas_interesse', label: 'Pas intéressé', color: '#ef4444' },
             { value: 'annule', label: 'Annulé', color: '#ef4444' },
           ];
@@ -4901,6 +4903,7 @@ export default function TrackingSheet() {
                 const R1_TAGS = [
                   { value: 'no_show', label: 'Lapin', color: '#f59e0b' },
                   { value: 'rescheduled', label: 'Reporté', color: '#3b82f6' },
+                  { value: 'to_reschedule', label: 'À reporter', color: '#64748b' },
                   { value: 'done', label: 'R1 effectué', color: '#10b981' },
                   { value: 'cancelled', label: 'Annulé', color: '#ef4444' },
                 ];
@@ -4912,6 +4915,7 @@ export default function TrackingSheet() {
                   { value: 'reflexion', label: 'Réflexion', color: '#3b82f6' },
                   { value: 'tresorerie', label: 'Trésorerie', color: '#f59e0b' },
                   { value: 'reporte', label: 'Reporté', color: '#fb923c' },
+                  { value: 'a_reporter', label: 'À reporter', color: '#64748b' },
                   { value: 'pas_interesse', label: 'Pas intéressé', color: '#ef4444' },
                   { value: 'annule', label: 'Annulé', color: '#ef4444' },
                 ];
@@ -4989,6 +4993,7 @@ export default function TrackingSheet() {
               const R1_TAGS = [
                 { value: 'no_show', label: 'Lapin', color: '#f59e0b' },
                 { value: 'rescheduled', label: 'Reporté', color: '#3b82f6' },
+                { value: 'to_reschedule', label: 'À reporter', color: '#64748b' },
                 { value: 'done', label: 'R1 effectué', color: '#10b981' },
                 { value: 'cancelled', label: 'Annulé', color: '#ef4444' },
               ];
@@ -5000,6 +5005,7 @@ export default function TrackingSheet() {
                 { value: 'reflexion', label: 'Réflexion', color: '#3b82f6' },
                 { value: 'tresorerie', label: 'Trésorerie', color: '#f59e0b' },
                 { value: 'reporte', label: 'Reporté', color: '#fb923c' },
+                { value: 'a_reporter', label: 'À reporter', color: '#64748b' },
                 { value: 'pas_interesse', label: 'Pas intéressé', color: '#ef4444' },
                 { value: 'annule', label: 'Annulé', color: '#ef4444' },
               ];
@@ -5100,7 +5106,7 @@ export default function TrackingSheet() {
             {(filterTags.length > 0 || filterStatuses.length > 0) && (
               <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
                 {filterTags.map(tag => {
-                  const label = tag === 'no_show' ? 'Lapin' : tag === 'rescheduled' ? 'Reporté' : tag === 'done' ? 'Effectué' : tag === 'cancelled' ? 'Annulé' : tag === 'comptable' ? 'Comptable' : tag === 'associe' ? 'Associé' : tag === 'reflexion' ? 'Réflexion' : tag === 'tresorerie' ? 'Trésorerie' : tag === 'reporte' ? 'Reporté R2' : tag === 'pas_interesse' ? 'Pas intéressé' : tag === 'annule' ? 'Annulé R2' : tag;
+                  const label = tag === 'no_show' ? 'Lapin' : tag === 'rescheduled' ? 'Reporté' : (tag === 'to_reschedule' || tag === 'a_reporter') ? 'À reporter' : tag === 'done' ? 'Effectué' : tag === 'cancelled' ? 'Annulé' : tag === 'comptable' ? 'Comptable' : tag === 'associe' ? 'Associé' : tag === 'reflexion' ? 'Réflexion' : tag === 'tresorerie' ? 'Trésorerie' : tag === 'reporte' ? 'Reporté R2' : tag === 'pas_interesse' ? 'Pas intéressé' : tag === 'annule' ? 'Annulé R2' : tag;
                   return (
                     <span key={`tag-${tag}`} onClick={() => setFilterTags(prev => prev.filter(v => v !== tag))} style={{
                       padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 600, cursor: 'pointer',
@@ -5161,7 +5167,7 @@ export default function TrackingSheet() {
             const r1SetterPlaced = isR1Tab ? filteredLeads.filter(isSetterPlacedUnqualified) : [];
             const r1Landing    = isR1Tab ? filteredLeads.filter(l => !isSetterPlacedUnqualified(l) && (!l.r1_result || l.r1_result === 'rescheduled') && !isDatePast(l.r1) && isLandingLead(l)) : [];
             const r1Scheduled  = isR1Tab ? filteredLeads.filter(l => !isSetterPlacedUnqualified(l) && (!l.r1_result || l.r1_result === 'rescheduled') && !isDatePast(l.r1) && !isLandingLead(l)) : [];
-            const r1Pending    = isR1Tab ? filteredLeads.filter(l => !isSetterPlacedUnqualified(l) && (l.r1_result === 'no_show' || ((!l.r1_result || l.r1_result === 'rescheduled') && isDatePast(l.r1)))) : [];
+            const r1Pending    = isR1Tab ? filteredLeads.filter(l => !isSetterPlacedUnqualified(l) && (l.r1_result === 'no_show' || l.r1_result === 'to_reschedule' || ((!l.r1_result || l.r1_result === 'rescheduled') && isDatePast(l.r1)))) : [];
             const r1Cancelled  = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'cancelled') : [];
             const r1Completed  = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'done') : [];
 
@@ -5175,14 +5181,14 @@ export default function TrackingSheet() {
             const r2Webinaire  = isR2Tab ? r2ScheduledAll.filter(isWebinaireLead) : [];
             const r2Landing    = isR2Tab ? r2ScheduledAll.filter(isLandingLead) : [];
             const r2Scheduled  = isR2Tab ? r2ScheduledAll.filter(l => !isWebinaireLead(l) && !isLandingLead(l)) : [];
-            const r2Pending    = isR2Tab ? filteredLeads.filter(l => l.r2_result === 'no_show' || R2_PENDING_STATES.includes(l.r2_result) || ((!l.r2_result || l.r2_result === 'reporte') && isDatePast(l.r2))) : [];
+            const r2Pending    = isR2Tab ? filteredLeads.filter(l => l.r2_result === 'a_reporter' || l.r2_result === 'no_show' || R2_PENDING_STATES.includes(l.r2_result) || ((!l.r2_result || l.r2_result === 'reporte') && isDatePast(l.r2))) : [];
             const r2Cancelled  = isR2Tab ? filteredLeads.filter(l => l.r2_result === 'pas_interesse' || l.r2_result === 'annule') : [];
             const r2Completed  = isR2Tab ? filteredLeads.filter(l => l.r2_result === 'done') : [];
 
             // R3 groups (same logic as R2)
             const R3_PENDING_STATES = ['comptable', 'associe', 'reflexion', 'relire_contrat', 'pas_decision_jour', 'tresorerie'];
             const r3Scheduled  = isR3Tab ? filteredLeads.filter(l => (!l.r3_result || l.r3_result === 'reporte') && !isDatePast(l.r3)) : [];
-            const r3Pending    = isR3Tab ? filteredLeads.filter(l => l.r3_result === 'no_show' || R3_PENDING_STATES.includes(l.r3_result) || ((!l.r3_result || l.r3_result === 'reporte') && isDatePast(l.r3))) : [];
+            const r3Pending    = isR3Tab ? filteredLeads.filter(l => l.r3_result === 'a_reporter' || l.r3_result === 'no_show' || R3_PENDING_STATES.includes(l.r3_result) || ((!l.r3_result || l.r3_result === 'reporte') && isDatePast(l.r3))) : [];
             const r3Cancelled  = isR3Tab ? filteredLeads.filter(l => l.r3_result === 'pas_interesse' || l.r3_result === 'annule') : [];
             const r3Completed  = isR3Tab ? filteredLeads.filter(l => l.r3_result === 'done') : [];
 
@@ -5497,6 +5503,7 @@ export default function TrackingSheet() {
                         const R1_BADGES = {
                           no_show:     { icon: 'rabbit', label: 'Lapin',   color: '#f59e0b' },
                           rescheduled: { icon: '↻',  label: 'Reporté',     color: '#3b82f6' },
+                          to_reschedule: { icon: '↻',  label: 'À reporter',  color: '#64748b' },
                           done:        { icon: '✓',  label: 'R1 effectué', color: '#10b981' },
                           cancelled:   { icon: '✕',  label: 'Annulé',      color: '#ef4444' },
                         };
@@ -5531,6 +5538,7 @@ export default function TrackingSheet() {
                           tresorerie:      { icon: '💰', label: 'Trésorerie',    color: '#f59e0b' },
                           no_show:         { icon: '🐇', label: 'Lapin',         color: '#f59e0b' },
                           reporte:         { icon: '↻',  label: 'Reporté',       color: '#fb923c' },
+                          a_reporter:      { icon: '↻',  label: 'À reporter',    color: '#64748b' },
                           pas_interesse:   { icon: '✕',  label: 'Pas intéressé', color: '#ef4444' },
                           annule:          { icon: '🚫', label: 'Annulé',        color: '#ef4444' },
                         };

@@ -3,6 +3,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowRight, CalendarCheck2, CalendarClock, CalendarPlus, Check, CircleX, Clock3, FileCheck2, Landmark, MessageCircle, Pause, UserRoundX, UsersRound, Wallet, X } from 'lucide-react';
 import './salesJourney.css';
+import { RELANCE_CHOICES, REPORT_CHOICES, TO_RESCHEDULE } from './missedChoices';
+import ChoiceButtons from './ChoiceButtons';
 export const RESULTS = [
   ['done','Prêt pour le contrat','Le client souhaite poursuivre',FileCheck2],
   ['comptable','Avis du comptable','Un échange reste nécessaire',Landmark],
@@ -34,29 +36,37 @@ export function useDialogFocus(ref, onClose, busy = false) {
 export default function QualificationDialog({lead,stage='r2',onClose,onSave,dark=false,canPlaceR3=false}) {
   const isR1=stage==='r1';
   const old=lead[`${stage}_result`];
-  const [attended,setAttended]=useState(!['no_show','reporte','annule','rescheduled','cancelled'].includes(old));
-  const [result,setResult]=useState(old || 'done');
+  const reportValue=isR1?'rescheduled':'reporte';
+  const toReschedule=old===TO_RESCHEDULE[stage];
+  const [attended,setAttended]=useState(!['no_show','reporte','annule','rescheduled','cancelled','to_reschedule','a_reporter'].includes(old));
+  const [result,setResult]=useState(toReschedule ? reportValue : (old || 'done'));
+  // Absent : relancer ou non ; reporté : date maintenant ou « à reporter » (dev 15/10/2026).
+  const [relance,setRelance]=useState('relance');
+  const [when,setWhen]=useState(toReschedule?'later':'date');
   const [date,setDate]=useState('');
   const [r3,setR3]=useState(false);
   const [busy,setBusy]=useState(false),[error,setError]=useState('');
   const ref=useRef(null); useDialogFocus(ref,onClose,busy);
   const label=stage.toUpperCase();
-  const options=attended ? (isR1?[['done','R1 effectué','Le rendez-vous a eu lieu. Vous pouvez préparer le contrat ou planifier un R2 depuis le dossier.',CalendarCheck2]]:RESULTS) : [['no_show','Client absent','Le rendez-vous n’a pas eu lieu',UserRoundX],[isR1?'rescheduled':'reporte','À reprogrammer','Choisir une nouvelle date',CalendarClock],[isR1?'cancelled':'annule','Rendez-vous annulé','Sans nouvelle date prévue',CircleX]];
+  const options=attended ? (isR1?[['done','R1 effectué','Le rendez-vous a eu lieu. Vous pouvez préparer le contrat ou planifier un R2 depuis le dossier.',CalendarCheck2]]:RESULTS) : [['no_show','Client absent','Le rendez-vous n’a pas eu lieu',UserRoundX],[reportValue,'À reprogrammer','Avec ou sans nouvelle date',CalendarClock],[isR1?'cancelled':'annule','Rendez-vous annulé','Sans nouvelle date prévue',CircleX]];
   // R3 : après un R2 effectué (sauf « Pas intéressé »), si les R3 sont activés.
   const placingR3=r3&&stage==='r2'&&canPlaceR3&&attended&&result!=='pas_interesse';
   async function save(continueContract) {
     if(busy)return;
-    if(['reporte','rescheduled'].includes(result) && !date){setError('Choisissez la nouvelle date du rendez-vous.');return;}
+    const later=result===reportValue&&when==='later';
+    if(result===reportValue && !later && !date){setError('Choisissez la nouvelle date du rendez-vous.');return;}
     if(placingR3 && !date){setError('Choisissez la date et l’heure du R3.');return;}
     setBusy(true);setError('');
-    try {await onSave({result,attended,date,continueContract,followUp:placingR3?'r3_set':undefined});} catch(e){setError(e.message || 'La qualification n’a pas été enregistrée. Réessayez.');} finally{setBusy(false);}
+    try {await onSave({result:later?TO_RESCHEDULE[stage]:result,attended,date:later?'':date,continueContract,followUp:placingR3?'r3_set':undefined,relance:result==='no_show'?relance==='relance':undefined});} catch(e){setError(e.message || 'La qualification n’a pas été enregistrée. Réessayez.');} finally{setBusy(false);}
   }
   return createPortal(<div className={`sj-overlay ${dark?'sj-dark':''}`} onClick={e=>{if(e.target===e.currentTarget&&!busy)onClose();}}>
     <section ref={ref} tabIndex={-1} className="sj-dialog" role="dialog" aria-modal="true" aria-labelledby="sj-title">
       <header className="sj-head"><span className="sj-icon"><CalendarCheck2 size={24}/></span><div><small>RENDEZ-VOUS COMMERCIAL</small><h2 id="sj-title">Qualifier le {label}</h2><p>{lead.company_name || lead.full_name}</p></div><button className="sj-close" aria-label="Fermer la qualification" onClick={onClose} disabled={busy}><X size={20}/></button></header>
       <div className="sj-body"><div className="sj-attendance" role="group" aria-label="Le rendez-vous a-t-il eu lieu ?">{[[true,`${label} effectué`,Check],[false,'Non effectué',Clock3]].map(([value,text,Icon])=><button key={text} disabled={busy} aria-pressed={attended===value} onClick={()=>{setAttended(value);setResult(value?'done':'no_show');setR3(false);setDate('');setError('');}}><Icon size={18}/>{text}</button>)}</div>
       <h3>{attended?'Quelle est la suite ?':'Que s’est-il passé ?'}</h3><div className="sj-options">{options.map(([value,title,desc,Icon])=><button key={value} disabled={busy} className={result===value?'is-selected':''} aria-pressed={result===value} onClick={()=>{setResult(value);setError('');}}><Icon size={21}/><span><strong>{title}</strong><small>{desc}</small></span>{result===value&&<Check size={16}/>}</button>)}</div>
-      {['reporte','rescheduled'].includes(result)&&<ParisDateTimeInput label="Nouveau rendez-vous" value={date} disabled={busy} onChange={setDate}/>}
+      {result==='no_show'&&<div className="sj-r1-next"><h3>Relancer le client ?</h3><ChoiceButtons items={RELANCE_CHOICES} value={relance} disabled={busy} onPick={key=>{setRelance(key);setError('');}}/></div>}
+      {result===reportValue&&<div className="sj-r1-next"><h3>La nouvelle date ?</h3><ChoiceButtons items={REPORT_CHOICES} value={when} disabled={busy} onPick={key=>{setWhen(key);setDate('');setError('');}}/></div>}
+      {result===reportValue&&when==='date'&&<ParisDateTimeInput label="Nouveau rendez-vous" value={date} disabled={busy} onChange={setDate}/>}
       {stage==='r2'&&canPlaceR3&&attended&&result!=='pas_interesse'&&<div className="sj-r1-next"><h3>Prochaine étape</h3><div className="sj-options"><button disabled={busy} aria-pressed={placingR3} className={placingR3?'is-selected':''} onClick={()=>{setR3(v=>!v);setDate('');setError('');}}><CalendarPlus size={21}/><span><strong>Placer le R3</strong><small>Planifier le rendez-vous suivant, par exemple la lecture du contrat</small></span>{placingR3&&<Check size={16}/>}</button></div></div>}
       {placingR3&&<ParisDateTimeInput label="Date et heure du R3" value={date} disabled={busy} onChange={value=>{setDate(value);setError('');}}/>}
       {error&&<p className="sj-error" role="alert">{error}</p>}</div>

@@ -33,3 +33,9 @@ test('a no-show rescheduled by a setter opens the sales tracking sheet',()=>{
   assert.equal(notificationTarget({type:'setter_rescheduled_no_show',data:{lead_id:7}}),'/tracking-sheet');
   assert.equal(notificationTarget({type:'setter_placed_r1'}),'/tracking-sheet');
 });
+
+test('les alertes au setter derrière un RDV ouvrent sa sheet setter (15/10/2026)', () => {
+  for (const type of ['setter_r1_no_show', 'setter_r2_no_show', 'setter_rdv_rescheduled']) {
+    assert.equal(notificationTarget({ type, data: { lead_id: 7 } }), '/tracking-setter');
+  }
+});
