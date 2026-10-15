@@ -4,19 +4,23 @@
 // séquences (pré-webinaire, post-webinaire, envois ponctuels) qui filtrent la liste.
 
 import { Inbox, MailCheck, MailPlus, Megaphone, TriangleAlert, Workflow } from 'lucide-react';
-import { fmtInt } from './format';
-import { SEQUENCES, audienceTone } from './model';
+import { fmtInt } from './format.js';
+import { SEQUENCES, audienceTone } from './model.js';
 
-const DOT = { blue: '#1a73e8', green: '#188038', grey: '#9aa0a6' };
+// Repères de public : variables du thème (`--smx-dot-*`, cf. beigeStyles.js), avec la couleur d'origine en repli.
+const DOT = { blue: 'var(--smx-dot-blue, #1a73e8)', green: 'var(--smx-dot-green, #188038)', grey: 'var(--smx-dot-grey, #80868b)' };
 
 const SEQ_ICONS = { any: Inbox, pre: MailPlus, post: MailCheck, oneshot: Megaphone };
 const SEQ_ORDER = ['any', 'pre', 'post', 'oneshot'];
 
+/** @brief « 21 e-mails » / « 1 e-mail » / « nombre d'e-mails inconnu » : le nombre, dit en toutes lettres. */
+const countLabel = (n) => (typeof n === 'number' ? `${fmtInt(n)} e-mail${n > 1 ? 's' : ''}` : "nombre d'e-mails inconnu");
+
 /**
  * @param cohorts Cohortes (catalogue ∪ CRM), les plus récentes d'abord.
- * @param totalCount Nombre d'e-mails de toutes les cohortes chargées.
- * @param countsByCohort Nombre d'e-mails par cohorte.
+ * @param totalCount Nombre d'e-mails de toutes les cohortes dont le contenu est local.
  * @param seqCounts Nombre d'e-mails par séquence dans la cohorte sélectionnée.
+ * @param apiStatus État de la liste des cohortes du CRM (`idle` | `loading` | `ready` | `error`).
  * @param onOpenSchema Ouvre (ou ramène au premier plan) la fenêtre « Schéma de séquence » ; le bouton n'existe que si fourni.
  * @param schemaOpen La fenêtre « Schéma de séquence » est actuellement ouverte.
  */
@@ -25,7 +29,6 @@ export default function CohortNav({
   cohortId,
   sequence,
   totalCount,
-  countsByCohort,
   seqCounts,
   collapsed,
   apiStatus,
@@ -41,30 +44,34 @@ export default function CohortNav({
         type="button"
         className={`smx-nav-item${cohortId === 'all' ? ' is-active' : ''}`}
         aria-current={cohortId === 'all' ? 'page' : undefined}
+        aria-label={`Toutes les cohortes, ${countLabel(totalCount)}`}
         title="Toutes les cohortes"
         onClick={() => onSelectCohort('all')}
       >
         <span className="smx-nav-ico"><Inbox size={16} strokeWidth={1.9} aria-hidden /></span>
         <span className="smx-nav-label">Toutes les cohortes</span>
-        <span className="smx-nav-count">{totalCount === null ? '' : fmtInt(totalCount)}</span>
+        <span className="smx-nav-count">{fmtInt(totalCount)}</span>
       </button>
       {cohorts.map((c) => {
         const active = cohortId === c.id;
-        const count = countsByCohort.get(c.id) ?? c.stepCount;
-        const tip = [c.label, c.audience, c.inApi ? null : 'Absente du CRM (contenu local seul)', c.inCatalog ? null : 'Contenu local indisponible']
-          .filter(Boolean)
-          .join(' · ');
+        const count = c.stepCount;
+        // L'état du CRM n'est dit qu'une fois connu : pendant un échec de la liste, « absente du CRM » serait faux.
+        const crmNote = c.inApi ? null
+          : apiStatus === 'ready' ? 'Absente du CRM (contenu local seul)'
+            : apiStatus === 'error' ? 'État dans le CRM inconnu (CRM injoignable)' : null;
+        const tip = [c.label, c.audience, crmNote, c.inCatalog ? null : 'Contenu local indisponible'].filter(Boolean).join(' · ');
         return (
           <button
             key={c.id}
             type="button"
             className={`smx-nav-item${active ? ' is-active' : ''}`}
             aria-current={active ? 'page' : undefined}
+            aria-label={[c.short, c.audience, countLabel(count)].filter(Boolean).join(', ')}
             title={tip}
             onClick={() => onSelectCohort(c.id)}
           >
             <span className="smx-nav-ico">
-              <span className="smx-nav-dot" style={{ background: DOT[audienceTone(c.audience)] || DOT.grey }} aria-hidden />
+              <span className="smx-nav-dot" style={{ background: DOT[audienceTone(c.audience)] }} aria-hidden />
             </span>
             <span className="smx-nav-label">
               {c.short}
@@ -87,6 +94,7 @@ export default function CohortNav({
             type="button"
             className={`smx-nav-item${active ? ' is-active' : ''}`}
             aria-current={active ? 'true' : undefined}
+            aria-label={`${label}, ${countLabel(count)}`}
             title={label}
             onClick={() => onSelectSequence(seq)}
           >
@@ -100,6 +108,7 @@ export default function CohortNav({
         <button
           type="button"
           className="smx-nav-item"
+          aria-label="Schéma de séquence"
           title={schemaOpen ? 'Schéma de séquence (déjà ouvert : le ramener au premier plan)' : 'Rouvrir la fenêtre « Schéma de séquence »'}
           onClick={onOpenSchema}
         >

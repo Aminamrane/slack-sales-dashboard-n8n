@@ -4,15 +4,13 @@
 // survol Gmail, cases à cocher, navigation clavier (↑/↓, Début/Fin, Entrée, x). La liste est
 // virtualisée : seules les lignes visibles existent dans le DOM, quel que soit le volume.
 
-import { forwardRef, memo, useCallback, useEffect, useRef, useState } from 'react';
+import { forwardRef, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import { ChevronDown, ExternalLink, SearchX, TriangleAlert, Inbox } from 'lucide-react';
-import { fmtDayMonth, fmtInt, fmtRatio, fmtWhenShort, fmtWhenLong } from './format';
+import { fmtDayMonth, fmtInt, fmtRatio, fmtWhenShort, fmtWhenLong } from './format.js';
 import { useLatest } from './hooks';
-import { PHASES, SEGMENTS, shortRelative } from './model';
-import { Chip, Highlight } from './ui';
-
-const CHIP_TONE = { blue: 'blue', purple: 'purple', amber: 'amber', red: 'red', green: 'green', grey: 'grey' };
+import { PHASES, SEGMENTS, shortRelative, titleOf } from './model.js';
+import { Chip, Highlight, RetryButton } from './ui';
 
 /** @brief Résumé d'engagement d'une ligne, uniquement si les compteurs réels existent. */
 function statOf(email) {
@@ -29,17 +27,18 @@ const EmailRow = memo(function EmailRow({
   const when = t?.mode === 'calendar' ? fmtWhenShort(t.at) : shortRelative(t);
   const phase = PHASES[email.phase];
   const segment = email.segment ? SEGMENTS[email.segment] : null;
-  const title = email.subject || (email.hasContent ? '(sans objet)' : email.kind);
+  const title = titleOf(email);
   const stat = statOf(email);
   const fullWhen = t?.mode === 'calendar' ? fmtWhenLong(t.at) : t?.label || '';
-  const cls = ['smx-row', isOpen && 'is-open', isActive && 'is-active', isChecked && 'is-checked', isFocus && 'is-focus'].filter(Boolean).join(' ');
+  const cls = ['smx-row', isOpen && 'is-open', isActive && 'is-active', isChecked && 'is-checked'].filter(Boolean).join(' ');
   return (
     <div
       role="row"
       aria-level={2}
+      aria-rowindex={index + 1}
       aria-selected={isChecked}
       aria-current={isActive ? 'true' : undefined}
-      aria-label={`${title}. ${phase?.label ?? ''}${segment ? `, ${segment}` : ''}. ${email.status.label}. ${when}`}
+      aria-label={[title, phase?.label, segment, email.status.label, when].filter(Boolean).join('. ')}
       data-row-index={index}
       data-email-key={email.key}
       tabIndex={isFocus ? 0 : -1}
@@ -52,10 +51,10 @@ const EmailRow = memo(function EmailRow({
         <input type="checkbox" tabIndex={-1} checked={isChecked} onChange={() => onCheck(email.key)} aria-label={`Sélectionner l'e-mail : ${title}`} />
       </span>
       <span className="smx-row-n" aria-hidden>{String(email.order).padStart(2, '0')}</span>
-      <span className={`smx-dot is-${email.status.key}`} aria-hidden />
+      <span className={`smx-dot is-${email.status.key}`} aria-hidden title={email.status.label} />
       <span role="gridcell" className="smx-row-main">
         <span className="smx-row-tags">
-          {phase && <Chip tone={CHIP_TONE[phase.tone]}>{phase.label}</Chip>}
+          {phase && <Chip tone={phase.tone}>{phase.label}</Chip>}
           {segment && <Chip className="is-seg">{segment}</Chip>}
         </span>
         <span className={`smx-row-subject${email.subject ? '' : ' is-empty'}`}>
@@ -86,9 +85,10 @@ const EmailRow = memo(function EmailRow({
   );
 });
 
-function GroupRow({ index, row, isFocus, onToggle, onFocusRow }) {
+function GroupRow({ index, row, searching, isFocus, onToggle, onFocusRow }) {
   const g = row.group;
   const cohort = g.cohort;
+  const count = g.emails.length;
   const meta =
     g.kind === 'cohort'
       ? [cohort.audience, cohort.liveAt ? `live le ${fmtDayMonth(cohort.liveAt)}` : null].filter(Boolean).join(' · ')
@@ -97,18 +97,22 @@ function GroupRow({ index, row, isFocus, onToggle, onFocusRow }) {
     <div
       role="row"
       aria-level={1}
+      aria-rowindex={index + 1}
       aria-expanded={!row.collapsed}
-      aria-label={`${g.label}, ${g.emails.length} e-mail${g.emails.length > 1 ? 's' : ''}, ${row.collapsed ? 'replié' : 'déplié'}`}
+      aria-label={`${g.label}, ${count} e-mail${count > 1 ? 's' : ''}`}
       data-row-index={index}
       tabIndex={isFocus ? 0 : -1}
-      className={`smx-group${row.collapsed ? ' is-collapsed' : ''}`}
+      className={`smx-group${row.collapsed ? ' is-collapsed' : ''}${searching ? ' is-static' : ''}`}
+      title={searching ? 'Les groupes sont dépliés pendant une recherche' : undefined}
       onFocus={() => onFocusRow(index)}
-      onClick={() => onToggle(g.id)}
+      // Pendant une recherche les groupes restent dépliés : basculer l'un d'eux serait sans effet visible
+      // (et le laisserait replié une fois la recherche effacée).
+      onClick={() => !searching && onToggle(g.id)}
     >
       <span role="gridcell" className="smx-group-cell">
         <span className="smx-group-chev"><ChevronDown size={16} aria-hidden /></span>
         <span>{g.label}</span>
-        <span className="smx-group-count">{fmtInt(g.emails.length)}</span>
+        <span className="smx-group-count">{fmtInt(count)}</span>
         {meta && <span className="smx-group-meta">{meta}</span>}
       </span>
     </div>
@@ -116,17 +120,36 @@ function GroupRow({ index, row, isFocus, onToggle, onFocusRow }) {
 }
 
 /**
- * @brief Liste de Virtuoso rendue comme une grille arborescente ARIA (`treegrid`) : ses enfants directs
- * sont les lignes ; les en-têtes de groupe (niveau 1, `aria-expanded`) contiennent les e-mails (niveau 2).
+ * @brief Liste de Virtuoso rendue comme une grille arborescente ARIA (`treegrid`) : elle contient les lignes ;
+ * les en-têtes de groupe (niveau 1, `aria-expanded`) précèdent les e-mails (niveau 2). La liste étant
+ * virtualisée, chaque ligne porte son rang (`aria-rowindex`) sur `aria-rowcount` lignes au total.
  */
 const GridList = forwardRef(function GridList({ children, context, ...props }, ref) {
   return (
-    <div ref={ref} {...props} role="treegrid" aria-label="E-mails" aria-multiselectable="true" aria-rowcount={context?.count}>
+    <div
+      ref={ref}
+      {...props}
+      role="treegrid"
+      aria-label="E-mails"
+      aria-multiselectable="true"
+      aria-rowcount={context?.count}
+      aria-keyshortcuts="ArrowUp ArrowDown Home End PageUp PageDown Enter Space J K O X"
+    >
       {children}
     </div>
   );
 });
-const VIRTUOSO_COMPONENTS = { List: GridList };
+
+/**
+ * @brief Conteneur défilant de Virtuoso : `tabindex="-1"`. Par défaut il porte `tabindex="0"` : second arrêt de
+ * tabulation, sans nom, juste avant la ligne qui porte déjà l'unique arrêt (tabindex itinérant). Cliqué dans un
+ * espace vide, il reste focalisable : les flèches continuent de parcourir la liste.
+ */
+const Scroller = forwardRef(function Scroller({ context, ...props }, ref) {
+  void context;
+  return <div ref={ref} {...props} tabIndex={-1} />;
+});
+const VIRTUOSO_COMPONENTS = { List: GridList, Scroller };
 
 function Skeleton() {
   return (
@@ -148,15 +171,25 @@ function Skeleton() {
  * @param currentKey Dernier e-mail consulté : sa ligne est repérée et ramenée dans le champ au retour sur la liste.
  * @param visible La liste est l'onglet actif. Elle reste montée quand un e-mail est ouvert (défilement et focus conservés).
  * @param checked Ensemble des e-mails cochés.
+ * @param scopeKey (optionnel) Identifie ce que la liste montre (cohorte, séquence, recherche) : quand elle change, la
+ * liste revient en haut au lieu de garder un défilement qui n'a plus de sens.
+ * @param needsReload (optionnel) L'erreur de chargement ne se rattrape que par un rechargement de la page.
  */
 export default function EmailList({
-  model, openKeys, currentKey, visible, checked, loading, error, search, hasCohorts,
+  model, openKeys, currentKey, visible, checked, loading, error, search, hasCohorts, scopeKey, needsReload,
   onOpen, onOpenFloating, onToggleGroup, onCheck, onClearSearch, onRetry,
 }) {
   const virtuosoRef = useRef(null);
   const scrollerRef = useRef(null);
+  const setScroller = useCallback((el) => {
+    scrollerRef.current = el;
+  }, []);
   const [focusIndex, setFocusIndex] = useState(0);
-  const { rows, tokens } = model;
+  const { rows, searching } = model;
+  // `buildListModel` rend un NOUVEAU tableau de mots à chaque calcul : tel quel, il redessinerait toutes les lignes
+  // (propriété de chacune) dès qu'un seul e-mail change. On ne le renouvelle que si les mots eux-mêmes changent.
+  const tokensKey = JSON.stringify(model.tokens);
+  const tokens = useMemo(() => JSON.parse(tokensKey), [tokensKey]);
   const last = rows.length - 1;
   const focus = Math.min(focusIndex, Math.max(0, last));
 
@@ -186,6 +219,15 @@ export default function EmailList({
     };
   }, [currentKey, visible, rowsRef]);
 
+  // Une autre cohorte, une autre séquence, une autre recherche : c'est une autre liste, elle repart du haut.
+  const scopeRef = useRef(scopeKey);
+  useEffect(() => {
+    if (scopeRef.current === scopeKey) return;
+    scopeRef.current = scopeKey;
+    setFocusIndex(0);
+    virtuosoRef.current?.scrollToIndex({ index: 0, align: 'start', behavior: 'auto' });
+  }, [scopeKey]);
+
   // Une ligne supprimée par un filtre ne doit pas laisser l'index de focus dans le vide.
   useEffect(() => {
     setFocusIndex((i) => Math.min(i, Math.max(0, rows.length - 1)));
@@ -206,7 +248,10 @@ export default function EmailList({
   );
 
   const onKeyDown = (e) => {
-    if (e.target.closest('input, button') && e.target.tagName !== 'DIV') return;
+    if (e.target.closest('input, button')) return;
+    // Les raccourcis du navigateur et du système (Ctrl/Cmd/Alt + touche : Ctrl+K, Ctrl+O, Alt+← …) ne sont jamais
+    // détournés. Seul Ctrl/Cmd + Entrée (ouvrir en arrière-plan) est un combiné prévu.
+    if (e.altKey || ((e.ctrlKey || e.metaKey) && e.key !== 'Enter')) return;
     const row = rows[focus];
     switch (e.key) {
       case 'ArrowDown':
@@ -236,13 +281,13 @@ export default function EmailList({
         goTo(focus - 8);
         break;
       case 'ArrowRight':
-        if (row?.type === 'group' && row.collapsed) {
+        if (row?.type === 'group' && row.collapsed && !searching) {
           e.preventDefault();
           onToggleGroup(row.id);
         }
         break;
       case 'ArrowLeft':
-        if (row?.type === 'group' && !row.collapsed) {
+        if (row?.type === 'group' && !row.collapsed && !searching) {
           e.preventDefault();
           onToggleGroup(row.id);
         }
@@ -251,8 +296,9 @@ export default function EmailList({
       case 'o':
         if (!row) break;
         e.preventDefault();
-        if (row.type === 'group') onToggleGroup(row.id);
-        else if (e.shiftKey) onOpenFloating(row.email.key);
+        if (row.type === 'group') {
+          if (!searching) onToggleGroup(row.id);
+        } else if (e.shiftKey) onOpenFloating(row.email.key);
         else onOpen(row.email.key, { background: e.ctrlKey || e.metaKey });
         break;
       case ' ':
@@ -269,7 +315,7 @@ export default function EmailList({
   const itemContent = useCallback(
     (index, row) =>
       row.type === 'group' ? (
-        <GroupRow index={index} row={row} isFocus={index === focus} onToggle={onToggleGroup} onFocusRow={setFocusIndex} />
+        <GroupRow index={index} row={row} searching={searching} isFocus={index === focus} onToggle={onToggleGroup} onFocusRow={setFocusIndex} />
       ) : (
         <EmailRow
           index={index}
@@ -285,7 +331,7 @@ export default function EmailList({
           onFocusRow={setFocusIndex}
         />
       ),
-    [focus, tokens, openKeys, currentKey, checked, onOpen, onOpenFloating, onCheck, onToggleGroup]
+    [focus, tokens, searching, openKeys, currentKey, checked, onOpen, onOpenFloating, onCheck, onToggleGroup]
   );
 
   let content;
@@ -293,9 +339,7 @@ export default function EmailList({
     content = (
       <Virtuoso
         ref={virtuosoRef}
-        scrollerRef={(el) => {
-          scrollerRef.current = el;
-        }}
+        scrollerRef={setScroller}
         style={{ height: '100%' }}
         data={rows}
         defaultItemHeight={44}
@@ -314,7 +358,7 @@ export default function EmailList({
         <TriangleAlert size={28} aria-hidden />
         <strong>Impossible de charger les e-mails</strong>
         <p>{error}</p>
-        <button type="button" className="smx-btn" onClick={onRetry}>Réessayer</button>
+        <RetryButton needsReload={needsReload} onRetry={onRetry} />
       </div>
     );
   } else if (search.trim()) {

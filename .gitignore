@@ -90,3 +90,6 @@ id_rsa*
 # inscrits) : données marketing sensibles, repo public -> jamais commitées. Régénérable via
 # scripts/webinar-sequences/build.mjs ; le catalogue (métadonnées seules) reste suivi.
 src/data/webinarSequences/cohorts/
+
+# Marqueurs de téléchargement Windows (fichier:Zone.Identifier) : jamais commités
+*:Zone.Identifier

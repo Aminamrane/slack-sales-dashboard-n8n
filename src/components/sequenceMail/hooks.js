@@ -1,9 +1,9 @@
 // src/components/sequenceMail/hooks.js
 //
-// Hooks du mini client e-mail : mesure d'élément, horloge, et accès aux données dérivées
-// (liste d'e-mails d'une cohorte, détail d'un e-mail).
+// Hooks du mini client e-mail : mesure d'élément, horloge partagée, geste de glisser, et accès aux
+// données dérivées (liste d'e-mails d'une cohorte, détail d'un e-mail).
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   deriveCohorts,
   ensureApiCohorts,
@@ -11,9 +11,10 @@ import {
   ensureStats,
   reloadAll,
   useDataStore,
-} from './dataStore';
-import { normalize } from './format';
-import { PHASES, SEQUENCES, emailKey, neighborsOf, parseKey, stepStatus } from './model';
+} from './dataStore.js';
+import { MINUTE_MS, normalize } from './format.js';
+import { draftedSteps } from './mailDraft';
+import { PHASES, SEQUENCES, emailKey, fallbackStep, neighborsOf, parseKey, reuseStable, stepStatus } from './model.js';
 
 const useIsoLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
@@ -52,15 +53,57 @@ export function useElementSize(ref) {
   return size;
 }
 
-/** @brief Instant courant, rafraîchi périodiquement (les statuts « à venir » changent avec l'heure). */
-function useNow(intervalMs = 60_000) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
-  return now;
+// ── Horloge partagée ───────────────────────────────────────────────────────────
+// Les statuts « à venir » changent avec l'heure : un tic par minute. UNE seule horloge pour toute l'interface
+// (et non un `setInterval` par lecteur ou par fenêtre flottante), mise en pause quand la page est masquée.
+
+let clockNow = Date.now();
+const clockListeners = new Set();
+let clockTimer = null;
+
+function clockTick() {
+  clockNow = Date.now();
+  clockListeners.forEach((l) => l());
 }
+function clockStart() {
+  if (clockTimer === null && !document.hidden) clockTimer = setInterval(clockTick, MINUTE_MS);
+}
+function clockStop() {
+  if (clockTimer !== null) {
+    clearInterval(clockTimer);
+    clockTimer = null;
+  }
+}
+function onClockVisibility() {
+  if (document.hidden) {
+    clockStop();
+  } else {
+    clockTick(); // l'heure a pu avancer pendant la pause
+    clockStart();
+  }
+}
+function subscribeClock(listener) {
+  clockListeners.add(listener);
+  if (clockListeners.size === 1) {
+    document.addEventListener('visibilitychange', onClockVisibility);
+    if (Date.now() - clockNow >= MINUTE_MS) clockTick();
+    clockStart();
+  }
+  return () => {
+    clockListeners.delete(listener);
+    if (clockListeners.size === 0) {
+      document.removeEventListener('visibilitychange', onClockVisibility);
+      clockStop();
+    }
+  };
+}
+
+/** @brief Instant courant (ms), rafraîchi une fois par minute tant que la page est visible. */
+function useNow() {
+  return useSyncExternalStore(subscribeClock, () => clockNow, () => clockNow);
+}
+
+// ── Gestes ─────────────────────────────────────────────────────────────────────
 
 /**
  * @brief Active `smx-dragging` sur <html> pendant un geste (drag, redimensionnement) : les iframes
@@ -80,6 +123,55 @@ export function beginDragMode(cursor) {
   // relâchement peut ne jamais arriver ; sans cela le curseur et les iframes resteraient bloqués.
   window.addEventListener('blur', end);
   return end;
+}
+
+/**
+ * @brief Geste de glisser au pointeur (déplacer une fenêtre, tirer un séparateur, redimensionner) avec un
+ * nettoyage GARANTI : relâchement, annulation, perte de la capture du pointeur (élément retiré, fenêtre qui
+ * perd le focus) ou démontage du composant en plein geste terminent tous le geste. Le mode `smx-dragging`
+ * (curseur forcé, iframes insensibles) n'est donc jamais laissé en place.
+ * @returns `start(event, { cursor, onMove, onEnd })` à appeler dans un `onPointerDown` :
+ *  - `onMove(ev)` à chaque déplacement du pointeur ;
+ *  - `onEnd(ev, completed)` une seule fois : `completed` vaut `false` quand le composant a été démonté en
+ *    plein geste (`ev` vaut alors `null`) — il n'y a plus rien à valider.
+ */
+export function useDragGesture() {
+  const stopRef = useRef(null);
+  // Démontage en plein geste : on termine proprement, sans valider.
+  useEffect(() => () => stopRef.current?.(false), []);
+  return useCallback((e, { cursor, onMove, onEnd }) => {
+    stopRef.current?.(false);
+    const el = e.currentTarget;
+    const pointerId = e.pointerId;
+    el.setPointerCapture?.(pointerId);
+    const endMode = beginDragMode(cursor);
+    let done = false;
+    const move = (ev) => onMove(ev);
+    const finish = (ev, completed) => {
+      if (done) return;
+      done = true;
+      stopRef.current = null;
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+      el.removeEventListener('pointercancel', up);
+      el.removeEventListener('lostpointercapture', up);
+      try {
+        el.releasePointerCapture?.(pointerId);
+      } catch {
+        /* capture déjà relâchée */
+      }
+      endMode();
+      onEnd?.(ev, completed);
+    };
+    function up(ev) {
+      finish(ev, true);
+    }
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    el.addEventListener('lostpointercapture', up);
+    stopRef.current = (completed = false) => finish(null, completed);
+  }, []);
 }
 
 // ── Dérivation des e-mails ─────────────────────────────────────────────────────
@@ -108,14 +200,21 @@ function searchTextOf(cohort, step) {
   return cached;
 }
 
+/** @brief Compteurs « en cours de demande » : une cohorte dont les compteurs vont être demandés n'est pas « non relevée ». */
+const NO_KINDS = Object.freeze(Object.create(null));
+const PENDING_STATS = Object.freeze({ status: 'loading', fetchedAt: null, byKind: NO_KINDS, summary: null, error: null });
+const NO_EMAILS = Object.freeze([]);
+
 /**
  * @brief Étapes d'une cohorte sous forme d'objets « e-mail » prêts pour la liste.
  * @note Sans contenu local mais avec des compteurs du CRM, on liste les types d'e-mails connus
- * du CRM (nom technique) plutôt que de cacher des envois réels.
+ * du CRM (nom technique) plutôt que de cacher des envois réels : ces e-mails sont marqués `fallback: true`.
  */
-function deriveEmails(cohort, contentEntry, statsEntry, nowMs) {
+function deriveEmails(cohort, contentEntry, statsEntry, nowMs, cohortDrafts) {
   if (contentEntry?.status === 'ready' && contentEntry.data) {
-    return contentEntry.data.steps.map((step) => ({
+    // Brouillons de l'éditeur de mail superposés au contenu d'origine (cf. mailDraft.js) : liste,
+    // onglets et schéma lisent ainsi la version en cours d'édition, sans autre source de vérité.
+    return draftedSteps(contentEntry.data.steps, cohortDrafts).map((step) => ({
       key: emailKey(cohort.id, step.kind),
       cohortId: cohort.id,
       cohortShort: cohort.short,
@@ -130,47 +229,83 @@ function deriveEmails(cohort, contentEntry, statsEntry, nowMs) {
       snippet: step.snippet || '',
       timing: step.timing,
       hasContent: Boolean(step.html || step.text),
+      draftStatus: step.draftStatus ?? null,
       stats: statsEntry?.byKind?.[step.kind] ?? null,
       status: stepStatus(step, statsEntry, nowMs),
       searchText: searchTextOf(cohort, step),
     }));
   }
-  if (statsEntry?.status === 'ready') {
-    return Object.keys(statsEntry.byKind || {})
-      .sort()
-      .map((kind, i) => ({
+  // Les derniers chiffres connus suffisent à lister les types d'e-mails, même pendant un nouveau relevé.
+  if (statsEntry && Number.isFinite(statsEntry.fetchedAt)) {
+    const kinds = Object.keys(statsEntry.byKind).sort();
+    return kinds.map((kind, i) => {
+      const step = fallbackStep(kind, i, kinds.length);
+      return {
         key: emailKey(cohort.id, kind),
         cohortId: cohort.id,
         cohortShort: cohort.short,
         kind,
-        order: i + 1,
-        sequence: 'pre',
-        sequenceIndex: i + 1,
-        sequenceCount: Object.keys(statsEntry.byKind).length,
-        phase: kind.includes('post') ? 'post' : 'nurture',
-        segment: null,
-        subject: '',
-        snippet: '',
-        timing: { mode: 'unknown' },
+        order: step.order,
+        sequence: step.sequence,
+        sequenceIndex: step.sequenceIndex,
+        sequenceCount: step.sequenceCount,
+        phase: step.phase,
+        segment: step.segment,
+        subject: step.subject,
+        snippet: step.snippet,
+        timing: step.timing,
         hasContent: false,
+        fallback: true,
         stats: statsEntry.byKind[kind],
-        status: stepStatus({ kind, timing: {} }, statsEntry, nowMs),
+        status: stepStatus(step, statsEntry, nowMs),
         searchText: normalize(`${kind} ${cohort.label}`),
-      }));
+      };
+    });
   }
-  return [];
+  return NO_EMAILS;
+}
+
+/**
+ * @brief Les e-mails d'UNE cohorte, mémoïsés par cohorte : tant que son contenu, ses compteurs, ses brouillons
+ * et sa fiche n'ont pas changé, le MÊME tableau revient ; quand l'un d'eux change (tic d'horloge compris), les
+ * e-mails qui n'ont en fait pas bougé gardent leur identité (lignes `memo` de la liste intactes).
+ */
+const derivedCache = new Map();
+function emailsOfCohort(cohort, contentEntry, statsEntry, cohortDrafts, nowMs) {
+  const hit = derivedCache.get(cohort.id);
+  if (
+    hit && hit.cohort === cohort && hit.content === contentEntry && hit.stats === statsEntry
+    && hit.drafts === cohortDrafts && hit.nowMs === nowMs
+  ) {
+    return hit.value;
+  }
+  const value = reuseStable(hit?.value, deriveEmails(cohort, contentEntry, statsEntry, nowMs, cohortDrafts));
+  derivedCache.set(cohort.id, { cohort, content: contentEntry, stats: statsEntry, drafts: cohortDrafts, nowMs, value });
+  return value;
+}
+
+/** @brief Même contenu (élément par élément) que l'appel précédent : renvoie la valeur déjà calculée. */
+function useStableBy(items, compute) {
+  const ref = useRef(null);
+  const prev = ref.current;
+  if (!prev || prev.items.length !== items.length || items.some((item, i) => item !== prev.items[i])) {
+    ref.current = { items, value: compute(items) };
+  }
+  return ref.current.value;
 }
 
 /**
  * @brief Cohortes, e-mails de la portée courante et état de chargement.
  * @param cohortId `'all'` ou l'identifiant d'une cohorte.
  * @param openKeys Clés des e-mails ouverts (onglets/fenêtres) : leur cohorte est chargée même hors portée.
+ * @returns `{ cohorts, api, emails, emailByKey, loadingContent, contentError, contentNeedsReload, refreshing, refresh }`.
  */
 export function useSequenceMail({ cohortId, openKeys }) {
   const api = useDataStore((d) => d.api);
   const content = useDataStore((d) => d.content);
   const stats = useDataStore((d) => d.stats);
-  const nowMs = useNow(60_000);
+  const drafts = useDataStore((d) => d.drafts);
+  const nowMs = useNow();
   const cohorts = useMemo(() => deriveCohorts(api), [api]);
 
   useEffect(() => {
@@ -189,26 +324,39 @@ export function useSequenceMail({ cohortId, openKeys }) {
   useEffect(() => {
     for (const id of contentKey ? contentKey.split('|') : []) void ensureContent(id);
   }, [contentKey]);
+  // `ensureStats` attend lui-même la liste des cohortes du CRM et ne redemande rien de frais : pas besoin de
+  // réagir aux changements de `api.status`.
   useEffect(() => {
     for (const id of statsKey ? statsKey.split('|') : []) void ensureStats(id);
-  }, [statsKey, api.status]);
+  }, [statsKey]);
 
+  // Une cohorte dont les compteurs vont être demandés est « en cours de relevé », pas « non relevée ».
+  const wantedStats = useMemo(() => new Set(statsKey ? statsKey.split('|') : []), [statsKey]);
+
+  // Seules les cohortes de la portée ou ouvertes sont dérivées ; chacune est mémoïsée à part.
   const byCohort = useMemo(() => {
     const map = new Map();
-    for (const c of cohorts) map.set(c.id, deriveEmails(c, content[c.id], stats[c.id], nowMs));
+    for (const c of cohorts) {
+      if (!contentIds.includes(c.id)) continue;
+      const entry = stats[c.id] ?? (wantedStats.has(c.id) ? PENDING_STATS : undefined);
+      map.set(c.id, emailsOfCohort(c, content[c.id], entry, drafts[c.id], nowMs));
+    }
     return map;
-  }, [cohorts, content, stats, nowMs]);
+  }, [cohorts, contentIds, content, stats, drafts, nowMs, wantedStats]);
 
-  const emails = useMemo(() => scopeIds.flatMap((id) => byCohort.get(id) || []), [scopeIds, byCohort]);
-  const emailByKey = useMemo(() => {
+  const emails = useStableBy(
+    scopeIds.map((id) => byCohort.get(id) ?? NO_EMAILS),
+    (lists) => lists.flat()
+  );
+  const emailByKey = useStableBy([...byCohort.values()], (lists) => {
     const map = new Map();
-    for (const list of byCohort.values()) for (const e of list) map.set(e.key, e);
+    for (const list of lists) for (const e of list) map.set(e.key, e);
     return map;
-  }, [byCohort]);
+  });
 
   const scopeContent = scopeIds.map((id) => content[id]);
   const loadingContent = scopeContent.some((c) => !c || c.status === 'loading');
-  const failedContent = scopeContent.filter((c) => c?.status === 'error');
+  const failedContent = scopeContent.find((c) => c?.status === 'error');
   const refreshing = api.status === 'loading' || Object.values(stats).some((s) => s.status === 'loading');
 
   const refresh = useCallback(() => reloadAll(), []);
@@ -218,9 +366,9 @@ export function useSequenceMail({ cohortId, openKeys }) {
     api,
     emails,
     emailByKey,
-    stats,
     loadingContent,
-    contentError: failedContent[0]?.error ?? null,
+    contentError: failedContent?.error ?? null,
+    contentNeedsReload: Boolean(failedContent?.reload),
     refreshing,
     refresh,
   };
@@ -228,18 +376,22 @@ export function useSequenceMail({ cohortId, openKeys }) {
 
 /**
  * @brief Détail complet d'un e-mail (corps, en-têtes, voisins, compteurs), chargé à la demande.
- * @returns `state` : `loading` | `ready` | `missing` (cohorte ou étape introuvable) | `error`.
+ * @returns `state` : `loading` | `ready` | `missing` (cohorte ou étape introuvable) | `error` (avec `needsReload`
+ * quand seul un rechargement de la page peut aider). `noContent` + `step.fallback` : e-mail connu du seul CRM.
  */
 export function useEmailDetail(key) {
   const { cohortId, kind } = parseKey(key);
   const api = useDataStore((d) => d.api);
   const contentEntry = useDataStore((d) => d.content[cohortId]);
   const statsEntry = useDataStore((d) => d.stats[cohortId]);
-  const nowMs = useNow(60_000);
+  // Brouillons de la seule cohorte de cet e-mail : modifier un autre e-mail ne re-rend pas celui-ci.
+  const cohortDrafts = useDataStore((d) => d.drafts[cohortId]);
+  const nowMs = useNow();
 
   useEffect(() => {
     if (!cohortId) return;
     void ensureContent(cohortId);
+    // Sans effet quand le relevé a moins d'une minute : changer d'onglet ne relance pas le CRM.
     void ensureStats(cohortId);
   }, [cohortId]);
 
@@ -248,23 +400,38 @@ export function useEmailDetail(key) {
 
   return useMemo(() => {
     const base = { key, cohortId, kind, cohort, stats: statsEntry ?? null };
-    if (!cohort && api.status !== 'ready' && !contentEntry) return { ...base, state: 'loading' };
     if (!contentEntry || contentEntry.status === 'loading') return { ...base, state: 'loading' };
-    if (contentEntry.status === 'error') return { ...base, state: 'error', error: contentEntry.error };
+    if (contentEntry.status === 'error') {
+      return { ...base, state: 'error', error: contentEntry.error, needsReload: Boolean(contentEntry.reload) };
+    }
+    // Les compteurs de cette cohorte ont été demandés à l'ouverture de l'e-mail : tant qu'ils n'ont pas répondu.
+    const stats = statsEntry ?? PENDING_STATS;
     if (contentEntry.status === 'missing' || !contentEntry.data) {
-      const kindStats = statsEntry?.byKind?.[kind] ?? null;
+      // Cohorte du CRM seul : l'e-mail n'existe que par ses compteurs. « Introuvable » n'est dit qu'une fois le
+      // CRM interrogé — jamais pendant que la réponse est en route.
+      const hasData = Number.isFinite(stats.fetchedAt);
+      if (stats.status === 'loading' && !hasData) return { ...base, state: 'loading' };
+      if (stats.status === 'error' && !hasData) {
+        return { ...base, state: 'error', error: `Compteurs du CRM indisponibles (${stats.error}) : impossible de retrouver cet e-mail.`, needsReload: false };
+      }
+      const kinds = Object.keys(stats.byKind ?? NO_KINDS).sort();
+      const index = kinds.indexOf(kind);
+      if (index < 0) return { ...base, state: 'missing', noContent: true };
+      const step = fallbackStep(kind, index, kinds.length);
       return {
         ...base,
-        state: kindStats ? 'ready' : 'missing',
+        state: 'ready',
         noContent: true,
-        step: kindStats ? { kind, subject: '', timing: { mode: 'unknown' }, conditions: [], tags: [], headers: [], attachments: [], links: [], text: '', order: 0, sequence: 'pre', phase: 'nurture' } : null,
+        step,
         steps: [],
         sequences: {},
-        kindStats,
-        status: stepStatus({ kind, timing: {} }, statsEntry, nowMs),
+        kindStats: stats.byKind[kind],
+        status: stepStatus(step, stats, nowMs),
       };
     }
-    const { steps, sequences, rules } = contentEntry.data;
+    const { sequences, rules } = contentEntry.data;
+    // Les voisins (« Précédent »/« Suivant ») portent aussi leurs brouillons : leurs objets changent avec eux.
+    const steps = draftedSteps(contentEntry.data.steps, cohortDrafts);
     const index = steps.findIndex((s) => s.kind === kind);
     if (index < 0) return { ...base, state: 'missing' };
     const step = steps[index];
@@ -273,6 +440,9 @@ export function useEmailDetail(key) {
       ...base,
       state: 'ready',
       step,
+      // Pour l'éditeur : l'étape d'origine (sans brouillon) et le brouillon lui-même.
+      originalStep: contentEntry.data.steps[index],
+      draft: cohortDrafts?.[kind] ?? null,
       steps,
       index,
       total: steps.length,
@@ -284,9 +454,9 @@ export function useEmailDetail(key) {
       seqPrev: seqNb.prev,
       seqNext: seqNb.next,
       kindStats: statsEntry?.byKind?.[kind] ?? null,
-      status: stepStatus(step, statsEntry, nowMs),
+      status: stepStatus(step, stats, nowMs),
       meta: contentEntry.data.cohort,
       generatedAt: contentEntry.data.generatedAt,
     };
-  }, [key, cohortId, kind, cohort, statsEntry, contentEntry, api.status, nowMs]);
+  }, [key, cohortId, kind, cohort, statsEntry, contentEntry, cohortDrafts, nowMs]);
 }

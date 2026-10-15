@@ -7,6 +7,17 @@
 export const SCHEMA_BORDER = '#fc6401';
 /** Fond (intérieur) de la fenêtre. */
 export const SCHEMA_BACKGROUND = '#ffe1bb';
+/**
+ * Points d'impression du corps de la fenêtre : deux trames de points orange (la teinte du contour), à peine perceptibles,
+ * à poser AVANT `SCHEMA_BACKGROUND` dans une déclaration `background`. La barre de titre, elle, reste unie (sans points).
+ */
+export const SCHEMA_DOTS =
+  'radial-gradient(rgba(252, 100, 1, 0.09) 0.6px, transparent 0.95px) 0 0 / 4px 4px, ' +
+  'radial-gradient(rgba(252, 100, 1, 0.06) 0.5px, transparent 0.85px) 2px 2px / 7px 7px';
+/** Fond des cases, des boutons et des puces posés sur le fond de la fenêtre (rapport ≈ 7:1 avec le texte). */
+export const SCHEMA_CARD = '#fffaf2';
+/** Texte d'erreur sur le fond de la fenêtre (rapport ≈ 5,9:1). */
+export const SCHEMA_DANGER = '#a3260f';
 
 /**
  * Palette de la fenêtre (mêmes clés que `getColors` de CeoDashboard). Fixe, quel que soit le mode

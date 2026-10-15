@@ -7,5 +7,8 @@ import { createContext, useContext } from 'react';
 
 export const ThemeContext = createContext('light');
 
-/** @brief Classe CSS qui porte les variables de couleur du thème courant. */
-export const useThemeClass = () => `smx-theme-${useContext(ThemeContext)}`;
+/**
+ * @brief Classes CSS qui portent les variables de couleur du thème courant, plus `smx-beige` : le fond beige à points et les
+ * cases de sélection de la Gestion de séquence (cf. beigeStyles.js). L'Éditeur de mail n'utilise pas ce hook : il garde son apparence.
+ */
+export const useThemeClass = () => `smx-theme-${useContext(ThemeContext)} smx-beige`;

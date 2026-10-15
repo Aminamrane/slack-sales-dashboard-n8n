@@ -2,8 +2,12 @@
 //
 // Formatage de dates/nombres pour le mini client e-mail. Tout est affiché à l'heure de
 // Paris : les séquences sont planifiées en Europe/Paris quel que soit le fuseau du poste.
+// Module pur (aucune dépendance) : il tourne tel quel sous Node (`node --test`).
 
 const TZ = 'Europe/Paris';
+
+/** @brief Une minute en millisecondes (horloge partagée, durée de vie du cache des compteurs…). */
+export const MINUTE_MS = 60_000;
 
 const fmt = (opts) => new Intl.DateTimeFormat('fr-FR', { timeZone: TZ, ...opts });
 const F_DAY_MONTH = fmt({ day: 'numeric', month: 'short' });
@@ -16,8 +20,13 @@ const F_YEAR = fmt({ year: 'numeric' });
 const F_YMD = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
 const F_INT = new Intl.NumberFormat('fr-FR');
 
+/**
+ * @brief Date valide ou `null`. Une valeur absente (`null`, `undefined`, chaîne vide, booléen) n'est PAS
+ * la date 0 : `new Date(null)` donnerait le 1er janvier 1970.
+ */
 const valid = (iso) => {
-  const d = new Date(iso);
+  if (iso === null || iso === undefined || iso === '' || typeof iso === 'boolean') return null;
+  const d = iso instanceof Date ? iso : new Date(iso);
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
@@ -75,10 +84,11 @@ export function relToLive(atIso, liveIso) {
   return n > 0 ? `J+${n}` : `J${n}`;
 }
 
-/** @brief Durée lisible : « 3 j 7 h », « 2 h 15 min », « 45 min ». */
+/** @brief Durée lisible : « 3 j 7 h », « 2 h 15 min », « 45 min ». Chaîne vide si la durée n'est pas un nombre fini. */
 export function humanSpan(ms) {
+  if (!Number.isFinite(ms)) return '';
   const abs = Math.abs(ms);
-  const min = Math.round(abs / 60000);
+  const min = Math.round(abs / MINUTE_MS);
   const d = Math.floor(min / 1440);
   const h = Math.floor((min % 1440) / 60);
   const m = min % 60;
@@ -94,7 +104,7 @@ export function fromNow(iso, nowMs = Date.now()) {
   const diff = d.getTime() - nowMs;
   const abs = Math.abs(diff);
   let text;
-  if (abs < 3600000) text = `${Math.max(1, Math.round(abs / 60000))} min`;
+  if (abs < 3600000) text = `${Math.max(1, Math.round(abs / MINUTE_MS))} min`;
   else if (abs < 86400000) text = `${Math.round(abs / 3600000)} h`;
   else {
     const days = Math.round(abs / 86400000);
@@ -111,12 +121,21 @@ export function fmtRatio(part, total) {
   return `${Math.round((part / total) * 100)} %`;
 }
 
-/** @brief Minuscules sans accents, pour la recherche. */
+/**
+ * @brief Texte replié pour la recherche : minuscules, sans accents, apostrophes typographiques ramenées
+ * à l'apostrophe droite (« d’avoir » = « d'avoir »), œ/æ développés, espaces insécables en espaces.
+ * @note Les marques combinantes sont retirées par la plage `\u0300-\u036f` (écrite en échappements : aucun
+ * caractère invisible dans le source).
+ */
 export function normalize(s) {
   return String(s ?? '')
+    .replace(/[\u2018\u2019\u02bc]/g, "'")
+    .replace(/[\u00a0\u2007\u2009\u202f]/g, ' ')
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase();
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\u0153/g, 'oe')
+    .replace(/\u00e6/g, 'ae');
 }
 
 /** @brief Taille de fichier lisible. */

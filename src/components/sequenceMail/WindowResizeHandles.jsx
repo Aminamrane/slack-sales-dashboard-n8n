@@ -13,6 +13,7 @@
 import { useEffect, useRef } from 'react';
 import { beginDragMode, useLatest } from './hooks';
 import { fixedViewport } from './viewportBox';
+import { NAVBAR_SAFE_TOP } from './constants';
 
 const HANDLES = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 const CURSOR = { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', ne: 'nesw-resize', sw: 'nesw-resize', nw: 'nwse-resize', se: 'nwse-resize' };
@@ -23,7 +24,7 @@ const CURSOR = { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize',
  * @param min Taille minimale `{ w, h }`.
  * @param onChange Reçoit la nouvelle géométrie `{ w, h, x, y }`.
  */
-export default function WindowResizeHandles({ geometry, safeTop = 64, min = { w: 640, h: 440 }, disabled = false, onChange }) {
+export default function WindowResizeHandles({ geometry, safeTop = NAVBAR_SAFE_TOP, min = { w: 640, h: 440 }, disabled = false, onChange }) {
   const geoRef = useLatest(geometry);
   const frameRef = useRef(0);
   useEffect(() => () => cancelAnimationFrame(frameRef.current), []);
@@ -35,6 +36,11 @@ export default function WindowResizeHandles({ geometry, safeTop = 64, min = { w:
     const handle = e.currentTarget;
     handle.setPointerCapture?.(e.pointerId);
     const g0 = { ...geoRef.current };
+    // Le minimum ne force JAMAIS l'agrandissement : une fenêtre accrochée sur une moitié d'écran plus étroite que
+    // `min` (575 px à 1440 px barre dépliée, 597 px à 1280 px) sautait à 640 px dès le premier pixel tiré vers
+    // l'intérieur. Elle garde sa taille tant qu'on ne la réduit pas, et ne peut pas descendre sous celle-ci.
+    const minW = Math.min(min.w, g0.w);
+    const minH = Math.min(min.h, g0.h);
     // Zone où le cadre est réellement visible (sans la barre de défilement ni sa gouttière, cf. viewportBox.js).
     const box = fixedViewport();
     const vw = box.left + box.width;
@@ -65,10 +71,10 @@ export default function WindowResizeHandles({ geometry, safeTop = 64, min = { w:
       let R = R0;
       let T = T0;
       let B = B0;
-      if (dir.includes('e')) R = Math.max(L0 + min.w, Math.min(R0 + dx, L0 + maxW, vw - 8));
-      if (dir.includes('w')) L = Math.min(R0 - min.w, Math.max(L0 + dx, R0 - maxW, 8));
-      if (dir.includes('s')) B = Math.max(T0 + min.h, Math.min(B0 + dy, T0 + maxH, vh - 8));
-      if (dir.includes('n')) T = Math.min(B0 - min.h, Math.max(T0 + dy, B0 - maxH, safeTop));
+      if (dir.includes('e')) R = Math.max(L0 + minW, Math.min(R0 + dx, L0 + maxW, vw - 8));
+      if (dir.includes('w')) L = Math.min(R0 - minW, Math.max(L0 + dx, R0 - maxW, 8));
+      if (dir.includes('s')) B = Math.max(T0 + minH, Math.min(B0 + dy, T0 + maxH, vh - 8));
+      if (dir.includes('n')) T = Math.min(B0 - minH, Math.max(T0 + dy, B0 - maxH, safeTop));
       pending = {
         w: Math.round(R - L),
         h: Math.round(B - T),

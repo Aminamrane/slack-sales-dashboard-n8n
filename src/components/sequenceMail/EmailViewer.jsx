@@ -3,19 +3,28 @@
 // Lecteur d'un e-mail : objet, en-tête façon Gmail (expéditeur, destinataires, date), corps réel
 // (HTML ou texte), puis « Informations de séquence ». Le même composant sert dans un onglet et
 // dans une fenêtre flottante ; il ne reçoit que le détail déjà chargé (cf. useEmailDetail).
+//
+// Le lecteur n'est PAS remonté quand on passe à l'e-mail précédent/suivant (seul le corps l'est, via sa clé) :
+// le bouton qui vient d'être activé garde le focus clavier.
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Copy, PictureInPicture2, TriangleAlert, SearchX } from 'lucide-react';
 import { actions, useSeqStore } from './store';
-import { fmtWhenLong, fromNow } from './format';
-import { PHASES, SEGMENTS, SEQUENCES, audienceTone, describeTiming, emailKey } from './model';
-import { Chip } from './ui';
+import { fmtWhenLong, fromNow } from './format.js';
+import { PHASES, SEGMENTS, SEQUENCES, audienceTone, describeTiming, emailKey, titleOf } from './model.js';
+import { Chip, RetryButton } from './ui';
 import EmailBodyFrame from './EmailBodyFrame';
-import { hasMergeFields } from './emailHtml';
+import { hasMergeFields } from './emailHtml.js';
 import SequenceInfo from './SequenceInfo';
 
 /** @brief Position de défilement de chaque e-mail, gardée le temps de la session (changement d'onglet sans perte d'état). */
 const scrollMemory = new Map();
+
+/**
+ * @brief Prestataire d'envoi des e-mails des cohortes webinaire. La donnée embarquée (instantané de la landing) ne le
+ * nomme pas : c'est une constante documentée (cf. src/data/webinarSequences/README.md), seul le domaine d'envoi est lu dans l'e-mail.
+ */
+const SEND_PROVIDER = 'Resend';
 
 /** @brief « Nom <adresse> » → { name, email }. */
 function parseAddress(raw) {
@@ -23,6 +32,9 @@ function parseAddress(raw) {
   if (m) return { name: m[1].replace(/^"|"$/g, ''), email: m[2] };
   return { name: raw || '', email: '' };
 }
+
+/** @brief Domaine d'une adresse (« info@ownertechnology.com » → « ownertechnology.com »), ou chaîne vide. */
+const domainOf = (address) => (address.includes('@') ? address.split('@').pop().trim() : '');
 
 function Skeleton() {
   return (
@@ -57,18 +69,22 @@ export default function EmailViewer({ detail, context, tabId, panelId, apiStatus
   const viewMode = useSeqStore((s) => s.viewMode[key]) || 'html';
   const detailsOpen = useSeqStore((s) => Boolean(s.detailsOpen[key]));
   const scrollRef = useRef(null);
+  const copiedTimer = useRef(0);
   const [copied, setCopied] = useState(false);
 
-  // Restaure la position de lecture de cet e-mail, et la garde en quittant l'onglet. Le corps est
-  // une iframe qui grandit après son chargement : la position est donc réappliquée à chaque
+  // Le minuteur de l'icône « copié » ne survit pas au lecteur.
+  useEffect(() => () => clearTimeout(copiedTimer.current), []);
+
+  // Restaure la position de lecture de cet e-mail. Elle est mémorisée au fil du défilement (et non au démontage :
+  // le lecteur peut rester monté d'un e-mail à l'autre, et son contenu a déjà changé quand un nettoyage s'exécute).
+  // Le corps est une iframe qui grandit après son chargement : la position est donc réappliquée à chaque
   // mesure (onFrameFit) tant que l'utilisateur n'a pas repris la main.
   const pendingScroll = useRef(0);
   useLayoutEffect(() => {
     const el = scrollRef.current;
-    if (!el) return undefined;
+    if (!el) return;
     pendingScroll.current = scrollMemory.get(key) || 0;
     el.scrollTop = pendingScroll.current;
-    return () => scrollMemory.set(key, el.scrollTop);
   }, [key, detail.state]);
   const onFrameFit = useCallback(() => {
     const el = scrollRef.current;
@@ -104,7 +120,7 @@ export default function EmailViewer({ detail, context, tabId, panelId, apiStatus
           <TriangleAlert size={28} aria-hidden />
           <strong>Contenu indisponible</strong>
           <p>{detail.error || "Le contenu de cette cohorte n'a pas pu être chargé."}</p>
-          <button type="button" className="smx-btn" onClick={onRetry}>Réessayer</button>
+          <RetryButton needsReload={detail.needsReload} onRetry={onRetry} />
         </div>
       </div>
     );
@@ -130,15 +146,20 @@ export default function EmailViewer({ detail, context, tabId, panelId, apiStatus
   const mergeNote = hasMergeFields(step.html) || hasMergeFields(step.text);
   const calendarAt = step.timing?.mode === 'calendar' ? step.timing.at : null;
   const hasBody = Boolean(step.html || step.text);
-  const prevTitle = detail.prev ? detail.prev.subject || detail.prev.kind : '';
-  const nextTitle = detail.next ? detail.next.subject || detail.next.kind : '';
+  const prevTitle = detail.prev ? titleOf(detail.prev) : '';
+  const nextTitle = detail.next ? titleOf(detail.next) : '';
+  const sendDomain = domainOf(sender.email);
+  // Une étape synthétisée (cohorte du CRM seul) n'a ni expéditeur, ni destinataires, ni séquence, ni date connus :
+  // son lecteur n'en affiche aucun (rien n'est inventé).
+  const hasDate = Boolean(calendarAt || timing?.when || timing?.note);
 
   const copySubject = async () => {
     try {
       await navigator.clipboard.writeText(subject);
       setCopied(true);
       actions.announce("Objet copié dans le presse-papiers");
-      setTimeout(() => setCopied(false), 1500);
+      clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopied(false), 1500);
     } catch {
       actions.announce("Impossible de copier l'objet");
     }
@@ -150,13 +171,17 @@ export default function EmailViewer({ detail, context, tabId, panelId, apiStatus
       className="smx-viewer"
       {...panelProps}
       tabIndex={-1}
+      onScroll={(e) => {
+        // Tant qu'une restauration est en attente, les défilements sont les nôtres : ils n'écrasent pas la mémoire.
+        if (!pendingScroll.current) scrollMemory.set(key, e.currentTarget.scrollTop);
+      }}
       onWheel={takeControl}
       onPointerDown={takeControl}
       onKeyDown={takeControl}
       onTouchStart={takeControl}
     >
       <div className="smx-viewer-in">
-        <div className="smx-vbar" role="toolbar" aria-label="Actions sur l'e-mail">
+        <div className="smx-vbar" role="group" aria-label="Actions sur l'e-mail">
           <button
             type="button" className="smx-iconbtn" disabled={!detail.prev}
             aria-label={detail.prev ? `E-mail précédent : ${prevTitle}` : 'Pas d\'e-mail précédent'}
@@ -186,44 +211,59 @@ export default function EmailViewer({ detail, context, tabId, panelId, apiStatus
         </div>
 
         <h2 className={`smx-subject${subject ? '' : ' is-empty'}`} title={subject || undefined}>
-          {subject || '(sans objet)'}
+          {subject || (step.fallback ? step.kind : '(sans objet)')}
         </h2>
         <div className="smx-chips">
           {cohort && <Chip large tone={audienceTone(cohort.audience)} title={cohort.label}>{cohort.short}{cohort.audience ? ` · ${cohort.audience}` : ''}</Chip>}
-          <Chip large>{SEQUENCES[step.sequence]?.label ?? step.sequence}</Chip>
-          {phase && phase.label !== SEQUENCES[step.sequence]?.label && <Chip large tone={phase.tone}>{phase.label}</Chip>}
-          {step.segment && <Chip large>{SEGMENTS[step.segment]}</Chip>}
+          {step.fallback ? (
+            <Chip large title="Cette cohorte n'a pas de contenu embarqué : seuls le type d'e-mail et ses compteurs viennent du CRM">Contenu local absent</Chip>
+          ) : (
+            <>
+              <Chip large>{SEQUENCES[step.sequence]?.label ?? step.sequence}</Chip>
+              {phase && phase.label !== SEQUENCES[step.sequence]?.label && <Chip large tone={phase.tone}>{phase.label}</Chip>}
+              {step.segment && <Chip large>{SEGMENTS[step.segment]}</Chip>}
+            </>
+          )}
           <Chip large tone={detail.status.tone}>{detail.status.label}</Chip>
+          {step.draftStatus && (
+            <Chip large tone="amber" title="Modifié dans l'éditeur de mail : brouillon en mémoire, ni enregistré ni envoyé (prototype)">
+              {step.draftStatus === 'confirmed' ? 'Confirmé (démo)' : 'Brouillon local (démo)'}
+            </Chip>
+          )}
         </div>
 
-        <div className="smx-msg-head">
-          <div className="smx-avatar" aria-hidden>{(sender.name || 'O').charAt(0).toUpperCase()}</div>
-          <div className="smx-msg-who">
-            <div className="smx-msg-from">
-              <strong>{sender.name || 'Expéditeur inconnu'}</strong>
-              {sender.email && <span className="smx-msg-addr">&lt;{sender.email}&gt;</span>}
+        {!step.fallback && (
+          <div className="smx-msg-head">
+            <div className="smx-avatar" aria-hidden>{(sender.name || 'O').charAt(0).toUpperCase()}</div>
+            <div className="smx-msg-who">
+              <div className="smx-msg-from">
+                <strong>{sender.name || 'Expéditeur inconnu'}</strong>
+                {sender.email && <span className="smx-msg-addr">&lt;{sender.email}&gt;</span>}
+              </div>
+              <div className="smx-msg-to">
+                <span className="smx-msg-to-text" title={recipients}>à {recipients}</span>
+                <button type="button" aria-expanded={detailsOpen} aria-label={detailsOpen ? "Masquer les détails de l'en-tête" : "Afficher les détails de l'en-tête"} onClick={() => actions.setDetailsOpen(key, !detailsOpen)}>
+                  <ChevronDown size={14} aria-hidden style={{ transform: detailsOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+                </button>
+              </div>
             </div>
-            <div className="smx-msg-to">
-              <span className="smx-msg-to-text" title={recipients}>à {recipients}</span>
-              <button type="button" aria-expanded={detailsOpen} aria-label={detailsOpen ? "Masquer les détails de l'en-tête" : "Afficher les détails de l'en-tête"} onClick={() => actions.setDetailsOpen(key, !detailsOpen)}>
-                <ChevronDown size={14} aria-hidden style={{ transform: detailsOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
-              </button>
-            </div>
+            {hasDate && (
+              <div className="smx-msg-date">
+                <strong>{calendarAt ? fmtWhenLong(calendarAt).replace(' à ', ', ') : timing?.when}</strong>
+                {calendarAt ? fromNow(calendarAt) : timing?.note}
+              </div>
+            )}
           </div>
-          <div className="smx-msg-date">
-            <strong>{calendarAt ? fmtWhenLong(calendarAt).replace(' à ', ', ') : timing?.when}</strong>
-            {calendarAt ? fromNow(calendarAt) : timing?.note}
-          </div>
-        </div>
+        )}
 
-        {detailsOpen && (
+        {detailsOpen && !step.fallback && (
           <dl className="smx-details">
             <dt>De</dt><dd>{step.from || '—'}</dd>
             <dt>À</dt><dd>{recipients} <span className="smx-code">{'{{email}}'}</span></dd>
             {step.replyTo && (<><dt>Répondre à</dt><dd>{step.replyTo}</dd></>)}
             <dt>Objet</dt><dd>{subject || '(sans objet)'}</dd>
-            <dt>Envoi</dt><dd>{timing?.when}{timing?.note ? ` — ${timing.note}` : ''}</dd>
-            <dt>Envoyé via</dt><dd>Resend (domaine ownertechnology.com)</dd>
+            {hasDate && (<><dt>Envoi</dt><dd>{timing?.when}{timing?.note ? ` — ${timing.note}` : ''}</dd></>)}
+            <dt>Envoyé via</dt><dd>{SEND_PROVIDER}{sendDomain ? ` (domaine ${sendDomain})` : ''}</dd>
             <dt>Type</dt><dd><span className="smx-code">{step.kind}</span></dd>
           </dl>
         )}
@@ -231,7 +271,7 @@ export default function EmailViewer({ detail, context, tabId, panelId, apiStatus
         {step.preheader && <p className="smx-preheader">Aperçu dans la boîte de réception : {step.preheader}</p>}
 
         {step.attachments?.length > 0 && (
-          <div className="smx-attach" aria-label="Pièces jointes">
+          <div className="smx-attach" role="group" aria-label="Pièces jointes">
             {step.attachments.map((a) => (
               <span key={a.filename} className="smx-attach-item" title={a.contentType}>{a.filename}</span>
             ))}
@@ -254,7 +294,8 @@ export default function EmailViewer({ detail, context, tabId, panelId, apiStatus
               )}
             </div>
             <div className="smx-paper">
-              <EmailBodyFrame html={step.html} text={step.text} mode={viewMode} title={subject || step.kind} onFit={onFrameFit} />
+              {/* Clé = l'e-mail : passer au suivant recrée l'iframe (un nouveau document), jamais le lecteur autour d'elle. */}
+              <EmailBodyFrame key={key} memoKey={key} html={step.html} text={step.text} mode={viewMode} title={subject || step.kind} onFit={onFrameFit} />
             </div>
           </>
         ) : (

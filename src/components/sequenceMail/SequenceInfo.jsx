@@ -5,8 +5,8 @@
 // n'est inventé, et une donnée absente est dite absente (avec sa raison quand on la connaît).
 
 import { CalendarClock, ChartNoAxesColumn, Info, Paperclip, Users } from 'lucide-react';
-import { fmtBytes, fmtDayMonth, fmtInt, fmtRatio, fmtWhenLong, fmtWhenShort } from './format';
-import { PHASES, SEGMENTS, SEQUENCES, delayBetween, describeTiming } from './model';
+import { fmtBytes, fmtDayMonth, fmtInt, fmtRatio, fmtWhenLong, fmtWhenShort } from './format.js';
+import { PHASES, SEGMENTS, SEQUENCES, delayBetween, describeTiming } from './model.js';
 import { Chip } from './ui';
 
 const KV = ({ label, children, sub }) =>
@@ -30,12 +30,21 @@ function Meter({ part, total }) {
   );
 }
 
-/** @brief Raison lisible pour laquelle les compteurs manquent. */
+/**
+ * @brief Raison lisible pour laquelle les compteurs manquent ou ne sont pas à jour (`null` : rien à dire).
+ * @note Trois situations distinctes : « cohorte absente du CRM » (état `unavailable`, permanent), « CRM injoignable »
+ * ou erreur d'appel (état `error`, réessayable : les derniers chiffres connus restent affichés), et relevé en cours.
+ */
 function statsUnavailable(stats, apiStatus) {
-  if (!stats || stats.status === 'idle' || stats.status === 'loading') return 'Chargement des compteurs du CRM…';
-  if (stats.status === 'unavailable') return `${stats.error || 'Compteurs indisponibles'} : le CRM ne fournit pas de compteurs pour cette cohorte.`;
-  if (stats.status === 'error') return `Compteurs indisponibles (${stats.error || 'erreur du CRM'}).`;
-  if (apiStatus === 'error') return 'CRM injoignable.';
+  if (!stats) return 'Chargement des compteurs du CRM…';
+  const hasData = Number.isFinite(stats.fetchedAt);
+  if (stats.status === 'idle') return 'Compteurs non relevés.';
+  if (stats.status === 'loading') return hasData ? null : 'Chargement des compteurs du CRM…';
+  if (stats.status === 'unavailable') return 'Cohorte absente du CRM : le CRM ne fournit pas de compteurs pour elle.';
+  if (stats.status === 'error') {
+    return `Compteurs du CRM indisponibles (${stats.error || 'erreur du CRM'})${hasData ? ' : derniers chiffres connus affichés.' : ' ; ils seront redemandés.'}`;
+  }
+  if (apiStatus === 'error') return 'CRM injoignable : chiffres du dernier relevé.';
   return null;
 }
 
@@ -53,6 +62,12 @@ export default function SequenceInfo({ detail, apiStatus }) {
   const delivered = kindStats?.delivered;
   const base = delivered > 0 ? delivered : sent;
   const hasEngagement = typeof kindStats?.opened === 'number';
+  // « Jour concerné » : le jour de la semaine (avec sa position par rapport au live en sous-texte) ou, à défaut, la
+  // relation à l'inscription ; jamais le même texte deux fois, et pas du tout s'il répète déjà « Envoi ».
+  const dayValue = timing.weekday || timing.relation;
+  const dayRow = dayValue && dayValue !== timing.when ? dayValue : null;
+  const daySub = timing.weekday && timing.relation && timing.relation !== dayValue ? timing.relation : null;
+  const fetched = Number.isFinite(stats?.fetchedAt) ? fmtWhenShort(new Date(stats.fetchedAt).toISOString()) : null;
 
   return (
     <section className="smx-info" aria-label="Informations de séquence">
@@ -62,31 +77,47 @@ export default function SequenceInfo({ detail, apiStatus }) {
       <div className="smx-info-grid">
         <div className="smx-card">
           <h4><CalendarClock size={12} aria-hidden style={{ verticalAlign: '-1px', marginRight: 5 }} />Programmation</h4>
-          <dl className="smx-kv">
-            <KV label="Étape" sub={total ? `${index + 1} sur ${total} dans la cohorte` : null}>
-              {step.sequenceCount ? `${step.sequenceIndex} sur ${step.sequenceCount} · ${seqLabel}` : seqLabel}
-            </KV>
-            <KV label="Phase">{phase && phase.label !== seqLabel ? <Chip tone={phase.tone}>{phase.label}</Chip> : null}</KV>
-            <KV label="Segment">{step.segment ? SEGMENTS[step.segment] : null}</KV>
-            <KV label="Envoi" sub={timing.note}>{timing.when}</KV>
-            <KV label="Jour concerné" sub={timing.relation}>{timing.weekday ? `${timing.weekday}` : timing.relation}</KV>
-            <KV label="Précédent" sub={seqPrev ? seqPrev.subject : null}>
-              {seqPrev ? (before ? `${before} avant cet envoi` : 'Délai variable (dépend de l\'inscription)') : 'Premier e-mail de la séquence'}
-            </KV>
-            <KV label="Suivant" sub={seqNext ? seqNext.subject : null}>
-              {seqNext ? (after ? `${after} après cet envoi` : 'Délai variable (dépend de l\'inscription)') : 'Dernier e-mail de la séquence'}
-            </KV>
-            <KV label="Fréquence">{sequenceMeta?.frequency}</KV>
-            <KV label="Statut">
-              <Chip tone={status.tone}>{status.label}</Chip>
-            </KV>
-          </dl>
+          {step.fallback ? (
+            // Étape synthétisée : seul le type d'e-mail est connu (via ses compteurs). Sa place dans la séquence et sa
+            // date d'envoi ne sont PAS connues : on ne les affiche pas.
+            <>
+              <dl className="smx-kv">
+                <KV label="Statut">
+                  <Chip tone={status.tone}>{status.label}</Chip>
+                </KV>
+              </dl>
+              <p className="smx-note">
+                Contenu local absent : cette cohorte n'a pas de contenu embarqué. Seuls le type d'e-mail et ses compteurs d'envoi
+                viennent du CRM ; sa place dans la séquence et sa date d'envoi ne sont pas connues.
+              </p>
+            </>
+          ) : (
+            <dl className="smx-kv">
+              <KV label="Étape" sub={total ? `${index + 1} sur ${total} dans la cohorte` : null}>
+                {step.sequenceCount ? `${step.sequenceIndex} sur ${step.sequenceCount} · ${seqLabel}` : seqLabel}
+              </KV>
+              <KV label="Phase">{phase && phase.label !== seqLabel ? <Chip tone={phase.tone}>{phase.label}</Chip> : null}</KV>
+              <KV label="Segment">{step.segment ? SEGMENTS[step.segment] : null}</KV>
+              <KV label="Envoi" sub={timing.note}>{timing.when}</KV>
+              <KV label="Jour concerné" sub={daySub}>{dayRow}</KV>
+              <KV label="Précédent" sub={seqPrev ? seqPrev.subject : null}>
+                {seqPrev ? (before ? `${before} avant cet envoi` : 'Délai variable (dépend de l\'inscription)') : 'Premier e-mail de la séquence'}
+              </KV>
+              <KV label="Suivant" sub={seqNext ? seqNext.subject : null}>
+                {seqNext ? (after ? `${after} après cet envoi` : 'Délai variable (dépend de l\'inscription)') : 'Dernier e-mail de la séquence'}
+              </KV>
+              <KV label="Fréquence">{sequenceMeta?.frequency}</KV>
+              <KV label="Statut">
+                <Chip tone={status.tone}>{status.label}</Chip>
+              </KV>
+            </dl>
+          )}
           {step.conditions?.length > 0 && (
             <>
               <h4 style={{ marginTop: 12 }}>Conditions d'envoi</h4>
               <ul className="smx-cond">
                 {step.conditions.map((c) => <li key={c}>{c}</li>)}
-                {rules?.map((r) => <li key={r}>{r}</li>)}
+                {rules?.filter((r) => !step.conditions.includes(r)).map((r) => <li key={r}>{r}</li>)}
               </ul>
             </>
           )}
@@ -97,7 +128,7 @@ export default function SequenceInfo({ detail, apiStatus }) {
           <dl className="smx-kv">
             <KV label="Nom">{cohort?.apiTitle || meta?.label || cohort?.label}</KV>
             <KV label="Public">{meta?.audience || cohort?.audience}</KV>
-            <KV label="Live">{liveAt ? fmtWhenLong(liveAt) : null}</KV>
+            <KV label="Live">{liveAt ? fmtWhenLong(liveAt) : 'Date inconnue'}</KV>
             <KV label="Intervenants">{meta?.speakers?.length ? meta.speakers.join(', ') : null}</KV>
             <KV label="Inscrits" sub={summary?.leadsBySource ? Object.entries(summary.leadsBySource).filter(([, v]) => v > 0).map(([k, v]) => `${k} ${fmtInt(v)}`).join(' · ') : null}>
               {typeof summary?.leadsDb === 'number' ? fmtInt(summary.leadsDb) : null}
@@ -110,7 +141,7 @@ export default function SequenceInfo({ detail, apiStatus }) {
           {meta?.notes?.length > 0 && (
             <p className="smx-note">{meta.notes.join(' ')}</p>
           )}
-          {!cohort?.inApi && (
+          {!cohort?.inApi && apiStatus === 'ready' && (
             <p className="smx-note">Cette cohorte n'est pas (ou pas encore) exposée par le CRM : ses compteurs ne sont pas disponibles.</p>
           )}
         </div>
@@ -137,7 +168,11 @@ export default function SequenceInfo({ detail, apiStatus }) {
           )}
           {(unavailable && kindStats) && <p className="smx-note">{unavailable}</p>}
           {!unavailable && !kindStats && <p className="smx-note" style={{ marginTop: 0 }}>Aucun envoi enregistré pour ce type d'e-mail.</p>}
-          {stats?.fetchedAt && <p className="smx-note">Compteurs du CRM relevés à {fmtWhenShort(new Date(stats.fetchedAt).toISOString())}.</p>}
+          {fetched && (
+            <p className="smx-note">
+              {stats.status === 'ready' ? 'Compteurs du CRM relevés à' : 'Derniers compteurs relevés avec succès à'} {fetched}.
+            </p>
+          )}
         </div>
 
         <div className="smx-card">

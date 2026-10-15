@@ -19,10 +19,10 @@ import { SortableContext, horizontalListSortingStrategy, useSortable } from '@dn
 import { CSS as DndCSS } from '@dnd-kit/utilities';
 import { AppWindow, ChevronDown, ChevronLeft, ChevronRight, Inbox, Mail, PictureInPicture, X } from 'lucide-react';
 import { beginDragMode, useElementSize } from './hooks';
-import { fmtDayMonth, fmtTime } from './format';
-import { shortRelative } from './model';
+import { fmtDayMonth, fmtTime } from './format.js';
+import { parseKey, shortRelative, titleOf } from './model.js';
 import { LIST_PANEL_ID, LIST_TAB_ID, tabDomId, panelDomId } from './domIds';
-import { MenuButton } from './ui';
+import { MenuButton, MenuSeparator, MenuTitle } from './ui';
 import { useThemeClass } from './themeContext';
 
 /** @brief Distance (px) à partir de laquelle un onglet glissé hors de la barre devient « détachable ». */
@@ -31,11 +31,12 @@ const DETACH_X = 48;
 /** @brief Clé (DOM et clavier) du premier onglet, la liste : le store la désigne par `null`. */
 const LIST_KEY = '@list';
 
+/** @brief Titre et sous-titre d'un onglet ou d'une fenêtre : l'objet de l'e-mail, sa cohorte et son moment d'envoi. */
 function labelOf(email, key) {
-  if (!email) return { title: 'Chargement…', sub: key.split('::')[1] || '' };
+  if (!email) return { title: 'Chargement…', sub: parseKey(key).kind };
   const t = email.timing;
   const when = t?.mode === 'calendar' ? `${fmtDayMonth(t.at)} ${fmtTime(t.at)}` : shortRelative(t);
-  return { title: email.subject || (email.hasContent ? '(sans objet)' : email.kind), sub: [email.cohortShort, when].filter(Boolean).join(' · ') };
+  return { title: titleOf(email), sub: [email.cohortShort, when].filter(Boolean).join(' · ') };
 }
 
 /**
@@ -90,7 +91,7 @@ function SortableTab({ tabKey, label, active, tabIndex, onActivate, onClose, onD
         aria-roledescription="onglet déplaçable"
         aria-describedby={attributes['aria-describedby']}
         tabIndex={tabIndex}
-        title={`${label.title}${label.sub ? `\n${label.sub}` : ''}`}
+        title={`${label.title}${label.sub ? `\n${label.sub}` : ''}\nDouble-clic : détacher dans une fenêtre flottante`}
         className="smx-tab-main"
         onClick={() => onActivate(tabKey)}
         onMouseDown={(e) => {
@@ -154,6 +155,8 @@ export default function EmailTabs({
   const [intent, setIntent] = useState(false);
   const pointerRef = useRef(null);
   const endModeRef = useRef(null);
+  // Barre d'onglets démontée en plein glissement : le mode « glisser » (curseur forcé, iframes insensibles) est levé.
+  useEffect(() => () => endModeRef.current?.(), []);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const activeId = activeKey ?? LIST_KEY;
@@ -372,13 +375,13 @@ export default function EmailTabs({
             renderButton={({ props, toggle }) => (
               <button type="button" className="smx-iconbtn is-sm" onClick={toggle} aria-label={`Fenêtres flottantes (${floating.length})`} title={`Fenêtres flottantes (${floating.length})`} {...props}>
                 <AppWindow size={16} aria-hidden />
-                <span className="smx-badge">{floating.length}</span>
+                <span className="smx-badge" aria-hidden>{floating.length}</span>
               </button>
             )}
           >
-            <div className="smx-menu-title">Fenêtres flottantes</div>
+            <MenuTitle>Fenêtres flottantes</MenuTitle>
             {floating.map((f) => (
-              <div key={f.key} style={{ display: 'flex', alignItems: 'center' }}>
+              <div key={f.key} role="none" style={{ display: 'flex', alignItems: 'center' }}>
                 <button type="button" role="menuitem" className="smx-menu-item" onClick={() => onFocusFloating(f.key)} title="Ramener au premier plan">
                   <span className="smx-menu-label">{labelFor(f.key).title}</span>
                 </button>
@@ -387,7 +390,7 @@ export default function EmailTabs({
                 </button>
               </div>
             ))}
-            <div className="smx-menu-sep" />
+            <MenuSeparator />
             <button type="button" role="menuitem" className="smx-menu-item" onClick={() => floating.forEach((f) => onDockFloating(f.key))}>
               <span className="smx-menu-label">Tout réintégrer dans les onglets</span>
             </button>
@@ -402,16 +405,16 @@ export default function EmailTabs({
               </button>
             )}
           >
-            <div className="smx-menu-title">Onglets ouverts ({tabs.length})</div>
-            <button type="button" role="menuitem" className={`smx-menu-item${activeKey === null ? ' is-current' : ''}`} onClick={() => onActivate(null)}>
+            <MenuTitle>{`Onglets ouverts (${tabs.length})`}</MenuTitle>
+            <button type="button" role="menuitemradio" aria-checked={activeKey === null} className={`smx-menu-item${activeKey === null ? ' is-current' : ''}`} onClick={() => onActivate(null)}>
               <span className="smx-menu-label">Liste · {listLabel.title}</span>
             </button>
             {tabs.map((k) => (
-              <button key={k} type="button" role="menuitem" className={`smx-menu-item${k === activeKey ? ' is-current' : ''}`} onClick={() => onActivate(k)}>
+              <button key={k} type="button" role="menuitemradio" aria-checked={k === activeKey} className={`smx-menu-item${k === activeKey ? ' is-current' : ''}`} onClick={() => onActivate(k)}>
                 <span className="smx-menu-label">{labelFor(k).title}</span>
               </button>
             ))}
-            <div className="smx-menu-sep" />
+            <MenuSeparator />
             {tabs.length > 1 && activeKey && (
               <button type="button" role="menuitem" className="smx-menu-item" onClick={() => onCloseOthers(activeKey)}>
                 <span className="smx-menu-label">Fermer les autres onglets d'e-mail</span>

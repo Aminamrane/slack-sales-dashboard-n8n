@@ -2,10 +2,10 @@
 //
 // Construit le modèle de la liste : filtrage (séquence, recherche plein texte), regroupement
 // (par cohorte, ou par phase quand une seule cohorte est affichée) et aplatissement en lignes
-// pour la liste virtualisée. Fonction pure : aucune dépendance à React.
+// pour la liste virtualisée. Fonction pure : aucune dépendance à React (testée sous Node).
 
-import { normalize } from './format';
-import { PHASES, phaseOrder } from './model';
+import { normalize } from './format.js';
+import { PHASES, phaseOrder } from './model.js';
 
 const byOrder = (a, b) => a.order - b.order;
 
@@ -16,6 +16,8 @@ const byOrder = (a, b) => a.order - b.order;
  * @param sequence `'any'` | `'pre'` | `'post'` | `'oneshot'`.
  * @param search Texte saisi ; chaque mot doit être présent (objet, aperçu, corps, cohorte, phase…).
  * @param collapsed `{ [idGroupe]: true }` des groupes repliés (ignoré pendant une recherche).
+ * @returns `{ tokens, searching, filtered, rows, groupIds, visibleKeys }` : `filtered` = tous les e-mails
+ * qui passent les filtres ; `visibleKeys` = ceux dont la ligne est réellement affichée (groupes dépliés).
  */
 export function buildListModel({ emails, cohorts, cohortId, sequence, search, collapsed }) {
   const tokens = normalize(search).split(/\s+/).filter(Boolean);
@@ -47,10 +49,16 @@ export function buildListModel({ emails, cohorts, cohortId, sequence, search, co
   }
 
   const rows = [];
+  const visibleKeys = [];
   for (const group of groups) {
     const isCollapsed = !searching && Boolean(collapsed[group.id]);
     rows.push({ type: 'group', id: group.id, group, collapsed: isCollapsed });
-    if (!isCollapsed) for (const email of group.emails) rows.push({ type: 'email', id: email.key, email, groupId: group.id });
+    if (!isCollapsed) {
+      for (const email of group.emails) {
+        rows.push({ type: 'email', id: email.key, email, groupId: group.id });
+        visibleKeys.push(email.key);
+      }
+    }
   }
-  return { tokens, searching, filtered, groups, rows, groupIds: groups.map((g) => g.id) };
+  return { tokens, searching, filtered, rows, groupIds: groups.map((g) => g.id), visibleKeys };
 }
