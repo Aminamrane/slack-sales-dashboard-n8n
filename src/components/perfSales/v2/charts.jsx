@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion as Motion } from 'framer-motion';
 import { CountUp, EASE, EASE_CSS, useDrawn } from '../motion';
 import { FUNNEL, METRICS, SOURCES, fr, signedNum, sourceOf } from './model';
+import { flowNodes } from './AdsFlow';
 import { Detail, usePop } from './Pop';
 
 // Graphiques SVG de la Performance Sales v2 (dev 14/10/2026 : « meilleur SVG, beau schéma qui représente »). Chacun se
@@ -47,14 +48,18 @@ export const channelLabel = (key, model) => (isCohort(key) ? `ADS reçus en ${mo
 const JOURNEY = ['active', 'r1', 'r2', 'signed', 'sales'];
 export const JOURNEY_LABELS = ['Leads actifs', 'Ont fait un R1', 'Ont fait un R2', 'Ont signé', 'Vendus'];
 const COHORT_STEPS = ['j_active', 'j_r1', 'j_r2', 'j_signed', 'j_sales'];
+// Puce « reçus » (dev 15/10/2026 : « les ADS reçues en octobre, ça doit être le total, même ce qui n'a pas été affecté ;
+// on l'a dans Funnel Leads ») : toutes les fiches entrantes du mois, comme Funnel Leads, et ce qu'elles ont produit à ce jour.
+const RECEIVED_STEPS = ['active', 'r1', 'r2', 'signed', 'sales'];
+const receivedJourney = (model) => (model.pilot?.intake?.journey ? RECEIVED_STEPS.map((k) => model.pilot.intake.journey[k] || 0) : null);
 function channelJourney(model, key) {
-  if (isCohort(key)) return COHORT_STEPS.map((k) => model.cohort?.by_family?.ads?.[k] || 0);
+  if (isCohort(key)) return receivedJourney(model) || COHORT_STEPS.map((k) => model.cohort?.by_family?.ads?.[k] || 0);
   const j = model.journeys || {};
   return JOURNEY.map((step) => j[key]?.[step] || 0);
 }
 // Silhouette de fond : tous les leads reçus du mois pour la puce cohorte, tous les leads actifs sinon.
 function ghostJourney(model, key) {
-  if (isCohort(key)) return COHORT_STEPS.map((k) => Object.values(model.cohort?.by_family || {}).reduce((a, f) => a + (f[k] || 0), 0));
+  if (isCohort(key)) return receivedJourney(model) || COHORT_STEPS.map((k) => Object.values(model.cohort?.by_family || {}).reduce((a, f) => a + (f[k] || 0), 0));
   return JOURNEY.map((step) => model.journeys?.global?.[step] || 0);
 }
 
@@ -62,7 +67,7 @@ export function FunnelPicker({ model, value, onChange }) {
   const j = model.journeys || {};
   const present = SOURCES.filter((s) => (j[s.key]?.active || 0) > 0);
   if (!present.length) return null;
-  const cohortAds = model.cohort?.by_family?.ads?.j_active ? [{ key: COHORT_KEY, label: channelLabel(COHORT_KEY, model), color: '#1e3a7b', group: true }] : [];
+  const cohortAds = model.pilot?.intake?.journey?.active || model.cohort?.by_family?.ads?.j_active ? [{ key: COHORT_KEY, label: channelLabel(COHORT_KEY, model), color: '#1e3a7b', group: true }] : [];
   const chips = [{ key: null, label: 'Global' }, ...cohortAds, ...present];
   return (
     <div className="ps2-picker" role="radiogroup" aria-label="Canal de l’entonnoir">
@@ -109,7 +114,7 @@ export function FunnelFlow({ model, onOpen, source = null }) {
                 <Detail kicker={`${channelLabel(source, model)} · parcours`} title={labels[i]} value={fr(values[i])}
                   rows={labels.map((l, k2) => [l, `${fr(values[k2])}${k2 && values[k2 - 1] ? ` · ${Math.round((values[k2] / values[k2 - 1]) * 100)} %` : ''}`, k2 === i ? 'ps2-strong' : ''])}
                   lines={cohortMode
-                    ? ['Les leads ADS reçus dans le mois (affectés par le moteur ou repris du pool), suivis jusqu’à aujourd’hui.', 'Chaque étape inclut les suivantes. R1 : effectué ou fait au téléphone.']
+                    ? ['Toutes les fiches reçues dans le mois, comme Funnel Leads, données à un sales ou non, suivies jusqu’à aujourd’hui.', 'Chaque étape inclut les suivantes. R1 : effectué ou fait au téléphone.']
                     : ['Leads actifs : reçus, attribués ou réattribués dans le mois, ou avec un RDV, une signature ou une vente dans le mois.',
                       'Chaque lead compte une fois, dans le canal de son résultat, et chaque étape inclut les suivantes. R1 : effectué ou fait au téléphone.']} />
               )) : onOpen(k))}
@@ -227,27 +232,16 @@ export function CohortBars({ steps }) {
   );
 }
 
-// Pont entre le « Clean (tél FR) » de Funnel Leads et les leads ADS reçus de la page (calculé par le backend, à l'unité).
+// Les fiches reçues du mois, de Funnel Leads à l'endroit où chacune se trouve aujourd'hui (calculé à l'unité par le serveur).
 function IntakeBridge({ model }) {
-  const b = model.pilot?.intake?.bridge;
-  if (!b) return <Detail kicker="ADS reçus" title="Pont non disponible" />;
-  const ng = b.clean_not_given || {}, oc = b.clean_other_channel || {};
-  const others = Object.values(oc).reduce((a, v) => a + v, 0);
-  const otherLabel = Object.entries(oc).map(([k, v]) => `${{ linkedin: 'LinkedIn', referral: 'parrainage', webinar: 'webinaire', cold_call: 'cold call', ccs: 'CCS' }[k] || k} ${v}`).join(', ');
+  const data = flowNodes(model.pilot?.intake);
+  if (!data) return <Detail kicker="Fiches reçues" title="Pont non disponible" />;
   const rows = [
-    ['« Clean (tél FR) » de Funnel Leads', fr(b.clean), 'ps2-strong'],
-    ng.duplicate && ['− doublons écartés par le moteur', fr(ng.duplicate)],
-    ng.webinar && ['− inscrits webinaire pris par les setters', fr(ng.webinar)],
-    ng.unclassifiable && ['− fiches non classables (tests)', fr(ng.unclassifiable)],
-    ng.waiting && ['− pas encore attribués', fr(ng.waiting)],
-    others && [`− autres canaux (${otherLabel})`, fr(others)],
-    b.clean_same_contact && ['− même contact déjà reçu par le même sales', fr(b.clean_same_contact)],
-    ['= leads ADS clean donnés aux sales', fr(b.ads_clean), 'ps2-strong'],
-    b.ads_non_fr && ['+ téléphone non français (retirés par Funnel)', fr(b.ads_non_fr)],
-    b.ads_small && ['+ moins de 100 k€ donnés quand même', fr(b.ads_small)],
-    b.ads_received_outside && ['+ reçus dans le mois, fiche créée juste avant', fr(b.ads_received_outside)],
-    [`= ADS reçus en ${monthName(model)} ici`, fr(b.cohort_ads), 'ps2-strong'],
+    ['Fiches reçues (comme Funnel Leads)', fr(data.total), 'ps2-strong'],
+    ...data.notGiven.map((n) => [`− ${n.label.toLowerCase()}`, fr(n.value)]),
+    ['= données à un sales', fr(data.givenTotal), 'ps2-strong'],
+    ...data.given.map((n) => [`→ ${n.label.toLowerCase()}`, fr(n.value)]),
   ];
-  return <Detail kicker={`ADS reçus en ${monthName(model)}`} title="Du « Clean » de Funnel Leads aux leads de la page" rows={rows}
-    source="Funnel Leads compte les fiches ; la page compte les leads donnés aux sales, une fois par sales et par contact" />;
+  return <Detail kicker={`Reçues en ${monthName(model)}`} title="De Funnel Leads aux sales" rows={rows}
+    source="Le schéma complet est dans l’onglet Canaux" />;
 }
