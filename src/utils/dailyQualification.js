@@ -32,6 +32,21 @@ export function rdvsToQualify(leads, today = parisToday(), windowDays = QUALIFY_
   return out.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }
 
+const sameEmail = (a, b) => Boolean(a && b) && String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+
+// Feuille d'un AUTRE commercial consultée (?sheet_id=), ou null pour sa propre feuille (dev 15/10/2026) : un head of
+// sales qui ouvre SA feuille depuis la liste des sheets arrive avec ?sheet_id=son e-mail ; c'est sa feuille, pop-up
+// obligatoire comprise.
+export function viewedSheet(sheetParam, selfEmail) {
+  return sheetParam && !sameEmail(sheetParam, selfEmail) ? sheetParam : null;
+}
+
+// Pop-up obligatoire : ses RDV à lui, jamais ceux d'un autre (dev 15/10/2026 : « il faut qu'ils n'aient accès qu'à
+// leurs qualifications, il ne faut pas qu'on mélange tout »).
+export function ownRdvsToQualify(leads, selfEmail, today = parisToday(), windowDays = QUALIFY_WINDOW_DAYS) {
+  return rdvsToQualify((leads || []).filter((lead) => sameEmail(lead?.assigned_to, selfEmail)), today, windowDays);
+}
+
 // « mardi 6 octobre à 10 h 30 », lu sur la chaîne (heure-mur de Paris).
 export function rdvLabel(at) {
   if (!wallTime(at)) return '';

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { rdvLabel, rdvsToQualify } from './dailyQualification.js';
+import { ownRdvsToQualify, rdvLabel, rdvsToQualify, viewedSheet } from './dailyQualification.js';
 
 const TODAY = '2026-10-07';
 
@@ -42,4 +42,20 @@ test('lit aussi les champs r1_date / r2_date de l’API', () => {
 test('libellé en heure-mur, sans conversion', () => {
   assert.equal(rdvLabel('2026-10-06T08:05'), 'mardi 6 octobre à 8 h 05');
   assert.equal(rdvLabel(''), '');
+});
+
+test('sa feuille ouverte depuis la liste des sheets reste sa feuille ; celle d’un autre est une vue d’administration', () => {
+  assert.equal(viewedSheet('L.Mafrici@ownertechnology.com ', 'l.mafrici@ownertechnology.com'), null);
+  assert.equal(viewedSheet(null, 'l.mafrici@ownertechnology.com'), null);
+  assert.equal(viewedSheet('y.zairi@ownertechnology.com', 'l.mafrici@ownertechnology.com'), 'y.zairi@ownertechnology.com');
+  assert.equal(viewedSheet('y.zairi@ownertechnology.com', undefined), 'y.zairi@ownertechnology.com');
+});
+
+test('la pop-up ne montre que ses propres RDV, jamais ceux d’un autre commercial', () => {
+  const mine = { id: 1, assigned_to: 'L.Mafrici@ownertechnology.com', r1_date: '2026-10-14T10:00:00', r1_result: null };
+  const other = { id: 2, assigned_to: 'y.zairi@ownertechnology.com', r1_date: '2026-10-14T11:00:00', r1_result: null };
+  const pool = { id: 3, assigned_to: '0', r1_date: '2026-10-14T12:00:00', r1_result: null };
+  const items = ownRdvsToQualify([mine, other, pool], 'l.mafrici@ownertechnology.com', '2026-10-15');
+  assert.deepEqual(items.map((i) => i.lead.id), [1]);
+  assert.deepEqual(ownRdvsToQualify([mine], undefined, '2026-10-15'), []);
 });

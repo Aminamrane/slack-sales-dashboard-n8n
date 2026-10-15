@@ -20,7 +20,7 @@ import { CalendarCheck2, ChevronRight, Building2, UserRoundCheck, ArrowRight, Ph
 import SalesProspection from "../components/setter/prospection/SalesProspection.jsx";
 import R1QualificationDialog from '../components/salesJourney/R1QualificationDialog';
 import DailyQualificationDeck from '../components/salesJourney/DailyQualificationDeck';
-import { rdvsToQualify } from '../utils/dailyQualification';
+import { ownRdvsToQualify, viewedSheet } from '../utils/dailyQualification';
 import QualificationDialog from '../components/salesJourney/QualificationDialog';
 import ContactQualificationDialog from '../components/salesJourney/ContactQualificationDialog';
 import {contactQualificationPatch} from '../utils/contactQualification';
@@ -517,8 +517,9 @@ export default function TrackingSheet() {
   const [loading, setLoading] = useState(true);
 
   // ── ADMIN VIEW: viewing another sales rep's sheet ──────────────────────────
+  // ?sheet_id= égal à son propre e-mail (sa feuille ouverte depuis la liste des sheets) = sa propre feuille.
   const urlParams = new URLSearchParams(window.location.search);
-  const viewingSheetId = urlParams.get('sheet_id');
+  const viewingSheetId = viewedSheet(urlParams.get('sheet_id'), apiClient.getUser()?.email);
   const isAdminView = !!viewingSheetId;
   const initialView = urlParams.get('view');
   // Embed mode: masque uniquement SharedNavbar interne. Utilisé par
@@ -1410,12 +1411,13 @@ export default function TrackingSheet() {
 
   // Pop-up des RDV à qualifier (06/10/2026) : à l'ouverture de sa propre sheet, une fois par chargement.
   // Obligatoire depuis le 15/10/2026 (dev : « s'ils ne qualifient pas tous leurs rendez-vous, ils ne pourront pas
-  // accéder à leur tracking sheet ») : plus de report, la fenêtre ne se ferme qu'une fois tout qualifié.
+  // accéder à leur tracking sheet ») : plus de report, la fenêtre ne se ferme qu'une fois tout qualifié. Ses RDV à lui
+  // seulement ; la feuille d'un autre (vue d'administration) n'ouvre jamais la pop-up.
   useEffect(() => {
     if (qualifyDeckChecked.current || isAdminView || !leads.length || !currentUser?.id) return;
     if (!['sales', 'head_of_sales', 'head_of_sales_manager'].includes(currentUser.role)) return;
     qualifyDeckChecked.current = true;
-    const items = rdvsToQualify(leads);
+    const items = ownRdvsToQualify(leads, currentUser.email);
     if (items.length) setQualifyDeck(items);
   }, [leads, isAdminView, currentUser]);
   const closeQualifyDeck = useCallback(() => setQualifyDeck(null), []);
