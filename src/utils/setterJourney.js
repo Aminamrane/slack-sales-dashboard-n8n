@@ -50,6 +50,12 @@ export function setterAction({ lead, outcome, slot, note = '', email = '', callb
 
 // Agenda unique (06/10/2026) : pas de commercial dans la requête, le serveur l'attribue. R1, ou R2 d'une Seconde
 // chance (15/10/2026 : « les R2 de seconde chance, c'est la même chose »).
+// « Placer le RDV quand même » (doublon dormant) : seul un vrai `true` confirme. Un clic passe un événement au
+// gestionnaire : il ne doit jamais valoir confirmation (incident du 16/10/2026, l'alerte était sautée).
+export function withDuplicateConfirmation(action, confirmDuplicate) {
+  return confirmDuplicate === true ? { ...action, body: { ...action.body, confirm_duplicate: true } } : action;
+}
+
 export function singleBookingAction({ lead, slot, note = '', email = '', prospect = false, kind = 'r1' }) {
   if (!slot?.date || !slot.time) throw new Error('Choisissez une date et une heure.');
   if (!validParisAppointment(`${slot.date}T${slot.time}`)) throw new Error('Choisissez une date et une heure valides en heure de Paris.');

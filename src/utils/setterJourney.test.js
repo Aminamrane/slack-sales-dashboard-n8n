@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setterAction, availableSelection, bookingSalesChoices, singleBookingAction, canRescheduleSetterR1 } from './setterJourney.js';
+import { setterAction, availableSelection, bookingSalesChoices, singleBookingAction, canRescheduleSetterR1, withDuplicateConfirmation } from './setterJourney.js';
 const owned = { id: 7, assigned_to: 'a@example.com', email: 'client@example.com' };
 const mine = { ...owned, created_by_setter: 'setter@example.com' };
 const slot = { email: 'a@example.com', date: '2026-09-24', time: '10:30' };
@@ -85,4 +85,15 @@ test('R2 d’une Seconde chance par l’agenda unique : réservation book-r2, em
   assert.deepEqual(action.body, { r2_date: '2026-10-20T14:00', notes: undefined });
   assert.throws(() => singleBookingAction({ lead: { id: 42 }, slot: { date: '2026-10-20', time: '14:00' }, kind: 'r2' }), /obligatoire pour le R2/);
   assert.equal(singleBookingAction({ lead: { id: 42 }, slot: { date: '2026-10-20', time: '14:00' } }).path, '/api/v1/tracking/setter/leads/42/book-r1');
+});
+
+test('a click never confirms a dormant duplicate: only « Placer le RDV quand même » sends confirm_duplicate', () => {
+  const action = { path: '/api/v1/prospection/items/7740/book-r1', body: { r1_date: '2026-10-19T17:00:00' } };
+  const click = { type: 'click', target: {}, preventDefault() {} };
+  assert.deepEqual(withDuplicateConfirmation(action, click), action);
+  assert.deepEqual(withDuplicateConfirmation(action, undefined), action);
+  assert.deepEqual(withDuplicateConfirmation(action, false), action);
+  assert.equal(withDuplicateConfirmation(action, true).body.confirm_duplicate, true);
+  assert.equal(withDuplicateConfirmation(action, true).body.r1_date, '2026-10-19T17:00:00');
+  assert.equal(action.body.confirm_duplicate, undefined);
 });

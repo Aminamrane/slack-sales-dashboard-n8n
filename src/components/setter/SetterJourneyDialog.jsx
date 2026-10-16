@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, CalendarCheck2, CalendarDays, Check, ChevronLeft
 import apiClient from '../../services/apiClient';
 import { useDialogFocus } from '../salesJourney/QualificationDialog';
 import { ParisDateTimeInput } from '../salesJourney/FrenchDateInput';
-import { availableSelection, bookingSalesChoices, setterAction, singleBookingAction } from '../../utils/setterJourney';
+import { availableSelection, bookingSalesChoices, setterAction, singleBookingAction, withDuplicateConfirmation } from '../../utils/setterJourney';
 import './setterJourney.css';
 
 const outcomes = [
@@ -70,7 +70,7 @@ export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onS
   async function save(confirmDuplicate = false) {
     if (submitting.current || browseOnly) return;
     submitting.current = true; setBusy(true); setError(''); setDuplicate(null);
-    const confirmed = (action) => (confirmDuplicate ? { ...action, body: { ...action.body, confirm_duplicate: true } } : action);
+    const confirmed = (action) => withDuplicateConfirmation(action, confirmDuplicate);
     try {
       if (single && bookingMode === 'available') {
         const action = confirmed(singleBookingAction({ lead: lead || {}, slot: selectedSlot, note, email, prospect: !!onBook, kind: outcome }));
@@ -142,7 +142,7 @@ export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onS
           </div>
         )}
       </div>
-      <footer className="sj-footer"><button disabled={busy} onClick={onClose}>{browseOnly ? 'Fermer' : 'Annuler'}</button>{!browseOnly && outcome && <button className="sj-primary" disabled={busy || (booking && (!selectedSlot || (bookingMode === 'available' && loading)))} onClick={save}>{busy ? <><LoaderCircle size={17} className="stj-spin"/> Enregistrement…</> : <>{booking ? `${bookingMode === 'manual' ? 'Placer' : 'Confirmer'} le ${outcome.toUpperCase()}` : 'Enregistrer'}<ArrowRight size={17}/></>}</button>}</footer>
+      <footer className="sj-footer"><button disabled={busy} onClick={onClose}>{browseOnly ? 'Fermer' : 'Annuler'}</button>{!browseOnly && outcome && <button className="sj-primary" disabled={busy || (booking && (!selectedSlot || (bookingMode === 'available' && loading)))} onClick={() => save()}>{busy ? <><LoaderCircle size={17} className="stj-spin"/> Enregistrement…</> : <>{booking ? `${bookingMode === 'manual' ? 'Placer' : 'Confirmer'} le ${outcome.toUpperCase()}` : 'Enregistrer'}<ArrowRight size={17}/></>}</button>}</footer>
     </section>
   </div>, document.body);
 }
