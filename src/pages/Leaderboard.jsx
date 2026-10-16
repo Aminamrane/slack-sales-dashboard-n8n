@@ -26,7 +26,11 @@ import lightIcon from "../assets/light.png";
 
 import darkIcon from "../assets/dark.png";
 
-import trophyIcon from "../assets/trophy.png";
+import trophyIcon from "../assets/medal-gold.png";
+import silverMedalIcon from "../assets/medal-silver.png";
+import bronzeMedalIcon from "../assets/medal-bronze.png";
+import { loadPodiumMedals, nameKey } from "../utils/podiumMedals.js";
+import MedalStack from "../components/MedalStack.jsx";
 import ndaIcon from "../assets/icon1.png";
 import declareIcon from "../assets/icon2.png";
 import toolsIcon from "../assets/icon3.png";
@@ -1517,6 +1521,9 @@ export default function Leaderboard() {
 
   const [trophies, setTrophies] = useState({});
 
+  // Médailles d'argent / de bronze : 2e et 3e de chaque mois complet, comme les trophées (clé = nom sans accents).
+  const [medals, setMedals] = useState({ second: {}, third: {} });
+
   const [tunnelStats, setTunnelStats] = useState({});
 
   const [channels, setChannels] = useState([]);
@@ -1672,6 +1679,15 @@ export default function Leaderboard() {
     };
 
     fetchTrophies();
+  }, []);
+
+  // ── LOAD SILVER / BRONZE MEDALS (2e et 3e de chaque mois complet, lus dans les classements mensuels) ──
+  useEffect(() => {
+    let alive = true;
+    loadPodiumMedals(apiClient)
+      .then((tally) => { if (alive) setMedals({ second: tally.second, third: tally.third }); })
+      .catch((err) => console.error("Erreur chargement médailles:", err));
+    return () => { alive = false; };
   }, []);
 
   // ── LOAD LEADERBOARD DATA (API Backend) ────────────────────────────────────
@@ -2577,14 +2593,10 @@ export default function Leaderboard() {
                             )}
                           </div>
                           <span style={{ fontWeight: 500 }}>{r.name}</span>
-                          {calculateTrophies[r.name] > 0 && (
-                            <div className="trophy-container">
-                              <img src={trophyIcon} alt="Trophy" className="trophy-icon" />
-                              {calculateTrophies[r.name] > 1 && (
-                                <span className="trophy-count">×{calculateTrophies[r.name]}</span>
-                              )}
-                            </div>
-                          )}
+                          <MedalStack
+                            counts={{ gold: calculateTrophies[r.name], silver: medals.second[nameKey(r.name)], bronze: medals.third[nameKey(r.name)] }}
+                            icons={{ gold: trophyIcon, silver: silverMedalIcon, bronze: bronzeMedalIcon }}
+                          />
                         </td>
                         <td align="center" style={{
                           fontWeight: 700,

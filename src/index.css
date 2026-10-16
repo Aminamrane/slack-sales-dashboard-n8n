@@ -139,10 +139,10 @@ body.dark-mode {
 }
 
 .trophy-icon {
-  width: 20px;
-  height: 20px;
+  width: 35px;
+  height: 35px;
   object-fit: contain;
-  filter: drop-shadow(0 2px 4px rgba(255, 215, 0, 0.4));
+  filter: drop-shadow(0 1px 3px rgba(255, 215, 0, 0.28));
 }
 
 .trophy-count {
@@ -168,7 +168,7 @@ body.dark-mode {
 
 /* Dark mode trophy */
 body.dark-mode .trophy-icon {
-  filter: drop-shadow(0 2px 4px rgba(255, 215, 0, 0.6)) brightness(1.2);
+  filter: drop-shadow(0 1px 3px rgba(255, 215, 0, 0.28));
 }
 
 body.dark-mode .trophy-count {
@@ -180,6 +180,72 @@ body.dark-mode .trophy-count {
 .trophy-container:hover .trophy-icon {
   transform: scale(1.15) rotate(10deg);
   transition: transform 0.3s ease;
+}
+
+/* Médailles d'argent et de bronze (2e et 3e de chaque mois) : même conteneur, mêmes dimensions, même apparition et
+   même survol que le trophée ; seuls le halo et la couleur du « ×N » changent. */
+.trophy-container.medal-silver .trophy-icon {
+  filter: drop-shadow(0 1px 3px rgba(150, 156, 163, 0.35));
+}
+.trophy-container.medal-silver .trophy-count {
+  color: #8b9299;
+}
+.trophy-container.medal-bronze .trophy-icon {
+  filter: drop-shadow(0 1px 3px rgba(184, 115, 51, 0.32));
+}
+.trophy-container.medal-bronze .trophy-count {
+  color: #b0702f;
+}
+body.dark-mode .trophy-container.medal-silver .trophy-icon {
+  filter: drop-shadow(0 1px 3px rgba(205, 210, 216, 0.25));
+}
+body.dark-mode .trophy-container.medal-silver .trophy-count {
+  color: #cfd4da;
+  text-shadow: 0 1px 3px rgba(205, 210, 216, 0.4);
+}
+body.dark-mode .trophy-container.medal-bronze .trophy-icon {
+  filter: drop-shadow(0 1px 3px rgba(224, 146, 84, 0.28));
+}
+body.dark-mode .trophy-container.medal-bronze .trophy-count {
+  color: #e39a5b;
+  text-shadow: 0 1px 3px rgba(224, 146, 84, 0.4);
+}
+/* Médailles empilées (16/10/2026) : or devant, argent puis bronze décalés derrière, le « ×N » tout à droite suit la médaille
+   survolée. Les icônes gardent leurs classes `trophy-*` (animation, halo, survol) ; seul l'empilement est ajouté. */
+.medal-stack {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+}
+.medal-stack-icons {
+  display: inline-flex;
+  align-items: center;
+}
+.medal-stack .trophy-container {
+  position: relative;
+  margin-left: -16px;
+}
+.medal-stack .trophy-container:first-child {
+  margin-left: 0;
+}
+.medal-stack .trophy-container.medal-gold { z-index: 3; }
+.medal-stack .trophy-container.medal-silver { z-index: 2; }
+.medal-stack .trophy-container.medal-bronze { z-index: 1; }
+.medal-stack .trophy-container.is-hovered { z-index: 4; }
+.medal-stack .trophy-count.medal-count-silver {
+  color: #8b9299;
+}
+.medal-stack .trophy-count.medal-count-bronze {
+  color: #b0702f;
+}
+body.dark-mode .medal-stack .trophy-count.medal-count-silver {
+  color: #cfd4da;
+  text-shadow: 0 1px 3px rgba(205, 210, 216, 0.4);
+}
+body.dark-mode .medal-stack .trophy-count.medal-count-bronze {
+  color: #e39a5b;
+  text-shadow: 0 1px 3px rgba(224, 146, 84, 0.4);
 }
 .avatar {
   width: 36px;
