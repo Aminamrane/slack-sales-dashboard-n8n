@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { AnimatePresence, motion as Motion } from 'framer-motion';
 import { CountUp, EASE, ITEM, Reveal, Ring, reducedMotion, useDrawn, useRevealed } from '../motion';
 import { CohortBars, Donut, FunnelFlow, FunnelPicker } from './charts';
@@ -18,6 +18,7 @@ import ShowsByChannel from './ShowsByChannel';
 import AdsFlow from './AdsFlow';
 import { AffectedCard, IntakePanel, PoolReclaims } from './IntakeLeads';
 import LeadsTab from './LeadsTab';
+import { RegistrantsBlock, RegistrantsPanel } from './Registrants';
 import { FUNNEL, SOURCES, buildModel, byPersonForAd, dm, euro, fr, initials, scopeFigures, signedNum } from './model';
 import TabIcon from './TabIcons';
 import './v2.css';
@@ -528,6 +529,8 @@ function Podium({ rows, onOpen, avatarFor }) {
 
 function Channels({ model, onOpen, period, dark }) {
   const [leads, setLeads] = useState(null);
+  const [regs, setRegs] = useState(null);
+  const closeRegs = useCallback(() => setRegs(null), []);
   const views = model.views?.global || {};
   const received = views.received || {};
   const cols = [['leads', 'received'], ['r1e', 'r1_done'], ['r2e', 'r2_done'], ['signed', 'signed'], ['sales', 'sales']];
@@ -563,8 +566,10 @@ function Channels({ model, onOpen, period, dark }) {
           <Motion.div className="ps2-card-head" variants={ITEM}><h2 id="ps2-flow-title">Fiches reçues en {MONTH}</h2>
             <span className="ps2-chip-soft">de Funnel Leads aux canaux</span></Motion.div>
           <Motion.div variants={ITEM}><AdsFlow intake={model.pilot.intake} month={MONTH} onLeads={setLeads} /></Motion.div>
+          <Motion.div variants={ITEM}><RegistrantsBlock registrants={model.pilot.intake.registrants} onOpen={setRegs} /></Motion.div>
         </Reveal>
       )}
+      <RegistrantsPanel open={regs} period={period} dark={dark} onClose={closeRegs} />
       {model.pilot?.intake?.links?.length > 0 && <AffectedCard period={period} month={MONTH} intake={model.pilot.intake} onLeads={setLeads} />}
       {model.pilot?.intake?.reclaims && <PoolReclaims reclaims={model.pilot.intake.reclaims} month={MONTH} onLeads={setLeads} />}
       <IntakePanel open={leads} period={period} dark={dark} onClose={() => setLeads(null)} />

@@ -314,6 +314,7 @@ export function AffectedCard({ period, month, intake, onLeads }) {
   const on = useRevealed();
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
+  const [people, setPeople] = useState(false);   // détail par sales replié par défaut (dev 16/10/2026)
   useEffect(() => {
     let alive = true;
     setData(null); setError(false);
@@ -376,12 +377,22 @@ export function AffectedCard({ period, month, intake, onLeads }) {
 
         <Motion.div variants={ITEM} className="ps2-affected-people">
           {a && (
+            <button type="button" className="ps2-affected-toggle" aria-expanded={people} onClick={() => setPeople((v) => !v)}>
+              <Motion.svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
+                animate={{ rotate: people ? 90 : 0 }} transition={{ duration: 0.3, ease: EASE }} aria-hidden="true"><path d="m9 6 6 6-6 6" /></Motion.svg>
+              Détail par sales<span className="ps2-soft"> · {fr(a.by_sales.length)}</span>
+            </button>
+          )}
+          <AnimatePresence initial={false}>
+          {a && people && (
+            <Motion.div key="people" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.45, ease: EASE }} style={{ overflow: 'hidden' }}>
             <table className="ps2-affected-table">
               <thead><tr><th style={{ textAlign: 'left' }}>Affectés à</th><th>Total</th>
                 {cols.map((k) => <th key={k} title={REASONS[k].label}><span style={{ color: REASONS[k].color }}><ReasonIcon kind={REASONS[k].icon} size={12} /></span> {REASONS[k].short}</th>)}</tr></thead>
               <tbody>
                 {a.by_sales.map((p, i) => (
-                  <Motion.tr key={p.name} initial={{ opacity: 0, y: 4 }} animate={on ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.35, ease: EASE, delay: 0.2 + i * 0.03 }}>
+                  <Motion.tr key={p.name} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: EASE, delay: 0.08 + i * 0.03 }}>
                     <td style={{ textAlign: 'left' }}><button type="button" className="ps2-affected-cell is-name" onClick={() => onLeads(affectedLeads(month, { sales: p.name, expected: p.affected }))}>{p.name}</button>
                       <span className="ps2-affected-mini">{cols.map((k) => (p[k] ? <i key={k} style={{ background: REASONS[k].color, flexGrow: p[k] }} /> : null))}</span></td>
                     <td><button type="button" className="ps2-affected-cell" onClick={() => onLeads(affectedLeads(month, { sales: p.name, expected: p.affected }))}><b>{fr(p.affected)}</b></button></td>
@@ -393,7 +404,9 @@ export function AffectedCard({ period, month, intake, onLeads }) {
                 ))}
               </tbody>
             </table>
+            </Motion.div>
           )}
+          </AnimatePresence>
         </Motion.div>
       </div>
     </Reveal>

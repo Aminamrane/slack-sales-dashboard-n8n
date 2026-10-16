@@ -27,7 +27,7 @@ function useWidth() {
 
 const NARROW = 760;
 // Blocs clairs : texte foncé ; les autres en blanc.
-const LIGHT = new Set(['#8b95a7', '#a3abbb', '#b9c0cc', '#c9cfda', '#e6b45a', '#d9b25f']);
+const LIGHT = new Set(['#8b95a7', '#a3abbb', '#b9c0cc', '#c9cfda', '#e6b45a', '#d9b25f', '#d9a046', '#cfae74', '#efd08f']);
 
 export default function AdsFlow({ intake, month, onLeads }) {
   const graph = useMemo(() => flowGraph(intake), [intake]);
@@ -131,7 +131,7 @@ function Diagram({ graph, layout: L, month, onLeads }) {
           transition={{ duration: 0.6, ease: EASE, delay: drawn && !hover ? delayOf(n.col) : 0 }}
           onMouseEnter={() => setHover(n.id)} onFocus={() => setHover(n.id)} onClick={(e) => openNode(e, n.id)}>
           <b className="ps2-num"><CountUp value={n.value} format={(v) => fr(Math.round(v))} delay={Math.round(delayOf(n.col) * 1000)} /></b>
-          <span className="ps2-flow-block-label">{n.label}</span>
+          <span className="ps2-flow-block-label">{n.short || n.label}</span>
         </Motion.button>
       ))}
       {L.leaves.map((l, i) => (

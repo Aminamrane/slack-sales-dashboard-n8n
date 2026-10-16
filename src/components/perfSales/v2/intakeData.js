@@ -39,7 +39,7 @@ export const GROUP = {
 export function nodeLeads(node, month) {
   const match = (r) => {
     if (node.kind === 'root') return true;
-    if (node.kind === 'channel') return r.channel === node.group;
+    if (node.kind === 'channel') return r.channel === node.group && (!node.link || (r.sub || 'live') === node.link);
     if (node.kind === 'funnel') return r.channel === 'ads' && r.funnel === node.funnel;
     const fate = String(r.fate).startsWith('other_') ? 'other' : r.fate;
     return r.channel === node.group && fate === node.fate;

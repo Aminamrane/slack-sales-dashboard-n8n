@@ -4,7 +4,8 @@ import { CountUp, EASE, ITEM, Reveal } from '../motion';
 import { dm, fr } from './model';
 import { AFFECTED_FATES, reasonOf } from './intakeData';
 import { loadIntake } from './intakeApi';
-import { CHANNELS } from './flowData';
+import { CHANNELS, WEBINAR_LINKS } from './flowData';
+import { RegistrantsTable } from './Registrants';
 import LeadHistoryPanel from './LeadHistory';
 import { ReasonIcon } from './IntakeLeads';
 
@@ -35,6 +36,7 @@ const VIEWS = [
   ['barrier', '3 jours sans RDV', (r) => r.channel === 'ads' && AFFECTED_FATES.includes(r.fate) && r.departure === 'barrier'],
   ['never', 'Jamais données', (r) => String(r.fate).startsWith('not_given')],
   ['older', 'Anciens repris', (r) => r.fate === 'older_pool'],
+  ['registrants', 'Inscrits webinaire', () => false],
 ];
 
 function Select({ label, value, options, onChange }) {
@@ -72,7 +74,12 @@ export default function LeadsTab({ period, dark }) {
   const close = useCallback(() => setOpen(null), []);
 
   const rows = useMemo(() => (data ? [...data.leads, ...data.older] : []), [data]);
-  const counts = useMemo(() => Object.fromEntries(VIEWS.map(([k, , f]) => [k, rows.filter(f).length])), [rows]);
+  const counts = useMemo(() => ({ ...Object.fromEntries(VIEWS.map(([k, , f]) => [k, rows.filter(f).length])),
+    registrants: data?.registrants?.total ?? 0 }), [rows, data]);
+  const regs = (data?.registrants?.rows || []).filter((r) => {
+    const w = norm(q).split(/\s+/).filter(Boolean);
+    return !w.length || w.every((x) => norm(`${r.name} ${r.company} ${r.crm_id || ''}`).includes(x));
+  }).sort((a, b) => (b.received || '').localeCompare(a.received || ''));
   const pick = VIEWS.find(([k]) => k === view)?.[2] || (() => true);
   const words = norm(q).split(/\s+/).filter(Boolean);
   const shown = rows.filter((r) => pick(r) && (!channel || r.channel === channel) && (!engine || r.engine === engine)
@@ -122,14 +129,25 @@ export default function LeadsTab({ period, dark }) {
 
         {error && <p className="ps2-note" role="alert">Leads non chargés.</p>}
         {!data && !error && <div className="ps2-loading" aria-label="Chargement"><i /><i /><i /><i /></div>}
-        {data && (
+        {data && view === 'registrants' && (
+          <div className="ps2-leads-wrap">
+            <RegistrantsTable rows={regs} cohorts={data.registrants?.cohorts} limit={limit}
+              onHistory={(r) => setOpen({ id: r.crm_id, name: r.name, company: r.company, now: r.crm_now })} />
+            {!regs.length && <p className="ps2-note">{data.registrants?.status === 'ok' ? 'Aucun inscrit.' : 'Inscrits non lus (landing indisponible).'}</p>}
+            {regs.length > limit && (
+              <button type="button" className="ps2-ghost-btn ps2-leads-more" onClick={() => setLimit((n) => n + PAGE * 2)}>
+                Afficher {fr(Math.min(PAGE * 2, regs.length - limit))} de plus · {fr(regs.length)} au total</button>
+            )}
+          </div>
+        )}
+        {data && view !== 'registrants' && (
           <div className="ps2-leads-wrap">
             <table className="ps2-dossiers ps2-intake-table ps2-leads-table">
               <thead><tr><th>Lead</th><th>Reçu</th><th>Canal</th><th>Affecté à</th><th>Pourquoi parti</th><th>Aujourd’hui</th><th>Étape</th></tr></thead>
               <tbody>
                 {shown.slice(0, limit).map((r, i) => {
                   const why = reasonOf(r);
-                  const ch = CHANNELS[r.channel] || CHANNELS.other;
+                  const ch = r.channel === 'webinar' && WEBINAR_LINKS[r.sub || 'live'] ? WEBINAR_LINKS[r.sub || 'live'] : CHANNELS[r.channel] || CHANNELS.other;
                   return (
                     <Motion.tr key={r.id} className="ps2-intake-row" tabIndex={0} onClick={() => setOpen(r)} onKeyDown={(e) => e.key === 'Enter' && setOpen(r)}
                       initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: EASE, delay: Math.min(i, 20) * 0.015 }}>

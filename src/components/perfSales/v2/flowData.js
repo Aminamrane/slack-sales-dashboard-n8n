@@ -20,6 +20,16 @@ export const CHANNELS = {
 };
 const CHANNEL_ORDER = ['ads', 'webinar', 'linkedin', 'referral', 'ccs', 'cold_call', 'other', 'test'];
 
+// D'où vient une fiche webinaire du CRM (dev 16/10/2026 : « les liens webinaires Lamia ? Aurélie ? les webinaires traités
+// depuis le CRM setter ? ») : `links[].sub`, calculé par le serveur (perf_intake.webinar_link).
+export const WEBINAR_LINKS = {
+  lamia: { label: 'Webinaire · lien Lamia', short: 'Lien Lamia', color: '#e6b45a' },
+  aurelie: { label: 'Webinaire · lien Aurélie', short: 'Lien Aurélie', color: '#d9a046' },
+  setter: { label: 'Webinaire · CRM setter', short: 'CRM setter', color: '#cfae74' },
+  live: { label: 'Webinaire · RDV après le live', short: 'Après le live', color: '#efd08f' },
+};
+const LINK_ORDER = ['lamia', 'aurelie', 'setter', 'live'];
+
 export const FUNNEL = {
   fr: { label: 'Traitables', sub: 'tél. FR, 100 k€ et plus', color: '#2f4f9e' },
   non_fr: { label: 'Tél. non français', color: '#8b95a7' },
@@ -79,6 +89,19 @@ export function flowGraph(intake) {
   for (const channel of channels) {
     const own = rows.filter((r) => r.channel === channel);
     const c = CHANNELS[channel] || { label: channel, color: '#c9cfda' };
+    // Webinaire : un bloc par lien d'origine, tous vers les mêmes cases d'aujourd'hui.
+    if (channel === 'webinar' && own.some((r) => r.sub)) {
+      const subs = [...new Set(own.map((r) => r.sub || 'live'))].sort((a, b) => rank(LINK_ORDER, a) - rank(LINK_ORDER, b));
+      for (const sub of subs) {
+        const part = own.filter((r) => (r.sub || 'live') === sub);
+        const w = WEBINAR_LINKS[sub] || { label: `Webinaire · ${sub}`, color: c.color };
+        const sid = `ch:webinar:${sub}`;
+        nodes.push({ id: sid, col: 1, label: w.label, short: w.short, value: sum(part), color: w.color, group: 'webinar', link: sub, kind: 'channel' });
+        links.push({ source: 'root', target: sid, value: sum(part) });
+        part.forEach((r) => addLeaf('webinar', r.fate, r.n, sid));
+      }
+      continue;
+    }
     const id = `ch:${channel}`;
     nodes.push({ id, col: 1, label: c.label, value: sum(own), color: c.color, group: channel, kind: 'channel' });
     links.push({ source: 'root', target: id, value: sum(own) });
