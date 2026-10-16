@@ -915,7 +915,7 @@ export default function PerfSalesV2({ data, dark, period, tab, onTab, front, con
             {tab === 'reactivity' && reactivityNode}
             {tab === 'cohort' && <Cohort model={model} />}
             {tab === 'ventes' && <VentesTab breakdown={ventesData} model={model} onOpen={open} />}
-            {tab === 'setters' && <SettersTab period={period} days={model.pilot?.days} avatarFor={model.avatarFor} />}
+            {tab === 'setters' && <SettersTab period={period} days={model.pilot?.days} avatarFor={model.avatarFor} dark={dark} />}
             {tab === 'auto' && <AutoAssignTab month={period} avatarFor={model.avatarFor} />}
           </Motion.div>
         </AnimatePresence>

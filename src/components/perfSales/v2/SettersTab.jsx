@@ -4,13 +4,16 @@ import apiClient from '../../../services/apiClient';
 import { CountUp, EASE, ITEM, Reveal, useRevealed } from '../motion';
 import { Detail, Info } from './Pop';
 import { euro, fr, initials } from './model';
+import SetterPlacements from './SetterPlacements';
+import { monthRange, usePlacements } from './setterApi';
 
 // Onglet Setters (dev 14/10/2026 : « prends exemple sur la page Setters du dashboard : plus de détails, de vraies stats ;
 // par rapport à leur taux de transfo, voir combien de volume il doit faire chacun »). Même calcul que la page Setters
 // (RDV posés au mois du RDV, honorés, no-show, ventes au mois de signature) et les appels Allo du mois. Pour chaque
 // setter : son parcours appels → répondus → RDV → honorés → ventes, ses taux, et le volume d'appels par jour qu'il lui
 // faut, à ses propres taux, pour atteindre l'objectif de ventes choisi d'ici la fin du mois.
-export default function SettersTab({ period, days, avatarFor }) {
+export default function SettersTab({ period, days, avatarFor, dark }) {
+  const [placed] = usePlacements(...(/^\d{4}-\d{2}$/.test(period || '') ? monthRange(period) : [null, null]));
   const [data, setData] = useState(null);
   const [calls, setCalls] = useState(null);
   const [error, setError] = useState(false);
@@ -65,6 +68,8 @@ export default function SettersTab({ period, days, avatarFor }) {
         ))}
       </Reveal>
 
+      <SetterPlacements period={period} dark={dark} avatarFor={avatarFor} rdvMonth={team.rdv?.total} />
+
       <Reveal as="section" className="ps2-card ps2-span-12" aria-labelledby="ps2-setters-title">
         <Motion.div className="ps2-card-head" variants={ITEM}>
           <h2 id="ps2-setters-title">Chaque setter, des appels aux ventes</h2>
@@ -79,11 +84,12 @@ export default function SettersTab({ period, days, avatarFor }) {
         <div className="ps2-ctable-wrap" style={{ marginTop: 12 }}>
           <table className="ps2-ctable ps2-setters-table" style={{ '--c': '#2c6448' }}>
             <thead>
-              <tr><th style={{ textAlign: 'left' }}>Setter</th><th>Appels</th><th>Appels / j</th><th>Répondus</th><th>RDV posés</th><th>Honorés</th><th>No-show</th><th>Ventes</th><th>CA</th>
+              <tr><th style={{ textAlign: 'left' }}>Setter</th><th>Appels</th><th>Appels / j</th><th>Répondus</th><th>RDV posés</th><th title="RDV posés dans le mois (date de la pose) ÷ jours ouvrés écoulés">RDV / j</th><th>Honorés</th><th>No-show</th><th>Ventes</th><th>CA</th>
                 <th style={{ textAlign: 'left', width: 220 }}>Parcours</th><th className="is-key">Appels / vente</th><th className="is-key">Pour l’objectif</th></tr>
             </thead>
             <tbody>
-              {rows.map((r, i) => <SetterRow key={r.id} r={r} i={i} target={target} remaining={remaining} elapsed={elapsed} teamCallsPerSale={callsPerSaleTeam} avatarFor={avatarFor} callsLoaded={!!calls} />)}
+              {rows.map((r, i) => <SetterRow key={r.id} r={r} i={i} target={target} remaining={remaining} elapsed={elapsed} teamCallsPerSale={callsPerSaleTeam} avatarFor={avatarFor} callsLoaded={!!calls}
+                placed={placed?.setters?.find((x) => x.id === r.id)} placedDays={placed?.elapsed_open_days} />)}
             </tbody>
           </table>
         </div>
@@ -94,7 +100,7 @@ export default function SettersTab({ period, days, avatarFor }) {
 
 // Appels par jour (dev 15/10/2026 : « quand l'objectif est atteint, on ne sait pas combien d'appels ils ont faits par jour ») :
 // les appels Allo du mois ÷ les jours ouvrés écoulés, la même moyenne que celle des RDV en haut de l'onglet.
-function SetterRow({ r, i, target, remaining, elapsed, teamCallsPerSale, avatarFor, callsLoaded }) {
+function SetterRow({ r, i, target, remaining, elapsed, teamCallsPerSale, avatarFor, callsLoaded, placed, placedDays }) {
   const on = useRevealed();
   const c = r.calls;
   const held = r.rdv.held || 0, noshow = r.rdv.no_show || 0, sold = r.sales.count || 0;
@@ -114,6 +120,7 @@ function SetterRow({ r, i, target, remaining, elapsed, teamCallsPerSale, avatarF
       <td>{callsPerDay != null ? <span title={`${fr(c.calls)} appels ÷ ${elapsed} jours ouvrés écoulés`}>{fr(callsPerDay, 0)}</span> : <span className="ps2-muted">–</span>}</td>
       <td>{c ? <>{fr(c.answered)} <small className="ps2-muted">{fr((c.answered / Math.max(1, c.calls)) * 100, 0)} %</small></> : <span className="ps2-muted">–</span>}</td>
       <td>{fr(r.rdv.total)}</td>
+      <td>{placed?.avg != null ? <span title={`${fr(placed.placed)} RDV posés ÷ ${placedDays} jours ouvrés écoulés`}>{fr(placed.avg, 1)}</span> : <span className="ps2-muted">–</span>}</td>
       <td>{fr(held)} {presence != null && <small className="ps2-muted">{fr(presence * 100, 0)} %</small>}</td>
       <td className={noshow ? 'ps2-low' : 'ps2-muted'}>{fr(noshow)}</td>
       <td><b>{fr(sold)}</b></td>

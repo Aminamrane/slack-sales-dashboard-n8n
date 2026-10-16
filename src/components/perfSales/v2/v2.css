@@ -1346,3 +1346,50 @@ button.ps2-tile { font: inherit; color: var(--ink); width: 100%; min-height: 168
   .ps2-agenda-day { min-height: 64px; padding: 4px; }
   .ps2-agenda-chip-name, .ps2-agenda-sum em { display: none; }
 }
+
+/* RDV posés par jour, setters (16/10/2026) */
+.ps2-place-periods { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 3px; border: 1px solid var(--line-2); border-radius: 12px; }
+.ps2-place-periods > button { position: relative; border: 0; background: none; padding: 6px 12px; border-radius: 9px; cursor: pointer; font-size: 12.5px; color: var(--soft); }
+.ps2-place-periods > button > span:not(.ps2-place-pill) { position: relative; z-index: 1; }
+.ps2-place-periods > button.is-on { color: var(--navy); font-weight: 600; }
+.ps2-place-periods > button::first-letter { text-transform: uppercase; }
+.ps2-place-pill { position: absolute; inset: 0; border-radius: 9px; background: var(--blue-bg); z-index: 0; }
+.ps2-place-day { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 10px; border-radius: 9px; font-size: 12.5px; color: var(--soft); }
+.ps2-place-day.is-on { background: var(--blue-bg); color: var(--navy); font-weight: 600; }
+.ps2-place-day input { border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; font: inherit; font-size: 12px; color: var(--ink); background: var(--card); }
+.ps2-place-kpis { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.ps2-place-kpis > span, .ps2-place-kpi-btn { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border: 1px solid var(--line-2); border-radius: 12px; font-size: 12px; color: var(--soft); min-width: 130px; }
+.ps2-place-kpis b { font-size: 24px; font-weight: 600; color: var(--ink); letter-spacing: -.02em; }
+.ps2-place-wrap { margin-top: 14px; overflow-x: auto; }
+.ps2-place-grid { border-collapse: separate; border-spacing: 3px; font-size: 12px; min-width: 100%; }
+.ps2-place-grid th { font-family: var(--mono); font-size: 10px; color: var(--muted); font-weight: 500; text-align: center; padding: 0 0 4px; }
+.ps2-place-grid th.is-name, .ps2-place-grid td.is-name { text-align: left; white-space: nowrap; padding-right: 10px; }
+.ps2-place-grid td.is-name > span { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
+.ps2-place-grid th.is-we { opacity: .5; }
+.ps2-place-grid th.is-today { color: #fff; background: var(--navy); border-radius: 6px; }
+.ps2-place-grid td { text-align: center; padding: 0; }
+.ps2-place-grid td.is-we { opacity: .55; }
+.ps2-place-grid th.is-tot, .ps2-place-grid td.is-tot { padding: 0 8px; text-align: right; white-space: nowrap; }
+.ps2-place-grid td.is-tot small { color: var(--soft); font-size: 10.5px; }
+.ps2-place-cell { width: 100%; min-width: 22px; height: 26px; border: 0; border-radius: 6px; cursor: pointer; font: 600 11.5px var(--sans); font-variant-numeric: tabular-nums; transition: transform .15s, box-shadow .15s; }
+.ps2-place-cell:hover { transform: scale(1.12); box-shadow: 0 4px 12px rgba(30, 58, 123, .25); }
+.ps2-place-empty { display: block; width: 100%; min-width: 22px; height: 26px; border-radius: 6px; background: var(--line-2); opacity: .55; }
+.ps2-place-grid tr.is-team td { font-weight: 600; color: var(--soft); padding-top: 6px; border-top: 1px solid var(--line-2); }
+.ps2-place-bars { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+.ps2-place-bar { display: grid; grid-template-columns: 24px 170px minmax(0, 1fr) 40px 90px; gap: 10px; align-items: center; border: 0; background: none; padding: 6px 8px; border-radius: 10px; cursor: pointer; text-align: left; color: var(--ink); font: inherit; font-size: 12.5px; }
+.ps2-place-bar:hover:not(:disabled) { background: var(--blue-bg); }
+.ps2-place-bar:disabled { cursor: default; opacity: .6; }
+.ps2-place-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps2-place-track { height: 10px; border-radius: 5px; background: var(--line-2); overflow: hidden; }
+.ps2-place-track i { display: block; height: 100%; border-radius: 5px; background: var(--navy); }
+.ps2-place-bar b { font-size: 18px; font-weight: 600; text-align: right; }
+.ps2-place-bar small { color: var(--soft); font-size: 11px; }
+.ps2-place-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow: auto; }
+.ps2-place-list button { width: 100%; display: grid; grid-template-columns: 44px auto minmax(0, 1fr); gap: 8px; align-items: center; border: 0; background: none; border-radius: 8px; padding: 6px; cursor: pointer; text-align: left; color: var(--ink); font: inherit; font-size: 12px; }
+.ps2-place-list button:hover { background: var(--blue-bg); }
+.ps2-place-who { display: flex; flex-direction: column; min-width: 0; }
+.ps2-place-who b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps2-place-who small { font-size: 10.5px; color: var(--soft); }
+@media (max-width: 640px) { .ps2-place-bar { grid-template-columns: 24px minmax(0, 1fr) 40px; } .ps2-place-track, .ps2-place-bar small { display: none; } }
+.ps2-place-kpi-btn { background: var(--card); cursor: pointer; text-align: left; font: inherit; }
+.ps2-place-kpi-btn:hover { background: var(--blue-bg); }
