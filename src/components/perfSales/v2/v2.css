@@ -1082,3 +1082,57 @@ button.ps2-tile { font: inherit; color: var(--ink); width: 100%; min-height: 168
 .ps2-studio-chart { display: flex; flex-direction: column; min-width: 0; }
 .ps2-studio-plot { position: relative; flex: 1 1 auto; width: 100%; min-width: 0; min-height: 180px; overflow: hidden; }
 .ps2-studio-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* Détail du schéma « Fiches reçues » et reprises du pool (16/10/2026) */
+.ps2-intake-panel { width: min(760px, 100vw); }
+.ps2-intake-check { padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; }
+.ps2-intake-check.is-ok { background: var(--good-bg); color: var(--good); }
+.ps2-intake-check.is-ko { background: var(--low-bg); color: var(--low); }
+.ps2-row-line { transition: opacity .25s; }
+.ps2-row-line.is-dim { opacity: .45; }
+.ps2-intake-table td:first-child { font-family: var(--sans); white-space: normal; }
+.ps2-intake-ref { display: block; font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+.ps2-intake-name { display: block; font-weight: 600; color: var(--ink); }
+.ps2-intake-co { display: block; font-size: 11.5px; }
+.ps2-intake-steps { display: flex; flex-direction: column; gap: 3px; }
+.ps2-intake-steps span { font-size: 11.5px; line-height: 1.35; color: var(--soft); padding-left: 10px; position: relative; }
+.ps2-intake-steps span::before { content: ''; position: absolute; left: 0; top: .55em; width: 5px; height: 5px; border-radius: 50%; background: var(--line); }
+.ps2-intake-steps span.is-low { color: var(--low-strong); } .ps2-intake-steps span.is-low::before { background: var(--low); }
+.ps2-intake-steps span.is-warn { color: var(--warn); } .ps2-intake-steps span.is-warn::before { background: var(--warn); }
+.ps2-intake-stage { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: var(--grey-bg); color: var(--soft); white-space: nowrap; }
+.ps2-intake-stage.is-r1_set, .ps2-intake-stage.is-r1_done { background: var(--blue-bg); color: var(--blue); }
+.ps2-intake-stage.is-r2_set, .ps2-intake-stage.is-r2_done { background: var(--blue-bg); color: var(--navy); }
+.ps2-intake-stage.is-signed { background: var(--good-bg); color: var(--good); }
+
+.ps2-reclaims { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 28px; margin-top: 18px; align-items: start; }
+.ps2-reclaims-split { display: flex; flex-direction: column; gap: 16px; }
+.ps2-reclaims-row { display: grid; grid-template-columns: 130px minmax(0, 1fr) 52px; align-items: center; gap: 14px; }
+.ps2-reclaims-label { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--ink); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+.ps2-reclaims-label:hover { color: var(--blue); }
+.ps2-reclaims-track { height: 34px; border-radius: 9px; background: var(--line-2); overflow: hidden; display: flex; border: 0; padding: 0; cursor: pointer; }
+.ps2-reclaims-track.is-stack { cursor: default; }
+.ps2-reclaims-stack { display: flex; height: 100%; gap: 2px; overflow: hidden; border-radius: 9px; }
+.ps2-reclaims-seg { display: block; height: 100%; border: 0; padding: 0; min-width: 3px; cursor: pointer; transition: filter .2s; }
+.ps2-reclaims-track > .ps2-reclaims-seg { border-radius: 9px; }
+.ps2-reclaims-seg:hover { filter: brightness(1.12); }
+.ps2-reclaims-n { font-size: 26px; font-weight: 600; letter-spacing: -.02em; text-align: right; }
+.ps2-reclaims-months { display: flex; flex-wrap: wrap; gap: 6px 14px; padding-left: 144px; }
+.ps2-reclaims-months button { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--soft); background: none; border: 0; padding: 0; cursor: pointer; }
+.ps2-reclaims-months button:hover { color: var(--ink); }
+.ps2-reclaims-months b { color: var(--ink); font-weight: 600; }
+.ps2-reclaims-people { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 22px; }
+.ps2-reclaims-people button { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(60px, 1.1fr) auto; align-items: center; gap: 10px;
+  background: none; border: 0; border-bottom: 1px solid var(--line-2); padding: 7px 2px; cursor: pointer; font-size: 12.5px; color: var(--ink); text-align: left; transition: background .2s; }
+.ps2-reclaims-people button:hover { background: var(--blue-bg); }
+.ps2-reclaims-who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps2-reclaims-mini { display: flex; gap: 2px; height: 8px; }
+.ps2-reclaims-mini i { display: block; height: 8px; border-radius: 3px; }
+.ps2-reclaims-pair { white-space: nowrap; font-size: 12.5px; }
+@media (max-width: 1180px) { .ps2-reclaims { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  .ps2-reclaims-row { grid-template-columns: minmax(0, 1fr) 44px; }
+  .ps2-reclaims-row .ps2-reclaims-track { grid-column: 1 / -1; grid-row: 2; }
+  .ps2-reclaims-months { padding-left: 0; }
+  .ps2-reclaims-people { grid-template-columns: minmax(0, 1fr); }
+  .ps2-intake-table th:nth-child(2), .ps2-intake-table td:nth-child(2) { display: none; }
+}

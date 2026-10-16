@@ -5,6 +5,7 @@ import { usePop, Detail } from './Pop';
 import { fr } from './model';
 import { flowLayout } from './flowLayout';
 import { COLUMNS, flowGraph, nodeDetail, nodeText } from './flowData';
+import { nodeLeads } from './intakeData';
 
 // Schéma « Fiches reçues » : données dans flowData.js, agencement dans flowLayout.js.
 
@@ -28,14 +29,14 @@ const NARROW = 760;
 // Blocs clairs : texte foncé ; les autres en blanc.
 const LIGHT = new Set(['#8b95a7', '#a3abbb', '#b9c0cc', '#c9cfda', '#e6b45a', '#d9b25f']);
 
-export default function AdsFlow({ intake, month }) {
+export default function AdsFlow({ intake, month, onLeads }) {
   const graph = useMemo(() => flowGraph(intake), [intake]);
   const [ref, width] = useWidth();
   const layout = useMemo(() => (graph && width >= NARROW ? flowLayout(graph, width) : null), [graph, width]);
   if (!graph) return null;
   return (
     <div className="ps2-flowmap" ref={ref}>
-      {layout ? <Diagram graph={graph} layout={layout} month={month} /> : width > 0 && <FlowList graph={graph} />}
+      {layout ? <Diagram graph={graph} layout={layout} month={month} onLeads={onLeads} /> : width > 0 && <FlowList graph={graph} />}
     </div>
   );
 }
@@ -65,7 +66,7 @@ function pathOf(graph, id) {
 
 const safeId = (key) => key.replace(/[^a-z0-9]/gi, '_');
 
-function Diagram({ graph, layout: L, month }) {
+function Diagram({ graph, layout: L, month, onLeads }) {
   const drawn = useDrawn();
   const open = usePop();
   const uid = useId().replace(/:/g, '');
@@ -82,8 +83,11 @@ function Diagram({ graph, layout: L, month }) {
         ['Clean (tél FR)', fr(f.clean)], ['… dont ADS traitables', fr(f.cleanAds)], ['… dont autres canaux', fr(f.clean - f.cleanAds)]]
       : node.funnel === 'fr' ? [['Clean (tél FR) de Funnel Leads, tous canaux', fr(f.clean)], ['… dont ADS', fr(f.cleanAds)]] : [];
     const lines = node.id === 'root' ? ['Mêmes filtres et mêmes bornes que Funnel Leads : fiches entrantes créées dans le mois, hors cold call et setters.'] : node.lines || [];
-    open(e.currentTarget, <Detail kicker={COLUMNS[node.col]} title={node.id === 'root' ? `Fiches reçues en ${month}` : nodeText(node)} value={fr(node.value)}
-      rows={[...extra, ...rows]} lines={lines} />);
+    // Le détail fiche par fiche (dev 16/10/2026 : « le détail des leads affectés, même s'ils ne sont plus dans les tracking sheets »).
+    const action = onLeads && node.value > 0 ? (close) => (
+      <button type="button" className="ps2-link" onClick={() => { close(); onLeads(nodeLeads(node, month)); }}>{node.value > 1 ? `Voir les ${fr(node.value)} fiches` : 'Voir la fiche'}</button>) : null;
+    open(e.currentTarget, (close) => <Detail kicker={COLUMNS[node.col]} title={node.id === 'root' ? `Fiches reçues en ${month}` : nodeText(node)} value={fr(node.value)}
+      rows={[...extra, ...rows]} lines={lines} action={action?.(close)} />);
   };
   const dim = (id) => Boolean(lit) && !lit.nodes.has(id);
   const label = `Fiches reçues en ${month} : ${L.leaves.map((n) => `${nodeText(n)} ${n.value}`).join(', ')}`;

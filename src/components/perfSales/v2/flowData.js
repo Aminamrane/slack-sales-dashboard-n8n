@@ -31,7 +31,7 @@ const FUNNEL_ORDER = ['fr', 'non_fr', 'small'];
 const FATES = {
   ads_affectation: { ads: 'Chez le sales affecté', color: '#1e3a7b',
     lines: ['Le sales que le moteur a choisi l’a toujours (ou l’a reçue après un raté des 6 minutes d’un collègue) : colonne « ADS affectés ».'] },
-  ads_pool: { ads: 'Repris du pool par un autre sales', color: '#7f9ad9', lines: ['Repartie au pool commun, puis reprise par un autre sales : colonne « ADS repris du pool ».'] },
+  ads_pool: { ads: 'Repris du pool', color: '#7f9ad9', lines: ['Repartie au pool commun, puis reprise par un sales (parfois celui que le moteur avait choisi) : colonne « ADS repris du pool ».'] },
   other: { other: 'chez un sales', lines: ['Dans la colonne de son canal.'] },
   pool_waiting: { ads: 'Au pool, personne ne l’a repris', other: 'au pool', color: '#c3cde3',
     lines: ['Donnée à un sales, repartie au pool commun, pas encore reprise : elle ne compte pour aucun sales.'] },

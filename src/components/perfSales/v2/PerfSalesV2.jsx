@@ -16,6 +16,7 @@ import ChannelFilter from './ChannelFilter';
 import SalesKpis from './SalesKpis';
 import ShowsByChannel from './ShowsByChannel';
 import AdsFlow from './AdsFlow';
+import { IntakePanel, PoolReclaims } from './IntakeLeads';
 import { FUNNEL, SOURCES, buildModel, byPersonForAd, dm, euro, fr, initials, scopeFigures, signedNum } from './model';
 import TabIcon from './TabIcons';
 import './v2.css';
@@ -524,7 +525,8 @@ function Podium({ rows, onOpen, avatarFor }) {
 
 // ── Canaux ────────────────────────────────────────────────────────────────
 
-function Channels({ model, onOpen }) {
+function Channels({ model, onOpen, period, dark }) {
+  const [leads, setLeads] = useState(null);
   const views = model.views?.global || {};
   const received = views.received || {};
   const cols = [['leads', 'received'], ['r1e', 'r1_done'], ['r2e', 'r2_done'], ['signed', 'signed'], ['sales', 'sales']];
@@ -559,9 +561,11 @@ function Channels({ model, onOpen }) {
         <Reveal as="section" className="ps2-card ps2-span-12" aria-labelledby="ps2-flow-title">
           <Motion.div className="ps2-card-head" variants={ITEM}><h2 id="ps2-flow-title">Fiches reçues en {MONTH}</h2>
             <span className="ps2-chip-soft">de Funnel Leads aux canaux</span></Motion.div>
-          <Motion.div variants={ITEM}><AdsFlow intake={model.pilot.intake} month={MONTH} /></Motion.div>
+          <Motion.div variants={ITEM}><AdsFlow intake={model.pilot.intake} month={MONTH} onLeads={setLeads} /></Motion.div>
         </Reveal>
       )}
+      {model.pilot?.intake?.reclaims && <PoolReclaims reclaims={model.pilot.intake.reclaims} month={MONTH} onLeads={setLeads} />}
+      <IntakePanel open={leads} period={period} dark={dark} onClose={() => setLeads(null)} />
       <Reveal as="section" className="ps2-card ps2-span-4" aria-labelledby="ps2-mix-title">
         <Motion.h2 id="ps2-mix-title" variants={ITEM}>D’où viennent les leads</Motion.h2>
         <Motion.div variants={ITEM} style={{ marginTop: 16 }}><Donut counts={received} total={model.value.leads} label="chez les sales" onPick={(k) => onOpen('leads', { source: k })} /></Motion.div>
@@ -884,7 +888,7 @@ export default function PerfSalesV2({ data, dark, period, tab, onTab, front, con
         <AnimatePresence mode="wait">
           <Motion.div key={tab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.35, ease: EASE }}>
             {tab === 'overview' && <Overview model={model} onOpen={open} onPilot={pilotTeam} />}
-            {tab === 'channels' && <Channels model={model} onOpen={open} />}
+            {tab === 'channels' && <Channels model={model} onOpen={open} period={period} dark={dark} />}
             {tab === 'sales' && <SalesTab model={model} salesData={salesData} salesRange={salesRange || period} salesPeriodBar={salesPeriodBar} salesLoading={salesLoading} front={front} salesNode={salesNode} onOpen={open} />}
             {tab === 'teams' && <TeamsTab model={model} team={team || myTeam} onTeam={setTeam} avatarFor={model.avatarFor} period={period} />}
             {tab === 'rdv' && (
