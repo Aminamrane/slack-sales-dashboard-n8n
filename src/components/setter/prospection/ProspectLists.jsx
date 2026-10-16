@@ -196,7 +196,10 @@ function ListDetail({ C, darkMode, listId, onBack, onToast, onOpenLeads, teamSal
       onToast?.(`R1 placé le ${fmtWallDateTime(r.r1_date)} avec ${r.sales?.name || r.sales?.email} pour ${item.company.name}.`);
       await refresh();
     } catch (err) {
-      throw new Error(errorMessage(err));
+      // Doublon dormant (dev 16/10/2026) : la fenêtre affiche l'alerte et propose de placer le RDV quand même.
+      const next = new Error(errorMessage(err));
+      if (err?.data?.code === 'dormant_duplicate') next.duplicate = err.data.duplicate || {};
+      throw next;
     }
   };
   const downloadCsv = async () => {

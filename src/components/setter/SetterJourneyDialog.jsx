@@ -33,6 +33,8 @@ export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onS
   const [manualDate, setManualDate] = useState(''), [manualSales, setManualSales] = useState('');
   const [day, setDay] = useState(''), [salesFilter, setSalesFilter] = useState('');
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  // Doublon dormant d'une entreprise de liste (dev 16/10/2026) : alerte, puis « Placer le RDV quand même ».
+  const [duplicate, setDuplicate] = useState(null);
   const submitting = useRef(false), ref = useRef(null);
   useDialogFocus(ref, onClose, busy);
   const booking = outcome === 'r1' || outcome === 'r2';
@@ -65,12 +67,13 @@ export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onS
   const chosenDay = days.includes(day) ? day : shownDays[0];
   const singleTimes = single ? ((data?.days || []).find(d => d.date === chosenDay)?.slots || []).map(x => x.time) : [];
   function selectOutcome(value) { setOutcome(value); setSlot(null); setError(''); setNote(''); if (value === 'r1') setBookingMode('available'); }
-  async function save() {
+  async function save(confirmDuplicate = false) {
     if (submitting.current || browseOnly) return;
-    submitting.current = true; setBusy(true); setError('');
+    submitting.current = true; setBusy(true); setError(''); setDuplicate(null);
+    const confirmed = (action) => (confirmDuplicate ? { ...action, body: { ...action.body, confirm_duplicate: true } } : action);
     try {
       if (single && bookingMode === 'available') {
-        const action = singleBookingAction({ lead: lead || {}, slot: selectedSlot, note, email, prospect: !!onBook, kind: outcome });
+        const action = confirmed(singleBookingAction({ lead: lead || {}, slot: selectedSlot, note, email, prospect: !!onBook, kind: outcome }));
         if (onBook) await onBook(action);
         else {
           if (action.email) await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { email: action.email });
@@ -83,7 +86,7 @@ export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onS
         onClose();
         return;
       }
-      const action = setterAction({ lead: lead || {}, outcome, slot: selectedSlot, note, email, callback, targetCalendar });
+      const action = confirmed(setterAction({ lead: lead || {}, outcome, slot: selectedSlot, note, email, callback, targetCalendar }));
       if (booking && bookingMode === 'available') {
         const latest = await apiClient.get(query());
         setData(latest);
@@ -96,7 +99,10 @@ export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onS
       }
       onSaved?.(booking ? `${outcome.toUpperCase()} placé.` : outcome === 'disqualify' ? 'Lead disqualifié.' : outcome === 'callback' ? 'Rappel enregistré.' : 'Appel enregistré.');
       onClose();
-    } catch (e) { setError(e.message || 'L’action n’a pas été enregistrée. Réessayez.'); }
+    } catch (e) {
+      if (e.duplicate) setDuplicate({ message: e.message, ...e.duplicate });
+      else setError(e.message || 'L’action n’a pas été enregistrée. Réessayez.');
+    }
     finally { submitting.current = false; setBusy(false); }
   }
   return createPortal(<div className={`sj-overlay stj-overlay ${dark ? 'sj-dark' : ''}`} onClick={e => { if (e.target === e.currentTarget && !busy) onClose(); }}>
@@ -129,6 +135,12 @@ export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onS
           </>}
         </>}
         {error && <p className="sj-error" role="alert">{error}</p>}
+        {duplicate && (
+          <div className="sj-duplicate" role="alert">
+            <p>{duplicate.message}</p>
+            <button type="button" disabled={busy} onClick={() => save(true)}>{busy ? 'Enregistrement…' : 'Placer le RDV quand même'}</button>
+          </div>
+        )}
       </div>
       <footer className="sj-footer"><button disabled={busy} onClick={onClose}>{browseOnly ? 'Fermer' : 'Annuler'}</button>{!browseOnly && outcome && <button className="sj-primary" disabled={busy || (booking && (!selectedSlot || (bookingMode === 'available' && loading)))} onClick={save}>{busy ? <><LoaderCircle size={17} className="stj-spin"/> Enregistrement…</> : <>{booking ? `${bookingMode === 'manual' ? 'Placer' : 'Confirmer'} le ${outcome.toUpperCase()}` : 'Enregistrer'}<ArrowRight size={17}/></>}</button>}</footer>
     </section>
