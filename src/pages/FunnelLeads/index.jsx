@@ -40,7 +40,7 @@ const availableMonths = () => {
 
 const HERO_GRADIENT = 'linear-gradient(135deg, #9b8dff 0%, #6c5ce7 65%, #5239d6 100%)';
 
-export default function FunnelLeads() {
+export default function FunnelLeads({ embed = false } = {}) {
   const navigate = useNavigate();
 
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
@@ -54,8 +54,9 @@ export default function FunnelLeads() {
   // Mode embarqué (rendu dans le shell CEO / Acquisition Director via
   // ?embed=true) : on masque la SharedNavbar interne + on réduit le padding.
   const embedMode = useMemo(() => {
+    if (embed) return true;
     try { return new URLSearchParams(window.location.search).get('embed') === 'true'; } catch { return false; }
-  }, []);
+  }, [embed]);
 
   const [session, setSession] = useState(null);
   const [authReady, setAuthReady] = useState(false);

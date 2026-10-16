@@ -148,13 +148,13 @@ function CalcTip({ text, rect, darkMode }) {
   );
 }
 
-export default function MonitoringPerf() {
+export default function MonitoringPerf({ embed = false } = {}) {
   const navigate = useNavigate();
   // Mode embed (CEO/Acquisition Director wrapper) : masque la SharedNavbar
   // interne pour laisser le wrapper rendre la sienne.
   const embedMode = useMemo(
-    () => new URLSearchParams(window.location.search).get('embed') === 'true',
-    []
+    () => embed || new URLSearchParams(window.location.search).get('embed') === 'true',
+    [embed]
   );
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
   useEffect(() => { localStorage.setItem("darkMode", darkMode); document.body.classList.toggle("dark-mode", darkMode); document.documentElement.classList.toggle("dark-mode", darkMode); }, [darkMode]);

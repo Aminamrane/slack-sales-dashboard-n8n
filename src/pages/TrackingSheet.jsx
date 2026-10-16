@@ -16,7 +16,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import LeadSmsActions from "../components/LeadSmsActions";
-import { CalendarCheck2, ChevronRight, Building2, UserRoundCheck, ArrowRight, PhoneCall, UserSearch, ListChecks, SlidersHorizontal } from 'lucide-react';
+import { CalendarCheck2, ChevronRight, Building2, UserRoundCheck, ArrowRight, PhoneCall, UserSearch, ListChecks, SlidersHorizontal, Funnel, ChartNoAxesCombined } from 'lucide-react';
 import SalesProspection from "../components/setter/prospection/SalesProspection.jsx";
 import R1QualificationDialog from '../components/salesJourney/R1QualificationDialog';
 import DailyQualificationDeck from '../components/salesJourney/DailyQualificationDeck';
@@ -77,7 +77,8 @@ import completedIcon from "../assets/completed.png";
 import meetIcon from "../assets/meet.png";
 import mynoteIcon from "../assets/mynote.svg";
 import iconFuse from "../assets/Fuse.svg";
-import LeadAssignmentLive from "./LeadAssignmentLive.jsx";
+const FunnelLeads = React.lazy(() => import("./FunnelLeads/index.jsx"));
+const MonitoringPerf = React.lazy(() => import("./MonitoringPerf.jsx"));
 import CeoSalesRecordingsView from "./CeoSalesRecordingsView.jsx";
 import iconMessage from "../assets/message.svg";
 import smsRecuIcon from "../assets/smsrecu.svg";
@@ -3148,9 +3149,14 @@ export default function TrackingSheet() {
               ...(!isAdminView && ['sales', 'head_of_sales', 'head_of_sales_manager'].includes(currentUser?.role) ? [{ key: 'my_prefs', label: 'Mes préférences', accent: C.accent, iconNode: (active) => (
                 <SlidersHorizontal size={19} strokeWidth={2} color={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} />
               ) }] : []),
-              ...(['head_of_sales_manager', 'admin'].includes(currentUser?.role) ? [{ key: 'autoassign', label: 'Auto-affectation', accent: '#2563eb', iconNode: (active) => (
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></svg>
-              ) }] : []),
+              ...(['head_of_sales_manager', 'admin'].includes(currentUser?.role) ? [
+                { key: 'funnel_leads', label: 'Funnel Leads', accent: '#8b5cf6', iconNode: (active) => (
+                  <Funnel size={19} strokeWidth={2} color={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} />
+                ) },
+                { key: 'perf_sales', label: 'Perf Sales', accent: '#2563eb', iconNode: (active) => (
+                  <ChartNoAxesCombined size={19} strokeWidth={2} color={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} />
+                ) },
+              ] : []),
               ...(['head_of_sales_manager', 'head_of_sales', 'admin'].includes(currentUser?.role) ? [{ key: 'recordings', label: 'Enregistrements sales', accent: '#0891b2', iconNode: (active) => (
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 8-6 4 6 4V8z" /><rect x="2" y="6" width="14" height="12" rx="2" ry="2" /></svg>
               ) }] : []),
@@ -3413,10 +3419,12 @@ export default function TrackingSheet() {
           </div>
         )}
 
-        {/* ════ VIEW: AUTO-AFFECTATION (embed, lecture seule — manager/admin) ═══ */}
-        {sidebarView === 'autoassign' && ['head_of_sales_manager', 'admin'].includes(currentUser?.role) && (
-          <div style={{ flex: 1, overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
-            <LeadAssignmentLive embed />
+        {/* Pages de pilotage intégrées : le menu et les leads de la tracking sheet restent en place. */}
+        {['funnel_leads', 'perf_sales'].includes(sidebarView) && ['head_of_sales_manager', 'admin'].includes(currentUser?.role) && (
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+            <React.Suspense fallback={<div role="status" style={{ padding: 24, color: C.muted }}>Chargement…</div>}>
+              {sidebarView === 'funnel_leads' ? <FunnelLeads embed /> : <MonitoringPerf embed />}
+            </React.Suspense>
           </div>
         )}
 
