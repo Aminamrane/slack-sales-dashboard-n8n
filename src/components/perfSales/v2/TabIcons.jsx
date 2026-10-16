@@ -71,6 +71,19 @@ const CHANNELS = (
   </>
 );
 
+// Leads : une frise, chaque étape se pose puis la ligne se trace.
+const LEADS = (
+  <>
+    <Motion.path d="M6 4v16" variants={draw(0, 0.4)} />
+    <Motion.circle cx="6" cy="6" r="1.6" fill="currentColor" variants={pop(0.05, 0.34, 0)} />
+    <Motion.circle cx="6" cy="12" r="1.6" fill="currentColor" variants={pop(0.14, 0.34, 0)} />
+    <Motion.circle cx="6" cy="18" r="1.6" fill="currentColor" variants={pop(0.23, 0.34, 0)} />
+    <Motion.path d="M10.5 6H20" variants={draw(0.1, 0.26)} />
+    <Motion.path d="M10.5 12H18" variants={draw(0.19, 0.24)} />
+    <Motion.path d="M10.5 18H16" variants={draw(0.28, 0.22)} />
+  </>
+);
+
 // Sales : les épaules se tracent, la tête se pose.
 const SALES = (
   <>
@@ -159,6 +172,7 @@ const AUTO = (
 const ICONS = {
   overview: { body: OVERVIEW },
   channels: { body: CHANNELS },
+  leads: { body: LEADS },
   sales: { body: SALES },
   teams: { body: TEAMS },
   rdv: { body: RDV },

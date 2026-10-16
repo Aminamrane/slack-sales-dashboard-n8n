@@ -1178,3 +1178,63 @@ button.ps2-tile { font: inherit; color: var(--ink); width: 100%; min-height: 168
 .ps2-affected-mini i { display: block; height: 4px; }
 @media (max-width: 900px) { .ps2-affected { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 640px) { .ps2-affected { grid-template-columns: minmax(0, 1fr); } .ps2-affected-people { overflow-x: auto; } }
+
+/* Onglet Leads et historique d'un lead (16/10/2026) */
+.ps2-intake-row { cursor: pointer; transition: background .18s; }
+.ps2-intake-row:hover, .ps2-intake-row:focus-visible { background: var(--blue-bg); outline: none; }
+.ps2-leads-month { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.ps2-leads-month b { min-width: 128px; text-align: center; font-weight: 600; }
+.ps2-leads-month b::first-letter { text-transform: uppercase; }
+.ps2-leads-month button { width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--line); background: var(--card); cursor: pointer; font-size: 16px; color: var(--ink); line-height: 1; }
+.ps2-leads-month button:disabled { opacity: .35; cursor: default; }
+.ps2-leads-views { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 16px; padding: 4px; border: 1px solid var(--line-2); border-radius: 14px; }
+.ps2-leads-view { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; border: 0; border-radius: 10px; background: none; cursor: pointer; color: var(--soft); text-align: left; }
+.ps2-leads-view > * { position: relative; z-index: 1; }
+.ps2-leads-view b { font-size: 22px; font-weight: 600; color: var(--ink); letter-spacing: -.02em; }
+.ps2-leads-view > span { font-size: 12px; }
+.ps2-leads-view.is-on { color: var(--navy); }
+.ps2-leads-view-pill { position: absolute !important; inset: 0; border-radius: 10px; background: var(--blue-bg); z-index: 0 !important; }
+.ps2-leads-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-top: 14px; }
+.ps2-leads-search { flex: 1 1 240px; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); background: var(--card); }
+.ps2-leads-search input { flex: 1; border: 0; outline: none; background: none; font: inherit; font-size: 13px; color: var(--ink); min-width: 0; }
+.ps2-leads-select { display: flex; flex-direction: column; gap: 3px; font-size: 10.5px; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.ps2-leads-select select { height: 36px; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; background: var(--card); color: var(--ink); font: 500 12.5px var(--sans); text-transform: none; letter-spacing: 0; max-width: 200px; }
+.ps2-leads-wrap { margin-top: 12px; overflow-x: auto; }
+.ps2-leads-table { min-width: 860px; }
+.ps2-leads-more { margin-top: 12px; }
+.ps2-hist-panel { width: min(640px, 100vw); }
+.ps2-hist-head h2 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -.01em; }
+.ps2-hist-sub { margin-top: 4px; font-size: 12.5px; color: var(--soft); }
+.ps2-hist-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.ps2-hist-chips span { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: var(--grey-bg); color: var(--soft); }
+.ps2-hist-chips b { color: var(--ink); font-weight: 600; }
+.ps2-hist { display: flex; flex-direction: column; gap: 14px; }
+.ps2-hist-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.ps2-hist-facts span { display: flex; flex-direction: column; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 12px; font-size: 11.5px; color: var(--soft); }
+.ps2-hist-facts b { font-size: 20px; font-weight: 600; color: var(--ink); }
+.ps2-hist-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ps2-hist-filters button { font-size: 12px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--soft); cursor: pointer; }
+.ps2-hist-filters button.is-on { background: var(--navy); border-color: var(--navy); color: #fff; }
+.ps2-hist-wait { font-size: 11.5px; color: var(--muted); }
+.ps2-hist-days, .ps2-hist-list { list-style: none; margin: 0; padding: 0; }
+.ps2-hist-days > li + li { margin-top: 14px; }
+.ps2-hist-day { font-family: var(--mono); font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); padding: 0 0 6px 62px; }
+.ps2-hist-list { position: relative; }
+.ps2-hist-list::before { content: ''; position: absolute; left: 63px; top: 6px; bottom: 6px; width: 1.5px; background: var(--line-2); }
+.ps2-hist-ev { display: grid; grid-template-columns: 46px 26px minmax(0, 1fr) auto; gap: 0 10px; align-items: start; padding: 5px 0; }
+.ps2-hist-time { font-size: 11.5px; color: var(--muted); text-align: right; padding-top: 4px; white-space: nowrap; }
+.ps2-hist-dot { position: relative; z-index: 1; width: 26px; height: 26px; border-radius: 50%; background: var(--card); border: 1.5px solid currentColor; display: inline-flex; align-items: center; justify-content: center; }
+.ps2-hist-body { display: flex; flex-direction: column; gap: 1px; padding-top: 3px; font-size: 12.5px; min-width: 0; }
+.ps2-hist-body b { font-weight: 600; color: var(--ink); }
+.ps2-hist-who { color: var(--navy); font-weight: 500; }
+.ps2-hist-detail { color: var(--soft); font-size: 12px; overflow-wrap: anywhere; }
+.ps2-hist-ev.is-low .ps2-hist-body b { color: var(--low-strong); }
+.ps2-hist-ev.is-good .ps2-hist-body b { color: var(--good); }
+.ps2-hist-src { font-family: var(--mono); font-size: 9.5px; color: var(--muted); padding-top: 5px; white-space: nowrap; }
+@media (max-width: 900px) { .ps2-leads-views { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 640px) {
+  .ps2-leads-views { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ps2-hist-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ps2-hist-src { display: none; }
+  .ps2-hist-ev { grid-template-columns: 46px 26px minmax(0, 1fr); }
+}

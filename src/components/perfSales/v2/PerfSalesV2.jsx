@@ -17,6 +17,7 @@ import SalesKpis from './SalesKpis';
 import ShowsByChannel from './ShowsByChannel';
 import AdsFlow from './AdsFlow';
 import { AffectedCard, IntakePanel, PoolReclaims } from './IntakeLeads';
+import LeadsTab from './LeadsTab';
 import { FUNNEL, SOURCES, buildModel, byPersonForAd, dm, euro, fr, initials, scopeFigures, signedNum } from './model';
 import TabIcon from './TabIcons';
 import './v2.css';
@@ -28,7 +29,7 @@ import './v2-nav.css';
 // préfère le détail en pop-up plutôt que ce genre de remarque »), et chaque chiffre de l'entonnoir se vérifie jusqu'aux
 // dossiers (panneau latéral).
 const TABS = [
-  ['overview', 'Vue d’ensemble'], ['channels', 'Canaux'], ['sales', 'Sales'], ['teams', 'Équipes'], ['rdv', 'Rendez-vous'], ['reactivity', 'Réactivité'],
+  ['overview', 'Vue d’ensemble'], ['channels', 'Canaux'], ['leads', 'Leads'], ['sales', 'Sales'], ['teams', 'Équipes'], ['rdv', 'Rendez-vous'], ['reactivity', 'Réactivité'],
   ['cohort', 'Cohorte'], ['ventes', 'Ventes'], ['setters', 'Setters'], ['auto', 'Auto-affectation'],
 ];
 const CHECK = <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>;
@@ -890,6 +891,7 @@ export default function PerfSalesV2({ data, dark, period, tab, onTab, front, con
           <Motion.div key={tab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.35, ease: EASE }}>
             {tab === 'overview' && <Overview model={model} onOpen={open} onPilot={pilotTeam} />}
             {tab === 'channels' && <Channels model={model} onOpen={open} period={period} dark={dark} />}
+            {tab === 'leads' && <LeadsTab period={period} dark={dark} />}
             {tab === 'sales' && <SalesTab model={model} salesData={salesData} salesRange={salesRange || period} salesPeriodBar={salesPeriodBar} salesLoading={salesLoading} front={front} salesNode={salesNode} onOpen={open} />}
             {tab === 'teams' && <TeamsTab model={model} team={team || myTeam} onTeam={setTeam} avatarFor={model.avatarFor} period={period} />}
             {tab === 'rdv' && (

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { GROUP, REASONS, affectedLeads, monthOf, nodeLeads } from './intakeData.js';
+import { GROUP, REASONS, affectedLeads, monthOf, nodeLeads, reasonOf } from './intakeData.js';
 
 // Une case du schéma ouvre exactement ses fiches (dev 16/10/2026 : le détail doit retomber sur le chiffre de la case).
 const leads = [
@@ -49,4 +49,14 @@ test('la carte « Affectés » ouvre les fiches des trois cases, par raison et p
   assert.deepEqual(ids(affectedLeads('octobre', { sales: 'Léo', reason: 'kept' })), [1]);
   assert.deepEqual(affectedLeads('octobre', { reason: 'barrier' }).groups, [GROUP.engine, GROUP.now]);
   assert.equal(GROUP.reason.key(rows[1]), REASONS.barrier.label);
+});
+
+test('la raison affichée précise le répondeur, le statut ou le retrait du pool', () => {
+  assert.deepEqual(reasonOf({ departure: 'barrier', answering: true, now: null, status: 'Répondeur' }).notes, ['Répondeur']);
+  assert.deepEqual(reasonOf({ departure: 'barrier', answering: false, now: null, status: 'À rappeler' }).notes, ['À rappeler']);
+  assert.deepEqual(reasonOf({ departure: 'barrier', answering: false, now: 'Mehdi', status: 'RDV fixé' }).notes, []);
+  assert.deepEqual(reasonOf({ departure: 'barrier', opt_out: true, opt_out_at: '2026-10-15T10:00+02:00', now: null }).notes,
+    ['retiré du pool : ne souhaite pas être rappelé · 15/10']);
+  assert.equal(reasonOf({ departure: 'sla_pool' }).label, '6 min ratées → pool réactivité');
+  assert.equal(reasonOf({ departure: 'inconnu' }).label, 'Autre');
 });

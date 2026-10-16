@@ -14,6 +14,18 @@ export const REASONS = {
 };
 export const REASON_ORDER = ['kept', 'sla_given', 'sla_pool', 'barrier', 'manual', 'other'];
 
+// Pourquoi le lead est parti, en clair : la raison (règle), puis ce qui la précise (répondeur, statut, sortie du pool).
+export function reasonOf(r) {
+  const reason = REASONS[r.departure] || REASONS.other;
+  const notes = [];
+  if (r.departure === 'barrier') {
+    if (r.answering) notes.push('Répondeur');
+    else if (!r.now && r.status && !r.opt_out) notes.push(r.status);
+  }
+  if (r.opt_out) notes.push(`retiré du pool : ne souhaite pas être rappelé${r.opt_out_at ? ` · ${r.opt_out_at.slice(8, 10)}/${r.opt_out_at.slice(5, 7)}` : ''}`);
+  return { ...reason, notes };
+}
+
 // Regroupements proposés dans le panneau.
 export const GROUP = {
   engine: { title: 'Affectées par le moteur à', key: (r) => r.engine || (r.fate?.startsWith('not_given') ? 'jamais donnée' : 'avant le moteur') },

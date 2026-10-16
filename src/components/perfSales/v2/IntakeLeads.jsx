@@ -1,25 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion as Motion } from 'framer-motion';
-import apiClient from '../../../services/apiClient';
 import { CountUp, EASE, ITEM, Reveal, useRevealed } from '../motion';
 import { Detail, Info } from './Pop';
 import { dm, fr } from './model';
-import { AFFECTED_FATES, GROUP, REASON_ORDER, REASONS, affectedLeads, monthOf } from './intakeData';
+import { AFFECTED_FATES, GROUP, REASON_ORDER, REASONS, affectedLeads, monthOf, reasonOf } from './intakeData';
+import { loadIntake } from './intakeApi';
+import LeadHistoryPanel from './LeadHistory';
 
 // Le détail du schéma « Fiches reçues » (dev 16/10/2026 : « il nous faut le détail des leads qui ont été affectés le mois
 // en cours, même s'ils ne sont plus dans les tracking sheets » ; « faire la diff entre les leads repris du pool qui
 // viennent du mois en cours et les leads repris du pool anciens »). Les fiches viennent du serveur, classées par le même
 // calcul que le schéma (/monitoring/performance/v2/intake/leads) : la liste d'une case a toujours le chiffre de la case.
-
-const cache = new Map();
-function loadIntake(period) {
-  if (!cache.has(period)) {
-    cache.set(period, apiClient.get(`/api/v1/monitoring/performance/v2/intake/leads?period=${encodeURIComponent(period)}`)
-      .catch((e) => { cache.delete(period); throw e; }));
-  }
-  return cache.get(period);
-}
 
 const STAGE = { none: 'Aucun RDV', r1_set: 'R1 posé', r1_done: 'R1 effectué', r2_set: 'R2 posé', r2_done: 'R2 effectué', signed: 'Signé' };
 const CLAIM = { barrier: 'barrage, R1 posé', callback: 'barrage, rappel', reactivity: 'pool réactivité', other: 'réaffecté ensuite' };
@@ -31,18 +23,6 @@ const olderColor = (i) => OLDER[Math.min(i, OLDER.length - 1)];
 
 // Horodatage réel (journal de réactivité, timestamptz) : affiché à l'heure de Paris.
 const hm = (iso) => (iso ? new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).replace(' ', ' ') : '');
-
-// Pourquoi le lead est parti, en clair : la raison (règle), puis ce qui la précise (répondeur, statut, sortie du pool).
-function reasonOf(r) {
-  const reason = REASONS[r.departure] || REASONS.other;
-  const notes = [];
-  if (r.departure === 'barrier') {
-    if (r.answering) notes.push('Répondeur');
-    else if (!r.now && r.status && !r.opt_out) notes.push(r.status);
-  }
-  if (r.opt_out) notes.push(`retiré du pool : ne souhaite pas être rappelé${r.opt_out_at ? ` · ${dm(r.opt_out_at)}` : ''}`);
-  return { ...reason, notes };
-}
 
 // Le chemin d'une fiche, du moteur à aujourd'hui, en étapes courtes.
 function steps(r) {
@@ -90,8 +70,9 @@ export function IntakePanel({ open, period, dark, onClose }) {
   const [state, setState] = useState({ loading: false, data: null, error: false });
   const [sel, setSel] = useState({});
   const [all, setAll] = useState(false);
+  const [hist, setHist] = useState(null);
   useEffect(() => {
-    setSel({}); setAll(false);
+    setSel({}); setAll(false); setHist(null);
     if (!open) return undefined;
     let alive = true;
     setState((s) => ({ ...s, loading: !s.data, error: false }));
@@ -100,11 +81,12 @@ export function IntakePanel({ open, period, dark, onClose }) {
     return () => { alive = false; };
   }, [open, period]);
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || hist) return undefined;   // l'historique ouvert par-dessus garde Échap pour lui
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open, onClose, hist]);
+  const closeHist = useCallback(() => setHist(null), []);
 
   const base = useMemo(() => (state.data && open ? open.pick(state.data) : []), [state.data, open]);
   const groups = open?.groups || [];
@@ -185,7 +167,8 @@ export function IntakePanel({ open, period, dark, onClose }) {
                         {(all ? rows : rows.slice(0, PAGE)).map((r, i) => {
                           const why = reasonOf(r);
                           return (
-                            <Motion.tr key={r.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: EASE, delay: Math.min(i, 14) * 0.02 }}>
+                            <Motion.tr key={r.id} className="ps2-intake-row" tabIndex={0} onClick={() => setHist(r)} onKeyDown={(e) => e.key === 'Enter' && setHist(r)}
+                              initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: EASE, delay: Math.min(i, 14) * 0.02 }}>
                               <td><span className="ps2-intake-ref">#{r.id}</span><span className="ps2-intake-name">{r.name || '–'}</span>
                                 {r.company && <span className="ps2-soft ps2-intake-co">{r.company}</span>}</td>
                               <td className="ps2-num">{r.received ? dm(r.received) : '–'}</td>
@@ -210,6 +193,7 @@ export function IntakePanel({ open, period, dark, onClose }) {
               )}
             </div>
           </Motion.aside>
+          <LeadHistoryPanel lead={hist} dark={dark} onClose={closeHist} depth={1} />
         </div>
       )}
     </AnimatePresence>,
