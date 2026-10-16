@@ -8,6 +8,7 @@ const USER_KEY = "auth_user";
 // (onglet Pilotage setting). Effacées à la déconnexion volontaire ; une session expirée les garde
 // pour qu'on les retrouve en se reconnectant.
 export const USER_DRAFTS_PREFIX = "ot.drafts.";
+export const CANCEL_REASON_CODE = "cancel_reason_required";
 
 async function safeJson(res) {
   const txt = await res.text();
@@ -23,6 +24,9 @@ class ApiClient {
     // une lecture qui a chevauché une modification de l'utilisateur (sinon l'ancienne version l'écrase).
     this.writeSeq = 0;
     this.pendingWrites = 0;
+    // Annulation d'un RDV (dev 16/10/2026) : le serveur exige la raison (422 `cancel_reason_required`) ; la fenêtre
+    // montée à la racine (CancelReasonPrompt) l'enregistre ici et la requête repart avec `cancel_reason`.
+    this.cancelReasonPrompt = null;
   }
 
   getToken() {
@@ -150,13 +154,17 @@ class ApiClient {
     const write = (options.method || 'GET').toUpperCase() !== 'GET';
     if (write) { this.pendingWrites += 1; this.writeSeq += 1; }
     try {
+      const { cancelReasonAsked: _asked, ...fetchOptions } = options;
       const response = await this._authenticatedFetch(`${this.baseUrl}${endpoint}`, {
-        ...options,
+        ...fetchOptions,
         headers: { 'Content-Type': 'application/json', ...options.headers },
       });
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
+        if (error?.code === CANCEL_REASON_CODE && options.body && !options.cancelReasonAsked) {
+          return this._retryWithCancelReason(endpoint, options, error);
+        }
         console.error('[API] Error:', error);
         const err = new Error(error.detail || 'Erreur API');
         err.status = response.status;
@@ -169,6 +177,23 @@ class ApiClient {
     } finally {
       if (write) { this.pendingWrites -= 1; this.writeSeq += 1; }
     }
+  }
+
+  // Raison d'annulation demandée à l'utilisateur, puis la même requête renvoyée une seule fois avec `cancel_reason`.
+  // Sans fenêtre montée, ou si l'utilisateur renonce, rien n'est enregistré.
+  async _retryWithCancelReason(endpoint, options, error) {
+    const reason = typeof this.cancelReasonPrompt === 'function'
+      ? String((await this.cancelReasonPrompt({ message: error.detail, stages: error.stages || [] })) || '').trim()
+      : '';
+    if (!reason) {
+      const err = new Error('Annulation non enregistrée : la raison est obligatoire.');
+      err.status = 422;
+      err.data = error;
+      err.cancelReasonMissing = true;
+      throw err;
+    }
+    const { cancelReasonAsked: _asked, ...rest } = options;
+    return this.request(endpoint, { ...rest, cancelReasonAsked: true, body: JSON.stringify({ ...JSON.parse(options.body), cancel_reason: reason }) });
   }
 
   // ============ GENERIC HTTP METHODS ============

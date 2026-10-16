@@ -68,6 +68,7 @@ const ReactivityMonitor = lazy(() => import("./pages/ReactivityMonitor.jsx"));
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import MouseDot from "./components/MouseDot.jsx";
+import CancelReasonPrompt from "./components/CancelReasonPrompt.jsx";
 
 import PageLoading from "./components/PageLoading.jsx";
 import PageLoadBoundary from "./components/PageLoadBoundary.jsx";
@@ -83,6 +84,7 @@ function App() {
   return (
     <BrowserRouter>
       <MouseDot size={10} lag={0.15} color="#071a31ff" />
+      <CancelReasonPrompt />
 
       <PageLoadBoundary>
       <Suspense fallback={<PageLoading />}>

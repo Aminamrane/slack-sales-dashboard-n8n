@@ -12,7 +12,7 @@ export function notificationTarget(notif) {
   // Lapin reprogrammé par un setter (dev 14/10/2026) : le commercial retrouve le lead dans sa sheet.
   if (['setter_placed_r1','setter_placed_r2','setter_rescheduled_no_show'].includes(notif.type)) return '/tracking-sheet';
   // Alertes au setter derrière un RDV (absence R1/R2, RDV reporté ou à reporter, dev 15/10/2026) : sa sheet setter.
-  if (['setter_r1_no_show','setter_r2_no_show','setter_rdv_rescheduled'].includes(notif.type)) return '/tracking-setter';
+  if (['setter_r1_no_show','setter_r2_no_show','setter_rdv_rescheduled','setter_rdv_cancelled'].includes(notif.type)) return '/tracking-setter';
   return null;
 }
 export function notificationPlacement(nav, bell, viewportWidth, viewportHeight) {

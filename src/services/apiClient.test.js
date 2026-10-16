@@ -240,3 +240,39 @@ test('writes are counted so a background reload can tell it overlapped a user ed
   await assert.rejects(client.post('/x', {}));
   assert.equal(client.pendingWrites, 0, 'a failed write is not left pending');
 });
+
+test('a cancellation without reason asks the user once, then sends the same PATCH with cancel_reason', async t => {
+  const { client, server } = setup(t);
+  const bodies = [];
+  globalThis.fetch = async (url, options) => {
+    if (url.endsWith('/api/v1/tracking/leads/22562')) {
+      const body = JSON.parse(options.body);
+      bodies.push(body);
+      if (!body.cancel_reason) return json(422, { detail: 'Indiquez pourquoi', code: 'cancel_reason_required', stages: ['r1'] });
+      return json(200, { success: true });
+    }
+    return server(url, options);
+  };
+  const asked = [];
+  client.cancelReasonPrompt = async info => { asked.push(info); return '  Le gérant a annulé par téléphone  '; };
+  assert.deepEqual(await client.patch('/api/v1/tracking/leads/22562', { r1_result: 'cancelled' }), { success: true });
+  assert.deepEqual(asked, [{ message: 'Indiquez pourquoi', stages: ['r1'] }]);
+  assert.deepEqual(bodies, [{ r1_result: 'cancelled' }, { r1_result: 'cancelled', cancel_reason: 'Le gérant a annulé par téléphone' }]);
+  assert.equal(client.pendingWrites, 0);
+});
+
+test('a dismissed reason saves nothing and a second refusal is never re-asked', async t => {
+  const { client, server } = setup(t);
+  let calls = 0;
+  globalThis.fetch = async (url, options) => {
+    if (url.endsWith('/api/v1/tracking/leads/7')) { calls++; return json(422, { detail: 'Indiquez pourquoi', code: 'cancel_reason_required', stages: ['r2'] }); }
+    return server(url, options);
+  };
+  client.cancelReasonPrompt = async () => null;
+  await assert.rejects(client.patch('/api/v1/tracking/leads/7', { r2_result: 'annule' }), err => err.cancelReasonMissing === true && err.status === 422);
+  assert.equal(calls, 1);
+  client.cancelReasonPrompt = async () => 'raison';
+  await assert.rejects(client.patch('/api/v1/tracking/leads/7', { r2_result: 'annule' }), err => err.status === 422 && !err.cancelReasonMissing);
+  assert.equal(calls, 3, 'demandée une seule fois par enregistrement');
+  assert.equal(client.pendingWrites, 0);
+});

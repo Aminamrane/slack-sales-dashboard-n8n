@@ -1,0 +1,43 @@
+/* Raison d'une annulation de RDV : au-dessus de tout (pop-up de qualification compris). */
+.crp-backdrop {
+  position: fixed; inset: 0; z-index: 2147483000; display: grid; place-items: center; padding: 16px;
+  background: rgba(18, 27, 53, 0.42); backdrop-filter: blur(3px);
+  animation: crp-fade 180ms ease-out both;
+}
+.crp-card {
+  width: min(460px, 100%); box-sizing: border-box; padding: 24px; border-radius: 18px; background: #fff;
+  box-shadow: 0 24px 60px rgba(18, 27, 53, 0.24), 0 2px 8px rgba(18, 27, 53, 0.08);
+  font-family: Inter, system-ui, sans-serif; color: #121b35;
+  animation: crp-rise 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.crp-tag {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 8px; border-radius: 999px;
+  background: #fdecec; color: #b42318; font-size: 12px; font-weight: 600;
+}
+.crp-tag svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+.crp-tag svg path { stroke-dasharray: 8; stroke-dashoffset: 8; animation: crp-draw 360ms 140ms ease-out forwards; }
+.crp-card h2 { margin: 14px 0 6px; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+.crp-card p { margin: 0 0 14px; font-size: 13px; line-height: 1.45; color: #5b6475; }
+.crp-card textarea {
+  width: 100%; box-sizing: border-box; resize: vertical; min-height: 96px; padding: 12px 14px; border-radius: 12px;
+  border: 1px solid #dfe3ec; background: #f8f9fc; color: #121b35; font: inherit; font-size: 14px; line-height: 1.45;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+.crp-card textarea:focus { outline: none; border-color: #121b35; background: #fff; box-shadow: 0 0 0 3px rgba(18, 27, 53, 0.1); }
+.crp-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.crp-actions button {
+  height: 40px; padding: 0 16px; border-radius: 11px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: transform 140ms ease, background 160ms ease, opacity 160ms ease;
+}
+.crp-actions button:active:not(:disabled) { transform: scale(0.97); }
+.crp-secondary { border: 1px solid #dfe3ec; background: #fff; color: #121b35; }
+.crp-secondary:hover { background: #f4f6fb; }
+.crp-primary { border: 0; background: #121b35; color: #fff; }
+.crp-primary:hover:not(:disabled) { background: #1d2a4f; }
+.crp-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+@keyframes crp-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes crp-rise { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes crp-draw { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .crp-backdrop, .crp-card, .crp-tag svg path { animation: none; stroke-dashoffset: 0; }
+}
