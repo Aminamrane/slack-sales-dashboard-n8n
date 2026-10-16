@@ -5,7 +5,7 @@ import apiClient from '../../../services/apiClient';
 import { CountUp, EASE, ITEM, Reveal, useRevealed } from '../motion';
 import { Detail, Info } from './Pop';
 import { dm, fr } from './model';
-import { GROUP, monthOf } from './intakeData';
+import { AFFECTED_FATES, GROUP, REASON_ORDER, REASONS, affectedLeads, monthOf } from './intakeData';
 
 // Le détail du schéma « Fiches reçues » (dev 16/10/2026 : « il nous faut le détail des leads qui ont été affectés le mois
 // en cours, même s'ils ne sont plus dans les tracking sheets » ; « faire la diff entre les leads repris du pool qui
@@ -29,11 +29,26 @@ export const RECLAIM_MONTH = '#7f9ad9';
 const OLDER = ['#1e3a7b', '#3a5598', '#5f6f92', '#8b95a7', '#b9c0cc'];
 const olderColor = (i) => OLDER[Math.min(i, OLDER.length - 1)];
 
+// Horodatage réel (journal de réactivité, timestamptz) : affiché à l'heure de Paris.
+const hm = (iso) => (iso ? new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).replace(' ', ' ') : '');
+
+// Pourquoi le lead est parti, en clair : la raison (règle), puis ce qui la précise (répondeur, statut, sortie du pool).
+function reasonOf(r) {
+  const reason = REASONS[r.departure] || REASONS.other;
+  const notes = [];
+  if (r.departure === 'barrier') {
+    if (r.answering) notes.push('Répondeur');
+    else if (!r.now && r.status && !r.opt_out) notes.push(r.status);
+  }
+  if (r.opt_out) notes.push(`retiré du pool : ne souhaite pas être rappelé${r.opt_out_at ? ` · ${dm(r.opt_out_at)}` : ''}`);
+  return { ...reason, notes };
+}
+
 // Le chemin d'une fiche, du moteur à aujourd'hui, en étapes courtes.
 function steps(r) {
   const out = [];
   if (r.engine) out.push({ text: `Moteur → ${r.engine}` });
-  [...new Set(r.missed || [])].forEach((name) => out.push({ text: `6 min ratées · ${name}`, tone: 'low' }));
+  (r.missed || []).forEach((name, i) => out.push({ text: `6 min ratées · ${name}${r.missed_at?.[i] ? ` · ${hm(r.missed_at[i])}` : ''}`, tone: 'low' }));
   const holder = r.now || r.previous;
   // Une reprise du pool s'affiche toujours, même par le sales que le moteur avait choisi.
   if (holder && (holder !== r.engine || ['barrier', 'callback', 'reactivity', 'manual'].includes(r.how))) {
@@ -69,14 +84,14 @@ const count = (rows, key) => {
 const PAGE = 30;
 const plural = (n) => (n > 1 ? `Voir les ${fr(n)} leads` : 'Voir le lead');
 
-// Panneau latéral : les fiches d'une case du schéma ou d'une barre des reprises du pool.
+// Panneau latéral : les fiches d'une case du schéma, d'une raison ou d'une barre des reprises du pool. Chaque encadré
+// filtre la liste ; les autres encadrés se recomptent sur ce qui reste.
 export function IntakePanel({ open, period, dark, onClose }) {
   const [state, setState] = useState({ loading: false, data: null, error: false });
-  const [first, setFirst] = useState(null);
-  const [second, setSecond] = useState(null);
+  const [sel, setSel] = useState({});
   const [all, setAll] = useState(false);
   useEffect(() => {
-    setFirst(open?.first || null); setSecond(null); setAll(false);
+    setSel({}); setAll(false);
     if (!open) return undefined;
     let alive = true;
     setState((s) => ({ ...s, loading: !s.data, error: false }));
@@ -93,14 +108,16 @@ export function IntakePanel({ open, period, dark, onClose }) {
 
   const base = useMemo(() => (state.data && open ? open.pick(state.data) : []), [state.data, open]);
   const groups = open?.groups || [];
-  const keyOf = (g, r) => (g ? g.key(r) : null);
-  const rows = base.filter((r) => (!first || keyOf(groups[0], r) === first) && (!second || keyOf(groups[1], r) === second));
+  const keep = (r, except) => groups.every((g, i) => i === except || !sel[i] || g.key(r) === sel[i]);
+  const rows = base.filter((r) => keep(r, -1));
+  const filtered = Object.values(sel).some(Boolean);
   const matches = state.data && open?.expected != null ? base.length === open.expected : null;
 
   const exportCsv = () => {
-    const head = ['lead', 'nom', 'entreprise', 'reçu le', 'affecté à', 'aujourd’hui', 'parcours', 'étape'];
-    const lines = rows.map((r) => [`#${r.id}`, r.name, r.company, r.received, r.engine, r.now || 'au pool', steps(r).map((s) => s.text).join(' / '), STAGE[r.stage]]
-      .map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';'));
+    const head = ['lead', 'nom', 'entreprise', 'reçu le', 'affecté à', 'pourquoi parti', 'précision', 'parcours', 'aujourd’hui', 'étape'];
+    const lines = rows.map((r) => { const why = reasonOf(r); return [`#${r.id}`, r.name, r.company, r.received, r.engine, why.label, why.notes.join(' / '),
+      steps(r).map((s) => s.text).join(' / '), r.now || (r.opt_out ? 'retiré du pool' : 'au pool'), STAGE[r.stage]]
+      .map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';'); });
     const blob = new Blob(['﻿' + [head.join(';'), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -128,11 +145,11 @@ export function IntakePanel({ open, period, dark, onClose }) {
             <div className="ps2-panel-body">
               <div>
                 <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--soft)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {open.color && <span className="ps2-swatch" style={{ background: open.color }} />}{open.title}{first ? ` · ${first}` : ''}{second ? ` · ${second}` : ''}</h2>
+                  {open.color && <span className="ps2-swatch" style={{ background: open.color }} />}{[open.title, ...groups.map((g, i) => sel[i]).filter(Boolean)].join(' · ')}</h2>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginTop: 6, flexWrap: 'wrap' }}>
                   <span className="ps2-num" style={{ fontSize: 52, fontWeight: 600, letterSpacing: '-.03em' }}>
                     {state.data ? <CountUp value={rows.length} duration={600} /> : fr(open.expected)}</span>
-                  {matches != null && !first && !second && (
+                  {matches != null && !filtered && (
                     <span className={`ps2-intake-check ${matches ? 'is-ok' : 'is-ko'}`}>
                       {matches ? `✓ recomptées une par une : ${fr(base.length)}` : `! ${fr(base.length)} fiches pour ${fr(open.expected)} affichées`}</span>
                   )}
@@ -144,16 +161,13 @@ export function IntakePanel({ open, period, dark, onClose }) {
               {state.data && (
                 <>
                   {groups.length > 0 && (
-                    <div className="ps2-split">
+                    <div className="ps2-intake-groups">
                       {groups.map((g, i) => {
-                        const items = count(i === 0 ? base : base.filter((r) => !first || keyOf(groups[0], r) === first), g.key)
-                          .map((it) => ({ ...it, color: g.color?.(it.key) }));
-                        if (items.length < 2) return null;   // une seule valeur : rien à départager
-                        const active = i === 0 ? first : second;
-                        const set = i === 0 ? setFirst : setSecond;
+                        const items = count(base.filter((r) => keep(r, i)), g.key).map((it) => ({ ...it, color: g.color?.(it.key) }));
+                        if (items.length < 2 && !sel[i]) return null;   // une seule valeur : rien à départager
                         return (
                           <div key={g.title} className="ps2-box"><h3>{g.title}</h3>
-                            <Bars items={items.slice(0, 10)} active={active} onPick={(k) => set(active === k ? null : k)} />
+                            <Bars items={items.slice(0, 10)} active={sel[i]} onPick={(k) => setSel((s) => ({ ...s, [i]: s[i] === k ? null : k }))} />
                             {items.length > 10 && <p className="ps2-note">et {items.length - 10} autres</p>}
                           </div>
                         );
@@ -162,23 +176,30 @@ export function IntakePanel({ open, period, dark, onClose }) {
                   )}
                   <div>
                     <div className="ps2-card-head">
-                      <h3>Les fiches{first || second ? ' filtrées' : ''}</h3>
-                      {(first || second) && <button type="button" className="ps2-link" onClick={() => { setFirst(null); setSecond(null); }}>Retirer le filtre</button>}
+                      <h3>Les fiches{filtered ? ' filtrées' : ''}</h3>
+                      {filtered && <button type="button" className="ps2-link" onClick={() => setSel({})}>Retirer le filtre</button>}
                     </div>
                     <table className="ps2-dossiers ps2-intake-table">
-                      <thead><tr><th>Lead</th><th>Reçu</th><th>Parcours</th><th>Aujourd’hui</th><th>Étape</th></tr></thead>
+                      <thead><tr><th>Lead</th><th>Reçu</th><th>Pourquoi parti</th><th>Parcours</th><th>Aujourd’hui</th><th>Étape</th></tr></thead>
                       <tbody>
-                        {(all ? rows : rows.slice(0, PAGE)).map((r, i) => (
-                          <Motion.tr key={r.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: EASE, delay: Math.min(i, 14) * 0.02 }}>
-                            <td><span className="ps2-intake-ref">#{r.id}</span><span className="ps2-intake-name">{r.name || '–'}</span>
-                              {r.company && <span className="ps2-soft ps2-intake-co">{r.company}</span>}</td>
-                            <td className="ps2-num">{r.received ? dm(r.received) : '–'}</td>
-                            <td><div className="ps2-intake-steps">{steps(r).map((s, k) => <span key={k} className={s.tone ? `is-${s.tone}` : ''}>{s.text}</span>)}
-                              {!steps(r).length && <span className="ps2-soft">jamais donnée</span>}</div></td>
-                            <td>{r.now ? <b style={{ fontWeight: 600 }}>{r.now}</b> : <span className="ps2-tag is-warn" style={{ marginLeft: 0 }}>{r.engine || r.previous ? 'au pool' : 'personne'}</span>}</td>
-                            <td><span className={`ps2-intake-stage is-${r.stage}`}>{STAGE[r.stage] || r.stage}</span></td>
-                          </Motion.tr>
-                        ))}
+                        {(all ? rows : rows.slice(0, PAGE)).map((r, i) => {
+                          const why = reasonOf(r);
+                          return (
+                            <Motion.tr key={r.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: EASE, delay: Math.min(i, 14) * 0.02 }}>
+                              <td><span className="ps2-intake-ref">#{r.id}</span><span className="ps2-intake-name">{r.name || '–'}</span>
+                                {r.company && <span className="ps2-soft ps2-intake-co">{r.company}</span>}</td>
+                              <td className="ps2-num">{r.received ? dm(r.received) : '–'}</td>
+                              <td>{r.engine || r.departure !== 'other' ? (
+                                <div className="ps2-intake-why"><span className="ps2-intake-why-tag" style={{ '--c': why.color }}><ReasonIcon kind={why.icon} />{why.label}</span>
+                                  {why.notes.map((n) => <span key={n} className="ps2-intake-why-note">{n}</span>)}</div>
+                              ) : <span className="ps2-soft">jamais donnée</span>}</td>
+                              <td><div className="ps2-intake-steps">{steps(r).map((s, k) => <span key={k} className={s.tone ? `is-${s.tone}` : ''}>{s.text}</span>)}</div></td>
+                              <td>{r.now ? <b style={{ fontWeight: 600 }}>{r.now}</b>
+                                : <span className="ps2-tag is-warn" style={{ marginLeft: 0 }}>{r.opt_out ? 'retiré du pool' : r.engine || r.previous ? 'au pool' : 'personne'}</span>}</td>
+                              <td><span className={`ps2-intake-stage is-${r.stage}`}>{STAGE[r.stage] || r.stage}</span></td>
+                            </Motion.tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                     {rows.length > PAGE && <button type="button" className="ps2-link" style={{ marginTop: 10 }} onClick={() => setAll((v) => !v)}>
@@ -193,6 +214,23 @@ export function IntakePanel({ open, period, dark, onClose }) {
       )}
     </AnimatePresence>,
     document.body,
+  );
+}
+
+// Icônes des raisons, tracées à l'apparition.
+export function ReasonIcon({ kind, size = 13 }) {
+  const draw = { initial: { pathLength: 0 }, animate: { pathLength: 1 }, transition: { duration: 0.6, ease: EASE, delay: 0.1 } };
+  const paths = {
+    check: ['M5 12.5l4.2 4.2L19 7'],
+    clock: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M12 7v5l3.2 2'],
+    calendar: ['M5 6h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z', 'M4 10h16', 'M8 3.5v4M16 3.5v4', 'M10 14l4 4M14 14l-4 4'],
+    hand: ['M7 12V6.5a1.5 1.5 0 0 1 3 0V11', 'M10 10.5V5a1.5 1.5 0 0 1 3 0v5.5', 'M13 10.5V6.5a1.5 1.5 0 0 1 3 0V13a7 7 0 0 1-7 7h-.5A5.5 5.5 0 0 1 4 15.2L3 12.8a1.5 1.5 0 0 1 2.6-1.5L7 13'],
+    dot: ['M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z'],
+  };
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {(paths[kind] || paths.dot).map((d) => <Motion.path key={d} d={d} {...draw} />)}
+    </svg>
   );
 }
 
@@ -278,6 +316,101 @@ export function PoolReclaims({ reclaims, month, onLeads }) {
             </li>
           ))}
         </Motion.ul>
+      </div>
+    </Reveal>
+  );
+}
+
+// Carte « Affectés » (dev 16/10/2026 : « il faut qu'on sache exactement les leads qui ont été affectés dans une première
+// intention… après il s'est passé des trucs… on veut le détail : pourquoi ils sont repartis dans le pool ») : les fiches
+// ADS du mois données à un sales (les trois cases du schéma), ce qu'elles sont devenues et pourquoi, par sales.
+const FATE_BAR = [['ads_affectation', 'Chez le sales affecté', '#1e3a7b'], ['ads_pool', 'Repris du pool', '#7f9ad9'], ['pool_waiting', 'Au pool', '#c3cde3']];
+
+export function AffectedCard({ period, month, intake, onLeads }) {
+  const on = useRevealed();
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    setData(null); setError(false);
+    loadIntake(period).then((d) => alive && setData(d)).catch(() => alive && setError(true));
+    return () => { alive = false; };
+  }, [period]);
+  const a = data?.affected;
+  // Les trois cases du schéma, lues dans la page : la carte ne remplace aucun chiffre, elle les détaille.
+  const schema = Object.fromEntries((intake?.links || []).filter((l) => l.channel === 'ads' && AFFECTED_FATES.includes(l.fate))
+    .reduce((m, l) => m.set(l.fate, (m.get(l.fate) || 0) + l.n), new Map()));
+  const total = a?.total ?? Object.values(schema).reduce((x, y) => x + y, 0);
+  const reasons = a ? REASON_ORDER.filter((k) => a.by_reason[k]).map((k) => ({ key: k, ...REASONS[k], value: a.by_reason[k], answering: a.answering?.[k] || 0 })) : [];
+  const max = Math.max(1, ...reasons.map((r) => r.value));
+  const cols = REASON_ORDER.filter((k) => k !== 'other' && reasons.some((r) => r.key === k));
+  return (
+    <Reveal as="section" className="ps2-card ps2-span-12" aria-labelledby="ps2-affected-title">
+      <Motion.div className="ps2-card-head" variants={ITEM}>
+        <h2 id="ps2-affected-title">Leads affectés en {month}</h2>
+        <Info className="ps2-chip-soft" label="Leads affectés" detail={<Detail kicker={`Affectés en ${month}`} value={fr(total)}
+          rows={FATE_BAR.map(([f, l]) => [l, fr(a?.by_fate?.[f] ?? schema[f] ?? 0)])}
+          lines={['Fiches ADS du mois données à un sales par le moteur, où qu’elles soient aujourd’hui.']} />}>première intention</Info>
+      </Motion.div>
+      {error && <p className="ps2-note" role="alert">Détail non chargé.</p>}
+      <div className="ps2-affected">
+        <Motion.div variants={ITEM} className="ps2-affected-total">
+          <button type="button" className="ps2-affected-big" onClick={() => onLeads(affectedLeads(month, { expected: total }))} aria-label={`Voir les ${total} leads affectés`}>
+            <b className="ps2-num"><CountUp value={total} /></b><span>affectés par le moteur</span>
+          </button>
+          <div className="ps2-affected-fates" role="img" aria-label={FATE_BAR.map(([f, l]) => `${l} ${a?.by_fate?.[f] ?? schema[f] ?? 0}`).join(', ')}>
+            {FATE_BAR.map(([f, , c], i) => {
+              const v = a?.by_fate?.[f] ?? schema[f] ?? 0;
+              return <Motion.span key={f} style={{ background: c }} initial={{ flexGrow: 0 }} animate={{ flexGrow: on ? v : 0 }} transition={{ duration: 0.9, ease: EASE, delay: 0.2 + i * 0.1 }} />;
+            })}
+          </div>
+          <ul className="ps2-affected-legend">
+            {FATE_BAR.map(([f, l, c]) => <li key={f}><span className="ps2-swatch" style={{ background: c }} />{l}<b className="ps2-num">{fr(a?.by_fate?.[f] ?? schema[f] ?? 0)}</b></li>)}
+          </ul>
+        </Motion.div>
+
+        <Motion.div variants={ITEM} className="ps2-affected-why">
+          <div className="ps2-mono ps2-affected-sub">Pourquoi ils sont partis</div>
+          {!a && !error && <div className="ps2-loading" aria-label="Chargement"><i /><i /><i /><i /></div>}
+          {reasons.map((r, i) => (
+            <button type="button" key={r.key} className="ps2-affected-reason" onClick={() => onLeads(affectedLeads(month, { reason: r.key, expected: r.value }))}>
+              <span className="ps2-affected-icon" style={{ color: r.color }}><ReasonIcon kind={r.icon} size={15} /></span>
+              <span className="ps2-affected-label">{r.label}
+                {r.key === 'barrier' && (r.answering > 0 || a.opt_out > 0) && (
+                  <small>{[r.answering ? `${fr(r.answering)} répondeurs` : null, a.opt_out ? `${fr(a.opt_out)} retirés du pool` : null].filter(Boolean).join(' · ')}</small>)}</span>
+              <span className="ps2-affected-track">
+                <Motion.i style={{ background: r.color }} initial={{ width: 0 }} animate={{ width: on ? `${(r.value / max) * 100}%` : 0 }}
+                  transition={{ duration: 0.8, ease: EASE, delay: 0.25 + i * 0.07 }} />
+                {r.key === 'barrier' && r.answering > 0 && (
+                  <Motion.i className="is-sub" initial={{ width: 0 }} animate={{ width: on ? `${(r.answering / max) * 100}%` : 0 }}
+                    transition={{ duration: 0.8, ease: EASE, delay: 0.45 + i * 0.07 }} />)}
+              </span>
+              <b className="ps2-num">{fr(r.value)}</b>
+            </button>
+          ))}
+        </Motion.div>
+
+        <Motion.div variants={ITEM} className="ps2-affected-people">
+          {a && (
+            <table className="ps2-affected-table">
+              <thead><tr><th style={{ textAlign: 'left' }}>Affectés à</th><th>Total</th>
+                {cols.map((k) => <th key={k} title={REASONS[k].label}><span style={{ color: REASONS[k].color }}><ReasonIcon kind={REASONS[k].icon} size={12} /></span> {REASONS[k].short}</th>)}</tr></thead>
+              <tbody>
+                {a.by_sales.map((p, i) => (
+                  <Motion.tr key={p.name} initial={{ opacity: 0, y: 4 }} animate={on ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.35, ease: EASE, delay: 0.2 + i * 0.03 }}>
+                    <td style={{ textAlign: 'left' }}><button type="button" className="ps2-affected-cell is-name" onClick={() => onLeads(affectedLeads(month, { sales: p.name, expected: p.affected }))}>{p.name}</button>
+                      <span className="ps2-affected-mini">{cols.map((k) => (p[k] ? <i key={k} style={{ background: REASONS[k].color, flexGrow: p[k] }} /> : null))}</span></td>
+                    <td><button type="button" className="ps2-affected-cell" onClick={() => onLeads(affectedLeads(month, { sales: p.name, expected: p.affected }))}><b>{fr(p.affected)}</b></button></td>
+                    {cols.map((k) => (
+                      <td key={k}>{p[k] ? <button type="button" className="ps2-affected-cell" onClick={() => onLeads(affectedLeads(month, { sales: p.name, reason: k, expected: p[k] }))}>{fr(p[k])}</button>
+                        : <span className="ps2-muted">0</span>}</td>
+                    ))}
+                  </Motion.tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Motion.div>
       </div>
     </Reveal>
   );

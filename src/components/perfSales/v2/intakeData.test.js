@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { GROUP, monthOf, nodeLeads } from './intakeData.js';
+import { GROUP, REASONS, affectedLeads, monthOf, nodeLeads } from './intakeData.js';
 
 // Une case du schéma ouvre exactement ses fiches (dev 16/10/2026 : le détail doit retomber sur le chiffre de la case).
 const leads = [
@@ -21,8 +21,8 @@ test('chaque type de case filtre ses propres fiches', () => {
 });
 
 test('les regroupements suivent la case', () => {
-  assert.deepEqual(nodeLeads({ id: 'ads:pool_waiting', group: 'ads', fate: 'pool_waiting', value: 1 }, 'octobre').groups, [GROUP.engine, GROUP.last]);
-  assert.deepEqual(nodeLeads({ id: 'ads:ads_pool', group: 'ads', fate: 'ads_pool', value: 1 }, 'octobre').groups, [GROUP.engine, GROUP.now]);
+  assert.deepEqual(nodeLeads({ id: 'ads:pool_waiting', group: 'ads', fate: 'pool_waiting', value: 1 }, 'octobre').groups, [GROUP.reason, GROUP.engine, GROUP.last]);
+  assert.deepEqual(nodeLeads({ id: 'ads:ads_pool', group: 'ads', fate: 'ads_pool', value: 1 }, 'octobre').groups, [GROUP.reason, GROUP.engine, GROUP.now]);
   assert.deepEqual(nodeLeads({ id: 'ads:not_given_small', group: 'ads', fate: 'not_given_small', value: 1 }, 'octobre').groups, []);
   assert.equal(GROUP.last.key(leads[1]), 'Alexandre');
   assert.equal(GROUP.now.key(leads[1]), 'au pool');
@@ -32,4 +32,21 @@ test('les mois anciens portent leur année si elle diffère', () => {
   const year = new Date().getFullYear();
   assert.equal(monthOf(`${year}-09`), 'sept.');
   assert.equal(monthOf(`${year - 1}-12`), `déc. ${year - 1}`);
+});
+
+test('la carte « Affectés » ouvre les fiches des trois cases, par raison et par sales', () => {
+  const rows = [
+    { id: 1, channel: 'ads', fate: 'ads_affectation', departure: 'kept', engine: 'Léo' },
+    { id: 2, channel: 'ads', fate: 'pool_waiting', departure: 'barrier', engine: 'Léo' },
+    { id: 3, channel: 'ads', fate: 'ads_pool', departure: 'sla_given', engine: 'Yanis' },
+    { id: 4, channel: 'ads', fate: 'not_given_small', departure: 'other', engine: null },
+    { id: 5, channel: 'webinar', fate: 'other_webinar', departure: 'other', engine: null },
+  ];
+  const ids = (spec) => spec.pick({ leads: rows }).map((r) => r.id);
+  assert.deepEqual(ids(affectedLeads('octobre')), [1, 2, 3]);
+  assert.deepEqual(ids(affectedLeads('octobre', { reason: 'barrier' })), [2]);
+  assert.deepEqual(ids(affectedLeads('octobre', { sales: 'Léo' })), [1, 2]);
+  assert.deepEqual(ids(affectedLeads('octobre', { sales: 'Léo', reason: 'kept' })), [1]);
+  assert.deepEqual(affectedLeads('octobre', { reason: 'barrier' }).groups, [GROUP.engine, GROUP.now]);
+  assert.equal(GROUP.reason.key(rows[1]), REASONS.barrier.label);
 });

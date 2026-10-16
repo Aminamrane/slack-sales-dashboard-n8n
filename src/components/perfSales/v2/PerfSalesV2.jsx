@@ -16,7 +16,7 @@ import ChannelFilter from './ChannelFilter';
 import SalesKpis from './SalesKpis';
 import ShowsByChannel from './ShowsByChannel';
 import AdsFlow from './AdsFlow';
-import { IntakePanel, PoolReclaims } from './IntakeLeads';
+import { AffectedCard, IntakePanel, PoolReclaims } from './IntakeLeads';
 import { FUNNEL, SOURCES, buildModel, byPersonForAd, dm, euro, fr, initials, scopeFigures, signedNum } from './model';
 import TabIcon from './TabIcons';
 import './v2.css';
@@ -564,6 +564,7 @@ function Channels({ model, onOpen, period, dark }) {
           <Motion.div variants={ITEM}><AdsFlow intake={model.pilot.intake} month={MONTH} onLeads={setLeads} /></Motion.div>
         </Reveal>
       )}
+      {model.pilot?.intake?.links?.length > 0 && <AffectedCard period={period} month={MONTH} intake={model.pilot.intake} onLeads={setLeads} />}
       {model.pilot?.intake?.reclaims && <PoolReclaims reclaims={model.pilot.intake.reclaims} month={MONTH} onLeads={setLeads} />}
       <IntakePanel open={leads} period={period} dark={dark} onClose={() => setLeads(null)} />
       <Reveal as="section" className="ps2-card ps2-span-4" aria-labelledby="ps2-mix-title">
