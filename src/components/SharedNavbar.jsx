@@ -1006,7 +1006,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                   </button>
                 )}
 
-                {(apiClient.getUser()?.role === 'admin' || apiClient.getUser()?.role === 'ceo' || apiClient.getUser()?.role === 'acquisition_director', 'head_of_acquisition') && (
+                {['admin', 'ceo', 'acquisition_director', 'head_of_acquisition', 'head_of_sales_manager'].includes(apiClient.getUser()?.role) && (
                   <button
                     onClick={() => navigate("/funnel-leads")}
                     style={{

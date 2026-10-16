@@ -133,7 +133,7 @@ function App() {
         <Route
           path="/funnel-leads"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'ceo', 'acquisition_director', 'head_of_acquisition']}>
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'acquisition_director', 'head_of_acquisition', 'head_of_sales_manager']}>
               <FunnelLeads />
             </ProtectedRoute>
           }
@@ -302,7 +302,7 @@ function App() {
         <Route
           path="/ceo/funnel-leads"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'ceo', 'acquisition_director', 'head_of_acquisition', 'hr', 'customer_success_manager', 'finance_director']}>
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'acquisition_director', 'head_of_acquisition', 'hr', 'customer_success_manager', 'finance_director', 'head_of_sales_manager']}>
               <CeoFunnelLeadsView />
             </ProtectedRoute>
           }
