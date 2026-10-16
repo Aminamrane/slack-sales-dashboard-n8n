@@ -15,6 +15,7 @@ import LeadHistoryPanel from './LeadHistory';
 const YELLOW = '#e6b45a';
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const liveLabel = (c) => (c.date ? `Live du ${dm(c.date)}` : c.title);
+const VIA = { lamia: 'via le lien Lamia', aurelie: 'via le lien Aurélie', setter: 'via le CRM setter', live: 'via le live' };
 
 export function RegistrantsBlock({ registrants, onOpen }) {
   const drawn = useDrawn();
@@ -31,7 +32,8 @@ export function RegistrantsBlock({ registrants, onOpen }) {
         <Motion.button type="button" className="ps2-regs-root" initial={{ opacity: 0, x: -8 }} animate={drawn ? { opacity: 1, x: 0 } : {}} transition={{ duration: 0.5, ease: EASE, delay: 0.2 }}
           onClick={(e) => open(e.currentTarget, (close) => <Detail kicker="Inscrits webinaire" value={fr(registrants.total)}
             rows={registrants.cohorts.map((c) => [liveLabel(c), fr(c.n)])}
-            lines={['Base de la landing, hors fiches du CRM : pas affectés avant le live.']}
+            lines={['Base de la landing, hors fiches du CRM : pas affectés avant le live.',
+              'Au CRM : via un lien webinaire de la cohorte (Lamia, Aurélie, CRM setter, live), sinon doublon interne (la même personne déjà là par un autre canal).']}
             action={<button type="button" className="ps2-link" onClick={() => { close(); onOpen({ cohort: null }); }}>Voir les {fr(registrants.total)} inscrits</button>} />)}>
           <b className="ps2-num"><CountUp value={registrants.total} delay={300} /></b><span>inscrits</span>
         </Motion.button>
@@ -48,18 +50,22 @@ export function RegistrantsBlock({ registrants, onOpen }) {
         <ul className="ps2-regs-cohorts">
           {registrants.cohorts.map((c, i) => {
             const upcoming = c.date && c.date >= todayIso();
+            const via = Object.values(c.via || {}).reduce((x, y) => x + y, 0);
+            const out = c.n - c.in_crm;
+            const seg = (v, cls, k) => (
+              <Motion.i key={cls} className={cls} initial={{ flexGrow: 0 }} animate={{ flexGrow: drawn ? v : 0 }} transition={{ duration: 0.8, ease: EASE, delay: 0.5 + i * 0.1 + k * 0.08 }} />);
             return (
               <Motion.li key={c.id} initial={{ opacity: 0, y: 6 }} animate={drawn ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.45, ease: EASE, delay: 0.45 + i * 0.1 }}>
                 <button type="button" className="ps2-regs-cohort" onClick={() => onOpen({ cohort: c.id })} aria-label={`${liveLabel(c)} : ${c.n} inscrits, voir la liste`}>
-                  <span className="ps2-regs-title"><b className="ps2-num">{fr(c.n)}</b>{liveLabel(c)}{upcoming && <span className="ps2-regs-soon">à venir</span>}</span>
-                  <span className="ps2-regs-bar">
-                    <Motion.i className="is-all" initial={{ width: 0 }} animate={{ width: drawn ? `${(c.n / max) * 100}%` : 0 }} transition={{ duration: 0.8, ease: EASE, delay: 0.5 + i * 0.1 }} />
-                    <Motion.i className="is-crm" initial={{ width: 0 }} animate={{ width: drawn ? `${(c.in_crm / max) * 100}%` : 0 }} transition={{ duration: 0.8, ease: EASE, delay: 0.6 + i * 0.1 }} />
-                    <Motion.i className="is-rdv" initial={{ width: 0 }} animate={{ width: drawn ? `${(c.rdv / max) * 100}%` : 0 }} transition={{ duration: 0.8, ease: EASE, delay: 0.7 + i * 0.1 }} />
+                  <span className="ps2-regs-title"><b className="ps2-num">{fr(c.n)}</b>{liveLabel(c)}{upcoming && <span className="ps2-regs-soon">live à venir</span>}</span>
+                  <span className="ps2-regs-bar" style={{ width: `${Math.max(8, (c.n / max) * 100)}%` }}>
+                    {seg(via, 'is-via', 0)}{seg(c.dup || 0, 'is-dup', 1)}{seg(out, 'is-out', 2)}
                   </span>
-                  <span className="ps2-regs-stats"><span><i className="is-crm" />au CRM <b className="ps2-num">{fr(c.in_crm)}</b></span>
-                    <span><i className="is-rdv" />RDV <b className="ps2-num">{fr(c.rdv)}</b></span>
-                    <span>pas au CRM <b className="ps2-num">{fr(c.n - c.in_crm)}</b></span></span>
+                  <span className="ps2-regs-stats">
+                    <span><i className="is-via" />via un lien webinaire <b className="ps2-num">{fr(via)}</b>{c.via_rdv ? <em> · {fr(c.via_rdv)} en RDV</em> : null}</span>
+                    <span><i className="is-dup" />doublons internes <b className="ps2-num">{fr(c.dup || 0)}</b>{c.dup_rdv ? <em> · {fr(c.dup_rdv)} en RDV</em> : null}</span>
+                    <span><i className="is-out" />pas au CRM <b className="ps2-num">{fr(out)}</b></span>
+                  </span>
                 </button>
               </Motion.li>
             );
@@ -85,8 +91,10 @@ export function RegistrantsTable({ rows, cohorts, onHistory, limit = Infinity })
             <td className="ps2-num">{dm(r.received)}</td>
             <td>{title(r.cohort)}</td>
             <td>{r.source === 'meta' ? 'Meta' : r.source || '–'}</td>
-            <td>{r.crm_id ? <span><span className="ps2-intake-ref">#{r.crm_id}</span>{r.crm_now || <span className="ps2-muted">sans sales</span>}</span>
-              : <span className="ps2-muted">pas encore</span>}</td>
+            <td>{r.via ? <span className="ps2-regs-tag is-via">{VIA[r.via] || r.via}</span>
+              : r.dup ? <span className="ps2-regs-tag is-dup">doublon interne · {r.dup.family}{r.dup.at ? ` · depuis le ${dm(r.dup.at)}` : ''}</span>
+                : <span className="ps2-muted">pas au CRM</span>}
+              {r.crm_id && <span className="ps2-intake-ref" style={{ marginTop: 3 }}>#{r.crm_id}{r.crm_now ? ` · ${r.crm_now}` : ''}</span>}</td>
             <td>{r.rdv ? <span className="ps2-intake-stage is-r2_set">RDV</span> : <span className="ps2-muted">–</span>}</td>
           </Motion.tr>
         ))}
@@ -116,10 +124,11 @@ export function RegistrantsPanel({ open, period, dark, onClose }) {
   }, [open, onClose, hist]);
   const closeHist = useCallback(() => setHist(null), []);
   const base = useMemo(() => (data?.rows || []).filter((r) => !open?.cohort || r.cohort === open.cohort), [data, open]);
-  const rows = base.filter((r) => !crm || (crm === 'in' ? r.crm_id : crm === 'rdv' ? r.rdv : !r.crm_id));
+  const rows = base.filter((r) => !crm || (crm === 'via' ? r.via : crm === 'dup' ? r.dup && !r.via : crm === 'rdv' ? r.rdv : !r.crm_id));
   const cohort = data?.cohorts?.find((c) => c.id === open?.cohort);
   const expected = cohort ? cohort.n : data?.total;
-  const chips = [['in', 'Au CRM', base.filter((r) => r.crm_id).length], ['rdv', 'Avec RDV', base.filter((r) => r.rdv).length], ['out', 'Pas au CRM', base.filter((r) => !r.crm_id).length]];
+  const chips = [['via', 'Via un lien webinaire', base.filter((r) => r.via).length], ['dup', 'Doublons internes', base.filter((r) => r.dup && !r.via).length],
+    ['out', 'Pas au CRM', base.filter((r) => !r.crm_id).length], ['rdv', 'Avec RDV', base.filter((r) => r.rdv).length]];
   return createPortal(
     <AnimatePresence>
       {open && (
