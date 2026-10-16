@@ -1272,3 +1272,77 @@ button.ps2-tile { font: inherit; color: var(--ink); width: 100%; min-height: 168
 .ps2-regs-stats i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
 .ps2-regs-stats b { color: var(--ink); font-weight: 600; }
 @media (max-width: 760px) { .ps2-regs-row { grid-template-columns: minmax(0, 1fr); gap: 10px; } .ps2-regs-links-wrap { display: none; } .ps2-regs-cohort { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "bar" "stats"; } }
+
+/* Agenda des RDV comptés (16/10/2026) */
+.ps2-agenda-wrap { position: fixed; inset: 0; z-index: 61; display: flex; align-items: center; justify-content: center; pointer-events: none; padding: 16px; }
+.ps2-agenda { position: relative; pointer-events: auto; width: min(1280px, 100%); height: min(880px, 100%);
+  background: var(--card); color: var(--ink); border-radius: 18px; box-shadow: 0 30px 80px rgba(18, 27, 53, .28); display: flex; flex-direction: column; overflow: hidden; font-family: var(--sans); }
+.ps2-agenda-head { display: flex; align-items: center; gap: 16px; padding: 18px 22px; border-bottom: 1px solid var(--line-2); flex-wrap: wrap; }
+.ps2-agenda-head > div:first-child { margin-right: auto; }
+.ps2-agenda-head h2 { margin: 4px 0 0; font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
+.ps2-agenda-kinds { display: flex; flex-wrap: wrap; gap: 6px; }
+.ps2-agenda-kind { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; padding: 6px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--soft); cursor: pointer; opacity: .55; transition: opacity .2s, background .2s; }
+.ps2-agenda-kind.is-on { opacity: 1; color: var(--ink); }
+.ps2-agenda-kind i { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
+.ps2-agenda-kind.is-r1 i { background: #2f4f9e; } .ps2-agenda-kind.is-r2 i { background: #2c6448; } .ps2-agenda-kind.is-direct i { border: 1.5px dashed #2c6448; background: #fff; }
+.ps2-agenda-kind b { font-weight: 600; }
+.ps2-agenda-body { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: 290px minmax(0, 1fr); }
+.ps2-agenda-side { border-right: 1px solid var(--line-2); display: flex; flex-direction: column; min-height: 0; }
+.ps2-agenda-count { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 14px; border-bottom: 1px solid var(--line-2); }
+.ps2-agenda-count > div { display: flex; flex-direction: column; padding: 10px 12px; border-radius: 12px; background: var(--grey-bg); }
+.ps2-agenda-count > div.is-wide { grid-column: 1 / -1; }
+.ps2-agenda-count > div > span { font-size: 11px; color: var(--soft); }
+.ps2-agenda-count b { font-size: 24px; font-weight: 600; letter-spacing: -.02em; }
+.ps2-agenda-count small { font-size: 11px; color: var(--soft); }
+.ps2-agenda-people { list-style: none; margin: 0; padding: 8px; overflow: auto; flex: 1; }
+.ps2-agenda-people button { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; border: 0; background: none; border-radius: 10px; padding: 8px 10px; cursor: pointer; text-align: left; color: var(--ink); font-size: 12.5px; }
+.ps2-agenda-people button:hover { background: var(--blue-bg); }
+.ps2-agenda-people button.is-on { background: var(--navy); color: #fff; }
+.ps2-agenda-people button > span:first-child { font-weight: 600; }
+.ps2-agenda-people .ps2-num { font-size: 11.5px; color: var(--soft); }
+.ps2-agenda-people button.is-on .ps2-num { color: rgba(255, 255, 255, .8); }
+.ps2-agenda-people em { font-style: normal; opacity: .8; }
+.ps2-agenda-main { min-height: 0; overflow: auto; padding: 12px 14px 16px; }
+.ps2-agenda-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)) repeat(2, minmax(0, .55fr)); gap: 6px; }
+.ps2-agenda-dow span { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 0 6px 6px; }
+.ps2-agenda-day { position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-height: 104px; padding: 6px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--card); text-align: left; cursor: pointer; color: var(--ink); font: inherit; transition: border-color .2s, box-shadow .2s; }
+.ps2-agenda-day:hover:not(:disabled) { border-color: var(--blue); box-shadow: 0 4px 14px rgba(47, 79, 158, .12); }
+.ps2-agenda-day:disabled { cursor: default; }
+.ps2-agenda-day.is-out { background: transparent; border-style: dashed; opacity: .4; }
+.ps2-agenda-day.is-on { border-color: var(--navy); box-shadow: 0 0 0 2px rgba(30, 58, 123, .18); }
+.ps2-agenda-date { font-size: 12px; font-weight: 600; color: var(--soft); }
+.ps2-agenda-day.is-today .ps2-agenda-date { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--navy); color: #fff; }
+.ps2-agenda-chips { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ps2-agenda-chip { display: flex; align-items: center; gap: 5px; font-size: 10.5px; padding: 2px 6px; border-radius: 6px; min-width: 0; }
+.ps2-agenda-chip.is-r1 { background: #e9eef6; color: #1e3a7b; }
+.ps2-agenda-chip.is-r2 { background: #e8f1ec; color: #2c5e43; }
+.ps2-agenda-chip.is-direct { background: #fff; color: #2c5e43; outline: 1.5px dashed #2c6448; outline-offset: -1.5px; }
+.ps2-agenda-chip-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps2-agenda-chip i { font-style: normal; font-weight: 700; }
+.ps2-agenda-more { font-size: 10.5px; font-weight: 600; color: var(--soft); padding-left: 4px; }
+.ps2-agenda-sum { display: flex; flex-direction: column; gap: 3px; }
+.ps2-agenda-sum span { font-size: 11px; padding: 2px 7px; border-radius: 6px; }
+.ps2-agenda-sum .is-r1 { background: #e9eef6; color: #1e3a7b; }
+.ps2-agenda-sum .is-r2 { background: #e8f1ec; color: #2c5e43; }
+.ps2-agenda-sum b { font-weight: 700; }
+.ps2-agenda-sum em { font-style: normal; opacity: .75; }
+.ps2-agenda-dayview { position: absolute; top: 0; right: 0; bottom: 0; width: min(420px, 100%); background: var(--card); border-left: 1px solid var(--line-2); box-shadow: -18px 0 40px rgba(18, 27, 53, .12); display: flex; flex-direction: column; z-index: 2; }
+.ps2-agenda-dayhead { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--line-2); text-transform: capitalize; }
+.ps2-agenda-daylist { list-style: none; margin: 0; padding: 8px; overflow: auto; flex: 1; }
+.ps2-agenda-daylist button { width: 100%; display: grid; grid-template-columns: 52px auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px; border: 0; border-radius: 10px; background: none; cursor: pointer; text-align: left; color: var(--ink); font: inherit; font-size: 12.5px; }
+.ps2-agenda-daylist button:hover { background: var(--blue-bg); }
+.ps2-agenda-hour { color: var(--muted); font-size: 11.5px; }
+.ps2-agenda-tag { font-size: 10.5px; font-weight: 650; padding: 2px 7px; border-radius: 6px; white-space: nowrap; }
+.ps2-agenda-tag.is-r1 { background: #e9eef6; color: #1e3a7b; } .ps2-agenda-tag.is-r2 { background: #e8f1ec; color: #2c5e43; }
+.ps2-agenda-tag.is-direct { background: #fff; color: #2c5e43; outline: 1.5px dashed #2c6448; outline-offset: -1.5px; }
+.ps2-agenda-who { display: flex; flex-direction: column; min-width: 0; }
+.ps2-agenda-who b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps2-agenda-who small { font-size: 11px; color: var(--soft); }
+.ps2-agenda-status { font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+@media (max-width: 900px) {
+  .ps2-agenda-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .ps2-agenda-side { border-right: 0; border-bottom: 1px solid var(--line-2); max-height: 38vh; }
+  .ps2-agenda-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+  .ps2-agenda-day { min-height: 64px; padding: 4px; }
+  .ps2-agenda-chip-name, .ps2-agenda-sum em { display: none; }
+}

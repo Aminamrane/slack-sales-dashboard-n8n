@@ -18,6 +18,7 @@ import ShowsByChannel from './ShowsByChannel';
 import AdsFlow from './AdsFlow';
 import { AffectedCard, IntakePanel, PoolReclaims } from './IntakeLeads';
 import LeadsTab from './LeadsTab';
+import RdvAgenda from './RdvAgenda';
 import { RegistrantsBlock, RegistrantsPanel } from './Registrants';
 import { FUNNEL, SOURCES, buildModel, byPersonForAd, dm, euro, fr, initials, scopeFigures, signedNum } from './model';
 import TabIcon from './TabIcons';
@@ -738,6 +739,8 @@ function RdvSummary({ model: pageModel, data, front, range, onOpen, dark, delay 
   const model = useMemo(() => (data && data !== pageModel.raw ? buildModel(data, front) : null) || pageModel, [data, front, pageModel]);
   const own = model !== pageModel;
   const [scope, setScope] = useState({ source: null, ad: null });
+  const [agenda, setAgenda] = useState(false);
+  const closeAgenda = useCallback(() => setAgenda(false), []);
   const t = scopeFigures(model, scope.source, scope.ad);
   const scopeLabel = scope.source ? [SOURCES.find((x) => x.key === scope.source)?.label, model.ads?.[scope.source]?.find((a) => a.key === scope.ad)?.label].filter(Boolean).join(' · ') : null;
   const track = dark ? 'rgba(148,163,184,.18)' : '#eef1f6';
@@ -759,7 +762,10 @@ function RdvSummary({ model: pageModel, data, front, range, onOpen, dark, delay 
           <Reveal as="section" key={s} className="ps2-card ps2-span-6" aria-label={`Rendez-vous ${name}`}>
             <Motion.div className="ps2-card-head" variants={ITEM}><h2>{name} {own ? 'de la période' : 'du mois'}</h2>
               {scopeLabel && <span className="ps2-chip-soft" style={{ marginRight: 'auto' }}>{scopeLabel}</span>}
-              <button type="button" className="ps2-link" onClick={() => onOpen(metric, { dossiers: `${s}p`, source: scope.source, ad: scope.ad, model, period: range })}>Dossiers</button></Motion.div>
+              <span style={{ display: 'inline-flex', gap: 14 }}>
+                <button type="button" className="ps2-link" onClick={() => setAgenda(true)}>Agenda</button>
+                <button type="button" className="ps2-link" onClick={() => onOpen(metric, { dossiers: `${s}p`, source: scope.source, ad: scope.ad, model, period: range })}>Dossiers</button>
+              </span></Motion.div>
             <Motion.div variants={ITEM} style={{ display: 'flex', gap: 26, alignItems: 'center', marginTop: 16, flexWrap: 'wrap' }}>
               <Info className="ps2-ring-btn" label={`Présence ${name}, détail`}
                 detail={<Detail kicker={`Présence ${name}`} value={presence == null ? '–' : `${presence} %`}
@@ -786,6 +792,7 @@ function RdvSummary({ model: pageModel, data, front, range, onOpen, dark, delay 
         );
       })}
       <div className="ps2-span-12"><ShowsByChannel model={model} scope={scope} onPick={setScope} /></div>
+      <RdvAgenda open={agenda} period={range} source={scope.source} dark={dark} onClose={closeAgenda} />
     </div>
   );
 }
