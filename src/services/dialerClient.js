@@ -9,7 +9,9 @@
 //     and is a fully isolated service (its own SQLite, no shared data).
 //   - It speaks application/x-www-form-urlencoded (FastAPI `Form(...)`) and
 //     multipart (CSV upload) — apiClient only sends JSON.
-//   - It has no auth of its own ; we deliberately send no bearer token.
+//   - It has no auth of its own : nginx asks the CRM API (GET /api/v1/dialer-access)
+//     before proxying, so every call carries the CRM session through
+//     apiClient._authenticatedFetch (same bearer, same refresh on 401).
 //
 // Endpoints (mirror the backend in power-dialer/main.py) :
 //   GET  /campaigns
@@ -19,8 +21,12 @@
 //   POST /campaigns/{id}/call               (form: item_id)
 //   GET  /campaigns/{id}/stats
 
-const API_ROOT = import.meta.env.VITE_API_URL || 'https://api.ownertechnology.com';
+import apiClient from './apiClient.js';
+
+const API_ROOT = import.meta.env?.VITE_API_URL || 'https://api.ownertechnology.com';
 const DIALER_BASE = `${API_ROOT}/dialer`;
+
+const send = (url, options) => apiClient._authenticatedFetch(url, options);
 
 async function parse(res) {
   const txt = await res.text();
@@ -40,14 +46,14 @@ const dialerClient = {
 
   /** List all campaigns (newest first — backend orders by id desc). */
   listCampaigns() {
-    return fetch(`${DIALER_BASE}/campaigns`).then(parse);
+    return send(`${DIALER_BASE}/campaigns`).then(parse);
   },
 
   /** Create a campaign. Returns { id, name, caller_id }. */
   createCampaign(name, callerId = '') {
     const body = new URLSearchParams({ name });
     if (callerId) body.set('caller_id', callerId);
-    return fetch(`${DIALER_BASE}/campaigns`, {
+    return send(`${DIALER_BASE}/campaigns`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
@@ -59,7 +65,7 @@ const dialerClient = {
     const fd = new FormData();
     fd.append('file', file);
     // No Content-Type header — let the browser set the multipart boundary.
-    return fetch(`${DIALER_BASE}/campaigns/${campaignId}/upload-csv`, {
+    return send(`${DIALER_BASE}/campaigns/${campaignId}/upload-csv`, {
       method: 'POST',
       body: fd,
     }).then(parse);
@@ -67,7 +73,7 @@ const dialerClient = {
 
   /** Next pending fiche. Returns { done, item }. */
   next(campaignId) {
-    return fetch(`${DIALER_BASE}/campaigns/${campaignId}/next`).then(parse);
+    return send(`${DIALER_BASE}/campaigns/${campaignId}/next`).then(parse);
   },
 
   /**
@@ -81,7 +87,7 @@ const dialerClient = {
     const body = new URLSearchParams({ item_id: String(itemId) });
     if (agentPhone) body.set('agent_phone', agentPhone);
     if (confName) body.set('conf_name', confName);
-    return fetch(`${DIALER_BASE}/campaigns/${campaignId}/call`, {
+    return send(`${DIALER_BASE}/campaigns/${campaignId}/call`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
@@ -92,7 +98,7 @@ const dialerClient = {
   /** Open the continuous line : rings the handset once → conference. */
   startSession(opKey, agentPhone) {
     const body = new URLSearchParams({ op_key: opKey, agent_phone: agentPhone });
-    return fetch(`${DIALER_BASE}/sessions/start`, {
+    return send(`${DIALER_BASE}/sessions/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
@@ -100,12 +106,12 @@ const dialerClient = {
   },
   /** Current active continuous-line session for an operator (or {active:false}). */
   activeSession(opKey) {
-    return fetch(`${DIALER_BASE}/sessions/active?op_key=${encodeURIComponent(opKey)}`).then(parse);
+    return send(`${DIALER_BASE}/sessions/active?op_key=${encodeURIComponent(opKey)}`).then(parse);
   },
   /** Close the continuous line (hangs up the operator's handset). */
   endSession(opKey) {
     const body = new URLSearchParams({ op_key: opKey });
-    return fetch(`${DIALER_BASE}/sessions/end`, {
+    return send(`${DIALER_BASE}/sessions/end`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
@@ -115,7 +121,7 @@ const dialerClient = {
   /** Really terminate the live Twilio call for a fiche. Returns { ok, item }. */
   hangup(campaignId, itemId) {
     const body = new URLSearchParams({ item_id: String(itemId) });
-    return fetch(`${DIALER_BASE}/campaigns/${campaignId}/hangup`, {
+    return send(`${DIALER_BASE}/campaigns/${campaignId}/hangup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
@@ -124,23 +130,23 @@ const dialerClient = {
 
   /** Live counters for the DAF dashboard. */
   stats(campaignId) {
-    return fetch(`${DIALER_BASE}/campaigns/${campaignId}/stats`).then(parse);
+    return send(`${DIALER_BASE}/campaigns/${campaignId}/stats`).then(parse);
   },
 
   /** Per-call detail (called fiches, newest first, each with its duration). */
   items(campaignId) {
-    return fetch(`${DIALER_BASE}/campaigns/${campaignId}/items`).then(parse);
+    return send(`${DIALER_BASE}/campaigns/${campaignId}/items`).then(parse);
   },
 
   /** Read an operator's saved handset number. Returns { op_key, agent_phone }. */
   getOperator(opKey) {
-    return fetch(`${DIALER_BASE}/operators/${encodeURIComponent(opKey)}`).then(parse);
+    return send(`${DIALER_BASE}/operators/${encodeURIComponent(opKey)}`).then(parse);
   },
 
   /** Save / update an operator's handset number. */
   saveOperator(opKey, agentPhone) {
     const body = new URLSearchParams({ agent_phone: agentPhone });
-    return fetch(`${DIALER_BASE}/operators/${encodeURIComponent(opKey)}`, {
+    return send(`${DIALER_BASE}/operators/${encodeURIComponent(opKey)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
