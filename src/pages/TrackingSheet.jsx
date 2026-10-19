@@ -23,7 +23,7 @@ import DailyQualificationDeck from '../components/salesJourney/DailyQualificatio
 import { ownRdvsToQualify, viewedSheet } from '../utils/dailyQualification';
 import QualificationDialog from '../components/salesJourney/QualificationDialog';
 import ContactQualificationDialog from '../components/salesJourney/ContactQualificationDialog';
-import {contactQualificationPatch} from '../utils/contactQualification';
+import {contactQualificationPatch, recallInPast, recallWhen, recallRuleNote, CALLBACK_NOTE_MAX, CALLBACK_RULE_HELP} from '../utils/contactQualification';
 import NotesDialog from '../components/salesJourney/NotesDialog';
 import { SaleIntake, SaleDocuments } from "../components/integrationPreview/SaleIntake";
 import PortalAccess from '../components/salesJourney/PortalAccess';
@@ -2378,6 +2378,8 @@ export default function TrackingSheet() {
       if (resp.r2_meet_link) meetFields.r2_meet_link = resp.r2_meet_link;
       if (resp.r1_event_id) meetFields.r1_event_id = resp.r1_event_id;
       if (resp.r2_event_id) meetFields.r2_event_id = resp.r2_event_id;
+      // Rappel daté : le serveur tient le compteur de réaffectations (règle des 3 jours) ; on le reprend pour que la mention s'affiche aussitôt.
+      if ('callback_description' in patchData && resp.lead?.callback_shifts != null) meetFields.callback_shifts = resp.lead.callback_shifts;
       if (Object.keys(meetFields).length > 0) {
         patchData = { ...patchData, ...meetFields };
       }
@@ -2948,6 +2950,11 @@ export default function TrackingSheet() {
         @keyframes wfDateCardIn {
           0%   { opacity: 0; max-height: 0; transform: translateY(-8px); }
           100% { opacity: 1; max-height: 300px; transform: translateY(0); }
+        }
+        /* Carte « Planifier le rappel » : plus haute que celles des RDV (description, mention de la règle des 3 jours, erreur) */
+        @keyframes wfRecallCardIn {
+          0%   { opacity: 0; max-height: 0; transform: translateY(-8px); }
+          100% { opacity: 1; max-height: 640px; transform: translateY(0); }
         }
         @keyframes detailSlideIn {
           from { opacity: 0; transform: translateX(30px) scale(0.97); }
@@ -6124,6 +6131,17 @@ export default function TrackingSheet() {
                     })()}
                   </div>
                 )}
+                {/* Rappel daté (16/10/2026) : quand le sales a convenu de rappeler le prospect, et ce qui a été dit (callback_at est l'heure de Paris, lue telle quelle).
+                    NON rétroactif : seuls les rappels posés avec la nouvelle fenêtre ont une description enregistrée (même vide) ; les anciens rappels (setters, ancien parcours) n'en ont pas et ne changent pas. */}
+                {(activeCat.key === 'callback' || activeCat.key === 'voicemail') && lead.callback_description != null && recallWhen(lead.callback_at) && (() => {
+                  const late = recallInPast(String(lead.callback_at).slice(0, 16));
+                  return (
+                    <div style={{ marginTop: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: late ? (darkMode ? '#f87171' : '#b91c1c') : (darkMode ? '#fbbf24' : '#b45309') }}>Rappel prévu : {recallWhen(lead.callback_at)}{late ? ' (dépassé)' : ''}</span>
+                      {lead.callback_description && <span style={{ fontSize: 12, color: C.text, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{lead.callback_description}</span>}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* ─── SIREN (detail card only — NOT shown in sidebar list) ─── */}
@@ -6888,6 +6906,19 @@ export default function TrackingSheet() {
                   } catch (e) { console.error('bump call_attempts failed:', e); }
                   setActiveWorkflow(null);
                 };
+                // « À rappeler » daté : même requête que la fenêtre guidée (contactQualificationPatch) ; sur un lead déjà en rappel / répondeur
+                // la tentative s'ajoute et le lead reste dans son onglet. Une erreur reste affichée dans la carte, les choix sont conservés.
+                const confirmCallback = async () => {
+                  if (wf?.saving) return;
+                  setActiveWorkflow(prev => ({ ...prev, saving: true, error: '' }));
+                  try {
+                    const current = leads.find(l => l.id === lead.id) || lead;
+                    const patch = contactQualificationPatch(current, activeCat.key, { result: 'reached', next: 'callback', date: wf.newDate, note: wf.note });
+                    await handleWorkflowSubmit(lead.id, patch, { strict: true });
+                  } catch (e) {
+                    setActiveWorkflow(prev => prev ? { ...prev, saving: false, error: e.message || 'Le rappel n’a pas pu être enregistré. Réessayez.' } : prev);
+                  }
+                };
                 const wfPill = (label, color, icon, delay, onClick) => (
                   <button key={label} onClick={onClick} style={{
                     display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 50,
@@ -6968,7 +6999,7 @@ export default function TrackingSheet() {
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                           {wfPill('RDV R1', '#3b82f6', '📅', 30, () => setActiveWorkflow(prev => ({ ...prev, appointmentResult: 'appointment_set', newDate: '' })))}
                           {wfPill('R2 direct', '#fb923c', '⚡', 70, () => setActiveWorkflow(prev => ({ ...prev, appointmentResult: 'r2_direct', newDate: '' })))}
-                          {wfPill('À rappeler', '#94a3b8', '↩', 110, () => isReContact ? bumpCallAttempts() : handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, contact_result: 'reached', appointment_result: 'no_appointment', status: 'callback' }))}
+                          {wfPill('À rappeler', '#94a3b8', '↩', 110, () => setActiveWorkflow(prev => ({ ...prev, appointmentResult: 'callback_set', newDate: '', note: '', error: '' })))}
                           {wfPill('Pas intéressé', '#ef4444', '✕', 150, () => handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, contact_result: 'reached', appointment_result: 'not_interested', status: 'not_relevant' }))}
                         </div>
                         <button onClick={() => setActiveWorkflow(prev => ({ ...prev, contactResult: '', appointmentResult: '' }))}
@@ -7074,6 +7105,57 @@ export default function TrackingSheet() {
                           >Confirmer → R2</button>
                         )}
                         <button onClick={() => setActiveWorkflow(prev => ({ ...prev, appointmentResult: '', newDate: '' }))}
+                          style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', opacity: 0.7 }}
+                        >← Retour</button>
+                      </div>
+                    ) : wf.contactResult === 'reached' && wf.appointmentResult === 'callback_set' ? (
+                      /* ── Step 3c: date, heure et description du rappel (événement Google « Recall » posé côté serveur) ── */
+                      <div style={{
+                        display: 'flex', flexDirection: 'column', gap: 10,
+                        padding: '16px 18px', borderRadius: 16,
+                        background: darkMode ? 'rgba(148,163,184,0.10)' : 'rgba(148,163,184,0.07)',
+                        border: `1px solid ${darkMode ? 'rgba(148,163,184,0.28)' : 'rgba(148,163,184,0.22)'}`,
+                        animation: 'wfRecallCardIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 15 }}>↩</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: darkMode ? '#cbd5e1' : '#64748b' }}>Planifier le rappel</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Date</div>
+                            <input type="date" value={wf.newDate ? wf.newDate.slice(0, 10) : ''} disabled={!!wf.saving}
+                              onChange={(e) => { const time = wf.newDate?.slice(10) || 'T09:00'; setActiveWorkflow(prev => ({ ...prev, newDate: e.target.value ? e.target.value + time : '', error: '' })); }}
+                              style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
+                            />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
+                            <TimeSelect value={wf.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wf.newDate?.slice(0, 10) || parisToday(); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t, error: '' })); }} C={C} darkMode={darkMode} />
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Description <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>(facultatif)</span></div>
+                          <textarea rows={2} maxLength={CALLBACK_NOTE_MAX} value={wf.note || ''} disabled={!!wf.saving}
+                            onChange={(e) => setActiveWorkflow(prev => ({ ...prev, note: e.target.value }))}
+                            placeholder="Ce dont vous avez convenu avec le prospect…"
+                            style={{ width: '100%', boxSizing: 'border-box', resize: 'none', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, lineHeight: 1.4, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
+                          />
+                        </div>
+                        {(() => { const ruleNote = recallRuleNote(leads.find(l => l.id === lead.id) || lead); return ruleNote ? (
+                          <div role="note" style={{ fontSize: 11.5, lineHeight: 1.4, padding: '8px 10px', borderRadius: 10, color: darkMode ? '#e8d49a' : '#6b5410', background: darkMode ? '#2f2a1b' : '#fbf5e4', border: `1px solid ${darkMode ? '#5a4c24' : '#e6d9b8'}` }}>
+                            <div style={{ fontWeight: 700 }}>{ruleNote}</div>
+                            <div>{CALLBACK_RULE_HELP}</div>
+                          </div>
+                        ) : null; })()}
+                        {recallInPast(wf.newDate) && <div role="alert" style={{ fontSize: 11, fontWeight: 600, color: darkMode ? '#fca5a5' : '#b42318' }}>Cette heure est déjà passée.</div>}
+                        {wf.error && <div role="alert" style={{ fontSize: 11, fontWeight: 600, color: darkMode ? '#fca5a5' : '#b42318' }}>{wf.error}</div>}
+                        {wf.newDate && wf.newDate.length >= 10 && !recallInPast(wf.newDate) && (
+                          <button disabled={!!wf.saving} onClick={confirmCallback}
+                            style={{ padding: '10px 20px', borderRadius: 50, border: 'none', background: '#64748b', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: wf.saving ? 'wait' : 'pointer', opacity: wf.saving ? 0.6 : 1, fontFamily: 'inherit', animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both' }}
+                          >{wf.saving ? 'Enregistrement…' : 'Confirmer → À rappeler'}</button>
+                        )}
+                        <button disabled={!!wf.saving} onClick={() => setActiveWorkflow(prev => ({ ...prev, appointmentResult: '', newDate: '', note: '', error: '' }))}
                           style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', opacity: 0.7 }}
                         >← Retour</button>
                       </div>
