@@ -508,6 +508,9 @@ export default function TrackingSheetFinance() {
   // Contrats en vol du board (Owner signé, Opti'Lex en attente) : ils n'ont
   // pas de numéro client, donc pas de ligne finance — on les synthétise.
   const [boardPending, setBoardPending] = useState([]);
+  // Les lignes du board (téléphone corrigé, contacts partagés, contrats en vol) :
+  // l'onglet « Tracking des appels » s'en sert pour retrouver le client d'un appel.
+  const boardRows = useMemo(() => [...(boardMap ? boardMap.values() : []), ...boardPending], [boardMap, boardPending]);
 
   // ── Vue-filtre active (chips) — single-select, « Tous » par défaut ────
   const [viewFilter, setViewFilter] = useState('all');
@@ -1422,7 +1425,7 @@ export default function TrackingSheetFinance() {
               style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
             >
               {activeTab === 'calls' && canViewCalls ? (
-                <CallsView operators={callsOperators} />
+                <CallsView operators={callsOperators} clients={rows} board={boardRows} />
               ) : activeTab === 'state-reviews' ? (<StateReviewQueue onOpenClient={openClientById}/>) : activeTab === 'validations' && canValidate ? (
                 <ValidationsView
                   onOpenClient={openClientById}

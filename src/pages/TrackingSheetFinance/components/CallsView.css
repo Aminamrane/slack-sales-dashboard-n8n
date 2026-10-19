@@ -53,3 +53,5 @@
 .fc-utterance time { color: #787774; }
 .fc-utterance p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; margin: 8px 0 0; }
 @media(max-width: 700px) { .fc-cards { grid-template-columns: 1fr; } .fc-heading { align-items: start; } .fc-filters > span { margin-left: 0; } .fc-dialog { padding: 18px; } }
+.finance-calls td .fc-client + .fc-client { margin-top: 9px; }
+.finance-calls td small.fc-unmatched { font-style: italic; }

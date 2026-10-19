@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Phone, ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, RefreshCw, X, Headphones } from 'lucide-react';
 import apiClient from '../../../services/apiClient.js';
+import { buildCallClientIndex, clientsForNumber } from '../callClients.js';
 import './CallsView.css';
 
 const ROOT = '/api/v1/finance-calls';
@@ -17,8 +18,29 @@ function initialDates() {
 const ALL_OPERATORS = [{ key: 'leny', name: 'Lény Perron' }, { key: 'aurelie', name: 'Aurélie Boukantar' }];
 const joinNames = names => names.length > 1 ? `${names.slice(0, -1).join(', ')} et ${names[names.length - 1]}` : names[0] || '';
 
-export default function CallsView({ operators = [] }) {
+// Colonne « Contact » : quand le numéro appelé est celui d'un client de la page,
+// on lit le client — nom, puis numéro de client, puis téléphone. Sinon (numéro
+// inconnu des fiches), l'affichage reste celui d'origine, avec la raison : aucune
+// fiche ne porte ce numéro (dite seulement une fois les fiches chargées).
+const MAX_CLIENTS = 3;
+function CallContact({ call, clients, directoryLoaded }) {
+  if (!clients.length) return <>
+    <strong>{call.contacts?.join(', ') || call.contact_number || 'Contact non renseigné'}</strong>{call.contacts?.length > 0 && <small>{call.contact_number}</small>}
+    {directoryLoaded && call.contact_number && <small className="fc-unmatched">Aucune fiche client avec ce numéro</small>}
+  </>;
+  return <>
+    {clients.slice(0, MAX_CLIENTS).map(client => <div className="fc-client" key={client.key}>
+      <strong>{client.name || 'Nom non renseigné'}</strong>
+      {client.numero && <small>N° client {client.numero}</small>}
+    </div>)}
+    {clients.length > MAX_CLIENTS && <small>et {clients.length - MAX_CLIENTS} autre{clients.length - MAX_CLIENTS > 1 ? 's' : ''} client{clients.length - MAX_CLIENTS > 1 ? 's' : ''}</small>}
+    <small>{call.contact_number}</small>
+  </>;
+}
+
+export default function CallsView({ operators = [], clients = null, board = null }) {
   const allowed = operators.length ? operators : ALL_OPERATORS;
+  const clientIndex = useMemo(() => buildCallClientIndex(clients, board), [clients, board]);
   const [draft, setDraft] = useState(initialDates);
   const [dates, setDates] = useState(initialDates);
   const [operator, setOperator] = useState(() => allowed[0].key);
@@ -68,7 +90,7 @@ export default function CallsView({ operators = [] }) {
     {listError ? <p className="fc-error" role="alert">{listError}</p> : !list ? <p role="status">Chargement des appels…</p> : !list.calls.length ? <div className="fc-empty"><Phone size={26} /><p>Aucun appel sur cette période.</p></div> : <div className="fc-table-wrap"><table>
       <thead><tr><th>Date et heure</th><th>Contact</th><th>Sens</th><th>Résultat</th><th>Durée</th><th>Enregistrement</th><th><span className="sr-only">Détails</span></th></tr></thead>
       <tbody>{list.calls.map(call => <tr key={call.id}>
-        <td>{dateLabel(call.date)}</td><td><strong>{call.contacts?.join(', ') || call.contact_number || 'Contact non renseigné'}</strong>{call.contacts?.length > 0 && <small>{call.contact_number}</small>}</td>
+        <td>{dateLabel(call.date)}</td><td><CallContact call={call} clients={clientsForNumber(clientIndex, call.contact_number)} directoryLoaded={clientIndex.size > 0} /></td>
         <td><span className="fc-inline">{call.direction === 'INBOUND' ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}{call.direction === 'INBOUND' ? 'Entrant' : 'Sortant'}</span></td>
         <td><span className={`fc-result ${call.result === 'ANSWERED' ? 'fc-answered' : ''}`}>{resultLabel(call.result)}</span></td><td>{duration(call.duration)}</td>
         <td>{call.has_recording ? <span className="fc-inline"><Headphones size={14} /> Disponible</span> : <span className="fc-muted">Indisponible</span>}</td>
