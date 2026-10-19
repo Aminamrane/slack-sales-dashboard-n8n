@@ -15,7 +15,7 @@ import LeadsManagement from "./LeadsManagement.jsx";
 // ── Setter modales (Option B duplication intégrale TrackingSheet) ──────────
 import SetterJourneyDialog from "../components/setter/SetterJourneyDialog.jsx";
 import SetterRescheduleR1Dialog from "../components/setter/SetterRescheduleR1Dialog.jsx";
-import { canRescheduleSetterR1 } from '../utils/setterJourney.js';
+import { canPlanSetterR2, canRescheduleSetterR1 } from '../utils/setterJourney.js';
 import {Phone, CalendarDays, ChevronRight, UserSearch, ListChecks, UsersRound, Video, RotateCcw} from "lucide-react";
 import SecondChance from "../components/setter/secondChance/SecondChance.jsx";
 import ProspectSearch from "../components/setter/prospection/ProspectSearch.jsx";
@@ -6662,7 +6662,7 @@ export default function TrackingSheetSetter() {
 
               {/* ═══ R1 TAB WORKFLOW ═══ */}
               {/* Visible côté sales (`r1`) ET setter (`r1_placed`) : qualifier
-                  R1 (Lapin / Reporter / R1 effectué / Annulé), R2 placé
+                  R1 (Lapin / Reporter / R1 effectué / Annulé), planifier un R2
                   (transfert vers le closer via création R2), reschedule.
                   Le sous-bloc "Envoyer le contrat" interne reste sous-gaté
                   `!isSetter` (sacred zone /api/v1/contracts/* + NDA). */}
@@ -6704,8 +6704,8 @@ export default function TrackingSheetSetter() {
                           onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.text; e.currentTarget.style.transform = 'scale(1)'; }}
                         >Qualifier le R1</button>
 
-                        {/* ── R2 placé: separate standalone button (only after R1 qualified) ── */}
-                        {!lead.r1_result ? null : !wfR2 ? (
+                        {/* ── Plan a new R2 only after the R1 took place ── */}
+                        {!canPlanSetterR2(lead) ? null : !wfR2 ? (
                           <button
                             onClick={() => setActiveWorkflow({ leadId: lead.id, r1Result: 'r2_set_standalone', newDate: '' })}
                             style={{
@@ -6718,7 +6718,7 @@ export default function TrackingSheetSetter() {
                             }}
                             onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(251,146,60,0.15)' : 'rgba(251,146,60,0.08)'; e.currentTarget.style.transform = 'scale(1.02)'; }}
                             onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(251,146,60,0.08)' : 'rgba(251,146,60,0.04)'; e.currentTarget.style.transform = 'scale(1)'; }}
-                          ><span style={{ fontSize: 15, lineHeight: 1 }}>📅</span> R2 placé</button>
+                          ><span style={{ fontSize: 15, lineHeight: 1 }}>📅</span> Planifier un R2</button>
                         ) : (
                           /* ── R2 date picker (standalone) ── */
                           <div style={{
