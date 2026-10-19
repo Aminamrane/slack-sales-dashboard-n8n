@@ -1073,7 +1073,6 @@ button.ps2-tile { font: inherit; color: var(--ink); width: 100%; min-height: 168
 .ps2-elig.is-in .ps2-elig-pips i.is-on { background: var(--good-strong); }
 .ps2-elig-state { grid-column: 3; grid-row: 1 / span 2; font-size: 11.5px; font-weight: 650; padding: 3px 8px; border-radius: 999px; background: var(--good-bg); color: var(--good); }
 .ps2-elig-state.is-out { background: var(--grey-bg); color: var(--soft); }
-.ps2-elig.is-blocked .ps2-elig-state { background: var(--warn-bg); color: var(--warn); }
 .ps2-elig:not(.is-in) .ps2-elig-name { color: var(--soft); }
 
 /* Graphique des ventes cumulées (15/10/2026) : la zone de tracé occupe la hauteur laissée par le simulateur, sans

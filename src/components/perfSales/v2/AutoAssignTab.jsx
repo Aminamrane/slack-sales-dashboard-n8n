@@ -339,7 +339,7 @@ function Eligibility({ e, avatarFor }) {
     <Detail kicker="RDV setters" title="Qui peut en recevoir" lines={[
       `Au moins un mois calendaire avec ${e.min} ventes déclarées, n’importe quel mois (mois de la déclaration), recalculé à chaque RDV.`,
       'Depuis le 15 octobre : un lead déjà suivi reste à son sales ; une seconde chance passe par l’auto-affectation, jamais chez son propriétaire historique.',
-      'Un agenda non synchronisé empêche de recevoir, même éligible.']} />
+      'Le RDV posé par un setter va toujours dans l’agenda Google du sales, même s’il a coupé sa synchronisation.']} />
   );
   return (
     <Reveal as="section" className="ps2-card" aria-labelledby="ps2-auto-elig">
@@ -351,16 +351,15 @@ function Eligibility({ e, avatarFor }) {
       </Motion.div>
       <div className="ps2-elig-grid">
         {e.people.map((p, i) => {
-          const blocked = p.eligible && !p.calendar;
           const detail = (
-            <Detail kicker="RDV setters" title={p.name} value={p.eligible ? (blocked ? 'Éligible, agenda à synchroniser' : 'Éligible') : 'Pas encore'}
+            <Detail kicker="RDV setters" title={p.name} value={p.eligible ? 'Éligible' : 'Pas encore'}
               rows={[['Meilleur mois', p.best_month ? `${monthText(p.best_month)} · ${fr(p.best)} vente${p.best > 1 ? 's' : ''}` : 'aucune vente'],
                 ['Mois à ' + e.min + ' ventes ou plus', fr(p.proven_months.length)],
                 ...(p.proven_months.length ? [['Dernier', monthText(p.proven_months[p.proven_months.length - 1])]] : []),
                 ['Ventes déclarées au total', fr(p.total)], ['Agenda synchronisé', p.calendar ? 'oui' : 'non']]} />
           );
           return (
-            <Info key={p.name} as="motion" className={`ps2-elig${p.eligible ? ' is-in' : ''}${blocked ? ' is-blocked' : ''}`} label={`${p.name}, détail`} detail={detail}
+            <Info key={p.name} as="motion" className={`ps2-elig${p.eligible ? ' is-in' : ''}`} label={`${p.name}, détail`} detail={detail}
               initial={{ opacity: 0, y: 8 }} animate={on ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.45, ease: EASE, delay: 0.05 + i * 0.035 }}>
               <Face name={p.name} url={avatarFor?.(p.name)} />
               <span className="ps2-elig-name">{p.name}</span>
@@ -370,7 +369,7 @@ function Eligibility({ e, avatarFor }) {
                     transition={{ duration: 0.35, ease: EASE, delay: 0.25 + i * 0.035 + k * 0.05 }} className={k < Math.min(p.best, e.min) ? 'is-on' : ''} />
                 ))}
               </span>
-              <span className={`ps2-elig-state ps2-num${p.eligible ? '' : ' is-out'}`}>{p.eligible ? (blocked ? 'sans agenda' : 'éligible') : `${fr(p.best)} / ${e.min}`}</span>
+              <span className={`ps2-elig-state ps2-num${p.eligible ? '' : ' is-out'}`}>{p.eligible ? 'éligible' : `${fr(p.best)} / ${e.min}`}</span>
             </Info>
           );
         })}
