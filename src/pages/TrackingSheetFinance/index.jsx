@@ -67,6 +67,7 @@ import companyLogo from '../../assets/my_image.png';
 import '../../index.css';
 
 import TableView from './TableView.jsx';
+import { canEditPaymentDates, loadPaymentDateAccess, paymentDateIdentity } from './paymentDateAccess.js';
 import DetailPanel from './DetailPanel.jsx';
 // `displayEtat` : règle métier unique de l'état affiché sur le board
 // Owner/Opti'Lex (import read-only — OptilexBoard n'est pas modifié).
@@ -386,6 +387,32 @@ export default function TrackingSheetFinance() {
 
   // ── Auth gating (mirrors Campaigns.jsx) ─────────────────────────────
   const [authChecked, setAuthChecked] = useState(false);
+  const currentUser = apiClient.getUser();
+  const paymentDateAccount = paymentDateIdentity(currentUser);
+  const [paymentDateAccess, setPaymentDateAccess] = useState(null);
+  const paymentDatesEditable = canEditPaymentDates(currentUser, paymentDateAccess);
+  useEffect(() => {
+    if (!authChecked) return undefined;
+    let live = true;
+    let revision = 0;
+    const refresh = async () => {
+      const requestRevision = ++revision;
+      setPaymentDateAccess(null);
+      const access = await loadPaymentDateAccess(apiClient);
+      if (live && requestRevision === revision) setPaymentDateAccess(access);
+    };
+    const onStorage = (event) => {
+      if (!event.key || event.key === 'auth_user') refresh();
+    };
+    refresh();
+    window.addEventListener('focus', refresh);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      live = false;
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [authChecked, paymentDateAccount]);
   const [canViewCalls, setCanViewCalls] = useState(false);
   // Opérateurs que le serveur autorise pour cette personne (Ismahane : les
   // deux ; Aurélie B : Lény seulement — décision dev 2026-09-18). Vide tant
@@ -1055,6 +1082,10 @@ export default function TrackingSheetFinance() {
 
   // ── Patch a row (optimistic + reconcile) ─────────────────────────────
   const onPatchRow = useCallback(async (rowId, patch) => {
+    if (Object.keys(patch).some((field) => ['payment_date_owner', 'payment_date_optilex'].includes(field))
+      && !canEditPaymentDates(apiClient.getUser(), paymentDateAccess)) {
+      throw new Error('Modification des dates de paiement non autorisée.');
+    }
     const prev = rows.find((r) => r.id === rowId);
     if (!prev) return;
 
@@ -1069,7 +1100,7 @@ export default function TrackingSheetFinance() {
       showToast(typeof msg === 'string' ? msg : 'Erreur 422 — valeur refusée par le serveur', 'error');
       throw e;
     }
-  }, [rows, showToast]);
+  }, [rows, showToast, paymentDateAccess]);
 
   // ── KPI summary ─────────────────────────────────────────────────────
   // Brief dev 2026-08-24 : les totaux du bandeau suivent la vision active,
@@ -1448,6 +1479,7 @@ export default function TrackingSheetFinance() {
               <TableView
                 rows={filteredRows}
                 onPatchRow={onPatchRow}
+                paymentDatesEditable={paymentDatesEditable}
                 boardMap={boardMap}
                 onOpenRow={onOpenRow}
                 activeRowId={panelOpen ? panelRowId : null}

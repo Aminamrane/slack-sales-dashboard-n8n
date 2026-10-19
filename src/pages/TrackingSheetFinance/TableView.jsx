@@ -142,12 +142,11 @@ const CELL_PAD_X = 12;
 // Champs backend par vision : `SCOPE_FIELDS` importé de constants.js
 // (source unique partagée avec index.jsx et DetailPanel depuis la phase 3).
 
-function buildCols(scope) {
+function buildCols(scope, paymentDatesEditable = false, role = apiClient.getUser()?.role) {
   const isGlobal = scope === 'global';
   // L'équipe finance ne saisit pas les encaissements : ses cellules de
-  // montants, dates et PSP restent en lecture (dev 2026-08-27). Les
-  // modalités, elles, lui sont ouvertes. Le serveur applique la même règle.
-  const role = apiClient.getUser()?.role;
+  // montants restent en lecture. Les dates disposent d'une permission
+  // séparée, fournie par le serveur sans élargir les droits sur les montants.
   const amounts = canEditAmounts(role);
   const contract = canEditContract(role);
   const entityGroup = `entity_${scope}`;
@@ -174,7 +173,7 @@ function buildCols(scope) {
     // absentes en vision Globale.
     ...(isGlobal ? {} : {
       psp:           { icon: CardIcon, w: 100, group: entityGroup,   shortLabel: 'Check',              fullLabel: stripEntitySuffix(COLUMN_LABELS.pspOwner),              kind: 'select', sticky: false, splitVisible: false, align: 'left',   editable: contract },
-      payDate:       { icon: CalendarIcon, w: 110, group: entityGroup,   shortLabel: 'Date paie.',         fullLabel: stripEntitySuffix(COLUMN_LABELS.payDateOwner),          kind: 'date',   sticky: false, splitVisible: false, align: 'center', editable: amounts },
+      payDate:       { icon: CalendarIcon, w: 110, group: entityGroup,   shortLabel: 'Date paie.',         fullLabel: stripEntitySuffix(COLUMN_LABELS.payDateOwner),          kind: 'date',   sticky: false, splitVisible: false, align: 'center', editable: amounts || paymentDatesEditable },
     }),
   };
 }
@@ -219,9 +218,9 @@ function HeaderTypeIcon({ kind, Icon = null }) {
 const GUTTER = 0; // Retiré 2026-05-11 : drag handle pas branché, créait un espace inutile à gauche de N°
 
 // ── Util : compute derived col config based on splitActive + scope ─────────
-function useColumnConfig(splitActive, scope) {
+function useColumnConfig(splitActive, scope, paymentDatesEditable, role) {
   return useMemo(() => {
-    const colsForScope = buildCols(scope);
+    const colsForScope = buildCols(scope, paymentDatesEditable, role);
     const allScopeKeys = Object.keys(colsForScope);
     const keys = splitActive
       ? allScopeKeys.filter((k) => colsForScope[k].splitVisible)
@@ -234,7 +233,7 @@ function useColumnConfig(splitActive, scope) {
     }, {});
     const totalWidth = keys.reduce((acc, k) => acc + cols[k].w, 0);
     return { keys, cols, stickyKeys, stickyLefts, totalWidth };
-  }, [splitActive, scope]);
+  }, [splitActive, scope, paymentDatesEditable, role]);
 }
 
 // ── Header (Notion-style label band) ──────────────────────────────────────
@@ -925,6 +924,7 @@ const RowRenderer = React.memo(function RowRenderer({
           ) : (
             <EditableNumber
               value={received}
+              disabled={!amountsEditable}
               onCommit={patch(fields.received)}
               align="center"
               placeholderItalic
@@ -970,6 +970,7 @@ const RowRenderer = React.memo(function RowRenderer({
         ) : (
           <EditableNumber
             value={recoveredOverdue}
+            disabled={!amountsEditable}
             onCommit={patch(fields.receivedOverdue)}
             align="center"
             placeholderItalic
@@ -1007,6 +1008,8 @@ const RowRenderer = React.memo(function RowRenderer({
       {/* Date paiement (entité active — absente en vision Globale) */}
       {keys.includes('payDate') && !isGlobal && C('payDate', (
         <EditableDate
+          key={cols.payDate.editable ? 'editable' : 'readonly'}
+          disabled={!cols.payDate.editable}
           value={displayedPayDate(row, fields).value}
           projected={displayedPayDate(row, fields).projected}
           onCommit={patch(fields.payDate)}
@@ -1454,6 +1457,7 @@ export function AnimatedAmount({ value, previous, style, countFromZero = false }
 export default function TableView({
   rows,
   onPatchRow,
+  paymentDatesEditable = false, // permission nominative servie par l'API
   boardMap,            // Map numero_client → row board (états Owner/Opti'Lex)
   onOpenClient,        // legacy (kept for back-compat)
   onOpenRow,           // (row) → opens the DetailPanel (only via OUVRIR button)
@@ -1468,7 +1472,7 @@ export default function TableView({
   showColRef,          // ref whose .current = (key) => show one col (called from parent)
 }) {
   const [scrollParent, setScrollParent] = useState(null);
-  const { keys: allKeys, cols: allCols } = useColumnConfig(splitActive, scope);
+  const { keys: allKeys, cols: allCols } = useColumnConfig(splitActive, scope, paymentDatesEditable, apiClient.getUser()?.role);
 
   // ── Bascule de vision : fondu SANS démontage ─────────────────────────────
   // La page ne reconstruit plus la table quand on change d'entité (elle le
