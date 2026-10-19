@@ -45,10 +45,8 @@ const RDV_SLOTS = (() => {
 })();
 
 // ── Coordonnées « à copier » ────────────────────────────────────────────────
-// Le téléphone et l'email sont les deux infos qu'un sales attrape pour agir :
-// on les sort du texte gris qualifiant pour en faire des puces cliquables, avec
-// une icône qui dit « copie-moi ». Aucune logique métier ici — copie presse-
-// papier + flash « Copié », c'est le même geste que la tracking sheet.
+// Le numéro reste du texte hors bouton pour les extensions de téléphonie.
+// Sa copie passe par l'icône dédiée ; l'email conserve sa puce cliquable.
 const IC_PHONE = (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
@@ -95,6 +93,38 @@ function CopyChip({ kind, value, C, darkMode }) {
     : hover ? (darkMode ? "rgba(8,145,178,0.16)" : "#e6f6fa")
             : (darkMode ? "rgba(255,255,255,0.05)" : "#f4f6f9");
   const border = copied ? "#3e7d5a" : hover ? accent : (darkMode ? "rgba(255,255,255,0.10)" : "#e2e6ee");
+  if (isPhone) {
+    return (
+      <span style={{
+        display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 9px",
+        borderRadius: 8, border: `1px solid ${border}`, background: bg,
+        transition: "background 0.15s, border-color 0.15s",
+      }}>
+        <span aria-hidden="true" style={{ display: "flex", color: accent, flexShrink: 0 }}>{IC_PHONE}</span>
+        {/* La copie ne remplace pas ce texte : une extension peut y injecter son bouton. */}
+        <span key={value} style={{ fontSize: 12.5, fontWeight: 700, color: C.text, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+          {value}
+        </span>
+        <button
+          type="button"
+          onClick={copy}
+          onMouseEnter={() => setHover(true)}
+          onMouseLeave={() => setHover(false)}
+          onFocus={() => setHover(true)}
+          onBlur={() => setHover(false)}
+          aria-label={copied ? "Numéro copié" : "Copier le numéro"}
+          title={copied ? "Copié" : "Copier le numéro"}
+          style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            padding: 2, margin: -2, border: "none", borderRadius: 3, background: "transparent",
+            color: copied ? "#3e7d5a" : (hover ? accent : C.muted), cursor: "pointer",
+          }}
+        >
+          {copied ? IC_CHECK : IC_COPY}
+        </button>
+      </span>
+    );
+  }
   return (
     <button
       onClick={copy}
