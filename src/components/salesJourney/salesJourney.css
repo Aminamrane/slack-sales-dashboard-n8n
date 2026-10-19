@@ -72,3 +72,27 @@
 .dq-finale h2{margin:18px 0 6px;font-size:23px;letter-spacing:-.01em;color:#24313e}
 .dq-finale p{margin:0 0 24px;font-size:13.5px;color:#617083}
 .dq-confetti{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:12050}
+
+/* « À rappeler » daté (16/10/2026) : même sélecteur de date et d'heure que « Placer un R2 directement », avec la description de
+   l'événement de rappel SOUS le sélecteur (une seule colonne). Le panneau se met à l'écran tout seul (voir le composant) ; l'indication
+   « Heure de Paris… » passe sur la ligne du titre et la fenêtre se resserre un peu sur les écrans bas pour tout montrer sans défiler. */
+.sj-callback{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;margin-top:14px;animation:sj-fade .18s ease-out;scroll-margin-bottom:96px}
+.sj-callback .sj-paris-date{margin:0}
+.sj-callback-when{position:relative;min-width:0}.sj-callback.is-past .sj-paris-date small{display:none}
+.sj-callback .sj-paris-date small{position:absolute;top:2px;right:0;margin:0;font-size:12px}
+.sj-callback-past{position:absolute;top:2px;right:0;margin:0;font-size:12px;font-weight:600;color:#b42318}.sj-dark .sj-callback-past{color:#fca5a5}
+.sj-callback.is-past .sj-paris-date input,.sj-callback.is-past .sj-paris-date select{border-color:#b42318}.sj-dark .sj-callback.is-past .sj-paris-date input,.sj-dark .sj-callback.is-past .sj-paris-date select{border-color:#fca5a5}
+.sj-dark .sj-callback .sj-paris-date small{color:var(--sj-muted)}
+.sj-footer-note{flex:1;min-width:0;align-self:center;font-size:12px;line-height:1.35;color:var(--sj-muted)}
+.sj-callback-note{display:flex;flex-direction:column;min-width:0}
+.sj-callback-note>span{font-weight:600;margin-bottom:7px}.sj-callback-note>span small{margin-left:4px;font-size:12px;font-weight:400;color:var(--sj-muted)}
+.sj-callback-note textarea{box-sizing:border-box;display:block;width:100%;resize:none;border:1px solid var(--sj-border,#dfe4ec);border-radius:12px;padding:10px 12px;background:var(--sj-bg,#fff);color:inherit;font:inherit;line-height:1.4}
+.sj-callback-note textarea:focus{outline:2px solid #6473bd;outline-offset:2px}.sj-callback-note textarea:disabled{opacity:.6}
+/* Mention de la règle des 3 jours : une seule ligne, dans la même cellule que le libellé « Description » (à droite de celui-ci) :
+   elle n'ajoute aucune hauteur à la fenêtre. Sur écran étroit elle repasse sous le champ, sur plusieurs lignes. */
+.sj-callback>.sj-callback-note{grid-row:2;grid-column:1}
+.sj-callback-rule{grid-row:2;grid-column:1;justify-self:end;align-self:start;margin:0;max-width:calc(100% - 175px);font-size:12px;font-weight:600;line-height:1.35;color:#8a6412;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sj-dark .sj-callback-rule{color:#e8d49a}
+/* Écran bas : la fenêtre « À rappeler » se resserre de quelques pixels (marges, titres, barre de boutons) (cartes à 72 px au lieu de 80) pour tenir sans défiler jusqu'à ~900 px de haut. */
+@media(max-height:980px){.sj-dialog-callback .sj-head{padding-block:16px}.sj-dialog-callback .sj-body{padding-block:16px 14px}.sj-dialog-callback .sj-body h3{margin-bottom:10px}.sj-dialog-callback .sj-r1-next h3{margin-top:16px}.sj-dialog-callback .sj-footer{padding-block:12px}.sj-dialog-callback .sj-callback{margin-top:12px;gap:10px}.sj-dialog-callback .sj-options button{min-height:72px}}
+@media(max-width:600px){.sj-callback .sj-paris-date small,.sj-callback-past{position:static;margin-top:8px}.sj-callback-rule{grid-row:auto;justify-self:stretch;max-width:none;white-space:normal;overflow:visible}}@media(prefers-reduced-motion:reduce){.sj-callback{animation:none}}
