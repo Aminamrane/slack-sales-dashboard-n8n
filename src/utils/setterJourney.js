@@ -10,6 +10,13 @@ export function canRescheduleSetterR1(lead, { isSetter = false, readOnly = false
     && ![lead.status, lead._setter_bucket, lead._lead_status].some(status =>
       ['signed', 'r2', 'r3', 'r2_placed'].includes(status)));
 }
+export function canPlanSetterR2(lead) {
+  return Boolean(lead?.id && ['done', 'showed_up'].includes(lead.r1_result)
+    && !lead.signed_at && !lead.setter_disqualified_at
+    && !(lead.r2 || lead.r2_date || lead.r2_event_id || lead.r3 || lead.r3_date || lead.r3_event_id)
+    && ![lead.status, lead._setter_bucket, lead._lead_status].some(status =>
+      ['signed', 'r2', 'r3', 'r2_placed'].includes(status)));
+}
 export function bookingSalesChoices(lead, sales = []) {
   const choices = sales.map(s => ({email:s.email || s, name:s.full_name || s.name || s.email || s}));
   const owner = lead?.assigned_to;

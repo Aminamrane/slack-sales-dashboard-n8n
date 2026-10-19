@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setterAction, availableSelection, bookingSalesChoices, singleBookingAction, canRescheduleSetterR1, withDuplicateConfirmation } from './setterJourney.js';
+import { setterAction, availableSelection, bookingSalesChoices, singleBookingAction, canPlanSetterR2, canRescheduleSetterR1, withDuplicateConfirmation } from './setterJourney.js';
 const owned = { id: 7, assigned_to: 'a@example.com', email: 'client@example.com' };
 const mine = { ...owned, created_by_setter: 'setter@example.com' };
 const slot = { email: 'a@example.com', date: '2026-09-24', time: '10:30' };
@@ -17,6 +17,29 @@ test('rescheduling shortcut preserves read-only, completed and later-stage restr
  assert.equal(canRescheduleSetterR1(lead,{isSetter:true,readOnly:true}),false);
  for (const patch of [{r1:null},{assigned_to:null},{r1_result:'done'},{r1_result:'showed_up'},{r2:'2026-10-15T10:00'},{r2_date:'2026-10-15T10:00'},{r3:'2026-10-15T10:00'},{status:'signed'},{_lead_status:'signed'},{_setter_bucket:'r2_placed'},{setter_disqualified_at:'2026-10-14'}]) {
   assert.equal(canRescheduleSetterR1({...lead,...patch},{isSetter:true}),false,JSON.stringify(patch));
+ }
+});
+test('a missed R1 offers rescheduling without suggesting an R2', () => {
+ const lead = { ...owned, status: 'r1_placed', _lead_status: 'r1', r1: '2026-10-20T10:00', r1_result: 'no_show' };
+ assert.equal(canRescheduleSetterR1(lead, { isSetter: true }), true);
+ assert.equal(canPlanSetterR2(lead), false);
+ for (const result of [null, '', 'rescheduled', 'to_reschedule', 'a_reporter', 'cancelled']) {
+  assert.equal(canPlanSetterR2({ ...lead, r1_result: result }), false, String(result));
+ }
+});
+test('an R2 can be planned after a completed R1 only while no later appointment or signature exists', () => {
+ const lead = { ...owned, status: 'r1_placed', _lead_status: 'r1', r1_result: 'done' };
+ assert.equal(canPlanSetterR2(lead), true);
+ assert.equal(canPlanSetterR2({ ...lead, r1_result: 'showed_up' }), true);
+ assert.equal(canPlanSetterR2(null), false);
+ for (const patch of [
+  { r2: '2026-10-21T10:00' }, { r2_date: '2026-10-21T10:00' }, { r2_event_id: 'r2-event' },
+  { r3: '2026-10-22T10:00' }, { r3_date: '2026-10-22T10:00' }, { r3_event_id: 'r3-event' },
+  { status: 'r2' }, { _lead_status: 'r3' }, { _setter_bucket: 'r2_placed' },
+  { status: 'signed' }, { _lead_status: 'signed' }, { signed_at: '2026-10-20T11:00' },
+  { setter_disqualified_at: '2026-10-20T11:00' },
+ ]) {
+  assert.equal(canPlanSetterR2({ ...lead, ...patch }), false, JSON.stringify(patch));
  }
 });
 test('existing and setter-created leads both send the explicitly selected sales', () => {
