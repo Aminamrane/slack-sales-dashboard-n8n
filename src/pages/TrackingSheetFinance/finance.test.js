@@ -528,3 +528,63 @@ test('month remains explicit for partial, future, paused and deferred installmen
  const report=installmentSubline({month:'2026-08',status:'deferred',reportedTo:[{month:'2026-09',amount:100}]});
  assert.match(report,/Août 2026/);assert.match(report,/septembre 2026/);
 });
+
+
+// L'accès nominatif aux dates n'ouvre jamais la saisie des montants.
+import { canEditAmounts } from './constants.js';
+import { canEditPaymentDates, loadPaymentDateAccess, paymentDateIdentity } from './paymentDateAccess.js';
+
+test('dates de paiement : refus par défaut, autorisation serveur stricte et propre au compte', () => {
+  const user = { id: 'finance-one', role: 'finance_team' };
+  for (const access of [undefined, null, {}, { identity: paymentDateIdentity(user), allowed: 'true' },
+    { identity: 'finance-two:finance_team', allowed: true }]) {
+    assert.equal(canEditPaymentDates(user, access), false);
+  }
+  assert.equal(canEditPaymentDates(user, { identity: paymentDateIdentity(user), allowed: true }), true);
+  assert.equal(canEditAmounts(user.role), false);
+  assert.equal(canEditPaymentDates({ role: 'finance_team' }, { identity: null, allowed: true }), false);
+  assert.equal(canEditPaymentDates(null, { identity: null, allowed: true }), false);
+  for (const role of ['setter', 'sales', 'customer_success_manager']) {
+    const other = { id: user.id, role };
+    assert.equal(canEditPaymentDates(other, { identity: paymentDateIdentity(other), allowed: true }), false);
+  }
+});
+
+test('dates de paiement : la direction conserve ses accès sans dépendre de la réponse nominative', () => {
+  for (const role of ['admin', 'ceo', 'finance_director']) {
+    assert.equal(canEditPaymentDates({ id: 'direction', role }, null), true);
+    assert.equal(canEditAmounts(role), true);
+  }
+});
+
+test('dates de paiement : réponse non mise en cache, erreurs et réponse invalide ferment l’accès', async () => {
+  const user = { id: 'finance-one', role: 'finance_team' };
+  for (const response of [{ can_edit_payment_dates: true }, { can_edit_payment_dates: false },
+    { can_edit_payment_dates: 'true' }, {}, null, new Error('403')]) {
+    const client = {
+      getUser: () => user,
+      request: async (endpoint, options) => {
+        assert.equal(endpoint, '/api/v1/finance-periods/access');
+        assert.deepEqual(options, { method: 'GET', cache: 'no-store' });
+        if (response instanceof Error) throw response;
+        return response;
+      },
+    };
+    const access = await loadPaymentDateAccess(client);
+    assert.equal(canEditPaymentDates(user, access), response?.can_edit_payment_dates === true);
+  }
+});
+
+test('dates de paiement : une réponse arrivée après un changement de compte est ignorée', async () => {
+  let user = { id: 'finance-one', role: 'finance_team' };
+  let resolve;
+  const client = { getUser: () => user, request: () => new Promise(r => { resolve = r; }) };
+  const pending = loadPaymentDateAccess(client);
+  user = { id: 'finance-two', role: 'finance_team' };
+  resolve({ can_edit_payment_dates: true });
+  assert.equal(await pending, null);
+  assert.equal(canEditPaymentDates(user, { identity: 'finance-one:finance_team', allowed: true }), false);
+  user = null;
+  client.request = () => { throw new Error('Aucune requête sans compte'); };
+  assert.equal(await loadPaymentDateAccess(client), null);
+});
