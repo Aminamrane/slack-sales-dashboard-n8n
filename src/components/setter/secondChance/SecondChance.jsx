@@ -11,7 +11,7 @@ import {
 import SetterJourneyDialog from '../SetterJourneyDialog';
 import { SalesNotesView } from '../../salesJourney/SalesNotes';
 import { originDisplay } from '../../../utils/sectors';
-import { STAGE_TONE, countItems, filterItems, itemState, outcomeLabel, untilLabel, wallLabel } from '../../../utils/secondChance';
+import { STAGE_TONE, countItems, filterItems, itemState, outcomeLabel, rdvHistory, untilLabel, wallLabel } from '../../../utils/secondChance';
 import { errorMessage, secondChanceApi } from './secondChanceApi';
 
 const REFRESH_MS = 60000;
@@ -183,6 +183,7 @@ export default function SecondChance({ C, darkMode = false, teamSales = [], asSe
 
   const lead = detail?.lead;
   const rebookKind = lead?.rebook_kind;
+  const rdvs = useMemo(() => rdvHistory(detail?.events), [detail]);
   const tabButton = (key, label, n) => (
     <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => { setTab(key); setSelectedId(null); }}
       style={{ padding: '7px 13px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
@@ -274,11 +275,13 @@ export default function SecondChance({ C, darkMode = false, teamSales = [], asSe
                     <span style={{ color: '#3e7d5a', fontWeight: 650, fontSize: 12 }}>À vous jusqu’au {untilLabel(selected.claim.expires_at)}{selected.claim.calls ? ` · ${selected.claim.calls} appel${selected.claim.calls > 1 ? 's' : ''}` : ''}</span>
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    <Button C={C} darkMode={darkMode} kind="primary" icon={CalendarPlus} disabled={readOnly || !rebookKind}
-                      title={rebookKind ? '' : lead?.rebook_note || ''}
-                      onClick={() => setRebook({ id: selected.lead_id, full_name: lead?.full_name, email: lead?.email || '', assigned_to: lead?.sales_email, assigned_to_name: lead?.sales_name, kind: rebookKind })}>
-                      Reprogrammer le {String(rebookKind || selected.stage).toUpperCase()}
-                    </Button>
+                    {['r1', 'r2'].map((kind) => (
+                      <Button key={kind} C={C} darkMode={darkMode} kind={kind === 'r1' ? 'primary' : 'secondary'} icon={CalendarPlus} disabled={readOnly || !rebookKind}
+                        title={rebookKind ? '' : lead?.rebook_note || ''}
+                        onClick={() => setRebook({ id: selected.lead_id, full_name: lead?.full_name, email: lead?.email || '', assigned_to: lead?.sales_email, assigned_to_name: lead?.sales_name, kind })}>
+                        Placer un {kind.toUpperCase()}
+                      </Button>
+                    ))}
                     <Button C={C} darkMode={darkMode} icon={PhoneCall} disabled={readOnly} onClick={() => setForm({ kind: 'called', text: '' })}>J’ai appelé</Button>
                     <Button C={C} darkMode={darkMode} kind="ghost" icon={Undo2} disabled={readOnly} onClick={() => setForm({ kind: 'release', text: '' })}>Rendre</Button>
                     <Button C={C} darkMode={darkMode} kind="danger" icon={Ban} disabled={readOnly} onClick={() => setForm({ kind: 'discard', text: '' })}>Écarter</Button>
@@ -313,6 +316,20 @@ export default function SecondChance({ C, darkMode = false, teamSales = [], asSe
             {!detail && !historyError && <div style={{ fontSize: 13, color: C.muted }}>Chargement du parcours…</div>}
             {detail && (
               <>
+                {rdvs.length > 0 && (
+                  <Section C={C} title="Rendez-vous déjà eus" icon={CalendarCheck2} aside={<span style={{ fontSize: 11.5, color: C.muted }}>avant cette reprise</span>}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {rdvs.map((r, i) => (
+                        <div key={`${r.kind}-${r.at}-${i}`} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 13, color: C.text }}>
+                          <Badge color={STAGE_TONE[r.kind]}>{r.kind.toUpperCase()} · {r.label}</Badge>
+                          <span>{wallLabel(r.at)}</span>
+                          {r.actor && <span style={{ color: C.muted }}>posé par {r.actor}</span>}
+                          {r.detail && <span style={{ color: C.secondary }}>{r.detail}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </Section>
+                )}
                 <Section C={C} title="Notes du dossier" icon={StickyNote}>
                   {detail.notes ? (
                     <div style={{ fontSize: 13, color: C.text, lineHeight: 1.55, maxHeight: 260, overflowY: 'auto' }}><SalesNotesView value={detail.notes} /></div>

@@ -33,6 +33,18 @@ export function untilLabel(value) {
   return wallLabel(value, { time: false });
 }
 
+// « Rendez-vous déjà eus » : les R1 / R2 du lead (événements « rdv », titre « R1 : annulé ») et ses absences
+// (« no_show », « R1 : client absent ») tirés du parcours renvoyé par l'API, dans l'ordre où l'API les donne.
+const RDV_TITLE = /^(R[123]) : (.+)$/;
+export function rdvHistory(events) {
+  return (events || []).flatMap((ev) => {
+    if (ev?.kind !== 'rdv' && ev?.kind !== 'no_show') return [];
+    const match = RDV_TITLE.exec(ev.title || '');
+    if (!match) return [];
+    return [{ kind: match[1].toLowerCase(), label: match[2], at: ev.at, detail: ev.detail || '', actor: ev.actor || '' }];
+  });
+}
+
 export function itemState(item) {
   if (!item?.claim) return 'free';
   return item.claim.claimed_by_me ? 'mine' : 'taken';

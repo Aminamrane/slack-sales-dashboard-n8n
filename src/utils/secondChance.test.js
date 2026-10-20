@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { countItems, filterItems, itemState, outcomeLabel, untilLabel, wallLabel } from './secondChance.js';
+import { countItems, filterItems, itemState, outcomeLabel, rdvHistory, untilLabel, wallLabel } from './secondChance.js';
 
 const items = [
   { lead_id: 1, stage: 'r1', result: 'cancelled', company: 'Crèche des Lilas', contact_first_name: 'Anne', sales_name: 'Yanis Zaïri', claim: null },
@@ -35,4 +35,22 @@ test('dates en heure-mur, sans conversion', () => {
 test('échéance d’une reprise, déjà en heure de Paris', () => {
   assert.equal(untilLabel('2026-10-09T17:00'), 'ven. 9 oct.');
   assert.equal(untilLabel(null), '');
+});
+
+test('rendez-vous déjà eus : R1 / R2 et absences du parcours, rien d’autre', () => {
+  const events = [
+    { at: '2026-10-01T09:00', kind: 'lead_created', title: 'Lead créé' },
+    { at: '2026-10-05T10:00', kind: 'no_show', title: 'R1 : client absent' },
+    { at: '2026-10-06T11:00', kind: 'rdv_placed', title: 'R1 posé', detail: 'Pour le 08/10/2026 à 14:00', actor: 'Jonathan' },
+    { at: '2026-10-08T14:00', kind: 'rdv', title: 'R1 : effectué', detail: 'Suite : R2 prévu', actor: 'Jonathan' },
+    { at: '2026-10-14T15:00', kind: 'rdv', title: 'R2 : pas intéressé' },
+    { at: '2026-10-15T09:53', kind: 'second_chance', title: 'Repris en Seconde chance' },
+    { at: '2026-10-16T08:00', kind: 'no_show', title: 'Client absent' },
+  ];
+  assert.deepEqual(rdvHistory(events), [
+    { kind: 'r1', label: 'client absent', at: '2026-10-05T10:00', detail: '', actor: '' },
+    { kind: 'r1', label: 'effectué', at: '2026-10-08T14:00', detail: 'Suite : R2 prévu', actor: 'Jonathan' },
+    { kind: 'r2', label: 'pas intéressé', at: '2026-10-14T15:00', detail: '', actor: '' },
+  ]);
+  assert.deepEqual(rdvHistory(null), []);
 });
