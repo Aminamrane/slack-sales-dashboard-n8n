@@ -5,13 +5,13 @@
 // /tracking/setter/second-chance.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Ban, CalendarCheck2, CalendarPlus, CalendarX2, CheckCircle2, Clock3, Mail, MessageSquare, Phone, PhoneCall,
-  RotateCcw, Search, Sparkles, StickyNote, Undo2, UserCheck, UserRoundX,
+  Ban, CalendarCheck2, CalendarPlus, CalendarX2, CheckCircle2, ChevronDown, ChevronUp, Clock3, Mail, MessageSquare, Phone,
+  PhoneCall, RotateCcw, Search, Sparkles, StickyNote, Undo2, UserCheck, UserRoundX,
 } from 'lucide-react';
 import SetterJourneyDialog from '../SetterJourneyDialog';
 import { SalesNotesView } from '../../salesJourney/SalesNotes';
 import { originDisplay } from '../../../utils/sectors';
-import { STAGE_TONE, countItems, filterItems, itemState, outcomeLabel, rdvHistory, untilLabel, wallLabel } from '../../../utils/secondChance';
+import { STAGE_TONE, TIMELINE_LIMIT, collapseEvents, countItems, filterItems, itemState, outcomeLabel, rdvHistory, untilLabel, wallLabel } from '../../../utils/secondChance';
 import { errorMessage, secondChanceApi } from './secondChanceApi';
 
 const REFRESH_MS = 60000;
@@ -91,14 +91,17 @@ function ListItem({ C, darkMode, item, selected, onSelect }) {
 }
 
 function Timeline({ C, events }) {
+  const [expanded, setExpanded] = useState(false);
+  const { shown, hidden } = collapseEvents(events, expanded);
   if (!events?.length) return <div style={{ fontSize: 12.5, color: C.muted }}>Aucun événement enregistré.</div>;
+  const canToggle = hidden > 0 || (expanded && events.length > TIMELINE_LIMIT);
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {events.map((ev, i) => {
+      {shown.map((ev, i) => {
         const Icon = EVENT_ICON[ev.kind] || (ev.kind === 'rdv' ? CalendarX2 : Clock3);
         return (
-          <div key={`${ev.at}-${i}`} style={{ display: 'grid', gridTemplateColumns: '28px 1fr', gap: 10, position: 'relative', paddingBottom: i < events.length - 1 ? 12 : 0 }}>
-            {i < events.length - 1 && <span style={{ position: 'absolute', left: 13, top: 26, bottom: 0, width: 1, background: C.border }} />}
+          <div key={`${ev.at}-${i}`} style={{ display: 'grid', gridTemplateColumns: '28px 1fr', gap: 10, position: 'relative', paddingBottom: i < shown.length - 1 ? 12 : 0 }}>
+            {i < shown.length - 1 && <span style={{ position: 'absolute', left: 13, top: 26, bottom: 0, width: 1, background: C.border }} />}
             <span style={{ width: 28, height: 28, borderRadius: 999, display: 'grid', placeItems: 'center', background: C.subtle, border: `1px solid ${C.border}`, zIndex: 1 }}>
               <Icon size={14} strokeWidth={2} color={C.secondary} />
             </span>
@@ -116,6 +119,15 @@ function Timeline({ C, events }) {
           </div>
         );
       })}
+      {canToggle && (
+        <button type="button" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', margin: '12px 0 0', padding: '7px 10px',
+            borderRadius: 9, border: `1px dashed ${C.border}`, background: C.subtle, color: C.secondary, fontSize: 12.5, fontWeight: 600,
+            fontFamily: 'inherit', cursor: 'pointer' }}>
+          {expanded ? <ChevronUp size={14} strokeWidth={2.2} /> : <ChevronDown size={14} strokeWidth={2.2} />}
+          {expanded ? 'Réduire le parcours' : `Afficher le reste du parcours (${hidden} événement${hidden > 1 ? 's' : ''})`}
+        </button>
+      )}
     </div>
   );
 }
@@ -336,7 +348,7 @@ export default function SecondChance({ C, darkMode = false, teamSales = [], asSe
                   ) : <div style={{ fontSize: 12.5, color: C.muted }}>Aucune note laissée sur ce lead.</div>}
                 </Section>
                 <Section C={C} title="Parcours" icon={Clock3} aside={<span style={{ fontSize: 11.5, color: C.muted }}>du plus ancien au plus récent</span>}>
-                  <Timeline C={C} events={detail.events} />
+                  <Timeline key={selectedId} C={C} events={detail.events} />
                 </Section>
                 {detail.comments?.length > 0 && (
                   <Section C={C} title="Commentaires" icon={MessageSquare}>

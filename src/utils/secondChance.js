@@ -33,6 +33,15 @@ export function untilLabel(value) {
   return wallLabel(value, { time: false });
 }
 
+// Parcours long : au-delà de `limit` événements, seuls les premiers restent visibles et le reste (la suite, sous eux)
+// se déplie d'un clic sur le bandeau placé à la fin de la liste. L'ordre chronologique est conservé.
+export const TIMELINE_LIMIT = 7;
+export function collapseEvents(events, expanded, limit = TIMELINE_LIMIT) {
+  const list = events || [];
+  if (expanded || list.length <= limit) return { shown: list, hidden: 0 };
+  return { shown: list.slice(0, limit), hidden: list.length - limit };
+}
+
 // « Rendez-vous déjà eus » : les R1 / R2 du lead (événements « rdv », titre « R1 : annulé ») et ses absences
 // (« no_show », « R1 : client absent ») tirés du parcours renvoyé par l'API, dans l'ordre où l'API les donne.
 const RDV_TITLE = /^(R[123]) : (.+)$/;

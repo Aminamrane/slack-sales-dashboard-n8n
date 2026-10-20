@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { countItems, filterItems, itemState, outcomeLabel, rdvHistory, untilLabel, wallLabel } from './secondChance.js';
+import { TIMELINE_LIMIT, collapseEvents, countItems, filterItems, itemState, outcomeLabel, rdvHistory, untilLabel, wallLabel } from './secondChance.js';
 
 const items = [
   { lead_id: 1, stage: 'r1', result: 'cancelled', company: 'Crèche des Lilas', contact_first_name: 'Anne', sales_name: 'Yanis Zaïri', claim: null },
@@ -53,4 +53,15 @@ test('rendez-vous déjà eus : R1 / R2 et absences du parcours, rien d’autre',
     { kind: 'r2', label: 'pas intéressé', at: '2026-10-14T15:00', detail: '', actor: '' },
   ]);
   assert.deepEqual(rdvHistory(null), []);
+});
+
+test('parcours long : les 7 premiers restent visibles, la suite se déplie', () => {
+  const events = (n) => Array.from({ length: n }, (_, i) => ({ at: `2026-10-${String(i + 1).padStart(2, '0')}T09:00`, title: `e${i + 1}` }));
+  assert.equal(TIMELINE_LIMIT, 7);
+  assert.deepEqual(collapseEvents(events(7), false), { shown: events(7), hidden: 0 });
+  const eight = collapseEvents(events(8), false);
+  assert.equal(eight.hidden, 1);
+  assert.deepEqual(eight.shown.map((e) => e.title), ['e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7']);
+  assert.deepEqual(collapseEvents(events(12), true), { shown: events(12), hidden: 0 });
+  assert.deepEqual(collapseEvents(null, false), { shown: [], hidden: 0 });
 });
