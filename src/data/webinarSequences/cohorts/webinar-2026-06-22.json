@@ -1,0 +1,1283 @@
+{
+ "schema": 1,
+ "generatedAt": "2026-09-25",
+ "cohort": {
+  "id": "webinar-2026-06-22",
+  "label": "Webinaire du 22 juin 2026",
+  "short": "22 juin",
+  "audience": "TPE/PME",
+  "liveAt": "2026-06-22T20:00:00+02:00",
+  "speakers": [
+   "Paul Faucomprez",
+   "Maître Moraru"
+  ],
+  "pages": [
+   "/"
+  ],
+  "notes": [
+   "Compte à rebours (19h30 / 19h55) inséré hors du code d'inscription, absent du planificateur de la cohorte."
+  ],
+  "codeEra": "june",
+  "stepCount": 21
+ },
+ "sequences": {
+  "pre": {
+   "label": "Séquence pré-webinaire",
+   "description": "De l'inscription au démarrage du live : confirmation, nurturing, rappels et jour J.",
+   "frequency": "7 e-mails « story » espacés de 8 à 48 h après l'inscription (jamais plus d'un toutes les 8 h) jusqu'au 22/06 16h00, puis J-1 (21/06 11h00) et le jour du live : 17h00, 19h30, 19h55, 20h15.",
+   "count": 13
+  },
+  "post": {
+   "label": "Séquence post-webinaire",
+   "description": "Relances après le live pour amener les inscrits vers un audit.",
+   "frequency": "Deux segments (absents / présents) : D1 le lendemain à 12h15, puis un e-mail par jour à 10h00 (24 au 26 juin).",
+   "count": 8
+  }
+ },
+ "rules": [
+  "Jamais envoyé à un inscrit désinscrit (lien de désinscription présent dans chaque e-mail)."
+ ],
+ "steps": [
+  {
+   "kind": "email_confirmation",
+   "order": 1,
+   "sequence": "pre",
+   "sequenceIndex": 1,
+   "sequenceCount": 13,
+   "phase": "confirmation",
+   "timing": {
+    "mode": "signup-delay",
+    "minutes": 2,
+    "label": "2 min après l'inscription"
+   },
+   "conditions": [
+    "Un seul par inscrit et par cohorte (une réinscription ne recrée pas de séquence)."
+   ],
+   "subject": "Votre inscription est confirmée",
+   "preheader": "",
+   "snippet": "Votre inscription est bien enregistrée pour notre masterclass : Optimisation des charges sociales et fiscales pour dirigeants de TPE/PME 📅 Lundi 22 juin 2026 ⏰ 20h00 Durant cette session exceptionnelle, nous verrons com",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_confirmation"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Inscription confirmée</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n\n    <p style=\"margin:0 0 16px;\">Votre inscription est bien enregistrée pour notre masterclass :</p>\n\n    <p style=\"margin:0 0 24px;font-weight:bold;color:#121b35;\">Optimisation des charges sociales et fiscales pour dirigeants de TPE/PME</p>\n\n    <p style=\"margin:0 0 8px;\">📅 Lundi 22 juin 2026</p>\n    <p style=\"margin:0 0 24px;\">⏰ 20h00</p>\n\n    <p style=\"margin:0 0 12px;\">Durant cette session exceptionnelle, nous verrons comment certains dirigeants parviennent à :</p>\n\n    <ul style=\"margin:0 0 16px;padding-left:24px;\">\n      <li style=\"margin:0 0 6px;\">réduire leurs charges sociales et fiscales</li>\n      <li style=\"margin:0 0 6px;\">revaloriser leur rémunération</li>\n      <li style=\"margin:0 0 6px;\">optimiser leur structure juridique</li>\n      <li style=\"margin:0 0 6px;\">récupérer plusieurs milliers d'euros chaque année</li>\n    </ul>\n\n    <p style=\"margin:0 0 16px;\">Le tout en parfaite conformité avec la réglementation.</p>\n\n    <p style=\"margin:0 0 16px;\">Nous partagerons des exemples réels issus de plus de 1200 entreprises accompagnées.</p>\n\n    <p style=\"margin:0 0 24px;\">Votre lien de connexion vous sera envoyé quelques jours avant l'événement.</p>\n\n    <p style=\"margin:0 0 16px;\">À très bientôt,</p>\n\n    <p style=\"margin:0;\">Paul Faucomprez<br>CEO Owner Technology</p>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    Votre inscription est bien enregistrée pour notre masterclass :\n\n    Optimisation des charges sociales et fiscales pour dirigeants de TPE/PME\n\n    📅 Lundi 22 juin 2026\n\n    ⏰ 20h00\n\n    Durant cette session exceptionnelle, nous verrons comment certains dirigeants parviennent à :\n\n- réduire leurs charges sociales et fiscales\n\n- revaloriser leur rémunération\n\n- optimiser leur structure juridique\n\n- récupérer plusieurs milliers d'euros chaque année\n\n    Le tout en parfaite conformité avec la réglementation.\n\n    Nous partagerons des exemples réels issus de plus de 1200 entreprises accompagnées.\n\n    Votre lien de connexion vous sera envoyé quelques jours avant l'événement.\n\n    À très bientôt,\n\n    Paul Faucomprez\nCEO Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  },
+  {
+   "kind": "email_marc_story",
+   "order": 2,
+   "sequence": "pre",
+   "sequenceIndex": 2,
+   "sequenceCount": 13,
+   "phase": "nurture",
+   "timing": {
+    "mode": "paced",
+    "label": "Espacé de 8 à 48 h après l'inscription (jusqu'au 22/06 16h00)"
+   },
+   "conditions": [
+    "Répartis dans l'ordre entre l'inscription et le 22/06 16h00 ; si le temps manque, on garde le début de l'arc et le dernier e-mail « garantie » (le closer)."
+   ],
+   "subject": "Dirigeant de PME : Marc pensait que tout était déjà optimisé",
+   "preheader": "",
+   "snippet": "Je vais vous raconter l'histoire de Marc. Marc dirige une PME de services. 14 salariés. 500 000€ de chiffre d'affaires. Comme beaucoup de dirigeants, il avait un expert-comptable compétent depuis plusieurs années. Et com",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_marc_story"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>L'histoire de Marc</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;text-align:left;\">\n  <div style=\"max-width:680px;margin:0 auto;padding:24px 20px;text-align:left;\">\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n\n    <p style=\"margin:0 0 16px;\">Je vais vous raconter l'histoire de Marc.</p>\n\n    <p style=\"margin:0 0 4px;\">Marc dirige une PME de services.</p>\n    <p style=\"margin:0 0 4px;\">14 salariés.</p>\n    <p style=\"margin:0 0 16px;\">500 000€ de chiffre d'affaires.</p>\n\n    <p style=\"margin:0 0 16px;\">Comme beaucoup de dirigeants, il avait un expert-comptable compétent depuis plusieurs années.</p>\n\n    <p style=\"margin:0 0 16px;\">Et comme beaucoup de dirigeants, il pensait que tout était déjà optimisé.</p>\n\n    <p style=\"margin:0 0 12px;\">Lors de notre audit, nous avons identifié :</p>\n\n    <ul style=\"margin:0 0 16px;padding-left:24px;\">\n      <li style=\"margin:0 0 6px;\">optimisation de sa rémunération : <span style=\"color:#16a34a;\">+6 400€</span></li>\n      <li style=\"margin:0 0 6px;\">restructuration retraite : <span style=\"color:#16a34a;\">+4 200€</span></li>\n      <li style=\"margin:0 0 6px;\">TVA sous-optimale : <span style=\"color:#16a34a;\">+3 100€</span></li>\n      <li style=\"margin:0 0 6px;\">holding sous-utilisée : <span style=\"color:#16a34a;\">+1 300€</span></li>\n    </ul>\n\n    <p style=\"margin:0 0 16px;color:#16a34a;\">Soit plus de 15 000€ d'économies légales.</p>\n\n    <p style=\"margin:0 0 4px;\">Son comptable n'avait rien fait de mal.</p>\n    <p style=\"margin:0 0 16px;\">Il ne faisait simplement pas ce type d'analyse.</p>\n\n    <p style=\"margin:0 0 24px;\">C'est exactement ce que nous verrons ensemble le 22 juin à 20h00.</p>\n\n    <p style=\"margin:0 0 16px;\">À bientôt,</p>\n\n    <p style=\"margin:0;\">Paul Faucomprez<br>CEO Owner Technology</p>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    Je vais vous raconter l'histoire de Marc.\n\n    Marc dirige une PME de services.\n\n    14 salariés.\n\n    500 000€ de chiffre d'affaires.\n\n    Comme beaucoup de dirigeants, il avait un expert-comptable compétent depuis plusieurs années.\n\n    Et comme beaucoup de dirigeants, il pensait que tout était déjà optimisé.\n\n    Lors de notre audit, nous avons identifié :\n\n- optimisation de sa rémunération : +6 400€\n\n- restructuration retraite : +4 200€\n\n- TVA sous-optimale : +3 100€\n\n- holding sous-utilisée : +1 300€\n\n    Soit plus de 15 000€ d'économies légales.\n\n    Son comptable n'avait rien fait de mal.\n\n    Il ne faisait simplement pas ce type d'analyse.\n\n    C'est exactement ce que nous verrons ensemble le 22 juin à 20h00.\n\n    À bientôt,\n\n    Paul Faucomprez\nCEO Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  },
+  {
+   "kind": "email_preview_reveal",
+   "order": 3,
+   "sequence": "pre",
+   "sequenceIndex": 3,
+   "sequenceCount": 13,
+   "phase": "nurture",
+   "timing": {
+    "mode": "paced",
+    "label": "Espacé de 8 à 48 h après l'inscription (jusqu'au 22/06 16h00)"
+   },
+   "conditions": [
+    "Répartis dans l'ordre entre l'inscription et le 22/06 16h00 ; si le temps manque, on garde le début de l'arc et le dernier e-mail « garantie » (le closer)."
+   ],
+   "subject": "Votre comptable n'est probablement pas le problème",
+   "preheader": "",
+   "snippet": "Quand nous réalisons un audit, nous observons souvent la même situation. Le dirigeant pense : \"Mon comptable m'a dit que tout était optimisé.\" Et pourtant... Nous identifions régulièrement des leviers qui n'ont jamais ét",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_preview_reveal"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Votre comptable n'est probablement pas le problème</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;text-align:left;\">\n  <div style=\"max-width:680px;margin:0 auto;padding:24px 20px;text-align:left;\">\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n\n    <p style=\"margin:0 0 16px;\">Quand nous réalisons un audit, nous observons souvent la même situation.</p>\n\n    <p style=\"margin:0 0 4px;\">Le dirigeant pense :</p>\n    <p style=\"margin:0 0 16px;font-style:italic;\">\"Mon comptable m'a dit que tout était optimisé.\"</p>\n\n    <p style=\"margin:0 0 16px;\">Et pourtant...</p>\n\n    <p style=\"margin:0 0 12px;\">Nous identifions régulièrement des leviers qui n'ont jamais été étudiés :</p>\n\n    <ul style=\"margin:0 0 16px;padding-left:24px;\">\n      <li style=\"margin:0 0 6px;\">rémunération dirigeant</li>\n      <li style=\"margin:0 0 6px;\">holding</li>\n      <li style=\"margin:0 0 6px;\">redevance de marque</li>\n      <li style=\"margin:0 0 6px;\">bureau professionnel</li>\n      <li style=\"margin:0 0 6px;\">structuration de groupe</li>\n    </ul>\n\n    <p style=\"margin:0 0 16px;\">Le problème n'est généralement pas la compétence du comptable.</p>\n\n    <p style=\"margin:0 0 16px;\">Le problème est que ces sujets nécessitent souvent une approche juridique, fiscale et stratégique.</p>\n\n    <p style=\"margin:0 0 24px;\">C'est exactement ce que nous allons décortiquer pendant ce webinaire.</p>\n\n    <p style=\"margin:0 0 8px;\">📅 Lundi 22 juin 2026</p>\n    <p style=\"margin:0 0 24px;\">⏰ 20h00</p>\n\n    <p style=\"margin:0;\">Paul Faucomprez<br>CEO Owner Technology</p>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    Quand nous réalisons un audit, nous observons souvent la même situation.\n\n    Le dirigeant pense :\n\n    \"Mon comptable m'a dit que tout était optimisé.\"\n\n    Et pourtant...\n\n    Nous identifions régulièrement des leviers qui n'ont jamais été étudiés :\n\n- rémunération dirigeant\n\n- holding\n\n- redevance de marque\n\n- bureau professionnel\n\n- structuration de groupe\n\n    Le problème n'est généralement pas la compétence du comptable.\n\n    Le problème est que ces sujets nécessitent souvent une approche juridique, fiscale et stratégique.\n\n    C'est exactement ce que nous allons décortiquer pendant ce webinaire.\n\n    📅 Lundi 22 juin 2026\n\n    ⏰ 20h00\n\n    Paul Faucomprez\nCEO Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  },
+  {
+   "kind": "email_why_concern",
+   "order": 4,
+   "sequence": "pre",
+   "sequenceIndex": 4,
+   "sequenceCount": 13,
+   "phase": "nurture",
+   "timing": {
+    "mode": "paced",
+    "label": "Espacé de 8 à 48 h après l'inscription (jusqu'au 22/06 16h00)"
+   },
+   "conditions": [
+    "Répartis dans l'ordre entre l'inscription et le 22/06 16h00 ; si le temps manque, on garde le début de l'arc et le dernier e-mail « garantie » (le closer)."
+   ],
+   "subject": "95% des dirigeants paient trop de charges",
+   "preheader": "",
+   "snippet": "Chaque mois vous payez : - URSSAF - cotisations - charges sociales Et comme la plupart des dirigeants, vous considérez probablement cela comme normal. Pourtant : 95% des dirigeants que nous rencontrons paient davantage q",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_why_concern"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;text-align:left;\">\n  <div style=\"max-width:680px;margin:0 auto;padding:24px 20px;text-align:left;\">\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 12px;\">Chaque mois vous payez :</p>\n    <ul style=\"margin:0 0 16px;padding-left:24px;\">\n      <li style=\"margin:0 0 6px;\">URSSAF</li>\n      <li style=\"margin:0 0 6px;\">cotisations</li>\n      <li style=\"margin:0 0 6px;\">charges sociales</li>\n    </ul>\n    <p style=\"margin:0 0 16px;\">Et comme la plupart des dirigeants, vous considérez probablement cela comme normal.</p>\n    <p style=\"margin:0 0 16px;\">Pourtant :</p>\n    <p style=\"margin:0 0 16px;\">95% des dirigeants que nous rencontrons paient davantage que nécessaire.</p>\n    <p style=\"margin:0 0 4px;\">Pas parce qu'ils font une erreur.</p>\n    <p style=\"margin:0 0 16px;\">Parce qu'ils ignorent simplement certains mécanismes d'optimisation.</p>\n    <p style=\"margin:0 0 12px;\">À ce jour :</p>\n    <ul style=\"margin:0 0 16px;padding-left:24px;\">\n      <li style=\"margin:0 0 6px;\">1200+ entreprises accompagnées</li>\n      <li style=\"margin:0 0 6px;\">15 millions d'euros économisés</li>\n      <li style=\"margin:0 0 6px;\">12 500€ économisés en moyenne par entreprise</li>\n    </ul>\n    <p style=\"margin:0 0 24px;\">Le lundi 22 juin à 20h00, nous vous montrerons comment ces économies sont générées.</p>\n    <p style=\"margin:0;\">Paul Faucomprez<br>CEO Owner Technology</p>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    Chaque mois vous payez :\n\n- URSSAF\n\n- cotisations\n\n- charges sociales\n\n    Et comme la plupart des dirigeants, vous considérez probablement cela comme normal.\n\n    Pourtant :\n\n    95% des dirigeants que nous rencontrons paient davantage que nécessaire.\n\n    Pas parce qu'ils font une erreur.\n\n    Parce qu'ils ignorent simplement certains mécanismes d'optimisation.\n\n    À ce jour :\n\n- 1200+ entreprises accompagnées\n\n- 15 millions d'euros économisés\n\n- 12 500€ économisés en moyenne par entreprise\n\n    Le lundi 22 juin à 20h00, nous vous montrerons comment ces économies sont générées.\n\n    Paul Faucomprez\nCEO Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  },
+  {
+   "kind": "email_charges_unknown",
+   "order": 5,
+   "sequence": "pre",
+   "sequenceIndex": 5,
+   "sequenceCount": 13,
+   "phase": "nurture",
+   "timing": {
+    "mode": "paced",
+    "label": "Espacé de 8 à 48 h après l'inscription (jusqu'au 22/06 16h00)"
+   },
+   "conditions": [
+    "Répartis dans l'ordre entre l'inscription et le 22/06 16h00 ; si le temps manque, on garde le début de l'arc et le dernier e-mail « garantie » (le closer)."
+   ],
+   "subject": "Travaillez-vous déjà depuis un bureau que vous possédez ?",
+   "preheader": "",
+   "snippet": "Une question simple. Travaillez-vous depuis : - votre domicile ? - un local dont vous êtes propriétaire ? - un bureau intégré à votre résidence ? Si oui, il existe peut-être un levier que vous n'utilisez pas. Nous consta",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_charges_unknown"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;text-align:left;\">\n  <div style=\"max-width:680px;margin:0 auto;padding:24px 20px;text-align:left;\">\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 16px;\">Une question simple.</p>\n    <p style=\"margin:0 0 12px;\">Travaillez-vous depuis :</p>\n    <ul style=\"margin:0 0 16px;padding-left:24px;\">\n      <li style=\"margin:0 0 6px;\">votre domicile ?</li>\n      <li style=\"margin:0 0 6px;\">un local dont vous êtes propriétaire ?</li>\n      <li style=\"margin:0 0 6px;\">un bureau intégré à votre résidence ?</li>\n    </ul>\n    <p style=\"margin:0 0 16px;\">Si oui, il existe peut-être un levier que vous n'utilisez pas.</p>\n    <p style=\"margin:0 0 16px;\">Nous constatons régulièrement que des dirigeants utilisent leur patrimoine personnel sans aucune stratégie d'optimisation.</p>\n    <p style=\"margin:0 0 16px;\">Le 22 juin, nous verrons comment certains dirigeants utilisent légalement ce mécanisme pour améliorer leur situation.</p>\n    <p style=\"margin:0 0 4px;\">Un détail ?</p>\n    <p style=\"margin:0 0 24px;\">Parfois plusieurs milliers d'euros par an.</p>\n    <p style=\"margin:0;\">Paul Faucomprez<br>CEO Owner Technology</p>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    Une question simple.\n\n    Travaillez-vous depuis :\n\n- votre domicile ?\n\n- un local dont vous êtes propriétaire ?\n\n- un bureau intégré à votre résidence ?\n\n    Si oui, il existe peut-être un levier que vous n'utilisez pas.\n\n    Nous constatons régulièrement que des dirigeants utilisent leur patrimoine personnel sans aucune stratégie d'optimisation.\n\n    Le 22 juin, nous verrons comment certains dirigeants utilisent légalement ce mécanisme pour améliorer leur situation.\n\n    Un détail ?\n\n    Parfois plusieurs milliers d'euros par an.\n\n    Paul Faucomprez\nCEO Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  },
+  {
+   "kind": "email_redevance_marque",
+   "order": 6,
+   "sequence": "pre",
+   "sequenceIndex": 6,
+   "sequenceCount": 13,
+   "phase": "nurture",
+   "timing": {
+    "mode": "paced",
+    "label": "Espacé de 8 à 48 h après l'inscription (jusqu'au 22/06 16h00)"
+   },
+   "conditions": [
+    "Répartis dans l'ordre entre l'inscription et le 22/06 16h00 ; si le temps manque, on garde le début de l'arc et le dernier e-mail « garantie » (le closer)."
+   ],
+   "subject": "Votre entreprise exploite peut-être gratuitement votre marque",
+   "preheader": "",
+   "snippet": "Votre entreprise utilise-t-elle : - votre nom ? - votre image ? - votre marque ? - votre réputation ? Pour beaucoup de dirigeants, la réponse est oui. Pourtant, rares sont ceux qui connaissent réellement le principe de l",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_redevance_marque"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;text-align:left;\">\n  <div style=\"max-width:680px;margin:0 auto;padding:24px 20px;text-align:left;\">\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 12px;\">Votre entreprise utilise-t-elle :</p>\n    <ul style=\"margin:0 0 16px;padding-left:24px;\">\n      <li style=\"margin:0 0 6px;\">votre nom ?</li>\n      <li style=\"margin:0 0 6px;\">votre image ?</li>\n      <li style=\"margin:0 0 6px;\">votre marque ?</li>\n      <li style=\"margin:0 0 6px;\">votre réputation ?</li>\n    </ul>\n    <p style=\"margin:0 0 16px;\">Pour beaucoup de dirigeants, la réponse est oui.</p>\n    <p style=\"margin:0 0 16px;\">Pourtant, rares sont ceux qui connaissent réellement le principe de la redevance de marque.</p>\n    <p style=\"margin:0 0 16px;\">Lorsqu'elle est pertinente et correctement mise en place, elle peut devenir un véritable levier de structuration.</p>\n    <p style=\"margin:0 0 12px;\">Le 22 juin, nous verrons :</p>\n    <ul style=\"margin:0 0 24px;padding-left:24px;\">\n      <li style=\"margin:0 0 6px;\">quand elle est pertinente</li>\n      <li style=\"margin:0 0 6px;\">quand elle ne l'est pas</li>\n      <li style=\"margin:0 0 6px;\">comment certains dirigeants l'utilisent légalement</li>\n    </ul>\n    <p style=\"margin:0;\">Paul Faucomprez<br>CEO Owner Technology</p>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    Votre entreprise utilise-t-elle :\n\n- votre nom ?\n\n- votre image ?\n\n- votre marque ?\n\n- votre réputation ?\n\n    Pour beaucoup de dirigeants, la réponse est oui.\n\n    Pourtant, rares sont ceux qui connaissent réellement le principe de la redevance de marque.\n\n    Lorsqu'elle est pertinente et correctement mise en place, elle peut devenir un véritable levier de structuration.\n\n    Le 22 juin, nous verrons :\n\n- quand elle est pertinente\n\n- quand elle ne l'est pas\n\n- comment certains dirigeants l'utilisent légalement\n\n    Paul Faucomprez\nCEO Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  },
+  {
+   "kind": "email_holding",
+   "order": 7,
+   "sequence": "pre",
+   "sequenceIndex": 7,
+   "sequenceCount": 13,
+   "phase": "nurture",
+   "timing": {
+    "mode": "paced",
+    "label": "Espacé de 8 à 48 h après l'inscription (jusqu'au 22/06 16h00)"
+   },
+   "conditions": [
+    "Répartis dans l'ordre entre l'inscription et le 22/06 16h00 ; si le temps manque, on garde le début de l'arc et le dernier e-mail « garantie » (le closer)."
+   ],
+   "subject": "La holding n'est pas réservée aux grands groupes",
+   "preheader": "",
+   "snippet": "\"Je suis trop petit pour avoir une holding.\" C'est probablement la phrase que nous entendons le plus. Et pourtant. Certaines holdings permettent de : - structurer les flux financiers - optimiser certaines remontées de tr",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_holding"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;text-align:left;\">\n  <div style=\"max-width:680px;margin:0 auto;padding:24px 20px;text-align:left;\">\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 16px;font-style:italic;\">\"Je suis trop petit pour avoir une holding.\"</p>\n    <p style=\"margin:0 0 16px;\">C'est probablement la phrase que nous entendons le plus.</p>\n    <p style=\"margin:0 0 16px;\">Et pourtant.</p>\n    <p style=\"margin:0 0 12px;\">Certaines holdings permettent de :</p>\n    <ul style=\"margin:0 0 16px;padding-left:24px;\">\n      <li style=\"margin:0 0 6px;\">structurer les flux financiers</li>\n      <li style=\"margin:0 0 6px;\">optimiser certaines remontées de trésorerie</li>\n      <li style=\"margin:0 0 6px;\">préparer de futurs investissements</li>\n      <li style=\"margin:0 0 6px;\">améliorer la rémunération dirigeant</li>\n    </ul>\n    <p style=\"margin:0 0 16px;\">D'autres ne servent absolument à rien.</p>\n    <p style=\"margin:0 0 24px;\">Le 22 juin, nous vous montrerons comment faire la différence.</p>\n    <p style=\"margin:0;\">Paul Faucomprez<br>CEO Owner Technology</p>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    \"Je suis trop petit pour avoir une holding.\"\n\n    C'est probablement la phrase que nous entendons le plus.\n\n    Et pourtant.\n\n    Certaines holdings permettent de :\n\n- structurer les flux financiers\n\n- optimiser certaines remontées de trésorerie\n\n- préparer de futurs investissements\n\n- améliorer la rémunération dirigeant\n\n    D'autres ne servent absolument à rien.\n\n    Le 22 juin, nous vous montrerons comment faire la différence.\n\n    Paul Faucomprez\nCEO Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  },
+  {
+   "kind": "email_garantie",
+   "order": 8,
+   "sequence": "pre",
+   "sequenceIndex": 8,
+   "sequenceCount": 13,
+   "phase": "nurture",
+   "timing": {
+    "mode": "paced",
+    "label": "Espacé de 8 à 48 h après l'inscription (jusqu'au 22/06 16h00)"
+   },
+   "conditions": [
+    "Répartis dans l'ordre entre l'inscription et le 22/06 16h00 ; si le temps manque, on garde le début de l'arc et le dernier e-mail « garantie » (le closer)."
+   ],
+   "subject": "Et si aucune économie n'était possible ?",
+   "preheader": "",
+   "snippet": "Une question revient souvent. \"Et si mon entreprise était déjà parfaitement optimisée ?\" La réponse est simple : Nous le saurons rapidement. Aujourd'hui : - 1200+ entreprises optimisées - 15M€ économisés - 96,64% de cont",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_garantie"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;text-align:left;\">\n  <div style=\"max-width:680px;margin:0 auto;padding:24px 20px;text-align:left;\">\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 16px;\">Une question revient souvent.</p>\n    <p style=\"margin:0 0 16px;font-style:italic;\">\"Et si mon entreprise était déjà parfaitement optimisée ?\"</p>\n    <p style=\"margin:0 0 4px;\">La réponse est simple :</p>\n    <p style=\"margin:0 0 16px;\">Nous le saurons rapidement.</p>\n    <p style=\"margin:0 0 12px;\">Aujourd'hui :</p>\n    <ul style=\"margin:0 0 16px;padding-left:24px;\">\n      <li style=\"margin:0 0 6px;\">1200+ entreprises optimisées</li>\n      <li style=\"margin:0 0 6px;\">15M€ économisés</li>\n      <li style=\"margin:0 0 6px;\">96,64% de contrats renouvelés</li>\n      <li style=\"margin:0 0 6px;\">rendement moyen : 4,2x</li>\n    </ul>\n    <p style=\"margin:0 0 4px;\">Et surtout :</p>\n    <p style=\"margin:0 0 16px;\">nous proposons une garantie contractuelle.</p>\n    <p style=\"margin:0 0 16px;\">Si les économies identifiées ne couvrent pas au minimum le coût de notre intervention, nous remboursons la différence.</p>\n    <p style=\"margin:0 0 24px;\">C'est le niveau de confiance que nous avons dans notre méthodologie.</p>\n    <p style=\"margin:0 0 16px;\">À lundi.</p>\n    <p style=\"margin:0;\">Paul Faucomprez<br>CEO Owner Technology</p>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    Une question revient souvent.\n\n    \"Et si mon entreprise était déjà parfaitement optimisée ?\"\n\n    La réponse est simple :\n\n    Nous le saurons rapidement.\n\n    Aujourd'hui :\n\n- 1200+ entreprises optimisées\n\n- 15M€ économisés\n\n- 96,64% de contrats renouvelés\n\n- rendement moyen : 4,2x\n\n    Et surtout :\n\n    nous proposons une garantie contractuelle.\n\n    Si les économies identifiées ne couvrent pas au minimum le coût de notre intervention, nous remboursons la différence.\n\n    C'est le niveau de confiance que nous avons dans notre méthodologie.\n\n    À lundi.\n\n    Paul Faucomprez\nCEO Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  },
+  {
+   "kind": "email_j_minus_1",
+   "order": 9,
+   "sequence": "pre",
+   "sequenceIndex": 9,
+   "sequenceCount": 13,
+   "phase": "reminder",
+   "timing": {
+    "mode": "calendar",
+    "at": "2026-06-21T11:00:00+02:00"
+   },
+   "conditions": [
+    "Ancre calendaire commune à toute la cohorte : sauté pour un inscrit arrivé après cette date."
+   ],
+   "subject": "Webinaire pour Dirigeants de TPE/PME : c'est demain à 20h00",
+   "preheader": "",
+   "snippet": "Le webinaire c'est demain ! → Votre lien de connexion personnel : https://webinaire.ownertechnology.com/r/EVENT_ID Demain soir, nous verrons : ✓ comment certains dirigeants économisent plusieurs milliers d'euros chaque a",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_j_minus_1"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "Votre lien de connexion personnel",
+     "href": "https://webinaire.ownertechnology.com/r/EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;text-align:left;\">\n  <div style=\"max-width:680px;margin:0 auto;padding:24px 20px;text-align:left;\">\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 12px;\">Le webinaire c'est demain !</p>\n    <p style=\"margin:0 0 24px;\">→ <a href=\"https://webinaire.ownertechnology.com/r/EVENT_ID\" style=\"color:#1a73e8;text-decoration:underline;font-weight:bold;\">Votre lien de connexion personnel</a></p>\n    <p style=\"margin:0 0 12px;\">Demain soir, nous verrons :</p>\n    <p style=\"margin:0 0 8px;\">✓ comment certains dirigeants économisent plusieurs milliers d'euros chaque année</p>\n    <p style=\"margin:0 0 8px;\">✓ comment revaloriser sa rémunération</p>\n    <p style=\"margin:0 0 8px;\">✓ comment utiliser un bureau professionnel</p>\n    <p style=\"margin:0 0 8px;\">✓ comment fonctionne une redevance de marque</p>\n    <p style=\"margin:0 0 8px;\">✓ dans quels cas une holding est pertinente</p>\n    <p style=\"margin:0 0 16px;\">✓ quelles erreurs coûtent le plus cher aux dirigeants</p>\n    <p style=\"margin:0 0 16px;\">Le tout illustré par des cas réels.</p>\n    <p style=\"margin:0 0 24px;\">À demain 20h00.</p>\n    <p style=\"margin:0;\">Paul Faucomprez<br>CEO Owner Technology</p>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    Le webinaire c'est demain !\n\n    → Votre lien de connexion personnel : https://webinaire.ownertechnology.com/r/EVENT_ID\n\n    Demain soir, nous verrons :\n\n    ✓ comment certains dirigeants économisent plusieurs milliers d'euros chaque année\n\n    ✓ comment revaloriser sa rémunération\n\n    ✓ comment utiliser un bureau professionnel\n\n    ✓ comment fonctionne une redevance de marque\n\n    ✓ dans quels cas une holding est pertinente\n\n    ✓ quelles erreurs coûtent le plus cher aux dirigeants\n\n    Le tout illustré par des cas réels.\n\n    À demain 20h00.\n\n    Paul Faucomprez\nCEO Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  },
+  {
+   "kind": "email_webinar_morning",
+   "order": 10,
+   "sequence": "pre",
+   "sequenceIndex": 10,
+   "sequenceCount": 13,
+   "phase": "liveday",
+   "timing": {
+    "mode": "calendar",
+    "at": "2026-06-22T17:00:00+02:00"
+   },
+   "conditions": [
+    "Ancre calendaire commune à toute la cohorte : sauté pour un inscrit arrivé après cette date."
+   ],
+   "subject": "Le webinaire spécial Dirigeant TPE/PME en direct dans quelques heures",
+   "preheader": "",
+   "snippet": "Dans quelques heures, nous serons en direct. Nous partagerons les mêmes méthodes que celles utilisées auprès de plus de 1200 entreprises. Si vous dirigez une TPE ou une PME, il est probable qu'au moins un des leviers pré",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_webinar_morning"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "Rejoindre le webinaire",
+     "href": "https://webinaire.ownertechnology.com/r/EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;text-align:left;\">\n  <div style=\"max-width:680px;margin:0 auto;padding:24px 20px;text-align:left;\">\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 16px;\">Dans quelques heures, nous serons en direct.</p>\n    <p style=\"margin:0 0 16px;\">Nous partagerons les mêmes méthodes que celles utilisées auprès de plus de 1200 entreprises.</p>\n    <p style=\"margin:0 0 16px;\">Si vous dirigez une TPE ou une PME, il est probable qu'au moins un des leviers présentés vous concerne.</p>\n    <p style=\"margin:0 0 12px;\">Préparez simplement :</p>\n    <ul style=\"margin:0 0 16px;padding-left:24px;\">\n      <li style=\"margin:0 0 6px;\">votre forme juridique</li>\n      <li style=\"margin:0 0 6px;\">votre rémunération dirigeant</li>\n      <li style=\"margin:0 0 6px;\">une question fiscale ou sociale</li>\n    </ul>\n    <p style=\"margin:0 0 16px;\">Rendez-vous à 20h00.</p>\n    <p style=\"margin:0 0 24px;\">→ <a href=\"https://webinaire.ownertechnology.com/r/EVENT_ID\" style=\"color:#1a73e8;text-decoration:underline;font-weight:bold;\">Rejoindre le webinaire</a></p>\n    <p style=\"margin:0 0 16px;\">À tout à l'heure.</p>\n    <p style=\"margin:0;\">Paul Faucomprez<br>CEO Owner Technology</p>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    Dans quelques heures, nous serons en direct.\n\n    Nous partagerons les mêmes méthodes que celles utilisées auprès de plus de 1200 entreprises.\n\n    Si vous dirigez une TPE ou une PME, il est probable qu'au moins un des leviers présentés vous concerne.\n\n    Préparez simplement :\n\n- votre forme juridique\n\n- votre rémunération dirigeant\n\n- une question fiscale ou sociale\n\n    Rendez-vous à 20h00.\n\n    → Rejoindre le webinaire : https://webinaire.ownertechnology.com/r/EVENT_ID\n\n    À tout à l'heure.\n\n    Paul Faucomprez\nCEO Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  },
+  {
+   "kind": "email_countdown_30",
+   "order": 11,
+   "sequence": "pre",
+   "sequenceIndex": 11,
+   "sequenceCount": 13,
+   "phase": "liveday",
+   "timing": {
+    "mode": "calendar",
+    "at": "2026-06-22T19:30:00+02:00"
+   },
+   "conditions": [
+    "Ancre calendaire commune à toute la cohorte : sauté pour un inscrit arrivé après cette date."
+   ],
+   "subject": "C'est dans 30 minutes — à vos crayons ✍️",
+   "preheader": "",
+   "snippet": "On y est presque : le webinaire spécial Dirigeants de TPE/PME commence dans 30 minutes, à 20h00. Installez-vous au calme et prenez de quoi noter — on va dérouler des leviers concrets pour : - réduire vos charges sociales",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_countdown_30"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "Rejoindre le webinaire",
+     "href": "https://webinaire.ownertechnology.com/r/EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;text-align:left;\">\n  <div style=\"max-width:680px;margin:0 auto;padding:24px 20px;text-align:left;\">\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 16px;\">On y est presque : le webinaire spécial Dirigeants de TPE/PME commence dans <strong>30 minutes</strong>, à 20h00.</p>\n    <p style=\"margin:0 0 12px;\">Installez-vous au calme et prenez de quoi noter — on va dérouler des leviers concrets pour :</p>\n    <ul style=\"margin:0 0 16px;padding-left:24px;\">\n      <li style=\"margin:0 0 6px;\">réduire vos charges sociales et fiscales</li>\n      <li style=\"margin:0 0 6px;\">optimiser votre rémunération de dirigeant</li>\n      <li style=\"margin:0 0 6px;\">sécuriser votre structure</li>\n    </ul>\n    <p style=\"margin:0 0 24px;\">Votre lien d'accès personnel :<br>→ <a href=\"https://webinaire.ownertechnology.com/r/EVENT_ID\" style=\"color:#1a73e8;text-decoration:underline;font-weight:bold;\">Rejoindre le webinaire</a></p>\n    <p style=\"margin:0;\">À tout de suite,<br>Paul Faucomprez<br>CEO Owner Technology</p>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    On y est presque : le webinaire spécial Dirigeants de TPE/PME commence dans 30 minutes, à 20h00.\n\n    Installez-vous au calme et prenez de quoi noter — on va dérouler des leviers concrets pour :\n\n- réduire vos charges sociales et fiscales\n\n- optimiser votre rémunération de dirigeant\n\n- sécuriser votre structure\n\n    Votre lien d'accès personnel :\n→ Rejoindre le webinaire : https://webinaire.ownertechnology.com/r/EVENT_ID\n\n    À tout de suite,\nPaul Faucomprez\nCEO Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  },
+  {
+   "kind": "email_countdown_5",
+   "order": 12,
+   "sequence": "pre",
+   "sequenceIndex": 12,
+   "sequenceCount": 13,
+   "phase": "liveday",
+   "timing": {
+    "mode": "calendar",
+    "at": "2026-06-22T19:55:00+02:00"
+   },
+   "conditions": [
+    "Ancre calendaire commune à toute la cohorte : sauté pour un inscrit arrivé après cette date."
+   ],
+   "subject": "🔴 On commence dans 5 minutes — rejoignez-nous",
+   "preheader": "",
+   "snippet": "C'est maintenant : le webinaire commence dans 5 minutes, on démarre à 20h00 pile. Ne manquez pas le début — c'est souvent là que tombent les infos les plus utiles. → Rejoindre le webinaire : https://webinaire.ownertechno",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_countdown_5"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "Rejoindre le webinaire",
+     "href": "https://webinaire.ownertechnology.com/r/EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;text-align:left;\">\n  <div style=\"max-width:680px;margin:0 auto;padding:24px 20px;text-align:left;\">\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 16px;\">C'est maintenant : le webinaire commence dans <strong>5 minutes</strong>, on démarre à 20h00 pile.</p>\n    <p style=\"margin:0 0 16px;\">Ne manquez pas le début — c'est souvent là que tombent les infos les plus utiles.</p>\n    <p style=\"margin:0 0 24px;\">→ <a href=\"https://webinaire.ownertechnology.com/r/EVENT_ID\" style=\"color:#1a73e8;text-decoration:underline;font-weight:bold;\">Rejoindre le webinaire</a></p>\n    <p style=\"margin:0;\">On vous attend !<br>Paul Faucomprez<br>CEO Owner Technology</p>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    C'est maintenant : le webinaire commence dans 5 minutes, on démarre à 20h00 pile.\n\n    Ne manquez pas le début — c'est souvent là que tombent les infos les plus utiles.\n\n    → Rejoindre le webinaire : https://webinaire.ownertechnology.com/r/EVENT_ID\n\n    On vous attend !\nPaul Faucomprez\nCEO Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  },
+  {
+   "kind": "email_live_plus_15",
+   "order": 13,
+   "sequence": "pre",
+   "sequenceIndex": 13,
+   "sequenceCount": 13,
+   "phase": "liveday",
+   "timing": {
+    "mode": "calendar",
+    "at": "2026-06-22T20:15:00+02:00"
+   },
+   "conditions": [
+    "Ancre calendaire commune à toute la cohorte : sauté pour un inscrit arrivé après cette date."
+   ],
+   "subject": "Le webinaire spécial Dirigeant TPE/PME a commencé",
+   "preheader": "",
+   "snippet": "Le webinaire spécial Dirigeant TPE/PME a commencé Bonjour {{prénom}}, Le webinaire a démarré il y a 15 minutes. Vous pouvez encore rejoindre la session : le contenu le plus utile est à venir. → Rejoindre maintenant : htt",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_live_plus_15"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "Rejoindre maintenant",
+     "href": "https://webinaire.ownertechnology.com/r/EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;text-align:left;\">\n  <div style=\"max-width:680px;margin:0 auto;padding:24px 20px;text-align:left;\">\n    <p style=\"margin:0 0 18px;font-weight:bold;\">Le webinaire spécial Dirigeant TPE/PME a commencé</p>\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 24px;\">Le webinaire a démarré il y a 15 minutes. Vous pouvez encore rejoindre la session : le contenu le plus utile est à venir.</p>\n    <p style=\"margin:0 0 24px;\">→ <a href=\"https://webinaire.ownertechnology.com/r/EVENT_ID\" style=\"color:#1a73e8;text-decoration:underline;font-weight:bold;\">Rejoindre maintenant</a></p>\n    <p style=\"margin:0 0 4px;\">À tout de suite,</p>\n    <p style=\"margin:0;\">Paul, CEO Owner Technology</p>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Le webinaire spécial Dirigeant TPE/PME a commencé\n\n    Bonjour {{prénom}},\n\n    Le webinaire a démarré il y a 15 minutes. Vous pouvez encore rejoindre la session : le contenu le plus utile est à venir.\n\n    → Rejoindre maintenant : https://webinaire.ownertechnology.com/r/EVENT_ID\n\n    À tout de suite,\n\n    Paul, CEO Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  },
+  {
+   "kind": "email_post_missed_no_rdv",
+   "order": 14,
+   "sequence": "post",
+   "sequenceIndex": 1,
+   "sequenceCount": 8,
+   "phase": "post",
+   "segment": "missed",
+   "timing": {
+    "mode": "calendar",
+    "at": "2026-06-23T12:15:00+02:00"
+   },
+   "conditions": [
+    "Segment « absents » (sans rendez-vous d'audit). Bascule vers « présents » si l'inscrit clique « Oui, j'étais présent » dans un e-mail post-live."
+   ],
+   "subject": "Vous avez raté quelque chose…",
+   "preheader": "",
+   "snippet": "Vous vous étiez inscrit au webinaire, mais vous n’avez pas pu être là. Pendant la session, on a montré aux dirigeants comment mieux se rémunérer et alléger leurs charges. Redevance de marque, frais pros, holding&hellip; ",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_post_missed_no_rdv"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "https://audit.ownertechnology.com/",
+     "href": "https://audit.ownertechnology.com/",
+     "personal": false,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "Oui, j'étais présent",
+     "href": "https://webinaire.ownertechnology.com/p/EVENT_ID?p=yes",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Non, absent",
+     "href": "https://webinaire.ownertechnology.com/p/EVENT_ID?p=no",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Vous avez raté quelque chose…</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.7;text-align:left;\">\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;text-align:left;\">\n    <p style=\"margin:0 0 18px;\">Vous vous étiez inscrit au webinaire, mais vous n&rsquo;avez pas pu être là.</p>\n\n    <p style=\"margin:0 0 18px;\">Pendant la session, on a montré aux dirigeants comment mieux se rémunérer et alléger leurs charges.</p>\n\n    <p style=\"margin:0 0 18px;\">Redevance de marque, frais pros, holding&hellip;</p>\n\n    <p style=\"margin:0 0 18px;\">Pas mal de sujets en deux heures.</p>\n\n    <p style=\"margin:0 0 18px;\">Plus de <strong>1&nbsp;200 dirigeants</strong> ont déjà identifié des leviers d&rsquo;optimisation.</p>\n\n    <p style=\"margin:0 0 18px;\">Pour une économie moyenne de <strong>12&nbsp;500&nbsp;€</strong> par an.</p>\n\n    <p style=\"margin:0 0 18px;\">La suite logique&nbsp;: faire analyser votre situation.</p>\n\n    <p style=\"margin:0 0 6px;\"><strong>Réservez votre audit&nbsp;:</strong></p>\n    <p style=\"margin:0 0 24px;\"><a href=\"https://audit.ownertechnology.com/\" style=\"color:#1a73e8;text-decoration:underline;font-weight:bold;\">https://audit.ownertechnology.com/</a></p>\n\n    <p style=\"margin:0 0 24px;\">Un expert passe en revue votre rémunération et vos charges.</p>\n\n    <p style=\"margin:0 0 6px;\">À bientôt,</p>\n    <p style=\"margin:0;\">Paul - CEO Owner Technology</p>\n  </div>\n</body>\n</html><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:28px auto 4px;border-collapse:collapse;\"><tr><td align=\"center\" style=\"padding:0 0 8px;font-size:13px;color:#5b6577;\">Étiez-vous présent(e) au webinaire&nbsp;?</td></tr><tr><td align=\"center\"><a href=\"https://webinaire.ownertechnology.com/p/EVENT_ID?p=yes\" style=\"display:inline-block;margin:0 5px;padding:10px 20px;border-radius:10px;background:#1f6f43;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;\">Oui, j'étais présent</a><a href=\"https://webinaire.ownertechnology.com/p/EVENT_ID?p=no\" style=\"display:inline-block;margin:0 5px;padding:10px 20px;border-radius:10px;background:#eceff4;color:#5b6577;font-size:14px;font-weight:600;text-decoration:none;\">Non, absent</a></td></tr></table><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Vous vous étiez inscrit au webinaire, mais vous n’avez pas pu être là.\n\n    Pendant la session, on a montré aux dirigeants comment mieux se rémunérer et alléger leurs charges.\n\n    Redevance de marque, frais pros, holding&hellip;\n\n    Pas mal de sujets en deux heures.\n\n    Plus de 1 200 dirigeants ont déjà identifié des leviers d’optimisation.\n\n    Pour une économie moyenne de 12 500 € par an.\n\n    La suite logique : faire analyser votre situation.\n\n    Réservez votre audit :\n\n    https://audit.ownertechnology.com/ : https://audit.ownertechnology.com/\n\n    Un expert passe en revue votre rémunération et vos charges.\n\n    À bientôt,\n\n    Paul - CEO Owner Technology\n\nÉtiez-vous présent(e) au webinaire ?\nOui, j'étais présent : https://webinaire.ownertechnology.com/p/EVENT_ID?p=yesNon, absent : https://webinaire.ownertechnology.com/p/EVENT_ID?p=no\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  },
+  {
+   "kind": "email_post_attended_no_rdv",
+   "order": 15,
+   "sequence": "post",
+   "sequenceIndex": 2,
+   "sequenceCount": 8,
+   "phase": "post",
+   "segment": "attended",
+   "timing": {
+    "mode": "calendar",
+    "at": "2026-06-23T12:15:00+02:00"
+   },
+   "conditions": [
+    "Segment « présents » (sans rendez-vous d'audit). Bascule vers « absents » si l'inscrit clique « Non, absent » dans un e-mail post-live."
+   ],
+   "subject": "Merci d’avoir participé au webinaire",
+   "preheader": "",
+   "snippet": "Vous avez suivi notre webinaire sur l’optimisation de vos charges et de votre rémunération. Vous avez vu les leviers présentés : - optimisation des charges - restructuration - rémunération du dirigeant - stratégies 100% ",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_post_attended_no_rdv"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "https://audit.ownertechnology.com/",
+     "href": "https://audit.ownertechnology.com/",
+     "personal": false,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "Oui, j'étais présent",
+     "href": "https://webinaire.ownertechnology.com/p/EVENT_ID?p=yes",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Non, absent",
+     "href": "https://webinaire.ownertechnology.com/p/EVENT_ID?p=no",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Merci d’avoir participé au webinaire</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.7;text-align:left;\">\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;text-align:left;\">\n    <p style=\"margin:0 0 18px;\">Vous avez suivi notre webinaire sur l&rsquo;optimisation de vos charges et de votre rémunération.</p>\n\n    <p style=\"margin:0 0 12px;\">Vous avez vu les leviers présentés&nbsp;:</p>\n\n    <ul style=\"margin:0 0 24px;padding-left:22px;\">\n      <li style=\"margin:0 0 6px;\">optimisation des charges</li>\n      <li style=\"margin:0 0 6px;\">restructuration</li>\n      <li style=\"margin:0 0 6px;\">rémunération du dirigeant</li>\n      <li style=\"margin:0;\">stratégies 100% légales</li>\n    </ul>\n\n    <p style=\"margin:0 0 18px;\">Reste la vraie question&nbsp;:</p>\n\n    <p style=\"margin:0 0 24px;font-weight:bold;\">Combien pourriez-vous récupérer, vous, chaque année&nbsp;?</p>\n\n    <p style=\"margin:0 0 6px;\"><strong>Réservez votre audit pour le savoir&nbsp;:</strong></p>\n    <p style=\"margin:0 0 24px;\"><a href=\"https://audit.ownertechnology.com/\" style=\"color:#1a73e8;text-decoration:underline;font-weight:bold;\">https://audit.ownertechnology.com/</a></p>\n\n    <p style=\"margin:0 0 6px;\">À bientôt,</p>\n    <p style=\"margin:0;\">Paul - CEO Owner Technology</p>\n  </div>\n</body>\n</html><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:28px auto 4px;border-collapse:collapse;\"><tr><td align=\"center\" style=\"padding:0 0 8px;font-size:13px;color:#5b6577;\">Étiez-vous présent(e) au webinaire&nbsp;?</td></tr><tr><td align=\"center\"><a href=\"https://webinaire.ownertechnology.com/p/EVENT_ID?p=yes\" style=\"display:inline-block;margin:0 5px;padding:10px 20px;border-radius:10px;background:#1f6f43;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;\">Oui, j'étais présent</a><a href=\"https://webinaire.ownertechnology.com/p/EVENT_ID?p=no\" style=\"display:inline-block;margin:0 5px;padding:10px 20px;border-radius:10px;background:#eceff4;color:#5b6577;font-size:14px;font-weight:600;text-decoration:none;\">Non, absent</a></td></tr></table><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Vous avez suivi notre webinaire sur l’optimisation de vos charges et de votre rémunération.\n\n    Vous avez vu les leviers présentés :\n\n- optimisation des charges\n\n- restructuration\n\n- rémunération du dirigeant\n\n- stratégies 100% légales\n\n    Reste la vraie question :\n\n    Combien pourriez-vous récupérer, vous, chaque année ?\n\n    Réservez votre audit pour le savoir :\n\n    https://audit.ownertechnology.com/ : https://audit.ownertechnology.com/\n\n    À bientôt,\n\n    Paul - CEO Owner Technology\n\nÉtiez-vous présent(e) au webinaire ?\nOui, j'étais présent : https://webinaire.ownertechnology.com/p/EVENT_ID?p=yesNon, absent : https://webinaire.ownertechnology.com/p/EVENT_ID?p=no\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  },
+  {
+   "kind": "email_post_missed_no_rdv_d2",
+   "order": 16,
+   "sequence": "post",
+   "sequenceIndex": 3,
+   "sequenceCount": 8,
+   "phase": "post",
+   "segment": "missed",
+   "timing": {
+    "mode": "calendar",
+    "at": "2026-06-24T10:00:00+02:00"
+   },
+   "conditions": [
+    "Segment « absents » (sans rendez-vous d'audit). Bascule vers « présents » si l'inscrit clique « Oui, j'étais présent » dans un e-mail post-live."
+   ],
+   "subject": "La plupart des dirigeants se croient déjà optimisés",
+   "preheader": "",
+   "snippet": "On entend souvent : « Mon expert-comptable s’en occupe déjà. » Sauf que déclarer et optimiser, ce sont deux métiers différents. Votre comptable déclare vos chiffres. L’optimisation, elle, dépend de la façon dont votre ac",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_post_missed_no_rdv_d2"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "https://audit.ownertechnology.com/",
+     "href": "https://audit.ownertechnology.com/",
+     "personal": false,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "Oui, j'étais présent",
+     "href": "https://webinaire.ownertechnology.com/p/EVENT_ID?p=yes",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Non, absent",
+     "href": "https://webinaire.ownertechnology.com/p/EVENT_ID?p=no",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>La plupart des dirigeants se croient déjà optimisés</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.7;text-align:left;\">\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;text-align:left;\">\n    <p style=\"margin:0 0 18px;\">On entend souvent&nbsp;:</p>\n\n    <p style=\"margin:0 0 18px;font-style:italic;\">«&nbsp;Mon expert-comptable s&rsquo;en occupe déjà.&nbsp;»</p>\n\n    <p style=\"margin:0 0 18px;\">Sauf que déclarer et optimiser, ce sont deux métiers différents.</p>\n\n    <p style=\"margin:0 0 18px;\">Votre comptable déclare vos chiffres.</p>\n\n    <p style=\"margin:0 0 18px;\">L&rsquo;optimisation, elle, dépend de la façon dont votre activité est structurée.</p>\n\n    <p style=\"margin:0 0 24px;\">C&rsquo;est souvent là que dorment plusieurs milliers d&rsquo;euros d&rsquo;économies.</p>\n\n    <p style=\"margin:0 0 6px;\"><strong>Réservez votre audit pour savoir combien&nbsp;:</strong></p>\n    <p style=\"margin:0 0 24px;\"><a href=\"https://audit.ownertechnology.com/\" style=\"color:#1a73e8;text-decoration:underline;font-weight:bold;\">https://audit.ownertechnology.com/</a></p>\n\n    <p style=\"margin:0 0 6px;\">À bientôt,</p>\n    <p style=\"margin:0;\">Paul - CEO Owner Technology</p>\n  </div>\n</body>\n</html><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:28px auto 4px;border-collapse:collapse;\"><tr><td align=\"center\" style=\"padding:0 0 8px;font-size:13px;color:#5b6577;\">Étiez-vous présent(e) au webinaire&nbsp;?</td></tr><tr><td align=\"center\"><a href=\"https://webinaire.ownertechnology.com/p/EVENT_ID?p=yes\" style=\"display:inline-block;margin:0 5px;padding:10px 20px;border-radius:10px;background:#1f6f43;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;\">Oui, j'étais présent</a><a href=\"https://webinaire.ownertechnology.com/p/EVENT_ID?p=no\" style=\"display:inline-block;margin:0 5px;padding:10px 20px;border-radius:10px;background:#eceff4;color:#5b6577;font-size:14px;font-weight:600;text-decoration:none;\">Non, absent</a></td></tr></table><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "On entend souvent :\n\n    « Mon expert-comptable s’en occupe déjà. »\n\n    Sauf que déclarer et optimiser, ce sont deux métiers différents.\n\n    Votre comptable déclare vos chiffres.\n\n    L’optimisation, elle, dépend de la façon dont votre activité est structurée.\n\n    C’est souvent là que dorment plusieurs milliers d’euros d’économies.\n\n    Réservez votre audit pour savoir combien :\n\n    https://audit.ownertechnology.com/ : https://audit.ownertechnology.com/\n\n    À bientôt,\n\n    Paul - CEO Owner Technology\n\nÉtiez-vous présent(e) au webinaire ?\nOui, j'étais présent : https://webinaire.ownertechnology.com/p/EVENT_ID?p=yesNon, absent : https://webinaire.ownertechnology.com/p/EVENT_ID?p=no\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  },
+  {
+   "kind": "email_post_attended_no_rdv_d2",
+   "order": 17,
+   "sequence": "post",
+   "sequenceIndex": 4,
+   "sequenceCount": 8,
+   "phase": "post",
+   "segment": "attended",
+   "timing": {
+    "mode": "calendar",
+    "at": "2026-06-24T10:00:00+02:00"
+   },
+   "conditions": [
+    "Segment « présents » (sans rendez-vous d'audit). Bascule vers « absents » si l'inscrit clique « Non, absent » dans un e-mail post-live."
+   ],
+   "subject": "+12 500€ : ce chiffre revient souvent",
+   "preheader": "",
+   "snippet": "C’est l’économie moyenne réalisée par plus de 1 200 dirigeants. Pas grâce à une astuce miracle. Grâce à une structure mieux adaptée à leur activité. C’est exactement ce qu’on regarde pendant l’audit. Prenez votre rendez-",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_post_attended_no_rdv_d2"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "https://audit.ownertechnology.com/",
+     "href": "https://audit.ownertechnology.com/",
+     "personal": false,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "Oui, j'étais présent",
+     "href": "https://webinaire.ownertechnology.com/p/EVENT_ID?p=yes",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Non, absent",
+     "href": "https://webinaire.ownertechnology.com/p/EVENT_ID?p=no",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>+12 500€ : ce chiffre revient souvent</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.7;text-align:left;\">\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;text-align:left;\">\n    <p style=\"margin:0 0 18px;\">C&rsquo;est l&rsquo;économie moyenne réalisée par plus de <strong>1&nbsp;200 dirigeants</strong>.</p>\n\n    <p style=\"margin:0 0 18px;\">Pas grâce à une astuce miracle.</p>\n\n    <p style=\"margin:0 0 18px;\">Grâce à une structure mieux adaptée à leur activité.</p>\n\n    <p style=\"margin:0 0 24px;\">C&rsquo;est exactement ce qu&rsquo;on regarde pendant l&rsquo;audit.</p>\n\n    <p style=\"margin:0 0 6px;\"><strong>Prenez votre rendez-vous&nbsp;:</strong></p>\n    <p style=\"margin:0 0 24px;\"><a href=\"https://audit.ownertechnology.com/\" style=\"color:#1a73e8;text-decoration:underline;font-weight:bold;\">https://audit.ownertechnology.com/</a></p>\n\n    <p style=\"margin:0 0 6px;\">À bientôt,</p>\n    <p style=\"margin:0;\">Paul - CEO Owner Technology</p>\n  </div>\n</body>\n</html><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:28px auto 4px;border-collapse:collapse;\"><tr><td align=\"center\" style=\"padding:0 0 8px;font-size:13px;color:#5b6577;\">Étiez-vous présent(e) au webinaire&nbsp;?</td></tr><tr><td align=\"center\"><a href=\"https://webinaire.ownertechnology.com/p/EVENT_ID?p=yes\" style=\"display:inline-block;margin:0 5px;padding:10px 20px;border-radius:10px;background:#1f6f43;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;\">Oui, j'étais présent</a><a href=\"https://webinaire.ownertechnology.com/p/EVENT_ID?p=no\" style=\"display:inline-block;margin:0 5px;padding:10px 20px;border-radius:10px;background:#eceff4;color:#5b6577;font-size:14px;font-weight:600;text-decoration:none;\">Non, absent</a></td></tr></table><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "C’est l’économie moyenne réalisée par plus de 1 200 dirigeants.\n\n    Pas grâce à une astuce miracle.\n\n    Grâce à une structure mieux adaptée à leur activité.\n\n    C’est exactement ce qu’on regarde pendant l’audit.\n\n    Prenez votre rendez-vous :\n\n    https://audit.ownertechnology.com/ : https://audit.ownertechnology.com/\n\n    À bientôt,\n\n    Paul - CEO Owner Technology\n\nÉtiez-vous présent(e) au webinaire ?\nOui, j'étais présent : https://webinaire.ownertechnology.com/p/EVENT_ID?p=yesNon, absent : https://webinaire.ownertechnology.com/p/EVENT_ID?p=no\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  },
+  {
+   "kind": "email_post_missed_no_rdv_d3",
+   "order": 18,
+   "sequence": "post",
+   "sequenceIndex": 5,
+   "sequenceCount": 8,
+   "phase": "post",
+   "segment": "missed",
+   "timing": {
+    "mode": "calendar",
+    "at": "2026-06-25T10:00:00+02:00"
+   },
+   "conditions": [
+    "Segment « absents » (sans rendez-vous d'audit). Bascule vers « présents » si l'inscrit clique « Oui, j'étais présent » dans un e-mail post-live."
+   ],
+   "subject": "Combien votre entreprise vous coûte vraiment ?",
+   "preheader": "",
+   "snippet": "La bonne question n’est pas : « Combien je facture ? » Mais : « Combien je laisse filer chaque année ? » Charges sociales, URSSAF, rémunération du dirigeant, structure juridique&hellip; C’est souvent là que part l’argent",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_post_missed_no_rdv_d3"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "https://audit.ownertechnology.com/",
+     "href": "https://audit.ownertechnology.com/",
+     "personal": false,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "Oui, j'étais présent",
+     "href": "https://webinaire.ownertechnology.com/p/EVENT_ID?p=yes",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Non, absent",
+     "href": "https://webinaire.ownertechnology.com/p/EVENT_ID?p=no",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Combien votre entreprise vous coûte vraiment ?</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.7;text-align:left;\">\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;text-align:left;\">\n    <p style=\"margin:0 0 18px;\">La bonne question n&rsquo;est pas&nbsp;:</p>\n\n    <p style=\"margin:0 0 18px;font-style:italic;\">«&nbsp;Combien je facture&nbsp;?&nbsp;»</p>\n\n    <p style=\"margin:0 0 18px;\">Mais&nbsp;:</p>\n\n    <p style=\"margin:0 0 18px;font-style:italic;\">«&nbsp;Combien je laisse filer chaque année&nbsp;?&nbsp;»</p>\n\n    <p style=\"margin:0 0 18px;\">Charges sociales, URSSAF, rémunération du dirigeant, structure juridique&hellip;</p>\n\n    <p style=\"margin:0 0 24px;\">C&rsquo;est souvent là que part l&rsquo;argent.</p>\n\n    <p style=\"margin:0 0 6px;\"><strong>Il vous reste peu de temps pour profiter de l&rsquo;audit offert aux inscrits du webinaire&nbsp;:</strong></p>\n    <p style=\"margin:0 0 24px;\"><a href=\"https://audit.ownertechnology.com/\" style=\"color:#1a73e8;text-decoration:underline;font-weight:bold;\">https://audit.ownertechnology.com/</a></p>\n\n    <p style=\"margin:0 0 6px;\">À bientôt,</p>\n    <p style=\"margin:0;\">Paul - CEO Owner Technology</p>\n  </div>\n</body>\n</html><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:28px auto 4px;border-collapse:collapse;\"><tr><td align=\"center\" style=\"padding:0 0 8px;font-size:13px;color:#5b6577;\">Étiez-vous présent(e) au webinaire&nbsp;?</td></tr><tr><td align=\"center\"><a href=\"https://webinaire.ownertechnology.com/p/EVENT_ID?p=yes\" style=\"display:inline-block;margin:0 5px;padding:10px 20px;border-radius:10px;background:#1f6f43;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;\">Oui, j'étais présent</a><a href=\"https://webinaire.ownertechnology.com/p/EVENT_ID?p=no\" style=\"display:inline-block;margin:0 5px;padding:10px 20px;border-radius:10px;background:#eceff4;color:#5b6577;font-size:14px;font-weight:600;text-decoration:none;\">Non, absent</a></td></tr></table><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "La bonne question n’est pas :\n\n    « Combien je facture ? »\n\n    Mais :\n\n    « Combien je laisse filer chaque année ? »\n\n    Charges sociales, URSSAF, rémunération du dirigeant, structure juridique&hellip;\n\n    C’est souvent là que part l’argent.\n\n    Il vous reste peu de temps pour profiter de l’audit offert aux inscrits du webinaire :\n\n    https://audit.ownertechnology.com/ : https://audit.ownertechnology.com/\n\n    À bientôt,\n\n    Paul - CEO Owner Technology\n\nÉtiez-vous présent(e) au webinaire ?\nOui, j'étais présent : https://webinaire.ownertechnology.com/p/EVENT_ID?p=yesNon, absent : https://webinaire.ownertechnology.com/p/EVENT_ID?p=no\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  },
+  {
+   "kind": "email_post_attended_no_rdv_d3",
+   "order": 19,
+   "sequence": "post",
+   "sequenceIndex": 6,
+   "sequenceCount": 8,
+   "phase": "post",
+   "segment": "attended",
+   "timing": {
+    "mode": "calendar",
+    "at": "2026-06-25T10:00:00+02:00"
+   },
+   "conditions": [
+    "Segment « présents » (sans rendez-vous d'audit). Bascule vers « absents » si l'inscrit clique « Non, absent » dans un e-mail post-live."
+   ],
+   "subject": "Vous développez votre activité… mais en profitez-vous ?",
+   "preheader": "",
+   "snippet": "Beaucoup de dirigeants font grossir leur entreprise&hellip; &hellip;mais restent les derniers à en récolter les fruits. C’est souvent une structure inadaptée qui bloque tout. Et ça se corrige. Vous avez suivi le webinair",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_post_attended_no_rdv_d3"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "https://audit.ownertechnology.com/",
+     "href": "https://audit.ownertechnology.com/",
+     "personal": false,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "Oui, j'étais présent",
+     "href": "https://webinaire.ownertechnology.com/p/EVENT_ID?p=yes",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Non, absent",
+     "href": "https://webinaire.ownertechnology.com/p/EVENT_ID?p=no",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Vous développez votre activité… mais en profitez-vous ?</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.7;text-align:left;\">\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;text-align:left;\">\n    <p style=\"margin:0 0 18px;\">Beaucoup de dirigeants font grossir leur entreprise&hellip;</p>\n\n    <p style=\"margin:0 0 18px;\">&hellip;mais restent les derniers à en récolter les fruits.</p>\n\n    <p style=\"margin:0 0 24px;\">C&rsquo;est souvent une structure inadaptée qui bloque tout. Et ça se corrige.</p>\n\n    <p style=\"margin:0 0 6px;\">Vous avez suivi le webinaire&nbsp;? L&rsquo;étape suivante est simple&nbsp;:</p>\n    <p style=\"margin:0 0 24px;\"><a href=\"https://audit.ownertechnology.com/\" style=\"color:#1a73e8;text-decoration:underline;font-weight:bold;\">https://audit.ownertechnology.com/</a></p>\n\n    <p style=\"margin:0 0 6px;\">À bientôt,</p>\n    <p style=\"margin:0;\">Paul - CEO Owner Technology</p>\n  </div>\n</body>\n</html><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:28px auto 4px;border-collapse:collapse;\"><tr><td align=\"center\" style=\"padding:0 0 8px;font-size:13px;color:#5b6577;\">Étiez-vous présent(e) au webinaire&nbsp;?</td></tr><tr><td align=\"center\"><a href=\"https://webinaire.ownertechnology.com/p/EVENT_ID?p=yes\" style=\"display:inline-block;margin:0 5px;padding:10px 20px;border-radius:10px;background:#1f6f43;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;\">Oui, j'étais présent</a><a href=\"https://webinaire.ownertechnology.com/p/EVENT_ID?p=no\" style=\"display:inline-block;margin:0 5px;padding:10px 20px;border-radius:10px;background:#eceff4;color:#5b6577;font-size:14px;font-weight:600;text-decoration:none;\">Non, absent</a></td></tr></table><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Beaucoup de dirigeants font grossir leur entreprise&hellip;\n\n    &hellip;mais restent les derniers à en récolter les fruits.\n\n    C’est souvent une structure inadaptée qui bloque tout. Et ça se corrige.\n\n    Vous avez suivi le webinaire ? L’étape suivante est simple :\n\n    https://audit.ownertechnology.com/ : https://audit.ownertechnology.com/\n\n    À bientôt,\n\n    Paul - CEO Owner Technology\n\nÉtiez-vous présent(e) au webinaire ?\nOui, j'étais présent : https://webinaire.ownertechnology.com/p/EVENT_ID?p=yesNon, absent : https://webinaire.ownertechnology.com/p/EVENT_ID?p=no\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  },
+  {
+   "kind": "email_post_missed_no_rdv_d4",
+   "order": 20,
+   "sequence": "post",
+   "sequenceIndex": 7,
+   "sequenceCount": 8,
+   "phase": "post",
+   "segment": "missed",
+   "timing": {
+    "mode": "calendar",
+    "at": "2026-06-26T10:00:00+02:00"
+   },
+   "conditions": [
+    "Segment « absents » (sans rendez-vous d'audit). Bascule vers « présents » si l'inscrit clique « Oui, j'étais présent » dans un e-mail post-live."
+   ],
+   "subject": "Dernière relance",
+   "preheader": "",
+   "snippet": "Vous vous êtes inscrit. Vous étiez intéressé. Mais vous n’avez pas fait le point sur votre situation. 150 dirigeants présents au webinaire ont déjà réservé leur audit. À votre tour : https://audit.ownertechnology.com/ : ",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_post_missed_no_rdv_d4"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "https://audit.ownertechnology.com/",
+     "href": "https://audit.ownertechnology.com/",
+     "personal": false,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "Oui, j'étais présent",
+     "href": "https://webinaire.ownertechnology.com/p/EVENT_ID?p=yes",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Non, absent",
+     "href": "https://webinaire.ownertechnology.com/p/EVENT_ID?p=no",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Dernière relance</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.7;text-align:left;\">\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;text-align:left;\">\n    <p style=\"margin:0 0 18px;\">Vous vous êtes inscrit.</p>\n\n    <p style=\"margin:0 0 18px;\">Vous étiez intéressé.</p>\n\n    <p style=\"margin:0 0 18px;\">Mais vous n&rsquo;avez pas fait le point sur votre situation.</p>\n\n    <p style=\"margin:0 0 24px;\"><strong>150 dirigeants</strong> présents au webinaire ont déjà réservé leur audit.</p>\n\n    <p style=\"margin:0 0 6px;\">À votre tour&nbsp;:</p>\n    <p style=\"margin:0 0 24px;\"><a href=\"https://audit.ownertechnology.com/\" style=\"color:#1a73e8;text-decoration:underline;font-weight:bold;\">https://audit.ownertechnology.com/</a></p>\n\n    <p style=\"margin:0 0 6px;\">À bientôt,</p>\n    <p style=\"margin:0;\">Paul - CEO Owner Technology</p>\n  </div>\n</body>\n</html><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:28px auto 4px;border-collapse:collapse;\"><tr><td align=\"center\" style=\"padding:0 0 8px;font-size:13px;color:#5b6577;\">Étiez-vous présent(e) au webinaire&nbsp;?</td></tr><tr><td align=\"center\"><a href=\"https://webinaire.ownertechnology.com/p/EVENT_ID?p=yes\" style=\"display:inline-block;margin:0 5px;padding:10px 20px;border-radius:10px;background:#1f6f43;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;\">Oui, j'étais présent</a><a href=\"https://webinaire.ownertechnology.com/p/EVENT_ID?p=no\" style=\"display:inline-block;margin:0 5px;padding:10px 20px;border-radius:10px;background:#eceff4;color:#5b6577;font-size:14px;font-weight:600;text-decoration:none;\">Non, absent</a></td></tr></table><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Vous vous êtes inscrit.\n\n    Vous étiez intéressé.\n\n    Mais vous n’avez pas fait le point sur votre situation.\n\n    150 dirigeants présents au webinaire ont déjà réservé leur audit.\n\n    À votre tour :\n\n    https://audit.ownertechnology.com/ : https://audit.ownertechnology.com/\n\n    À bientôt,\n\n    Paul - CEO Owner Technology\n\nÉtiez-vous présent(e) au webinaire ?\nOui, j'étais présent : https://webinaire.ownertechnology.com/p/EVENT_ID?p=yesNon, absent : https://webinaire.ownertechnology.com/p/EVENT_ID?p=no\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  },
+  {
+   "kind": "email_post_attended_no_rdv_d4",
+   "order": 21,
+   "sequence": "post",
+   "sequenceIndex": 8,
+   "sequenceCount": 8,
+   "phase": "post",
+   "segment": "attended",
+   "timing": {
+    "mode": "calendar",
+    "at": "2026-06-26T10:00:00+02:00"
+   },
+   "conditions": [
+    "Segment « présents » (sans rendez-vous d'audit). Bascule vers « absents » si l'inscrit clique « Non, absent » dans un e-mail post-live."
+   ],
+   "subject": "Dernière relance",
+   "preheader": "",
+   "snippet": "Vous avez participé au webinaire. Mais vous n’avez pas encore fait analyser votre situation. 150 dirigeants présents lors du webinaire l’ont déjà. À votre tour : https://audit.ownertechnology.com/ : https://audit.ownerte",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_post_attended_no_rdv_d4"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "https://audit.ownertechnology.com/",
+     "href": "https://audit.ownertechnology.com/",
+     "personal": false,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "Oui, j'étais présent",
+     "href": "https://webinaire.ownertechnology.com/p/EVENT_ID?p=yes",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Non, absent",
+     "href": "https://webinaire.ownertechnology.com/p/EVENT_ID?p=no",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Dernière relance</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.7;text-align:left;\">\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;text-align:left;\">\n    <p style=\"margin:0 0 18px;\">Vous avez participé au webinaire.</p>\n\n    <p style=\"margin:0 0 18px;\">Mais vous n&rsquo;avez pas encore fait analyser votre situation.</p>\n\n    <p style=\"margin:0 0 24px;\"><strong>150 dirigeants</strong> présents lors du webinaire l&rsquo;ont déjà.</p>\n\n    <p style=\"margin:0 0 6px;\">À votre tour&nbsp;:</p>\n    <p style=\"margin:0 0 24px;\"><a href=\"https://audit.ownertechnology.com/\" style=\"color:#1a73e8;text-decoration:underline;font-weight:bold;\">https://audit.ownertechnology.com/</a></p>\n\n    <p style=\"margin:0 0 6px;\">À bientôt,</p>\n    <p style=\"margin:0;\">Paul - CEO Owner Technology</p>\n  </div>\n</body>\n</html><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:28px auto 4px;border-collapse:collapse;\"><tr><td align=\"center\" style=\"padding:0 0 8px;font-size:13px;color:#5b6577;\">Étiez-vous présent(e) au webinaire&nbsp;?</td></tr><tr><td align=\"center\"><a href=\"https://webinaire.ownertechnology.com/p/EVENT_ID?p=yes\" style=\"display:inline-block;margin:0 5px;padding:10px 20px;border-radius:10px;background:#1f6f43;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;\">Oui, j'étais présent</a><a href=\"https://webinaire.ownertechnology.com/p/EVENT_ID?p=no\" style=\"display:inline-block;margin:0 5px;padding:10px 20px;border-radius:10px;background:#eceff4;color:#5b6577;font-size:14px;font-weight:600;text-decoration:none;\">Non, absent</a></td></tr></table><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Vous avez participé au webinaire.\n\n    Mais vous n’avez pas encore fait analyser votre situation.\n\n    150 dirigeants présents lors du webinaire l’ont déjà.\n\n    À votre tour :\n\n    https://audit.ownertechnology.com/ : https://audit.ownertechnology.com/\n\n    À bientôt,\n\n    Paul - CEO Owner Technology\n\nÉtiez-vous présent(e) au webinaire ?\nOui, j'étais présent : https://webinaire.ownertechnology.com/p/EVENT_ID?p=yesNon, absent : https://webinaire.ownertechnology.com/p/EVENT_ID?p=no\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n",
+   "textDerived": true
+  }
+ ]
+}

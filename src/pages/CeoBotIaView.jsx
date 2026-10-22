@@ -36,7 +36,7 @@
  * (SUB_TICKETS_ROLES) : aucune adresse dans ce dépôt public.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import { navigateBackToDashboard } from "../utils/dashboardNavigation";
@@ -45,9 +45,38 @@ import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections, SUB_TICKETS_ROLES } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import companyLogo from "../assets/my_image.png";
+// Mini client e-mail (cohortes → e-mails → onglets → fenêtres flottantes), fenêtre réutilisable
+// (accrochage sur une moitié d'écran, déplacement, redimensionnement), fenêtre « Schéma de
+// séquence » et « Éditeur de mail » : ajouts autonomes, cf. src/components/sequenceMail/.
+// Le contenu des trois fenêtres n'est chargé qu'à la première ouverture (React.lazy) : la page de tickets
+// n'embarque plus tout le client e-mail ; le chargement est lancé dès que l'on survole le bouton.
+import SequenceWindow, { SEQUENCE_WINDOW_Z } from "../components/sequenceMail/SequenceWindow.jsx";
+import SequenceErrorBoundary from "../components/sequenceMail/SequenceErrorBoundary.jsx";
+import WindowLoading from "../components/sequenceMail/WindowLoading.jsx";
+import useMediaQuery from "../components/sequenceMail/useMediaQuery.js";
+import { useLatest } from "../components/sequenceMail/hooks.js";
+import { useDraftsUnloadGuard } from "../components/sequenceMail/draftsGuard.js";
+import { COMPACT_VIEWPORT_WIDTH, NAVBAR_SAFE_TOP } from "../components/sequenceMail/constants.js";
+import { SCHEMA_COLORS } from "../components/sequenceMail/schemaTheme.js";
+import managerIcon from "../assets/sequence-icons/gestion-sequence.png";
+import schemaIcon from "../assets/sequence-icons/schema-sequence.png";
+import editorIcon from "../assets/sequence-icons/sous-fenetre.png";
 import {
   suggestMentions, parseMention, expandMention, mentionRefusal,
 } from "../config/botIaMentions.js";
+
+const loadSeqManager = () => import("../components/sequenceMail/SequenceEmailManager.jsx");
+const loadSeqSchema = () => import("../components/sequenceMail/SequenceSchema.jsx");
+const loadSeqEditor = () => import("../components/sequenceMail/MailEditor.jsx");
+const LazySeqManager = lazy(loadSeqManager);
+const LazySeqSchema = lazy(loadSeqSchema);
+const LazySeqEditor = lazy(loadSeqEditor);
+
+// Durées (ms) de l'enchaînement d'ouverture / de fermeture des fenêtres de séquence (cf. la machine à états).
+const SEQ_SHAKE_MS = 500;
+const SEQ_FALL_MS = 600;
+const SEQ_WINDOW_IN_MS = 220;
+const SEQ_RETURN_MS = 650;
 
 // Typographie de la zone de saisie. Extraite en constante parce qu'elle est
 // utilisée DEUX fois : par le textarea, et par le calque qui le double pour
@@ -188,6 +217,7 @@ export default function CeoBotIaView() {
   useEffect(() => {
     localStorage.setItem("ceoSideCollapsed_v2", String(sideCollapsed));
   }, [sideCollapsed]);
+  const sidebarW = sideCollapsed ? 56 : 260;
 
   // ── Garde d'accès ──────────────────────────────────────────────────────
   const [authChecked, setAuthChecked] = useState(false);
@@ -264,42 +294,98 @@ export default function CeoBotIaView() {
     clearTimeout(pollTimerRef.current);
   }, []);
 
-  // ── Fenêtre « Gestion de séquence » — mockup additif, gris et vide ──────
+  // ── Fenêtres « Gestion de séquence », « Schéma de séquence » et « Éditeur de mail » ──
   // Machine à états pour l'enchaînement animé :
   //   idle → shake → fall (composer+bouton tombent hors écran) →
-  //   window-in (la fenêtre apparaît) → window-open (interactive,
-  //   déplaçable) → window-closing (la fenêtre tombe) → return
-  //   (composer+bouton reviennent du haut) → idle.
+  //   window-in (les fenêtres apparaissent, accrochées chacune sur une
+  //   moitié de l'écran) → window-open (interactives, déplaçables) →
+  //   window-closing (les fenêtres tombent) → return (composer+bouton
+  //   reviennent du haut) → idle.
+  // La géométrie (accrochage, déplacement, agrandissement, redimensionnement)
+  // vit dans <SequenceWindow>, une instance par fenêtre : ici, seul reste
+  // l'enchaînement d'ouverture et de fermeture.
   const [seqPhase, setSeqPhase] = useState("idle");
-  const [seqWinPos, setSeqWinPos] = useState(null); // { w, h } px, calculé à l'ouverture
-  // Décalage de drag depuis la position centrée par défaut — (0,0) = centré.
-  // Coordonnées RELATIVES (pas des px absolus de viewport) : le centrage
-  // lui-même est fait en CSS pur (calc + transform), donc aucun calcul
-  // manuel ne peut le désaligner.
-  const [seqDrag, setSeqDrag] = useState({ x: 0, y: 0 });
+  // « Schéma de séquence » s'ouvre avec « Gestion de séquence ». Sa croix ne
+  // ferme QUE cette fenêtre ; celle de « Gestion de séquence » ferme les deux.
+  // Le bouton du volet de navigation de « Gestion de séquence » la rouvre.
+  // "off" | "opening" (animation d'entrée) | "on" | "closing".
+  const [schemaState, setSchemaState] = useState("off");
+  // « Éditeur de mail » : s'ouvre depuis le stylo d'une case du schéma, sur la moitié droite (par-dessus
+  // le schéma), alors que l'e-mail édité s'affiche en direct dans « Gestion de séquence » à gauche.
+  // Mêmes états que le schéma : "off" | "opening" | "on" | "closing". `editorKey` = e-mail édité.
+  const [editorState, setEditorState] = useState("off");
+  const [editorKey, setEditorKey] = useState(null);
+  // Ordre d'empilement des trois fenêtres, la dernière utilisée en dernier : chacune a son propre rang
+  // (SEQUENCE_WINDOW_Z + 0, 1 ou 2), elles ne partagent jamais le même z-index. Elles ne se recouvrent que si
+  // l'on en déplace ou en agrandit une.
+  const [seqOrder, setSeqOrder] = useState(["editor", "schema", "manager"]);
+  const seqFront = seqOrder[seqOrder.length - 1];
+  const bringFront = useCallback((which) => {
+    setSeqOrder((o) => (o[o.length - 1] === which ? o : [...o.filter((k) => k !== which), which]));
+  }, []);
+  // Fenêtre qui prend le focus clavier à son ouverture : celle que l'utilisateur vient de demander.
+  const [seqFocus, setSeqFocus] = useState(null);
+  // Fenêtres réduites en icône (bouton « Réduire ») : cachées mais toujours montées. On les rouvre par un
+  // clic (ou Entrée / Espace) sur leur icône, ou en demandant explicitement de les revoir (voir plus bas).
+  const [seqMin, setSeqMin] = useState({ manager: false, schema: false, editor: false });
+  const setMin = useCallback((which, value) => setSeqMin((m) => (m[which] === value ? m : { ...m, [which]: value })), []);
+  const restoreSeq = useCallback((which) => { setMin(which, false); bringFront(which); }, [setMin, bringFront]);
+  // Petit écran : pas de place pour deux fenêtres côte à côte. Chacune occupe toute la zone utile, seule celle du
+  // dessus est affichée et les autres sont réduites en icônes (un clic sur une icône échange les fenêtres).
+  const compact = useMediaQuery(`(max-width: ${COMPACT_VIEWPORT_WIDTH - 1}px)`);
+  const minimizedOf = (which) => seqMin[which] || (compact && seqFront !== which);
+  // Préférence système « réduire les animations » : ni secousse ni chute, les phases s'enchaînent sans attente.
+  const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const seqTimersRef = useRef([]);
-  const seqDragRef = useRef(null);
+  const seqWindowTimers = useRef({ schema: 0, editor: 0 });
+  const seqBtnRef = useRef(null);
+  // Dernières valeurs d'état, lues par les actions ci-dessous : elles gardent ainsi une identité stable (la
+  // fenêtre de gestion est mémoïsée, des callbacks recréés à chaque rendu de la page la re-rendraient pour rien).
+  const seqState = useLatest({ seqPhase, schemaState, editorState, reduceMotion });
+  // Un lien « Gestion séquence » survolé ou focalisé précharge le code des fenêtres : la 1re ouverture est immédiate.
+  const prefetchSeq = useCallback(() => {
+    loadSeqManager().catch(() => {});
+    loadSeqSchema().catch(() => {});
+  }, []);
+  // Chargement du code en échec (réseau, déploiement) : « Réessayer » recrée les composants paresseux, ce qui relance l'import.
+  const [seqLazy, setSeqLazy] = useState({ Manager: LazySeqManager, Schema: LazySeqSchema, Editor: LazySeqEditor });
+  const retrySeqLazy = useCallback(() => setSeqLazy({ Manager: lazy(loadSeqManager), Schema: lazy(loadSeqSchema), Editor: lazy(loadSeqEditor) }), []);
+  const { Manager: SeqManager, Schema: SeqSchema, Editor: SeqEditor } = seqLazy;
 
-  const seqClearTimers = () => {
+  const seqClearTimers = useCallback(() => {
     seqTimersRef.current.forEach(clearTimeout);
     seqTimersRef.current = [];
-  };
-  const seqAfter = (ms, fn) => { seqTimersRef.current.push(setTimeout(fn, ms)); };
-  useEffect(() => () => seqClearTimers(), []);
+    seqWindowTimers.current = { schema: 0, editor: 0 };
+  }, []);
+  /** @brief Programme `fn` ; avec « réduire les animations », elle part tout de suite. */
+  const seqAfter = useCallback((ms, fn) => {
+    const id = setTimeout(fn, seqState.current.reduceMotion ? 0 : ms);
+    seqTimersRef.current.push(id);
+    return id;
+  }, [seqState]);
+  /**
+   * @brief Comme `seqAfter`, avec UN seul minuteur par fenêtre : rouvrir pendant la fermeture annule celle-ci.
+   * Avant, l'ancien minuteur de fermeture tirait quand même et refermait la fenêtre tout juste rouverte.
+   */
+  const seqAfterFor = useCallback((which, ms, fn) => {
+    clearTimeout(seqWindowTimers.current[which]);
+    seqWindowTimers.current[which] = seqAfter(ms, fn);
+  }, [seqAfter]);
+  useEffect(() => () => seqClearTimers(), [seqClearTimers]);
 
-  const SEQ_SHAKE_MS = 500;
-  const SEQ_FALL_MS = 600;
-  const SEQ_WINDOW_IN_MS = 220;
-  const SEQ_RETURN_MS = 650;
-  const SEQ_WIN_W = 880;
-  const SEQ_WIN_H = 600;
-  // Espace réservé à la navbar flottante (profil, pages, dark mode…) : même
-  // valeur que le `paddingTop` du shell CEO, + marge demandée avant de la
-  // toucher en drag.
-  const SEQ_NAVBAR_SAFE_TOP = 64 + 0;
+  /** @brief Une fenêtre se ferme : si c'était celle du dessus, la précédente encore ouverte passe devant. */
+  const handOverFront = useCallback((closing) => {
+    setSeqOrder((o) => {
+      if (o[o.length - 1] !== closing) return o;
+      const { schemaState: sch, editorState: ed } = seqState.current;
+      const isOpen = (k) => k === "manager" || (k === "schema" && sch !== "off") || (k === "editor" && ed !== "off");
+      const next = [...o].reverse().find((k) => k !== closing && isOpen(k)) || "manager";
+      return [...o.filter((k) => k !== next), next];
+    });
+  }, [seqState]);
 
-  const openSeqWindow = () => {
-    if (seqPhase !== "idle") return;
+  const openSeqWindow = useCallback(() => {
+    if (seqState.current.seqPhase !== "idle") return;
     // Le champ pourrait être focus au clic : lui couper le clavier avant
     // que le tremblement ne commence, sinon on pourrait continuer à taper
     // dans une barre en train de tomber.
@@ -308,65 +394,121 @@ export default function CeoBotIaView() {
     setSeqPhase("shake");
     seqAfter(SEQ_SHAKE_MS, () => setSeqPhase("fall"));
     seqAfter(SEQ_SHAKE_MS + SEQ_FALL_MS, () => {
-      const sidebarW = sideCollapsed ? 56 : 260;
-      const availW = window.innerWidth - sidebarW;
-      const w = Math.min(SEQ_WIN_W, availW - 48);
-      const h = Math.min(SEQ_WIN_H, window.innerHeight - 96);
-      setSeqWinPos({ w, h });
-      setSeqDrag({ x: 0, y: 0 }); // repart toujours centrée, jamais l'ancien drag
+      // Les fenêtres repartent toujours accrochées, jamais à l'ancienne position.
+      setSchemaState("on");
+      setEditorState("off");
+      setEditorKey(null);
+      setSeqMin({ manager: false, schema: false, editor: false });
+      setSeqOrder(["editor", "schema", "manager"]);
+      setSeqFocus("manager");
       setSeqPhase("window-in");
     });
     seqAfter(SEQ_SHAKE_MS + SEQ_FALL_MS + SEQ_WINDOW_IN_MS, () => setSeqPhase("window-open"));
-  };
+  }, [seqState, seqClearTimers, seqAfter]);
 
-  const closeSeqWindow = () => {
-    if (seqPhase !== "window-open") return;
+  const closeSeqWindow = useCallback(() => {
+    if (seqState.current.seqPhase !== "window-open") return;
     seqClearTimers();
+    setSeqMin({ manager: false, schema: false, editor: false });
     setSeqPhase("window-closing");
     seqAfter(SEQ_FALL_MS, () => setSeqPhase("return"));
-    seqAfter(SEQ_FALL_MS + SEQ_RETURN_MS, () => setSeqPhase("idle"));
-  };
+    seqAfter(SEQ_FALL_MS + SEQ_RETURN_MS, () => {
+      setSeqPhase("idle");
+      setSeqFocus(null);
+      // Le focus revient au bouton qui a ouvert les fenêtres (le composer n'était plus atteignable pendant ce temps).
+      requestAnimationFrame(() => seqBtnRef.current?.focus({ preventScroll: true }));
+    });
+  }, [seqState, seqClearTimers, seqAfter]);
 
-  // Drag de la fenêtre via sa barre supérieure — décalage RELATIF au centre
-  // (cf. seqDrag), pas une position absolue : le centrage CSS reste la seule
-  // source de vérité pour la position de repos.
-  const onSeqHeaderMouseDown = (e) => {
-    if (seqPhase !== "window-open") return;
-    e.preventDefault();
-    seqDragRef.current = { startX: e.clientX, startY: e.clientY, origX: seqDrag.x, origY: seqDrag.y };
-    const onMove = (ev) => {
-      if (!seqDragRef.current) return;
-      const { startX, startY, origX, origY } = seqDragRef.current;
-      // Le plafond vertical est calculé en absolu (position réelle à l'écran),
-      // pas en simple décalage relatif : il s'arrête à SEQ_NAVBAR_SAFE_TOP du
-      // haut du viewport, quelle que soit la hauteur de fenêtre/écran.
-      const centeredTop = (window.innerHeight - seqWinPos.h) / 2;
-      const minY = SEQ_NAVBAR_SAFE_TOP - centeredTop;
-      const nextX = Math.max(-500, Math.min(origX + (ev.clientX - startX), 500));
-      const nextY = Math.max(minY, Math.min(origY + (ev.clientY - startY), 320));
-      setSeqDrag({ x: nextX, y: nextY });
-    };
-    const onUp = () => {
-      seqDragRef.current = null;
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  };
+  const closeSchemaWindow = useCallback(() => {
+    const { seqPhase: phase, schemaState: st } = seqState.current;
+    if (phase !== "window-open" || st !== "on") return;
+    setSchemaState("closing");
+    seqAfterFor("schema", SEQ_FALL_MS, () => {
+      setSchemaState("off");
+      handOverFront("schema");
+    });
+  }, [seqState, seqAfterFor, handOverFront]);
+
+  // Rouvre « Schéma de séquence » (fermée par sa croix) sur sa moitié, au premier plan ; déjà ouverte :
+  // la ramène simplement devant. Pendant sa chute, la fermeture est annulée et la fenêtre revient
+  // (avant, le clic était ignoré tant qu'elle tombait).
+  const openSchemaWindow = useCallback(() => {
+    const { seqPhase: phase, schemaState: st } = seqState.current;
+    if (phase !== "window-open") return;
+    restoreSeq("schema");
+    if (st === "on" || st === "opening") return;
+    setSchemaState("opening");
+    setSeqFocus("schema");
+    seqAfterFor("schema", SEQ_WINDOW_IN_MS, () => setSchemaState("on"));
+  }, [seqState, restoreSeq, seqAfterFor]);
+
+  // Ouvre l'éditeur de mail sur l'e-mail `key` (stylo d'une case du schéma). L'e-mail est déjà ouvert dans
+  // « Gestion de séquence » (SequenceSchema.jsx) : la fenêtre est remise devant l'éditeur pour qu'on la voie
+  // se mettre à jour. Déjà ouvert sur un autre e-mail : l'éditeur passe simplement à celui-ci.
+  const openEditorWindow = useCallback((key) => {
+    const { seqPhase: phase, editorState: st } = seqState.current;
+    if (phase !== "window-open") return;
+    setMin("manager", false);
+    restoreSeq("editor");
+    setEditorKey(key);
+    if (st === "on" || st === "opening") return;
+    setEditorState("opening");
+    setSeqFocus("editor");
+    seqAfterFor("editor", SEQ_WINDOW_IN_MS, () => setEditorState("on"));
+  }, [seqState, setMin, restoreSeq, seqAfterFor]);
+
+  const closeEditorWindow = useCallback(() => {
+    const { seqPhase: phase, editorState: st } = seqState.current;
+    if (phase !== "window-open" || st !== "on") return;
+    setEditorState("closing");
+    seqAfterFor("editor", SEQ_FALL_MS, () => {
+      setEditorState("off");
+      setEditorKey(null);
+      handOverFront("editor");
+    });
+  }, [seqState, seqAfterFor, handOverFront]);
+
+  // Brouillons de l'éditeur de mail (PROTOTYPE, en mémoire seulement) : tant qu'il en existe, recharger ou fermer
+  // l'onglet demande confirmation — y compris fenêtres fermées, la page étant seule montée en permanence.
+  useDraftsUnloadGuard();
+
+  // Actions par fenêtre, d'identité stable (voir `seqState`).
+  const seqActions = useMemo(() => ({
+    manager: { activate: () => bringFront("manager"), minimize: () => setMin("manager", true), restore: () => restoreSeq("manager") },
+    schema: { activate: () => bringFront("schema"), minimize: () => setMin("schema", true), restore: () => restoreSeq("schema") },
+    editor: { activate: () => bringFront("editor"), minimize: () => setMin("editor", true), restore: () => restoreSeq("editor") },
+  }), [bringFront, setMin, restoreSeq]);
 
   // Même chaîne d'animation tant que la fenêtre est visible (fall/window-in/
   // window-open/window-closing) : pas de redémarrage, le composer reste
   // simplement hors écran, figé sur l'état final de la chute.
-  const seqRowAnim =
-    seqPhase === "shake" ? "ceoBotIaShake 0.5s cubic-bezier(0.36,0.07,0.19,0.97) both"
-      : (seqPhase === "fall" || seqPhase === "window-in" || seqPhase === "window-open" || seqPhase === "window-closing")
-        ? "ceoBotIaFallOut 0.6s cubic-bezier(0.55,0,0.85,0.35) both"
+  // « Réduire les animations » : aucune secousse ni chute ; le composer est simplement caché tant que les fenêtres sont là.
+  const seqRowAway = seqPhase === "fall" || seqPhase === "window-in" || seqPhase === "window-open" || seqPhase === "window-closing";
+  const seqRowAnim = reduceMotion ? "none"
+    : seqPhase === "shake" ? "ceoBotIaShake 0.5s cubic-bezier(0.36,0.07,0.19,0.97) both"
+      : seqRowAway ? "ceoBotIaFallOut 0.6s cubic-bezier(0.55,0,0.85,0.35) both"
         : seqPhase === "return" ? "ceoBotIaReturnDown 0.65s cubic-bezier(0.16,1,0.3,1) both"
           : "none";
+  // Hors de l'écran (translateY(160vh)) mais toujours dans le DOM : il ne doit être ni atteignable au clavier ni
+  // lu par les lecteurs d'écran tant que les fenêtres sont ouvertes (`inert`), sinon on y saisit (et envoie) à l'aveugle.
   const seqRowInteractive = seqPhase === "idle";
   const seqWindowVisible = seqPhase === "window-in" || seqPhase === "window-open" || seqPhase === "window-closing";
-  const seqWindowInteractive = seqPhase === "window-open";
+  // « Schéma de séquence » tombe aussi quand on ferme « Gestion de séquence ».
+  const schemaPhase = seqPhase === "window-closing" || schemaState === "closing" ? "window-closing"
+    : schemaState === "opening" ? "window-in" : seqPhase;
+  const editorPhase = seqPhase === "window-closing" || editorState === "closing" ? "window-closing"
+    : editorState === "opening" ? "window-in" : seqPhase;
+  // Cadre fixe : le composer tombé hors écran rend la page défilable (+160 vh) alors que les fenêtres
+  // remplissent déjà toute la zone visible. On fige donc le défilement tant qu'elles sont ouvertes ;
+  // la gouttière de `html` (scrollbar-gutter: stable) évite tout décalage de mise en page.
+  useEffect(() => {
+    if (!seqWindowVisible) return undefined;
+    const root = document.documentElement;
+    const previous = root.style.overflow;
+    root.style.overflow = "hidden";
+    return () => { root.style.overflow = previous; };
+  }, [seqWindowVisible]);
 
   const canSend = text.trim().length > 0 && !sending;
   const isEmpty = messages.length === 0;
@@ -753,6 +895,16 @@ export default function CeoBotIaView() {
         .ceo-side-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
         .ceo-side-scroll:hover::-webkit-scrollbar-thumb { background: ${darkMode ? "rgba(255,255,255,0.18)" : "rgba(55,53,47,0.16)"}; background-clip: padding-box; }
         .ceo-side-scroll::-webkit-scrollbar-track { background: transparent; }
+        /* Bouton « Gestion séquence » : libellé visible au survol et au focus clavier (le pictogramme seul ne dit rien). */
+        .ceo-seq-btn { position: relative; }
+        .ceo-seq-btn::after {
+          content: attr(data-label); position: absolute; right: 0; bottom: calc(100% + 8px);
+          padding: 4px 10px; border-radius: 8px; white-space: nowrap; pointer-events: none;
+          font-size: 12px; font-weight: 500; letter-spacing: 0; color: #fff; background: rgba(20,22,30,0.94);
+          opacity: 0; transform: translateY(2px); transition: opacity 0.12s, transform 0.12s;
+        }
+        .ceo-seq-btn:hover::after, .ceo-seq-btn:focus-visible::after { opacity: 1; transform: none; }
+        .ceo-seq-btn:focus-visible { outline: 2px solid #3d4ff2; outline-offset: 2px; }
         .ceo-botia-ta::placeholder { color: ${C.muted}; }
         /* Le texte du champ est transparent : c'est le calque au-dessous qui
            l'affiche, mention grisée comprise. La sélection, elle, est peinte
@@ -791,10 +943,6 @@ export default function CeoBotIaView() {
           0%   { transform: translateY(-160vh) rotate(-4deg); }
           100% { transform: translateY(0) rotate(0deg); }
         }
-        @keyframes ceoBotIaWindowPop {
-          0%   { opacity: 0; transform: scale(0.94) translateY(8px); }
-          100% { opacity: 1; transform: scale(1) translateY(0); }
-        }
       `}</style>
 
       {/* ═══ SIDEBAR ═══ */}
@@ -806,7 +954,7 @@ export default function CeoBotIaView() {
         display: "flex",
       }}>
         <Sidebar
-          width={sideCollapsed ? 56 : 260}
+          width={sidebarW}
           collapsed={sideCollapsed}
           onToggle={() => setSideCollapsed((v) => !v)}
           sections={visibleSections}
@@ -1107,11 +1255,15 @@ export default function CeoBotIaView() {
               </div>
             )}
 
-            <div style={{
-              display: "flex", alignItems: "flex-end", gap: 10,
-              animation: seqRowAnim,
-              pointerEvents: seqRowInteractive ? "auto" : "none",
-            }}>
+            <div
+              inert={!seqRowInteractive}
+              style={{
+                display: "flex", alignItems: "flex-end", gap: 10,
+                animation: seqRowAnim,
+                pointerEvents: seqRowInteractive ? "auto" : "none",
+                visibility: reduceMotion && seqRowAway ? "hidden" : "visible",
+              }}
+            >
               <div style={{
                 // Ancre du menu de mentions, qui se pose juste au-dessus.
                 position: "relative",
@@ -1391,13 +1543,18 @@ export default function CeoBotIaView() {
                 </div>
               </div>
 
-              {/* Bouton séparé, à droite du composer. Ouvre le mockup de
-                fenêtre « Gestion de séquence » (vide pour l'instant). */}
+              {/* Bouton séparé, à droite du composer. Ouvre les fenêtres de gestion de séquence
+                (client e-mail + schéma). Libellé visible au survol et au focus clavier (.ceo-seq-btn,
+                cf. le <style> de la page) ; le pictogramme suit le mode clair/sombre. */}
               <button
+                ref={seqBtnRef}
                 type="button"
+                className="ceo-seq-btn"
+                data-label="Gestion de séquence"
                 aria-label="Gestion séquence"
-                title="Gestion séquence"
                 onClick={openSeqWindow}
+                onPointerEnter={prefetchSeq}
+                onFocus={prefetchSeq}
                 style={{
                   width: 48, height: 48, borderRadius: 16, flexShrink: 0,
                   border: "none",
@@ -1414,129 +1571,114 @@ export default function CeoBotIaView() {
               >
                 {/* Gene Structure — svgrepo.com/svg/530671/gene-structure */}
                 <svg width="26" height="26" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M608 156.8c4.8 1.6 6.4 4.8 6.4 9.6l-28.8 108.8c-1.6 4.8-4.8 6.4-9.6 6.4-4.8-1.6-6.4-4.8-6.4-9.6l28.8-108.8c0-4.8 4.8-8 9.6-6.4zM867.2 416c1.6 4.8-1.6 8-6.4 9.6L752 454.4c-4.8 1.6-8-1.6-9.6-6.4-1.6-4.8 1.6-8 6.4-9.6l108.8-28.8c4.8 0 8 3.2 9.6 6.4z m-94.4 356.8c-3.2 3.2-8 3.2-11.2 0l-78.4-78.4c-3.2-3.2-3.2-8 0-11.2 3.2-3.2 8-3.2 11.2 0l78.4 78.4c3.2 3.2 3.2 8 0 11.2zM416 867.2c-4.8-1.6-6.4-4.8-6.4-9.6l28.8-108.8c1.6-4.8 4.8-6.4 9.6-6.4 4.8 1.6 6.4 4.8 6.4 9.6l-28.8 108.8c0 4.8-4.8 8-9.6 6.4zM156.8 608c-1.6-4.8 1.6-8 6.4-9.6l108.8-28.8c4.8-1.6 8 1.6 9.6 6.4 1.6 4.8-1.6 8-6.4 9.6l-108.8 28.8c-4.8 0-8-3.2-9.6-6.4z m94.4-356.8c3.2-3.2 8-3.2 11.2 0l78.4 78.4c3.2 3.2 3.2 8 0 11.2s-8 3.2-11.2 0l-78.4-78.4c-3.2-3.2-3.2-8 0-11.2z" fill="#050D42" />
-                  <path d="M355.2 355.2l-57.6 214.4 156.8 156.8 214.4-57.6 57.6-214.4-156.8-156.8-214.4 57.6z m230.4-86.4l169.6 169.6c4.8 4.8 6.4 9.6 4.8 16l-62.4 232c-1.6 4.8-6.4 9.6-11.2 11.2l-232 62.4c-4.8 1.6-11.2 0-16-4.8L268.8 585.6c-4.8-4.8-6.4-9.6-4.8-16l62.4-232c1.6-4.8 6.4-9.6 11.2-11.2l232-62.4c6.4 0 11.2 1.6 16 4.8z" fill="#050D42" />
-                  <path d="M561.6 326.4c-25.6-6.4-41.6-33.6-33.6-59.2s33.6-41.6 59.2-33.6c25.6 6.4 41.6 33.6 33.6 59.2-6.4 25.6-33.6 40-59.2 33.6z m136 136c-6.4-25.6 8-51.2 33.6-59.2 25.6-6.4 51.2 8 59.2 33.6 6.4 25.6-8 51.2-33.6 59.2-25.6 6.4-52.8-8-59.2-33.6z m-49.6 185.6c19.2-19.2 49.6-19.2 67.2 0 19.2 19.2 19.2 49.6 0 67.2-19.2 19.2-49.6 19.2-67.2 0-19.2-17.6-19.2-48 0-67.2z m-185.6 49.6c25.6 6.4 41.6 33.6 33.6 59.2-6.4 25.6-33.6 41.6-59.2 33.6-25.6-6.4-41.6-33.6-33.6-59.2 6.4-25.6 33.6-40 59.2-33.6z m-136-136c6.4 25.6-8 51.2-33.6 59.2-25.6 6.4-51.2-8-59.2-33.6-6.4-25.6 8-51.2 33.6-59.2 25.6-6.4 52.8 8 59.2 33.6z m49.6-185.6c-19.2 19.2-49.6 19.2-67.2 0-19.2-19.2-19.2-49.6 0-67.2 19.2-19.2 49.6-19.2 67.2 0s19.2 48 0 67.2z" fill="#2F4BFF" />
-                  <path d="M483.014155 620.184198a112 112 0 1 0 57.97169-216.368396 112 112 0 1 0-57.97169 216.368396Z" fill="#2F4BFF" />
-                  <path d="M598.4 187.2c-17.6-4.8-27.2-22.4-22.4-38.4 4.8-17.6 22.4-27.2 38.4-22.4 17.6 4.8 27.2 22.4 22.4 38.4s-20.8 27.2-38.4 22.4z m238.4 238.4c-4.8-17.6 4.8-35.2 22.4-38.4 17.6-4.8 35.2 4.8 38.4 22.4 4.8 17.6-4.8 35.2-22.4 38.4-16 4.8-33.6-6.4-38.4-22.4z m-88 323.2c12.8-12.8 32-12.8 44.8 0s12.8 32 0 44.8c-12.8 12.8-32 12.8-44.8 0s-11.2-32 0-44.8z m-323.2 88c17.6 4.8 27.2 22.4 22.4 38.4-4.8 17.6-22.4 27.2-38.4 22.4-17.6-4.8-27.2-22.4-22.4-38.4 3.2-17.6 20.8-27.2 38.4-22.4zM187.2 598.4c4.8 17.6-4.8 35.2-22.4 38.4-17.6 4.8-35.2-4.8-38.4-22.4-4.8-17.6 4.8-35.2 22.4-38.4 16-4.8 33.6 6.4 38.4 22.4z m88-323.2c-12.8 12.8-32 12.8-44.8 0-12.8-12.8-12.8-32 0-44.8 12.8-12.8 32-12.8 44.8 0 11.2 11.2 11.2 32 0 44.8z" fill="#2F4BFF" />
+                  <path d="M608 156.8c4.8 1.6 6.4 4.8 6.4 9.6l-28.8 108.8c-1.6 4.8-4.8 6.4-9.6 6.4-4.8-1.6-6.4-4.8-6.4-9.6l28.8-108.8c0-4.8 4.8-8 9.6-6.4zM867.2 416c1.6 4.8-1.6 8-6.4 9.6L752 454.4c-4.8 1.6-8-1.6-9.6-6.4-1.6-4.8 1.6-8 6.4-9.6l108.8-28.8c4.8 0 8 3.2 9.6 6.4z m-94.4 356.8c-3.2 3.2-8 3.2-11.2 0l-78.4-78.4c-3.2-3.2-3.2-8 0-11.2 3.2-3.2 8-3.2 11.2 0l78.4 78.4c3.2 3.2 3.2 8 0 11.2zM416 867.2c-4.8-1.6-6.4-4.8-6.4-9.6l28.8-108.8c1.6-4.8 4.8-6.4 9.6-6.4 4.8 1.6 6.4 4.8 6.4 9.6l-28.8 108.8c0 4.8-4.8 8-9.6 6.4zM156.8 608c-1.6-4.8 1.6-8 6.4-9.6l108.8-28.8c4.8-1.6 8 1.6 9.6 6.4 1.6 4.8-1.6 8-6.4 9.6l-108.8 28.8c-4.8 0-8-3.2-9.6-6.4z m94.4-356.8c3.2-3.2 8-3.2 11.2 0l78.4 78.4c3.2 3.2 3.2 8 0 11.2s-8 3.2-11.2 0l-78.4-78.4c-3.2-3.2-3.2-8 0-11.2z" fill={darkMode ? "#E8EAFF" : "#050D42"} />
+                  <path d="M355.2 355.2l-57.6 214.4 156.8 156.8 214.4-57.6 57.6-214.4-156.8-156.8-214.4 57.6z m230.4-86.4l169.6 169.6c4.8 4.8 6.4 9.6 4.8 16l-62.4 232c-1.6 4.8-6.4 9.6-11.2 11.2l-232 62.4c-4.8 1.6-11.2 0-16-4.8L268.8 585.6c-4.8-4.8-6.4-9.6-4.8-16l62.4-232c1.6-4.8 6.4-9.6 11.2-11.2l232-62.4c6.4 0 11.2 1.6 16 4.8z" fill={darkMode ? "#E8EAFF" : "#050D42"} />
+                  <path d="M561.6 326.4c-25.6-6.4-41.6-33.6-33.6-59.2s33.6-41.6 59.2-33.6c25.6 6.4 41.6 33.6 33.6 59.2-6.4 25.6-33.6 40-59.2 33.6z m136 136c-6.4-25.6 8-51.2 33.6-59.2 25.6-6.4 51.2 8 59.2 33.6 6.4 25.6-8 51.2-33.6 59.2-25.6 6.4-52.8-8-59.2-33.6z m-49.6 185.6c19.2-19.2 49.6-19.2 67.2 0 19.2 19.2 19.2 49.6 0 67.2-19.2 19.2-49.6 19.2-67.2 0-19.2-17.6-19.2-48 0-67.2z m-185.6 49.6c25.6 6.4 41.6 33.6 33.6 59.2-6.4 25.6-33.6 41.6-59.2 33.6-25.6-6.4-41.6-33.6-33.6-59.2 6.4-25.6 33.6-40 59.2-33.6z m-136-136c6.4 25.6-8 51.2-33.6 59.2-25.6 6.4-51.2-8-59.2-33.6-6.4-25.6 8-51.2 33.6-59.2 25.6-6.4 52.8 8 59.2 33.6z m49.6-185.6c-19.2 19.2-49.6 19.2-67.2 0-19.2-19.2-19.2-49.6 0-67.2 19.2-19.2 49.6-19.2 67.2 0s19.2 48 0 67.2z" fill={darkMode ? "#9FB0FF" : "#2F4BFF"} />
+                  <path d="M483.014155 620.184198a112 112 0 1 0 57.97169-216.368396 112 112 0 1 0-57.97169 216.368396Z" fill={darkMode ? "#9FB0FF" : "#2F4BFF"} />
+                  <path d="M598.4 187.2c-17.6-4.8-27.2-22.4-22.4-38.4 4.8-17.6 22.4-27.2 38.4-22.4 17.6 4.8 27.2 22.4 22.4 38.4s-20.8 27.2-38.4 22.4z m238.4 238.4c-4.8-17.6 4.8-35.2 22.4-38.4 17.6-4.8 35.2 4.8 38.4 22.4 4.8 17.6-4.8 35.2-22.4 38.4-16 4.8-33.6-6.4-38.4-22.4z m-88 323.2c12.8-12.8 32-12.8 44.8 0s12.8 32 0 44.8c-12.8 12.8-32 12.8-44.8 0s-11.2-32 0-44.8z m-323.2 88c17.6 4.8 27.2 22.4 22.4 38.4-4.8 17.6-22.4 27.2-38.4 22.4-17.6-4.8-27.2-22.4-22.4-38.4 3.2-17.6 20.8-27.2 38.4-22.4zM187.2 598.4c4.8 17.6-4.8 35.2-22.4 38.4-17.6 4.8-35.2-4.8-38.4-22.4-4.8-17.6 4.8-35.2 22.4-38.4 16-4.8 33.6 6.4 38.4 22.4z m88-323.2c-12.8 12.8-32 12.8-44.8 0-12.8-12.8-12.8-32 0-44.8 12.8-12.8 32-12.8 44.8 0 11.2 11.2 11.2 32 0 44.8z" fill={darkMode ? "#9FB0FF" : "#2F4BFF"} />
                 </svg>
               </button>
             </div>
 
-            {/* Fenêtre « Gestion de séquence » — mockup vide (étape 1). Position
-                fixed calculée en px à l'ouverture (cf. openSeqWindow), pour que
-                `transform` reste libre aux animations d'entrée/sortie. */}
-            {seqWindowVisible && seqWinPos && (
-              // Couche EXTERNE : positionnement pur, centrage CSS natif
-              // (calc(50%) + transform self-centering — aucun calcul manuel
-              // de px ne peut le désaligner) + décalage de drag additif.
-              // `transform` reste donc TOUJOURS le même type de valeur ici ;
-              // l'animation d'entrée/sortie vit sur la couche INTERNE pour
-              // ne jamais rentrer en conflit avec ce transform de position.
-              <div
-                style={{
-                  position: "fixed",
-                  top: "50%",
-                  left: `calc(50% + ${(sideCollapsed ? 56 : 260) / 2}px)`,
-                  width: seqWinPos.w,
-                  height: seqWinPos.h,
-                  transform: `translate(calc(-50% + ${seqDrag.x}px), calc(-50% + ${seqDrag.y}px))`,
-                  zIndex: 500,
-                  pointerEvents: seqWindowInteractive ? "auto" : "none",
-                }}
+            {/* Fenêtres « Gestion de séquence » (moitié gauche de l'écran) et « Schéma de
+                séquence » (moitié droite), comme après Win + ← / Win + →. Rendues sous
+                <body> par SequenceWindow : ancrées au viewport, elles ne défilent pas avec la page.
+                Chaque contenu est chargé à la demande et protégé par un garde-fou de rendu : une erreur
+                ne tombe que sur sa fenêtre, jamais sur la page de tickets. */}
+            {seqWindowVisible && (
+              <SequenceWindow
+                title="Gestion de séquence"
+                side="left"
+                phase={seqPhase}
+                sidebarWidth={sidebarW}
+                safeTop={NAVBAR_SAFE_TOP}
+                colors={C}
+                darkMode={darkMode}
+                logo={companyLogo}
+                zIndex={SEQUENCE_WINDOW_Z + seqOrder.indexOf("manager")}
+                onActivate={seqActions.manager.activate}
+                onClose={closeSeqWindow}
+                closeLabel="Fermer toutes les fenêtres de séquence"
+                closeTitle="Fermer (ferme aussi le Schéma et l'Éditeur)"
+                minimized={minimizedOf("manager")}
+                onMinimize={seqActions.manager.minimize}
+                onRestore={seqActions.manager.restore}
+                icon={managerIcon}
+                iconId="seq:manager"
+                compact={compact}
+                focusOnOpen={seqFocus === "manager"}
               >
-                <div
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    borderRadius: 14,
-                    overflow: "hidden",
-                    border: `1px solid ${C.border}`,
-                    boxShadow: darkMode ? "0 24px 64px rgba(0,0,0,0.55)" : "0 24px 64px rgba(16,24,40,0.28)",
-                    display: "flex",
-                    flexDirection: "column",
-                    animation:
-                      seqPhase === "window-in" ? "ceoBotIaWindowPop 0.22s cubic-bezier(0.16,1,0.3,1) both"
-                        : seqPhase === "window-closing" ? "ceoBotIaFallOut 0.6s cubic-bezier(0.55,0,0.85,0.35) both"
-                          : "none",
-                  }}
-                >
-                  {/* Barre supérieure : drag + réduire/agrandir (inertes)/fermer. */}
-                  <div
-                    onMouseDown={onSeqHeaderMouseDown}
-                    style={{
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      height: 42, flexShrink: 0, padding: "0 8px 0 14px",
-                      background: C.bg, borderBottom: `1px solid ${C.border}`,
-                      cursor: seqWindowInteractive ? "grab" : "default",
-                      userSelect: "none",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{
-                        width: 22, height: 22, borderRadius: 6, flexShrink: 0,
-                        background: darkMode ? "#fff" : "#1e2330",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                      }}>
-                        <img src={companyLogo} alt="" style={{ width: 14, height: 14, objectFit: "contain", filter: darkMode ? "none" : "brightness(0) invert(1)" }} />
-                      </div>
-                      <span style={{ fontSize: 12.5, fontWeight: 600, color: C.secondary }}>Gestion de séquence</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <button
-                        type="button"
-                        aria-label="Réduire"
-                        title="Réduire"
-                        onMouseDown={(e) => e.stopPropagation()}
-                        style={{
-                          width: 28, height: 28, borderRadius: 7, border: "none",
-                          background: "transparent", display: "flex", alignItems: "center", justifyContent: "center",
-                          cursor: "default", color: C.muted,
-                        }}
-                      >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                          <line x1="5" y1="19" x2="19" y2="19" />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Agrandir"
-                        title="Agrandir"
-                        onMouseDown={(e) => e.stopPropagation()}
-                        style={{
-                          width: 28, height: 28, borderRadius: 7, border: "none",
-                          background: "transparent", display: "flex", alignItems: "center", justifyContent: "center",
-                          cursor: "default", color: C.muted,
-                        }}
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round">
-                          <rect x="4" y="4" width="16" height="16" rx="2" />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Fermer"
-                        title="Fermer"
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={closeSeqWindow}
-                        style={{
-                          width: 28, height: 28, borderRadius: 7, border: "none",
-                          background: "transparent", display: "flex", alignItems: "center", justifyContent: "center",
-                          cursor: "pointer", color: C.muted, transition: "background 0.15s, color 0.15s",
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = "#ff3b30"; e.currentTarget.style.color = "#fff"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = C.muted; }}
-                      >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                  {/* Corps — mockup volontairement vide, gris, sans contenu. */}
-                  <div style={{ flex: 1, background: darkMode ? "#2a2b36" : "#e4e6ea" }} />
-                </div>
-              </div>
+                {/* Mini client e-mail (cohortes → e-mails → onglets → fenêtres flottantes). */}
+                <SequenceErrorBoundary label="Gestion de séquence" colors={C} onRetry={retrySeqLazy}>
+                  <Suspense fallback={<WindowLoading colors={C} label="Chargement de la gestion de séquence…" />}>
+                    <SeqManager darkMode={darkMode} onOpenSchema={openSchemaWindow} schemaOpen={schemaState === "on" || schemaState === "opening"} />
+                  </Suspense>
+                </SequenceErrorBoundary>
+              </SequenceWindow>
+            )}
+            {seqWindowVisible && schemaState !== "off" && (
+              <SequenceWindow
+                title="Schéma de séquence"
+                side="right"
+                phase={schemaPhase}
+                sidebarWidth={sidebarW}
+                safeTop={NAVBAR_SAFE_TOP}
+                colors={SCHEMA_COLORS}
+                darkMode={false}
+                logo={companyLogo}
+                borderWidth={2}
+                labelSuffix=" — Schéma de séquence"
+                zIndex={SEQUENCE_WINDOW_Z + seqOrder.indexOf("schema")}
+                onActivate={seqActions.schema.activate}
+                onClose={closeSchemaWindow}
+                minimized={minimizedOf("schema")}
+                onMinimize={seqActions.schema.minimize}
+                onRestore={seqActions.schema.restore}
+                icon={schemaIcon}
+                iconId="seq:schema"
+                compact={compact}
+                focusOnOpen={seqFocus === "schema"}
+              >
+                <SequenceErrorBoundary label="Schéma de séquence" colors={SCHEMA_COLORS} onRetry={retrySeqLazy}>
+                  <Suspense fallback={<WindowLoading colors={SCHEMA_COLORS} label="Chargement du schéma…" />}>
+                    <SeqSchema
+                      onOpenManager={seqActions.manager.restore}
+                      onEditEmail={openEditorWindow}
+                      editingKey={editorState === "off" ? null : editorKey}
+                    />
+                  </Suspense>
+                </SequenceErrorBoundary>
+              </SequenceWindow>
+            )}
+            {seqWindowVisible && editorState !== "off" && editorKey && (
+              <SequenceWindow
+                title="Éditeur de mail"
+                side="right"
+                phase={editorPhase}
+                sidebarWidth={sidebarW}
+                safeTop={NAVBAR_SAFE_TOP}
+                colors={C}
+                darkMode={darkMode}
+                logo={companyLogo}
+                labelSuffix=" — Éditeur de mail"
+                zIndex={SEQUENCE_WINDOW_Z + seqOrder.indexOf("editor")}
+                onActivate={seqActions.editor.activate}
+                onClose={closeEditorWindow}
+                minimized={minimizedOf("editor")}
+                onMinimize={seqActions.editor.minimize}
+                onRestore={seqActions.editor.restore}
+                icon={editorIcon}
+                iconId="seq:editor"
+                compact={compact}
+                focusOnOpen={seqFocus === "editor"}
+              >
+                {/* Prototype : modifications en mémoire, rien n'est enregistré ni envoyé (cf. MailEditor.jsx). */}
+                <SequenceErrorBoundary label="Éditeur de mail" colors={C} onRetry={retrySeqLazy}>
+                  <Suspense fallback={<WindowLoading colors={C} label="Chargement de l'éditeur…" />}>
+                    <SeqEditor emailKey={editorKey} darkMode={darkMode} />
+                  </Suspense>
+                </SequenceErrorBoundary>
+              </SequenceWindow>
             )}
 
             {/* Rien ne s'affiche quand tout va bien. Un échec d'enregistrement

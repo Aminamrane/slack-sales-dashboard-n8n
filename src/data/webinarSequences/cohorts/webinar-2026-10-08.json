@@ -1,0 +1,86 @@
+{
+ "schema": 1,
+ "generatedAt": "2026-09-25",
+ "cohort": {
+  "id": "webinar-2026-10-08",
+  "label": "Webinaire du 8 octobre 2026",
+  "short": "8 oct.",
+  "audience": "Ambulances",
+  "liveAt": "2026-10-08T20:00:00+02:00",
+  "speakers": [
+   "Paul Faucomprez",
+   "Maître Bouchared"
+  ],
+  "pages": [
+   "/"
+  ],
+  "notes": [
+   "Cohorte ouverte le 25/09/2026 : seules la confirmation et l'événement Meta CAPI sont programmés, les relances attendent la copie du dev.",
+   "La confirmation n'a pas de gabarit propre à cette cohorte : elle retombe sur le gabarit générique (« masterclass »), sans lien personnel ni groupe WhatsApp."
+  ],
+  "codeEra": "sept",
+  "stepCount": 1
+ },
+ "sequences": {
+  "pre": {
+   "label": "Séquence pré-webinaire",
+   "description": "De l'inscription au démarrage du live : confirmation, nurturing, rappels et jour J.",
+   "frequency": "Pour l'instant : une seule confirmation, 2 minutes après l'inscription.",
+   "count": 1
+  }
+ },
+ "rules": [
+  "Jamais envoyé à un inscrit désinscrit (lien de désinscription présent dans chaque e-mail)."
+ ],
+ "steps": [
+  {
+   "kind": "email_confirmation",
+   "order": 1,
+   "sequence": "pre",
+   "sequenceIndex": 1,
+   "sequenceCount": 1,
+   "phase": "confirmation",
+   "timing": {
+    "mode": "signup-delay",
+    "minutes": 2,
+    "label": "2 min après l'inscription"
+   },
+   "conditions": [
+    "Un seul par inscrit et par cohorte (une réinscription ne recrée pas de séquence)."
+   ],
+   "subject": "Votre inscription est confirmée",
+   "preheader": "",
+   "snippet": "Votre inscription est bien enregistrée pour notre masterclass : Optimiser les charges sociales et fiscales de votre société d'ambulances 📅 Jeudi 8 octobre 2026 ⏰ 20h00 Durant cette session exceptionnelle, nous verrons c",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_confirmation"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Inscription confirmée</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n\n    <p style=\"margin:0 0 16px;\">Votre inscription est bien enregistrée pour notre masterclass :</p>\n\n    <p style=\"margin:0 0 24px;font-weight:bold;color:#121b35;\">Optimiser les charges sociales et fiscales de votre société d&#39;ambulances</p>\n\n    <p style=\"margin:0 0 8px;\">📅 Jeudi 8 octobre 2026</p>\n    <p style=\"margin:0 0 24px;\">⏰ 20h00</p>\n\n    <p style=\"margin:0 0 12px;\">Durant cette session exceptionnelle, nous verrons comment certains dirigeants parviennent à :</p>\n\n    <ul style=\"margin:0 0 16px;padding-left:24px;\">\n      <li style=\"margin:0 0 6px;\">réduire leurs charges sociales et fiscales</li>\n      <li style=\"margin:0 0 6px;\">revaloriser leur rémunération</li>\n      <li style=\"margin:0 0 6px;\">optimiser leur structure juridique</li>\n      <li style=\"margin:0 0 6px;\">récupérer plusieurs milliers d'euros chaque année</li>\n    </ul>\n\n    <p style=\"margin:0 0 16px;\">Le tout en parfaite conformité avec la réglementation.</p>\n\n    <p style=\"margin:0 0 16px;\">Nous partagerons des exemples réels issus de plus de 1200 entreprises accompagnées.</p>\n\n    <p style=\"margin:0 0 24px;\">Votre lien de connexion vous sera envoyé quelques jours avant l'événement.</p>\n\n    <p style=\"margin:0 0 16px;\">À très bientôt,</p>\n\n    <p style=\"margin:0;\">Paul Faucomprez<br>CEO Owner Technology</p>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    Votre inscription est bien enregistrée pour notre masterclass :\n\n    Optimiser les charges sociales et fiscales de votre société d'ambulances\n\n    📅 Jeudi 8 octobre 2026\n\n    ⏰ 20h00\n\n    Durant cette session exceptionnelle, nous verrons comment certains dirigeants parviennent à :\n\n- réduire leurs charges sociales et fiscales\n\n- revaloriser leur rémunération\n\n- optimiser leur structure juridique\n\n- récupérer plusieurs milliers d'euros chaque année\n\n    Le tout en parfaite conformité avec la réglementation.\n\n    Nous partagerons des exemples réels issus de plus de 1200 entreprises accompagnées.\n\n    Votre lien de connexion vous sera envoyé quelques jours avant l'événement.\n\n    À très bientôt,\n\n    Paul Faucomprez\nCEO Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n"
+  }
+ ]
+}
