@@ -135,8 +135,9 @@ export function LeadTimeline({ id }) {
   );
 }
 
-// Panneau latéral d'un lead : en-tête (qui l'a, où il en est) puis sa frise.
-export default function LeadHistoryPanel({ lead, dark, onClose, depth = 0 }) {
+// Panneau latéral d'un lead : en-tête (qui l'a, où il en est) puis sa frise. `children` s'affiche entre les deux
+// (fiche et doublons dans Gestion des leads) ; `zBase` place le panneau au-dessus d'une barre de navigation.
+export default function LeadHistoryPanel({ lead, dark, onClose, depth = 0, zBase = 62, children }) {
   useEffect(() => {
     if (!lead) return undefined;
     const onKey = (e) => { if (e.key === 'Escape') { e.stopImmediatePropagation(); onClose(); } };
@@ -147,8 +148,8 @@ export default function LeadHistoryPanel({ lead, dark, onClose, depth = 0 }) {
     <AnimatePresence>
       {lead && (
         <div className={`ps2${dark ? ' is-dark' : ''}`} style={{ display: 'contents' }}>
-          <Motion.div className="ps2-overlay" style={{ zIndex: 62 + depth * 2 }} onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} />
-          <Motion.aside className="ps2-panel ps2-hist-panel" style={{ zIndex: 63 + depth * 2 }} role="dialog" aria-modal="true" aria-label={`Historique de ${lead.name || `#${lead.id}`}`}
+          <Motion.div className="ps2-overlay" style={{ zIndex: zBase + depth * 2 }} onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} />
+          <Motion.aside className="ps2-panel ps2-hist-panel" style={{ zIndex: zBase + 1 + depth * 2 }} role="dialog" aria-modal="true" aria-label={`Historique de ${lead.name || `#${lead.id}`}`}
             initial={{ x: 60, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 60, opacity: 0 }} transition={{ duration: 0.45, ease: EASE }}>
             <div className="ps2-panel-head">
               <span className="ps2-mono">Historique du lead #{lead.id}</span>
@@ -166,6 +167,7 @@ export default function LeadHistoryPanel({ lead, dark, onClose, depth = 0 }) {
                   {lead.status && <span>Statut <b>{lead.status}</b></span>}
                 </div>
               </div>
+              {children}
               <LeadTimeline id={lead.id} />
             </div>
           </Motion.aside>
