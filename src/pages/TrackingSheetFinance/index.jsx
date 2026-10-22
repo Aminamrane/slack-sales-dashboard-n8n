@@ -170,6 +170,14 @@ const STYLE_BLOCK = `
   .tsf-stage > *:nth-child(2) { z-index: 25; }
   .tsf-stage > *:nth-child(3) { z-index: 20; }
 
+  /* Le tableau (dernier bloc) est lui aussi isolé : son en-tête collant
+     (z-index 20) et la cellule sélectionnée (50, point à 999) partageaient
+     le contexte de la barre d'outils (rang 20) ; l'animation d'arrivée finie,
+     « Date paie. » et les autres en-têtes repassaient AU-DESSUS des menus
+     Filtre / Trier / Colonnes. Isolé, tout ce qu'il contient reste sous les
+     blocs du haut. */
+  .tsf-stage > *:last-child { isolation: isolate; }
+
   /* Les compteurs du bandeau se posent un à un : c'est le moment où
      l'utilisateur voit que les chiffres ont bien été calculés. */
   .tsf-kpis > * { animation: tsfRise 0.5s cubic-bezier(0.16,1,0.3,1) both; }
