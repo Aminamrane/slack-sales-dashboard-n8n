@@ -1,9 +1,12 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import { Fragment, useEffect, useState, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient"; // Still needed for clients, Info, tracking_sheets
 import apiClient from "../services/apiClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
+import LeadHistoryPanel from "../components/perfSales/v2/LeadHistory.jsx";
+import "../components/perfSales/v2/v2.css";
+import { duplicatesById, mergeLeads, nextRdv, parisToday, rdvLabel } from "../utils/leadsManagement.js";
 import "../index.css";
 
 const COLORS = {
@@ -161,11 +164,16 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
     setDataLoading(true);
     try {
       // Fetch all data in parallel for faster loading
-      const [leadsResult, clientsResult, salesResult, salesTeamResult, assignableResult] = await Promise.all([
-        // Fetch leads from backend API
-        apiClient.get(`/api/v1/leads?limit=400&deduplicate=true`).catch(err => {
+      const [leadsResult, upcomingResult, clientsResult, salesResult, salesTeamResult, assignableResult] = await Promise.all([
+        // Les 400 leads les plus récents, doublons compris (dev 22/10/2026 : « même les doublons faut que je les voie »)
+        apiClient.get(`/api/v1/leads?limit=400`).catch(err => {
           console.error("Error fetching leads:", err);
           return { leads: [], items: [], data: [] };
+        }),
+        // Et tous ceux qui ont un RDV à venir, quel que soit leur âge (un RDV webinaire pris une semaine plus tôt)
+        apiClient.get(`/api/v1/leads?upcoming_rdv=true&limit=1000`).catch(err => {
+          console.error("Error fetching leads with an upcoming appointment:", err);
+          return { leads: [] };
         }),
         // Fetch clients from backend API
         apiClient.get('/api/v1/clients?limit=1000').catch(err => {
@@ -193,7 +201,8 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
       console.log("📊 Assignable users:", assignableResult);
 
       // Set leads from API response - handle different response formats
-      const leadsData = leadsResult?.leads || leadsResult?.items || leadsResult?.data || (Array.isArray(leadsResult) ? leadsResult : []);
+      const listOf = (result) => result?.leads || result?.items || result?.data || (Array.isArray(result) ? result : []);
+      const leadsData = mergeLeads(listOf(leadsResult), listOf(upcomingResult));
       setLeads(leadsData);
       console.log("📊 Leads set:", leadsData.length, "items");
 
@@ -316,6 +325,25 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
     setSelectedLead(lead);
     setShowModal(true);
   };
+
+  // ── FICHE : où en est le lead, ses doublons ─────────────────────────────────
+
+  const today = parisToday();
+  const rdvOf = (lead) => nextRdv(lead, today);
+  const dupes = useMemo(() => duplicatesById(leads), [leads]);
+  const ownerLabel = (lead) => {
+    if (!lead.assigned_to) return 'sans sales';
+    const u = assignableUsers.find(u => u.email === lead.assigned_to);
+    return `chez ${u?.full_name || lead.assigned_to}`;
+  };
+  const panelLead = (lead) => ({
+    id: lead.id, name: lead.full_name, company: lead.company, origin: lead.origin,
+    now: ownerLabel(lead), status: lead.status || 'À traiter',
+  });
+  const tagStyle = (color) => ({
+    fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 6, color,
+    background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+  });
 
   const closeModal = () => {
     setShowModal(false);
@@ -503,7 +531,7 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
                 {
                   key: 'statut', label: 'Statut', state: filterStatut, setter: setFilterStatut,
                   icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>,
-                  options: ['Non assigné', 'Assigné', ...LEAD_STATUS_OPTIONS],
+                  options: ['Non assigné', 'Assigné', 'RDV à venir', 'Doublon', ...LEAD_STATUS_OPTIONS],
                 },
                 {
                   key: 'assigne', label: 'Assigné à', state: filterAssigne, setter: setFilterAssigne,
@@ -624,6 +652,8 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
                             return filterStatut.some(s => {
                               if (s === 'Non assigné') return !l.assigned_to;
                               if (s === 'Assigné') return !!l.assigned_to;
+                              if (s === 'RDV à venir') return !!rdvOf(l);
+                              if (s === 'Doublon') return dupes.has(l.id);
                               return (l.status || 'À traiter') === s;
                             });
                           });
@@ -680,6 +710,16 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
                             </td>
                             <td style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}`, fontSize: 14, fontWeight: 600, color: C.text }}>
                               {lead.full_name || '—'}
+                              {(rdvOf(lead) || dupes.has(lead.id)) && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                                  {rdvOf(lead) && <span style={tagStyle('#3e7d5a')}>{rdvLabel(rdvOf(lead))}</span>}
+                                  {dupes.has(lead.id) && (
+                                    <span style={tagStyle(C.secondary)} title="Même e-mail ou même téléphone qu'une autre fiche">
+                                      Doublon ×{dupes.get(lead.id).length + 1}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </td>
                             <td style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}`, fontSize: 13, color: C.text, textAlign: 'center', fontWeight: 500 }}>
                               {lead.headcount || '—'}
@@ -792,46 +832,46 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
             )}
           </div>
 
-      {/* ── DETAIL MODAL ─────────────────────────────────────────────── */}
-      {showModal && selectedLead && (
-        <>
-          <div onClick={closeModal} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 2000 }} />
-          <div onClick={(e) => e.stopPropagation()} style={{
-            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 2001,
-            width: 480, maxWidth: '90vw', maxHeight: '80vh', overflow: 'auto',
-            background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`,
-            boxShadow: darkMode ? '0 24px 48px rgba(0,0,0,0.4)' : '0 24px 48px rgba(0,0,0,0.1)',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif',
-          }}>
-            <div style={{ padding: '20px 24px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontSize: 17, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>Détails du Lead</div>
-              <button onClick={closeModal} style={{ width: 28, height: 28, borderRadius: '50%', border: 'none', background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
-            </div>
-            <div style={{ padding: '20px 24px', display: 'grid', gap: 16 }}>
+      {/* ── FICHE DU LEAD : où il en est, ses doublons, son historique ───────── */}
+      <LeadHistoryPanel lead={showModal && selectedLead ? panelLead(selectedLead) : null} dark={darkMode} onClose={closeModal} zBase={2000}>
+        {selectedLead && (
+          <>
+            <dl className="ps2-dl">
               {[
-                { label: 'Origine', value: selectedLead.origin },
-                { label: 'Date', value: formatDate(selectedLead.created_at) },
-                { label: 'Nom & Prénom', value: selectedLead.full_name },
-                { label: 'Téléphone', value: selectedLead.phone },
-                { label: 'Email', value: selectedLead.email },
-                { label: 'Salariés', value: selectedLead.headcount },
-                { label: "Chiffre d'Affaires", value: selectedLead.revenue },
-                { label: 'Assigné à', value: (() => {
-                  const u = assignableUsers.find(u => u.email === selectedLead.assigned_to);
-                  return u ? u.full_name : (selectedLead.assigned_to || 'Non assigné');
-                })() },
-                { label: 'Statut', value: selectedLead.status || 'À traiter' },
-                { label: 'Notes', value: selectedLead.notes },
-              ].map((f, i) => (
-                <div key={i}>
-                  <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{f.label}</div>
-                  <div style={{ fontSize: 14, color: C.text, wordBreak: 'break-word' }}>{f.value || '—'}</div>
-                </div>
+                ['Prochain RDV', rdvLabel(rdvOf(selectedLead)) || 'aucun'],
+                ['Téléphone', selectedLead.phone],
+                ['E-mail', selectedLead.email],
+                ['Reçu le', formatDate(selectedLead.created_at)],
+                ['Salariés', selectedLead.headcount],
+                ["Chiffre d'affaires", selectedLead.revenue],
+                ['Campagne', selectedLead.campaign_name],
+                ['Notes', selectedLead.notes],
+              ].map(([label, value]) => (
+                <Fragment key={label}><dt>{label}</dt><dd>{value || '—'}</dd></Fragment>
               ))}
-            </div>
-          </div>
-        </>
-      )}
+            </dl>
+            {dupes.has(selectedLead.id) && (
+              <div>
+                <div className="ps2-mono" style={{ marginBottom: 8 }}>Autres fiches de cette personne ({dupes.get(selectedLead.id).length})</div>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  {dupes.get(selectedLead.id).map(other => (
+                    <button type="button" key={other.id} onClick={() => setSelectedLead(other)} style={{
+                      display: 'flex', flexDirection: 'column', gap: 2, padding: '10px 12px', borderRadius: 12,
+                      border: '1px solid var(--line-2)', background: 'transparent', color: 'var(--ink)',
+                      textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13,
+                    }}>
+                      <b>#{other.id} · {other.origin || 'sans origine'}</b>
+                      <span style={{ color: 'var(--soft)', fontSize: 12 }}>
+                        {[`reçu le ${formatDate(other.created_at)}`, ownerLabel(other), other.status, rdvLabel(rdvOf(other))].filter(Boolean).join(' · ')}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </LeadHistoryPanel>
     </>
   );
 
