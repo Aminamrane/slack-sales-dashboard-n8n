@@ -2852,7 +2852,7 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    // Onboarding : créneaux de l'animateur du client (Vincent, ou Paul s'il a pris le relais).
+    // Onboarding : créneaux de l'animateur du client (Emilie, Vincent, ou Paul pour un ancien dossier).
     const client = kind === "onboarding" && num ? `&numero_client=${encodeURIComponent(num)}` : "";
     apiClient.get(`/api/v1/optilex/board-reschedule-slots?kind=${kind}&start=${start}${client}`)
       .then((r) => { if (alive) { setDays(r.days || []); setLoading(false); } })
@@ -2906,7 +2906,7 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 20px", borderBottom: `1px solid ${BORDER}` }}>
           <button type="button" onClick={() => shiftWeek(-1)} disabled={saving || uncertain || start <= todayIso()}
             style={{ border: `1px solid ${BORDER}`, background: CARD, borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, color: start <= todayIso() ? MUTED : NAVY, cursor: start <= todayIso() ? "default" : "pointer", fontFamily: "inherit" }}>← Sem. préc.</button>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>Créneaux libres · {kind === "onboarding" ? "Vincent + facturation" : kind} · heure de Paris</span>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>Créneaux libres · {kind === "onboarding" ? "animateur + facturation" : kind} · heure de Paris</span>
           <button type="button" disabled={saving || uncertain} onClick={() => shiftWeek(1)}
             style={{ border: `1px solid ${BORDER}`, background: CARD, borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, color: NAVY, cursor: "pointer", fontFamily: "inherit" }}>Sem. suiv. →</button>
         </div>

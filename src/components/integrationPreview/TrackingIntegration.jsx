@@ -429,7 +429,7 @@ export function IntegrationDialog({ context: initialContext, onClose, onSaved, c
               <div><dt>Téléphone du signataire</dt><dd>{preparation.phone || "Non renseigné"}</dd></div>
               <div><dt>Date du contrat</dt><dd>{contractDetails.displayDate ? new Date(`${contractDetails.displayDate}T12:00:00`).toLocaleDateString("fr-FR") : "Date du jour"}</dd></div>
             </dl>
-            <div className="ti-next-appointment"><CalendarDays size={23} /><span><strong>Après la signature</strong>Un rendez-vous onboarding avec Vincent et la facturation.</span></div>
+            <div className="ti-next-appointment"><CalendarDays size={23} /><span><strong>Après la signature</strong>Un rendez-vous onboarding avec le Customer Success et la facturation.</span></div>
             <div className="ti-review-actions">
               <button className="ip-secondary" onClick={() => setStage("intake")}><ArrowLeft size={17} /> Revoir la fiche</button>
               <button className="ip-primary" onClick={() => onSend(preparation)}><Send size={17} />{context.nextAction.type === "resend" ? "Poursuivre le renvoi" : "Envoyer le contrat"}</button>

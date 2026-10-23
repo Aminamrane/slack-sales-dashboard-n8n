@@ -38,7 +38,7 @@ export default function SalesAssessmentFields({ value = {}, onChange }) {
   return <div className="sales-assessment">
     <div className={`sales-assessment-intro ${answered === 6 ? 'is-complete' : ''}`}>
       <HandoffGlyph/>
-      <div className="sales-intro-copy"><strong>Un relais clair pour un bon départ</strong><p>Transmettez votre échange à Vincent : ce qui est clair, les points à préciser et la priorité du client.</p></div>
+      <div className="sales-intro-copy"><strong>Un relais clair pour un bon départ</strong><p>Transmettez votre échange au Customer Success : ce qui est clair, les points à préciser et la priorité du client.</p></div>
       <div className="sales-progress" role="progressbar" aria-label="Questions obligatoires complétées" aria-valuemin={0} aria-valuemax={6} aria-valuenow={answered}>
         <svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20"/><circle className="sales-progress-fill" cx="24" cy="24" r="20" pathLength="6" strokeDasharray={`${answered} 6`}/></svg>
         <span>{answered}<small>/6</small></span>

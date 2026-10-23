@@ -13,7 +13,7 @@ export default function SaleReservation({ preparation, busy, error, onRetry, onC
     return () => clearInterval(timer);
   }, [preparation, confirmed, finalized]);
   const Icon = confirmed || finalized ? CalendarCheck2 : Clock3;
-  // Animateur de l'onboarding : Vincent, ou Paul en relais quand Vincent n'était pas libre.
+  // Animateur de l'onboarding : Emilie, ou Vincent en relais quand elle n'était pas libre (Paul : anciens dossiers).
   const host = preparation?.host_name || 'Vincent';
   return <section className="integration-preview ip-embedded si-reservation">
     <header className="si-title"><span className="si-title-icon"><Icon size={28}/></span><div>

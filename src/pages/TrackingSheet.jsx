@@ -1280,7 +1280,7 @@ export default function TrackingSheet() {
         clientNumero = res.client_numero || null;
       } catch (err) {
         const msg = err?.message || err?.detail || '';
-        if (err?.status === 400) { alert(msg || 'Choisissez le rendez-vous Vincent + facturation avant de déclarer la vente.'); setSaleSubmitting(false); saleRequestBusy.current = false; return; }
+        if (err?.status === 400) { alert(msg || 'Choisissez le rendez-vous onboarding + facturation avant de déclarer la vente.'); setSaleSubmitting(false); saleRequestBusy.current = false; return; }
         if (err?.status === 409) { alert(msg || 'Un client avec cet email existe déjà.'); setSaleSubmitting(false); saleRequestBusy.current = false; return; }
         if (err?.status === 403 || err?.status === 404) { alert(msg || 'Lead introuvable ou accès refusé.'); setSaleSubmitting(false); saleRequestBusy.current = false; return; }
         console.error('declare-sale failed:', err);
@@ -6482,8 +6482,8 @@ export default function TrackingSheet() {
                     </div>
                   ));
                 })()}
-                {/* Dispos onboarding (demande dev 29/09) : consultation seule des créneaux de Vincent et
-                    Paul, pour en parler au client avant le contrat. Le créneau se réserve toujours à la
+                {/* Dispos onboarding (demande dev 29/09) : consultation seule des créneaux d'Emilie et
+                    Vincent, pour en parler au client avant le contrat. Le créneau se réserve toujours à la
                     déclaration de vente. Additif. */}
                 <button type="button" onClick={() => setOnbAvailOpen(true)}
                   style={{
@@ -9201,7 +9201,7 @@ export default function TrackingSheet() {
                 cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
             <div style={{ textAlign: 'center', marginBottom: 18 }}>
               <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Disponibilités onboarding</div>
-              <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Vincent ou Paul, et facturation · pour information, le créneau se réserve à la déclaration de vente</div>
+              <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Emilie ou Vincent, et facturation · pour information, le créneau se réserve à la déclaration de vente</div>
             </div>
             <SaleSlotPicker kind="onboarding" value="" onChange={() => {}} readOnly C={C} darkMode={darkMode} />
           </div>
@@ -9452,7 +9452,7 @@ export default function TrackingSheet() {
                       )}
                     </div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>{saleStep === 'onboarding' ? 'RDV Onboarding' : 'RDV Lancement'}</div>
-                    <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Choisis un créneau libre · {saleStep === 'onboarding' ? 'Vincent ou Paul, et facturation' : "Opti'Lex"}</div>
+                    <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Choisis un créneau libre · {saleStep === 'onboarding' ? 'Emilie ou Vincent, et facturation' : "Opti'Lex"}</div>
                   </div>
 
                   <SaleSlotPicker key={saleStep} kind={saleStep} value={saleSlots[saleStep]} band={saleForm.employeeRange}

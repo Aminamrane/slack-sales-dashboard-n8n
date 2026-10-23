@@ -65,6 +65,7 @@ const OptilexRdvMonitoring = lazy(() => import("./pages/OptilexRdvMonitoring.jsx
 const WorkHours = lazy(() => import("./pages/WorkHours.jsx"));
 const CeoWorkHoursView = lazy(() => import("./pages/CeoWorkHoursView.jsx"));
 const ReactivityMonitor = lazy(() => import("./pages/ReactivityMonitor.jsx"));
+const OnboardingTest = lazy(() => import("./pages/OnboardingTest.jsx"));
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import MouseDot from "./components/MouseDot.jsx";
@@ -225,6 +226,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['admin', 'ceo', 'marketing', 'finance_director', 'head_of_acquisition']}>
               <CeoCampaignsView />
+            </ProtectedRoute>
+          }
+        />
+        {/* Test du RDV d'onboarding de la déclaration de vente, sans déclaration réelle (dev 23/10) */}
+        <Route
+          path="/test-onboarding"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'ceo']}>
+              <OnboardingTest />
             </ProtectedRoute>
           }
         />
