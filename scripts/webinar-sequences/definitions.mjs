@@ -95,21 +95,35 @@ function postSegments(days) {
 /**
  * @brief Suivi post-live des cohortes d'octobre (8/10 et 22/10) : un e-mail par segment, puis 4 e-mails communs.
  * @param p Préfixe des kinds (`post08` | `post22`).
+ * @param plan Dates réelles relevées dans la file d'envoi (`outbox`), clés `missed`, `attended`, `1` à `4` :
+ * `[premier envoi ISO, libellé]`. Sans `plan`, aucune date n'est inventée : le mode `after-live` n'affiche que son libellé.
  * @note La landing ne planifie PAS ces lignes à l'inscription (cf. commentaire de `buildOct08Outbox`) : elles sont créées
- * après le live. Aucune date n'est inventée ici : le mode `after-live` n'affiche que son libellé.
+ * après le live, une fois les présents et les absents connus.
  */
-function postOctober(p) {
-  const afterLive = { mode: 'after-live', label: 'Après le live' };
+function postOctober(p, plan) {
+  const when = (key, label) => (plan?.[key] ? [cal(plan[key][0]), { atLabel: plan[key][1] }] : [{ mode: 'after-live', label }, {}]);
+  const common = 'Parcours commun à tous les inscrits (aucune distinction présents / absents).';
+  const [missedAt, missedExtra] = when('missed', 'Après le live');
+  const [attendedAt, attendedExtra] = when('attended', 'Après le live');
   return [
-    post(`email_${p}_missed`, afterLive, 'missed', { conditions: [RULE_MISSED] }),
-    post(`email_${p}_attended`, afterLive, 'attended', { conditions: [RULE_ATTENDED] }),
-    ...[1, 2, 3, 4].map((n) =>
-      post(`email_${p}_j${n}`, { mode: 'after-live', label: `Relance ${n} après le live` }, 'all', {
-        conditions: ['Parcours commun à tous les inscrits (aucune distinction présents / absents).'],
-      })
-    ),
+    post(`email_${p}_missed`, missedAt, 'missed', { conditions: [RULE_MISSED], ...missedExtra }),
+    post(`email_${p}_attended`, attendedAt, 'attended', { conditions: [RULE_ATTENDED], ...attendedExtra }),
+    ...[1, 2, 3, 4].map((n) => {
+      const [at, extra] = when(String(n), `Relance ${n} après le live`);
+      return post(`email_${p}_j${n}`, at, 'all', { conditions: [common], ...extra });
+    }),
   ];
 }
+
+/** Suivi post-live du 22/10 : dates des lignes `pending` de la file d'envoi (relevé lecture seule du 2026-10-23, envois échelonnés). Heure d'hiver (+01:00) dès le 25/10 à 3 h. */
+const POST22_PLAN = {
+  missed: ['2026-10-23T15:02:00+02:00', '23 oct. · 15h02 à 15h40'],
+  attended: ['2026-10-23T15:03:00+02:00', '23 oct. · 15h03 à 15h40'],
+  1: ['2026-10-24T11:00:00+02:00', '24 oct. · 11h00 (échelonné sur ≈ 40 min)'],
+  2: ['2026-10-25T11:00:00+01:00', '25 oct. · 11h00 (échelonné sur ≈ 40 min)'],
+  3: ['2026-10-26T11:00:00+01:00', '26 oct. · 11h00 (échelonné sur ≈ 40 min)'],
+  4: ['2026-10-27T11:00:00+01:00', '27 oct. · 11h00 (échelonné sur ≈ 40 min)'],
+};
 
 export const COHORTS = [
   // ═══ 26 mai 2026 — TPE/PME, live à 11h00 (cohorte FIGÉE côté landing) ═══════════
@@ -399,7 +413,7 @@ export const COHORTS = [
     notes: [
       "Séquence complète validée par le dev le 28/09 (« Séquence mail + sms Webinaire Ambulance du 8_10 ») : même structure que le 21 septembre.",
       "Deux SMS (Brevo) accompagnent la séquence : 1 h avant le live et au démarrage. Ils n'apparaissent pas dans cette liste, qui ne montre que les e-mails.",
-      "Suivi post-webinaire : planifié après le live, une fois les présents et les absents connus ; la date d'envoi de chaque relance n'est pas lue ici.",
+      "Relevé de la file d'envoi du 23/10 : 21 inscrits (22/09 → 06/10), e-mails partis jusqu'au 05/10 (J-3). Il n'existe aucune ligne d'envoi pour le rappel J-1, le jour J ni le suivi post-live : ces étapes sont montrées telles que prévues par le code, sans envoi.",
     ],
     sequences: {
       pre: {
@@ -410,7 +424,7 @@ export const COHORTS = [
       post: {
         ...SEQ_POST,
         frequency:
-          "Relances planifiées après le live : un premier e-mail par segment (absents / présents), puis 4 e-mails communs à tous les inscrits.",
+          "Aucune relance post-live programmée au 23/10 (aucune ligne d'envoi) : un e-mail par segment (absents / présents) puis 4 e-mails communs sont prévus par le code.",
       },
     },
     steps: [
@@ -443,7 +457,7 @@ export const COHORTS = [
       "Copie fournie par le dev (« Campagne mail et SMS webinaire broad du 22_10 à 11h », 11/10) : même structure que le 8 octobre.",
       "Live à 11h00 : le mail du jour J part à 8h30 (comme le 26 mai), la veille à 18h00. Les inscrits arrivent du formulaire Meta « Webinaire BROAD - OCTOBRE » (lu en direct, sans n8n).",
       "Deux SMS (Brevo) accompagnent la séquence : 1 h avant le live et au démarrage. Ils n'apparaissent pas dans cette liste, qui ne montre que les e-mails.",
-      "Suivi post-webinaire : planifié après le live, une fois les présents et les absents connus ; la date d'envoi de chaque relance n'est pas lue ici.",
+      "Suivi post-webinaire planifié le 23/10 (lendemain du live) : un e-mail par segment entre 15h00 et 15h40, puis un e-mail commun par jour à 11h00 du 24 au 27 octobre (échelonné sur ≈ 40 min). Dates relevées dans la file d'envoi le 23/10.",
     ],
     sequences: {
       pre: {
@@ -454,7 +468,7 @@ export const COHORTS = [
       post: {
         ...SEQ_POST,
         frequency:
-          "Relances planifiées après le live : un premier e-mail par segment (absents / présents), puis 4 e-mails communs à tous les inscrits.",
+          "Un e-mail par segment (absents / présents) le 23 octobre entre 15h00 et 15h40, puis 4 e-mails communs à tous les inscrits, un par jour à 11h00 du 24 au 27 octobre.",
       },
     },
     steps: [
@@ -469,7 +483,7 @@ export const COHORTS = [
       pre('email_oct22_h1', 'liveday', cal('2026-10-22T10:00:00+02:00'), { conditions: [RULE_ANCHOR] }),
       pre('email_oct22_live', 'liveday', cal('2026-10-22T11:00:00+02:00'), { conditions: [RULE_ANCHOR] }),
       pre('email_oct22_live15', 'liveday', cal('2026-10-22T11:15:00+02:00'), { conditions: [RULE_ANCHOR] }),
-      ...postOctober('post22'),
+      ...postOctober('post22', POST22_PLAN),
     ],
   },
 ];

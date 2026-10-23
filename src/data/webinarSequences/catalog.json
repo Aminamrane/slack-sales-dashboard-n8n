@@ -117,7 +117,7 @@
   "notes": [
    "Séquence complète validée par le dev le 28/09 (« Séquence mail + sms Webinaire Ambulance du 8_10 ») : même structure que le 21 septembre.",
    "Deux SMS (Brevo) accompagnent la séquence : 1 h avant le live et au démarrage. Ils n'apparaissent pas dans cette liste, qui ne montre que les e-mails.",
-   "Suivi post-webinaire : planifié après le live, une fois les présents et les absents connus ; la date d'envoi de chaque relance n'est pas lue ici."
+   "Relevé de la file d'envoi du 23/10 : 21 inscrits (22/09 → 06/10), e-mails partis jusqu'au 05/10 (J-3). Il n'existe aucune ligne d'envoi pour le rappel J-1, le jour J ni le suivi post-live : ces étapes sont montrées telles que prévues par le code, sans envoi."
   ],
   "codeEra": "sept",
   "stepCount": 19
@@ -139,7 +139,7 @@
    "Copie fournie par le dev (« Campagne mail et SMS webinaire broad du 22_10 à 11h », 11/10) : même structure que le 8 octobre.",
    "Live à 11h00 : le mail du jour J part à 8h30 (comme le 26 mai), la veille à 18h00. Les inscrits arrivent du formulaire Meta « Webinaire BROAD - OCTOBRE » (lu en direct, sans n8n).",
    "Deux SMS (Brevo) accompagnent la séquence : 1 h avant le live et au démarrage. Ils n'apparaissent pas dans cette liste, qui ne montre que les e-mails.",
-   "Suivi post-webinaire : planifié après le live, une fois les présents et les absents connus ; la date d'envoi de chaque relance n'est pas lue ici."
+   "Suivi post-webinaire planifié le 23/10 (lendemain du live) : un e-mail par segment entre 15h00 et 15h40, puis un e-mail commun par jour à 11h00 du 24 au 27 octobre (échelonné sur ≈ 40 min). Dates relevées dans la file d'envoi le 23/10."
   ],
   "codeEra": "sept",
   "stepCount": 19

@@ -17,7 +17,7 @@
   "notes": [
    "Séquence complète validée par le dev le 28/09 (« Séquence mail + sms Webinaire Ambulance du 8_10 ») : même structure que le 21 septembre.",
    "Deux SMS (Brevo) accompagnent la séquence : 1 h avant le live et au démarrage. Ils n'apparaissent pas dans cette liste, qui ne montre que les e-mails.",
-   "Suivi post-webinaire : planifié après le live, une fois les présents et les absents connus ; la date d'envoi de chaque relance n'est pas lue ici."
+   "Relevé de la file d'envoi du 23/10 : 21 inscrits (22/09 → 06/10), e-mails partis jusqu'au 05/10 (J-3). Il n'existe aucune ligne d'envoi pour le rappel J-1, le jour J ni le suivi post-live : ces étapes sont montrées telles que prévues par le code, sans envoi."
   ],
   "codeEra": "sept",
   "stepCount": 19
@@ -32,7 +32,7 @@
   "post": {
    "label": "Séquence post-webinaire",
    "description": "Relances après le live pour amener les inscrits vers un audit.",
-   "frequency": "Relances planifiées après le live : un premier e-mail par segment (absents / présents), puis 4 e-mails communs à tous les inscrits.",
+   "frequency": "Aucune relance post-live programmée au 23/10 (aucune ligne d'envoi) : un e-mail par segment (absents / présents) puis 4 e-mails communs sont prévus par le code.",
    "count": 6
   }
  },

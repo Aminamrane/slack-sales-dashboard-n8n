@@ -18,7 +18,7 @@
    "Copie fournie par le dev (« Campagne mail et SMS webinaire broad du 22_10 à 11h », 11/10) : même structure que le 8 octobre.",
    "Live à 11h00 : le mail du jour J part à 8h30 (comme le 26 mai), la veille à 18h00. Les inscrits arrivent du formulaire Meta « Webinaire BROAD - OCTOBRE » (lu en direct, sans n8n).",
    "Deux SMS (Brevo) accompagnent la séquence : 1 h avant le live et au démarrage. Ils n'apparaissent pas dans cette liste, qui ne montre que les e-mails.",
-   "Suivi post-webinaire : planifié après le live, une fois les présents et les absents connus ; la date d'envoi de chaque relance n'est pas lue ici."
+   "Suivi post-webinaire planifié le 23/10 (lendemain du live) : un e-mail par segment entre 15h00 et 15h40, puis un e-mail commun par jour à 11h00 du 24 au 27 octobre (échelonné sur ≈ 40 min). Dates relevées dans la file d'envoi le 23/10."
   ],
   "codeEra": "sept",
   "stepCount": 19
@@ -33,7 +33,7 @@
   "post": {
    "label": "Séquence post-webinaire",
    "description": "Relances après le live pour amener les inscrits vers un audit.",
-   "frequency": "Relances planifiées après le live : un premier e-mail par segment (absents / présents), puis 4 e-mails communs à tous les inscrits.",
+   "frequency": "Un e-mail par segment (absents / présents) le 23 octobre entre 15h00 et 15h40, puis 4 e-mails communs à tous les inscrits, un par jour à 11h00 du 24 au 27 octobre.",
    "count": 6
   }
  },
@@ -1028,8 +1028,9 @@
    "phase": "post",
    "segment": "missed",
    "timing": {
-    "mode": "after-live",
-    "label": "Après le live"
+    "mode": "calendar",
+    "at": "2026-10-23T15:02:00+02:00",
+    "label": "23 oct. · 15h02 à 15h40"
    },
    "conditions": [
     "Segment « absents » (sans rendez-vous d'audit). Bascule vers « présents » si l'inscrit clique « Oui, j'étais présent » dans un e-mail post-live."
@@ -1084,8 +1085,9 @@
    "phase": "post",
    "segment": "attended",
    "timing": {
-    "mode": "after-live",
-    "label": "Après le live"
+    "mode": "calendar",
+    "at": "2026-10-23T15:03:00+02:00",
+    "label": "23 oct. · 15h03 à 15h40"
    },
    "conditions": [
     "Segment « présents » (sans rendez-vous d'audit). Bascule vers « absents » si l'inscrit clique « Non, absent » dans un e-mail post-live."
@@ -1140,8 +1142,9 @@
    "phase": "post",
    "segment": "all",
    "timing": {
-    "mode": "after-live",
-    "label": "Relance 1 après le live"
+    "mode": "calendar",
+    "at": "2026-10-24T11:00:00+02:00",
+    "label": "24 oct. · 11h00 (échelonné sur ≈ 40 min)"
    },
    "conditions": [
     "Parcours commun à tous les inscrits (aucune distinction présents / absents)."
@@ -1196,8 +1199,9 @@
    "phase": "post",
    "segment": "all",
    "timing": {
-    "mode": "after-live",
-    "label": "Relance 2 après le live"
+    "mode": "calendar",
+    "at": "2026-10-25T11:00:00+01:00",
+    "label": "25 oct. · 11h00 (échelonné sur ≈ 40 min)"
    },
    "conditions": [
     "Parcours commun à tous les inscrits (aucune distinction présents / absents)."
@@ -1252,8 +1256,9 @@
    "phase": "post",
    "segment": "all",
    "timing": {
-    "mode": "after-live",
-    "label": "Relance 3 après le live"
+    "mode": "calendar",
+    "at": "2026-10-26T11:00:00+01:00",
+    "label": "26 oct. · 11h00 (échelonné sur ≈ 40 min)"
    },
    "conditions": [
     "Parcours commun à tous les inscrits (aucune distinction présents / absents)."
@@ -1308,8 +1313,9 @@
    "phase": "post",
    "segment": "all",
    "timing": {
-    "mode": "after-live",
-    "label": "Relance 4 après le live"
+    "mode": "calendar",
+    "at": "2026-10-27T11:00:00+01:00",
+    "label": "27 oct. · 11h00 (échelonné sur ≈ 40 min)"
    },
    "conditions": [
     "Parcours commun à tous les inscrits (aucune distinction présents / absents)."
