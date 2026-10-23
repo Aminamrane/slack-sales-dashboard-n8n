@@ -27,7 +27,7 @@ import { requiresExitDecision } from '../../utils/boardFinanceExit.js';
 //   PATCH succeeds → server returns the recomputed row, we replace it.
 //   PATCH fails (422 / network) → toast + rollback to the original row.
 
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -2416,12 +2416,98 @@ function RelanceMonthPicker({ selected, onChange }) {
   );
 }
 
+// Les puces se calent sur la largeur réellement disponible (barre latérale,
+// zoom, mode embarqué, police du poste) : on mesure leur texte dans le
+// navigateur et on prend la plus grande taille qui laisse toutes les puces sur
+// une seule ligne, à CHIP_ROW_MARGIN px du bord droit. Une seule variable, --chip-t
+// (0 = compact, 1 = taille d'origine), posée sur la rangée : pas de nouveau
+// rendu React, donc pas d'animation parasite de la pastille active.
+const CHIP_ROW_MARGIN = 6;
+const CHIP_MIN = { font: 10, count: 9, padX: 4, height: 22, gap: 2 };
+const CHIP_MAX = { font: 12.5, count: 11, padX: 12, height: 28, gap: 6 };
+const chipCss = (key) => `calc(${CHIP_MIN[key]}px + ${CHIP_MAX[key] - CHIP_MIN[key]}px * var(--chip-t, 1))`;
+const chipDims = (t) => Object.fromEntries(
+  Object.keys(CHIP_MIN).map((k) => [k, CHIP_MIN[k] + (CHIP_MAX[k] - CHIP_MIN[k]) * t]),
+);
+
+function fitChipRow(row) {
+  const chips = Array.from(row.querySelectorAll('[data-chip]'));
+  const avail = row.clientWidth - CHIP_ROW_MARGIN;
+  if (chips.length < 2 || avail <= 0) return;
+  let t = Number.parseFloat(row.style.getPropertyValue('--chip-t'));
+  if (!Number.isFinite(t)) t = 1;
+  // Le texte mesuré à la taille courante sert à prédire la largeur à une autre
+  // taille ; on re-mesure après chaque réglage pour corriger l'écart.
+  for (let pass = 0; pass < 4; pass += 1) {
+    const cur = chipDims(t);
+    const parts = chips.map((c) => ({
+      label: c.querySelector('[data-chip-label]').getBoundingClientRect().width,
+      count: c.querySelector('[data-chip-count]')?.getBoundingClientRect().width ?? 0,
+    }));
+    const widthAt = (x) => {
+      const d = chipDims(x);
+      return parts.reduce((sum, p) => sum + 2 + 2 * d.padX + p.label * (d.font / cur.font)
+        + (p.count ? d.gap + p.count * (d.count / cur.count) : 0), 0) + (parts.length - 1) * d.gap;
+    };
+    let next = 1;
+    if (widthAt(1) > avail) {
+      if (widthAt(0) >= avail) {
+        next = 0;
+      } else {
+        let lo = 0;
+        let hi = 1;
+        for (let i = 0; i < 24; i += 1) {
+          const mid = (lo + hi) / 2;
+          if (widthAt(mid) <= avail) lo = mid; else hi = mid;
+        }
+        next = Math.floor(lo * 1000) / 1000;
+      }
+    }
+    if (Math.abs(next - t) < 0.002) break;
+    t = next;
+    row.style.setProperty('--chip-t', String(t));
+  }
+  // Garde-fou : si une puce est quand même passée à la ligne, on réduit.
+  for (let guard = 0; guard < 40 && t > 0
+    && chips[chips.length - 1].offsetTop - chips[0].offsetTop > 2; guard += 1) {
+    t = Math.max(0, t - 0.01);
+    row.style.setProperty('--chip-t', String(t));
+  }
+}
+
 function ViewChips({ active, onChange, counts, lateOnboarding, onLateOnboardingChange, onboardingPhase, onOnboardingPhaseChange,
   relanceMonths, onRelanceMonthsChange, creanceAge, onCreanceAgeChange,
   optilexPhase = 'all', onOptilexPhaseChange, optilexPhaseCounts }) {
+  const rowRef = useRef(null);
+  // Après chaque rendu (compteurs, puce active : le texte change de largeur).
+  useLayoutEffect(() => {
+    if (rowRef.current) fitChipRow(rowRef.current);
+  });
+  // Changement de largeur de la rangée, et polices fraîchement chargées.
+  useEffect(() => {
+    const row = rowRef.current;
+    if (!row) return undefined;
+    let raf = 0;
+    let lastWidth = row.clientWidth;
+    const refit = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => fitChipRow(row));
+    };
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => {
+      if (row.clientWidth !== lastWidth) { lastWidth = row.clientWidth; refit(); }
+    });
+    ro?.observe(row);
+    document.fonts?.ready?.then(refit);
+    document.fonts?.addEventListener?.('loadingdone', refit);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro?.disconnect();
+      document.fonts?.removeEventListener?.('loadingdone', refit);
+    };
+  }, []);
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 6,
+    <div ref={rowRef} style={{
+      display: 'flex', alignItems: 'center', gap: chipCss('gap'),
       padding: '10px 0 2px',
       flexWrap: 'wrap',
     }}>
@@ -2432,17 +2518,18 @@ function ViewChips({ active, onChange, counts, lateOnboarding, onLateOnboardingC
           <button
             key={v.key}
             type="button"
+            data-chip
             onClick={() => onChange(v.key)}
             style={{
               position: 'relative',
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              height: 28, padding: '0 12px',
+              display: 'inline-flex', alignItems: 'center', gap: chipCss('gap'),
+              height: chipCss('height'), padding: `0 ${chipCss('padX')}`,
               border: `1px solid ${isActive ? 'transparent' : N.border}`,
               borderRadius: 999,
               background: 'transparent',
               cursor: 'pointer',
               fontFamily: 'inherit',
-              fontSize: 12.5,
+              fontSize: chipCss('font'),
               fontWeight: isActive ? 600 : 500,
               color: isActive ? '#ffffff' : N.textMuted,
               transition: 'color 0.18s ease, border-color 0.18s ease',
@@ -2462,11 +2549,11 @@ function ViewChips({ active, onChange, counts, lateOnboarding, onLateOnboardingC
                 }}
               />
             )}
-            <span style={{ position: 'relative', zIndex: 1 }}>{v.label}</span>
+            <span data-chip-label style={{ position: 'relative', zIndex: 1 }}>{v.label}</span>
             {count !== undefined && (
-              <span style={{
+              <span data-chip-count style={{
                 position: 'relative', zIndex: 1,
-                fontSize: 11, fontWeight: 600,
+                fontSize: chipCss('count'), fontWeight: 600,
                 fontVariantNumeric: 'tabular-nums',
                 color: isActive ? 'rgba(255,255,255,0.72)' : N.textFaint,
               }}>
