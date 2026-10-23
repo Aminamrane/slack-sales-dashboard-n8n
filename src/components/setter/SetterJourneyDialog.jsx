@@ -23,12 +23,16 @@ const dateLabel = (day, opts = {}) => new Date(`${day}T12:00:00Z`).toLocaleDateS
 // `initialOutcome` : ouverture directe sur « Placer un R1 / R2 » (reprise d'un lead de Seconde chance) ;
 // `lockSales` : un R2 se repose avec ce commercial, seul agenda proposé.
 // `autoAssign` : R2 d'une Seconde chance par l'agenda unique, comme le R1 (dev 15/10/2026).
+// R2 d'un lead sans sales propriétaire (dev 23/10/2026) : le serveur répond l'agenda unique (`auto_assign`) et le setter ne
+// choisit pas le commercial. `autoR2` : null tant que la première réponse n'est pas arrivée ; « Créneaux disponibles /
+// Forcer » n'apparaît que pour un lead qui a son sales (ou si la consultation échoue).
 export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onSaved, dark = false, browseOnly = false, asSetter = null, prospect = null, onBook = null, initialOutcome = null, lockSales = null, autoAssign = false }) {
   const [outcome, setOutcome] = useState(initialOutcome || (browseOnly || onBook ? 'r1' : ''));
   const [slot, setSlot] = useState(null), [note, setNote] = useState(''), [email, setEmail] = useState(lead?.email || '');
   const [callback, setCallback] = useState(''), [targetCalendar, setTargetCalendar] = useState('sales');
   const [data, setData] = useState(null), [loading, setLoading] = useState(false), [reload, setReload] = useState(0);
   const [dayPage, setDayPage] = useState(0);
+  const [autoR2, setAutoR2] = useState(null);
   const [bookingMode, setBookingMode] = useState('available');
   const [manualDate, setManualDate] = useState(''), [manualSales, setManualSales] = useState('');
   const [day, setDay] = useState(''), [salesFilter, setSalesFilter] = useState('');
@@ -38,7 +42,7 @@ export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onS
   const submitting = useRef(false), ref = useRef(null);
   useDialogFocus(ref, onClose, busy);
   const booking = outcome === 'r1' || outcome === 'r2';
-  const single = outcome === 'r1' || (autoAssign && outcome === 'r2');
+  const single = outcome === 'r1' || ((autoAssign || autoR2) && outcome === 'r2');
   const query = () => {
     const params = new URLSearchParams({ kind: outcome });
     if (single && onBook && prospect?.itemId) return `/api/v1/prospection/items/${prospect.itemId}/agenda`;
@@ -51,7 +55,7 @@ export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onS
     if (!booking || bookingMode === 'manual') { setLoading(false); return; }
     let disposed = false;
     setLoading(true); setError(''); setData(null); setSlot(null); setDay(''); setDayPage(0);
-    apiClient.get(query()).then(result => { if (!disposed) setData(result); })
+    apiClient.get(query()).then(result => { if (!disposed) { if (!single) setAutoR2(!!result?.auto_assign); setData(result); } })
       .catch(e => { if (!disposed) setError(e.message || 'Impossible de consulter les agendas. Réessayez.'); })
       .finally(() => { if (!disposed) setLoading(false); });
     return () => { disposed = true; };
@@ -112,7 +116,7 @@ export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onS
         {!outcome && <><h3 className="stj-question">Quel est le résultat de l’appel ?</h3><div className="sj-options stj-outcomes">{outcomes.map(([value, title, desc, Icon]) => <button key={value} onClick={() => selectOutcome(value)}><Icon size={23}/><span><strong>{title}</strong><small>{desc}</small></span><ChevronRight size={17}/></button>)}</div></>}
         {outcome && <>
           {browseOnly ? <div className="sj-attendance" aria-label="Type de rendez-vous">{['r1', 'r2'].map(k => <button key={k} disabled={busy} aria-pressed={outcome === k} onClick={() => selectOutcome(k)}>{k.toUpperCase()} · {k === 'r1' ? 'Premier rendez-vous' : 'Audit'}</button>)}</div> : <div className="stj-step">{!onBook && <button disabled={busy} onClick={() => selectOutcome('')}><ArrowLeft size={16}/> Résultat de l’appel</button>}<strong>{outcomes.find(o => o[0] === outcome)?.[1]}</strong></div>}
-          {booking && !single && !browseOnly && !lockSales && <div className="sj-attendance stj-booking-mode" aria-label="Mode de réservation"><button disabled={busy} aria-pressed={bookingMode === 'available'} onClick={() => {setBookingMode('available');setError('');}}><CalendarDays size={18}/> Créneaux disponibles</button><button disabled={busy} aria-pressed={bookingMode === 'manual'} onClick={() => {setBookingMode('manual');setError('');}}><Clock3 size={18}/> Forcer un rendez-vous</button></div>}
+          {booking && !single && !browseOnly && !lockSales && (autoR2 === false || error || bookingMode === 'manual') && <div className="sj-attendance stj-booking-mode" aria-label="Mode de réservation"><button disabled={busy} aria-pressed={bookingMode === 'available'} onClick={() => {setBookingMode('available');setError('');}}><CalendarDays size={18}/> Créneaux disponibles</button><button disabled={busy} aria-pressed={bookingMode === 'manual'} onClick={() => {setBookingMode('manual');setError('');}}><Clock3 size={18}/> Forcer un rendez-vous</button></div>}
           {booking && bookingMode === 'manual' && !browseOnly && <div className="stj-manual"><p className="stj-muted">Avec l’accord du sales, placez le rendez-vous à l’heure convenue, même hors de ses disponibilités.</p>{<label className="stj-sales-filter">Commercial<select aria-label="Commercial pour le rendez-vous manuel" disabled={busy} value={manualEmail} onChange={e => setManualSales(e.target.value)}><option value="">Choisir un commercial</option>{manualOptions.map(s => <option key={s.email} value={s.email}>{s.name}</option>)}</select></label>}<ParisDateTimeInput label="Date et heure convenues" value={manualDate} onChange={setManualDate} disabled={busy}/></div>}
           {booking && bookingMode === 'available' && <div className="stj-calendar">
             <div className="stj-calendar-bar"><div><CalendarDays size={17}/><strong>Créneaux disponibles</strong><span>Heure de Paris</span></div><button aria-label="Actualiser les disponibilités" disabled={loading || busy} onClick={() => setReload(v => v + 1)}><RefreshCw size={16} className={loading ? 'stj-spin' : ''}/></button></div>
