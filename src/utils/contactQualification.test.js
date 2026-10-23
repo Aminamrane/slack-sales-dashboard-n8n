@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {contactQualificationPatch, CALLBACK_NOTE_MAX, CALLBACK_RULE_HELP, CALLBACK_SHIFTS_MAX, recallInPast, recallRuleFrozen, recallRuleNote, recallWhen} from './contactQualification.js';
+import {contactQualificationPatch, CALLBACK_NOTE_MAX, CALLBACK_RULE_HELP, CALLBACK_SHIFTS_MAX, recallInPast, recallNote, recallRuleFrozen, recallRuleNote, recallWhen} from './contactQualification.js';
 const lead = {id: 1, status: 'new', email: 'fixture@example.invalid'};
 const patch = (values, category = 'new', source = lead) => contactQualificationPatch(source, category, values, '2026-09-22');
 test('contact outcomes preserve the existing statuses and create no appointments', () => {
@@ -88,6 +88,20 @@ test('a saved callback is read as written, in Paris wall-clock time, with no tim
 test('an unreadable callback reads as nothing rather than a wrong date', () => {
   for (const value of ['', null, undefined, 'bientôt', '2026-10-19', '19/10/2026 16:15', 42]) assert.equal(recallWhen(value), '');
   for (const value of ['2026-13-45T10:00:00+00:00', '2026-02-30T10:00:00+00:00', '2026-10-19T25:00:00+00:00', '2026-10-19T10:61:00+00:00']) assert.equal(recallWhen(value), '');
+});
+// La description d'un rappel daté s'affiche dans la carte « Note » de la fiche : elle est lue telle que saisie, sans rien inventer pour les anciens rappels.
+test('the note of a dated callback is its description, trimmed, and nothing else', () => {
+  const saved = {callback_at: '2026-10-19T16:15:00+00:00', callback_description: '  Rappeler après sa réunion\n- tarif du pack  '};
+  assert.equal(recallNote(saved), 'Rappeler après sa réunion\n- tarif du pack');
+  assert.equal(recallNote({...saved, callback_description: 'Court'}), 'Court');
+  for (const empty of ['', '   ', '\n']) assert.equal(recallNote({...saved, callback_description: empty}), '', JSON.stringify(empty));   // date posée sans texte : pas de note
+});
+test('an old callback, an unreadable date or no lead at all has no note, so nothing new shows on existing data', () => {
+  const text = 'Rappeler plus tard';
+  assert.equal(recallNote({callback_at: '2026-10-19T16:15:00+00:00'}), '');                              // ancien rappel : aucune description enregistrée
+  assert.equal(recallNote({callback_at: '2026-10-19T16:15:00+00:00', callback_description: null}), '');
+  for (const callback_at of [null, undefined, '', 'bientôt', '2026-02-30T10:00:00+00:00']) assert.equal(recallNote({callback_at, callback_description: text}), '', String(callback_at));
+  for (const missing of [null, undefined, {}]) assert.equal(recallNote(missing), '');
 });
 // Règle des 3 jours : 4 réaffectations décalent la règle, la mention n'apparaît qu'ensuite et seulement pour un rappel daté.
 test('the 3-day rule is announced as frozen only once 4 reassignments are done, for a dated callback', () => {

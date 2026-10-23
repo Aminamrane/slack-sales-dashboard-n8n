@@ -23,7 +23,7 @@ import DailyQualificationDeck from '../components/salesJourney/DailyQualificatio
 import { ownRdvsToQualify, viewedSheet } from '../utils/dailyQualification';
 import QualificationDialog from '../components/salesJourney/QualificationDialog';
 import ContactQualificationDialog from '../components/salesJourney/ContactQualificationDialog';
-import {contactQualificationPatch, recallInPast, recallWhen, recallRuleNote, CALLBACK_NOTE_MAX, CALLBACK_RULE_HELP} from '../utils/contactQualification';
+import {contactQualificationPatch, recallInPast, recallNote, recallWhen, recallRuleNote, CALLBACK_NOTE_MAX, CALLBACK_RULE_HELP} from '../utils/contactQualification';
 import NotesDialog from '../components/salesJourney/NotesDialog';
 import { SaleIntake, SaleDocuments } from "../components/integrationPreview/SaleIntake";
 import PortalAccess from '../components/salesJourney/PortalAccess';
@@ -5971,6 +5971,9 @@ export default function TrackingSheet() {
           if (!lead) return null;
           const origin = ORIGIN_COLORS[lead.origin] || DEFAULT_ORIGIN;
           const notesVal = editingNotes[lead.id] !== undefined ? editingNotes[lead.id] : lead.notes;
+          // La description d'un rappel daté (onglets « À rappeler » et « Répondeurs ») est une note : elle va dans la carte « Note », pas dans l'en-tête.
+          const recallText = (activeCat.key === 'callback' || activeCat.key === 'voicemail') ? recallNote(lead) : '';
+          const notesShown = !!lead.notes && (isGuidedLead(lead) || !editingNotes.hasOwnProperty(lead.id));
           const selectStyle = {
             padding: '7px 28px 7px 12px', borderRadius: '10px', border: `1px solid ${C.border}`,
             background: darkMode ? '#16171e' : '#fff', color: C.text, fontSize: '13px', fontWeight: 500, cursor: 'pointer',
@@ -6131,14 +6134,13 @@ export default function TrackingSheet() {
                     })()}
                   </div>
                 )}
-                {/* Rappel daté (16/10/2026) : quand le sales a convenu de rappeler le prospect, et ce qui a été dit (callback_at est l'heure de Paris, lue telle quelle).
+                {/* Rappel daté (16/10/2026) : quand le sales a convenu de rappeler le prospect (callback_at est l'heure de Paris, lue telle quelle) ; ce qui a été dit est dans la carte « Note ».
                     NON rétroactif : seuls les rappels posés avec la nouvelle fenêtre ont une description enregistrée (même vide) ; les anciens rappels (setters, ancien parcours) n'en ont pas et ne changent pas. */}
                 {(activeCat.key === 'callback' || activeCat.key === 'voicemail') && lead.callback_description != null && recallWhen(lead.callback_at) && (() => {
                   const late = recallInPast(String(lead.callback_at).slice(0, 16));
                   return (
                     <div style={{ marginTop: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: late ? (darkMode ? '#f87171' : '#b91c1c') : (darkMode ? '#fbbf24' : '#b45309') }}>Rappel prévu : {recallWhen(lead.callback_at)}{late ? ' (dépassé)' : ''}</span>
-                      {lead.callback_description && <span style={{ fontSize: 12, color: C.text, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{lead.callback_description}</span>}
                     </div>
                   );
                 })()}
@@ -6601,16 +6603,18 @@ export default function TrackingSheet() {
                 </div>
               )}
 
-              {/* ─── NOTES ─── */}
-              {lead.notes && (isGuidedLead(lead) || !editingNotes.hasOwnProperty(lead.id)) && (
+              {/* ─── NOTES ─── (la note du rappel daté d'abord, puis les notes du lead ; pendant la saisie en ligne d'une note, la note du rappel reste visible) */}
+              {(recallText || notesShown) && (
                 <div style={{
                   marginBottom: 10, padding: '8px 12px', borderRadius: 8,
                   background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
                   border: `1px solid ${darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'}`,
                 }}>
                   <span style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Note</span>
-                  <SalesNotesView value={lead.notes}/>
-                  {lead.notes_updated_at && formatNoteDate(lead.notes_updated_at) && (
+                  {recallText && <SalesNotesView value={recallText}/>}
+                  {recallText && notesShown && <div style={{ height: 1, margin: '8px 0', background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }} />}
+                  {notesShown && <SalesNotesView value={lead.notes}/>}
+                  {notesShown && lead.notes_updated_at && formatNoteDate(lead.notes_updated_at) && (
                     <div style={{ fontSize: 10, color: C.muted, marginTop: 6, textAlign: 'right', fontStyle: 'normal' }}>
                       Modifié {formatNoteDate(lead.notes_updated_at)}
                     </div>

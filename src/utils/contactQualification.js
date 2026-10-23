@@ -36,6 +36,12 @@ export function recallWhen(value) {
   return `${recallDay.format(day)} à ${m[4]}h${m[5]}`;
 }
 
+// Description d'un rappel daté, lue pour la carte « Note » de la fiche (et non pour l'en-tête, où elle étirait la fiche).
+// Chaîne vide pour un ancien rappel (aucune description enregistrée : ils ne changent pas), une date de rappel illisible ou une description vide.
+export function recallNote(lead) {
+  return lead?.callback_description != null && recallWhen(lead.callback_at) ? String(lead.callback_description).trim() : '';
+}
+
 // Heure-mur de Paris « maintenant » au format des rendez-vous (YYYY-MM-DDTHH:MM), pour comparer des chaînes sans fuseau.
 function parisNowLocal(now) {
   const p = Object.fromEntries(new Intl.DateTimeFormat('sv-SE', {
