@@ -171,6 +171,24 @@ export const ExitIcon = (p) => (
   </Icon>
 );
 
+// En pause — le cercle et ses deux barres.
+export const PauseIcon = (p) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M10 9v6M14 9v6" />
+  </Icon>
+);
+
+// Liquidations — la balance : fléau, deux plateaux, pied.
+export const LiquidationIcon = (p) => (
+  <Icon {...p}>
+    <path d="M12 4.5v15M8.5 20h7" />
+    <path d="M5.5 7h13" />
+    <path d="m5.5 7-2.5 6h5l-2.5-6ZM18.5 7l-2.5 6h5l-2.5-6Z" />
+    <path d="M3 13a2.5 2.5 0 0 0 5 0M16 13a2.5 2.5 0 0 0 5 0" />
+  </Icon>
+);
+
 // Exporter — la feuille de calcul qui sort.
 export const ExportIcon = (p) => (
   <Icon {...p}>

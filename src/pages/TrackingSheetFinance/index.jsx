@@ -57,6 +57,7 @@ import SequencesView from './components/SequencesView.jsx';
 import {
   TableIcon, InboxIcon, LossIcon, CheckCircleIcon, ClockIcon, OverdueIcon,
   RefundIcon, CalendarCheckIcon, CalendarClockIcon, MeteoFilterIcon, ContractPendingIcon, BankOffIcon, ExitIcon, ExportIcon, ContactIcon,
+  PauseIcon, LiquidationIcon,
 } from './components/FinanceIcons.jsx';
 import { exportFinanceXlsx } from './exportExcel.js';
 import { parisToday } from '../../utils/parisDates.js';
@@ -290,6 +291,8 @@ const VIEW_ICONS = {
   non_auto:         BankOffIcon,
   attente_optilex:  ContractPendingIcon,
   resilies:         ExitIcon,
+  pause:            PauseIcon,
+  liquidation:      LiquidationIcon,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -327,6 +330,12 @@ const VIEW_FILTERS = [
   // ni attendu, flaguées (demande dev 2026-09-18).
   { key: 'attente_optilex', label: PENDING_OPTILEX_LABEL },
   { key: 'resilies',    label: 'Résiliés / Rétractés' },
+  // Clients dont l'état affiché au board est « Pause », puis ceux en
+  // liquidation (« Liquidation » et « En cours de liquidation ») : mêmes
+  // règles d'état que le board et que le masquage des Créances antérieures
+  // (demande dev 2026-10-22).
+  { key: 'pause',       label: 'En pause' },
+  { key: 'liquidation', label: 'Liquidations' },
 ];
 
 // Les deux phases de la vue « Onboarding ».
@@ -646,6 +655,10 @@ export default function TrackingSheetFinance() {
         const br = (r.client?.numero_client && boardMap) ? boardMap.get(r.client.numero_client) : null;
         return optilexIntegrationPhaseOf(br) === optilexPhase;
       }
+      case 'pause':
+        return boardEtatOf(r) === 'Pause';
+      case 'liquidation':
+        return isLiquidationEtat(boardEtatOf(r));
       default:
         return true; // 'all'
     }
