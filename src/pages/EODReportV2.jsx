@@ -500,6 +500,8 @@ export default function EODReportV2() {
           question: aiQuestionStart.question,
           answer: aiStartAnswer.trim(),
         } : null,
+        // The backend relays the report to OpenClaw for the AI analysis: its key stays on the server.
+        forward_to_openclaw: true,
       };
 
       await apiClient.post('/api/v1/eod/submit', payload);
@@ -510,23 +512,6 @@ export default function EODReportV2() {
           apiClient.patch(`/api/v1/eod/projects/${pid}`, { status: 'termine' }).catch(err => console.warn('Failed to terminate project:', pid, err));
         });
         setLocalTerminatedIds(new Set());
-      }
-
-      // Fire-and-forget to OpenClaw (AI analysis for EOD Dashboard)
-      const openclawUrl = import.meta.env.VITE_OPENCLAW_WEBHOOK_URL;
-      if (openclawUrl) {
-        const user = apiClient.getUser();
-        const totalHours = tasks.reduce((sum, t) => sum + (t.subtasks || []).reduce((s, st) => s + (st.hours_spent || 0), 0), 0);
-        fetch(openclawUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-API-Key': import.meta.env.VITE_OPENCLAW_API_KEY || '' },
-          body: JSON.stringify({
-            event: 'eod_submitted',
-            timestamp: new Date().toISOString(),
-            user: { id: user?.id, name: user?.name || user?.first_name || '', email: user?.email, role: user?.role, department: user?.department || user?.role },
-            eod: { report_date: reportDate, pool_key: null, tasks: payload.tasks, question_answers: questionAnswers, total_hours: totalHours },
-          }),
-        }).catch(err => console.warn('[OpenClaw] Send failed (non-blocking):', err));
       }
 
       setSubmitted(true);
