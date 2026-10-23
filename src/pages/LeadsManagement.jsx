@@ -6,7 +6,9 @@ import apiClient from "../services/apiClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import LeadHistoryPanel from "../components/perfSales/v2/LeadHistory.jsx";
 import "../components/perfSales/v2/v2.css";
-import { duplicatesById, mergeLeads, nextRdv, parisToday, rdvLabel } from "../utils/leadsManagement.js";
+import {
+  CONTACT_FIELDS, canEditContact, contactPatch, contactSaveError, duplicatesById, mergeLeads, nextRdv, parisToday, rdvLabel,
+} from "../utils/leadsManagement.js";
 import "../index.css";
 
 const COLORS = {
@@ -123,6 +125,10 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
   // Modal state
   const [selectedLead, setSelectedLead] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  // Correction de la fiche (nom, téléphone, e-mail) avant affectation : brouillon, envoi, message.
+  const [contactDraft, setContactDraft] = useState(null);
+  const [contactSaving, setContactSaving] = useState(false);
+  const [contactMsg, setContactMsg] = useState(null);
 
   // Assignment state
   const [assigningLeads, setAssigningLeads] = useState(new Set());
@@ -336,6 +342,33 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
     const u = assignableUsers.find(u => u.email === lead.assigned_to);
     return `chez ${u?.full_name || lead.assigned_to}`;
   };
+  // Les admins seuls (le rôle réel : la vue CEO intégrée ouvre la page à tous ses rôles), hors leads déjà clients.
+  const isAdminRole = apiClient.getUser()?.role === 'admin';
+  const clientEmails = useMemo(() => new Set(clients.map(c => (c.email || '').trim().toLowerCase()).filter(Boolean)), [clients]);
+  const canEdit = canEditContact(selectedLead, { isAdmin: isAdminRole, clientEmails });
+  useEffect(() => { setContactDraft(null); setContactMsg(null); }, [selectedLead?.id]);
+
+  const saveContact = async () => {
+    const { patch, problem } = contactPatch(selectedLead, contactDraft);
+    if (problem) { setContactMsg({ error: true, text: problem }); return; }
+    if (!Object.keys(patch).length) { setContactDraft(null); return; }
+    setContactSaving(true);
+    setContactMsg(null);
+    try {
+      const res = await apiClient.patch(`/api/v1/tracking/leads/${selectedLead.id}`, patch);
+      // Seuls les champs corrigés sont repris : la réponse de cette route a ses propres formats (statut en anglais).
+      const saved = Object.fromEntries(Object.keys(patch).map(k => [k, res?.lead?.[k] ?? patch[k]]));
+      setLeads(prev => prev.map(l => (l.id === selectedLead.id ? { ...l, ...saved } : l)));
+      setSelectedLead(prev => (prev?.id === selectedLead.id ? { ...prev, ...saved } : prev));
+      setContactDraft(null);
+      setContactMsg({ text: res?.calendar_email_updated ? 'Enregistré, invitation du RDV envoyée à la nouvelle adresse.' : 'Enregistré.' });
+    } catch (err) {
+      setContactMsg({ error: true, text: contactSaveError(err) });
+    } finally {
+      setContactSaving(false);
+    }
+  };
+
   const panelLead = (lead) => ({
     id: lead.id, name: lead.full_name, company: lead.company, origin: lead.origin,
     now: ownerLabel(lead), status: lead.status || 'À traiter',
@@ -836,20 +869,55 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
       <LeadHistoryPanel lead={showModal && selectedLead ? panelLead(selectedLead) : null} dark={darkMode} onClose={closeModal} zBase={2000}>
         {selectedLead && (
           <>
-            <dl className="ps2-dl">
-              {[
-                ['Prochain RDV', rdvLabel(rdvOf(selectedLead)) || 'aucun'],
-                ['Téléphone', selectedLead.phone],
-                ['E-mail', selectedLead.email],
-                ['Reçu le', formatDate(selectedLead.created_at)],
-                ['Salariés', selectedLead.headcount],
-                ["Chiffre d'affaires", selectedLead.revenue],
-                ['Campagne', selectedLead.campaign_name],
-                ['Notes', selectedLead.notes],
-              ].map(([label, value]) => (
-                <Fragment key={label}><dt>{label}</dt><dd>{value || '—'}</dd></Fragment>
-              ))}
-            </dl>
+            {contactDraft ? (
+              <form className="ps2-edit" onSubmit={(e) => { e.preventDefault(); saveContact(); }}>
+                <dl className="ps2-dl">
+                  {CONTACT_FIELDS.map(([key, label]) => (
+                    <Fragment key={key}>
+                      <dt><label htmlFor={`lm-edit-${key}`}>{label}</label></dt>
+                      <dd>
+                        <input id={`lm-edit-${key}`} className="ps2-dl-input" value={contactDraft[key]} disabled={contactSaving}
+                          type={key === 'email' ? 'email' : key === 'phone' ? 'tel' : 'text'} autoComplete="off" autoFocus={key === 'full_name'}
+                          onChange={(e) => setContactDraft(d => ({ ...d, [key]: e.target.value }))} />
+                      </dd>
+                    </Fragment>
+                  ))}
+                </dl>
+                <div className="ps2-edit-actions">
+                  <button type="submit" className="ps2-ghost-btn is-primary" disabled={contactSaving}>{contactSaving ? 'Enregistrement…' : 'Enregistrer'}</button>
+                  <button type="button" className="ps2-ghost-btn" disabled={contactSaving} onClick={() => { setContactDraft(null); setContactMsg(null); }}>Annuler</button>
+                  {contactMsg && <span className={`ps2-edit-msg${contactMsg.error ? '' : ' is-good'}`} role={contactMsg.error ? 'alert' : 'status'}>{contactMsg.text}</span>}
+                </div>
+              </form>
+            ) : (
+              <>
+                <dl className="ps2-dl">
+                  {[
+                    ['Prochain RDV', rdvLabel(rdvOf(selectedLead)) || 'aucun'],
+                    ['Téléphone', selectedLead.phone],
+                    ['E-mail', selectedLead.email],
+                    ['Reçu le', formatDate(selectedLead.created_at)],
+                    ['Salariés', selectedLead.headcount],
+                    ["Chiffre d'affaires", selectedLead.revenue],
+                    ['Campagne', selectedLead.campaign_name],
+                    ['Notes', selectedLead.notes],
+                  ].map(([label, value]) => (
+                    <Fragment key={label}><dt>{label}</dt><dd>{value || '—'}</dd></Fragment>
+                  ))}
+                </dl>
+                {(canEdit || contactMsg) && (
+                  <div className="ps2-edit-actions">
+                    {canEdit && (
+                      <button type="button" className="ps2-ghost-btn" onClick={() => {
+                        setContactMsg(null);
+                        setContactDraft(Object.fromEntries(CONTACT_FIELDS.map(([k]) => [k, selectedLead[k] || ''])));
+                      }}>Corriger nom, téléphone, e-mail</button>
+                    )}
+                    {contactMsg && <span className={`ps2-edit-msg${contactMsg.error ? '' : ' is-good'}`} role="status">{contactMsg.text}</span>}
+                  </div>
+                )}
+              </>
+            )}
             {dupes.has(selectedLead.id) && (
               <div>
                 <div className="ps2-mono" style={{ marginBottom: 8 }}>Autres fiches de cette personne ({dupes.get(selectedLead.id).length})</div>

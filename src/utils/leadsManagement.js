@@ -64,3 +64,40 @@ export function rdvLabel(rdv) {
 export function parisToday(now = new Date()) {
   return now.toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
 }
+
+// Corriger la fiche avant affectation (dev 23/10/2026 : « changer les infos comme email et tout avant affectation si
+// c'est faux »). Nom, téléphone et e-mail passent par la route du Tracking Sheet (PATCH /tracking/leads/{id}) : elle
+// refuse un doublon, met à jour l'invitation d'un RDV à venir et journalise l'auteur. Réservé aux admins (seuls
+// autorisés par cette route sur un lead sans sales), et jamais sur un lead déjà client : la route recopie le nom dans
+// la fiche client.
+export const CONTACT_FIELDS = [['full_name', 'Nom'], ['phone', 'Téléphone'], ['email', 'E-mail']];
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function canEditContact(lead, { isAdmin, clientEmails }) {
+  return Boolean(isAdmin && lead && !lead.assigned_to && !clientEmails.has(emailKey(lead)));
+}
+
+// Les champs changés, prêts à envoyer, ou le problème à corriger d'abord.
+export function contactPatch(lead, draft) {
+  const patch = {};
+  for (const [key, label] of CONTACT_FIELDS) {
+    const before = (lead[key] || '').trim();
+    const after = (draft[key] ?? '').trim();
+    if (after === before) continue;
+    if (!after) return { problem: `${label} ne peut pas être vidé.` };
+    if (key === 'email' && !EMAIL.test(after)) return { problem: 'E-mail invalide.' };
+    patch[key] = key === 'email' ? after.toLowerCase() : after;
+  }
+  return { patch };
+}
+
+// Le message à montrer quand la route refuse (l'erreur d'apiClient porte `status` et le corps dans `data`).
+export function contactSaveError(err) {
+  const detail = err?.data?.detail;
+  if (detail?.code === 'duplicate_lead') return `Le lead #${detail.lead_id} porte déjà cet e-mail ou ce téléphone.`;
+  if (err?.status === 403) return 'Modification réservée aux admins.';
+  if (err?.status === 422) return 'E-mail invalide.';
+  if (typeof detail === 'string' && err?.status === 502) return detail;
+  return 'Modification non enregistrée. Réessayez.';
+}

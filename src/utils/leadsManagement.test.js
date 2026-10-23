@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { duplicatesById, mergeLeads, nextRdv, parisToday, rdvLabel } from './leadsManagement.js';
+import {
+  canEditContact, contactPatch, contactSaveError, duplicatesById, mergeLeads, nextRdv, parisToday, rdvLabel,
+} from './leadsManagement.js';
 
 test('les deux chargements sont réunis sans doublon de ligne, du plus récent au plus ancien', () => {
   const recent = [{ id: 23656 }, { id: 23640 }];
@@ -40,4 +42,34 @@ test('libellé du RDV au format uniforme', () => {
 
 test('la date du jour est celle de Paris', () => {
   assert.equal(parisToday(new Date('2026-10-21T22:30:00Z')), '2026-10-22');
+});
+
+test('seuls les champs changés partent, e-mail en minuscules ; vider un champ ou un e-mail mal formé est refusé', () => {
+  const lead = { full_name: 'Blondel Alex', phone: '0652536415', email: 'blondel.alex@outlook.fr' };
+  assert.deepEqual(contactPatch(lead, { ...lead }), { patch: {} });
+  assert.deepEqual(contactPatch(lead, { ...lead, email: ' Alex.Blondel@Outlook.fr ' }), { patch: { email: 'alex.blondel@outlook.fr' } });
+  assert.deepEqual(contactPatch(lead, { ...lead, full_name: 'Alex Blondel', phone: '06 52 53 64 15' }),
+    { patch: { full_name: 'Alex Blondel', phone: '06 52 53 64 15' } });
+  assert.deepEqual(contactPatch(lead, { ...lead, phone: '  ' }), { problem: 'Téléphone ne peut pas être vidé.' });
+  assert.deepEqual(contactPatch(lead, { ...lead, email: 'blondel.alex@outlook' }), { problem: 'E-mail invalide.' });
+  assert.deepEqual(contactPatch({ full_name: 'Sans mail' }, { full_name: 'Sans mail', email: 'a@b.fr' }), { patch: { email: 'a@b.fr' } });
+});
+
+test('la fiche se corrige par un admin, avant affectation, et jamais sur un lead déjà client', () => {
+  const clientEmails = new Set(['deja.client@exemple.fr']);
+  const pool = { id: 1, email: 'blondel.alex@outlook.fr', assigned_to: null };
+  assert.equal(canEditContact(pool, { isAdmin: true, clientEmails }), true);
+  assert.equal(canEditContact(pool, { isAdmin: false, clientEmails }), false);
+  assert.equal(canEditContact({ ...pool, assigned_to: 'sales@ownertechnology.com' }, { isAdmin: true, clientEmails }), false);
+  assert.equal(canEditContact({ ...pool, email: ' Deja.Client@exemple.fr' }, { isAdmin: true, clientEmails }), false);
+});
+
+test('un refus de la route se lit en clair', () => {
+  assert.equal(contactSaveError({ status: 409, data: { detail: { code: 'duplicate_lead', lead_id: 23570 } } }),
+    'Le lead #23570 porte déjà cet e-mail ou ce téléphone.');
+  assert.equal(contactSaveError({ status: 403, data: { detail: "You don't have permission" } }), 'Modification réservée aux admins.');
+  assert.equal(contactSaveError({ status: 422, data: { detail: [{ loc: ['body', 'email'] }] } }), 'E-mail invalide.');
+  assert.equal(contactSaveError({ status: 502, data: { detail: 'L’invitation Google Agenda n’a pas pu être mise à jour.' } }),
+    'L’invitation Google Agenda n’a pas pu être mise à jour.');
+  assert.equal(contactSaveError(new Error('Failed to fetch')), 'Modification non enregistrée. Réessayez.');
 });
