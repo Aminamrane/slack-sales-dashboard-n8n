@@ -7,7 +7,7 @@ import SharedNavbar from "../components/SharedNavbar.jsx";
 import LeadHistoryPanel from "../components/perfSales/v2/LeadHistory.jsx";
 import "../components/perfSales/v2/v2.css";
 import {
-  CONTACT_FIELDS, canEditContact, contactPatch, contactSaveError, duplicatesById, mergeLeads, nextRdv, parisToday, rdvLabel,
+  CONTACT_FIELDS, canEditContact, contactPatch, contactSaveError, duplicatesById, isClientIn, mergeLeads, nextRdv, parisToday, rdvLabel,
 } from "../utils/leadsManagement.js";
 import "../index.css";
 
@@ -342,10 +342,32 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
     const u = assignableUsers.find(u => u.email === lead.assigned_to);
     return `chez ${u?.full_name || lead.assigned_to}`;
   };
-  // Les admins seuls (le rôle réel : la vue CEO intégrée ouvre la page à tous ses rôles), hors leads déjà clients.
+  // Les admins seuls (le rôle réel : la vue CEO intégrée ouvre la page à tous ses rôles).
   const isAdminRole = apiClient.getUser()?.role === 'admin';
-  const clientEmails = useMemo(() => new Set(clients.map(c => (c.email || '').trim().toLowerCase()).filter(Boolean)), [clients]);
-  const canEdit = canEditContact(selectedLead, { isAdmin: isAdminRole, clientEmails });
+  const canEdit = canEditContact(selectedLead, { isAdmin: isAdminRole });
+  const [contactChecking, setContactChecking] = useState(false);
+  // Un lead déjà client ne se corrige pas ici (la route recopierait le nom dans sa fiche client) : chaque e-mail est
+  // vérifié auprès du back, à l'ouverture et à l'enregistrement. Si la vérification échoue, rien n'est envoyé.
+  const clientAmong = async (emails) => {
+    for (const email of new Set(emails.map(e => (e || '').trim().toLowerCase()).filter(Boolean))) {
+      const res = await apiClient.get(`/api/v1/clients?search=${encodeURIComponent(email)}&limit=100`);
+      if (isClientIn(res?.clients, email)) return email;
+    }
+    return null;
+  };
+  const CLIENT_MSG = 'Lead déjà client : à corriger depuis sa fiche client.';
+  const startContactEdit = async () => {
+    setContactMsg(null);
+    setContactChecking(true);
+    try {
+      if (await clientAmong([selectedLead.email])) { setContactMsg({ error: true, text: CLIENT_MSG }); return; }
+      setContactDraft(Object.fromEntries(CONTACT_FIELDS.map(([k]) => [k, selectedLead[k] || ''])));
+    } catch {
+      setContactMsg({ error: true, text: 'Vérification impossible. Réessayez.' });
+    } finally {
+      setContactChecking(false);
+    }
+  };
   useEffect(() => { setContactDraft(null); setContactMsg(null); }, [selectedLead?.id]);
 
   const saveContact = async () => {
@@ -355,6 +377,7 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
     setContactSaving(true);
     setContactMsg(null);
     try {
+      if (await clientAmong([selectedLead.email, patch.email])) { setContactMsg({ error: true, text: CLIENT_MSG }); return; }
       const res = await apiClient.patch(`/api/v1/tracking/leads/${selectedLead.id}`, patch);
       // Seuls les champs corrigés sont repris : la réponse de cette route a ses propres formats (statut en anglais).
       const saved = Object.fromEntries(Object.keys(patch).map(k => [k, res?.lead?.[k] ?? patch[k]]));
@@ -908,12 +931,11 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
                 {(canEdit || contactMsg) && (
                   <div className="ps2-edit-actions">
                     {canEdit && (
-                      <button type="button" className="ps2-ghost-btn" onClick={() => {
-                        setContactMsg(null);
-                        setContactDraft(Object.fromEntries(CONTACT_FIELDS.map(([k]) => [k, selectedLead[k] || ''])));
-                      }}>Corriger nom, téléphone, e-mail</button>
+                      <button type="button" className="ps2-ghost-btn" disabled={contactChecking} onClick={startContactEdit}>
+                        {contactChecking ? 'Vérification…' : 'Corriger nom, téléphone, e-mail'}
+                      </button>
                     )}
-                    {contactMsg && <span className={`ps2-edit-msg${contactMsg.error ? '' : ' is-good'}`} role="status">{contactMsg.text}</span>}
+                    {contactMsg && <span className={`ps2-edit-msg${contactMsg.error ? '' : ' is-good'}`} role={contactMsg.error ? 'alert' : 'status'}>{contactMsg.text}</span>}
                   </div>
                 )}
               </>
