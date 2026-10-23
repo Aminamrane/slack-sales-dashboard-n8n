@@ -1021,6 +1021,7 @@ button.ps2-tile { font: inherit; color: var(--ink); width: 100%; min-height: 168
 .ps2-shows-track i { display: block; height: 100%; }
 .ps2-shows-done { text-align: right; font-size: 13px; } .ps2-shows-done b { font-weight: 650; } .ps2-shows-done small { color: var(--muted); margin-left: 3px; }
 .ps2-shows-pres { justify-self: end; font-size: 12px; font-weight: 650; padding: 3px 8px; border-radius: 7px; background: var(--line-2); color: var(--soft); }
+.ps2-shows-pres.is-none { color: var(--soft); }   /* « – » : la pastille est un bouton (détail au clic), `.ps2 button` lui donnerait l'encre */
 .ps2-shows-pres.is-good { background: #e3f0e8; color: #2c6448; } .ps2-shows-pres.is-mid { background: #e9eef6; color: #2f4f9e; } .ps2-shows-pres.is-low { background: #f8e6dc; color: #b23a0d; }
 .ps2.is-dark .ps2-shows-pres.is-good { background: #1d3328; color: #8fd0ab; } .ps2.is-dark .ps2-shows-pres.is-mid { background: #232a40; color: #9fb4ee; } .ps2.is-dark .ps2-shows-pres.is-low { background: #3a2219; color: #f0a07a; }
 @media (max-width: 720px) { .ps2-shows-row { grid-template-columns: minmax(110px, 1fr) minmax(0, 1.4fr) 70px; } .ps2-shows-pres { display: none; } }

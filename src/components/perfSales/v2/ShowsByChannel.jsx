@@ -6,15 +6,41 @@ import { AD_SOURCES, SOURCES, fr } from './model';
 
 // Qui fait nos shows (dev 15/10/2026 : « voir quels canaux d'acquisition font le plus de nos shows ») : chaque canal, ou
 // chaque pub du canal ADS choisi, avec ses RDV posés du mois découpés en effectués, absents, annulés, pas qualifiés et
-// à venir (mêmes couleurs que les cartes), et sa présence. Classés par RDV effectués ; un clic filtre les cartes.
+// à venir (mêmes couleurs que les cartes), et son taux de show. Classés par RDV effectués ; un clic filtre les cartes.
+// Taux de show (dev 23/10/2026 : « les stats doivent parler d'elles-mêmes » ; l’acquisition lisait 47 / 113 à côté de 56 %) :
+// effectués ÷ (effectués + absents + annulés), les RDV passés dont l'issue est connue, un annulé comptant contre la pub.
+// La fraction affichée est celle du pourcentage. Pas qualifiés et à venir restent dans la barre, hors calcul ; la
+// présence des anneaux R1/R2 (effectués ÷ (effectués + absents)) est rappelée dans le détail au clic.
 const PARTS = [['done', '#2c6448'], ['noshow', '#c2410c'], ['cancelled', '#c9a66b'], ['open', '#cfd5df'], ['upcoming', '#9fb3df']];
 const LABEL = { done: 'effectués', noshow: 'absents', cancelled: 'annulés', open: 'pas qualifiés', upcoming: 'à venir' };
+const NB = '\u00a0';   // insécable : un calcul ne se coupe qu'entre ses termes, jamais entre un nombre et son libellé
+const rate = (a, b) => (b ? Math.round((a / b) * 100) : null);
+const pctText = (v) => (v == null ? '–' : `${v}${NB}%`);
+const tone = (v) => (v == null ? ' is-none' : v >= 70 ? ' is-good' : v >= 50 ? ' is-mid' : ' is-low');
 
 function split(steps, s) {
   const g = (k) => Number(steps?.[k] || 0);
   const placed = g(s), due = g(`${s}_due`), done = g(`${s}_done_due`), open = g(`${s}_open`), noshow = g(`${s}_noshow`);
-  return { placed, done, noshow, open, cancelled: Math.max(0, due - done - open - noshow), upcoming: Math.max(0, placed - due),
-    presence: done + noshow ? Math.round((done / (done + noshow)) * 100) : null };
+  const cancelled = Math.max(0, due - done - open - noshow);
+  // Somme des trois issues plutôt que due − open : le dénominateur est toujours celui que le détail additionne.
+  const decided = done + noshow + cancelled;
+  return { placed, done, noshow, open, cancelled, upcoming: Math.max(0, placed - due), decided,
+    show: rate(done, decided), presence: rate(done, done + noshow) };
+}
+
+function RowDetail({ it, stage }) {
+  const { r } = it;
+  const name = stage.toUpperCase();
+  const done = fr(r.done);
+  return (
+    <Detail kicker={`${name} · ${it.label}`} value={`${fr(r.placed)} posés`}
+      rows={PARTS.map(([k]) => [LABEL[k], fr(r[k]), k === 'done' ? 'ps2-strong' : ''])}
+      lines={[
+        `Show : ${done} ÷ (${done} + ${fr(r.noshow)}${NB}absents + ${fr(r.cancelled)}${NB}annulés) =${NB}${pctText(r.show)}`,
+        r.open || r.upcoming ? `Hors calcul : ${fr(r.open)}${NB}pas${NB}qualifiés, ${fr(r.upcoming)}${NB}à${NB}venir` : null,
+        `Présence (règle de l'anneau ${name}) : ${[done, '÷', `(${done}`, '+', `${fr(r.noshow)})`, '=', pctText(r.presence)].join(NB)}`,
+      ]} />
+  );
 }
 
 export default function ShowsByChannel({ model, scope, onPick }) {
@@ -46,10 +72,7 @@ export default function ShowsByChannel({ model, scope, onPick }) {
               aria-pressed={active(it)}>
               <i style={{ background: it.color }} />{it.label}
             </button>
-            <Info className="ps2-shows-bar" label={`${it.label}, ${stage.toUpperCase()}, détail`}
-              detail={<Detail kicker={`${stage.toUpperCase()} · ${it.label}`} value={`${fr(it.r.placed)} posés`}
-                rows={PARTS.map(([k]) => [LABEL[k], fr(it.r[k]), k === 'done' ? 'ps2-strong' : ''])}
-                lines={[`Présence : ${fr(it.r.done)} ÷ (${fr(it.r.done)} + ${fr(it.r.noshow)}) = ${it.r.presence ?? '–'} %`]} />}>
+            <Info className="ps2-shows-bar" label={`${it.label}, ${stage.toUpperCase()}, détail`} detail={<RowDetail it={it} stage={stage} />}>
               <span className="ps2-shows-track" style={{ width: `${(it.r.placed / max) * 100}%` }}>
                 {PARTS.map(([k, color], j) => (
                   <Motion.i key={k} style={{ background: color }} initial={{ width: 0 }}
@@ -58,16 +81,17 @@ export default function ShowsByChannel({ model, scope, onPick }) {
                 ))}
               </span>
             </Info>
-            <span className="ps2-shows-done ps2-num"><b>{fr(it.r.done)}</b><small>/ {fr(it.r.placed)}</small></span>
-            <span className={`ps2-shows-pres ps2-num${it.r.presence == null ? '' : it.r.presence >= 70 ? ' is-good' : it.r.presence >= 50 ? ' is-mid' : ' is-low'}`}>
-              {it.r.presence == null ? '–' : `${it.r.presence} %`}
-            </span>
+            <span className="ps2-shows-done ps2-num"><b>{fr(it.r.done)}</b><small>/ {fr(it.r.decided)}</small></span>
+            <Info className={`ps2-shows-pres ps2-num${tone(it.r.show)}`} label={`${it.label}, ${stage.toUpperCase()}, taux de show ${pctText(it.r.show)}, détail`}
+              detail={<RowDetail it={it} stage={stage} />}>
+              {pctText(it.r.show)}
+            </Info>
           </Motion.div>
         ))}
       </div>
       <div className="ps2-compo-legend" style={{ marginTop: 14 }}>
         {PARTS.map(([k, color]) => <span key={k}><i style={{ background: color }} />{LABEL[k]}</span>)}
-        <span className="ps2-soft" style={{ marginLeft: 'auto' }}>effectués / posés · présence</span>
+        <span className="ps2-soft" style={{ marginLeft: 'auto' }}>effectués / RDV passés qualifiés · taux de show</span>
       </div>
     </section>
   );
