@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  canEditContact, contactPatch, contactSaveError, duplicatesById, mergeLeads, nextRdv, parisToday, rdvLabel,
+  canEditContact, contactPatch, contactSaveError, duplicatesById, isClientIn, mergeLeads, nextRdv, parisToday, rdvLabel,
 } from './leadsManagement.js';
 
 test('les deux chargements sont réunis sans doublon de ligne, du plus récent au plus ancien', () => {
@@ -55,13 +55,20 @@ test('seuls les champs changés partent, e-mail en minuscules ; vider un champ o
   assert.deepEqual(contactPatch({ full_name: 'Sans mail' }, { full_name: 'Sans mail', email: 'a@b.fr' }), { patch: { email: 'a@b.fr' } });
 });
 
-test('la fiche se corrige par un admin, avant affectation, et jamais sur un lead déjà client', () => {
-  const clientEmails = new Set(['deja.client@exemple.fr']);
+test('la fiche se corrige par un admin, avant affectation', () => {
   const pool = { id: 1, email: 'blondel.alex@outlook.fr', assigned_to: null };
-  assert.equal(canEditContact(pool, { isAdmin: true, clientEmails }), true);
-  assert.equal(canEditContact(pool, { isAdmin: false, clientEmails }), false);
-  assert.equal(canEditContact({ ...pool, assigned_to: 'sales@ownertechnology.com' }, { isAdmin: true, clientEmails }), false);
-  assert.equal(canEditContact({ ...pool, email: ' Deja.Client@exemple.fr' }, { isAdmin: true, clientEmails }), false);
+  assert.equal(canEditContact(pool, { isAdmin: true }), true);
+  assert.equal(canEditContact(pool, { isAdmin: false }), false);
+  assert.equal(canEditContact({ ...pool, assigned_to: 'sales@ownertechnology.com' }, { isAdmin: true }), false);
+  assert.equal(canEditContact(null, { isAdmin: true }), false);
+});
+
+test('un lead est déjà client si un client porte exactement son e-mail, la recherche du back étant un « contient »', () => {
+  const found = [{ email: 'Deja.Client@exemple.fr ' }, { email: 'autre.deja.client@exemple.fr' }];
+  assert.equal(isClientIn(found, ' deja.client@exemple.fr'), true);
+  assert.equal(isClientIn([{ email: 'autre.deja.client@exemple.fr' }], 'deja.client@exemple.fr'), false);
+  assert.equal(isClientIn(found, ''), false);
+  assert.equal(isClientIn(undefined, 'deja.client@exemple.fr'), false);
 });
 
 test('un refus de la route se lit en clair', () => {

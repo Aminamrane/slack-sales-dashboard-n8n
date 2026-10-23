@@ -69,13 +69,20 @@ export function parisToday(now = new Date()) {
 // c'est faux »). Nom, téléphone et e-mail passent par la route du Tracking Sheet (PATCH /tracking/leads/{id}) : elle
 // refuse un doublon, met à jour l'invitation d'un RDV à venir et journalise l'auteur. Réservé aux admins (seuls
 // autorisés par cette route sur un lead sans sales), et jamais sur un lead déjà client : la route recopie le nom dans
-// la fiche client.
+// la fiche client. Ce contrôle interroge le back pour chaque e-mail (`isClientIn` sur une recherche ciblée) : la liste
+// des clients chargée par la page est vide (clients?limit=1000 refusé, maximum 100).
 export const CONTACT_FIELDS = [['full_name', 'Nom'], ['phone', 'Téléphone'], ['email', 'E-mail']];
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function canEditContact(lead, { isAdmin, clientEmails }) {
-  return Boolean(isAdmin && lead && !lead.assigned_to && !clientEmails.has(emailKey(lead)));
+export function canEditContact(lead, { isAdmin }) {
+  return Boolean(isAdmin && lead && !lead.assigned_to);
+}
+
+// Vrai si un client porte exactement cet e-mail (la recherche du back est un « contient »).
+export function isClientIn(clients, email) {
+  const key = (email || '').trim().toLowerCase();
+  return Boolean(key) && (clients || []).some((c) => (c.email || '').trim().toLowerCase() === key);
 }
 
 // Les champs changés, prêts à envoyer, ou le problème à corriger d'abord.
