@@ -11,7 +11,7 @@
 // que la landing envoie, aux champs personnalisés près.
 //
 // Usage :
-//   node scripts/webinar-sequences/build.mjs --landing <dossier> --eras <dossier> [--out <dossier>]
+//   node scripts/webinar-sequences/build.mjs --landing <dossier> --eras <dossier> [--out <dossier>] [--only <id,id>]
 //
 //   --landing  racine d'une copie du projet landing (contient src/lib/webinars.ts,
 //              src/lib/services/email.ts et post-ambulance.ts) — version ACTUELLE.
@@ -20,6 +20,9 @@
 //              Elles servent à restituer ce qui a réellement été envoyé aux cohortes passées
 //              (les relances post-live ont été réécrites le 08/09).
 //   --out      dossier de sortie (défaut : src/data/webinarSequences).
+//   --only     ne régénère que ces cohortes (ids séparés par des virgules) et laisse les autres fichiers
+//              intacts ; `--eras` devient inutile quand elles sont toutes de l'ère « sept » (code actuel).
+//              Le catalogue est mis à jour sur place (entrées remplacées ou ajoutées, ordre du registre).
 //
 // Lecture seule : rien n'est envoyé, aucune base n'est lue.
 
@@ -47,12 +50,13 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-if (!args.landing || !args.eras) {
-  console.error('Usage : node scripts/webinar-sequences/build.mjs --landing <dossier> --eras <dossier> [--out <dossier>]');
+if (!args.landing) {
+  console.error('Usage : node scripts/webinar-sequences/build.mjs --landing <dossier> --eras <dossier> [--out <dossier>] [--only <id,id>]');
   process.exit(1);
 }
 const LANDING = path.resolve(args.landing);
-const ERAS_DIR = path.resolve(args.eras);
+const ERAS_DIR = args.eras ? path.resolve(args.eras) : null;
+const ONLY = args.only ? new Set(args.only.split(',').map((id) => id.trim()).filter(Boolean)) : null;
 const OUT = path.resolve(args.out || path.join(REPO, 'src', 'data', 'webinarSequences'));
 
 /** @brief Copie `from` vers `to` en créant les dossiers. */
@@ -79,8 +83,12 @@ const aliasPlugin = (root) => ({
 /** @brief Compile l'`email.ts` d'une ère et renvoie son module. */
 async function loadEra(name, spec) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), `webinar-seq-${name}-`));
+  if (spec.file && !ERAS_DIR) throw new Error(`L'ère « ${name} » demande --eras (${spec.file}).`);
   const emailSrc = spec.file ? path.join(ERAS_DIR, spec.file) : path.join(LANDING, 'src', 'lib', 'services', 'email.ts');
   copy(emailSrc, path.join(root, 'src', 'lib', 'services', 'email.ts'));
+  // Le code actuel envoie aussi des SMS (Brevo) : `email.ts` importe `sms.ts`, absent des anciennes ères.
+  const smsSrc = path.join(LANDING, 'src', 'lib', 'services', 'sms.ts');
+  if (!spec.file && fs.existsSync(smsSrc)) copy(smsSrc, path.join(root, 'src', 'lib', 'services', 'sms.ts'));
   copy(path.join(LANDING, 'src', 'lib', 'webinars.ts'), path.join(root, 'src', 'lib', 'webinars.ts'));
   if (spec.postAmbulance) {
     copy(path.join(LANDING, 'src', 'lib', 'services', 'post-ambulance.ts'), path.join(root, 'src', 'lib', 'services', 'post-ambulance.ts'));
@@ -121,7 +129,8 @@ async function captureCohort(mod, cohortId, warnings) {
   const byKind = new Map();
   const lead = sampleLead(cohortId);
   for (const [name, fn] of Object.entries(mod)) {
-    if (!/^send.+Email$/.test(name) || name === 'sendBroadInviteEmail') continue;
+    // `sendOct08Email(kind, lead, outboxId)` & co prennent un kind en premier argument : traités plus bas.
+    if (!/^send.+Email$/.test(name) || name === 'sendBroadInviteEmail' || /^sendOct\d+Email$/.test(name)) continue;
     globalThis.__seqCapture = [];
     try {
       await fn(lead, 'preview');
@@ -132,6 +141,27 @@ async function captureCohort(mod, cohortId, warnings) {
     for (const payload of globalThis.__seqCapture) {
       const kind = kindOf(payload);
       if (kind) byKind.set(kind, payload);
+    }
+  }
+  // Cohortes d'octobre : un registre `OCT<jj>_EMAILS` (sujet + rendu par kind) et `sendOct<jj>Email(kind, lead, outboxId)`.
+  // Ce sont les mêmes fonctions que celles du worker de la landing ; le faux Resend capture la charge utile.
+  const day = /^webinar-\d{4}-\d{2}-(\d{2})$/.exec(cohortId)?.[1];
+  const registry = day && mod[`OCT${day}_EMAILS`];
+  if (registry && typeof mod[`sendOct${day}Email`] === 'function') {
+    for (const kind of Object.keys(registry)) {
+      globalThis.__seqCapture = [];
+      try {
+        await mod[`sendOct${day}Email`](kind, lead, 'preview');
+      } catch (err) {
+        warnings.push(`${cohortId} · sendOct${day}Email(${kind}) : ${err.message}`);
+        continue;
+      }
+      for (const payload of globalThis.__seqCapture) {
+        const k = kindOf(payload);
+        // `email_oct<jj>_confirmation` n'est jamais planifié : la confirmation part sous le kind `email_confirmation`
+        // (capturé plus haut par `sendConfirmationEmail`), qui reste prioritaire.
+        if (k && !byKind.has(k)) byKind.set(k, payload);
+      }
     }
   }
   if (typeof mod.sendBroadInviteEmail === 'function') {
@@ -265,8 +295,16 @@ const warnings = [];
 const catalog = [];
 fs.mkdirSync(path.join(OUT, 'cohorts'), { recursive: true });
 
+// Avec --only : les cohortes non demandées gardent leur fichier et leur entrée de catalogue.
+const previousCatalog = ONLY && fs.existsSync(path.join(OUT, 'catalog.json')) ? JSON.parse(fs.readFileSync(path.join(OUT, 'catalog.json'), 'utf8')) : [];
+
 const eraModules = new Map();
 for (const cohort of COHORTS) {
+  if (ONLY && !ONLY.has(cohort.id)) {
+    const kept = previousCatalog.find((entry) => entry.id === cohort.id);
+    if (kept) catalog.push(kept);
+    continue;
+  }
   if (!eraModules.has(cohort.era)) eraModules.set(cohort.era, await loadEra(cohort.era, ERAS[cohort.era]));
   const mod = eraModules.get(cohort.era);
   const captured = await captureCohort(mod, cohort.id, warnings);

@@ -115,10 +115,33 @@
    "/"
   ],
   "notes": [
-   "Cohorte ouverte le 25/09/2026 : seules la confirmation et l'événement Meta CAPI sont programmés, les relances attendent la copie du dev.",
-   "La confirmation n'a pas de gabarit propre à cette cohorte : elle retombe sur le gabarit générique (« masterclass »), sans lien personnel ni groupe WhatsApp."
+   "Séquence complète validée par le dev le 28/09 (« Séquence mail + sms Webinaire Ambulance du 8_10 ») : même structure que le 21 septembre.",
+   "Deux SMS (Brevo) accompagnent la séquence : 1 h avant le live et au démarrage. Ils n'apparaissent pas dans cette liste, qui ne montre que les e-mails.",
+   "Suivi post-webinaire : planifié après le live, une fois les présents et les absents connus ; la date d'envoi de chaque relance n'est pas lue ici."
   ],
   "codeEra": "sept",
-  "stepCount": 1
+  "stepCount": 19
+ },
+ {
+  "id": "webinar-2026-10-22",
+  "label": "Webinaire du 22 octobre 2026",
+  "short": "22 oct.",
+  "audience": "TPE/PME",
+  "liveAt": "2026-10-22T11:00:00+02:00",
+  "speakers": [
+   "Paul Faucomprez",
+   "Maître Moraru"
+  ],
+  "pages": [
+   "/tpe-pme"
+  ],
+  "notes": [
+   "Copie fournie par le dev (« Campagne mail et SMS webinaire broad du 22_10 à 11h », 11/10) : même structure que le 8 octobre.",
+   "Live à 11h00 : le mail du jour J part à 8h30 (comme le 26 mai), la veille à 18h00. Les inscrits arrivent du formulaire Meta « Webinaire BROAD - OCTOBRE » (lu en direct, sans n8n).",
+   "Deux SMS (Brevo) accompagnent la séquence : 1 h avant le live et au démarrage. Ils n'apparaissent pas dans cette liste, qui ne montre que les e-mails.",
+   "Suivi post-webinaire : planifié après le live, une fois les présents et les absents connus ; la date d'envoi de chaque relance n'est pas lue ici."
+  ],
+  "codeEra": "sept",
+  "stepCount": 19
  }
 ]

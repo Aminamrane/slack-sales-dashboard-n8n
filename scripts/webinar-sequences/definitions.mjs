@@ -92,6 +92,25 @@ function postSegments(days) {
   return out;
 }
 
+/**
+ * @brief Suivi post-live des cohortes d'octobre (8/10 et 22/10) : un e-mail par segment, puis 4 e-mails communs.
+ * @param p Préfixe des kinds (`post08` | `post22`).
+ * @note La landing ne planifie PAS ces lignes à l'inscription (cf. commentaire de `buildOct08Outbox`) : elles sont créées
+ * après le live. Aucune date n'est inventée ici : le mode `after-live` n'affiche que son libellé.
+ */
+function postOctober(p) {
+  const afterLive = { mode: 'after-live', label: 'Après le live' };
+  return [
+    post(`email_${p}_missed`, afterLive, 'missed', { conditions: [RULE_MISSED] }),
+    post(`email_${p}_attended`, afterLive, 'attended', { conditions: [RULE_ATTENDED] }),
+    ...[1, 2, 3, 4].map((n) =>
+      post(`email_${p}_j${n}`, { mode: 'after-live', label: `Relance ${n} après le live` }, 'all', {
+        conditions: ['Parcours commun à tous les inscrits (aucune distinction présents / absents).'],
+      })
+    ),
+  ];
+}
+
 export const COHORTS = [
   // ═══ 26 mai 2026 — TPE/PME, live à 11h00 (cohorte FIGÉE côté landing) ═══════════
   {
@@ -378,13 +397,80 @@ export const COHORTS = [
     pages: ['/'],
     era: 'sept',
     notes: [
-      "Cohorte ouverte le 25/09/2026 : seules la confirmation et l'événement Meta CAPI sont programmés, les relances attendent la copie du dev.",
-      "La confirmation n'a pas de gabarit propre à cette cohorte : elle retombe sur le gabarit générique (« masterclass »), sans lien personnel ni groupe WhatsApp.",
+      "Séquence complète validée par le dev le 28/09 (« Séquence mail + sms Webinaire Ambulance du 8_10 ») : même structure que le 21 septembre.",
+      "Deux SMS (Brevo) accompagnent la séquence : 1 h avant le live et au démarrage. Ils n'apparaissent pas dans cette liste, qui ne montre que les e-mails.",
+      "Suivi post-webinaire : planifié après le live, une fois les présents et les absents connus ; la date d'envoi de chaque relance n'est pas lue ici.",
     ],
     sequences: {
-      pre: { ...SEQ_PRE, frequency: "Pour l'instant : une seule confirmation, 2 minutes après l'inscription." },
+      pre: {
+        ...SEQ_PRE,
+        frequency:
+          "Un e-mail éducatif par jour à 11h00 (J+1 à J+5), rappels J-7, J-3 et J-1 (18h00), puis 4 e-mails le jour du live (10h00, 19h00, 20h00, 20h15).",
+      },
+      post: {
+        ...SEQ_POST,
+        frequency:
+          "Relances planifiées après le live : un premier e-mail par segment (absents / présents), puis 4 e-mails communs à tous les inscrits.",
+      },
     },
-    steps: [pre('email_confirmation', 'confirmation', signupDelay(2), { conditions: [RULE_CONFIRM] })],
+    steps: [
+      pre('email_confirmation', 'confirmation', signupDelay(2), { conditions: [RULE_CONFIRM] }),
+      ...['email_oct08_remuneration', 'email_oct08_diagnostic', 'email_oct08_holding', 'email_oct08_simulateur', 'email_oct08_pertes'].map(
+        (kind, i) => pre(kind, 'nurture', signupDays(i + 1), { conditions: [RULE_EDU] })
+      ),
+      pre('email_oct08_j7', 'reminder', cal('2026-10-01T11:00:00+02:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_oct08_j3', 'reminder', cal('2026-10-05T11:00:00+02:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_oct08_j1', 'reminder', cal('2026-10-07T18:00:00+02:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_oct08_morning', 'liveday', cal('2026-10-08T10:00:00+02:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_oct08_h1', 'liveday', cal('2026-10-08T19:00:00+02:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_oct08_live', 'liveday', cal('2026-10-08T20:00:00+02:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_oct08_live15', 'liveday', cal('2026-10-08T20:15:00+02:00'), { conditions: [RULE_ANCHOR] }),
+      ...postOctober('post08'),
+    ],
+  },
+
+  // ═══ 22 octobre 2026 — TPE/PME, jeudi 11h00 (webinaire « broad ») ═══════════════
+  {
+    id: 'webinar-2026-10-22',
+    label: 'Webinaire du 22 octobre 2026',
+    short: '22 oct.',
+    audience: 'TPE/PME',
+    liveAt: '2026-10-22T11:00:00+02:00',
+    speakers: ['Paul Faucomprez', 'Maître Moraru'],
+    pages: ['/tpe-pme'],
+    era: 'sept',
+    notes: [
+      "Copie fournie par le dev (« Campagne mail et SMS webinaire broad du 22_10 à 11h », 11/10) : même structure que le 8 octobre.",
+      "Live à 11h00 : le mail du jour J part à 8h30 (comme le 26 mai), la veille à 18h00. Les inscrits arrivent du formulaire Meta « Webinaire BROAD - OCTOBRE » (lu en direct, sans n8n).",
+      "Deux SMS (Brevo) accompagnent la séquence : 1 h avant le live et au démarrage. Ils n'apparaissent pas dans cette liste, qui ne montre que les e-mails.",
+      "Suivi post-webinaire : planifié après le live, une fois les présents et les absents connus ; la date d'envoi de chaque relance n'est pas lue ici.",
+    ],
+    sequences: {
+      pre: {
+        ...SEQ_PRE,
+        frequency:
+          "Un e-mail éducatif par jour à 11h00 (J+1 à J+5), rappels J-7, J-3 et J-1 (18h00), puis 4 e-mails le jour du live (8h30, 10h00, 11h00, 11h15).",
+      },
+      post: {
+        ...SEQ_POST,
+        frequency:
+          "Relances planifiées après le live : un premier e-mail par segment (absents / présents), puis 4 e-mails communs à tous les inscrits.",
+      },
+    },
+    steps: [
+      pre('email_confirmation', 'confirmation', signupDelay(2), { conditions: [RULE_CONFIRM] }),
+      ...['email_oct22_remuneration', 'email_oct22_decouvrir', 'email_oct22_holding', 'email_oct22_simulateur', 'email_oct22_pertes'].map(
+        (kind, i) => pre(kind, 'nurture', signupDays(i + 1), { conditions: [RULE_EDU] })
+      ),
+      pre('email_oct22_j7', 'reminder', cal('2026-10-15T11:00:00+02:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_oct22_j3', 'reminder', cal('2026-10-19T11:00:00+02:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_oct22_j1', 'reminder', cal('2026-10-21T18:00:00+02:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_oct22_morning', 'liveday', cal('2026-10-22T08:30:00+02:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_oct22_h1', 'liveday', cal('2026-10-22T10:00:00+02:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_oct22_live', 'liveday', cal('2026-10-22T11:00:00+02:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_oct22_live15', 'liveday', cal('2026-10-22T11:15:00+02:00'), { conditions: [RULE_ANCHOR] }),
+      ...postOctober('post22'),
+    ],
   },
 ];
 
