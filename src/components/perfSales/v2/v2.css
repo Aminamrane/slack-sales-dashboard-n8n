@@ -149,6 +149,14 @@
 .ps2-dl { margin: 0; display: grid; grid-template-columns: 116px minmax(0, 1fr); row-gap: 10px; column-gap: 16px; font-size: 13px; }
 .ps2-dl dt { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .05em; padding-top: 2px; text-transform: uppercase; }
 .ps2-dl dd { margin: 0; line-height: 1.45; }
+.ps2-dl-input { width: 100%; box-sizing: border-box; font: inherit; font-size: 13px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px; margin: -4px 0; }
+.ps2-dl-input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
+.ps2-dl-input:disabled { opacity: .6; }
+.ps2-edit-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+.ps2-ghost-btn.is-primary { background: var(--navy); border-color: var(--navy); color: var(--card); }
+.ps2-ghost-btn:disabled { opacity: .6; cursor: default; }
+.ps2-edit-msg { font-size: 12.5px; color: var(--low-strong); }
+.ps2-edit-msg.is-good { color: var(--good-strong); }
 .ps2-trail { margin-top: 10px; background: var(--bg); border: 1px solid var(--line-2); border-radius: 12px; padding: 14px 18px; font-family: var(--mono); font-size: 12.5px; line-height: 1.95; color: var(--soft); }
 .ps2-trail .is-strong { color: var(--ink); font-weight: 600; }
 .ps2-trail .is-good { color: var(--good); font-weight: 600; }
