@@ -183,7 +183,7 @@
   display: flex;
   gap: 9px;
 }
-.vr-.vr-app button {
+.vr-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
