@@ -19,6 +19,16 @@ export const formatTime = (value) =>
     hour: "2-digit",
     minute: "2-digit",
   });
+const MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet",
+  "août", "septembre", "octobre", "novembre", "décembre"];
+// « 2026-10-25 » → « 25 octobre ». Date calendaire de Paris lue telle quelle :
+// pas de new Date(), qui la décalerait selon le fuseau du navigateur.
+export function dayMonthLabel(isoDate) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(isoDate || ""));
+  const month = m && MONTHS[Number(m[2]) - 1], day = m && Number(m[3]);
+  if (!month || day < 1 || day > 31) return "";
+  return `${day === 1 ? "1er" : day} ${month}`;
+}
 export function safeMoney(calc, ref) {
   try {
     return money(calc.value(ref));

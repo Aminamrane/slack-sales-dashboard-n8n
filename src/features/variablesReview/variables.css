@@ -1771,3 +1771,13 @@
 @media(max-width:520px){.vr-remuneration-line{grid-template-columns:1fr auto;gap:10px;}.vr-remuneration-line .vr-button{grid-column:1/-1;justify-self:start;}}
 
 .vr-sale-plan{display:block;margin-top:7px;font-size:10px;color:#9298ab;}
+
+/* Chargement / erreur de la page en direct (CeoVariablesView). */
+.vr-status{background:white;border:1px solid var(--border);border-radius:11px;padding:56px 24px;text-align:center;animation:vr-rise .28s cubic-bezier(.2,.8,.2,1);}
+.vr-status.busy{animation:vr-fade .4s ease .15s both;}
+.vr-status h3{margin:0;font-size:14px;font-weight:600;color:var(--ink);}
+.vr-status p{margin:8px auto 0;max-width:420px;font-size:12px;line-height:1.7;color:var(--muted);}
+.vr-status .vr-button{margin-top:20px;}
+.vr-status-spinner{display:inline-block;width:22px;height:22px;margin-bottom:16px;border:2px solid #ece9f6;border-top-color:var(--accent);border-radius:50%;animation:vr-spin .9s linear infinite;}
+@keyframes vr-spin{to{transform:rotate(360deg);}}
+@media(prefers-reduced-motion:reduce){.vr-status,.vr-status.busy,.vr-status-spinner{animation:none;}}

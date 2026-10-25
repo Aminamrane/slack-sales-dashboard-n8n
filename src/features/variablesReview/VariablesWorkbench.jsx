@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowLeft,
@@ -28,12 +28,14 @@ import {
   Wallet,
 } from "lucide-react";
 import { createCalculator, money, Rational } from "./calculation.js";
-import { emptyDraft, readDraft, statementModel } from "./model.js";
+import { emptyDraft, initialStatement, parseDraft, statementModel } from "./model.js";
 import {
   CHANNELS,
+  dayMonthLabel,
   formatTime,
   safeMoney,
 } from "./presentation.js";
+import { isStaleRevision } from "./api.js";
 import { IconButton, Modal } from "./ui.jsx";
 import {
   ActualCellEditor,
@@ -47,19 +49,34 @@ import { calculationParts, resolveDeal } from "./dealCalculation.js";
 import { financeStatus } from "./financeStatus.js";
 import { ProfileAvatar } from "./profileAvatar.jsx";
 import { RemunerationBreakdown } from "./RemunerationBreakdown.jsx";
-export default function VariablesWorkbench({ source }) {
-  const storageKey = `owner:variables:local:${source.sha256}`;
-  const loaded = useMemo(
-    () => readDraft(localStorage, storageKey, source.sha256),
-    [source.sha256, storageKey],
-  );
+const STALE_MESSAGE =
+  "Un autre utilisateur a modifié les variables. Rechargez cette page avant de continuer.";
+const SAVE_FAILED_MESSAGE =
+  "Enregistrement impossible : les dernières modifications n’ont pas été appliquées. Réessayez.";
+
+// source : données CRM lues en direct. initialDraft : brouillon partagé du serveur.
+// saveDraft(body) → { draft } ; rien n'est appliqué tant que le serveur n'a pas répondu.
+export default function VariablesWorkbench({ source, initialDraft, saveDraft }) {
+  const loaded = useMemo(() => {
+    try {
+      return { draft: parseDraft(initialDraft), error: null };
+    } catch {
+      return {
+        draft: emptyDraft(source.sha256),
+        error:
+          "Le brouillon enregistré ne peut pas être relu. Il a été conservé ; aucune réécriture automatique.",
+      };
+    }
+  }, [initialDraft, source.sha256]);
   const [draft, setDraft] = useState(loaded.draft),
-    [storageError, setStorageError] = useState(loaded.error),
+    // Bloquant (brouillon illisible ou révision dépassée) : plus aucune écriture avant rechargement.
+    [blockingError, setBlockingError] = useState(loaded.error),
+    // Échec ponctuel (réseau) : rien n'a été appliqué, une nouvelle tentative reste possible.
+    [saveError, setSaveError] = useState(""),
     [toast, setToast] = useState("");
-  const [person, setPerson] = useState(source.statements.find(s=>s.person.includes("Léo")&&s.period===source.defaultPeriod)?.person || source.statements[0].person),
-    [selectedId, setSelectedId] = useState(
-      source.statements.find(s=>s.person.includes("Léo")&&s.period===source.defaultPeriod)?.id || source.statements[0].id,
-    );
+  const saving = useRef(false);
+  const [person, setPerson] = useState(() => initialStatement(source).person),
+    [selectedId, setSelectedId] = useState(() => initialStatement(source).id);
   const [search, setSearch] = useState(""),
     [query, setQuery] = useState(""),
     
@@ -144,23 +161,14 @@ export default function VariablesWorkbench({ source }) {
     setToast(text);
     setTimeout(() => setToast(""), 4000);
   }
-  function commit(next, action, detail, before, after) {
-    if (storageError) {
-      notify(
-        "Sauvegarde locale indisponible : exportez le brouillon avant de continuer.",
-      );
+  // Envoie l'état complet suivant + l'entrée d'audit ; le brouillon affiché
+  // devient celui renvoyé par le serveur. Une seule écriture à la fois.
+  async function commit(next, action, detail, before, after) {
+    if (blockingError) {
+      notify("Rechargez cette page avant de continuer.");
       return false;
     }
-    const stored = readDraft(localStorage, storageKey, source.sha256);
-    if (
-      stored.error ||
-      (stored.draft.audit[0]?.id || null) !== (draft.audit[0]?.id || null)
-    ) {
-      setStorageError(
-        "Un autre onglet a modifié le brouillon. Rechargez cette page avant de continuer.",
-      );
-      return false;
-    }
+    if (saving.current) return false;
     const item = {
       id: crypto.randomUUID(),
       at: new Date().toISOString(),
@@ -171,29 +179,35 @@ export default function VariablesWorkbench({ source }) {
       before,
       after,
     };
-    const saved = { ...next, audit: [item, ...draft.audit] };
+    saving.current = true;
     try {
-      localStorage.setItem(storageKey, JSON.stringify(saved));
-      setDraft(saved);
+      const response = await saveDraft({
+        expected_revision: draft.revision,
+        changes: next.changes,
+        settings: next.settings,
+        audit_item: item,
+      });
+      setDraft(parseDraft(response?.draft));
+      setSaveError("");
       return true;
-    } catch {
-      setStorageError(
-        "Le navigateur ne peut pas enregistrer le brouillon. Les dernières modifications n’ont pas été appliquées.",
-      );
+    } catch (error) {
+      if (isStaleRevision(error)) setBlockingError(STALE_MESSAGE);
+      else setSaveError(SAVE_FAILED_MESSAGE);
       return false;
+    } finally {
+      saving.current = false;
     }
   }
-  function updateSettings(next, action, detail) {
-    if (
-      commit(
-        { ...draft, settings: { ...draft.settings, [statement.id]: next } },
-        action,
-        detail,
-        settings,
-        next,
-      )
-    )
-      notify("Modifications enregistrées");
+  async function updateSettings(next, action, detail) {
+    const saved = await commit(
+      { ...draft, settings: { ...draft.settings, [statement.id]: next } },
+      action,
+      detail,
+      settings,
+      next,
+    );
+    if (saved) notify("Modifications enregistrées");
+    return saved;
   }
   function selectPerson(name) {
     setPerson(name);
@@ -217,7 +231,7 @@ export default function VariablesWorkbench({ source }) {
           <div><div className="vr-eyebrow">ÉQUIPE COMMERCIALE</div><h1>Variables & rémunérations</h1></div>
           <div className="vr-heading-actions"><button className="vr-button primary" onClick={()=>setPanel('coefficients')}><Pencil size={15}/>Coefficients</button><button className="vr-button" onClick={()=>setPanel('rules')}><SlidersHorizontal size={16}/>Fixe & paliers</button></div>
         </header>
-        {storageError&&<div className="vr-error" role="alert">{storageError}</div>}
+        {(blockingError||saveError)&&<div className="vr-error" role="alert">{blockingError||saveError}</div>}
         <div className="vr-layout">
           <aside className="vr-team">
             <div className="vr-team-title"><h2>Collaborateurs</h2><span>{people.length}</span></div>
@@ -250,7 +264,7 @@ export default function VariablesWorkbench({ source }) {
               <footer className="vr-table-footer"><span>{visibleRows.length} commissions</span><div><IconButton label="Page précédente" disabled={page<=1} onClick={()=>setPage(p=>p-1)}><ArrowLeft size={14}/></IconButton><select aria-label="Numéro de page" value={Math.min(page,pages)} onChange={e=>setPage(Number(e.target.value))}>{Array.from({length:pages},(_,i)=><option key={i} value={i+1}>{i+1} / {pages}</option>)}</select><IconButton label="Page suivante" disabled={page>=pages} onClick={()=>setPage(p=>p+1)}><ArrowRight size={14}/></IconButton></div></footer>
             </div>
             {(settings.bonuses||[]).length>0&&<section className="vr-bonus-list"><h3>Primes & ajustements</h3>{settings.bonuses.map(b=><div key={b.id}><Sparkles size={16}/><span><strong>{b.label}</strong><small>{b.reason}</small></span><b>{money(Rational.from(b.amount))}</b><IconButton label={`Retirer ${b.label}`} onClick={()=>updateSettings({...settings,bonuses:settings.bonuses.filter(x=>x.id!==b.id)},'Retrait de prime',b.label)}><Trash2 size={14}/></IconButton></div>)}</section>}
-            <div className="vr-review-footer"><span>Lecture CRM du 6 octobre · barème en vérification · hors commissions de management</span><button onClick={()=>setPanel('control')}>Vérifications</button>{changedCount>0&&<button onClick={()=>setPanel('reset')}><Undo2 size={13}/>Annuler les ajustements</button>}</div>
+            <div className="vr-review-footer"><span>Données CRM en direct{dayMonthLabel(source.snapshotDate)&&<> · lues le {dayMonthLabel(source.snapshotDate)}</>} · barème en vérification · hors commissions de management</span><button onClick={()=>setPanel('control')}>Vérifications</button>{changedCount>0&&<button onClick={()=>setPanel('reset')}><Undo2 size={13}/>Annuler les ajustements</button>}</div>
           </section>
         </div>
       </main></div>
@@ -281,7 +295,7 @@ export default function VariablesWorkbench({ source }) {
           draft={draft}
           activeRule={!!model?.appliedAcquisition[editor.ref]}
           onClose={() => setEditor(null)}
-          onSave={(input, reason) => {
+          onSave={async (input, reason) => {
             const changes = { ...draft.changes, [editor.ref]: input };
             if (input === String(source.cells[editor.ref]?.input ?? ""))
               delete changes[editor.ref];
@@ -293,7 +307,7 @@ export default function VariablesWorkbench({ source }) {
                     deals: {
                       ...settings.deals,
                       [editor.ref]: {
-                        ...settings.deals[editor.ref],
+                        ...settings.deals?.[editor.ref],
                         exception: true,
                         reason,
                       },
@@ -301,18 +315,16 @@ export default function VariablesWorkbench({ source }) {
                   },
                 }
               : draft.settings;
-            if (
-              commit(
-                { ...draft, changes, settings: nextSettings },
-                "Cellule modifiée",
-                `${editor.ref} · ${reason}`,
-                calculator.raw(editor.ref),
-                input,
-              )
-            ) {
-              setEditor(null);
-              notify("Calcul mis à jour et modification tracée");
-            }
+            const saved = await commit(
+              { ...draft, changes, settings: nextSettings },
+              "Cellule modifiée",
+              `${editor.ref} · ${reason}`,
+              calculator.raw(editor.ref),
+              input,
+            );
+            // Fermée aussi en cas d'échec : le bandeau d'erreur reste visible sous la fenêtre sinon.
+            setEditor(null);
+            if (saved) notify("Calcul mis à jour et modification tracée");
           }}
         />
       )}
@@ -324,8 +336,8 @@ export default function VariablesWorkbench({ source }) {
           person={person}
           label={statement.label}
           onClose={() => setPanel(null)}
-          onSave={(next) => {
-            updateSettings(
+          onSave={async (next) => {
+            await updateSettings(
               next,
               "Règles modifiées",
               `${person}${next.rulesReason ? " · "+next.rulesReason : ""}`,
@@ -337,8 +349,8 @@ export default function VariablesWorkbench({ source }) {
       {panel === "bonus" && (
         <BonusEditor
           onClose={() => setPanel(null)}
-          onSave={(b) => {
-            updateSettings(
+          onSave={async (b) => {
+            await updateSettings(
               { ...settings, bonuses: [...(settings.bonuses || []), b] },
               "Prime ajoutée",
               b.label,
@@ -353,8 +365,8 @@ export default function VariablesWorkbench({ source }) {
           deal={resolveDeal(source,panel.row,settings.deals?.[panel.row.amountCell],calculator)}
           rules={settings.acquisition||{}}
           onClose={() => setPanel(null)}
-          onSave={(deal) => {
-            updateSettings(
+          onSave={async (deal) => {
+            await updateSettings(
               {
                 ...settings,
                 deals: { ...settings.deals, [panel.row.amountCell]: deal },
@@ -371,8 +383,8 @@ export default function VariablesWorkbench({ source }) {
           settings={settings}
           person={person}
           onClose={() => setPanel(null)}
-          onSave={(period) => {
-            updateSettings({ ...settings, period }, "Période précisée", period);
+          onSave={async (period) => {
+            await updateSettings({ ...settings, period }, "Période précisée", period);
             setPanel(null);
           }}
         />
@@ -419,22 +431,22 @@ export default function VariablesWorkbench({ source }) {
       {panel === "control" && (
         <Modal
           title="Contrôles avant mise en production"
-          subtitle="Réconciliation du snapshot source, avant modification"
+          subtitle="Données lues en direct dans le CRM, avant modification"
           onClose={() => setPanel(null)}
           wide
         >
-          <div className="vr-control"><h3>Données CRM et Finance</h3><p>Ventes signées par mois civil Europe/Paris, dédoublonnées par lead. Rapprochement Finance par email unique. Seuls les montants Owner encaissés à partir du mois de signature sont retenus ; une date seule ne valide pas le paiement.</p><h3>Barème en vérification</h3><p>Coefficients reconstitués à partir des formules : distinction Sales / Head, paiement mensuel / annuel et origine. Les coefficients proposés doivent encore être rapprochés de l’ensemble des cas. Les commissions de management ne sont pas incluses dans cet aperçu.</p><p>Le fixe des nouveaux collaborateurs reste à configurer. Aucune paie réelle ne peut être lancée ici.</p></div>
+          <div className="vr-control"><h3>Données CRM et Finance</h3><p>Ventes signées par mois civil Europe/Paris, dédoublonnées par lead. Rapprochement Finance par lead, puis par e-mail unique. Seuls les montants Owner encaissés à partir du mois de signature sont retenus ; une date seule ne valide pas le paiement.</p><h3>Barème en vérification</h3><p>Coefficients reconstitués à partir des formules : distinction Sales / Head, paiement mensuel / annuel et origine. Les coefficients proposés doivent encore être rapprochés de l’ensemble des cas. Les commissions de management ne sont pas incluses dans cet aperçu.</p><p>Le fixe des nouveaux collaborateurs reste à configurer. Aucune paie réelle ne peut être lancée ici.</p></div>
         </Modal>
       )}
       {panel === "reset" && (
         <Modal
-          title="Revenir aux valeurs du Sheet ?"
+          title="Revenir aux valeurs calculées ?"
           subtitle="Le brouillon de tous les relevés sera réinitialisé. L’historique restera disponible."
           onClose={() => setPanel(null)}
         >
           <div className="vr-form-body">
             <p>
-              Vous pouvez exporter votre brouillon avant de le réinitialiser.
+              La réinitialisation s’applique pour tous les utilisateurs de cette page.
             </p>
           </div>
           <div className="vr-dialog-footer">
@@ -443,22 +455,19 @@ export default function VariablesWorkbench({ source }) {
             </button>
             <button
               className="vr-button primary"
-              onClick={() => {
-                if (
-                  commit(
-                    { ...emptyDraft(source.sha256), audit: draft.audit },
-                    "Réinitialisation",
-                    "Tous les relevés",
-                    draft.changes,
-                    {},
-                  )
-                ) {
-                  setPanel(null);
-                  notify("Valeurs de référence restaurées");
-                }
+              onClick={async () => {
+                const saved = await commit(
+                  { ...emptyDraft(source.sha256), audit: draft.audit },
+                  "Réinitialisation",
+                  "Tous les relevés",
+                  draft.changes,
+                  {},
+                );
+                setPanel(null);
+                if (saved) notify("Valeurs de référence restaurées");
               }}
             >
-              Restaurer la source
+              Revenir aux valeurs calculées
             </button>
           </div>
         </Modal>

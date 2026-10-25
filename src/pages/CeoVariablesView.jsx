@@ -1,22 +1,81 @@
 // src/pages/CeoVariablesView.jsx
 //
-// Route /ceo/variables — embed <Variables embed /> dans le shell CEO
-// (sidebar shared + SharedNavbar conservés). Calque de CeoAutoAssignView.
+// Route /ceo/variables : poste de travail Variables (features/variablesReview)
+// dans le shell CEO (sidebar shared + SharedNavbar conservés). Calque de CeoAutoAssignView.
+// Données CRM lues en direct par l'API, brouillon d'ajustements partagé côté serveur.
 //
-// Salaires = donnée CONFIDENTIELLE -> acces restreint admin / ceo uniquement
-// (l'acquisition director ne voit de toute façon pas la section HUMAN).
+// Salaires = donnée CONFIDENTIELLE : accès admin, ceo, hr, finance_director
+// (contrôlé aussi par le back, require_variables_access).
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import { navigateBackToDashboard } from "../utils/dashboardNavigation";
-import Variables from "./Variables.jsx";
+import VariablesWorkbench from "../features/variablesReview/VariablesWorkbench.jsx";
+import { loadWorkbench, saveWorkbenchDraft } from "../features/variablesReview/api.js";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "finance_director"]);
+
+// Même en-tête que le poste de travail : la page ne saute pas quand les données arrivent.
+function WorkbenchStatus({ title, detail, onRetry, busy = false }) {
+  return (
+    <div className="vr-app vr-embedded">
+      <div className="vr-workspace"><main className="vr-main">
+        <header className="vr-heading"><div><div className="vr-eyebrow">ÉQUIPE COMMERCIALE</div><h1>Variables & rémunérations</h1></div></header>
+        <div className={`vr-status ${busy ? "busy" : ""}`} role={busy ? "status" : "alert"}>
+          {busy && <span className="vr-status-spinner" aria-hidden="true" />}
+          <h3>{title}</h3>
+          {detail && <p>{detail}</p>}
+          {onRetry && <button className="vr-button" onClick={onRetry}>Réessayer</button>}
+        </div>
+      </main></div>
+    </div>
+  );
+}
+
+// GET /api/v1/variables/workbench → { source, draft }, relu à chaque visite de la page.
+function LiveVariablesWorkbench() {
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState({ status: "loading" });
+  useEffect(() => {
+    let cancelled = false;
+    setState({ status: "loading" });
+    loadWorkbench()
+      .then((data) => {
+        if (cancelled) return;
+        if (!data?.source || !Array.isArray(data.source.statements)) {
+          setState({ status: "error", detail: "Réponse inattendue du serveur." });
+          return;
+        }
+        setState({ status: "ready", source: data.source, draft: data.draft });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        if (error?.status === 403) setState({ status: "forbidden" });
+        else setState({
+          status: "error",
+          detail: error?.status ? `Le serveur a répondu une erreur (${error.status}).` : "Connexion au serveur impossible.",
+        });
+      });
+    return () => { cancelled = true; };
+  }, [attempt]);
+
+  if (state.status === "loading") return <WorkbenchStatus busy title="Lecture des données CRM…" />;
+  if (state.status === "forbidden") {
+    return <WorkbenchStatus title="Accès réservé" detail="Votre compte n’a pas accès aux variables des sales." />;
+  }
+  if (state.status === "error") {
+    return <WorkbenchStatus title="Impossible de charger les variables" detail={state.detail} onRetry={() => setAttempt((n) => n + 1)} />;
+  }
+  if (!state.source.statements.length) {
+    return <WorkbenchStatus title="Aucun relevé à afficher" />;
+  }
+  return <VariablesWorkbench source={state.source} initialDraft={state.draft} saveDraft={saveWorkbenchDraft} />;
+}
 
 export default function CeoVariablesView() {
   const navigate = useNavigate();
@@ -143,7 +202,7 @@ export default function CeoVariablesView() {
 
       <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 64 }}>
         <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
-        <Variables embed />
+        <LiveVariablesWorkbench />
       </div>
     </div>
   );

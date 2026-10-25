@@ -150,26 +150,33 @@ export const emptyDraft = (hash) => ({
   settings: {},
   audit: [],
 });
-export function readDraft(storage, key, hash) {
-  const raw = storage.getItem(key);
-  if (!raw) return { draft: emptyDraft(hash), error: null };
-  try {
-    const parsed = JSON.parse(raw);
-    if (
-      parsed.version !== 1 ||
-      parsed.sourceHash !== hash ||
-      !parsed.changes ||
-      typeof parsed.changes !== "object" ||
-      !parsed.settings ||
-      !Array.isArray(parsed.audit)
-    )
-      throw new Error("Format ou source différente");
-    return { draft: parsed, error: null };
-  } catch {
-    return {
-      draft: emptyDraft(hash),
-      error:
-        "La sauvegarde locale ne peut pas être relue. Elle a été conservée ; aucune réécriture automatique.",
-    };
-  }
+const isMap = (value) =>
+  !!value && typeof value === "object" && !Array.isArray(value);
+// Brouillon partagé renvoyé par le serveur : forme vérifiée avant tout usage,
+// jamais réparée en silence. Le sourceHash n'est pas comparé : les données sont
+// lues en direct, leur empreinte change à chaque lecture.
+export function parseDraft(value) {
+  if (
+    !isMap(value) ||
+    value.version !== 1 ||
+    !isMap(value.changes) ||
+    !isMap(value.settings) ||
+    !Array.isArray(value.audit) ||
+    !Number.isInteger(value.revision) ||
+    value.revision < 0
+  )
+    throw new Error("Brouillon enregistré illisible");
+  return value;
+}
+// Relevé ouvert à l'arrivée : première personne (ordre alphabétique) ayant un
+// relevé sur la période par défaut, sinon dernier relevé de la première personne.
+export function initialStatement(data) {
+  const sorted = [...data.statements].sort((a, b) =>
+    a.person.localeCompare(b.person, "fr"),
+  );
+  return (
+    sorted.find((s) => s.period === data.defaultPeriod) ||
+    sorted.filter((s) => s.person === sorted[0]?.person).at(-1) ||
+    null
+  );
 }

@@ -573,8 +573,8 @@ export function PeriodEditor({ settings, person, onClose, onSave }) {
             />
           </label>
           <p>
-            Cette information qualifie le relevé local. Elle ne déplace aucune
-            vente et ne change pas le Sheet.
+            Cette information qualifie le relevé. Elle ne déplace aucune
+            vente et ne modifie pas le CRM.
           </p>
         </div>
         <div className="vr-dialog-footer">

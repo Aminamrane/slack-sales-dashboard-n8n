@@ -5,7 +5,8 @@ import {
   fixedByTiers,
   statementModel,
   impactedStatements,
-  readDraft,
+  initialStatement,
+  parseDraft,
   validateTiers,
 } from "./model.js";
 const data = {
@@ -71,14 +72,38 @@ test("invalid rules and missing verified sales block calculation", () => {
 test("editing a shared source lists all affected statements", () => {
   assert.equal(impactedStatements(data, { E1: "300" }).length, 2);
 });
-test("corrupt draft preserved without automatic overwrite", () => {
-  const store = {
-    getItem: () => "{bad",
-    setItem: () => {
-      throw Error("must not write");
-    },
+test("server draft with an unexpected shape is rejected, never repaired", () => {
+  const valid = {
+    version: 1,
+    sourceHash: "any",
+    changes: {},
+    settings: {},
+    audit: [],
+    revision: 0,
   };
-  assert.match(readDraft(store, "test", "hash").error, /conservée/);
+  assert.equal(parseDraft(valid), valid);
+  for (const bad of [
+    null,
+    "{bad",
+    { ...valid, version: 2 },
+    { ...valid, changes: [] },
+    { ...valid, settings: null },
+    { ...valid, audit: {} },
+    { ...valid, revision: "3" },
+    { ...valid, revision: -1 },
+  ])
+    assert.throws(() => parseDraft(bad), /illisible/);
+});
+test("default statement: first person alphabetically on the default period, no hard-coded name", () => {
+  const statements = [
+    { id: "z9", person: "Zoé", period: "2026-09" },
+    { id: "e8", person: "Émile", period: "2026-08" },
+    { id: "b9", person: "Bastien", period: "2026-09" },
+    { id: "a8", person: "Adam", period: "2026-08" },
+  ];
+  assert.equal(initialStatement({ statements, defaultPeriod: "2026-09" }).id, "b9");
+  assert.equal(initialStatement({ statements, defaultPeriod: "2026-12" }).id, "a8");
+  assert.equal(initialStatement({ statements: [], defaultPeriod: "2026-09" }), null);
 });
 test("CCS independent from CC; no acquisition inference; exception retains sheet", () => {
   const settings = {
