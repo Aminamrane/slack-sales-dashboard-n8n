@@ -1,11 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Rational } from "./calculation.js";
+import { createCalculator, Rational } from "./calculation.js";
+import { calculationParts, resolveDeal } from "./dealCalculation.js";
 import {
   fixedByTiers,
   statementModel,
   impactedStatements,
-  initialStatement,
   parseDraft,
   validateTiers,
 } from "./model.js";
@@ -94,17 +94,6 @@ test("server draft with an unexpected shape is rejected, never repaired", () => 
   ])
     assert.throws(() => parseDraft(bad), /illisible/);
 });
-test("default statement: first person alphabetically on the default period, no hard-coded name", () => {
-  const statements = [
-    { id: "z9", person: "Zoé", period: "2026-09" },
-    { id: "e8", person: "Émile", period: "2026-08" },
-    { id: "b9", person: "Bastien", period: "2026-09" },
-    { id: "a8", person: "Adam", period: "2026-08" },
-  ];
-  assert.equal(initialStatement({ statements, defaultPeriod: "2026-09" }).id, "b9");
-  assert.equal(initialStatement({ statements, defaultPeriod: "2026-12" }).id, "a8");
-  assert.equal(initialStatement({ statements: [], defaultPeriod: "2026-09" }), null);
-});
 test("CCS independent from CC; no acquisition inference; exception retains sheet", () => {
   const settings = {
     acquisition: {
@@ -127,4 +116,21 @@ test("CCS independent from CC; no acquisition inference; exception retains sheet
     statementModel(data, data.statements[0], {}, settings).total.toFixed(2),
     "700.00",
   );
+});
+test("readable coefficient agrees exactly with the underlying formula", () => {
+  const c = createCalculator({ C1: { input: "2112" }, E1: { input: "=(C1/12)*(1.7)" } });
+  assert.equal(calculationParts(c, "E1").label, "176,00\u00a0€ × 1,7");
+});
+test("counted and pending commissions display, only counted ones enter the total; override preserves origin", () => {
+  const data = {
+    cells: { C1: { input: "1200" }, C2: { input: "1200" }, E1: { input: "=C1/12*1" }, E2: { input: "=C2/12*1" }, G3: { input: "Fixe" }, H3: { input: "500" }, M3: { input: "=H3+E1" } },
+    entries: [{ amountCell: "E1", originChannel: "WEB", plan: "M" }, { amountCell: "E2", originChannel: "WEB", plan: "M" }],
+  };
+  const st = { totalCell: "M3", entryRefs: ["E1", "E2"] };
+  const settings = { acquisition: { WEB: { enabled: true, coefficient: "1" }, ADS: { enabled: true, coefficient: "1.2" } }, deals: { E1: { channel: "ADS" } } };
+  const m = statementModel(data, st, {}, settings);
+  assert.equal(m.total.toFixed(2), "620.00");
+  assert.equal(m.calculator.value("E2").toFixed(2), "100.00");
+  assert.equal(data.entries[0].originChannel, "WEB");
+  assert.equal(resolveDeal(data, data.entries[0], settings.deals.E1).overridden, true);
 });

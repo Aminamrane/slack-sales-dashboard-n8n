@@ -21,15 +21,15 @@ import SharedNavbar from "../components/SharedNavbar.jsx";
 const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "finance_director"]);
 
 // Même en-tête que le poste de travail : la page ne saute pas quand les données arrivent.
-function WorkbenchStatus({ title, detail, onRetry, busy = false }) {
+function WorkbenchStatus({ title, detail, onRetry, busy = false, darkMode = false }) {
   return (
-    <div className="vr-app vr-embedded">
+    <div className={`vr-app vr-embedded ${darkMode ? "vr-dark" : ""}`}>
       <div className="vr-workspace"><main className="vr-main">
         <header className="vr-heading"><div><div className="vr-eyebrow">ÉQUIPE COMMERCIALE</div><h1>Variables & rémunérations</h1></div></header>
         <div className={`vr-status ${busy ? "busy" : ""}`} role={busy ? "status" : "alert"}>
           {busy && <span className="vr-status-spinner" aria-hidden="true" />}
           <h3>{title}</h3>
-          {detail && <p>{detail}</p>}
+          {detail && <div className="vr-status-detail">{detail}</div>}
           {onRetry && <button className="vr-button" onClick={onRetry}>Réessayer</button>}
         </div>
       </main></div>
@@ -38,7 +38,7 @@ function WorkbenchStatus({ title, detail, onRetry, busy = false }) {
 }
 
 // GET /api/v1/variables/workbench → { source, draft }, relu à chaque visite de la page.
-function LiveVariablesWorkbench() {
+function LiveVariablesWorkbench({ darkMode }) {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState({ status: "loading" });
   useEffect(() => {
@@ -64,17 +64,17 @@ function LiveVariablesWorkbench() {
     return () => { cancelled = true; };
   }, [attempt]);
 
-  if (state.status === "loading") return <WorkbenchStatus busy title="Lecture des données CRM…" />;
+  if (state.status === "loading") return <WorkbenchStatus busy darkMode={darkMode} title="Lecture des données CRM…" />;
   if (state.status === "forbidden") {
-    return <WorkbenchStatus title="Accès réservé" detail="Votre compte n’a pas accès aux variables des sales." />;
+    return <WorkbenchStatus darkMode={darkMode} title="Accès réservé" detail="Votre compte n’a pas accès aux variables des sales." />;
   }
   if (state.status === "error") {
-    return <WorkbenchStatus title="Impossible de charger les variables" detail={state.detail} onRetry={() => setAttempt((n) => n + 1)} />;
+    return <WorkbenchStatus darkMode={darkMode} title="Impossible de charger les variables" detail={state.detail} onRetry={() => setAttempt((n) => n + 1)} />;
   }
   if (!state.source.statements.length) {
-    return <WorkbenchStatus title="Aucun relevé à afficher" />;
+    return <WorkbenchStatus darkMode={darkMode} title="Aucune donnée à afficher" />;
   }
-  return <VariablesWorkbench source={state.source} initialDraft={state.draft} saveDraft={saveWorkbenchDraft} />;
+  return <VariablesWorkbench source={state.source} initialDraft={state.draft} saveDraft={saveWorkbenchDraft} darkMode={darkMode} />;
 }
 
 export default function CeoVariablesView() {
@@ -202,7 +202,7 @@ export default function CeoVariablesView() {
 
       <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 64 }}>
         <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
-        <LiveVariablesWorkbench />
+        <LiveVariablesWorkbench darkMode={darkMode} />
       </div>
     </div>
   );

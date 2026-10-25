@@ -168,15 +168,3 @@ export function parseDraft(value) {
     throw new Error("Brouillon enregistré illisible");
   return value;
 }
-// Relevé ouvert à l'arrivée : première personne (ordre alphabétique) ayant un
-// relevé sur la période par défaut, sinon dernier relevé de la première personne.
-export function initialStatement(data) {
-  const sorted = [...data.statements].sort((a, b) =>
-    a.person.localeCompare(b.person, "fr"),
-  );
-  return (
-    sorted.find((s) => s.period === data.defaultPeriod) ||
-    sorted.filter((s) => s.person === sorted[0]?.person).at(-1) ||
-    null
-  );
-}
