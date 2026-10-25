@@ -8,7 +8,8 @@ import { CHANNELS, decimalLabel } from "./presentation.js";
 import { IconButton } from "./ui.jsx";
 import { Slide } from "./Slide.jsx";
 
-const STATUS_CHIPS = [["ALL", "Toutes"], ["counted", "Comptées"], ["pending", "En attente"]];
+const STATUS_CHIPS = [["ALL", "Toutes"], ["counted", "Comptées"], ["pending", "En attente"], ["lost", "Perdues"]];
+const GROUP_LABELS = { counted: "Comptées", pending: "En attente d’encaissement", lost: "Perdues" };
 const CHANNEL_CHIPS = [...Object.entries(CHANNELS), ["UNKNOWN", "Non retrouvée"]];
 const plural = (n, word) => `${n} ${word}${n > 1 ? "s" : ""}`;
 
@@ -49,16 +50,18 @@ export function SalesTable({
       <div className="vr-card vr-table-card">
         <div className="vr-toolbar">
           <div className="vr-chips" role="group" aria-label="Statut des ventes">
-            {STATUS_CHIPS.map(([key, label]) => (
-              <Chip key={key} group="status" countDelay={countDelay} active={filters.status === key} count={counts.status[key]} onClick={() => setFilter({ status: key })}>{label}</Chip>
-            ))}
-            <InfoTip label="Détail des ventes en attente">
-              {breakdown.length ? (
-                <dl className="vr-breakdown">
-                  {breakdown.map((g) => <div key={g.key}><dt>{g.label}</dt><dd className="vr-num">{g.count}</dd></div>)}
-                </dl>
-              ) : <span>Aucune vente en attente.</span>}
-            </InfoTip>
+            {STATUS_CHIPS.filter(([key]) => key !== "lost" || counts.status.lost > 0 || filters.status === "lost").map(([key, label]) => [
+              <Chip key={key} group="status" countDelay={countDelay} active={filters.status === key} count={counts.status[key]} onClick={() => setFilter({ status: key })}>{label}</Chip>,
+              key === "pending" && (
+                <InfoTip key="pending-info" label="Détail des ventes en attente">
+                  {breakdown.length ? (
+                    <dl className="vr-breakdown">
+                      {breakdown.map((g) => <div key={g.key}><dt>{g.label}</dt><dd className="vr-num">{g.count}</dd></div>)}
+                    </dl>
+                  ) : <span>Aucune vente en attente.</span>}
+                </InfoTip>
+              ),
+            ])}
           </div>
           <div className="vr-chips" role="group" aria-label="Catégorie de rémunération">
             {CHANNEL_CHIPS.map(([key, label]) => (
@@ -123,7 +126,7 @@ function SalesBody({ rows, counts, showGroups, entryDelay, exitDelay, inline, on
         return [
           group && (
             <Motion.div key={`group-${row.status}`} role="row" className={`vr-row-group ${row.status}`} {...motionProps}>
-              <span role="cell">{row.status === "counted" ? "Comptées" : "En attente d’encaissement"}<b className="vr-num">{counts.status[row.status]}</b></span>
+              <span role="cell">{GROUP_LABELS[row.status]}<b className="vr-num">{counts.status[row.status]}</b></span>
             </Motion.div>
           ),
           <SaleRow key={row.ref} row={row} motionProps={motionProps} inline={inline?.ref === row.ref ? inline : null}

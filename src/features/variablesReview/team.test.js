@@ -7,6 +7,7 @@ import {
   pendingOf,
   periodsOf,
   saleCounts,
+  saleStatus,
   sortSales,
   teamRows,
   teamTotals,
@@ -78,30 +79,40 @@ test("a statement whose calculation fails is listed last, without breaking the t
 const sale = (client, status, signedAt, channel = "ADS", finance = { key: "paid", label: "Payée" }) =>
   ({ client, status, signedAt, channel, finance, search: client });
 
-test("sales order: counted first, then pending, each group by Paris signing time", () => {
+test("one status per sale: counted, pending, or lost (not counted, lost client)", () => {
+  assert.equal(saleStatus({ counted: true, finance: { status: "paid" } }), "counted");
+  assert.equal(saleStatus({ counted: false, finance: { status: "first_due_unpaid" } }), "pending");
+  assert.equal(saleStatus({ counted: false, finance: null }), "pending");
+  assert.equal(saleStatus({ counted: false, finance: { status: "lost" } }), "lost");
+  assert.equal(saleStatus({ counted: true, finance: { status: "lost" } }), "counted");
+});
+
+test("sales order: counted, then pending, then lost, each group by Paris signing time", () => {
   const rows = [
+    sale("L1", "lost", "2026-08-30 10:00:00+00:00"),
     sale("P1", "pending", "2026-09-01 10:00:00+00:00"),
     sale("C20", "counted", "2026-09-20 10:00:00+00:00"),
     sale("C02", "counted", "2026-09-02 10:00:00+00:00"),
     sale("Late UTC", "counted", "2026-09-01 22:30:00+00:00"),
   ];
-  assert.deepEqual(sortSales(rows).map((r) => r.client), ["Late UTC", "C02", "C20", "P1"]);
+  assert.deepEqual(sortSales(rows).map((r) => r.client), ["Late UTC", "C02", "C20", "P1", "L1"]);
 });
 
 test("filter chips: each count equals the rows shown when clicked; statuses add up to all", () => {
   const rows = [
     sale("A", "counted", "2026-09-01", "ADS"),
-    sale("B", "pending", "2026-09-02", "ADS", { key: "lost", label: "Client perdu" }),
+    sale("B", "lost", "2026-09-02", "ADS", { key: "lost", label: "Client perdu" }),
+    sale("E", "pending", "2026-09-05", "ADS", { key: "first_due_unpaid", label: "Première échéance non payée" }),
     sale("C", "counted", "2026-09-03", "CC"),
     sale("D", "pending", "2026-09-04", "UNKNOWN", { key: "unmatched", label: "À rapprocher" }),
   ];
   for (const filters of [{}, { channel: "ADS" }, { status: "pending" }, { status: "counted", channel: "CC" }, { query: "a" }]) {
     const counts = saleCounts(rows, filters);
-    assert.equal(counts.status.counted + counts.status.pending, counts.status.ALL);
-    for (const status of ["ALL", "counted", "pending"])
+    assert.equal(counts.status.counted + counts.status.pending + counts.status.lost, counts.status.ALL);
+    for (const status of ["ALL", "counted", "pending", "lost"])
       assert.equal(filterSales(rows, { ...filters, status }).length, counts.status[status]);
     for (const channel of ["ALL", "ADS", "CC", "UNKNOWN"])
       assert.equal(filterSales(rows, { ...filters, channel }).length, counts.channel[channel] || 0);
   }
-  assert.deepEqual(pendingBreakdown(rows).map((g) => `${g.label}:${g.count}`), ["À rapprocher:1", "Client perdu:1"]);
+  assert.deepEqual(pendingBreakdown(rows).map((g) => `${g.label}:${g.count}`), ["À rapprocher:1", "Première échéance non payée:1"]);
 });

@@ -294,9 +294,9 @@
 .vr-row-group b { padding: 0 7px; border-radius: 999px; background: var(--vr-sunken); color: var(--vr-soft); letter-spacing: 0; }
 .vr-row-group.counted b { background: var(--vr-good-soft); color: var(--vr-good); }
 .vr-row.edited::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--vr-accent); }
-.vr-row.pending .vr-client-line strong { color: var(--vr-soft); }
-.vr-row.pending .vr-amount { color: var(--vr-muted); }
-.vr-row.pending .vr-base { color: var(--vr-muted); }
+.vr-row:is(.pending, .lost) .vr-client-line strong { color: var(--vr-soft); }
+.vr-row:is(.pending, .lost) :is(.vr-amount, .vr-base) { color: var(--vr-muted); }
+.vr-row-group.lost { color: color-mix(in srgb, var(--vr-muted) 80%, transparent); }
 .vr-cell-client { min-width: 0; }
 .vr-client-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .vr-client-line strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 650; }
