@@ -15,7 +15,7 @@ import { ClientMissions, DetailFold, DetailText } from "../components/OptilexCli
 import MentionTextarea, { MentionedText } from "../components/MentionTextarea";
 import { mentionedIds, notifiedSummary } from "../utils/mentions.js";
 import { isOnboardingToReschedule, matchesUpcomingIntegration, matchesUpcomingOnboarding, matchesOverdueOnboarding, onboardingDateOf, onboardingSituation, parisWallTime } from "../utils/boardIntegration.js";
-import { matchesSignedClient, resolvePendingExit } from "../utils/boardClientState.js";
+import { createLatestRequestTracker, displayEtat, matchesSignedClient, withConfirmedEtat } from "../utils/boardClientState.js";
 import { Fragment, useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
@@ -105,12 +105,6 @@ export const ETAT_DATE_CONFIG = {
   "Pause": { pause: true },
 };
 
-// Volet Opti'Lex actif : planifié (va être envoyé) ou envoyé (en attente signature).
-const optilexPending = (r) => r.optilex_status === "scheduled" || r.optilex_status === "ongoing";
-// "Attente Opti'Lex" = Owner SIGNÉ mais Opti'Lex encore en attente -> le cabinet doit agir.
-const isAttenteOptilex = (r) => r.owner_status === "done" && optilexPending(r);
-// "En cours" = Opti'Lex actif mais Owner PAS encore signé (les 2 contrats encore en vol).
-const isEnCours = (r) => r.owner_status !== "done" && optilexPending(r);
 // RDV à venir (date de RDV >= aujourd'hui à Paris, pas encore effectué) — onglets dédiés.
 // Dates stockées en heure-mur Paris labellisée UTC -> on compare les PARTIES date (YYYY-MM-DD),
 // indépendamment du fuseau du navigateur, pour coller à l'affichage. Restreint aux lignes avec
@@ -119,7 +113,7 @@ const _todayParisISO = () => new Date().toLocaleDateString("en-CA", { timeZone: 
 // Split des contrats effectif au 01/07/2026 : depuis cette date, un RDV intégration NON marqué
 // "effectué" reste "à venir" MÊME si sa date est passée (il n'a pas été réalisé par Lisa).
 // Avant le 01/07 = pré-split, pas de suivi "effectué" fiable -> exclu (on n'inonde pas la case).
-// Exportés (avec `displayEtat` plus bas) : les cartes d'états du dashboard CEO
+// Exportés (avec `displayEtat`, réexporté plus bas) : les cartes d'états du dashboard CEO
 // comptent avec CES prédicats-ci. Une seule définition de la règle métier, pas de
 // copie qui dérive — board et dashboard affichent forcément les mêmes chiffres.
 export const isOnboardingUpcoming = (r) => matchesUpcomingOnboarding(r, _todayParisISO());
@@ -134,48 +128,20 @@ const optilexNotSigned = (r) => !!r.optilex_status && r.optilex_status !== "done
 const integrationAlert = (r) => isIntegrationUpcoming(r) && optilexNotSigned(r);
 // Un état DATÉ (Résiliation/Rétractation/Pause/Liquidation…) n'est EFFECTIF qu'à partir de sa date
 // d'effet. Posé avec une date FUTURE (ou sans date = à renseigner) = "PRÉVU", pas encore appliqué :
-// le client reste dans son état actuel, puis bascule AUTOMATIQUEMENT à l'échéance (calcul à la
-// volée, aucun cron). La date devient donc de fait obligatoire : sans elle, l'état ne prend jamais
-// effet. Les "En cours de résiliation/rétractation" (sans date) restent des marqueurs immédiats.
+// le client reste dans son état actuel, puis bascule AUTOMATIQUEMENT à l'échéance (calcul fait
+// par le back à chaque chargement du board, aucun cron). La date devient donc de fait obligatoire :
+// sans elle, l'état ne prend jamais effet. Les "En cours de résiliation/rétractation" (sans date)
+// restent des marqueurs immédiats.
 export const isEtatPending = (r) => !!(r.etat_manuel && ETAT_DATE_CONFIG[r.etat_manuel]
   && (!r.etat_date || String(r.etat_date).slice(0, 10) > _todayParisISO()));
 
-// État affiché : l'état du Sheet en priorité, sinon le statut du contrat en cours.
-// Exporté : les cartes d'états du dashboard CEO comptent avec CETTE fonction, pour
-// afficher exactement les mêmes chiffres que les onglets du board.
-// Où vit un client PENDANT l'attente de sa date d'effet : un état terminal daté
-// posé pour une date FUTURE ne laisse plus le client dans son ancien état — il
-// bascule immédiatement dans le « En cours de … » correspondant (demande dev
-// 2026-09-03), garde son badge « ⏳ prévu le … », puis passe tout seul dans
-// l'état acté à l'échéance (isEtatPending redevient faux ; calcul à la volée,
-// aucun cron). Pause garde l'ancien comportement : une pause future n'est pas
-// « en cours », le client reste actif jusqu'à son début.
-const PENDING_ETAT_DISPLAY = {
-  "Résiliation": "En cours de résiliation",
-  "Self-Résiliation": "En cours de résiliation",
-  "Rétractation": "En cours de rétractation",
-  "Liquidation": "En cours de liquidation",
-  "En cours de liquidation": "En cours de liquidation",
-};
-export const displayEtat = (r) => {
-  const rawState = r.etat_manuel || r.etat;
-  const effectiveState = resolvePendingExit(rawState, r.etat_date, _todayParisISO());
-  if (effectiveState !== rawState) return effectiveState;
-  if (r.etat_manuel && !isEtatPending(r)) return r.etat_manuel;   // override cabinet, une fois EFFECTIF (date d'effet atteinte)
-  if (r.etat_manuel && PENDING_ETAT_DISPLAY[r.etat_manuel]) return PENDING_ETAT_DISPLAY[r.etat_manuel]; // prévu à date future -> déjà « en cours de … »
-  if (r.etat) return r.etat;                 // état du Sheet (vérité des ÉTATS)
-  // Vérité des DATA = interne : Owner signé -> "Signé" même pas (encore) dans le Sheet.
-  // Deux régimes : contrat GROUPÉ (optilex null = Opti'Lex inclus dans l'Owner, signé avec)
-  // ou SPLIT dont le volet Opti'Lex est signé (optilex 'done'). Owner signé + Opti'Lex
-  // encore en vol (scheduled/ongoing) reste "Attente Opti'Lex" (traité plus bas).
-  if (r.owner_status === "done" && (r.optilex_status == null || r.optilex_status === "done")) return "Signé";
-  if (isAttenteOptilex(r)) return "Attente Opti'Lex";
-  if (isEnCours(r)) return "En cours";
-  // Owner signé mais volet Opti'Lex terminal (expiré/annulé/refusé) : le client reste acquis
-  // côté Owner -> "Signé" (la colonne/le détail Opti'Lex montre le statut réel).
-  if (r.owner_status === "done") return "Signé";
-  return null;
-};
+// État affiché : calculé par le back (`etat_affiche` de GET /optilex/board), lu tel quel
+// par `displayEtat` (utils/boardClientState.js). Réexporté d'ici : les cartes d'états du
+// dashboard CEO et la page Finance comptent avec CETTE valeur, donc avec les mêmes
+// chiffres que les onglets du board et que la synchro vers le SaaS Opti'Lex.
+// `isEtatPending` ci-dessus ne décide pas de l'état : il ne pilote que le badge
+// « ⏳ prévu le … » d'un état posé dont la date d'effet n'est pas encore atteinte.
+export { displayEtat };
 // Une ligne appartient-elle à une catégorie (onglet primaire OU secondaire) ? Unifie les
 // prédicats calculés (RDV à venir) et les états (Sheet/override/interne) pour un filtrage unique.
 // Client cabinet sans mission suivie depuis 60 j (enrichissement SaaS Opti'Lex, jointure email).
@@ -1120,7 +1086,10 @@ export default function OptilexBoard({ embed = false }) {
   // pause ne valent que pour "Pause". Optimiste avec ROLLBACK si le POST échoue (un état qui
   // "a l'air posé" mais ne l'est pas est inacceptable pour un outil d'audit) ; la timeline ne
   // se rafraîchit qu'en cas de succès.
+  // L'état AFFICHÉ (`etat_affiche`) n'est jamais deviné ici : il reste celui du serveur jusqu'à sa
+  // réponse, qui renvoie le nouvel état calculé ; seuls les champs posés (état, dates) sont optimistes.
   const [etatHistVersion, setEtatHistVersion] = useState(0);
+  const [etatRequests] = useState(createLatestRequestTracker);
   const changeEtat = useCallback(async (numero, payload) => {
     if (requiresExitDecision(apiClient.getUser()?.role, payload.etat)) {
       payload = await confirmBoardFinanceExit(numero, payload);
@@ -1130,6 +1099,7 @@ export default function OptilexBoard({ embed = false }) {
     if (!numero) return;
     if (isFinanceTeam() && !FINANCE_TEAM_ETATS.includes(etat)) return; // finance_team : seulement les 2 "en cours"
     mutSeq.current += 1;
+    const isLatest = etatRequests.start(numero);
     const pe = etat === "Pause" ? pause_end_date : null;
     const pr = etat === "Pause" ? pause_relance_date : null;
     let snapshot = null;
@@ -1140,14 +1110,20 @@ export default function OptilexBoard({ embed = false }) {
     }));
     try {
       const saved = await apiClient.post("/api/v1/optilex/etat-change", { numero_client: numero, etat, etat_date, pause_end_date: pe, pause_relance_date: pr, finance_decision });
-      setRows(prev => prev.map(r => r.numero_client === numero ? { ...r, finance_review_status: saved.finance_review?.status } : r));
+      if (isLatest()) {
+        // Un rechargement parti avant cette réponse peut porter l'ancien état : on l'écarte.
+        mutSeq.current += 1;
+        setRows((prev) => prev.map((r) => (r.numero_client === numero
+          ? { ...withConfirmedEtat(r, saved), pause_end_date: pe, pause_relance_date: pr, finance_review_status: saved.finance_review?.status }
+          : r)));
+      }
       setEtatHistVersion((v) => v + 1);   // succès uniquement
     } catch (e) {
       console.error("etat-change failed", e);
-      if (snapshot) setRows((prev) => prev.map((r) => (r.numero_client === numero ? snapshot : r)));
+      if (snapshot && isLatest()) setRows((prev) => prev.map((r) => (r.numero_client === numero ? snapshot : r)));
       flagSaveError(e);
     }
-  }, [flagSaveError]);
+  }, [flagSaveError, etatRequests]);
 
   // Poser une note météo (1-5) + note d'interaction : POST dédié (historisé). Optimiste avec
   // rollback. La dernière note = la météo courante (badge/filtre/CSV). Bump la version pour
