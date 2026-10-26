@@ -205,13 +205,14 @@ function SaleSlotPicker({ kind, value, onChange, C, darkMode, band, readOnly = f
     setLoading(true);
     // band (tranche salariale) route le Lancement vers H. Moraru si 20+ salariés ->
     // on lit les dispos du BON agenda. Onboarding = créneaux 50 min avec dispo CROISÉE
-    // Vincent (v.chaintron@) + facturation@ sur les 15 dernières min (géré côté backend).
+    // animateur + facturation sur les 15 dernières min (géré côté backend) ; chaque créneau
+    // libre porte le prénom de l'animateur (`host`), montré par sa photo (`host_photos`) pour information.
     const bandParam = band ? `&band=${encodeURIComponent(band)}` : '';
     apiClient.get(`${slotsPath || "/api/v1/tracking/sale-slots"}?kind=${kind}&start=${_ymd(y, m, 1)}&days=${daysInMonth}${bandParam}`)
       .then(r => {
         if (!alive) return;
         const days = (r && r.days) || [];
-        setData({ days, slotMinutes: (r && r.slot_minutes) || null });
+        setData({ days, slotMinutes: (r && r.slot_minutes) || null, hostPhotos: (r && r.host_photos) || {} });
         setSelectedDay(prev => {
           if (prev && days.some(d => d.date === prev)) return prev;
           if (value && days.some(d => d.date === value.slice(0, 10))) return value.slice(0, 10);
@@ -304,15 +305,28 @@ function SaleSlotPicker({ kind, value, onChange, C, darkMode, band, readOnly = f
             <div style={{ color: C.muted, fontSize: 12, padding: '24px 0', textAlign: 'center' }}>Aucun créneau ce mois</div>
           ) : selectedSlots.map((s, idx) => {
             const sel = valDay === selectedDay && valTime === s.t;
+            const host = s.free ? s.host : null;
+            const photo = host && (data.hostPhotos || {})[host];
             return (
               <button key={s.t} data-slot={s.t} onClick={() => !readOnly && s.free && onChange(selectedDay + 'T' + s.t)} disabled={!s.free || readOnly}
+                title={host || undefined}
                 style={{ padding: '10px 0', borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
                   cursor: s.free && !readOnly ? 'pointer' : 'default',
                   border: `1px solid ${sel ? '#1e2330' : (s.free ? C.border : 'transparent')}`,
                   background: sel ? '#1e2330' : (s.free ? (darkMode ? '#252636' : '#f9fafb') : (darkMode ? 'rgba(255,255,255,0.02)' : '#f3f4f6')),
                   color: sel ? '#fff' : (s.free ? C.text : (darkMode ? '#4a4b57' : '#c3cad6')),
                   textDecoration: s.free ? 'none' : 'line-through',
-                  animation: 'solarFadeIn 0.2s ease both', animationDelay: `${Math.min(idx * 0.012, 0.25)}s`, transition: 'all 0.12s' }}>{s.t}</button>
+                  animation: 'solarFadeIn 0.2s ease both', animationDelay: `${Math.min(idx * 0.012, 0.25)}s`, transition: 'all 0.12s' }}>
+                {s.t}
+                {/* Animateur de l'onboarding : sa photo, sinon son prénom (marges négatives = hauteur de ligne inchangée). */}
+                {photo ? (
+                  <img src={photo} alt={host} draggable={false}
+                    style={{ width: 22, height: 22, margin: '-4px 0 -4px 8px', verticalAlign: 'middle', borderRadius: '50%', objectFit: 'cover',
+                      boxShadow: sel ? '0 0 0 1.5px #fff' : 'none' }} />
+                ) : host && (
+                  <span style={{ marginLeft: 6, fontSize: 11.5, fontWeight: 500, color: sel ? 'rgba(255,255,255,0.72)' : C.muted }}>{host}</span>
+                )}
+              </button>
             );
           })}
         </div>
