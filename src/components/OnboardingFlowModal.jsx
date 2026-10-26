@@ -15,6 +15,7 @@ import { METEO_MEANING, MeteoIcon, meteoStyle } from "./meteo.jsx";
 import { weatherPresentation } from "../utils/weatherCase";
 import BoardOnboardingDateCorrection from "./BoardOnboardingDateCorrection";
 import { onboardingDateOf } from "../utils/boardIntegration";
+import { displayEtat } from "../utils/boardClientState";
 
 const NAVY = "#1e2330";
 const BORDER = "#e9ebf0";
@@ -119,7 +120,7 @@ function SituationStep({ brief, row }) {
         <Row label="Contact">{brief.client.contact_name || "—"}</Row>
         <Row label="E-mail d'envoi des contrats">{brief.client.email || "—"}{brief.client.email && row.email && brief.client.email.toLowerCase() !== String(row.email).toLowerCase() && <> <Pill color={AMBER}>corrigée</Pill></>}</Row>
         <Row label="Téléphone">{brief.client.phone || "—"}</Row>
-        <Row label="État sur le board">{row.etat || brief.client.etat || "—"}</Row>
+        <Row label="État sur le board">{displayEtat(row) || "—"}</Row>
       </Card>
       <Card title="Finance">
         <div style={{ fontSize: 13.5, fontWeight: 700, color: tone, marginBottom: 6 }}>
