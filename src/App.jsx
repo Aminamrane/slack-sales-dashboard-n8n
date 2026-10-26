@@ -370,7 +370,7 @@ function App() {
         <Route
           path="/ceo/meta-ads"
           element={
-            <ProtectedRoute allowedRoles={['ceo', 'finance_director', 'acquisition_director', 'head_of_acquisition', 'marketing']}>
+            <ProtectedRoute allowedRoles={['ceo', 'finance_director', 'acquisition_director', 'head_of_acquisition', 'marketing', 'hr']}>
               <CeoMetaAdsView />
             </ProtectedRoute>
           }

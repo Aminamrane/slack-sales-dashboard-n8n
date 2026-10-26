@@ -54,9 +54,9 @@ const ITEM_ROLE_GATE = {
   // Même liste que l'API (calendar_internal.DIRECTOR_ROLES).
   acquisition_agenda: new Set(["ceo", "admin", "acquisition_director", "head_of_acquisition"]),
   // Meta Ads : Paul (ceo), Timothy (head_of_acquisition), Gaylord
-  // (acquisition_director), Ismahane (finance_director). Même liste que
-  // l'API (MARKETING_ALLOWED_ROLES) : les RH, qui voient l'Acquisition, non.
-  meta_ads: new Set(["ceo", "admin", "finance_director", "acquisition_director", "head_of_acquisition", "marketing"]),
+  // (acquisition_director), Ismahane (finance_director), les RH (hr, 26/10).
+  // Même liste que l'API (META_ADS_ALLOWED_ROLES).
+  meta_ads: new Set(["ceo", "admin", "finance_director", "acquisition_director", "head_of_acquisition", "marketing", "hr"]),
   // Sub Tickets : rôles des personnes de la liste nominative du backend
   // (bot_ia_prompts.py ALLOWED_EMAILS), qui reste la garde qui fait foi.
   bot_ia: SUB_TICKETS_ROLES,

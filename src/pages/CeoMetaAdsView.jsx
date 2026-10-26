@@ -3,8 +3,8 @@
 // Meta Ads dans le dashboard (section Acquisition), même gabarit que
 // CeoWebinarView : sidebar CEO filtrée par rôle + navbar, page MetaAds en
 // mode intégré. Accès : Paul (ceo), Ismahane (finance_director), Timothy
-// (head_of_acquisition), Gaylord (acquisition_director), comme l'API
-// /marketing/meta-ads (MARKETING_ALLOWED_ROLES).
+// (head_of_acquisition), Gaylord (acquisition_director), les RH (hr), comme
+// l'API /marketing/meta-ads (META_ADS_ALLOWED_ROLES).
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -17,7 +17,7 @@ import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import { getTheme } from "./MetaAds/theme.js";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo", "finance_director", "acquisition_director", "head_of_acquisition", "marketing"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo", "finance_director", "acquisition_director", "head_of_acquisition", "marketing", "hr"]);
 
 export default function CeoMetaAdsView() {
   const navigate = useNavigate();

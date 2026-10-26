@@ -22,7 +22,7 @@ import { TABS } from './tabs.jsx';
 import Pict from './icons.jsx';
 import { getTheme, fmtInt, fmtCompact, fmtEur, fmtEur2, fmtRoas } from './theme.js';
 
-const ALLOWED_ROLES = ['admin', 'ceo', 'marketing', 'acquisition_director', 'head_of_acquisition', 'finance_director'];
+const ALLOWED_ROLES = ['admin', 'ceo', 'marketing', 'acquisition_director', 'head_of_acquisition', 'finance_director', 'hr'];
 const MAX_SELECTED = 4;
 
 // ── métriques (tuiles + courbe) ────────────────────────────────────────────
