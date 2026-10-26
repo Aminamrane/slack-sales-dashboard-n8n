@@ -34,7 +34,7 @@ import { MonthNav } from "./MonthNav.jsx";
 import { TeamList } from "./TeamList.jsx";
 import { PersonCard } from "./PersonCard.jsx";
 import { SalesTable } from "./SalesTable.jsx";
-import { EXIT, SPRING_UI, STEP } from "./motion.js";
+import { entryOffset, EXIT, SPRING_UI, TABLE_DELAY } from "./motion.js";
 import "./variables.css";
 
 const STALE_MESSAGE =
@@ -78,8 +78,10 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
   const monthText = monthLabel(period);
   const readingDay = dayMonthLabel(source.snapshotDate);
 
-  // cause : « nav » (personne ou mois : liste, puis carte, puis tableau), « filter », « edit ».
-  const [motionState, setMotionState] = useState({ direction: 1, cause: "nav" });
+  // Cause du dernier changement, qui choisit le déplacement d'entrée (motion.js) :
+  // « load », « person » (vertical, dans le sens de la liste), « month » (horizontal : → par la
+  // droite, ← par la gauche), « filter » (tableau seul), « edit » (valeurs modifiées).
+  const [motionState, setMotionState] = useState({ direction: 1, cause: "load" });
   const [filters, setFilters] = useState(NO_FILTERS),
     [page, setPage] = useState(1),
     [panel, setPanel] = useState(null),
@@ -128,7 +130,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
       client: entry.client,
       status: saleStatus(entry),
       channel: deal.channel || "UNKNOWN",
-      finance: financeBadge(entry.finance),
+      finance: financeBadge(entry.finance, entry.unlinkedReason),
       signedAt: entry.signedAt,
       signedLabel: signedParis(entry.signedAt)?.label,
       range: entry.employeeRange,
@@ -151,7 +153,11 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
   const currentPage = Math.min(page, pages);
   const shown = visible.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const changedCount = Object.keys(draft.changes).length + Object.keys(draft.settings).length;
-  const nav = motionState.cause === "nav";
+  // Tout change dans la même image ; seul le déplacement diffère. Le tableau part 60 ms
+  // après la liste et la carte quand la personne ou le mois change, tout de suite sinon.
+  const entry = { axis: motionState.cause === "month" ? "x" : "y", direction: motionState.direction };
+  const navigating = motionState.cause === "person" || motionState.cause === "month";
+  const rowEntry = motionState.cause === "edit" ? null : entryOffset(entry, 10);
 
   function notify(text) {
     const id = crypto.randomUUID();
@@ -172,7 +178,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
       const response = await saveDraft({ expected_revision: draft.revision, changes: next.changes, settings: next.settings, audit_item: item });
       setDraft(parseDraft(response?.draft));
       setSaveError("");
-      setMotionState((m) => ({ ...m, cause: "edit" }));
+      setMotionState({ direction: 1, cause: "edit" });
       return true;
     } catch (error) {
       if (isStaleRevision(error)) setBlockingError(STALE_MESSAGE);
@@ -201,7 +207,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
   function selectPerson(name) {
     if (name === row.person) return;
     const from = team.findIndex((r) => r.person === row.person), to = team.findIndex((r) => r.person === name);
-    setMotionState({ direction: to >= from ? 1 : -1, cause: "nav" });
+    setMotionState({ direction: to >= from ? 1 : -1, cause: "person" });
     setPerson(name);
     setFilters(NO_FILTERS);
     setPage(1);
@@ -209,7 +215,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
   }
   function changePeriod(next) {
     if (next === period) return;
-    setMotionState({ direction: next > period ? 1 : -1, cause: "nav" });
+    setMotionState({ direction: next > period ? 1 : -1, cause: "month" });
     const nextTeam = teamRows(source, draft, next);
     if (!nextTeam.some((r) => r.person === row.person)) setPerson(nextTeam[0]?.person ?? null);
     setPeriod(next);
@@ -219,7 +225,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
   }
   function changeFilters(next) {
     const onlySearch = next.status === filters.status && next.channel === filters.channel;
-    if (!onlySearch) setMotionState((m) => ({ ...m, cause: "filter" }));
+    if (!onlySearch) setMotionState({ direction: 1, cause: "filter" });
     setFilters(next);
     setPage(1);
     setInline(null);
@@ -292,8 +298,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
                 settings={settings}
                 monthText={monthText}
                 readingDay={readingDay}
-                direction={motionState.direction}
-                delay={nav ? STEP : 0}
+                entry={entry}
                 onCoefficients={() => setPanel("coefficients")}
                 onTiers={() => setPanel("rules")}
                 onHistory={() => setPanel("history")}
@@ -315,11 +320,10 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
                   onFilters={changeFilters}
                   page={currentPage}
                   pages={pages}
-                  onPage={(p) => { setMotionState((m) => ({ ...m, cause: "filter" })); setPage(p); }}
+                  onPage={(p) => { setMotionState({ direction: p > currentPage ? 1 : -1, cause: "filter" }); setPage(p); }}
                   bodyKey={`${statement.id}|${filters.status}|${filters.channel}|${currentPage}`}
-                  countDelay={nav ? 2 * STEP : 0}
-                  exitDelay={nav ? 0.1 : 0}
-                  entryDelay={nav ? 0.03 : 0}
+                  rowEntry={rowEntry}
+                  rowDelay={navigating ? TABLE_DELAY : 0}
                   inline={inlineView}
                   onInline={inlineApi}
                   onDeal={(r) => setPanel({ type: "deal", row: r })}

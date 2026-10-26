@@ -82,7 +82,13 @@ const FINANCE_LABELS = {
 };
 const FINANCE_TONES = { paid: "paid", first_due_unpaid: "late" };
 export const UNMATCHED = "unmatched";
-export function financeBadge(finance) {
+export const NOT_DECLARED_HINT =
+  "Contrat signé, vente pas encore déclarée dans le CRM : pas de fiche client, donc pas de suivi Finance.";
+// Sans fiche Finance, le back précise pourquoi (entry.unlinkedReason) : « not_declared »
+// (contrat signé, vente jamais déclarée) ou « no_client ». Sans le champ : « À rapprocher ».
+export function financeBadge(finance, unlinkedReason) {
+  if (!finance && unlinkedReason === "not_declared")
+    return { key: "not_declared", label: "Vente non déclarée", tone: "neutral", hint: NOT_DECLARED_HINT };
   const key = typeof finance?.status === "string" ? finance.status : "";
   const label = (typeof finance?.statusLabel === "string" && finance.statusLabel.trim()) || FINANCE_LABELS[key];
   if (!key || !label) return { key: UNMATCHED, label: "À rapprocher", tone: "neutral" };

@@ -44,6 +44,17 @@ test("finance status comes from the back; missing or unknown status falls back t
     assert.deepEqual(financeBadge(missing), { key: "unmatched", label: "À rapprocher", tone: "neutral" });
 });
 
+test("sale without Finance record: « Vente non déclarée » only when the back says not_declared", () => {
+  const notDeclared = financeBadge(null, "not_declared");
+  assert.equal(notDeclared.key, "not_declared");
+  assert.equal(notDeclared.label, "Vente non déclarée");
+  assert.equal(notDeclared.tone, "neutral");
+  assert.match(notDeclared.hint, /pas de fiche client/);
+  for (const reason of ["no_client", undefined, null, "autre"])
+    assert.equal(financeBadge(null, reason).label, "À rapprocher");
+  assert.equal(financeBadge({ status: "paid" }, "not_declared").key, "paid");
+});
+
 test("history never shows cell references or raw formulas", () => {
   assert.equal(auditDetail("E123456789 · Ajustement validé"), "Ajustement validé");
   assert.equal(auditDetail("H12 · Fixe"), "Fixe");

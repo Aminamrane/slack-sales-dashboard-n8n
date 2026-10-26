@@ -122,7 +122,7 @@ export function pendingBreakdown(rows) {
   const groups = new Map();
   for (const r of rows) {
     if (r.status !== "pending") continue;
-    const g = groups.get(r.finance.key) || { key: r.finance.key, label: r.finance.label, count: 0 };
+    const g = groups.get(r.finance.key) || { key: r.finance.key, label: r.finance.label, hint: r.finance.hint, count: 0 };
     g.count++;
     groups.set(r.finance.key, g);
   }

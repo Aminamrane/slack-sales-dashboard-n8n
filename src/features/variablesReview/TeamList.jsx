@@ -1,19 +1,27 @@
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion as Motion } from "framer-motion";
+import { motion as Motion, useReducedMotion } from "framer-motion";
 import { Search } from "lucide-react";
 import { money } from "./calculation.js";
-import { EXIT, SPRING_UI, STAGGER, STAGGER_MAX } from "./motion.js";
+import { FLIP, GLIDE, INDICATOR } from "./motion.js";
 import { ProfileAvatar } from "./profileAvatar.jsx";
-import { Slide } from "./Slide.jsx";
+import { Glide, Roll } from "./transitions.jsx";
 
 const salesLabel = (counted, signed) =>
   signed === 0 ? "Aucune vente" : `${counted}/${signed} vente${signed > 1 ? "s" : ""}`;
 
 // Liste de l'équipe pour le mois : total de l'équipe en tête, une ligne par personne.
-// Nouveau mois = nouvelle liste (l'ancienne se referme, la nouvelle monte en cascade) ;
-// dans un même mois, un ajustement qui change l'ordre fait glisser les lignes à leur place.
+// Changement de mois : les personnes présentes dans les deux mois glissent vers leur nouveau
+// rang (FLIP), celles qui arrivent apparaissent à leur place en entrant par le côté du mois,
+// celles qui partent disparaissent dans l'image même. La liste n'est jamais vide.
 export function TeamList({ source, period, rows, totals, selected, direction, onSelect }) {
   const [search, setSearch] = useState("");
+  const reduce = useReducedMotion(); // mouvement réduit : aucune animation de mise en page
+  // Mois affiché au rendu précédent : les lignes montées par un changement de mois entrent
+  // par le côté ; celles montées par la recherche apparaissent sans déplacement.
+  const shownPeriod = useRef(period);
+  const arriving = shownPeriod.current !== period && !reduce ? { x: 16 * direction } : false;
+  useEffect(() => { shownPeriod.current = period; }, [period]);
+
   const visible = rows.filter((r) => r.name.toLowerCase().includes(search.trim().toLowerCase()));
   const grouped = rows.some((r) => r.head) && rows.some((r) => !r.head);
   const items = [];
@@ -22,77 +30,53 @@ export function TeamList({ source, period, rows, totals, selected, direction, on
       items.push({ key: r.head ? "group-heads" : "group-sales", label: r.head ? "Heads" : "Sales" });
     items.push({ key: r.person, row: r });
   });
+  const pendingText = totals.pending.n !== 0n ? money(totals.pending) : null;
   return (
     <aside className="vr-team" aria-label="Équipe">
       <div className="vr-team-total">
         <span className="vr-kicker">Équipe · {rows.length} personne{rows.length > 1 ? "s" : ""}</span>
-        <strong className="vr-num"><Slide id={money(totals.total)} direction={direction}>{money(totals.total)}</Slide></strong>
-        {totals.pending.n !== 0n && (
-          <small><span className="vr-num">{money(totals.pending)}</span> en attente d’encaissement</small>
+        <strong className="vr-num"><Roll id={money(totals.total)} direction={direction}>{money(totals.total)}</Roll></strong>
+        {pendingText && (
+          <small><Glide id={pendingText} from={{ x: 0, y: 6 * direction }}><span className="vr-num">{pendingText}</span> en attente d’encaissement</Glide></small>
         )}
       </div>
       <div className="vr-search">
         <Search size={15} />
         <input aria-label="Rechercher un collaborateur" placeholder="Rechercher…" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
-      <div className="vr-team-list">
-        <AnimatePresence mode="wait" initial={false}>
+      <Motion.div className="vr-team-list" layoutScroll={!reduce}>
+        {items.map((item) => (
           <Motion.div
-            key={period}
-            initial={{ clipPath: "inset(0% 0% 0% 0%)" }}
-            animate={{ clipPath: "inset(0% 0% 0% 0%)" }}
-            exit={{ clipPath: "inset(0% 0% 100% 0%)", transition: EXIT }}
+            key={item.key}
+            layout={reduce ? false : "position"}
+            className={item.row ? "vr-person-slot" : "vr-team-group"}
+            initial={arriving}
+            animate={{ x: 0, transition: GLIDE }}
+            transition={{ layout: FLIP }}
           >
-            <TeamItems source={source} period={period} items={items} selected={selected} direction={direction} onSelect={onSelect} />
+            {item.row ? (
+              <PersonRow source={source} row={item.row} selected={item.row.person === selected} slide={!reduce} onSelect={onSelect} />
+            ) : item.label}
           </Motion.div>
-        </AnimatePresence>
+        ))}
         {!visible.length && <div className="vr-team-empty">Aucun résultat</div>}
-      </div>
+      </Motion.div>
     </aside>
   );
 }
 
-function TeamItems({ source, period, items, selected, direction, onSelect }) {
-  // Lignes présentes à l'ouverture du mois : cascade ; ligne qui apparaît ensuite (recherche) : dépliée.
-  const opening = useRef(true);
-  useEffect(() => { opening.current = false; }, []);
-  let index = 0;
-  return (
-    <AnimatePresence>
-      {items.map((item) => {
-        const delay = Math.min(index++, STAGGER_MAX) * STAGGER;
-        const motionProps = {
-          layout: "position",
-          initial: opening.current ? { y: 14 } : { height: 0, overflow: "hidden" },
-          animate: { y: 0, height: "auto", transition: { ...SPRING_UI, delay: opening.current ? delay : 0 }, transitionEnd: { overflow: "visible" } },
-          exit: { height: 0, overflow: "hidden", transition: EXIT },
-          transition: SPRING_UI,
-        };
-        return item.row ? (
-          <Motion.div key={item.key} className="vr-person-slot" {...motionProps}>
-            <PersonRow source={source} period={period} row={item.row} selected={item.row.person === selected} direction={direction} onSelect={onSelect} />
-          </Motion.div>
-        ) : (
-          <Motion.div key={item.key} className="vr-team-group" {...motionProps}>{item.label}</Motion.div>
-        );
-      })}
-    </AnimatePresence>
-  );
-}
-
-function PersonRow({ source, period, row, selected, direction, onSelect }) {
-  const amount = row.total ? money(row.total) : null;
+function PersonRow({ source, row, selected, slide, onSelect }) {
   return (
     <button type="button" className={`vr-person ${selected ? "selected" : ""}`} aria-current={selected ? "true" : undefined} onClick={() => onSelect(row.person)}>
-      {selected && <Motion.span layoutId={`vr-person-active-${period}`} className="vr-person-active" transition={SPRING_UI} />}
+      {selected && (slide
+        ? <Motion.span layoutId="vr-person-active" className="vr-person-active" transition={INDICATOR} />
+        : <span className="vr-person-active" />)}
       <ProfileAvatar source={source} person={row.person} />
       <span className="vr-person-text">
         <strong>{row.name}</strong>
         <small>{salesLabel(row.counted, row.signed)}</small>
       </span>
-      <span className={`vr-person-amount vr-num ${amount ? "" : "blocked"}`}>
-        {amount ? <Slide id={amount} direction={direction} align="end">{amount}</Slide> : "Calcul bloqué"}
-      </span>
+      <span className={`vr-person-amount vr-num ${row.total ? "" : "blocked"}`}>{row.total ? money(row.total) : "Calcul bloqué"}</span>
     </button>
   );
 }

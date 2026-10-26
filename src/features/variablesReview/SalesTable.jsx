@@ -1,38 +1,44 @@
 import { useEffect, useRef } from "react";
-import { AnimatePresence, motion as Motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, ChevronDown, Pencil, Search } from "lucide-react";
+import { motion as Motion, useReducedMotion } from "framer-motion";
+import { ArrowLeft, ArrowRight, ChevronDown, Info, Pencil, Search } from "lucide-react";
 import { money, Rational } from "./calculation.js";
 import { InfoTip } from "./InfoTip.jsx";
-import { EXIT, SPRING_UI, STAGGER, STAGGER_MAX } from "./motion.js";
+import { INDICATOR, ROW, ROW_MAX, ROW_STEP } from "./motion.js";
 import { CHANNELS, decimalLabel } from "./presentation.js";
+import { AutoHeight } from "./transitions.jsx";
 import { IconButton } from "./ui.jsx";
-import { Slide } from "./Slide.jsx";
 
 const STATUS_CHIPS = [["ALL", "Toutes"], ["counted", "Comptées"], ["pending", "En attente"], ["lost", "Perdues"]];
 const GROUP_LABELS = { counted: "Comptées", pending: "En attente d’encaissement", lost: "Perdues" };
 const CHANNEL_CHIPS = [...Object.entries(CHANNELS), ["UNKNOWN", "Non retrouvée"]];
 const plural = (n, word) => `${n} ${word}${n > 1 ? "s" : ""}`;
 
-function Chip({ active, count, group, countDelay, onClick, children }) {
+// Les compteurs sont des entiers : remplacés nets, dans la même image que les lignes.
+function Chip({ active, count, group, onClick, children }) {
+  const reduce = useReducedMotion();
   return (
     <button type="button" className={`vr-chip ${active ? "active" : ""}`} aria-pressed={active} disabled={!count && !active} onClick={onClick}>
-      {active && <Motion.span layoutId={`vr-chip-${group}`} className="vr-chip-active" transition={SPRING_UI} />}
+      {active && (reduce
+        ? <span className="vr-chip-active" />
+        : <Motion.span layoutId={`vr-chip-${group}`} className="vr-chip-active" transition={INDICATOR} />)}
       <span className="vr-chip-text">{children}</span>
-      <span className="vr-chip-count vr-num"><Slide id={String(count)} delay={countDelay} align="center">{count}</Slide></span>
+      <span className="vr-chip-count vr-num">{count}</span>
     </button>
   );
 }
 
-// Ventes de la personne pour le mois : filtres en puces, comptées puis en attente.
+// Ventes de la personne pour le mois : filtres en puces, comptées, en attente, perdues.
+// Changement de données : l'ancien corps disparaît dans l'image même, le nouveau est déjà là,
+// ses lignes entrent par un court déplacement en cascade ; la hauteur suit en ressort.
 export function SalesTable({
-  readingDay, total, rows, counts, breakdown, filters, onFilters, page, pages, onPage, countDelay = 0,
-  bodyKey, entryDelay, exitDelay, inline, onInline, onDeal, onEdit,
+  readingDay, total, rows, counts, breakdown, filters, onFilters, page, pages, onPage,
+  bodyKey, rowEntry, rowDelay, inline, onInline, onDeal, onEdit,
 }) {
   const setFilter = (patch) => onFilters({ ...filters, ...patch });
   return (
     <section className="vr-sales" aria-label="Ventes et commissions">
       <div className="vr-sales-head">
-        <h3>Ventes & commissions <span className="vr-count vr-num"><Slide id={String(total)} delay={countDelay} align="center">{total}</Slide></span></h3>
+        <h3>Ventes & commissions <span className="vr-count vr-num">{total}</span></h3>
         <InfoTip label="Méthode de calcul des ventes" align="start">
           <ul>
             <li>Ventes signées dans le mois, heure de Paris, une seule par lead.</li>
@@ -51,12 +57,17 @@ export function SalesTable({
         <div className="vr-toolbar">
           <div className="vr-chips" role="group" aria-label="Statut des ventes">
             {STATUS_CHIPS.filter(([key]) => key !== "lost" || counts.status.lost > 0 || filters.status === "lost").map(([key, label]) => [
-              <Chip key={key} group="status" countDelay={countDelay} active={filters.status === key} count={counts.status[key]} onClick={() => setFilter({ status: key })}>{label}</Chip>,
+              <Chip key={key} group="status" active={filters.status === key} count={counts.status[key]} onClick={() => setFilter({ status: key })}>{label}</Chip>,
               key === "pending" && (
                 <InfoTip key="pending-info" label="Détail des ventes en attente">
                   {breakdown.length ? (
                     <dl className="vr-breakdown">
-                      {breakdown.map((g) => <div key={g.key}><dt>{g.label}</dt><dd className="vr-num">{g.count}</dd></div>)}
+                      {breakdown.map((g) => (
+                        <div key={g.key}>
+                          <dt>{g.label}{g.hint && <small>{g.hint}</small>}</dt>
+                          <dd className="vr-num">{g.count}</dd>
+                        </div>
+                      ))}
                     </dl>
                   ) : <span>Aucune vente en attente.</span>}
                 </InfoTip>
@@ -65,7 +76,7 @@ export function SalesTable({
           </div>
           <div className="vr-chips" role="group" aria-label="Catégorie de rémunération">
             {CHANNEL_CHIPS.map(([key, label]) => (
-              <Chip key={key} group="channel" countDelay={countDelay} active={filters.channel === key} count={counts.channel[key] || 0}
+              <Chip key={key} group="channel" active={filters.channel === key} count={counts.channel[key] || 0}
                 onClick={() => setFilter({ channel: filters.channel === key ? "ALL" : key })}>{label}</Chip>
             ))}
           </div>
@@ -78,11 +89,11 @@ export function SalesTable({
             <span role="columnheader">Base × coefficient</span>
             <span role="columnheader" className="end">Commission HT</span>
           </div>
-          <AnimatePresence mode="wait">
-            <SalesBody key={bodyKey} rows={rows} counts={counts} showGroups={filters.status === "ALL"} entryDelay={entryDelay} exitDelay={exitDelay}
+          <AutoHeight>
+            <SalesBody key={bodyKey} rows={rows} counts={counts} showGroups={filters.status === "ALL"} rowEntry={rowEntry} rowDelay={rowDelay}
               inline={inline} onInline={onInline} onDeal={onDeal} onEdit={onEdit} />
-          </AnimatePresence>
-          {!rows.length && <div className="vr-empty">Aucune vente correspondante</div>}
+            {!rows.length && <div className="vr-empty">Aucune vente correspondante</div>}
+          </AutoHeight>
         </div>
 
         <footer className="vr-table-footer">
@@ -100,28 +111,22 @@ export function SalesTable({
   );
 }
 
-// Corps du tableau. Changement de personne, de mois ou de filtre : l'ancien corps se referme
-// (rideau, sans opacité), les lignes du nouveau montent en cascade.
-function SalesBody({ rows, counts, showGroups, entryDelay, exitDelay, inline, onInline, onDeal, onEdit }) {
-  // Seules les lignes présentes à l'ouverture du corps montent en cascade ; une ligne qui
-  // apparaît ensuite (recherche) s'affiche directement.
+// Corps du tableau, remonté à chaque changement de personne, de mois, de filtre ou de page.
+// Seules les lignes présentes à l'ouverture entrent en cascade (30 ms, plafonnée à 8 lignes) ;
+// une ligne qui apparaît ensuite (recherche) s'affiche directement à sa place.
+function SalesBody({ rows, counts, showGroups, rowEntry, rowDelay, inline, onInline, onDeal, onEdit }) {
+  const reduce = useReducedMotion();
   const opening = useRef(true);
   useEffect(() => { opening.current = false; }, []);
   let index = 0;
   return (
-    <Motion.div
-      role="rowgroup"
-      className="vr-table-body"
-      initial={{ clipPath: "inset(0% 0% 0% 0%)" }}
-      animate={{ clipPath: "inset(0% 0% 0% 0%)" }}
-      exit={{ clipPath: "inset(0% 0% 100% 0%)", transition: { ...EXIT, delay: exitDelay } }}
-    >
+    <div role="rowgroup" className="vr-table-body">
       {rows.map((row, i) => {
         const group = showGroups && (i === 0 || rows[i - 1].status !== row.status);
-        const delay = entryDelay + Math.min(index++, STAGGER_MAX) * STAGGER;
+        const delay = rowDelay + Math.min(index++, ROW_MAX - 1) * ROW_STEP;
         const motionProps = {
-          initial: opening.current ? { y: 18 } : false,
-          animate: { y: 0, transition: { ...SPRING_UI, delay } },
+          initial: opening.current && rowEntry && !reduce ? rowEntry : false,
+          animate: { x: 0, y: 0, transition: { ...ROW, delay } },
         };
         return [
           group && (
@@ -133,7 +138,7 @@ function SalesBody({ rows, counts, showGroups, entryDelay, exitDelay, inline, on
             onInline={onInline} onDeal={onDeal} onEdit={onEdit} />,
         ];
       })}
-    </Motion.div>
+    </div>
   );
 }
 
@@ -145,7 +150,14 @@ function SaleRow({ row, motionProps, inline, onInline, onDeal, onEdit }) {
       <div role="cell" className="vr-cell-client">
         <div className="vr-client-line">
           <strong title={row.client}>{row.client}</strong>
-          <span className={`vr-pill ${row.finance.tone}`}>{row.finance.label}</span>
+          {row.finance.hint ? (
+            <InfoTip label={row.finance.label} triggerClassName={`vr-pill ${row.finance.tone}`}
+              trigger={<>{row.finance.label}<Info size={11} strokeWidth={2.4} /></>}>
+              <span>{row.finance.hint}</span>
+            </InfoTip>
+          ) : (
+            <span className={`vr-pill ${row.finance.tone}`}>{row.finance.label}</span>
+          )}
         </div>
         <div className="vr-client-meta">{meta.join(" · ")}</div>
       </div>

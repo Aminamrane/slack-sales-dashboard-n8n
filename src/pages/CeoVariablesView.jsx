@@ -13,6 +13,7 @@ import apiClient from "../services/apiClient";
 import { navigateBackToDashboard } from "../utils/dashboardNavigation";
 import VariablesWorkbench from "../features/variablesReview/VariablesWorkbench.jsx";
 import { loadWorkbench, saveWorkbenchDraft } from "../features/variablesReview/api.js";
+import { preloadAvatars } from "../features/variablesReview/avatars.js";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
@@ -51,7 +52,10 @@ function LiveVariablesWorkbench({ darkMode }) {
           setState({ status: "error", detail: "Réponse inattendue du serveur." });
           return;
         }
-        setState({ status: "ready", source: data.source, draft: data.draft });
+        // Photos chargées et décodées avant l'affichage (plafond 1,5 s) : jamais de cercle vide.
+        return preloadAvatars(data.source).then(() => {
+          if (!cancelled) setState({ status: "ready", source: data.source, draft: data.draft });
+        });
       })
       .catch((error) => {
         if (cancelled) return;
