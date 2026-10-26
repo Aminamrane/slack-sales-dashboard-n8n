@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { matchesUpcomingIntegration, matchesOverdueOnboarding, matchesUpcomingOnboarding, onboardingDateOf, onboardingSituation, parisWallTime } from './boardIntegration.js';
+import { isOnboardingToReschedule, matchesUpcomingIntegration, matchesOverdueOnboarding, matchesUpcomingOnboarding, onboardingDateOf, onboardingSituation, parisWallTime } from './boardIntegration.js';
 const row = { numero_client: '42', rdv_lancement_date: '2026-09-30T10:00:00', rdv_lancement_done: false };
 test('both withdrawal states are excluded from upcoming and overdue integration', () => {
     for (const state of ['En cours de rétractation', 'Rétractation']) {
@@ -67,4 +67,30 @@ test('an exited client or a pending contract is in no onboarding situation unles
     assert.equal(onboardingSituation({ numero_client: 'n°7', rdv_onboarding_done: true }, today, { exited: true }), null);
     assert.equal(onboardingSituation({ numero_client: 'n°7' }, today, { exited: true, includeExited: true }), 'todo');
     assert.equal(onboardingSituation({ numero_client: null, rdv_onboarding_date: '2026-10-09' }, today), null);
+});
+
+test('since September, a past onboarding the Client Success neither ticked nor rated is a no show', () => {
+    const today = '2026-10-26';
+    const r = { numero_client: 'n°8', rdv_onboarding_date: '2026-09-15T10:00:00+00:00', csm_rated: false };
+    assert.equal(onboardingSituation(r, today), 'noshow');
+    assert.equal(onboardingSituation({ ...r, rdv_onboarding_date: '2026-09-01T09:00:00' }, today), 'noshow');
+    // La date recalée prime sur la date prévue, dans les deux sens.
+    assert.equal(onboardingSituation({ ...r, rdv_onboarding_date: '2026-08-20T10:00:00', rdv_onboarding_date_manual: '2026-09-10' }, today), 'noshow');
+    assert.equal(onboardingSituation({ ...r, rdv_onboarding_date_manual: '2026-08-20' }, today), 'todo');
+    // Restent « à faire » : noté sans être coché, avant septembre, sans date, back sans l'information.
+    assert.equal(onboardingSituation({ ...r, csm_rated: true }, today), 'todo');
+    assert.equal(onboardingSituation({ ...r, rdv_onboarding_date: '2026-08-31T18:00:00' }, today), 'todo');
+    assert.equal(onboardingSituation({ numero_client: 'n°9', csm_rated: false }, today), 'todo');
+    const { csm_rated: _unknown, ...withoutInfo } = r;
+    assert.equal(onboardingSituation(withoutInfo, today), 'todo');
+    // Ni le jour même, ni un onboarding réalisé, ni un client sorti.
+    assert.equal(onboardingSituation({ ...r, rdv_onboarding_date: '2026-10-26T08:00:00' }, today), 'venir');
+    assert.equal(onboardingSituation({ ...r, rdv_onboarding_done: true }, today), 'done');
+    assert.equal(onboardingSituation(r, today, { exited: true }), null);
+});
+
+test('à recaler stays a subset of the past, undone onboardings, to do or no show', () => {
+    const r = { onboarding_reschedule_pending: true };
+    assert.deepEqual(['todo', 'noshow', 'venir', 'done', null].map((s) => isOnboardingToReschedule(r, s)), [true, true, false, false, false]);
+    assert.equal(isOnboardingToReschedule({}, 'noshow'), false);
 });

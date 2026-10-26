@@ -17,13 +17,26 @@ export function matchesUpcomingOnboarding(row, today) {
     return !!row.numero_client && !!date && !row.rdv_onboarding_done && String(date).slice(0, 10) >= today;
 }
 
+// No show (dev 26/10/2026) : depuis le 01/09/2026, un onboarding passé que le Client Success n'a ni coché
+// réalisé ni noté (`csm_rated`, calculé par le back) est un no show. Sans l'information du back (champ
+// absent), on ne conclut pas : le client reste « à faire ».
+const NO_SHOW_SINCE = '2026-09-01';
+
 // Situation d'onboarding d'un client, EXCLUSIVE (Vincent 30/09 : « quand tu cumules à venir, réalisé et
 // à faire, tu dépasses le nombre de clients signés ») : chaque client compte dans UNE seule case, « à faire »
-// = ni réalisé ni planifié. Un client sorti n'entre dans aucune case, sauf si son état est demandé.
+// = ni réalisé, ni planifié, ni no show. Un client sorti n'entre dans aucune case, sauf si son état est demandé.
 export function onboardingSituation(row, today, { exited = false, includeExited = false } = {}) {
     if (!row.numero_client || (exited && !includeExited)) return null;
     if (row.rdv_onboarding_done) return 'done';
-    return matchesUpcomingOnboarding(row, today) ? 'venir' : 'todo';
+    if (matchesUpcomingOnboarding(row, today)) return 'venir';
+    const date = row.rdv_onboarding_date_manual || row.rdv_onboarding_date;
+    return date && String(date).slice(0, 10) >= NO_SHOW_SINCE && row.csm_rated === false ? 'noshow' : 'todo';
+}
+
+// « À recaler » (posé par le CSM au parcours guidé) : sous-ensemble des onboardings passés non réalisés,
+// qu'ils soient « à faire » ou no show.
+export function isOnboardingToReschedule(row, situation) {
+    return (situation === 'todo' || situation === 'noshow') && !!row.onboarding_reschedule_pending;
 }
 
 // Date d'onboarding d'une ligne pour le filtre de dates du board et ses mois : un onboarding réalisé
