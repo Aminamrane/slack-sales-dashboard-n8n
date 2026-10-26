@@ -10,6 +10,8 @@ export const statementSettings = (statement, draft) => ({
 export const isHead = (source, person) => /^head/i.test(source.profiles?.[person]?.role || "");
 export const periodsOf = (source) => [...new Set(source.statements.map((s) => s.period))].sort();
 export const entryIndex = (source) => new Map((source.entries || []).map((e) => [e.amountCell, e]));
+export const teamEntryIndex = (source) =>
+  new Map((source.entries || []).filter((e) => e.teamCell).map((e) => [e.teamCell, e]));
 
 // Statut d'une vente dans le relevé d'un mois P, seule source pour la carte, la liste, les puces
 // et le tableau. Règle du 26/10 : une vente compte dans le mois où le client a payé sa 1re échéance
@@ -44,6 +46,30 @@ export function pendingOf(statement, entries, calculator) {
     }
   }
   return { amount, count };
+}
+
+// Part d'équipe d'un head pour le mois (relevé avec teamRefs) : les parts du total (model.teamRefs,
+// ventes de l'équipe dont la 1re échéance est payée ce mois) et celles des ventes de l'équipe du relevé
+// encore en attente, hors total (même statut que pendingOf, perdues et reportées exclues).
+export function teamShareOf(statement, teamEntries, model) {
+  const valueOf = (ref) => {
+    try {
+      return model.calculator.value(ref);
+    } catch {
+      return null;
+    }
+  };
+  const counted = (model.teamRefs || []).map((ref) => ({ ref, entry: teamEntries.get(ref), value: valueOf(ref) }));
+  const status = statusFor({ period: statement.period, countedRefs: statement.countedTeamRefs || [] });
+  let amount = ZERO, count = 0;
+  for (const ref of statement.teamRefs || []) {
+    const entry = teamEntries.get(ref);
+    if (!entry || status({ ...entry, amountCell: ref }) !== "pending") continue;
+    count++;
+    const value = valueOf(ref);
+    if (value) amount = amount.add(value);
+  }
+  return { counted, amount: model.teamShare, pending: { amount, count } };
 }
 
 // n/N de la liste : ventes comptées dans le mois / ventes du relevé (mêmes statuts que les puces).

@@ -12,7 +12,9 @@ import {
   salesFlow,
   sortSales,
   statusFor,
+  teamEntryIndex,
   teamRows,
+  teamShareOf,
   teamTotals,
 } from "./team.js";
 
@@ -267,4 +269,83 @@ test("sales flow: former rule (no countedRefs) goes through statusFor; an empty 
   assert.equal(none.signed.amount.toFixed(2), "0.00");
   assert.equal(none.paid.amount.sub(model.commission).n, 0n);
   assert.ok(none.signed.parts.every((p) => p.count === 0 && p.amount.n === 0n));
+});
+
+// Part d'équipe : Bob (head) mène l'équipe d'Alice. Ventes d'Alice signées en septembre : E1/T1 (Ads,
+// payée en septembre), E2/T2 (cold call, payée en octobre), E3/T3 (webinaire, non payée), E4/T4 (Ads,
+// client perdu). Bases annuelles C : 2160, 3000, 2160, 4032.
+const TEAM_RULES = {
+  ADS: { enabled: true, coefficient: "1.5", coefficientAnnual: "1.7", team: "0.3" },
+  CC: { enabled: true, coefficient: "2", coefficientAnnual: "2.2", team: "0.5" },
+  CCS: { enabled: true, coefficient: "1.5", coefficientAnnual: "1.5", team: "0" },
+  WEB: { enabled: true, coefficient: "1", coefficientAnnual: "1", team: "0.1" },
+};
+const withTeam = {
+  profiles: { Alice: { name: "Alice A", role: "sales" }, Bob: { name: "Bob B", role: "head_of_sales" } },
+  cells: {
+    C1: { input: "2160" }, C2: { input: "3000" }, C3: { input: "2160" }, C4: { input: "4032" },
+    E1: { input: "=C1/12*1.2" }, E2: { input: "=C2/12*1.5" }, E3: { input: "=C3/12*1" }, E4: { input: "=C4/12*1.2" },
+    T1: { input: "=C1/12*0.3" }, T2: { input: "=C2/12*0.5" }, T3: { input: "=C3/12*0.1" }, T4: { input: "=C4/12*0.3" },
+    G5: { input: "Fixe" }, H5: { input: "1500" }, M5: { input: "=H5+T1" },
+    G6: { input: "Fixe" }, H6: { input: "1500" }, M6: { input: "=H6+T2" },
+  },
+  entries: [
+    { amountCell: "E1", teamCell: "T1", person: "Alice", client: "Un", originChannel: "ADS", counted: true, signedMonth: "2026-09", countedMonth: "2026-09", finance: { status: "paid" } },
+    { amountCell: "E2", teamCell: "T2", person: "Alice", client: "Deux", originChannel: "CC", counted: true, signedMonth: "2026-09", countedMonth: "2026-10", finance: { status: "paid" } },
+    { amountCell: "E3", teamCell: "T3", person: "Alice", client: "Trois", originChannel: "WEB", counted: false, signedMonth: "2026-09", countedMonth: null, finance: { status: "first_due_unpaid" } },
+    { amountCell: "E4", teamCell: "T4", person: "Alice", client: "Quatre", originChannel: "ADS", counted: false, signedMonth: "2026-09", countedMonth: null, finance: { status: "lost" } },
+  ],
+  statements: [
+    { id: "b-09", person: "Bob", period: "2026-09", totalCell: "M5", entryRefs: [], countedRefs: [],
+      teamRefs: ["T1", "T2", "T3", "T4"], countedTeamRefs: ["T1"], defaults: { acquisition: TEAM_RULES } },
+    { id: "b-10", person: "Bob", period: "2026-10", totalCell: "M6", entryRefs: [], countedRefs: [],
+      teamRefs: ["T2"], countedTeamRefs: ["T2"], defaults: { acquisition: TEAM_RULES } },
+  ],
+};
+const teamModel = (statement, settings = statement.defaults, changes = {}) =>
+  statementModel(withTeam, statement, changes, settings);
+
+test("team share: in the head's total only in the month the first due is paid, never before", () => {
+  const [sep, oct] = withTeam.statements;
+  const september = teamModel(sep), october = teamModel(oct);
+  assert.deepEqual([september.teamRefs, october.teamRefs], [["T1"], ["T2"]]);
+  assert.equal(september.teamShare.toFixed(2), "54.00"); // 2160 / 12 × 0,3
+  assert.equal(october.teamShare.toFixed(2), "125.00"); // 3000 / 12 × 0,5, signée en septembre
+  assert.equal(september.total.toFixed(2), "1554.00");
+  assert.equal(october.total.toFixed(2), "1625.00");
+  assert.equal(september.commission.toFixed(2), "0.00");
+  assert.equal(september.remainder.toFixed(2), "0.00"); // la part n'est pas un « autre ajustement »
+  assert.deepEqual(teamRows(withTeam, emptyDraft, "2026-10").map((r) => r.total.toFixed(2)), ["1625.00"]);
+});
+
+test("team share detail: counted shares, then unpaid team sales outside the total (lost and deferred excluded)", () => {
+  const [sep, oct] = withTeam.statements;
+  const index = teamEntryIndex(withTeam);
+  const september = teamShareOf(sep, index, teamModel(sep));
+  assert.deepEqual(september.counted.map((c) => [c.ref, c.entry.client, c.value.toFixed(2)]), [["T1", "Un", "54.00"]]);
+  assert.equal(september.amount.toFixed(2), "54.00");
+  // T2 est payée en octobre (reportée), T4 perdue : seule T3 attend son paiement.
+  assert.deepEqual([september.pending.count, september.pending.amount.toFixed(2)], [1, "18.00"]);
+  const october = teamShareOf(oct, index, teamModel(oct));
+  assert.deepEqual([october.counted.length, october.pending.count], [1, 0]);
+});
+
+test("team coefficients of the month apply to the team cells; disabled, missing or manual ones keep the cell", () => {
+  const [sep] = withTeam.statements;
+  const rules = (patch) => ({ acquisition: { ...TEAM_RULES, ADS: { ...TEAM_RULES.ADS, ...patch } } });
+  const changed = teamModel(sep, rules({ team: "0.25" }));
+  assert.equal(changed.teamShare.toFixed(2), "45.00");
+  assert.equal(changed.appliedAcquisition.T1, "ADS");
+  assert.equal(teamModel(sep, rules({ enabled: false, team: "0.25" })).teamShare.toFixed(2), "54.00");
+  assert.equal(teamModel(sep, rules({ team: undefined })).teamShare.toFixed(2), "54.00"); // réglage d'avant la part
+  const manual = { ...rules({ team: "0.25" }), deals: { T1: { exception: true } } };
+  assert.equal(teamModel(sep, manual, { T1: "60" }).teamShare.toFixed(2), "60.00");
+  assert.throws(() => teamModel(sep, rules({ team: "-0.1" })), /positifs ou nuls/);
+});
+
+test("a statement without team refs has no team share", () => {
+  const model = statementModel(source, source.statements[1], {}, {});
+  assert.deepEqual(model.teamRefs, []);
+  assert.equal(model.teamShare.toFixed(2), "0.00");
+  assert.equal(model.total.toFixed(2), "1010.00");
 });

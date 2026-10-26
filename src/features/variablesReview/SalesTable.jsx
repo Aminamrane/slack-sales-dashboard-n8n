@@ -47,7 +47,7 @@ export function SalesTable({
             <li>Une vente compte dans le total du mois où le client a payé sa première échéance Owner, même s’il est en retard ensuite.</li>
             <li>Au mois de sa signature, une vente payée un autre mois apparaît « Reportée », hors total.</li>
             <li>Rapprochement Finance par lead, puis par e-mail unique.</li>
-            <li>Barème en vérification, hors commissions de management.</li>
+            <li>Barème en vérification. Ventes de la personne seulement ; la part d’équipe d’un head est dans sa carte.</li>
             {readingDay && <li>Données CRM lues le {readingDay}.</li>}
           </ul>
         </InfoTip>

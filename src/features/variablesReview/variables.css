@@ -432,6 +432,7 @@
 .vr-rules-row input:disabled { background: var(--vr-sunken); color: var(--vr-muted); }
 .vr-rules-name { display: inline-flex; align-items: center; gap: 8px; font-weight: 620; }
 .vr-rules-row.off .vr-rules-name { color: var(--vr-muted); }
+.vr-rules-grid.team .vr-rules-row { grid-template-columns: minmax(0, 1.4fr) 64px repeat(3, minmax(0, 1fr)); }
 .vr-channel-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ch-unknown); }
 .vr-channel-dot.ads { background: var(--ch-ads); }
 .vr-channel-dot.web { background: var(--ch-web); }
@@ -464,6 +465,7 @@
 .vr-remuneration-sales button:hover { background: var(--vr-sunken); }
 .vr-remuneration-sales span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vr-remuneration-sales svg { color: var(--vr-muted); }
+.vr-remuneration-sales small { font-size: 11px; color: var(--vr-muted); }
 .vr-remuneration-bonus { display: flex; justify-content: space-between; padding: 5px 0 5px 12px; font-size: 12px; color: var(--vr-soft); }
 .vr-remuneration-total { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 16px; padding: 16px 18px; border-radius: 12px; background: var(--vr-accent-soft); color: var(--vr-accent); }
 .vr-remuneration-total span { font-size: 13px; font-weight: 600; }

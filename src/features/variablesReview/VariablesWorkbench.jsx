@@ -26,7 +26,9 @@ import {
   sortSales,
   statementSettings,
   statusFor,
+  teamEntryIndex,
   teamRows,
+  teamShareOf,
   teamTotals,
 } from "./team.js";
 import { isStaleRevision } from "./api.js";
@@ -109,6 +111,12 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
   const entries = useMemo(() => entryIndex(source), [source]);
   // Ventes signées ce mois (et pourquoi une partie n'est pas payée ce mois), puis ventes payées ce mois.
   const flow = useMemo(() => (model ? salesFlow(statement, entries, model) : null), [statement, entries, model]);
+  // Part d'équipe : seulement pour le relevé d'un head qui mène une équipe (teamRefs fourni par le serveur).
+  const teamEntries = useMemo(() => teamEntryIndex(source), [source]);
+  const teamShare = useMemo(
+    () => (model && Array.isArray(statement.teamRefs) ? teamShareOf(statement, teamEntries, model) : null),
+    [statement, teamEntries, model],
+  );
 
   const linkedRows = useMemo(() => {
     let refs = [];
@@ -319,6 +327,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
                 entry={entry}
                 flow={flow}
                 entries={entries}
+                teamShare={teamShare}
                 onCoefficients={() => setPanel("coefficients")}
                 onTiers={() => setPanel("rules")}
                 onHistory={() => setPanel("history")}
@@ -371,6 +380,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
               rows={linkedRows}
               settings={settings}
               pending={row.pending}
+              teamShare={teamShare}
               subtitle={who}
               onClose={() => setPanel(null)}
               onFixed={() => setPanel("fixed")}

@@ -4,7 +4,7 @@ import { Modal } from "./ui.jsx";
 
 const plural = (n, word) => `${n} ${word}${n > 1 ? "s" : ""}`;
 
-export function RemunerationBreakdown({ model, rows, settings, subtitle, pending, onClose, onFixed, onRules, onBonus, onCommission }) {
+export function RemunerationBreakdown({ model, rows, settings, subtitle, pending, teamShare, onClose, onFixed, onRules, onBonus, onCommission }) {
   return (
     <Modal title="Détail de la rémunération" subtitle={subtitle} onClose={onClose}
       info={<span>Seules les ventes comptées ce mois-ci (première échéance Owner payée dans le mois) entrent dans le total.</span>}>
@@ -32,6 +32,26 @@ export function RemunerationBreakdown({ model, rows, settings, subtitle, pending
             })}
           </div>
         )}
+        {teamShare && (
+          <div className="vr-remuneration-line" data-line="team">
+            <div><strong>Part d’équipe</strong><small>{plural(teamShare.counted.length, "vente")} de l’équipe, 1re échéance payée ce mois</small></div>
+            <b className="vr-num">{money(teamShare.amount)}</b>
+            <button type="button" className="vr-button" onClick={onRules}><Pencil size={13} />Coefficients</button>
+          </div>
+        )}
+        {teamShare?.counted.length > 0 && (
+          <div className="vr-remuneration-sales" data-list="team">
+            {teamShare.counted.map(({ ref, entry, value }) => {
+              const client = entry?.client || "Part d’équipe ajustée";
+              return (
+                <button type="button" key={ref} onClick={() => onCommission(ref, `Part d’équipe · ${client}`)} aria-label={`Modifier la part d’équipe de ${client}`}>
+                  <span>{client}{entry?.person && <small> · {entry.person}</small>}</span>
+                  <b className="vr-num">{value ? money(value) : "À vérifier"}</b><Pencil size={12} />
+                </button>
+              );
+            })}
+          </div>
+        )}
         <div className="vr-remuneration-line">
           <strong>Primes</strong><b className="vr-num">{money(model.bonuses)}</b>
           <button type="button" className="vr-button" onClick={onBonus}><Plus size={13} />Ajouter</button>
@@ -48,6 +68,13 @@ export function RemunerationBreakdown({ model, rows, settings, subtitle, pending
             <Clock3 size={14} />
             <span>En attente d’encaissement, hors total · {plural(pending.count, "vente")}</span>
             <b className="vr-num">{money(pending.amount)}</b>
+          </div>
+        )}
+        {teamShare?.pending.count > 0 && (
+          <div className="vr-remuneration-pending" data-line="team-pending">
+            <Clock3 size={14} />
+            <span>Équipe en attente d’encaissement, hors total · {plural(teamShare.pending.count, "vente")}</span>
+            <b className="vr-num">{money(teamShare.pending.amount)}</b>
           </div>
         )}
       </div>

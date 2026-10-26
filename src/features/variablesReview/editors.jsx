@@ -189,6 +189,7 @@ const withComma = (rules) =>
     ...r,
     coefficient: decimalLabel(r.coefficient ?? ""),
     ...(r.coefficientAnnual != null ? { coefficientAnnual: decimalLabel(r.coefficientAnnual) } : {}),
+    ...(r.team != null ? { team: decimalLabel(r.team) } : {}),
   }]));
 
 const toDot = (rule, key) => (rule[key] == null ? {} : { [key]: String(rule[key]).trim().replace(",", ".") });
@@ -204,6 +205,8 @@ export function RulesEditor({ initialSection = "fixed", settings, computedSales,
     [error, setError] = useState("");
   const changeTier = (i, key, value) => setTiers(tiers.map((t, index) => (index === i ? { ...t, [key]: value } : t)));
   const changeRule = (key, patch) => setAcquisition({ ...acquisition, [key]: { ...acquisition[key], ...patch } });
+  // Head qui mène une équipe : le serveur fournit un coefficient d'équipe par source.
+  const hasTeam = Object.values(acquisition).some((r) => r?.team != null);
   const save = () => {
     try {
       const normalized = tiers.map((t) => ({ ...t, amount: normalizeInput(t.amount) }));
@@ -213,12 +216,15 @@ export function RulesEditor({ initialSection = "fixed", settings, computedSales,
       const rules = Object.fromEntries(
         Object.entries(acquisition).map(([k, r]) => {
           // Source désactivée : conservée telle quelle (comme Codex), seule la virgule redevient un point.
-          if (!r.enabled) return [k, { ...r, ...toDot(r, "coefficient"), ...toDot(r, "coefficientAnnual") }];
+          if (!r.enabled) return [k, { ...r, ...toDot(r, "coefficient"), ...toDot(r, "coefficientAnnual"), ...toDot(r, "team") }];
           const coefficient = normalizeInput(r.coefficient);
           if (Rational.from(coefficient).n < 0n) throw Error("Un coefficient ne peut pas être négatif.");
           const coefficientAnnual = normalizeInput(r.coefficientAnnual ?? coefficient);
           if (Rational.from(coefficientAnnual).n < 0n) throw Error("Coefficient annuel négatif.");
-          return [k, { ...r, coefficient, coefficientAnnual }];
+          if (r.team == null) return [k, { ...r, coefficient, coefficientAnnual }];
+          const team = normalizeInput(r.team);
+          if (Rational.from(team).n < 0n) throw Error("Coefficient d’équipe négatif.");
+          return [k, { ...r, coefficient, coefficientAnnual, team }];
         }),
       );
       onSave({ ...settings, tiers: normalized, sales, acquisition: rules, rulesReason: reason });
@@ -236,6 +242,7 @@ export function RulesEditor({ initialSection = "fixed", settings, computedSales,
           <li>Un palier s’applique dès le nombre de ventes indiqué ; le fixe garanti ne baisse jamais.</li>
           <li>Une source désactivée garde le calcul d’origine ; une vente en calcul individuel garde sa formule.</li>
           <li>CCS : cold call setter.</li>
+          {hasTeam && <li>Équipe : part du head sur chaque vente de son équipe, abonnement mensuel × coefficient, sans mensuel ni annuel.</li>}
         </ul>
       }
       onClose={onClose}
@@ -279,12 +286,13 @@ export function RulesEditor({ initialSection = "fixed", settings, computedSales,
             {!fixedCell && <div className="vr-warning">Fixe non identifié : paliers indisponibles.</div>}
           </>
         ) : (
-          <div className="vr-rules-grid" role="table" aria-label="Coefficients par source">
+          <div className={`vr-rules-grid ${hasTeam ? "team" : ""}`} role="table" aria-label="Coefficients par source">
             <div className="vr-rules-row head" role="row">
               <span role="columnheader">Source</span>
               <span role="columnheader">Active</span>
               <span role="columnheader">Mensuel</span>
               <span role="columnheader">Annuel</span>
+              {hasTeam && <span role="columnheader">Équipe</span>}
             </div>
             {Object.entries(CHANNELS).map(([key, name]) => {
               const rule = acquisition[key] || {};
@@ -305,6 +313,12 @@ export function RulesEditor({ initialSection = "fixed", settings, computedSales,
                     <input className="vr-num" aria-label={`Coefficient annuel ${name}`} inputMode="decimal" disabled={!rule.enabled}
                       value={rule.coefficientAnnual ?? rule.coefficient ?? ""} onChange={(e) => changeRule(key, { coefficientAnnual: e.target.value })} />
                   </span>
+                  {hasTeam && (
+                    <span role="cell">
+                      <input className="vr-num" aria-label={`Coefficient d’équipe ${name}`} inputMode="decimal" disabled={!rule.enabled || rule.team == null}
+                        value={rule.team ?? ""} onChange={(e) => changeRule(key, { team: e.target.value })} />
+                    </span>
+                  )}
                 </div>
               );
             })}

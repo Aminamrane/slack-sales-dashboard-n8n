@@ -2,6 +2,7 @@ import { ChevronRight, Clock3, History, Layers, Pencil, Plus, SlidersHorizontal,
 import { money, Rational } from "./calculation.js";
 import { InfoTip } from "./InfoTip.jsx";
 import { entryOffset, GLIDE_STEP } from "./motion.js";
+import { CHANNELS, decimalLabel } from "./presentation.js";
 import { ProfileAvatar } from "./profileAvatar.jsx";
 import { SalesFlow } from "./SalesFlow.jsx";
 import { Glide, Roll } from "./transitions.jsx";
@@ -14,7 +15,7 @@ const plural = (n, word) => `${n} ${word}${n > 1 ? "s" : ""}`;
 // Mouvement : tout change dans la même image ; seul le grand total roule, l'identité et les
 // valeurs secondaires glissent de quelques pixels, décalées de 30 ms. Une valeur inchangée ne bouge pas.
 export function PersonCard({
-  source, row, model, error, settings, monthText, readingDay, entry, flow, entries,
+  source, row, model, error, settings, monthText, readingDay, entry, flow, entries, teamShare,
   onCoefficients, onTiers, onHistory, onFixed, onBreakdown, onBonusAdd, onBonusRemove, onPending, onCheckRules,
 }) {
   const from = entryOffset(entry, 6);
@@ -24,6 +25,11 @@ export function PersonCard({
   const fixedText = model?.fixedCell ? money(model.effectiveFixed) : "Non identifié";
   const countedText = `${row.counted} vente${row.counted > 1 ? "s" : ""} comptée${row.counted > 1 ? "s" : ""}`;
   const pendingKey = `${row.pending.count}|${money(row.pending.amount)}`;
+  const teamText = teamShare && `${plural(teamShare.counted.length, "vente")} de l’équipe`;
+  const teamCoefficients = Object.entries(CHANNELS)
+    .filter(([key]) => settings.acquisition?.[key]?.team != null)
+    .map(([key, name]) => `${decimalLabel(settings.acquisition[key].team)} ${name.toLowerCase()}`)
+    .join(", ");
   return (
     <section className="vr-card vr-person-card" aria-label="Rémunération du mois">
       <header className="vr-person-head">
@@ -36,8 +42,9 @@ export function PersonCard({
         </Glide>
         <InfoTip label="À propos de ce calcul">
           <ul>
-            <li>Fixe, commissions personnelles et primes du mois. Commissions de management non incluses.</li>
+            <li>{teamShare ? "Fixe, commissions personnelles, part d’équipe et primes du mois." : "Fixe, commissions personnelles et primes du mois."}</li>
             <li>Une vente compte dans le total du mois où le client a payé sa première échéance Owner.</li>
+            {teamShare && <li>Part d’équipe : chaque vente d’un membre de son équipe CRM, au mois où le client paie sa 1re échéance ; abonnement mensuel × {teamCoefficients}.</li>}
             <li>Signées : ventes signées ce mois, au barème du mois. Payées : ventes dont la 1re échéance a été payée ce mois ; c’est le total des commissions.</li>
             <li>Barème en vérification.</li>
             {readingDay && <li>Données CRM lues le {readingDay}.</li>}
@@ -87,6 +94,13 @@ export function PersonCard({
               <b className="vr-num"><Glide id={money(model.commission)} {...glide(2)}>{money(model.commission)}</Glide></b>
               <ChevronRight size={15} className="vr-pay-go" />
             </button>
+            {teamShare && (
+              <button type="button" className="vr-pay-line" data-line="team" onClick={onBreakdown}>
+                <span className="vr-pay-label">Part d’équipe<small><Glide id={teamText} {...glide(3)}>{teamText}</Glide></small></span>
+                <b className="vr-num"><Glide id={money(teamShare.amount)} {...glide(3)}>{money(teamShare.amount)}</Glide></b>
+                <ChevronRight size={15} className="vr-pay-go" />
+              </button>
+            )}
             <button type="button" className="vr-pay-line" onClick={onBonusAdd}>
               <span className="vr-pay-label">Primes</span>
               <b className="vr-num"><Glide id={money(model.bonuses)} {...glide(3)}>{money(model.bonuses)}</Glide></b>

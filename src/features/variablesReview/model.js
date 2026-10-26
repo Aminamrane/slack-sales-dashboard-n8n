@@ -73,12 +73,28 @@ export function statementModel(data, statement, changes = {}, settings = {}) {
     scopedChanges[ref] = `=(${deal.baseExpression || deal.base})*(${deal.plan === "A" ? rule.coefficientAnnual ?? rule.coefficient : rule.coefficient})`;
     appliedAcquisition[ref] = deal.channel;
   }
+  // Part d'équipe d'un head (cellules T, une par vente de son équipe) : abonnement mensuel de la vente
+  // × coefficient « team » de la source, sans mensuel/annuel. Source désactivée, coefficient absent ou
+  // part saisie à la main (exception) : la cellule garde sa formule.
+  const teamEntries = (statement.teamRefs || []).length
+    ? new Map((data.entries || []).filter((e) => e.teamCell).map((e) => [e.teamCell, e]))
+    : null;
+  for (const ref of statement.teamRefs || []) {
+    const entry = teamEntries.get(ref);
+    const rule = settings.acquisition?.[entry?.originChannel];
+    if (!entry || !rule?.enabled || rule.team == null || settings.deals?.[ref]?.exception) continue;
+    if (Rational.from(rule.team).n < 0n)
+      throw new Error("La base et le coefficient doivent être positifs ou nuls.");
+    scopedChanges[ref] = `=(C${ref.slice(1)}/12)*(${rule.team})`;
+    appliedAcquisition[ref] = entry.originChannel;
+  }
   const base = createCalculator(data.cells, scopedChanges);
   const refs = base.dependencies(statement.totalCell, {
     recursive: true,
-    stopAt: (r) => /^E\d+$/.test(r),
+    stopAt: (r) => /^[ET]\d+$/.test(r),
   });
   const amountRefs = refs.filter((r) => /^E\d+$/.test(r));
+  const teamRefs = refs.filter((r) => /^T\d+$/.test(r));
   const allRefs = base.dependencies(statement.totalCell, { recursive: true });
   const fixedRefs = allRefs.filter(
     (ref) =>
@@ -106,6 +122,7 @@ export function statementModel(data, statement, changes = {}, settings = {}) {
     (n, r) => n.add(effective.value(r)),
     ZERO,
   );
+  const teamShare = teamRefs.reduce((n, r) => n.add(effective.value(r)), ZERO);
   const bonuses = (settings.bonuses || []).reduce(
     (n, b) => n.add(Rational.from(b.amount)),
     ZERO,
@@ -121,11 +138,13 @@ export function statementModel(data, statement, changes = {}, settings = {}) {
     baseTotal,
     effectiveTotal,
     commission,
+    teamShare,
     bonuses,
     total,
     delta: total.sub(sourceTotal),
-    remainder: effectiveTotal.sub(tierResult.effective).sub(commission),
+    remainder: effectiveTotal.sub(tierResult.effective).sub(commission).sub(teamShare),
     amountRefs,
+    teamRefs,
     allRefs,
     calculator: effective,
   };
