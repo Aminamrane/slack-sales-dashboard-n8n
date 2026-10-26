@@ -1522,9 +1522,19 @@ export default function OptilexBoard({ embed = false }) {
                           Réalisé le {fmtDT(r.rdv_onboarding_done_date)}
                         </div>
                       )}
-                      {r.onboarding_reschedule_pending && !r.rdv_onboarding_done && (
-                        <div title={r.onboarding_reschedule_note || "Onboarding à recaler, sans date"} style={{ marginTop: 3, display: "inline-block", padding: "2px 7px", borderRadius: 999, background: "#fff4e0", color: "#b45309", fontSize: 10.5, fontWeight: 700 }}>À recaler</div>
-                      )}
+                      {(() => {
+                        // Pastilles sous la date (sur la ligne de la date, elles débordaient sur la colonne Intégration).
+                        const noShow = viewFilter.situationOf(r) === "noshow";
+                        const recaler = r.onboarding_reschedule_pending && !r.rdv_onboarding_done;
+                        return (noShow || recaler) ? (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 3 }}>
+                            {noShow && <OnboardingNoShowBadge date={r.rdv_onboarding_date_manual || r.rdv_onboarding_date} />}
+                            {recaler && (
+                              <div title={r.onboarding_reschedule_note || "Onboarding à recaler, sans date"} style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, background: "#fff4e0", color: "#b45309", fontSize: 10.5, fontWeight: 700 }}>À recaler</div>
+                            )}
+                          </div>
+                        ) : null;
+                      })()}
                     </td>
                     <td style={{ ...td, color: r.rdv_lancement_date ? TEXT : "#cbd2e0" }}>
                       {fmtDT(r.rdv_lancement_date) || "—"}
@@ -1600,6 +1610,20 @@ function IntegrationOverdueBadge() {
         <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15 14" />
       </svg>
       En retard
+    </span>
+  );
+}
+
+// Badge « No show » (dev 26/10/2026) : pastille en contour (ghost) dans la colonne Onboarding, même
+// pictogramme que la ligne du menu ; la bulle dit pourquoi le client est compté en no show.
+function OnboardingNoShowBadge({ date }) {
+  return (
+    <span title={`No show : onboarding du ${fmt(date)} passé, ni coché réalisé ni noté par le Client Success`}
+      style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "1px 6px", borderRadius: 999, border: "1px solid #c0392b", background: "transparent", color: "#c0392b", fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+        <rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m14 14-4 4M10 14l4 4" />
+      </svg>
+      No show
     </span>
   );
 }
