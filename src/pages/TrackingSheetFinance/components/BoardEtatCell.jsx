@@ -31,7 +31,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   EtatBadge, ETAT_STYLE, ETAT_DATE_CONFIG, displayEtat, isEtatPending,
 } from '../../OptilexBoard.jsx';
-import { formatDateFR, canEditAmounts, ACTED_EXIT_ETATS } from '../constants.js';
+import { formatDateFR, pauseRange, canEditAmounts, ACTED_EXIT_ETATS } from '../constants.js';
 import apiClient from '../../../services/apiClient.js';
 
 // Palette locale minimale (sync avec la charte du board — Attio/Linear sobre).
@@ -150,6 +150,9 @@ export default function BoardEtatCell({ boardRow, onEtatChange, disabled = false
   const pending = isEtatPending(boardRow);
   const posedEtat = boardRow.etat_manuel;          // état POSÉ (dont on édite les dates)
   const dateCfg = posedEtat ? ETAT_DATE_CONFIG[posedEtat] : null;
+  // Période de la pause, lisible par tous menu fermé (le menu, lui, ne s'ouvre
+  // que pour la direction).
+  const pause = etat === 'Pause' ? pauseRange(boardRow) : null;
 
   const toggle = (e) => {
     e.stopPropagation();
@@ -196,29 +199,43 @@ export default function BoardEtatCell({ boardRow, onEtatChange, disabled = false
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2, minWidth: 0 }}>
-      {disabled ? (
-        <EtatBadge etat={etat} />
-      ) : (
-        <button
-          ref={btnRef}
-          type="button"
-          onClick={toggle}
-          title="Changer l'état (board Owner/Opti'Lex)"
-          style={{
-            border: 'none', background: 'transparent', padding: 0, cursor: 'pointer',
-            fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4,
-          }}
-        >
+      {/* Badge (+ période de la pause à sa droite, sous lui si la case est étroite). */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 8, rowGap: 2, minWidth: 0 }}>
+        {disabled ? (
           <EtatBadge etat={etat} />
-          <svg
-            width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={MUTED}
-            strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
-            style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.16s ease', flexShrink: 0 }}
+        ) : (
+          <button
+            ref={btnRef}
+            type="button"
+            onClick={toggle}
+            title="Changer l'état (board Owner/Opti'Lex)"
+            style={{
+              border: 'none', background: 'transparent', padding: 0, cursor: 'pointer',
+              fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}
           >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </button>
-      )}
+            <EtatBadge etat={etat} />
+            <svg
+              width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={MUTED}
+              strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+              style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.16s ease', flexShrink: 0 }}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+        )}
+        {pause && (
+          <span
+            style={{
+              fontSize: 11, fontWeight: 500, color: ETAT_STYLE.Pause.fg, lineHeight: 1.25,
+              whiteSpace: 'nowrap', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}
+            title={pause.title}
+          >
+            {pause.text}
+          </span>
+        )}
+      </div>
 
       {/* État daté posé mais pas encore effectif : le client reste actif
           jusqu'à la date d'effet — même restitution que le board. */}

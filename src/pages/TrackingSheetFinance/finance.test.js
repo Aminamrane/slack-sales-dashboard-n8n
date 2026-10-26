@@ -25,6 +25,7 @@ import {
   isExitCandidate,
   financeAutomationFilter,
   matchesNonAutomated,
+  pauseRange,
 } from './constants.js';
 
 test('non automatisé : sans attendu du mois, le client est exclu même avec une dette antérieure', () => {
@@ -587,4 +588,35 @@ test('dates de paiement : une réponse arrivée après un changement de compte e
   user = null;
   client.request = () => { throw new Error('Aucune requête sans compte'); };
   assert.equal(await loadPaymentDateAccess(client), null);
+});
+
+test('pause : la fiche affiche début et fin quand les deux sont connus', () => {
+  const r = { etat_manuel: 'Pause', etat_date: '2026-10-01', pause_end_date: '2026-12-31' };
+  assert.equal(pauseRange(r).text, 'du 01/10/2026 au 31/12/2026');
+  assert.equal(pauseRange(r).title, 'Pause du 01/10/2026 au 31/12/2026');
+  // Une date ISO complète donne le même jour.
+  assert.equal(pauseRange({ ...r, etat_date: '2026-10-01T00:00:00Z', pause_end_date: '2026-12-31T00:00:00Z' }).text,
+    'du 01/10/2026 au 31/12/2026');
+});
+
+test('pause : sans fin connue, la fin est « non définie » et la relance reste dans l’infobulle', () => {
+  const r = { etat_manuel: 'Pause', etat_date: '2026-10-01', pause_end_date: null };
+  assert.equal(pauseRange(r).text, 'du 01/10/2026 · fin non définie');
+  assert.equal(pauseRange(r).title, 'Pause depuis le 01/10/2026, fin non définie');
+  const relance = pauseRange({ ...r, pause_relance_date: '2026-12-05' });
+  assert.equal(relance.text, 'du 01/10/2026 · fin non définie');
+  assert.equal(relance.title, 'Pause depuis le 01/10/2026, fin non définie, à relancer le 05/12/2026');
+});
+
+test('pause : venue du Sheet ou sans aucune date, les dates sont « non définies »', () => {
+  for (const r of [
+    { etat_manuel: null, etat: 'Pause' },
+    { etat_manuel: 'Pause', etat_date: null, pause_end_date: null },
+    { etat_manuel: 'Pause', etat_date: '', pause_end_date: 'pas une date' },
+    // Les dates d'un autre état posé ne sont jamais celles d'une pause.
+    { etat_manuel: 'Signé', etat_date: '2026-10-01', pause_end_date: '2026-12-31' },
+    null, undefined,
+  ]) {
+    assert.equal(pauseRange(r).text, 'dates non définies', JSON.stringify(r));
+  }
 });

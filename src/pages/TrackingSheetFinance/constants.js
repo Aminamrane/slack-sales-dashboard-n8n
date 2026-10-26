@@ -884,6 +884,25 @@ export const formatDateFR = (iso) => {
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
+// Période d'une pause, restituée à côté du badge d'état de la fiche sans avoir
+// à ouvrir le menu. `etat_date` = début, `pause_end_date` = fin connue ; sans
+// fin connue elle est « non définie » (la date de relance, `pause_relance_date`,
+// ne la remplace pas : elle ne figure que dans l'infobulle). Seule une pause
+// posée à la main (`etat_manuel`) porte des dates : celle qui vient du Sheet
+// n'en a aucune.
+export const pauseRange = (row) => {
+  const day = (v) => { const s = formatDateFR(v); return s === '—' ? null : s; };
+  const manual = row?.etat_manuel === 'Pause';
+  const start = manual ? day(row.etat_date) : null;
+  const end = manual ? day(row.pause_end_date) : null;
+  const relance = manual ? day(row.pause_relance_date) : null;
+  const callback = relance ? `, à relancer le ${relance}` : '';
+  if (start && end) return { text: `du ${start} au ${end}`, title: `Pause du ${start} au ${end}` };
+  if (start) return { text: `du ${start} · fin non définie`, title: `Pause depuis le ${start}, fin non définie${callback}` };
+  if (end) return { text: `jusqu'au ${end}`, title: `Pause jusqu'au ${end}, début non défini` };
+  return { text: 'dates non définies', title: `Aucune date de pause renseignée${callback}` };
+};
+
 /**
  * Pattern observé sur 89% des clients (539/604) : `clients.societe` contient
  * "Nom Société - Prénom Nom du dirigeant" (parfois avec plusieurs tirets si le
