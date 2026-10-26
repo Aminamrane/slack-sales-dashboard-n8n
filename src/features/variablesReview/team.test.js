@@ -1,12 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createCalculator } from "./calculation.js";
+import { createCalculator, ZERO } from "./calculation.js";
+import { statementModel } from "./model.js";
 import {
   filterSales,
   pendingBreakdown,
   pendingOf,
   periodsOf,
+  entryIndex,
   saleCounts,
+  salesFlow,
   sortSales,
   statusFor,
   teamRows,
@@ -177,4 +180,87 @@ test("chips per person and month: Comptées + Reportées + En attente + Perdues 
     assert.equal(counts.status.counted + counts.status.deferred + counts.status.pending + counts.status.lost, counts.status.ALL);
     assert.equal(counts.status.counted, statement.countedRefs.length);
   }
+});
+
+// Flux de la carte (salesFlow), données fictives : relevé de septembre d'une personne.
+const flowSource = {
+  profiles: { Alice: { name: "Alice A", role: "sales" } },
+  cells: {
+    G1: { input: "Fixe" }, H1: { input: "500" }, M1: { input: "=H1+E1+E6+E9" },
+    E1: { input: "100" }, E2: { input: "200" }, E3: { input: "40" }, E4: { input: "50" }, E5: { input: "60" },
+    E6: { input: "70" }, E7: { input: "80" }, E8: { input: "texte" }, E9: { input: "15" }, E10: { input: "90" },
+  },
+  entries: [
+    { amountCell: "E1", signedMonth: "2026-09", counted: true, countedMonth: "2026-09", finance: { status: "lost", firstDuePeriod: "2026-10" } },
+    { amountCell: "E2", signedMonth: "2026-09", counted: false, finance: { status: "lost", firstDuePeriod: "2026-10" } },
+    { amountCell: "E3", signedMonth: "2026-09", counted: false, finance: { status: "onboarding_pending", firstDuePeriod: "2026-10" } },
+    { amountCell: "E4", signedMonth: "2026-09", counted: true, countedMonth: "2026-10", finance: { status: "paid", firstDuePeriod: "2026-09" } },
+    { amountCell: "E5", signedMonth: "2026-09", counted: false, finance: { status: "onboarding_pending" } },
+    { amountCell: "E6", signedMonth: "2026-08", counted: true, countedMonth: "2026-09", finance: { status: "paid", firstDuePeriod: "2026-09" } },
+    { amountCell: "E7", signedMonth: "2026-09", counted: false, finance: null, unlinkedReason: "not_declared" },
+    { amountCell: "E8", signedMonth: "2026-09", counted: false, finance: { status: "no_schedule" } },
+    { amountCell: "E10", signedMonth: "2026-09", counted: false, finance: { status: "first_due_unpaid", firstDuePeriod: "2026-11" } },
+  ],
+  statements: [{ id: "s9", person: "Alice", period: "2026-09", totalCell: "M1",
+    entryRefs: ["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E10"], countedRefs: ["E1", "E6"], defaults: {} }],
+};
+const flowOf = (source, statement = source.statements[0]) => {
+  const model = statementModel(source, statement, {}, { ...statement.defaults });
+  return { flow: salesFlow(statement, entryIndex(source), model), model };
+};
+const part = (group, key) => group.parts.find((p) => p.key === key);
+
+test("sales flow: each sale signed this month in exactly one category, by priority", () => {
+  const { flow } = flowOf(flowSource);
+  assert.deepEqual(flow.signed.parts.map((p) => p.key), ["paid", "lost", "laterDue", "laterPayment", "noFinance"]);
+  assert.deepEqual(part(flow.signed, "paid").refs, ["E1"]); // comptée avant tout, même client perdu ensuite
+  assert.deepEqual(part(flow.signed, "lost").refs, ["E2"]); // perdue avant l'échéance future
+  assert.deepEqual(part(flow.signed, "laterDue").refs, ["E3", "E10"]);
+  assert.deepEqual(part(flow.signed, "laterPayment").refs, ["E4", "E5"]); // reportée ; onboarding à venir sans échéance
+  assert.deepEqual(part(flow.signed, "noFinance").refs, ["E7", "E8"]); // non déclarée ; aucune échéance
+  assert.ok(!flow.signed.parts.some((p) => p.refs.includes("E6"))); // signée en août : pas dans « signées »
+  assert.equal(flow.signed.count, 8);
+});
+
+test("sales flow labels: one later due month, or several", () => {
+  const { flow } = flowOf(flowSource);
+  assert.equal(part(flow.signed, "paid").label, "Payées en septembre");
+  assert.equal(part(flow.signed, "laterDue").label, "1re échéance après septembre"); // octobre et novembre
+  const single = { ...flowSource, entries: flowSource.entries.filter((e) => e.amountCell !== "E10") };
+  const statement = { ...flowSource.statements[0], entryRefs: flowSource.statements[0].entryRefs.filter((r) => r !== "E10") };
+  assert.equal(part(flowOf(single, statement).flow.signed, "laterDue").label, "1re échéance en octobre");
+  assert.deepEqual(flowOf(flowSource).flow.paid.parts.map((p) => p.label), ["Signées en septembre", "Signées avant", "Ajustements"]);
+});
+
+test("sales flow invariants: parts add up; paid = model.commission exactly; paid top = signed here bottom", () => {
+  const { flow, model } = flowOf(flowSource);
+  for (const group of [flow.signed, flow.paid])
+    assert.equal(group.parts.reduce((sum, p) => sum.add(p.amount), ZERO).sub(group.amount).n, 0n);
+  assert.equal(flow.paid.amount.sub(model.commission).n, 0n);
+  assert.equal(flow.paid.amount.toFixed(2), "185.00"); // E1 + E6 + E9 (ajustement sans vente)
+  assert.deepEqual(part(flow.paid, "signedHere").refs, ["E1"]);
+  assert.deepEqual(part(flow.paid, "signedBefore").refs, ["E6"]);
+  assert.deepEqual(part(flow.paid, "adjustment").refs, ["E9"]);
+  assert.equal(part(flow.signed, "paid").amount.sub(part(flow.paid, "signedHere").amount).n, 0n);
+});
+
+test("sales flow: an unreadable amount counts in n, not in the sum, and marks its part", () => {
+  const { flow } = flowOf(flowSource);
+  const noFinance = part(flow.signed, "noFinance");
+  assert.equal(noFinance.count, 2);
+  assert.equal(noFinance.amount.toFixed(2), "80.00"); // E7 seulement, E8 est illisible
+  assert.equal(noFinance.unreadable, true);
+  assert.equal(part(flow.signed, "laterDue").unreadable, false);
+});
+
+test("sales flow: former rule (no countedRefs) goes through statusFor; an empty month is all zero", () => {
+  const former = { ...flowSource.statements[0], countedRefs: undefined };
+  const { flow } = flowOf(flowSource, former);
+  assert.deepEqual(part(flow.signed, "paid").refs, ["E1", "E4"]); // entry.counted, ancienne règle
+  const empty = { ...flowSource, statements: [{ id: "e", person: "Alice", period: "2026-07", totalCell: "H1", entryRefs: [], defaults: {} }] };
+  const { flow: none, model } = flowOf(empty);
+  assert.deepEqual([none.signed.count, none.paid.count], [0, 0]);
+  assert.equal(none.signed.amount.toFixed(2), "0.00");
+  assert.equal(none.paid.amount.sub(model.commission).n, 0n);
+  assert.ok(none.signed.parts.every((p) => p.count === 0 && p.amount.n === 0n));
 });

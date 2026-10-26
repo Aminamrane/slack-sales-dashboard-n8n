@@ -515,3 +515,59 @@
   .vr-status, .vr-status-spinner { animation: none; }
   .vr-switch span::after { transition: none; }
 }
+
+/* Bande « ventes du mois » de la carte (SalesFlow.jsx) : signées ce mois / payées ce mois. */
+.vr-app {
+  --flow-paid: var(--vr-accent);
+  --flow-signedHere: var(--vr-accent);
+  --flow-laterDue: #8fa4d8;
+  --flow-laterPayment: var(--vr-late);
+  --flow-noFinance: #9aa1ae;
+  --flow-lost: var(--vr-danger);
+  --flow-signedBefore: var(--vr-good);
+  --flow-adjustment: #9aa1ae;
+}
+.vr-app.vr-dark {
+  --flow-laterDue: #3f5aa0;
+  --flow-noFinance: #6b7180;
+  --flow-adjustment: #6b7180;
+}
+.vr-flow { display: grid; gap: 14px; padding: 16px 24px 18px; border-top: 1px solid var(--vr-border); }
+.vr-flow-row {
+  display: grid; grid-template-columns: 220px minmax(0, 1fr) 110px; grid-template-areas: "head bar total" ". legend legend";
+  align-items: center; column-gap: 16px; row-gap: 7px;
+}
+/* 220 px : « Signées en septembre · 22 ventes » (le mois le plus long) tient sur une ligne. */
+.vr-flow-head { grid-area: head; min-width: 0; font-size: 12.5px; white-space: nowrap; }
+.vr-flow-title { font-weight: 620; color: var(--vr-text); }
+.vr-flow-head .vr-flow-count { color: var(--vr-muted); }
+.vr-flow-bar { grid-area: bar; height: 10px; overflow: hidden; border-radius: 0 4px 4px 0; background: var(--vr-sunken); }
+.vr-flow-fill { display: flex; gap: 2px; height: 100%; overflow: hidden; border-radius: 0 4px 4px 0; background: var(--vr-card); }
+.vr-flow-segment { flex: 1 0 0px; min-width: 0; height: 100%; }
+.vr-flow-total { grid-area: total; text-align: right; font-size: 13.5px; font-weight: 720; color: var(--vr-text); }
+.vr-flow-legend { grid-area: legend; display: flex; flex-wrap: wrap; gap: 6px; }
+.vr-flow-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border: 1px solid var(--vr-border); border-radius: 999px;
+  background: var(--vr-card); color: var(--vr-soft); font-size: 11.5px; font-weight: 550; white-space: nowrap;
+}
+.vr-flow-chip:hover, .vr-flow-chip[aria-expanded="true"] { border-color: var(--vr-accent-line); background: var(--vr-sunken); }
+.vr-flow-swatch { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.vr-flow-amount { font-weight: 650; color: var(--vr-text); }
+.vr-flow-chip .vr-flow-count { color: var(--vr-muted); }
+.vr-flow-segment.paid, .vr-flow-swatch.paid { background: var(--flow-paid); }
+.vr-flow-segment.signedHere, .vr-flow-swatch.signedHere { background: var(--flow-signedHere); }
+.vr-flow-segment.laterDue, .vr-flow-swatch.laterDue { background: var(--flow-laterDue); }
+.vr-flow-segment.laterPayment, .vr-flow-swatch.laterPayment { background: var(--flow-laterPayment); }
+.vr-flow-segment.noFinance, .vr-flow-swatch.noFinance { background: var(--flow-noFinance); }
+.vr-flow-segment.lost, .vr-flow-swatch.lost { background: var(--flow-lost); }
+.vr-flow-segment.signedBefore, .vr-flow-swatch.signedBefore { background: var(--flow-signedBefore); }
+.vr-flow-segment.adjustment, .vr-flow-swatch.adjustment { background: var(--flow-adjustment); }
+.vr-info-pop .vr-flow-list { display: grid; gap: 9px; max-height: 280px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.vr-info-pop .vr-flow-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; margin: 0; }
+.vr-flow-client { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 620; color: var(--vr-text); }
+.vr-flow-list b { font-weight: 680; color: var(--vr-text); }
+.vr-flow-list small { grid-column: 1 / -1; font-size: 11px; color: var(--vr-muted); }
+@media (max-width: 1280px) {
+  .vr-flow-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "head total" "bar bar" "legend legend"; }
+  .vr-flow-head { white-space: normal; }
+}

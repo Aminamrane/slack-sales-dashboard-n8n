@@ -9,7 +9,7 @@ const WIDTH = 310, GAP = 8, MARGIN = 16;
 // Bulle d'explication au clic : les explications ne sont jamais écrites sous les blocs.
 // Rendue dans la racine de la page en position fixe : aucune carte ni fenêtre ne la coupe.
 // Un second clic, un clic ailleurs ou Échap la ferment. `trigger` remplace l'icône (i).
-export function InfoTip({ label = "Explications", align = "start", trigger, triggerClassName = "", children }) {
+export function InfoTip({ label = "Explications", align = "start", trigger, triggerClassName = "", triggerProps, children }) {
   const [open, setOpen] = useState(false);
   const [place, setPlace] = useState(null);
   const button = useRef(null), pop = useRef(null);
@@ -52,7 +52,7 @@ export function InfoTip({ label = "Explications", align = "start", trigger, trig
   const root = button.current?.closest(".vr-app") || null;
   return (
     <>
-      <button ref={button} type="button" aria-label={label} aria-expanded={open} onClick={() => setOpen((v) => !v)}
+      <button ref={button} type="button" aria-label={label} aria-expanded={open} onClick={() => setOpen((v) => !v)} {...triggerProps}
         className={trigger ? `vr-info-trigger ${triggerClassName}` : `vr-info-button ${open ? "open" : ""}`}>
         {trigger ?? <Info size={14} strokeWidth={2.2} />}
       </button>

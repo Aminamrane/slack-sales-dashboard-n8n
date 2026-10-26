@@ -1,7 +1,7 @@
 // Vue d'équipe et ventes d'une personne : logique pure, sans React (testée par team.test.js).
 import { ZERO } from "./calculation.js";
 import { statementModel } from "./model.js";
-import { signedParis } from "./presentation.js";
+import { monthName, signedMonthOf, signedParis } from "./presentation.js";
 
 export const statementSettings = (statement, draft) => ({
   ...statement.defaults,
@@ -139,4 +139,78 @@ export function pendingBreakdown(rows) {
     groups.set(r.finance.key, g);
   }
   return [...groups.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "fr"));
+}
+
+// Flux de ventes de la carte : ce que la personne aurait touché sur ses ventes signées du mois
+// (et pourquoi une partie n'est pas dans la paie de ce mois), puis ce qu'elle touche ce mois.
+// Montants au barème du mois (model.calculator), comme le tableau et pendingOf.
+// - signed : ventes de entryRefs signées ce mois, une catégorie chacune, testée dans l'ordre
+//   paid → lost → laterDue → laterPayment → noFinance ;
+// - paid : model.amountRefs, exactement ce qui fait model.commission
+//   (signedHere, signedBefore, adjustment pour une référence sans vente).
+// Une valeur illisible compte dans n, pas dans la somme, et marque sa partie (unreadable).
+const SIGNED_PARTS = ["paid", "lost", "laterDue", "laterPayment", "noFinance"];
+const PAID_PARTS = ["signedHere", "signedBefore", "adjustment"];
+
+function flowGroup(keys, items, labelOf) {
+  const parts = keys.map((key) => {
+    const mine = items.filter((item) => item.key === key);
+    const readable = mine.filter((item) => item.value);
+    return {
+      key,
+      label: labelOf(key, mine),
+      amount: readable.reduce((sum, item) => sum.add(item.value), ZERO),
+      count: mine.length,
+      refs: mine.map((item) => item.ref),
+      unreadable: readable.length < mine.length,
+    };
+  });
+  return {
+    amount: parts.reduce((sum, part) => sum.add(part.amount), ZERO),
+    count: parts.reduce((n, part) => n + part.count, 0),
+    parts,
+  };
+}
+
+export function salesFlow(statement, entries, model) {
+  const period = statement.period;
+  const status = statusFor(statement);
+  const valueOf = (ref) => {
+    try {
+      return model.calculator.value(ref);
+    } catch {
+      return null;
+    }
+  };
+  const signedItems = [];
+  for (const ref of statement.entryRefs || []) {
+    const entry = entries.get(ref);
+    if (!entry || signedMonthOf(entry) !== period) continue;
+    const st = status(entry), finance = entry.finance, due = finance?.firstDuePeriod;
+    const key = st === "counted" ? "paid"
+      : finance?.status === "lost" ? "lost"
+        : due && due > period ? "laterDue"
+          : due || st === "deferred" || finance?.status === "onboarding_pending" ? "laterPayment"
+            : "noFinance";
+    signedItems.push({ key, ref, value: valueOf(ref), due });
+  }
+  const paidItems = (model.amountRefs || []).map((ref) => {
+    const entry = entries.get(ref);
+    const key = !entry ? "adjustment" : signedMonthOf(entry) === period ? "signedHere" : "signedBefore";
+    return { key, ref, value: valueOf(ref) };
+  });
+  const month = monthName(period, period);
+  const signed = flowGroup(SIGNED_PARTS, signedItems, (key, mine) => {
+    if (key === "paid") return `Payées en ${month}`;
+    if (key === "lost") return "Perdues";
+    if (key === "laterDue") {
+      const dues = new Set(mine.map((item) => item.due));
+      return dues.size === 1 ? `1re échéance en ${monthName([...dues][0], period)}` : `1re échéance après ${month}`;
+    }
+    if (key === "laterPayment") return "Paiement plus tard";
+    return "Sans suivi Finance";
+  });
+  const paid = flowGroup(PAID_PARTS, paidItems, (key) =>
+    key === "signedHere" ? `Signées en ${month}` : key === "signedBefore" ? "Signées avant" : "Ajustements");
+  return { signed, paid };
 }

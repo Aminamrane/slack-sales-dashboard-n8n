@@ -17,10 +17,12 @@ import {
   signedParis,
 } from "./presentation.js";
 import {
+  entryIndex,
   filterSales,
   pendingBreakdown,
   periodsOf,
   saleCounts,
+  salesFlow,
   sortSales,
   statementSettings,
   statusFor,
@@ -104,6 +106,9 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
     }
   }, [source, statement, draft.changes, settings]);
   const model = result.model;
+  const entries = useMemo(() => entryIndex(source), [source]);
+  // Ventes signées ce mois (et pourquoi une partie n'est pas payée ce mois), puis ventes payées ce mois.
+  const flow = useMemo(() => (model ? salesFlow(statement, entries, model) : null), [statement, entries, model]);
 
   const linkedRows = useMemo(() => {
     let refs = [];
@@ -312,6 +317,8 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
                 monthText={monthText}
                 readingDay={readingDay}
                 entry={entry}
+                flow={flow}
+                entries={entries}
                 onCoefficients={() => setPanel("coefficients")}
                 onTiers={() => setPanel("rules")}
                 onHistory={() => setPanel("history")}
