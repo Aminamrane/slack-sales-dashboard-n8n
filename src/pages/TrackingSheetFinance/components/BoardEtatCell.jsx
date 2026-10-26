@@ -119,6 +119,9 @@ function DateField({ label, value, onCommit }) {
 export default function BoardEtatCell({ boardRow, onEtatChange, disabled = false, onActedEtat = null }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
+  // Pose en cours : l'état affiché vient du serveur, le badge garde donc l'état
+  // confirmé, estompé, jusqu'à sa réponse (même règle que le board).
+  const [saving, setSaving] = useState(false);
   const btnRef = useRef(null);
   // Acter une résiliation ou une rétractation : direction seulement.
   const canActe = canEditAmounts(apiClient.getUser()?.role);
@@ -173,7 +176,12 @@ export default function BoardEtatCell({ boardRow, onEtatChange, disabled = false
       onActedEtat(opt);
       return;
     }
-    onEtatChange({ etat: opt });
+    const pendingChange = onEtatChange({ etat: opt });
+    if (pendingChange?.then) {
+      const done = () => setSaving(false);
+      setSaving(true);
+      pendingChange.then(done, done);
+    }
     // État daté : le menu reste ouvert et révèle la saisie de date (l'update
     // optimiste de la Map board fait apparaître la section dessous).
     if (!opt || !ETAT_DATE_CONFIG[opt]) setOpen(false);
@@ -209,9 +217,12 @@ export default function BoardEtatCell({ boardRow, onEtatChange, disabled = false
             type="button"
             onClick={toggle}
             title="Changer l'état (board Owner/Opti'Lex)"
+            disabled={saving}
+            aria-busy={saving || undefined}
             style={{
-              border: 'none', background: 'transparent', padding: 0, cursor: 'pointer',
+              border: 'none', background: 'transparent', padding: 0, cursor: saving ? 'progress' : 'pointer',
               fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4,
+              opacity: saving ? 0.5 : 1, transition: 'opacity 0.2s ease',
             }}
           >
             <EtatBadge etat={etat} />

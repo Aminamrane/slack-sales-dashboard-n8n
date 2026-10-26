@@ -403,6 +403,9 @@ const ETAT_MENU_H = 360;
 function EtatPicker({ etat, onPick, disabled }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
+  // Pose en cours : l'état affiché vient du serveur, le badge garde donc l'état confirmé,
+  // estompé, jusqu'à sa réponse (pas d'état deviné, pas de double pose).
+  const [saving, setSaving] = useState(false);
   const btnRef = useRef(null);
   useEffect(() => {
     if (!open) return undefined;
@@ -420,12 +423,19 @@ function EtatPicker({ etat, onPick, disabled }) {
     setPos({ top: up ? r.top - 4 : r.bottom + 4, left: r.left, up });
     setOpen(true);
   };
+  const pick = (opt) => {
+    const pending = onPick(opt);
+    if (!pending?.then) return;
+    const done = () => setSaving(false);
+    setSaving(true);
+    pending.then(done, done);
+  };
   // "Automatique" = état calculé (suivi cabinet / signatures), efface l'override manuel.
   const items = [...(isFinanceTeam() ? [] : [{ opt: null, label: "Automatique" }]), ...etatOptionsForUser().map((o) => ({ opt: o, label: o }))];
   return (
     <span onClick={(e) => e.stopPropagation()}>
-      <button ref={btnRef} type="button" onClick={toggle} title="Changer l'état"
-        style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <button ref={btnRef} type="button" onClick={toggle} title="Changer l'état" disabled={saving} aria-busy={saving || undefined}
+        style={{ border: "none", background: "transparent", padding: 0, cursor: saving ? "progress" : "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4, opacity: saving ? 0.5 : 1, transition: "opacity 0.2s ease" }}>
         <EtatBadge etat={etat} />
         {/* Caret d'affordance : le badge est cliquable ; pivote quand le menu est ouvert. */}
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
@@ -441,7 +451,7 @@ function EtatPicker({ etat, onPick, disabled }) {
               const st = opt ? (ETAT_STYLE[opt] || {}) : null;
               const sel = opt === etat;
               return (
-                <button key={label} type="button" onClick={() => { setOpen(false); if (!sel) onPick(opt); }}
+                <button key={label} type="button" onClick={() => { setOpen(false); if (!sel) pick(opt); }}
                   style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", border: "none",
                     background: sel ? "#f3f4f6" : "transparent", borderRadius: 7, padding: "8px 10px", cursor: "pointer",
                     fontSize: 12.5, fontWeight: 600, color: opt ? TEXT : MUTED, fontFamily: "inherit", whiteSpace: "nowrap" }}
@@ -1473,7 +1483,7 @@ export default function OptilexBoard({ embed = false }) {
                         échue ou si la date d'effet manque. */}
                     <td style={td}>
                       <EtatPicker etat={displayEtat(r)} disabled={!r.numero_client}
-                        onPick={(v) => { changeEtat(r.numero_client, { etat: v }); if (ETAT_DATE_CONFIG[v]) setSelected(key); }} />
+                        onPick={(v) => { const saving = changeEtat(r.numero_client, { etat: v }); if (ETAT_DATE_CONFIG[v]) setSelected(key); return saving; }} />
                       {isEtatPending(r) && r.etat_date && (
                         <div style={{ fontSize: 10.5, fontWeight: 700, color: "#b45309", marginTop: 4, lineHeight: 1.3 }}
                           title={`${r.etat_manuel} prévue le ${fmt(r.etat_date)} — pas encore effective, le client reste actif jusqu'à cette date`}>
