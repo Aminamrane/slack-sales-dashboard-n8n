@@ -1,13 +1,13 @@
 import { motion as Motion, useReducedMotion } from "framer-motion";
 import { money } from "./calculation.js";
 import { InfoTip } from "./InfoTip.jsx";
-import { SPRING_UI } from "./motion.js";
+import { INDICATOR } from "./motion.js";
 import { monthName, safeMoney, saleTimeline } from "./presentation.js";
 import { Glide } from "./transitions.jsx";
 
 // Ordre des segments (et de la légende) ; salesFlow garde l'ordre de priorité du classement.
 const ORDER = {
-  signed: ["paid", "laterDue", "laterPayment", "noFinance", "lost"],
+  signed: ["paid", "laterPayment", "onboarding", "laterDue", "lost", "noFinance"],
   paid: ["signedHere", "signedBefore", "adjustment"],
 };
 const salesWord = (n) => (n === 0 ? "Aucune vente" : `${n} vente${n > 1 ? "s" : ""}`);
@@ -37,7 +37,8 @@ export function SalesFlow({ flow, period, source, entries, model, glide }) {
 
 function FlowRow({ kind, title, group, max, describe, glide }) {
   const reduce = useReducedMotion();
-  const spring = reduce ? { duration: 0 } : SPRING_UI;
+  // Ressort des indicateurs : largeurs posées en moins de 350 ms, comme le reste de la carte.
+  const spring = reduce ? { duration: 0 } : INDICATOR;
   const parts = ORDER[kind].map((key) => group.parts.find((p) => p.key === key)).filter(Boolean);
   const listed = parts.filter((p) => p.count > 0);
   const drawn = parts.filter((p) => p.amount.n > 0n);
@@ -65,7 +66,7 @@ function FlowRow({ kind, title, group, max, describe, glide }) {
       <div className="vr-flow-total vr-num"><Glide id={total} {...glide}>{total}</Glide></div>
       <Glide as="div" id={legendKey || "vide"} className="vr-flow-legend" {...glide}>
         {listed.map((p) => (
-          <InfoTip key={p.key} label={`${p.label} : détail des ventes`} triggerClassName="vr-flow-chip" triggerProps={{ "data-part": p.key, "data-count": p.count }}
+          <InfoTip key={p.key} label={`${p.label}, ${money(p.amount)}, ${salesWord(p.count).toLowerCase()} : détail des ventes`} triggerClassName="vr-flow-chip" triggerProps={{ "data-part": p.key, "data-count": p.count }}
             trigger={<>
               <span className={`vr-flow-swatch ${p.key}`} aria-hidden="true" />
               <span className="vr-flow-label">{p.label}</span>

@@ -145,11 +145,11 @@ export function pendingBreakdown(rows) {
 // (et pourquoi une partie n'est pas dans la paie de ce mois), puis ce qu'elle touche ce mois.
 // Montants au barème du mois (model.calculator), comme le tableau et pendingOf.
 // - signed : ventes de entryRefs signées ce mois, une catégorie chacune, testée dans l'ordre
-//   paid → lost → laterDue → laterPayment → noFinance ;
+//   paid → lost → laterDue → onboarding → laterPayment → noFinance ;
 // - paid : model.amountRefs, exactement ce qui fait model.commission
 //   (signedHere, signedBefore, adjustment pour une référence sans vente).
 // Une valeur illisible compte dans n, pas dans la somme, et marque sa partie (unreadable).
-const SIGNED_PARTS = ["paid", "lost", "laterDue", "laterPayment", "noFinance"];
+const SIGNED_PARTS = ["paid", "lost", "laterDue", "onboarding", "laterPayment", "noFinance"];
 const PAID_PARTS = ["signedHere", "signedBefore", "adjustment"];
 
 function flowGroup(keys, items, labelOf) {
@@ -190,8 +190,9 @@ export function salesFlow(statement, entries, model) {
     const key = st === "counted" ? "paid"
       : finance?.status === "lost" ? "lost"
         : due && due > period ? "laterDue"
-          : due || st === "deferred" || finance?.status === "onboarding_pending" ? "laterPayment"
-            : "noFinance";
+          : finance?.status === "onboarding_pending" ? "onboarding"
+            : due || st === "deferred" ? "laterPayment"
+              : "noFinance";
     signedItems.push({ key, ref, value: valueOf(ref), due });
   }
   const paidItems = (model.amountRefs || []).map((ref) => {
@@ -207,6 +208,7 @@ export function salesFlow(statement, entries, model) {
       const dues = new Set(mine.map((item) => item.due));
       return dues.size === 1 ? `1re échéance en ${monthName([...dues][0], period)}` : `1re échéance après ${month}`;
     }
+    if (key === "onboarding") return "Onboarding à venir";
     if (key === "laterPayment") return "Paiement plus tard";
     return "Sans suivi Finance";
   });

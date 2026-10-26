@@ -522,6 +522,7 @@
   --flow-signedHere: var(--vr-accent);
   --flow-laterDue: #8fa4d8;
   --flow-laterPayment: var(--vr-late);
+  --flow-onboarding: #6a5fc1;
   --flow-noFinance: #9aa1ae;
   --flow-lost: var(--vr-danger);
   --flow-signedBefore: var(--vr-good);
@@ -529,6 +530,7 @@
 }
 .vr-app.vr-dark {
   --flow-laterDue: #3f5aa0;
+  --flow-onboarding: #9085e9;
   --flow-noFinance: #6b7180;
   --flow-adjustment: #6b7180;
 }
@@ -558,6 +560,7 @@
 .vr-flow-segment.signedHere, .vr-flow-swatch.signedHere { background: var(--flow-signedHere); }
 .vr-flow-segment.laterDue, .vr-flow-swatch.laterDue { background: var(--flow-laterDue); }
 .vr-flow-segment.laterPayment, .vr-flow-swatch.laterPayment { background: var(--flow-laterPayment); }
+.vr-flow-segment.onboarding, .vr-flow-swatch.onboarding { background: var(--flow-onboarding); }
 .vr-flow-segment.noFinance, .vr-flow-swatch.noFinance { background: var(--flow-noFinance); }
 .vr-flow-segment.lost, .vr-flow-swatch.lost { background: var(--flow-lost); }
 .vr-flow-segment.signedBefore, .vr-flow-swatch.signedBefore { background: var(--flow-signedBefore); }
