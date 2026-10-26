@@ -71,6 +71,45 @@ export function signedParis(raw) {
   return { key: `${y}-${mo}-${d} ${h}:${mi}:${sec}`, label: `${day === 1 ? "1er" : day} ${month}` };
 }
 
+// Mois d'un relevé ou d'un paiement, relatif au mois affiché : « septembre », ou
+// « décembre 2025 » quand l'année diffère de celle du mois affiché.
+export function monthName(period, reference) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(period || ""));
+  const name = m && MONTHS[Number(m[2]) - 1];
+  if (!name) return "";
+  return reference && String(reference).slice(0, 4) !== m[1] ? `${name} ${m[1]}` : name;
+}
+// « 2026-10-22 » → « 22/10 » ; l'année est ajoutée quand elle diffère de la référence.
+function shortDay(isoDay, referenceYear) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(isoDay || ""));
+  if (!m) return "";
+  return referenceYear && referenceYear !== m[1] ? `${m[3]}/${m[2]}/${m[1]}` : `${m[3]}/${m[2]}`;
+}
+// Mois de signature d'une vente (champ du back, sinon déduit de signedAt à l'heure de Paris).
+export const signedMonthOf = (entry) => entry?.signedMonth || signedParis(entry?.signedAt)?.key.slice(0, 7) || "";
+
+// Chronologie factuelle d'une vente : « Signée le 30/09 · 1re échéance octobre · payée le 22/10 ».
+export function saleTimeline(entry) {
+  const signedKey = signedParis(entry?.signedAt)?.key || "";
+  const year = signedKey.slice(0, 4) || null;
+  const parts = [];
+  if (signedKey) parts.push(`Signée le ${shortDay(signedKey, null)}`);
+  if (entry?.finance?.firstDuePeriod) parts.push(`1re échéance ${monthName(entry.finance.firstDuePeriod, year ? `${year}-01` : null)}`);
+  if (entry?.paidOnUnknown) parts.push("date de paiement inconnue");
+  else if (entry?.paidOn) parts.push(`payée le ${shortDay(entry.paidOn, year)}`);
+  return parts.join(" · ");
+}
+
+// Pastille de mois croisé dans le relevé du mois P (aucune notion de retard, factuel) :
+// vente comptée en P mais signée avant → « Signée en septembre » ;
+// vente signée en P mais comptée un autre mois → « Comptée en octobre ».
+export function crossMonthLabel(status, entry, period) {
+  const signed = signedMonthOf(entry);
+  if (status === "counted" && signed && signed !== period) return `Signée en ${monthName(signed, period)}`;
+  if (status === "deferred" && entry?.countedMonth) return `Comptée en ${monthName(entry.countedMonth, period)}`;
+  return null;
+}
+
 // Statut Finance d'une vente, calculé par le back (entry.finance.status / statusLabel).
 // Sans client relié, ou tant que le back n'envoie pas le statut : « À rapprocher ».
 const FINANCE_LABELS = {

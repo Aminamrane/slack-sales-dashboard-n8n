@@ -6,12 +6,14 @@ import { emptyDraft, parseDraft, statementModel } from "./model.js";
 import {
   auditDetail,
   auditValue,
+  crossMonthLabel,
   dayMonthLabel,
   decimalLabel,
   financeBadge,
   formatTime,
   monthLabel,
   safeMoney,
+  saleTimeline,
   signedParis,
 } from "./presentation.js";
 import {
@@ -19,9 +21,9 @@ import {
   pendingBreakdown,
   periodsOf,
   saleCounts,
-  saleStatus,
   sortSales,
   statementSettings,
+  statusFor,
   teamRows,
   teamTotals,
 } from "./team.js";
@@ -69,7 +71,11 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
 
   // Mois de toute la page, puis la liste de l'équipe de ce mois (heads, puis total décroissant).
   const periods = useMemo(() => periodsOf(source), [source]);
-  const [period, setPeriod] = useState(() => (periods.includes(source.defaultPeriod) ? source.defaultPeriod : periods.at(-1)));
+  // Le mois affiché est toujours un mois qui a des relevés (donc au moins une ligne d'équipe) :
+  // une valeur inconnue (option absente, valeur vide) retombe sur le mois par défaut.
+  const fallbackPeriod = periods.includes(source.defaultPeriod) ? source.defaultPeriod : periods.at(-1);
+  const [periodChoice, setPeriod] = useState(fallbackPeriod);
+  const period = periods.includes(periodChoice) ? periodChoice : fallbackPeriod;
   const team = useMemo(() => teamRows(source, draft, period), [source, draft, period]);
   const totals = useMemo(() => teamTotals(team), [team]);
   const [person, setPerson] = useState(() => team[0]?.person ?? null);
@@ -119,32 +125,39 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
       });
   }, [source, calculator, statement]);
 
-  const saleRows = useMemo(() => linkedRows.map((entry) => {
-    const ref = entry.amountCell;
-    const deal = resolveDeal(source, entry, settings.deals?.[ref], calculator);
-    const applied = !!model?.appliedAcquisition[ref];
-    const calc = applied ? model.calculator : calculator;
-    return {
-      ref,
-      entry,
-      client: entry.client,
-      status: saleStatus(entry),
-      channel: deal.channel || "UNKNOWN",
-      finance: financeBadge(entry.finance, entry.unlinkedReason),
-      signedAt: entry.signedAt,
-      signedLabel: signedParis(entry.signedAt)?.label,
-      range: entry.employeeRange,
-      origin: deal.origin,
-      plan: deal.plan,
-      overridden: deal.overridden,
-      originChannel: deal.originChannel,
-      exception: deal.exception,
-      parts: calculationParts(calc, ref),
-      value: calculator.raw(ref) === "" && !applied ? "Non calculée" : safeMoney(calc, ref),
-      edited: Object.hasOwn(draft.changes, ref) || !!settings.deals?.[ref],
-      search: `${entry.client} ${entry.origin || ""}`,
-    };
-  }), [linkedRows, source, settings, calculator, model, draft.changes]);
+  const saleRows = useMemo(() => {
+    const statusOf = statusFor(statement);
+    return linkedRows.map((entry) => {
+      const ref = entry.amountCell;
+      const status = statusOf(entry);
+      const deal = resolveDeal(source, entry, settings.deals?.[ref], calculator);
+      const applied = !!model?.appliedAcquisition[ref];
+      const calc = applied ? model.calculator : calculator;
+      return {
+        ref,
+        entry,
+        client: entry.client,
+        status,
+        crossMonth: crossMonthLabel(status, entry, statement.period),
+        timeline: saleTimeline(entry),
+        paidInfo: !!(entry.paidOn || entry.paidOnUnknown),
+        channel: deal.channel || "UNKNOWN",
+        finance: financeBadge(entry.finance, entry.unlinkedReason),
+        signedAt: entry.signedAt,
+        signedLabel: signedParis(entry.signedAt)?.label,
+        range: entry.employeeRange,
+        origin: deal.origin,
+        plan: deal.plan,
+        overridden: deal.overridden,
+        originChannel: deal.originChannel,
+        exception: deal.exception,
+        parts: calculationParts(calc, ref),
+        value: calculator.raw(ref) === "" && !applied ? "Non calculée" : safeMoney(calc, ref),
+        edited: Object.hasOwn(draft.changes, ref) || !!settings.deals?.[ref],
+        search: `${entry.client} ${entry.origin || ""}`,
+      };
+    });
+  }, [linkedRows, source, settings, calculator, model, draft.changes, statement]);
 
   const visible = useMemo(() => sortSales(filterSales(saleRows, filters)), [saleRows, filters]);
   const counts = useMemo(() => saleCounts(saleRows, filters), [saleRows, filters]);
@@ -214,7 +227,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
     setInline(null);
   }
   function changePeriod(next) {
-    if (next === period) return;
+    if (!periods.includes(next) || next === period) return;
     setMotionState({ direction: next > period ? 1 : -1, cause: "month" });
     const nextTeam = teamRows(source, draft, next);
     if (!nextTeam.some((r) => r.person === row.person)) setPerson(nextTeam[0]?.person ?? null);

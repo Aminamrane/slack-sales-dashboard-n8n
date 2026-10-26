@@ -36,7 +36,7 @@ export function PersonCard({
         <InfoTip label="À propos de ce calcul">
           <ul>
             <li>Fixe, commissions personnelles et primes du mois. Commissions de management non incluses.</li>
-            <li>Une vente compte dans le total dès que le client a payé sa première échéance Owner.</li>
+            <li>Une vente compte dans le total du mois où le client a payé sa première échéance Owner.</li>
             <li>Barème en vérification.</li>
             {readingDay && <li>Données CRM lues le {readingDay}.</li>}
           </ul>

@@ -272,6 +272,7 @@
 .vr-pill.paid { border-color: transparent; background: var(--vr-good-soft); color: var(--vr-good); }
 .vr-pill.late { border-color: transparent; background: var(--vr-late-soft); color: var(--vr-late); }
 .vr-pill.attention { border-color: var(--vr-accent-line); background: var(--vr-accent-soft); color: var(--vr-accent); }
+.vr-pill.month { border-color: var(--vr-accent-line); background: var(--vr-card); color: var(--vr-accent); }
 .vr-pill.attention::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
 /* Ventes */
@@ -309,8 +310,8 @@
 .vr-row-group b { padding: 0 7px; border-radius: 999px; background: var(--vr-sunken); color: var(--vr-soft); letter-spacing: 0; }
 .vr-row-group.counted b { background: var(--vr-good-soft); color: var(--vr-good); }
 .vr-row.edited::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--vr-accent); }
-.vr-row:is(.pending, .lost) .vr-client-line strong { color: var(--vr-soft); }
-.vr-row:is(.pending, .lost) :is(.vr-amount, .vr-base) { color: var(--vr-muted); }
+.vr-row:is(.deferred, .pending, .lost) .vr-client-line strong { color: var(--vr-soft); }
+.vr-row:is(.deferred, .pending, .lost) :is(.vr-amount, .vr-base) { color: var(--vr-muted); }
 .vr-row-group.lost { color: color-mix(in srgb, var(--vr-muted) 80%, transparent); }
 .vr-cell-client { min-width: 0; }
 .vr-client-line { display: flex; align-items: center; gap: 8px; min-width: 0; }

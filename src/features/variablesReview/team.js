@@ -11,21 +11,31 @@ export const isHead = (source, person) => /^head/i.test(source.profiles?.[person
 export const periodsOf = (source) => [...new Set(source.statements.map((s) => s.period))].sort();
 export const entryIndex = (source) => new Map((source.entries || []).map((e) => [e.amountCell, e]));
 
-// Statut d'une vente, seule source pour la carte, la liste, les puces et le tableau :
-// « counted » (compte dans le total), « lost » (non comptée, client perdu), « pending » (le reste).
-export function saleStatus(entry) {
-  if (entry?.counted !== false) return "counted";
-  return entry.finance?.status === "lost" ? "lost" : "pending";
+// Statut d'une vente dans le relevé d'un mois P, seule source pour la carte, la liste, les puces
+// et le tableau. Règle du 26/10 : une vente compte dans le mois où le client a payé sa 1re échéance
+// Owner ; une même vente peut donc figurer au relevé de sa signature et à celui de son paiement.
+// - « counted » : dans les countedRefs du relevé (total du mois, y compris signée avant P) ;
+// - « deferred » : signée en P, comptée un autre mois (payée plus tard) ;
+// - « lost » : non comptée, client perdu ; « pending » : le reste (dont les ventes non déclarées).
+// Relevé sans countedRefs (données d'avant le 26/10) : ancienne règle, entry.counted.
+export function statusFor(statement) {
+  const counted = Array.isArray(statement?.countedRefs) ? new Set(statement.countedRefs) : null;
+  return (entry) => {
+    if (counted ? counted.has(entry?.amountCell) : entry?.counted !== false) return "counted";
+    if (counted && entry?.counted && entry.countedMonth && entry.countedMonth !== statement.period) return "deferred";
+    return entry?.finance?.status === "lost" ? "lost" : "pending";
+  };
 }
-export const SALE_STATUSES = ["counted", "pending", "lost"];
+export const SALE_STATUSES = ["counted", "deferred", "pending", "lost"];
 
 // Commissions des ventes en attente (non comptées, hors client perdu) :
 // ce que la personne touchera quand les clients paieront leur première échéance.
 export function pendingOf(statement, entries, calculator) {
+  const status = statusFor(statement);
   let amount = ZERO, count = 0;
   for (const ref of statement.entryRefs || []) {
     const entry = entries.get(ref);
-    if (!entry || saleStatus(entry) !== "pending") continue;
+    if (!entry || status(entry) !== "pending") continue;
     count++;
     try {
       amount = amount.add(calculator.value(ref));
@@ -36,9 +46,11 @@ export function pendingOf(statement, entries, calculator) {
   return { amount, count };
 }
 
+// n/N de la liste : ventes comptées dans le mois / ventes du relevé (mêmes statuts que les puces).
 function summarize(source, statement, draft, entries) {
   const refs = statement.entryRefs || [];
-  const counted = refs.filter((ref) => entries.get(ref)?.counted !== false).length;
+  const status = statusFor(statement);
+  const counted = refs.filter((ref) => status(entries.get(ref) || { amountCell: ref }) === "counted").length;
   try {
     const model = statementModel(source, statement, draft.changes, statementSettings(statement, draft));
     return { total: model.total, pending: pendingOf(statement, entries, model.calculator), counted, signed: refs.length, error: null };
@@ -82,7 +94,7 @@ export function teamTotals(rows) {
   );
 }
 
-// Comptées, puis en attente, puis perdues ; dans chaque groupe, par date de signature.
+// Comptées, reportées, en attente, puis perdues ; dans chaque groupe, par date de signature.
 export function sortSales(rows) {
   const key = (r) => signedParis(r.signedAt)?.key || "9999";
   return [...rows].sort(
@@ -103,7 +115,7 @@ export const filterSales = (rows, filters) => rows.filter((r) => matches(r, filt
 // Compteurs des puces : chaque compteur = nombre de lignes affichées si on clique la puce
 // (les autres filtres restent appliqués). La somme des statuts = « Toutes ».
 export function saleCounts(rows, filters) {
-  const status = { ALL: 0, counted: 0, pending: 0, lost: 0 }, channel = { ALL: 0 };
+  const status = { ALL: 0, counted: 0, deferred: 0, pending: 0, lost: 0 }, channel = { ALL: 0 };
   for (const r of rows) {
     if (matches(r, filters, "status")) {
       status.ALL++;

@@ -7,7 +7,7 @@ const plural = (n, word) => `${n} ${word}${n > 1 ? "s" : ""}`;
 export function RemunerationBreakdown({ model, rows, settings, subtitle, pending, onClose, onFixed, onRules, onBonus, onCommission }) {
   return (
     <Modal title="Détail de la rémunération" subtitle={subtitle} onClose={onClose}
-      info={<span>Seules les ventes comptées (première échéance Owner payée) entrent dans le total.</span>}>
+      info={<span>Seules les ventes comptées ce mois-ci (première échéance Owner payée dans le mois) entrent dans le total.</span>}>
       <div className="vr-form-body vr-remuneration-detail">
         <div className="vr-remuneration-line">
           <div><strong>Fixe</strong>{model.appliedTier && <small>Palier de {model.appliedTier.sales} ventes atteint</small>}</div>

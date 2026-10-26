@@ -8,8 +8,10 @@ import { CHANNELS, decimalLabel } from "./presentation.js";
 import { AutoHeight } from "./transitions.jsx";
 import { IconButton } from "./ui.jsx";
 
-const STATUS_CHIPS = [["ALL", "Toutes"], ["counted", "Comptées"], ["pending", "En attente"], ["lost", "Perdues"]];
-const GROUP_LABELS = { counted: "Comptées", pending: "En attente d’encaissement", lost: "Perdues" };
+const STATUS_CHIPS = [["ALL", "Toutes"], ["counted", "Comptées"], ["deferred", "Reportées"], ["pending", "En attente"], ["lost", "Perdues"]];
+// « Reportées » et « Perdues » n'apparaissent que s'il y en a (ou si le filtre est actif).
+const OPTIONAL_CHIPS = new Set(["deferred", "lost"]);
+const GROUP_LABELS = { counted: "Comptées", deferred: "Reportées", pending: "En attente d’encaissement", lost: "Perdues" };
 const CHANNEL_CHIPS = [...Object.entries(CHANNELS), ["UNKNOWN", "Non retrouvée"]];
 const plural = (n, word) => `${n} ${word}${n > 1 ? "s" : ""}`;
 
@@ -41,9 +43,10 @@ export function SalesTable({
         <h3>Ventes & commissions <span className="vr-count vr-num">{total}</span></h3>
         <InfoTip label="Méthode de calcul des ventes" align="start">
           <ul>
-            <li>Ventes signées dans le mois, heure de Paris, une seule par lead.</li>
+            <li>Ventes signées dans le mois (heure de Paris, une seule par lead), et ventes signées avant dont la première échéance est payée dans le mois.</li>
+            <li>Une vente compte dans le total du mois où le client a payé sa première échéance Owner, même s’il est en retard ensuite.</li>
+            <li>Au mois de sa signature, une vente payée un autre mois apparaît « Reportée », hors total.</li>
             <li>Rapprochement Finance par lead, puis par e-mail unique.</li>
-            <li>Une vente compte dès que le client a payé sa première échéance Owner, même s’il est en retard ensuite.</li>
             <li>Barème en vérification, hors commissions de management.</li>
             {readingDay && <li>Données CRM lues le {readingDay}.</li>}
           </ul>
@@ -56,7 +59,7 @@ export function SalesTable({
       <div className="vr-card vr-table-card">
         <div className="vr-toolbar">
           <div className="vr-chips" role="group" aria-label="Statut des ventes">
-            {STATUS_CHIPS.filter(([key]) => key !== "lost" || counts.status.lost > 0 || filters.status === "lost").map(([key, label]) => [
+            {STATUS_CHIPS.filter(([key]) => !OPTIONAL_CHIPS.has(key) || counts.status[key] > 0 || filters.status === key).map(([key, label]) => [
               <Chip key={key} group="status" active={filters.status === key} count={counts.status[key]} onClick={() => setFilter({ status: key })}>{label}</Chip>,
               key === "pending" && (
                 <InfoTip key="pending-info" label="Détail des ventes en attente">
@@ -150,14 +153,7 @@ function SaleRow({ row, motionProps, inline, onInline, onDeal, onEdit }) {
       <div role="cell" className="vr-cell-client">
         <div className="vr-client-line">
           <strong title={row.client}>{row.client}</strong>
-          {row.finance.hint ? (
-            <InfoTip label={row.finance.label} triggerClassName={`vr-pill ${row.finance.tone}`}
-              trigger={<>{row.finance.label}<Info size={11} strokeWidth={2.4} /></>}>
-              <span>{row.finance.hint}</span>
-            </InfoTip>
-          ) : (
-            <span className={`vr-pill ${row.finance.tone}`}>{row.finance.label}</span>
-          )}
+          <SalePills row={row} />
         </div>
         <div className="vr-client-meta">{meta.join(" · ")}</div>
       </div>
@@ -190,6 +186,24 @@ function SaleRow({ row, motionProps, inline, onInline, onDeal, onEdit }) {
         <button type="button" className="vr-amount vr-num" onClick={() => onEdit(row.ref, row.client)} title="Plus d’options">{amount}</button>
       </div>
     </Motion.div>
+  );
+}
+
+// Pastilles d'une vente : statut Finance, puis mois croisé (« Signée en septembre »,
+// « Comptée en octobre »). Une seule pastille ouvre le détail, la chronologie de la vente
+// (« Signée le 30/09 · 1re échéance octobre · payée le 22/10 ») ou l'explication du statut.
+function SalePills({ row }) {
+  const pill = (label, tone, detail) => (detail ? (
+    <InfoTip label={label} triggerClassName={`vr-pill ${tone}`} trigger={<>{label}<Info size={11} strokeWidth={2.4} /></>}>
+      <span>{detail}</span>
+    </InfoTip>
+  ) : <span className={`vr-pill ${tone}`}>{label}</span>);
+  const financeDetail = row.finance.hint || (!row.crossMonth && row.paidInfo ? row.timeline : null);
+  return (
+    <>
+      {pill(row.finance.label, row.finance.tone, financeDetail)}
+      {row.crossMonth && pill(row.crossMonth, "month", row.timeline)}
+    </>
   );
 }
 

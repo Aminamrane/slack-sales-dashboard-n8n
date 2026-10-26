@@ -5,10 +5,13 @@ import {
   amountInput,
   auditDetail,
   auditValue,
+  crossMonthLabel,
   dayMonthLabel,
   decimalLabel,
   financeBadge,
   monthLabel,
+  monthName,
+  saleTimeline,
   signedParis,
 } from "./presentation.js";
 
@@ -63,4 +66,23 @@ test("history never shows cell references or raw formulas", () => {
   assert.equal(auditValue("=((C12/12))*1.3"), "coefficient 1,3");
   assert.equal(auditValue("1500"), "1 500,00 €");
   assert.equal(auditValue("=C1+C2"), "calcul personnalisé");
+});
+
+test("sale timeline, factual: signature day, first due month, payment day or unknown", () => {
+  const paidLater = { signedAt: "2026-09-30 15:00:00+00:00", finance: { firstDuePeriod: "2026-10" }, paidOn: "2026-10-22" };
+  assert.equal(saleTimeline(paidLater), "Signée le 30/09 · 1re échéance octobre · payée le 22/10");
+  assert.equal(saleTimeline({ ...paidLater, paidOn: null, paidOnUnknown: true }), "Signée le 30/09 · 1re échéance octobre · date de paiement inconnue");
+  assert.equal(saleTimeline({ signedAt: "2025-12-30 10:00:00+00:00", finance: { firstDuePeriod: "2026-01" }, paidOn: "2026-01-05" }),
+    "Signée le 30/12 · 1re échéance janvier 2026 · payée le 05/01/2026");
+  assert.equal(saleTimeline({ signedAt: "2026-09-11 22:30:00+00:00" }), "Signée le 12/09");
+});
+
+test("cross-month pill: « Signée en septembre » in the payment month, « Comptée en octobre » in the signing month", () => {
+  const sale = { signedAt: "2026-09-30 15:00:00+00:00", countedMonth: "2026-10" };
+  assert.equal(crossMonthLabel("counted", sale, "2026-10"), "Signée en septembre");
+  assert.equal(crossMonthLabel("deferred", sale, "2026-09"), "Comptée en octobre");
+  assert.equal(crossMonthLabel("counted", { signedMonth: "2026-10" }, "2026-10"), null);
+  assert.equal(crossMonthLabel("pending", sale, "2026-09"), null);
+  assert.equal(crossMonthLabel("counted", { signedMonth: "2025-12" }, "2026-01"), "Signée en décembre 2025");
+  assert.equal(monthName("2026-10", "2026-09"), "octobre");
 });
