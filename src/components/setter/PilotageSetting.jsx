@@ -26,7 +26,7 @@ import {
   ACTION_MAX, ALLO_LABELS, BLOCAGE_MAX, COLUMN_LABELS, DISCOURS_SCORES, MANUAL_COLUMNS, PERIOD_MODES,
   blocageChoices, columnsFor, effectiveReview, fmtAverage, fmtDayShort, fmtPeriod, fmtScore, fmtTalk,
   mergeSavedReview, newestFirst, notedDays, parisToday, pruneDraft, resolvePeriod, reviewKey, reviewPayload,
-  reviewTooltip, sameReview, shiftDay, shouldShowR2, sortSetters, teamTotals, topBlocage,
+  reviewTooltip, sameReview, shiftDay, shouldShowR2, teamTotals, topBlocage, visibleSetters,
 } from '../../utils/setterPilotage.js';
 
 const API = '/api/v1/tracking/setter-team/pilotage';
@@ -284,8 +284,8 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
   const shownDayMode = loadedMode === 'day';
   const editable = shownDayMode && canEdit;
   const locked = stale || loading;
-  // Comptes désactivés : jamais dans le tableau ni dans les totaux (dev 05/10).
-  const rows = useMemo(() => sortSetters((data?.setters || []).filter((s) => s.active !== false)), [data]);
+  // Comptes désactivés ou masqués : jamais dans le tableau ni dans les totaux (dev 05/10, 26/10).
+  const rows = useMemo(() => visibleSetters(data?.setters), [data]);
   const team = useMemo(() => teamTotals(rows), [rows]);
   const blocage = blocageChoices(data?.blocage_suggestions);
   const multiDay = !shownDayMode;

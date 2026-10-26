@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import {
   parisToday, isIsoDay, shiftDay, daysInclusive, lastMonthRange, customRangeError, resolvePeriod,
   fmtDayShort, fmtDayLong, fmtPeriod, fmtTalk, fmtAverage, fmtScore, fmtSavedAt, reviewTooltip,
-  columnsFor, shouldShowR2, sortSetters, newestFirst, teamTotals, topBlocage, notedDays, discoursAverage,
+  columnsFor, shouldShowR2, sortSetters, isHiddenSetter, visibleSetters, newestFirst, teamTotals, topBlocage, notedDays, discoursAverage,
   normalizeReview, effectiveReview, sameReview, reviewPayload, pruneDraft, mergeSuggestions,
   mergeSavedReview, blocageChoices, MAX_RANGE_DAYS,
 } from './setterPilotage.js';
@@ -135,6 +135,29 @@ test("setters : actifs d'abord, ordre de l'API conservé ; jours du plus récent
   assert.deepEqual(sortSetters(list).map((s) => s.name), ['Aurélie', 'Jonathan', 'Alain']);
   assert.deepEqual(newestFirst([{ day: '2026-09-01' }, { day: '2026-09-03' }, { day: '2026-09-02' }]).map((d) => d.day),
     ['2026-09-03', '2026-09-02', '2026-09-01']);
+});
+
+test("comptes masqués : retirés du tableau et des totaux, par leur nom entier (casse, accents, espaces ignorés)", () => {
+  assert.equal(isHiddenSetter({ name: 'Vincent Kobylarz' }), true);
+  assert.equal(isHiddenSetter({ name: '  sarra   NEKHILI ' }), true);
+  assert.equal(isHiddenSetter({ name: 'Sàrra Nékhili' }), true);
+  assert.equal(isHiddenSetter({ name: 'Vincent' }), false);                  // un morceau du nom ne suffit pas
+  assert.equal(isHiddenSetter({ name: 'Sarra Nekhili-Martin' }), false);
+  assert.equal(isHiddenSetter({ name: null }), false);
+  assert.equal(isHiddenSetter(null), false);
+
+  const list = [
+    { name: 'Alain', active: false, allo: 'linked', totals: { calls: 5, r1: 1 } },
+    { name: 'Sarra Nekhili', active: true, allo: 'missing', totals: { r1: 4 } },
+    { name: 'Aurélie', active: true, allo: 'linked', totals: { calls: 10, r1: 2 } },
+    { name: 'Vincent Kobylarz', active: true, allo: 'linked', totals: { calls: 97, r1: 1 } },
+    { name: 'Jonathan', active: true, allo: 'linked', totals: { calls: 20, r1: 3 } },
+  ];
+  const rows = visibleSetters(list);
+  assert.deepEqual(rows.map((s) => s.name), ['Aurélie', 'Jonathan']);        // ni masqués ni désactivés, ordre de l'API
+  assert.equal(teamTotals(rows).calls, 30);
+  assert.equal(teamTotals(rows).r1, 5);
+  assert.deepEqual(visibleSetters(undefined), []);
 });
 
 test("totaux d'équipe : les appels ne comptent que les setters reliés à Allo", () => {

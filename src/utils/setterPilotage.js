@@ -191,6 +191,22 @@ export function sortSetters(setters) {
   return [...(setters || [])].sort((a, b) => Number(b.active !== false) - Number(a.active !== false));
 }
 
+// Comptes masqués du Pilotage (demande dev 26/10/2026), repérés par leur nom : jamais dans le tableau
+// ni dans les totaux, comme les comptes désactivés. Masqués ici seulement : leur compte et les autres
+// écrans ne changent pas.
+export const HIDDEN_SETTERS = ['Vincent Kobylarz', 'Sarra Nekhili'];
+
+// Casse, accents et espaces en trop ignorés ; le nom doit être celui-là en entier.
+const nameKey = (name) => String(name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().split(/\s+/).filter(Boolean).join(' ');
+const HIDDEN_KEYS = new Set(HIDDEN_SETTERS.map(nameKey));
+
+export const isHiddenSetter = (setter) => HIDDEN_KEYS.has(nameKey(setter?.name));
+
+// Les lignes du tableau et des totaux : ni comptes désactivés (dev 05/10) ni comptes masqués, actifs d'abord.
+export function visibleSetters(setters) {
+  return sortSetters((setters || []).filter((s) => s.active !== false && !isHiddenSetter(s)));
+}
+
 export function newestFirst(days) {
   return [...(days || [])].sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0));
 }
