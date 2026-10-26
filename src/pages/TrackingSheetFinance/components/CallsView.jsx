@@ -16,6 +16,7 @@ function initialDates() {
 // Opérateurs connus, par défaut : tant que /access ne renvoie pas la liste
 // (ancienne API), la page reste telle qu'elle était.
 const ALL_OPERATORS = [{ key: 'leny', name: 'Lény Perron' }, { key: 'aurelie', name: 'Aurélie Boukantar' }];
+const COUNT_WORDS = { 2: 'deux', 3: 'trois' };
 const joinNames = names => names.length > 1 ? `${names.slice(0, -1).join(', ')} et ${names[names.length - 1]}` : names[0] || '';
 
 // Colonne « Contact » : quand le numéro appelé est celui d'un client de la page,
@@ -79,8 +80,8 @@ export default function CallsView({ operators = [], clients = null, board = null
       <span>Heures de Paris · actualisation à la demande</span>
     </form>
     {error && <p className="fc-error" role="alert">{error}</p>}
-    <div className={`fc-cards ${single ? 'fc-cards-single' : ''}`} aria-live="polite">
-      <div className="fc-card fc-total"><span>Total des appels</span><strong>{overview?.total_calls ?? '…'}</strong><small>{single ? current.name : 'Les deux collaborateurs'}, sur la période</small></div>
+    <div className={`fc-cards ${single ? 'fc-cards-single' : allowed.length > 2 ? 'fc-cards-wide' : ''}`} aria-live="polite">
+      <div className="fc-card fc-total"><span>Total des appels</span><strong>{overview?.total_calls ?? '…'}</strong><small>{single ? current.name : `Les ${COUNT_WORDS[allowed.length] || allowed.length} collaborateurs`}, sur la période</small></div>
       {(overview?.operators || allowed).filter(user => allowed.some(x => x.key === user.key)).map(user =>
         <button type="button" key={user.key} className={`fc-card ${operator === user.key ? 'fc-selected' : ''}`} aria-pressed={operator === user.key} onClick={() => chooseOperator(user.key)}>
           <span>{user.name}</span><strong>{user.calls ?? '…'}</strong><small>Voir les appels <ChevronRight size={13} /></small>
