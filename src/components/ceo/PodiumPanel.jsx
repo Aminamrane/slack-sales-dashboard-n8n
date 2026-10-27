@@ -10,6 +10,7 @@ import trophyIcon from '../../assets/medal-gold.png';
 import silverMedalIcon from '../../assets/medal-silver.png';
 import bronzeMedalIcon from '../../assets/medal-bronze.png';
 import crownIcon from '../../assets/crown.png';
+import podiumArt from '../../assets/ceo-podium-fresque.webp';
 import MedalStack from '../MedalStack.jsx';
 import { loadPodiumMedals, nameKey } from '../../utils/podiumMedals.js';
 import { intFr, Share } from './Figures.jsx';
@@ -61,6 +62,9 @@ export default function PodiumPanel({ leaderboard, loading, objective, canEdit, 
   const honours = useHonours(sellers.length > 0);
   return (
     <motion.article className="an-panel an-podium" variants={item} aria-label="Classement du mois">
+      <div className="an-podium-art" aria-hidden="true">
+        <img src={podiumArt} alt="" loading="lazy" decoding="async" onLoad={(e) => e.currentTarget.classList.add('is-ready')} />
+      </div>
       <img
         src={ceo6}
         alt={canEdit ? 'Éditer les objectifs mensuels' : ''}
