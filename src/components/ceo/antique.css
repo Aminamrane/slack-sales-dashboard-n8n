@@ -322,6 +322,18 @@
 /* ── Podium et arche ──────────────────────────────────────────────────── */
 .an-bottom { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
 .an-podium { flex: 1; min-width: 320px; display: flex; flex-direction: column; }
+/* Fresque de fond du classement (rendu généré pour cet emplacement : relief de bataille antique,
+   aquarelle pierre et sauge, dessiné en vignette sur papier blanc dont le blanc a été rendu
+   transparent) : le dessin se pose directement sur la carte, sans aplat ni bord ; il couvre la
+   carte, calé à droite, et s'efface vers la gauche où se lisent les noms. */
+.an-podium-art { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; z-index: 0; pointer-events: none; }
+.an-podium-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: right center; opacity: 0; transition: opacity .7s ease; -webkit-mask-image: linear-gradient(90deg, transparent 30%, #000 62%); mask-image: linear-gradient(90deg, transparent 30%, #000 62%); }
+.an-podium-art img.is-ready { opacity: .5; }
+.an-podium > :not(.an-podium-art) { position: relative; z-index: 1; }
+/* Sombre : le dessin (gris sur transparent) est inversé, il ressort en gravure claire. */
+.ceo-antique.is-dark .an-podium-art img { filter: invert(1); }
+.ceo-antique.is-dark .an-podium-art img.is-ready { opacity: .16; }
+
 .an-podium-rows { display: flex; flex-direction: column; }
 .an-podium-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--an-stone); }
 .an-podium-row:last-child { border-bottom: 0; }
