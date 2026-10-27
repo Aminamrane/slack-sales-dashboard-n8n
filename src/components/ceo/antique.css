@@ -104,6 +104,9 @@
 .an-parc-zone-title::after { content: ''; flex: 1; height: 1px; background: var(--an-lapis-line); }
 .an-stock { display: flex; flex-direction: column; gap: 18px; }
 .an-stock-sub { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding-top: 14px; border-top: 1px solid var(--an-lapis-line); }
+/* Durée de vie moyenne : mois et jours côte à côte, chacun avec son unité. */
+.an-lifetime { padding-top: 14px; border-top: 1px solid var(--an-lapis-line); }
+.an-lifetime .an-figure-value { display: flex; align-items: baseline; gap: 12px; }
 .an-exits { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
 .an-exit { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .an-exit-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
@@ -123,6 +126,7 @@
 /* Retard : dans la ligne de sous-titre, en rouille adoucie, pour garder les deux chiffres alignés. */
 .an-rdv-late { display: inline-flex; align-items: center; gap: 4px; color: #ffb8a6; font-weight: 650; }
 .an-rdv-value { font-size: 26px; line-height: 1; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.an-rdv-value--rate { font-size: 22px; }
 
 /* ── Chiffres ─────────────────────────────────────────────────────────────── */
 .an-figure { display: flex; flex-direction: column; gap: 4px; min-width: 0; }

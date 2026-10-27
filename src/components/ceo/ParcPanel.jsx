@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { CalendarClock, CalendarDays, CircleCheck, Clock, UserRoundX, RotateCcw, Users, TrendingUp, Cloud, BadgeEuro } from 'lucide-react';
+import { CalendarClock, CalendarDays, CircleCheck, Clock, UserRoundX, RotateCcw, Users, TrendingUp, Cloud, BadgeEuro, Hourglass } from 'lucide-react';
 import { METEO_BANDS, meteoBandOf } from '../../utils/meteoBands.js';
+import { monthsAndDays, periodLabelOf } from '../../utils/ceoDashboardStats.js';
 import { Chip, euro, intFr, Numeral, ReadingSwap, Spark } from './Figures.jsx';
 import { Orbits, CornerTicks } from './Ornaments.jsx';
 import { MeteoShowcase } from './Meteo.jsx';
@@ -23,6 +24,9 @@ const meteoWording = (avg) => {
 };
 
 const Dash = () => <span className="an-placeholder">—</span>;
+// Taux de résiliation au centième, comme la feuille de la Finance (6,91 %).
+const pctFr = (rate) => (rate == null ? '—' : `${new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(rate * 100)}\u00a0%`);
+const durationFr = (days) => { const d = monthsAndDays(days); return d ? `${d.months} mois ${d.days} j` : '—'; };
 
 // Une colonne de sorties : les actées (cumul ↔ mois en cours), leur trajectoire sur
 // 12 mois, la part Owner HT perdue sur les MÊMES dossiers, et ce qui est en cours.
@@ -103,6 +107,34 @@ export default function ParcPanel({ stats, period, setPeriod, periodOptions, own
     { label: p ? `Encore actifs fin ${p}` : 'Onglet Signé du board', value: intFr(stats.actifs) },
     { label: 'En cours de sortie (comptés actifs)', value: intFr(stats.pendingResiliation + stats.pendingRetraction) },
   ] : [];
+  // Rétention : durée de vie moyenne (LTV) et taux de résiliation, définitions de la Finance.
+  const life = stats?.lifetime;
+  const lifeParts = life ? monthsAndDays(life.averageDays) : null;
+  const lifeRows = life ? [
+    { label: 'Médiane', value: durationFr(life.medianDays) },
+    { label: 'Clients mesurés', value: intFr(life.measured) },
+    { label: 'Encore clients', value: intFr(life.open) },
+    { label: 'Partis', value: intFr(life.closed) },
+    ...(life.unmeasured ? [{ label: 'Sans date, hors calcul', value: intFr(life.unmeasured) }] : []),
+    ...(life.incoherent ? [{ label: 'Dates incohérentes, hors calcul', value: intFr(life.incoherent) }] : []),
+    { note: 'De la signature Owner à la sortie, ou à aujourd’hui pour un client encore là. Rétractés exclus.' },
+  ] : [];
+  const month = stats?.resiliationMonth;
+  const previous = stats?.resiliationPreviousMonth;
+  const monthLabel = month ? periodLabelOf(month.key) : null;
+  const monthRows = month ? [
+    { label: `Résiliations en ${monthLabel}`, value: intFr(month.count) },
+    { label: `En cours au 1er ${monthLabel}`, value: intFr(month.base) },
+    { label: `${periodLabelOf(previous.key)}`, value: `${pctFr(previous.rate)} (${intFr(previous.count)} sur ${intFr(previous.base)})` },
+    { note: 'Self-résiliations comprises, comme la Finance.' },
+  ] : [];
+  const global = stats?.resiliationGlobal;
+  const globalRows = global ? [
+    { label: 'Résiliations depuis le début', value: intFr(global.count) },
+    { label: 'Clients en cours', value: intFr(global.base) },
+    ...(global.undated ? [{ label: 'Résiliations sans date, hors calcul', value: intFr(global.undated) }] : []),
+    { note: 'Résiliations, self-résiliations comprises, rapportées aux clients en cours, comme la Finance.' },
+  ] : [];
   return (
     <motion.section
       className="an-panel an-panel--lapis"
@@ -144,6 +176,15 @@ export default function ParcPanel({ stats, period, setPeriod, periodOptions, own
               <span className="an-figure-cap">des clients signés</span>
             </div>
           </div>
+          <Bubble rows={lifeRows} dark align="start">
+            <div className="an-figure an-lifetime">
+              <span className="an-figure-label"><Hourglass size={13} strokeWidth={2.2} aria-hidden="true" /> Durée de vie moyenne</span>
+              <span className="an-figure-value an-figure-value--md">
+                {loading || !lifeParts ? <Dash /> : <><Numeral value={lifeParts.months} unit="mois" delay={0.21} /><Numeral value={lifeParts.days} unit="j" delay={0.28} /></>}
+              </span>
+              <span className="an-figure-cap">LTV par client{p ? `, fin ${p}` : ''}</span>
+            </div>
+          </Bubble>
         </div>
 
         {/* ── Sorties ── */}
@@ -205,6 +246,23 @@ export default function ParcPanel({ stats, period, setPeriod, periodOptions, own
                 </div>
                 <span className="an-rdv-value">{loading ? <Dash /> : <Numeral value={upcoming} />}</span>
               </div>
+            ))}
+          </div>
+          <div className="an-rdv">
+            {[
+              ['month', 'Résiliation du mois', month && `${periodLabelOf(previous.key).split(' ')[0]} : ${pctFr(previous.rate)}`, month?.rate, monthRows],
+              ['global', 'Résiliation globale', 'Depuis le début', global?.rate, globalRows],
+            ].map(([key, label, sub, rate, rows]) => (
+              <Bubble key={key} rows={rows} dark>
+                <div className="an-rdv-row">
+                  <span className="an-rdv-icon" aria-hidden="true"><UserRoundX size={17} strokeWidth={1.9} /></span>
+                  <div className="an-rdv-copy">
+                    {label}
+                    <small>{loading ? '' : sub}</small>
+                  </div>
+                  <span className="an-rdv-value an-rdv-value--rate">{loading || rate == null ? <Dash /> : <Numeral value={rate} format={pctFr} />}</span>
+                </div>
+              </Bubble>
             ))}
           </div>
         </div>
