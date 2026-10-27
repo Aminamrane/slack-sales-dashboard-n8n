@@ -2,12 +2,9 @@
 // Extraites du board le 25/09/2026 pour que la météo d'onboarding (fiche d'intégration, parcours
 // « Faire l'onboarding ») utilise exactement les mêmes visuels que la météo client : c'est la même météo.
 // 1-2 rouge (critique, risque résiliation), 3 orange (mécontent), 4-5 vert (satisfait).
-export const METEO_BANDS = {
-  rouge:  { label: "Critique",  color: "#dc2626", bg: "#fdecec", dot: "#dc2626" },
-  orange: { label: "Mécontent", color: "#d97706", bg: "#fff3e3", dot: "#d97706" },
-  vert:   { label: "Satisfait", color: "#15a34a", bg: "#e9f9ef", dot: "#15a34a" },
-};
-export const meteoBandOf = (score) => (score == null ? null : score <= 2 ? "rouge" : score === 3 ? "orange" : "vert");
+// Bandes et seuils définis dans utils/meteoBands.js (module sans JSX, lisible par les tests).
+import { METEO_BANDS, meteoBandOf } from "../utils/meteoBands.js";
+export { METEO_BANDS, meteoBandOf };
 export const meteoStyle = (score) => { const b = meteoBandOf(score); return b ? METEO_BANDS[b] : null; };
 // Sens de chaque note (affiché dans le sélecteur) + action implicite (automatisable via CSV).
 export const METEO_MEANING = {

@@ -14,7 +14,8 @@ import { appointmentConfirmation, appointmentFailure } from "../utils/appointmen
 import { ClientMissions, DetailFold, DetailText } from "../components/OptilexClientDetail";
 import MentionTextarea, { MentionedText } from "../components/MentionTextarea";
 import { mentionedIds, notifiedSummary } from "../utils/mentions.js";
-import { isOnboardingToReschedule, matchesUpcomingIntegration, matchesUpcomingOnboarding, matchesOverdueOnboarding, onboardingDateOf, onboardingSituation, parisWallTime } from "../utils/boardIntegration.js";
+import { isOnboardingToReschedule, onboardingDateOf, onboardingSituation } from "../utils/boardIntegration.js";
+import { isOnboardingUpcoming, isOnboardingOverdue, isIntegrationUpcoming, isIntegrationOverdue } from "../utils/boardPredicates.js";
 import { createLatestRequestTracker, displayEtat, matchesSignedClient, withConfirmedEtat } from "../utils/boardClientState.js";
 import { Fragment, useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -113,14 +114,11 @@ const _todayParisISO = () => new Date().toLocaleDateString("en-CA", { timeZone: 
 // Split des contrats effectif au 01/07/2026 : depuis cette date, un RDV intégration NON marqué
 // "effectué" reste "à venir" MÊME si sa date est passée (il n'a pas été réalisé par Lisa).
 // Avant le 01/07 = pré-split, pas de suivi "effectué" fiable -> exclu (on n'inonde pas la case).
-// Exportés (avec `displayEtat`, réexporté plus bas) : les cartes d'états du dashboard CEO
-// comptent avec CES prédicats-ci. Une seule définition de la règle métier, pas de
-// copie qui dérive — board et dashboard affichent forcément les mêmes chiffres.
-export const isOnboardingUpcoming = (r) => matchesUpcomingOnboarding(r, _todayParisISO());
-export const isOnboardingOverdue = (r) => matchesOverdueOnboarding(r, parisWallTime());
-export const isIntegrationUpcoming = (r) => matchesUpcomingIntegration(r, displayEtat(r));
-// "En retard" : dans "à venir" (donc non effectué, depuis le 01/07) MAIS date déjà passée = non réalisé.
-export const isIntegrationOverdue = (r) => isIntegrationUpcoming(r) && String(r.rdv_lancement_date).slice(0, 10) < _todayParisISO();
+// Définis dans utils/boardPredicates.js (réexportés ici, avec `displayEtat` plus bas) : les
+// cartes d'états du dashboard CEO comptent avec CES prédicats-ci, sans embarquer cette page.
+// Une seule définition de la règle métier, pas de copie qui dérive — board et dashboard
+// affichent forcément les mêmes chiffres.
+export { isOnboardingUpcoming, isOnboardingOverdue, isIntegrationUpcoming, isIntegrationOverdue };
 // Contrat Opti'Lex SÉPARÉ (split) pas encore signé : optilex_status existe (non null =
 // pas le cas "groupé/inclus") et != done. Sert l'alerte "RDV intégration mais Opti'Lex
 // non signé". Disparaît d'elle-même dès que le contrat est signé (status -> done).
