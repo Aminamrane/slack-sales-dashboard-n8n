@@ -22,7 +22,6 @@ import { createLatestRequestTracker, withConfirmedEtat } from '../../utils/board
 //       · title block : circular green icon + page name + subtitle
 //       · tab row : "Toutes les périodes / Encaissements / Pertes" + actions
 //       · <TableView /> Notion-styled, <ReceiptsView />, <LossesView />
-//   - <ClientDetailModal /> for timeline + audit
 //
 // Optimistic edits :
 //   PATCH succeeds → server returns the recomputed row, we replace it.

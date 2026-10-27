@@ -4,13 +4,10 @@ import { useNavigate } from "react-router-dom";
 
 import { motion, AnimatePresence } from "framer-motion";
 
-// import { supabase } from "../lib/supabaseClient"; // No longer needed - using API backend
 
 import apiClient from "../services/apiClient";
 
-import * as XLSX from "xlsx";
 
-import { saveAs } from "file-saver";
 
 import myLogo from "../assets/my_image.png";
 
@@ -31,9 +28,7 @@ import silverMedalIcon from "../assets/medal-silver.png";
 import bronzeMedalIcon from "../assets/medal-bronze.png";
 import { loadPodiumMedals, nameKey } from "../utils/podiumMedals.js";
 import MedalStack from "../components/MedalStack.jsx";
-import ndaIcon from "../assets/icon1.png";
 import declareIcon from "../assets/icon2.png";
-import toolsIcon from "../assets/icon3.png";
 import crownIcon from "../assets/crown.png";
 import chefIcon from "../assets/chef.png";
 import airBg from "../assets/Air.png";
@@ -1485,16 +1480,6 @@ export default function Leaderboard() {
         // Check admin
         setIsAdminUser(user.role === 'admin' || user.role === 'head_of_sales' || user.role === 'tech');
 
-        // Check sales
-        if (user.role === 'commercial') {
-          const { data: trackingSheet } = await supabase
-            .from('tracking_sheets')
-            .select('*')
-            .eq('sales_email', user.email)
-            .eq('is_active', true)
-            .maybeSingle();
-          setIsSalesUser(!!trackingSheet);
-        }
       } else {
         // Pas de JWT - rediriger vers login (Leaderboard désormais protégé)
         setSession(null);
