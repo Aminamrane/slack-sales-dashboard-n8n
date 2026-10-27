@@ -489,7 +489,8 @@ function MeteoBadge({ score, context, showLabel = true }) {
       <span style={{ width: 26, height: 26, borderRadius: 8, background: s.bg, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <MeteoIcon score={score} size={16} color={s.color} />
       </span>
-      {showLabel && <span style={{ fontSize: 12, fontWeight: 700, color: s.color }}>{s.legacy ? <>{s.label}<small style={{display:'block',fontSize:10,fontWeight:400,color:MUTED,marginTop:2}}>Ancienne échelle · {score}/5</small></> : `${score} · ${s.label}`}</span>}
+      {/* Le libellé reste dans sa colonne (124 px) : il passe à la ligne au lieu de déborder sous l'état (dev 27/10/2026). */}
+      {showLabel && <span style={{ fontSize: 12, fontWeight: 700, color: s.color, minWidth: 0, whiteSpace: "normal", lineHeight: 1.2 }}>{s.legacy ? <>{s.label}<small style={{ display: "block", fontSize: 10, fontWeight: 400, color: MUTED, marginTop: 2, lineHeight: 1.2 }}>Ancienne échelle · {score}/5</small></> : `${score} · ${s.label}`}</span>}
     </span>
   );
 }
@@ -1346,7 +1347,9 @@ export default function OptilexBoard({ embed = false }) {
       </div>
 
 
-      <div style={{ background: CARD, borderRadius: 14, border: `1px solid ${BORDER}`, overflowX: "hidden", overflowY: "auto", maxHeight: "calc(100vh - 190px)" }}>
+      {/* Fenêtre étroite ou zoomée (dev 27/10/2026) : le tableau garde une largeur minimale et défile horizontalement,
+          au lieu d'écraser la colonne Client (noms coupés puis invisibles). */}
+      <div style={{ background: CARD, borderRadius: 14, border: `1px solid ${BORDER}`, overflowX: "auto", overflowY: "auto", maxHeight: "calc(100vh - 190px)" }}>
         {loading ? (
           // Skeleton shimmer : la structure de la table se devine pendant le chargement.
           <div style={{ padding: "6px 0" }}>
@@ -1362,7 +1365,7 @@ export default function OptilexBoard({ embed = false }) {
             ))}
           </div>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+          <table style={{ width: "100%", minWidth: 1420, borderCollapse: "collapse", tableLayout: "fixed" }}>
             <colgroup>
               <col />{/* client (reste) */}
               <col style={{ width: 124 }} />{/* météo */}
@@ -1440,7 +1443,7 @@ export default function OptilexBoard({ embed = false }) {
                         </div>
                       </div>
                     </td>
-                    <td style={td}>
+                    <td style={{ ...td, whiteSpace: "normal" }}>
                       <MeteoPicker score={r.meteo_score} context={r.meteo_context} disabled={!r.numero_client}
                         onSave={payload => recordMeteo(r.numero_client, payload)} />
                     </td>
