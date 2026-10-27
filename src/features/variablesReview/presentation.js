@@ -37,6 +37,35 @@ export function monthLabel(period) {
 }
 // Décimale affichée à la française : « 1.5 » → « 1,5 ». La saisie accepte virgule ou point.
 export const decimalLabel = (value) => String(value ?? "").replace(".", ",");
+
+// Tranche de salariés, clé de lecture de l'Excel : « 6-10 salariés ».
+export const rangeLabel = (range) => (range ? `${range} salariés` : "Tranche non renseignée");
+
+// Montant sans centimes quand il est rond : « 5 760 € », sinon « 2 798,40 € ».
+export const euros = (value) => money(value).replace(/,00(?=\u00a0€$)/, "");
+
+// Base d'une vente écrite comme dans l'Excel : « (5 760 € × 80 %) / 12 » (total = prix Owner / 0,7) ou
+// « 2 160 € / 12 » (prix Owner). null pour une base saisie à la main ou une formule libre.
+export function baseCaption(cells, baseExpression) {
+  const expr = String(baseExpression || "").replace(/\s/g, "").replace(/^\((.*)\)$/, "$1");
+  const total = /^C(\d+)\/0\.7\*0\.8\/12$/.exec(expr), owner = /^C(\d+)\/12$/.exec(expr);
+  const annual = (row) => {
+    try {
+      return Rational.from(String(cells?.[`C${row}`]?.input ?? ""));
+    } catch {
+      return null;
+    }
+  };
+  if (total) {
+    const price = annual(total[1]);
+    return price ? `(${euros(price.div(Rational.from("0.7")))} × 80 %) / 12` : null;
+  }
+  if (owner) {
+    const price = annual(owner[1]);
+    return price ? `${euros(price)} / 12` : null;
+  }
+  return null;
+}
 // Montant prêt à éditer : 800 → « 800 », 1500.5 → « 1500,50 ».
 export function amountInput(rational) {
   const fixed = rational.toFixed(2);
@@ -85,6 +114,10 @@ function shortDay(isoDay, referenceYear) {
   if (!m) return "";
   return referenceYear && referenceYear !== m[1] ? `${m[3]}/${m[2]}/${m[1]}` : `${m[3]}/${m[2]}`;
 }
+// « 21/09 » : signature (heure de Paris) ou paiement d'une vente, colonne du tableau.
+export const signedDayOf = (entry) => shortDay(signedParis(entry?.signedAt)?.key, null);
+export const paidDayOf = (entry) => shortDay(entry?.paidOn, (signedParis(entry?.signedAt)?.key || "").slice(0, 4) || null);
+
 // Mois de signature d'une vente (champ du back, sinon déduit de signedAt à l'heure de Paris).
 export const signedMonthOf = (entry) => entry?.signedMonth || signedParis(entry?.signedAt)?.key.slice(0, 7) || "";
 
@@ -119,7 +152,8 @@ const FINANCE_LABELS = {
   first_due_unpaid: "Première échéance non payée",
   no_schedule: "Aucune échéance en Finance",
 };
-const FINANCE_TONES = { paid: "paid", first_due_unpaid: "late" };
+// Non payée : pastille d'attention (marine), jamais de saumon ni de moutarde (charte des dashboards Owner).
+const FINANCE_TONES = { paid: "paid", first_due_unpaid: "attention" };
 export const UNMATCHED = "unmatched";
 export const NOT_DECLARED_HINT =
   "Contrat signé, vente pas encore déclarée dans le CRM : pas de fiche client, donc pas de suivi Finance.";
@@ -132,6 +166,67 @@ export function financeBadge(finance, unlinkedReason) {
   const label = (typeof finance?.statusLabel === "string" && finance.statusLabel.trim()) || FINANCE_LABELS[key];
   if (!key || !label) return { key: UNMATCHED, label: "À rapprocher", tone: "neutral" };
   return { key, label, tone: FINANCE_TONES[key] || "neutral" };
+}
+
+// État d'une vente hors rémunération : un mot pour la colonne « Payée » (short), le libellé complet en bulle.
+// Une 1re échéance qui tombe après le mois en cours (reportée par la facturation, ou fixée plus tard) n'est pas
+// « non payée » : « 1re échéance en janvier ». currentMonth : mois de lecture des données (AAAA-MM).
+const SHORT_STATUS = {
+  paid: "Payée", lost: "Client perdu", onboarding_pending: "Onboarding", first_due_unpaid: "Non payée",
+  no_schedule: "Sans échéance", not_declared: "Non déclarée", unmatched: "À rapprocher",
+};
+// Board (entry.finance.boardState, boardLost) : client fini au board = raison de la perte (« Rétractation ») ;
+// client en pause = « En pause ».
+export function saleState(entry, currentMonth) {
+  const badge = financeBadge(entry?.finance, entry?.unlinkedReason);
+  const board = entry?.finance?.boardState;
+  if (badge.key === "lost" && board && entry?.finance?.boardLost)
+    return { key: `lost:${board}`, label: `${board} au board`, short: board, tone: "neutral" };
+  if (board === "Pause" && badge.key !== "paid" && badge.key !== "lost")
+    return { key: "pause", label: "Client en pause au board", short: "En pause", tone: "neutral" };
+  const due = entry?.finance?.firstDuePeriod;
+  if (badge.key === "first_due_unpaid" && due && currentMonth && due > currentMonth) {
+    const month = monthName(due, currentMonth);
+    return { key: `due:${due}`, label: `1re échéance en ${month}`, short: `Échéance ${month}`, tone: "neutral" };
+  }
+  return { ...badge, short: SHORT_STATUS[badge.key] || badge.label };
+}
+
+// « d’octobre », « de septembre ».
+export const ofMonth = (month) => (/^[aeiouh]/i.test(month) ? `d’${month}` : `de ${month}`);
+const sales = (n) => `${n} vente${n > 1 ? "s" : ""}`;
+
+// Statut d'une ligne (ventes, part d'équipe), en pastille : où va l'argent, sans lire le reste.
+// tone : paid (dans la paie du mois), later (client payé après le mois : paie suivante), waiting (1re échéance
+// passée et pas payée), upcoming (onboarding ou 1re échéance à venir), lost (client perdu), unknown (non déclarée…).
+export function rowStatus(row) {
+  const timeline = row.timeline || undefined;
+  if (row.status === "counted") return { tone: "paid", label: row.paidDay ? `Payée le ${row.paidDay}` : "Payée", title: timeline };
+  if (row.status === "deferred") return { tone: "later", label: row.paidDay ? `Payée le ${row.paidDay}` : "Payée plus tard", title: timeline };
+  const state = row.saleState || {};
+  const title = [state.label, state.hint, timeline].filter(Boolean).join(" · ") || undefined;
+  if (row.status === "lost") return { tone: "lost", label: String(state.key).startsWith("lost:") ? state.short : "Client perdu", title };
+  if (state.key === "pause") return { tone: "unknown", label: "En pause", title };
+  if (String(state.key).startsWith("due:")) return { tone: "upcoming", label: String(state.label).replace("1re échéance", "Échéance"), title };
+  if (state.key === "onboarding_pending") return { tone: "upcoming", label: "Onboarding à venir", title };
+  if (state.key === "first_due_unpaid") return { tone: "waiting", label: "Non payée", title };
+  return { tone: "unknown", label: state.short || "À rapprocher", title };
+}
+
+// Groupes des tableaux : où va l'argent. Titre, sous-titre (avec le nombre de ventes) et ton de l'en-tête.
+// « counted-before » est un intertitre du groupe « Dans la paie » (même paie, signées un mois précédent).
+export function groupText(key, period, count, laterMonths = []) {
+  const month = monthName(period, period);
+  if (key === "counted") return { tone: "paid", title: `Dans la paie ${ofMonth(month)}`, subtitle: sales(count) };
+  if (key === "counted-before") return { tone: "paid", title: `Signées avant ${month}, payées en ${month}`, subtitle: sales(count) };
+  if (key === "deferred") {
+    const later = laterMonths.length === 1 ? monthName(laterMonths[0], period) : null;
+    return later
+      ? { tone: "later", title: `Dans la paie ${ofMonth(later)}`, subtitle: `Client payé en ${later} · ${sales(count)}` }
+      : { tone: "later", title: "Dans une paie suivante", subtitle: `Client payé plus tard · ${sales(count)}` };
+  }
+  if (key === "pending") return { tone: "waiting", title: "Pas encore payées", subtitle: `Hors paie, en attente du client · ${sales(count)}` };
+  return { tone: "lost", title: "Clients perdus", subtitle: `Hors paie · ${sales(count)}` };
 }
 
 // Historique lisible : jamais de référence de cellule ni de formule brute.

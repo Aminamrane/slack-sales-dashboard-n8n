@@ -1,7 +1,7 @@
 // Vue d'équipe et ventes d'une personne : logique pure, sans React (testée par team.test.js).
 import { ZERO } from "./calculation.js";
 import { statementModel } from "./model.js";
-import { monthName, signedMonthOf, signedParis } from "./presentation.js";
+import { groupText, saleState, signedParis } from "./presentation.js";
 
 export const statementSettings = (statement, draft) => ({
   ...statement.defaults,
@@ -28,29 +28,10 @@ export function statusFor(statement) {
     return entry?.finance?.status === "lost" ? "lost" : "pending";
   };
 }
-export const SALE_STATUSES = ["counted", "deferred", "pending", "lost"];
-
-// Commissions des ventes en attente (non comptées, hors client perdu) :
-// ce que la personne touchera quand les clients paieront leur première échéance.
-export function pendingOf(statement, entries, calculator) {
-  const status = statusFor(statement);
-  let amount = ZERO, count = 0;
-  for (const ref of statement.entryRefs || []) {
-    const entry = entries.get(ref);
-    if (!entry || status(entry) !== "pending") continue;
-    count++;
-    try {
-      amount = amount.add(calculator.value(ref));
-    } catch {
-      /* Montant illisible : la vente reste comptée dans n, pas dans la somme. */
-    }
-  }
-  return { amount, count };
-}
 
 // Part d'équipe d'un head pour le mois (relevé avec teamRefs) : les parts du total (model.teamRefs,
 // ventes de l'équipe dont la 1re échéance est payée ce mois) et celles des ventes de l'équipe du relevé
-// encore en attente, hors total (même statut que pendingOf, perdues et reportées exclues).
+// encore en attente, hors total (statut « pending » : perdues et reportées exclues).
 export function teamShareOf(statement, teamEntries, model) {
   const valueOf = (ref) => {
     try {
@@ -61,27 +42,29 @@ export function teamShareOf(statement, teamEntries, model) {
   };
   const counted = (model.teamRefs || []).map((ref) => ({ ref, entry: teamEntries.get(ref), value: valueOf(ref) }));
   const status = statusFor({ period: statement.period, countedRefs: statement.countedTeamRefs || [] });
-  let amount = ZERO, count = 0;
+  let amount = ZERO;
+  const rows = [];
   for (const ref of statement.teamRefs || []) {
     const entry = teamEntries.get(ref);
     if (!entry || status({ ...entry, amountCell: ref }) !== "pending") continue;
-    count++;
     const value = valueOf(ref);
+    rows.push({ ref, entry, value });
     if (value) amount = amount.add(value);
   }
-  return { counted, amount: model.teamShare, pending: { amount, count } };
+  return { counted, amount: model.teamShare, pending: { amount, count: rows.length, rows } };
 }
 
-// n/N de la liste : ventes comptées dans le mois / ventes du relevé (mêmes statuts que les puces).
-function summarize(source, statement, draft, entries) {
+// n/N de la liste : ventes comptées dans le mois / ventes du relevé (mêmes statuts que les puces) ;
+// manque à gagner du mois (missedOf), sommé dans l'en-tête de l'équipe.
+function summarize(source, statement, draft, entries, teamEntries) {
   const refs = statement.entryRefs || [];
   const status = statusFor(statement);
   const counted = refs.filter((ref) => status(entries.get(ref) || { amountCell: ref }) === "counted").length;
   try {
     const model = statementModel(source, statement, draft.changes, statementSettings(statement, draft));
-    return { total: model.total, pending: pendingOf(statement, entries, model.calculator), counted, signed: refs.length, error: null };
+    return { total: model.total, missed: missedOf(statement, entries, model, teamEntries).total, counted, signed: refs.length, error: null };
   } catch (e) {
-    return { total: null, pending: { amount: ZERO, count: 0 }, counted, signed: refs.length, error: e.message };
+    return { total: null, missed: ZERO, counted, signed: refs.length, error: e.message };
   }
 }
 
@@ -96,7 +79,7 @@ const byTeamOrder = (a, b) =>
 
 // Une ligne par personne ayant un relevé ce mois-là : heads d'abord, puis total décroissant.
 export function teamRows(source, draft, period) {
-  const entries = entryIndex(source);
+  const entries = entryIndex(source), teamEntries = teamEntryIndex(source);
   return source.statements
     .filter((s) => s.period === period)
     .map((statement) => ({
@@ -104,7 +87,7 @@ export function teamRows(source, draft, period) {
       person: statement.person,
       name: source.profiles?.[statement.person]?.name || statement.person,
       head: isHead(source, statement.person),
-      ...summarize(source, statement, draft, entries),
+      ...summarize(source, statement, draft, entries, teamEntries),
     }))
     .sort(byTeamOrder);
 }
@@ -113,22 +96,68 @@ export function teamTotals(rows) {
   return rows.reduce(
     (acc, r) => ({
       total: r.total ? acc.total.add(r.total) : acc.total,
-      pending: acc.pending.add(r.pending.amount),
+      missed: acc.missed.add(r.missed),
       blocked: acc.blocked + (r.error ? 1 : 0),
     }),
-    { total: ZERO, pending: ZERO, blocked: 0 },
+    { total: ZERO, missed: ZERO, blocked: 0 },
   );
 }
 
-// Comptées, reportées, en attente, puis perdues ; dans chaque groupe, par date de signature.
+// Groupes du tableau, dans l'ordre : comptées ce mois et signées dans le mois, comptées ce mois et signées
+// avant (row.signedBefore), reportées, pas encore payées, perdues.
+export const SALE_GROUPS = ["counted", "counted-before", "deferred", "pending", "lost"];
+export const saleGroup = (row) => (row.status === "counted" && row.signedBefore ? "counted-before" : row.status);
+
+// Par groupe, puis par date de signature.
 export function sortSales(rows) {
   const key = (r) => signedParis(r.signedAt)?.key || "9999";
   return [...rows].sort(
     (a, b) =>
-      SALE_STATUSES.indexOf(a.status) - SALE_STATUSES.indexOf(b.status) ||
+      SALE_GROUPS.indexOf(saleGroup(a)) - SALE_GROUPS.indexOf(saleGroup(b)) ||
       key(a).localeCompare(key(b)) ||
       String(a.client || "").localeCompare(String(b.client || ""), "fr"),
   );
+}
+
+// Groupe principal d'une ligne : les ventes signées avant et payées ce mois sont « Dans la paie », sous un intertitre.
+const topGroup = (key) => (key === "counted-before" ? "counted" : key);
+
+// Sections d'une liste triée (ventes, part d'équipe) : une par destination de l'argent, avec son en-tête (titre,
+// nombre, total) et ses éléments, lignes et intertitre « signées avant » à sa place. stats : groupTotals de
+// toutes les lignes (pas seulement la page affichée).
+export function groupSections(rows, stats, period, laterMonths = []) {
+  const sum = (keys) => keys.reduce((acc, k) => ({
+    count: acc.count + (stats[k]?.count || 0), amount: acc.amount.add(stats[k]?.amount || ZERO),
+  }), { count: 0, amount: ZERO });
+  const sections = [];
+  let previous = null;
+  for (const row of rows) {
+    const key = saleGroup(row);
+    if (previous === null || topGroup(previous) !== topGroup(key)) {
+      const totals = topGroup(key) === "counted" ? sum(["counted", "counted-before"]) : sum([key]);
+      sections.push({ key: topGroup(key), text: groupText(topGroup(key), period, totals.count, laterMonths), total: totals.amount, items: [] });
+    }
+    const items = sections.at(-1).items;
+    if (key === "counted-before" && previous !== "counted-before") {
+      const totals = sum(["counted-before"]);
+      items.push({ type: "sub", key, text: groupText(key, period, totals.count), total: totals.amount });
+    }
+    items.push({ type: "row", row });
+    previous = key;
+  }
+  return sections;
+}
+
+// Nombre de ventes et sous-total de chaque groupe (toutes les pages), pour l'en-tête du groupe.
+// row.amount : montant lisible de la ligne (null s'il ne l'est pas, compté dans le nombre seulement).
+export function groupTotals(rows) {
+  const out = {};
+  for (const row of rows) {
+    const group = (out[saleGroup(row)] ||= { count: 0, amount: ZERO });
+    group.count++;
+    if (row.amount) group.amount = group.amount.add(row.amount);
+  }
+  return out;
 }
 
 const matches = (row, { status = "ALL", channel = "ALL", query = "" }, ignore) =>
@@ -167,40 +196,40 @@ export function pendingBreakdown(rows) {
   return [...groups.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "fr"));
 }
 
-// Flux de ventes de la carte : ce que la personne aurait touché sur ses ventes signées du mois
-// (et pourquoi une partie n'est pas dans la paie de ce mois), puis ce qu'elle touche ce mois.
-// Montants au barème du mois (model.calculator), comme le tableau et pendingOf.
-// - signed : ventes de entryRefs signées ce mois, une catégorie chacune, testée dans l'ordre
-//   paid → lost → laterDue → onboarding → laterPayment → noFinance ;
-// - paid : model.amountRefs, exactement ce qui fait model.commission
-//   (signedHere, signedBefore, adjustment pour une référence sans vente).
-// Une valeur illisible compte dans n, pas dans la somme, et marque sa partie (unreadable).
-const SIGNED_PARTS = ["paid", "lost", "laterDue", "onboarding", "laterPayment", "noFinance"];
-const PAID_PARTS = ["signedHere", "signedBefore", "adjustment"];
+// Ventes du relevé hors rémunération du mois, par statut (mêmes statuts que le tableau, statusFor) :
+// « pending » client pas encore payé (détail par statut Finance) et « lost » client perdu font le manque à gagner
+// (total) ; « deferred » client payé après le mois n'en fait pas partie : la commission est versée avec la paie du
+// mois du paiement (later). Rémunération et manque à gagner ne s'additionnent pas : la rémunération contient des
+// ventes signées les mois précédents. Pour un head, même découpage pour les parts de son équipe (teamRefs).
+// Montants au barème du mois (model.calculator), comme le tableau ; une valeur illisible compte dans n, pas dans la somme.
+export const MISSED_STATUSES = ["deferred", "pending", "lost"];
 
-function flowGroup(keys, items, labelOf) {
-  const parts = keys.map((key) => {
-    const mine = items.filter((item) => item.key === key);
-    const readable = mine.filter((item) => item.value);
-    return {
-      key,
-      label: labelOf(key, mine),
-      amount: readable.reduce((sum, item) => sum.add(item.value), ZERO),
-      count: mine.length,
-      refs: mine.map((item) => item.ref),
-      unreadable: readable.length < mine.length,
-    };
-  });
-  return {
-    amount: parts.reduce((sum, part) => sum.add(part.amount), ZERO),
-    count: parts.reduce((n, part) => n + part.count, 0),
-    parts,
-  };
+function missedGroups(refs, status, entryOf, valueOf, currentMonth) {
+  const groups = Object.fromEntries(MISSED_STATUSES.map((key) => [key, { amount: ZERO, count: 0, refs: [], months: [], reasons: [] }]));
+  for (const ref of refs) {
+    const entry = entryOf(ref);
+    if (!entry) continue;
+    const group = groups[status({ ...entry, amountCell: ref })];
+    if (!group) continue; // comptée : dans la rémunération du mois
+    const value = valueOf(ref);
+    group.count++;
+    group.refs.push(ref);
+    if (value) group.amount = group.amount.add(value);
+    if (entry.countedMonth && !group.months.includes(entry.countedMonth)) group.months.push(entry.countedMonth);
+    const state = saleState(entry, currentMonth);
+    const reason = group.reasons.find((r) => r.key === state.key);
+    if (reason) reason.count++;
+    else group.reasons.push({ key: state.key, label: state.label, count: 1 });
+  }
+  for (const group of Object.values(groups)) {
+    group.months.sort();
+    group.reasons.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "fr"));
+  }
+  return groups;
 }
 
-export function salesFlow(statement, entries, model) {
-  const period = statement.period;
-  const status = statusFor(statement);
+// currentMonth (AAAA-MM, facultatif) : distingue une 1re échéance à venir d'une échéance non payée.
+export function missedOf(statement, entries, model, teamEntries, currentMonth) {
   const valueOf = (ref) => {
     try {
       return model.calculator.value(ref);
@@ -208,37 +237,11 @@ export function salesFlow(statement, entries, model) {
       return null;
     }
   };
-  const signedItems = [];
-  for (const ref of statement.entryRefs || []) {
-    const entry = entries.get(ref);
-    if (!entry || signedMonthOf(entry) !== period) continue;
-    const st = status(entry), finance = entry.finance, due = finance?.firstDuePeriod;
-    const key = st === "counted" ? "paid"
-      : finance?.status === "lost" ? "lost"
-        : due && due > period ? "laterDue"
-          : finance?.status === "onboarding_pending" ? "onboarding"
-            : due || st === "deferred" ? "laterPayment"
-              : "noFinance";
-    signedItems.push({ key, ref, value: valueOf(ref), due });
-  }
-  const paidItems = (model.amountRefs || []).map((ref) => {
-    const entry = entries.get(ref);
-    const key = !entry ? "adjustment" : signedMonthOf(entry) === period ? "signedHere" : "signedBefore";
-    return { key, ref, value: valueOf(ref) };
-  });
-  const month = monthName(period, period);
-  const signed = flowGroup(SIGNED_PARTS, signedItems, (key, mine) => {
-    if (key === "paid") return `Payées en ${month}`;
-    if (key === "lost") return "Perdues";
-    if (key === "laterDue") {
-      const dues = new Set(mine.map((item) => item.due));
-      return dues.size === 1 ? `1re échéance en ${monthName([...dues][0], period)}` : `1re échéance après ${month}`;
-    }
-    if (key === "onboarding") return "Onboarding à venir";
-    if (key === "laterPayment") return "Paiement plus tard";
-    return "Sans suivi Finance";
-  });
-  const paid = flowGroup(PAID_PARTS, paidItems, (key) =>
-    key === "signedHere" ? `Signées en ${month}` : key === "signedBefore" ? "Signées avant" : "Ajustements");
-  return { signed, paid };
+  const own = missedGroups(statement.entryRefs || [], statusFor(statement), (ref) => entries.get(ref), valueOf, currentMonth);
+  const team = Array.isArray(statement.teamRefs) && teamEntries
+    ? missedGroups(statement.teamRefs, statusFor({ period: statement.period, countedRefs: statement.countedTeamRefs || [] }),
+      (ref) => teamEntries.get(ref), valueOf, currentMonth)
+    : null;
+  const sum = (keys) => [own, team].filter(Boolean).reduce((s, groups) => keys.reduce((t, key) => t.add(groups[key].amount), s), ZERO);
+  return { own, team, total: sum(["pending", "lost"]), later: sum(["deferred"]) };
 }

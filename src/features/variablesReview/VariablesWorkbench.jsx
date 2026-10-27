@@ -1,12 +1,16 @@
 import { useMemo, useRef, useState } from "react";
 import { AnimatePresence, MotionConfig, motion as Motion } from "framer-motion";
 import { CheckCheck, History, Undo2 } from "lucide-react";
-import { createCalculator } from "./calculation.js";
+import { createCalculator, money, ZERO } from "./calculation.js";
 import { emptyDraft, parseDraft, statementModel } from "./model.js";
 import {
   auditDetail,
   auditValue,
+  baseCaption,
   crossMonthLabel,
+  paidDayOf,
+  saleState,
+  signedDayOf,
   dayMonthLabel,
   decimalLabel,
   financeBadge,
@@ -14,15 +18,18 @@ import {
   monthLabel,
   safeMoney,
   saleTimeline,
+  signedMonthOf,
   signedParis,
 } from "./presentation.js";
 import {
   entryIndex,
   filterSales,
+  groupTotals,
   pendingBreakdown,
   periodsOf,
   saleCounts,
-  salesFlow,
+  MISSED_STATUSES,
+  missedOf,
   sortSales,
   statementSettings,
   statusFor,
@@ -40,6 +47,7 @@ import { MonthNav } from "./MonthNav.jsx";
 import { TeamList } from "./TeamList.jsx";
 import { PersonCard } from "./PersonCard.jsx";
 import { SalesTable } from "./SalesTable.jsx";
+import { TeamShareTable } from "./TeamShareTable.jsx";
 import { entryOffset, EXIT, SPRING_UI, TABLE_DELAY } from "./motion.js";
 import "./variables.css";
 
@@ -50,6 +58,16 @@ const SAVE_FAILED_MESSAGE =
 const PAGE_SIZE = 25;
 const NO_FILTERS = { status: "ALL", channel: "ALL", query: "" };
 const COEFFICIENT = /^\d+(?:[.,]\d+)?$/;
+// Montant d'une cellule, null s'il ne se calcule pas (compté dans les nombres, pas dans les sous-totaux).
+const valueOf = (calc, ref) => {
+  try {
+    return calc.value(ref);
+  } catch {
+    return null;
+  }
+};
+// Base « total × 80 % » de l'Excel dans une formule de vente ou de part d'équipe.
+const TOTAL_BASE = /\/0\.7\*0\.8\/12\)?$/;
 
 // source : données CRM lues en direct. initialDraft : brouillon partagé du serveur.
 // saveDraft(body) → { draft } ; rien n'est appliqué tant que le serveur n'a pas répondu.
@@ -72,6 +90,9 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
     [toast, setToast] = useState(null);
   const saving = useRef(false);
   const salesSection = useRef(null);
+  const teamSection = useRef(null);
+  // Section de la part d'équipe à ouvrir depuis la carte (« Pas encore payées » de l'équipe, etc.).
+  const [teamFocus, setTeamFocus] = useState(null);
 
   // Mois de toute la page, puis la liste de l'équipe de ce mois (heads, puis total décroissant).
   const periods = useMemo(() => periodsOf(source), [source]);
@@ -109,14 +130,16 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
   }, [source, statement, draft.changes, settings]);
   const model = result.model;
   const entries = useMemo(() => entryIndex(source), [source]);
-  // Ventes signées ce mois (et pourquoi une partie n'est pas payée ce mois), puis ventes payées ce mois.
-  const flow = useMemo(() => (model ? salesFlow(statement, entries, model) : null), [statement, entries, model]);
   // Part d'équipe : seulement pour le relevé d'un head qui mène une équipe (teamRefs fourni par le serveur).
   const teamEntries = useMemo(() => teamEntryIndex(source), [source]);
   const teamShare = useMemo(
     () => (model && Array.isArray(statement.teamRefs) ? teamShareOf(statement, teamEntries, model) : null),
     [statement, teamEntries, model],
   );
+  // Manque à gagner du mois : ventes du relevé hors rémunération du mois, par raison (et parts d'équipe d'un head).
+  const currentMonth = String(source.snapshotDate || "").slice(0, 7) || null;
+  const missed = useMemo(() => (model ? missedOf(statement, entries, model, teamEntries, currentMonth) : null),
+    [statement, entries, model, teamEntries, currentMonth]);
 
   const linkedRows = useMemo(() => {
     let refs = [];
@@ -146,6 +169,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
       const deal = resolveDeal(source, entry, settings.deals?.[ref], calculator);
       const applied = !!model?.appliedAcquisition[ref];
       const calc = applied ? model.calculator : calculator;
+      const parts = calculationParts(calc, ref);
       return {
         ref,
         entry,
@@ -164,15 +188,74 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
         overridden: deal.overridden,
         originChannel: deal.originChannel,
         exception: deal.exception,
-        parts: calculationParts(calc, ref),
+        parts,
+        baseCaption: baseCaption(source.cells, parts.baseExpression),
+        baseTotal: TOTAL_BASE.test(parts.baseExpression || ""),
+        signedDay: signedDayOf(entry),
+        paidDay: status === "counted" || status === "deferred" ? paidDayOf(entry) : "",
+        saleState: saleState(entry, currentMonth),
+        signedBefore: status === "counted" && !!signedMonthOf(entry) && signedMonthOf(entry) < statement.period,
+        countedMonth: entry.countedMonth,
+        boardState: entry.finance?.boardState || null,
+        boardLost: !!entry.finance?.boardLost,
+        amount: valueOf(calc, ref),
         value: calculator.raw(ref) === "" && !applied ? "Non calculée" : safeMoney(calc, ref),
         edited: Object.hasOwn(draft.changes, ref) || !!settings.deals?.[ref],
         search: `${entry.client} ${entry.origin || ""}`,
       };
     });
-  }, [linkedRows, source, settings, calculator, model, draft.changes, statement]);
+  }, [linkedRows, source, settings, calculator, model, draft.changes, statement, currentMonth]);
+
+  // Tableau « Part d'équipe » d'un head : ventes de son équipe comptées ce mois, puis hors rémunération du mois
+  // par raison (versées plus tard, clients pas encore payés, perdus), comme le manque à gagner de la carte.
+  const teamTable = useMemo(() => {
+    if (!teamShare || !model) return null;
+    const toRow = (status, ref) => {
+      const e = teamEntries.get(ref), parts = calculationParts(model.calculator, ref), value = valueOf(model.calculator, ref);
+      return {
+        ref, status,
+        client: e?.client || "Part d’équipe ajustée",
+        seller: e?.person,
+        sellerName: source.profiles?.[e?.person]?.name || e?.person,
+        channel: e?.originChannel || "UNKNOWN",
+        range: e?.employeeRange,
+        plan: e?.plan,
+        origin: e?.origin,
+        timeline: e ? saleTimeline(e) : "",
+        parts,
+        baseCaption: baseCaption(source.cells, parts.baseExpression),
+        baseTotal: TOTAL_BASE.test(parts.baseExpression || ""),
+        signedDay: e ? signedDayOf(e) : "",
+        paidDay: e && (status === "counted" || status === "deferred") ? paidDayOf(e) : "",
+        saleState: saleState(e, currentMonth),
+        signedBefore: status === "counted" && !!e && signedMonthOf(e) < statement.period,
+        countedMonth: e?.countedMonth,
+        signedAt: e?.signedAt,
+        boardState: e?.finance?.boardState || null,
+        boardLost: !!e?.finance?.boardLost,
+        amount: value,
+        exception: !!settings.deals?.[ref]?.exception,
+        edited: Object.hasOwn(draft.changes, ref) || !!settings.deals?.[ref],
+        value: value ? money(value) : "À vérifier",
+      };
+    };
+    const missedRows = (status) => (missed?.team?.[status].refs || []).map((ref) => toRow(status, ref));
+    return {
+      counted: teamShare.counted.map(({ ref }) => toRow("counted", ref)),
+      deferred: missedRows("deferred"),
+      pending: missedRows("pending"),
+      lost: missedRows("lost"),
+      months: missed?.team?.deferred.months || [],
+      missed: missed?.team ? missed.team.pending.amount.add(missed.team.lost.amount) : ZERO,
+    };
+  }, [teamShare, missed, teamEntries, model, source, settings, draft.changes, currentMonth, statement.period]);
 
   const visible = useMemo(() => sortSales(filterSales(saleRows, filters)), [saleRows, filters]);
+  const groups = useMemo(() => groupTotals(visible), [visible]);
+  const signedBefore = useMemo(() => ({
+    own: saleRows.filter((r) => r.status === "counted" && r.signedBefore).length,
+    team: teamTable ? teamTable.counted.filter((r) => r.signedBefore).length : 0,
+  }), [saleRows, teamTable]);
   const counts = useMemo(() => saleCounts(saleRows, filters), [saleRows, filters]);
   const breakdown = useMemo(() => pendingBreakdown(filterSales(saleRows, { ...filters, status: "ALL" })), [saleRows, filters]);
   const pages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
@@ -238,6 +321,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
     setFilters(NO_FILTERS);
     setPage(1);
     setInline(null);
+    setTeamFocus(null);
   }
   function changePeriod(next) {
     if (!periods.includes(next) || next === period) return;
@@ -248,6 +332,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
     setFilters(NO_FILTERS);
     setPage(1);
     setInline(null);
+    setTeamFocus(null);
   }
   function changeFilters(next) {
     const onlySearch = next.status === filters.status && next.channel === filters.channel;
@@ -256,8 +341,13 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
     setPage(1);
     setInline(null);
   }
-  function showPending() {
-    changeFilters({ ...NO_FILTERS, status: "pending" });
+  function showTeam() {
+    teamSection.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  // Ligne du manque à gagner : les ventes concernées (filtre du tableau), ou le tableau de la part d'équipe.
+  function showMissed(scope, status) {
+    if (scope === "team") return setTeamFocus({ key: status });
+    changeFilters({ ...NO_FILTERS, status });
     salesSection.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   function openEdit(ref, label) {
@@ -325,22 +415,25 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
                 monthText={monthText}
                 readingDay={readingDay}
                 entry={entry}
-                flow={flow}
-                entries={entries}
                 teamShare={teamShare}
+                missed={missed}
+                signedBefore={signedBefore}
                 onCoefficients={() => setPanel("coefficients")}
                 onTiers={() => setPanel("rules")}
                 onHistory={() => setPanel("history")}
                 onFixed={() => setPanel("fixed")}
                 onBreakdown={() => setPanel("breakdown")}
+                onTeam={showTeam}
+                onMissed={showMissed}
                 onBonusAdd={() => setPanel("bonus")}
                 onBonusRemove={(b) => updateSettings({ ...settings, bonuses: settings.bonuses.filter((x) => x.id !== b.id) }, "Retrait de prime", b.label)}
-                onPending={showPending}
                 onCheckRules={() => setPanel("rules")}
               />
               <div ref={salesSection} className="vr-sales-anchor">
                 <SalesTable
                   readingDay={readingDay}
+                  period={period}
+                  groups={groups}
                   total={saleRows.length}
                   rows={shown}
                   counts={counts}
@@ -359,6 +452,24 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
                   onEdit={openEdit}
                 />
               </div>
+              {teamTable && (
+                <div ref={teamSection} className="vr-sales-anchor">
+                  <TeamShareTable
+                    source={source}
+                    groups={teamTable}
+                    period={period}
+                    total={teamShare.amount}
+                    missedTotal={teamTable.missed}
+                    settings={settings}
+                    bodyKey={statement.id}
+                    rowEntry={rowEntry}
+                    rowDelay={navigating ? TABLE_DELAY : 0}
+                    onEdit={openEdit}
+                    focus={teamFocus}
+                    onRules={() => setPanel("coefficients")}
+                  />
+                </div>
+              )}
             </section>
           </div>
         </main>
@@ -379,7 +490,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
               model={model}
               rows={linkedRows}
               settings={settings}
-              pending={row.pending}
+              missed={missed}
               teamShare={teamShare}
               subtitle={who}
               onClose={() => setPanel(null)}

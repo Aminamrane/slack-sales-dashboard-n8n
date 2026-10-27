@@ -1,5 +1,5 @@
 import { createCalculator, Rational, ZERO } from "./calculation.js";
-import { resolveDeal } from "./dealCalculation.js";
+import { resolveDeal, splitCoefficient } from "./dealCalculation.js";
 export function validateTiers(tiers) {
   const seen = new Set();
   for (const tier of tiers) {
@@ -73,9 +73,10 @@ export function statementModel(data, statement, changes = {}, settings = {}) {
     scopedChanges[ref] = `=(${deal.baseExpression || deal.base})*(${deal.plan === "A" ? rule.coefficientAnnual ?? rule.coefficient : rule.coefficient})`;
     appliedAcquisition[ref] = deal.channel;
   }
-  // Part d'équipe d'un head (cellules T, une par vente de son équipe) : abonnement mensuel de la vente
-  // × coefficient « team » de la source, sans mensuel/annuel. Source désactivée, coefficient absent ou
-  // part saisie à la main (exception) : la cellule garde sa formule.
+  // Part d'équipe d'un head (cellules T, une par vente de son équipe) : base de la vente (celle de la formule
+  // du serveur : prix Owner, ou total × 80 % à partir de 6 salariés) × coefficient « team » de la source, sans
+  // mensuel/annuel. Source désactivée, coefficient absent ou part saisie à la main (exception) : la cellule
+  // garde sa formule.
   const teamEntries = (statement.teamRefs || []).length
     ? new Map((data.entries || []).filter((e) => e.teamCell).map((e) => [e.teamCell, e]))
     : null;
@@ -85,7 +86,8 @@ export function statementModel(data, statement, changes = {}, settings = {}) {
     if (!entry || !rule?.enabled || rule.team == null || settings.deals?.[ref]?.exception) continue;
     if (Rational.from(rule.team).n < 0n)
       throw new Error("La base et le coefficient doivent être positifs ou nuls.");
-    scopedChanges[ref] = `=(C${ref.slice(1)}/12)*(${rule.team})`;
+    const base = splitCoefficient(data.cells?.[ref]?.input)?.baseExpression || `C${ref.slice(1)}/12`;
+    scopedChanges[ref] = `=(${base})*(${rule.team})`;
     appliedAcquisition[ref] = entry.originChannel;
   }
   const base = createCalculator(data.cells, scopedChanges);

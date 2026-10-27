@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowRight, Plus, Trash2, Undo2 } from "lucide-react";
 import { createCalculator, money, normalizeInput, Rational } from "./calculation.js";
 import { impactedStatements, validateTiers } from "./model.js";
 import { Modal, IconButton } from "./ui.jsx";
+import { ChannelIcon } from "./ChannelIcon.jsx";
 import { calculationParts } from "./dealCalculation.js";
 import { SPRING_UI } from "./motion.js";
 import { amountInput, CHANNELS, decimalLabel, safeMoney } from "./presentation.js";
@@ -242,7 +243,7 @@ export function RulesEditor({ initialSection = "fixed", settings, computedSales,
           <li>Un palier s’applique dès le nombre de ventes indiqué ; le fixe garanti ne baisse jamais.</li>
           <li>Une source désactivée garde le calcul d’origine ; une vente en calcul individuel garde sa formule.</li>
           <li>CCS : cold call setter.</li>
-          {hasTeam && <li>Équipe : part du head sur chaque vente de son équipe, abonnement mensuel × coefficient, sans mensuel ni annuel.</li>}
+          {hasTeam && <li>Équipe : part du head sur chaque vente de son équipe, base de la vente × coefficient, sans mensuel ni annuel.</li>}
         </ul>
       }
       onClose={onClose}
@@ -298,7 +299,7 @@ export function RulesEditor({ initialSection = "fixed", settings, computedSales,
               const rule = acquisition[key] || {};
               return (
                 <div className={`vr-rules-row ${rule.enabled ? "" : "off"}`} role="row" key={key}>
-                  <span role="cell" className="vr-rules-name"><span className={`vr-channel-dot ${key.toLowerCase()}`} />{name}</span>
+                  <span role="cell" className="vr-rules-name"><ChannelIcon channel={key} size={15} />{name}</span>
                   <span role="cell">
                     <label className="vr-switch">
                       <input type="checkbox" aria-label={`Activer ${name}`} checked={!!rule.enabled} onChange={(e) => changeRule(key, { enabled: e.target.checked })} />

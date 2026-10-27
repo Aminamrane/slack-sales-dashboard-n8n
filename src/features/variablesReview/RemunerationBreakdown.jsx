@@ -4,7 +4,7 @@ import { Modal } from "./ui.jsx";
 
 const plural = (n, word) => `${n} ${word}${n > 1 ? "s" : ""}`;
 
-export function RemunerationBreakdown({ model, rows, settings, subtitle, pending, teamShare, onClose, onFixed, onRules, onBonus, onCommission }) {
+export function RemunerationBreakdown({ model, rows, settings, subtitle, missed, teamShare, onClose, onFixed, onRules, onBonus, onCommission }) {
   return (
     <Modal title="Détail de la rémunération" subtitle={subtitle} onClose={onClose}
       info={<span>Seules les ventes comptées ce mois-ci (première échéance Owner payée dans le mois) entrent dans le total.</span>}>
@@ -63,18 +63,11 @@ export function RemunerationBreakdown({ model, rows, settings, subtitle, pending
           <div className="vr-remuneration-line"><strong>Autres ajustements</strong><b className="vr-num">{money(model.remainder)}</b></div>
         )}
         <div className="vr-remuneration-total"><span>Total du mois</span><strong className="vr-num">{money(model.total)}</strong></div>
-        {pending.count > 0 && (
-          <div className="vr-remuneration-pending">
+        {missed && missed.total.n !== 0n && (
+          <div className="vr-remuneration-pending" data-line="missed">
             <Clock3 size={14} />
-            <span>En attente d’encaissement, hors total · {plural(pending.count, "vente")}</span>
-            <b className="vr-num">{money(pending.amount)}</b>
-          </div>
-        )}
-        {teamShare?.pending.count > 0 && (
-          <div className="vr-remuneration-pending" data-line="team-pending">
-            <Clock3 size={14} />
-            <span>Équipe en attente d’encaissement, hors total · {plural(teamShare.pending.count, "vente")}</span>
-            <b className="vr-num">{money(teamShare.pending.amount)}</b>
+            <span>Manque à gagner du mois, hors rémunération</span>
+            <b className="vr-num">{money(missed.total)}</b>
           </div>
         )}
       </div>

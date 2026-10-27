@@ -75,3 +75,22 @@ export function AutoHeight({ className = "", children }) {
     </Motion.div>
   );
 }
+
+// Groupe repliable : la hauteur s'ouvre et se ferme en ressort (amortissement critique, aucun dépassement),
+// le contenu reste en place et à pleine opacité, simplement découvert ou recouvert par le bord ; à la
+// fermeture, les lignes restent affichées jusqu'à la fin du mouvement : jamais de trou.
+// instant : s'ouvre d'un coup (ouverture demandée d'ailleurs, suivie d'un défilement jusqu'à la section).
+export function Collapse({ open, instant = false, children }) {
+  const reduce = useReducedMotion();
+  if (reduce) return open ? <div>{children}</div> : null;
+  return (
+    <AnimatePresence initial={false}>
+      {open && (
+        <Motion.div key="content" className="vr-collapse" initial={instant ? false : { height: 0 }} animate={{ height: "auto", transition: HEIGHT }}
+          exit={{ height: 0, transition: HEIGHT }}>
+          {children}
+        </Motion.div>
+      )}
+    </AnimatePresence>
+  );
+}

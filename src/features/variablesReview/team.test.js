@@ -1,15 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createCalculator, ZERO } from "./calculation.js";
+import { createCalculator, Rational, ZERO } from "./calculation.js";
 import { statementModel } from "./model.js";
 import {
   filterSales,
+  groupSections,
+  groupTotals,
+  saleGroup,
   pendingBreakdown,
-  pendingOf,
   periodsOf,
   entryIndex,
   saleCounts,
-  salesFlow,
+  missedOf,
+  MISSED_STATUSES,
   sortSales,
   statusFor,
   teamEntryIndex,
@@ -60,14 +63,15 @@ test("team totals and order include the shared draft (adjustments, primes)", () 
   assert.deepEqual(summary(rows), ["Bob:1010.00", "Chloe:2000.00", "Alice:800.00"]);
   const totals = teamTotals(rows);
   assert.equal(totals.total.toFixed(2), "3810.00");
-  assert.equal(totals.pending.toFixed(2), "50.00");
+  assert.equal(totals.missed.toFixed(2), "120.00"); // Alice : E2 pas encore payée 50 + E4 cliente perdue 70
 });
 
-test("pending amount: commissions of sales not counted yet, lost clients excluded, never in the total", () => {
+test("missed amount: commissions of sales not counted (not paid yet, lost), never in the total", () => {
   const entries = new Map(source.entries.map((e) => [e.amountCell, e]));
-  const pending = pendingOf(source.statements[0], entries, createCalculator(source.cells));
-  assert.equal(pending.amount.toFixed(2), "50.00");
-  assert.equal(pending.count, 1);
+  const missed = missedOf(source.statements[0], entries, { calculator: createCalculator(source.cells) });
+  assert.deepEqual([missed.own.pending.count, missed.own.pending.amount.toFixed(2)], [1, "50.00"]);
+  assert.deepEqual([missed.own.lost.count, missed.own.lost.amount.toFixed(2)], [1, "70.00"]);
+  assert.equal(missed.total.toFixed(2), "120.00");
   const alice = teamRows(source, emptyDraft, "2026-09").find((r) => r.person === "Alice");
   assert.equal(alice.total.toFixed(2), "600.00");
 });
@@ -118,6 +122,37 @@ test("sales order: counted, deferred, pending, then lost, each group by Paris si
   assert.deepEqual(sortSales(rows).map((r) => r.client), ["Late UTC", "C02", "C20", "D1", "P1", "L1"]);
 });
 
+test("counted sales signed in an earlier month form their own group, after those signed this month; group totals", () => {
+  const rows = [
+    { ...sale("Avant", "counted", "2026-07-22 10:00:00+00:00"), signedBefore: true, amount: Rational.from("280") },
+    { ...sale("Ici", "counted", "2026-09-11 10:00:00+00:00"), amount: Rational.from("768") },
+    { ...sale("Reportée", "deferred", "2026-09-23 10:00:00+00:00"), amount: Rational.from("180") },
+    { ...sale("Illisible", "counted", "2026-09-12 10:00:00+00:00"), amount: null },
+  ];
+  assert.deepEqual(sortSales(rows).map((r) => [r.client, saleGroup(r)]),
+    [["Ici", "counted"], ["Illisible", "counted"], ["Avant", "counted-before"], ["Reportée", "deferred"]]);
+  const totals = groupTotals(rows);
+  assert.deepEqual(Object.fromEntries(Object.entries(totals).map(([k, g]) => [k, [g.count, g.amount.toFixed(2)]])),
+    { counted: [2, "768.00"], "counted-before": [1, "280.00"], deferred: [1, "180.00"] });
+});
+
+test("group sections: one « in the pay » section with an intertitle for sales signed earlier, then the others", () => {
+  const rows = sortSales([
+    { ...sale("Ici", "counted", "2026-09-11 10:00:00+00:00"), amount: Rational.from("768") },
+    { ...sale("Avant", "counted", "2026-07-22 10:00:00+00:00"), signedBefore: true, amount: Rational.from("280") },
+    { ...sale("Plus tard", "deferred", "2026-09-23 10:00:00+00:00"), amount: Rational.from("180"), countedMonth: "2026-10" },
+    { ...sale("Perdue", "lost", "2026-09-03 10:00:00+00:00"), amount: Rational.from("576") },
+  ]);
+  const sections = groupSections(rows, groupTotals(rows), "2026-09", ["2026-10"]);
+  assert.deepEqual(sections.map((s) => [s.key, s.text.title, s.total.toFixed(2)]), [
+    ["counted", "Dans la paie de septembre", "1048.00"], // 768 + 280 : toute la paie du mois
+    ["deferred", "Dans la paie d’octobre", "180.00"],
+    ["lost", "Clients perdus", "576.00"],
+  ]);
+  assert.deepEqual(sections[0].items.map((i) => (i.type === "row" ? i.row.client : `${i.text.title} (${i.total.toFixed(2)})`)),
+    ["Ici", "Signées avant septembre, payées en septembre (280.00)", "Avant"]);
+});
+
 test("filter chips: each count equals the rows shown when clicked; statuses add up to all", () => {
   const rows = [
     sale("A", "counted", "2026-09-01", "ADS"),
@@ -164,10 +199,9 @@ test("a sale paid a month after its signature: counted (and summed) only in the 
   assert.equal(sep.total.toFixed(2), "600.00"); // fixe 500 + E2
   assert.equal(oct.total.toFixed(2), "900.00"); // fixe 600 + E1, signée en septembre
   assert.deepEqual([sep.counted, sep.signed, oct.counted, oct.signed], [1, 3, 1, 2]);
-  // En attente : E3 seulement (E1 est reportée, pas en attente ; E4 est perdue).
-  assert.equal(sep.pending.count, 1);
-  assert.equal(sep.pending.amount.toFixed(2), "40.00");
-  assert.equal(oct.pending.count, 0);
+  // Manque à gagner : septembre, E3 pas encore payée 40 (E1, payée en octobre, n'en fait pas partie) ; octobre, E4 perdue 70.
+  assert.equal(sep.missed.toFixed(2), "40.00");
+  assert.equal(oct.missed.toFixed(2), "70.00");
   assert.equal(teamTotals([sep]).total.add(teamTotals([oct]).total).toFixed(2), "1500.00");
 });
 
@@ -184,7 +218,7 @@ test("chips per person and month: Comptées + Reportées + En attente + Perdues 
   }
 });
 
-// Flux de la carte (salesFlow), données fictives : relevé de septembre d'une personne.
+// Manque à gagner de la carte (missedOf), données fictives : relevé de septembre d'une personne.
 const flowSource = {
   profiles: { Alice: { name: "Alice A", role: "sales" } },
   cells: {
@@ -207,68 +241,33 @@ const flowSource = {
   statements: [{ id: "s9", person: "Alice", period: "2026-09", totalCell: "M1",
     entryRefs: ["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E10", "E11"], countedRefs: ["E1", "E6"], defaults: {} }],
 };
-const flowOf = (source, statement = source.statements[0]) => {
-  const model = statementModel(source, statement, {}, { ...statement.defaults });
-  return { flow: salesFlow(statement, entryIndex(source), model), model };
-};
-const part = (group, key) => group.parts.find((p) => p.key === key);
+const missedModel = (source, statement = source.statements[0]) => statementModel(source, statement, {}, { ...statement.defaults });
 
-test("sales flow: each sale signed this month in exactly one category, by priority", () => {
-  const { flow } = flowOf(flowSource);
-  assert.deepEqual(flow.signed.parts.map((p) => p.key), ["paid", "lost", "laterDue", "onboarding", "laterPayment", "noFinance"]);
-  assert.deepEqual(part(flow.signed, "paid").refs, ["E1"]); // comptée avant tout, même client perdu ensuite
-  assert.deepEqual(part(flow.signed, "lost").refs, ["E2"]); // perdue avant l'échéance future
-  assert.deepEqual(part(flow.signed, "laterDue").refs, ["E3", "E10"]); // échéance future, même onboarding à venir
-  assert.deepEqual(part(flow.signed, "onboarding").refs, ["E5", "E11"]); // sans échéance ; échéance ce mois
-  assert.deepEqual(part(flow.signed, "laterPayment").refs, ["E4"]); // échéance ce mois, payée le mois suivant
-  assert.deepEqual(part(flow.signed, "noFinance").refs, ["E7", "E8"]); // non déclarée ; aucune échéance
-  assert.ok(!flow.signed.parts.some((p) => p.refs.includes("E6"))); // signée en août : pas dans « signées »
-  assert.equal(flow.signed.count, 9);
+test("missed this month: every sale of the statement not counted, by reason; counted ones stay out", () => {
+  const model = missedModel(flowSource);
+  const missed = missedOf(flowSource.statements[0], entryIndex(flowSource), model);
+  assert.deepEqual(missed.own.deferred.refs, ["E4"]); // client payé en octobre : versée dans la paie d'octobre
+  assert.deepEqual(missed.own.deferred.months, ["2026-10"]);
+  assert.deepEqual(missed.own.pending.refs, ["E3", "E5", "E7", "E8", "E10", "E11"]); // pas encore payé (dont non déclarée)
+  assert.deepEqual(missed.own.lost.refs, ["E2"]);
+  assert.ok(!MISSED_STATUSES.some((k) => missed.own[k].refs.includes("E1") || missed.own[k].refs.includes("E6")));
+  assert.deepEqual(MISSED_STATUSES.map((k) => missed.own[k].amount.toFixed(2)), ["50.00", "295.00", "200.00"]); // E8 illisible : compté, pas sommé
+  assert.equal(missed.own.pending.count, 6);
+  assert.equal(missed.total.toFixed(2), "495.00"); // pas encore payées 295 + perdue 200
+  assert.equal(missed.later.toFixed(2), "50.00"); // versée en octobre : hors manque à gagner
+  assert.equal(missed.team, null);
+  assert.deepEqual(missed.own.pending.reasons.map((r) => [r.label, r.count]),
+    [["Onboarding à venir", 3], ["Aucune échéance en Finance", 1], ["Première échéance non payée", 1], ["Vente non déclarée", 1]]);
 });
 
-test("sales flow labels: one later due month, or several", () => {
-  const { flow } = flowOf(flowSource);
-  assert.equal(part(flow.signed, "paid").label, "Payées en septembre");
-  assert.equal(part(flow.signed, "laterDue").label, "1re échéance après septembre"); // octobre et novembre
-  assert.equal(part(flow.signed, "onboarding").label, "Onboarding à venir");
-  assert.equal(part(flow.signed, "laterPayment").label, "Paiement plus tard");
-  const single = { ...flowSource, entries: flowSource.entries.filter((e) => e.amountCell !== "E10") };
-  const statement = { ...flowSource.statements[0], entryRefs: flowSource.statements[0].entryRefs.filter((r) => r !== "E10") };
-  assert.equal(part(flowOf(single, statement).flow.signed, "laterDue").label, "1re échéance en octobre");
-  assert.deepEqual(flowOf(flowSource).flow.paid.parts.map((p) => p.label), ["Signées en septembre", "Signées avant", "Ajustements"]);
-});
-
-test("sales flow invariants: parts add up; paid = model.commission exactly; paid top = signed here bottom", () => {
-  const { flow, model } = flowOf(flowSource);
-  for (const group of [flow.signed, flow.paid])
-    assert.equal(group.parts.reduce((sum, p) => sum.add(p.amount), ZERO).sub(group.amount).n, 0n);
-  assert.equal(flow.paid.amount.sub(model.commission).n, 0n);
-  assert.equal(flow.paid.amount.toFixed(2), "185.00"); // E1 + E6 + E9 (ajustement sans vente)
-  assert.deepEqual(part(flow.paid, "signedHere").refs, ["E1"]);
-  assert.deepEqual(part(flow.paid, "signedBefore").refs, ["E6"]);
-  assert.deepEqual(part(flow.paid, "adjustment").refs, ["E9"]);
-  assert.equal(part(flow.signed, "paid").amount.sub(part(flow.paid, "signedHere").amount).n, 0n);
-});
-
-test("sales flow: an unreadable amount counts in n, not in the sum, and marks its part", () => {
-  const { flow } = flowOf(flowSource);
-  const noFinance = part(flow.signed, "noFinance");
-  assert.equal(noFinance.count, 2);
-  assert.equal(noFinance.amount.toFixed(2), "80.00"); // E7 seulement, E8 est illisible
-  assert.equal(noFinance.unreadable, true);
-  assert.equal(part(flow.signed, "laterDue").unreadable, false);
-});
-
-test("sales flow: former rule (no countedRefs) goes through statusFor; an empty month is all zero", () => {
+test("missed this month: former rule (no countedRefs) and an empty month", () => {
   const former = { ...flowSource.statements[0], countedRefs: undefined };
-  const { flow } = flowOf(flowSource, former);
-  assert.deepEqual(part(flow.signed, "paid").refs, ["E1", "E4"]); // entry.counted, ancienne règle
+  const missed = missedOf(former, entryIndex(flowSource), missedModel(flowSource, former));
+  assert.deepEqual(missed.own.deferred.refs, []); // ancienne règle : E4 est comptée (entry.counted)
   const empty = { ...flowSource, statements: [{ id: "e", person: "Alice", period: "2026-07", totalCell: "H1", entryRefs: [], defaults: {} }] };
-  const { flow: none, model } = flowOf(empty);
-  assert.deepEqual([none.signed.count, none.paid.count], [0, 0]);
-  assert.equal(none.signed.amount.toFixed(2), "0.00");
-  assert.equal(none.paid.amount.sub(model.commission).n, 0n);
-  assert.ok(none.signed.parts.every((p) => p.count === 0 && p.amount.n === 0n));
+  const none = missedOf(empty.statements[0], entryIndex(empty), missedModel(empty));
+  assert.equal(none.total.toFixed(2), "0.00");
+  assert.ok(MISSED_STATUSES.every((k) => none.own[k].count === 0));
 });
 
 // Part d'équipe : Bob (head) mène l'équipe d'Alice. Ventes d'Alice signées en septembre : E1/T1 (Ads,
@@ -341,6 +340,32 @@ test("team coefficients of the month apply to the team cells; disabled, missing 
   const manual = { ...rules({ team: "0.25" }), deals: { T1: { exception: true } } };
   assert.equal(teamModel(sep, manual, { T1: "60" }).teamShare.toFixed(2), "60.00");
   assert.throws(() => teamModel(sep, rules({ team: "-0.1" })), /positifs ou nuls/);
+});
+
+test("team share keeps the base of the sale: total × 80 % from 6 employees, Owner price below", () => {
+  // Vente CC 6-10 (4 032 € / an) : (5 760 × 80 %) / 12 = 384 € ; coefficient d'équipe du mois 0,4 → 153,60 €.
+  const data = {
+    cells: {
+      C9: { input: "4032" }, E9: { input: "=C9/0.7*0.8/12*1.5" }, T9: { input: "=C9/0.7*0.8/12*0.5" },
+      H8: { input: "1500" }, M8: { input: "=H8+T9" },
+    },
+    entries: [{ amountCell: "E9", teamCell: "T9", person: "Alice", client: "Neuf", originChannel: "CC", counted: true, signedMonth: "2026-09", countedMonth: "2026-09", finance: { status: "paid" } }],
+  };
+  const st = { id: "b", person: "Bob", period: "2026-09", totalCell: "M8", entryRefs: [], countedRefs: [], teamRefs: ["T9"], countedTeamRefs: ["T9"] };
+  assert.equal(statementModel(data, st, {}, { acquisition: TEAM_RULES }).teamShare.toFixed(2), "192.00");
+  const changed = statementModel(data, st, {}, { acquisition: { ...TEAM_RULES, CC: { ...TEAM_RULES.CC, team: "0.4" } } });
+  assert.equal(changed.teamShare.toFixed(2), "153.60");
+  assert.equal(changed.calculator.raw("T9"), "=(C9/0.7*0.8/12)*(0.4)");
+});
+
+test("missed team shares: paid next month, not paid yet, lost; the counted share stays out", () => {
+  const [sep] = withTeam.statements;
+  const missed = missedOf(sep, entryIndex(withTeam), teamModel(sep), teamEntryIndex(withTeam));
+  assert.deepEqual([missed.team.deferred.refs, missed.team.pending.refs, missed.team.lost.refs], [["T2"], ["T3"], ["T4"]]);
+  assert.deepEqual(MISSED_STATUSES.map((k) => missed.team[k].amount.toFixed(2)), ["125.00", "18.00", "100.80"]);
+  assert.equal(missed.total.toFixed(2), "118.80"); // pas encore payée 18 + perdue 100,80 (aucune vente perso du head)
+  assert.equal(missed.later.toFixed(2), "125.00"); // payée en octobre : versée avec la paie d'octobre
+  assert.deepEqual(missed.team.deferred.months, ["2026-10"]);
 });
 
 test("a statement without team refs has no team share", () => {

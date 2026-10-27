@@ -121,6 +121,23 @@ test("readable coefficient agrees exactly with the underlying formula", () => {
   const c = createCalculator({ C1: { input: "2112" }, E1: { input: "=(C1/12)*(1.7)" } });
   assert.equal(calculationParts(c, "E1").label, "176,00\u00a0€ × 1,7");
 });
+test("a channel corrected by hand takes the base of that channel (baseByChannel from the server)", () => {
+  // Webinaire 6-10 vendu 4 032 € / an : base Owner 336 € ; corrigé en cold call : (5 760 × 80 %) / 12 = 384 €.
+  const data = {
+    cells: { C1: { input: "4032" }, E1: { input: "=C1/12*1" }, G3: { input: "Fixe" }, H3: { input: "500" }, M3: { input: "=H3+E1" } },
+    entries: [{ amountCell: "E1", originChannel: "WEB", plan: "M",
+      baseByChannel: { ADS: "C1/0.7*0.8/12", CC: "C1/0.7*0.8/12", CCS: "C1/0.7*0.8/12", WEB: "C1/12" } }],
+  };
+  const st = { totalCell: "M3", entryRefs: ["E1"] };
+  const rules = { WEB: { enabled: true, coefficient: "1" }, CC: { enabled: true, coefficient: "1.5" } };
+  assert.equal(statementModel(data, st, {}, { acquisition: rules }).total.toFixed(2), "836.00");
+  const corrected = statementModel(data, st, {}, { acquisition: rules, deals: { E1: { channel: "CC" } } });
+  assert.equal(corrected.total.toFixed(2), "1076.00"); // 500 + 384 × 1,5
+  const deal = resolveDeal(data, data.entries[0], { channel: "CC" }, createCalculator(data.cells));
+  assert.deepEqual([deal.base, deal.baseExpression], ["384", "C1/0.7*0.8/12"]);
+  // Base saisie à la main : elle reste celle du dev, quel que soit le canal.
+  assert.equal(resolveDeal(data, data.entries[0], { channel: "CC", base: "300" }, createCalculator(data.cells)).base, "300");
+});
 test("counted and pending commissions display, only counted ones enter the total; override preserves origin", () => {
   const data = {
     cells: { C1: { input: "1200" }, C2: { input: "1200" }, E1: { input: "=C1/12*1" }, E2: { input: "=C2/12*1" }, G3: { input: "Fixe" }, H3: { input: "500" }, M3: { input: "=H3+E1" } },
