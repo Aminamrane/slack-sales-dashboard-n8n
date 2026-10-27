@@ -16,7 +16,7 @@ import MentionTextarea, { MentionedText } from "../components/MentionTextarea";
 import { mentionedIds, notifiedSummary } from "../utils/mentions.js";
 import { isOnboardingToReschedule, onboardingDateOf, onboardingSituation } from "../utils/boardIntegration.js";
 import { isOnboardingUpcoming, isOnboardingOverdue, isIntegrationUpcoming, isIntegrationOverdue } from "../utils/boardPredicates.js";
-import { createLatestRequestTracker, displayEtat, matchesSignedClient, withConfirmedEtat } from "../utils/boardClientState.js";
+import { createLatestRequestTracker, displayEtat, EXITED_ETATS, matchesSignedClient, withConfirmedEtat } from "../utils/boardClientState.js";
 import { Fragment, useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
@@ -153,7 +153,7 @@ const isInactif = (r) => r.is_inactive_60d === true && (r.mission_count_total ||
 // les clients ENCORE actifs qui approchent l'anniversaire (fenêtre 90 j), pour anticiper
 // qui va renouveler / partir. La notif email J-90 (backend) est indépendante.
 const RENEWAL_WINDOW_DAYS = 90;
-const TERMINATED_ETATS = ["Résiliation", "Self-Résiliation", "Rétractation", "Liquidation", "Sans suite"];
+const TERMINATED_ETATS = EXITED_ETATS; // liste partagée avec le dashboard CEO (utils/boardClientState.js)
 // Catégories qui ne sont PAS des états mais des CRITÈRES (un client peut en
 // cumuler plusieurs) : elles se combinent en ET avec les états, pour permettre
 // des croisements du type « en cours de résiliation ET contrat qui arrive à

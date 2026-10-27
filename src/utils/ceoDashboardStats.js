@@ -4,7 +4,8 @@
 // Les règles sont celles du board (prédicats importés, jamais recopiés) : chaque
 // chiffre est vérifiable en un clic dans l'onglet correspondant du board.
 import { displayEtat, matchesSignedClient, isCurrentProductClient } from './boardClientState.js';
-import { isOnboardingUpcoming, isOnboardingOverdue } from './boardPredicates.js';
+import { isActiveOnboardingUpcoming, isActiveOnboardingOverdue } from './boardPredicates.js';
+import { parisWallTime } from './boardIntegration.js';
 import { meteoBandOf } from './meteoBands.js';
 import { lossArr } from './lossArr.js';
 
@@ -125,6 +126,7 @@ export function computeBoardStats(boardRows, etatPeriod = 'all', ownerArr = null
   // ── À DATE : insensibles à la période ──
   // Un RDV "à venir" est par nature dans le futur, et la météo est un relevé courant.
   // Seul l'onboarding Owner est suivi : les RDV d'intégration (rdv_lancement) n'existent plus.
+  const parisNow = parisWallTime(now);
   const signedNow = established.filter((r) => matchesSignedClient(r, displayEtat(r)));
   const scores = signedNow
     .map((r) => r.meteo_score)
@@ -148,8 +150,9 @@ export function computeBoardStats(boardRows, etatPeriod = 'all', ownerArr = null
     arrRetractes: arrStats(BOARD_RETRACTE),
     currentMonthKey,
     currentMonthLabel: `${MONTH_LABELS_FR[now.getMonth()].toLowerCase()} ${now.getFullYear()}`,
-    onboarding: established.filter(isOnboardingUpcoming).length,
-    onboardingOverdue: established.filter(isOnboardingOverdue).length,
+    // Même compteur que « Onboarding à venir » du menu Onboarding du board : clients partis exclus.
+    onboarding: established.filter((r) => isActiveOnboardingUpcoming(r, parisNow)).length,
+    onboardingOverdue: established.filter((r) => isActiveOnboardingOverdue(r, parisNow)).length,
     meteoAvg: scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null,
     meteoRated: scores.length,
     meteoSigned: signedNow.length,

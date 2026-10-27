@@ -1,4 +1,6 @@
 export const PENDING_EXITS = ['En cours de résiliation', 'En cours de rétractation'];
+// Clients partis : hors parc, hors cases d'onboarding du board et du dashboard CEO.
+export const EXITED_ETATS = ['Résiliation', 'Self-Résiliation', 'Rétractation', 'Liquidation', 'Sans suite'];
 
 // État affiché d'un client du board : calculé UNE seule fois, par le back
 // (champ `etat_affiche` de GET /optilex/board), jamais recalculé ici. Le board,
@@ -44,5 +46,5 @@ export function matchesSignedClient(row, displayedState) {
 
 export function isCurrentProductClient(row, displayedState) {
   return !row.is_pending_contract && !!row.numero_client
-    && !['Résiliation', 'Self-Résiliation', 'Rétractation', 'Liquidation', 'Sans suite'].includes(displayedState);
+    && !EXITED_ETATS.includes(displayedState);
 }
