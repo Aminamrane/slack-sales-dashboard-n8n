@@ -14,7 +14,7 @@ import { originDisplay } from "../utils/sectors";
 import LeadsManagement from "./LeadsManagement.jsx";
 // ── Setter modales (Option B duplication intégrale TrackingSheet) ──────────
 import SetterJourneyDialog from "../components/setter/SetterJourneyDialog.jsx";
-import SetterRescheduleR1Dialog from "../components/setter/SetterRescheduleR1Dialog.jsx";
+import SetterRescheduleDialog from "../components/setter/SetterRescheduleDialog.jsx";
 import { canPlanSetterR2, canRescheduleSetterR1 } from '../utils/setterJourney.js';
 import {Phone, CalendarDays, ChevronRight, UserSearch, ListChecks, UsersRound, Video, RotateCcw} from "lucide-react";
 import SecondChance from "../components/setter/secondChance/SecondChance.jsx";
@@ -320,7 +320,8 @@ export default function TrackingSheetSetter() {
   const [teamSales, setTeamSales] = useState([]);
   // Setter modales state — ouvertes via setter actions dans panel détail
   const [showSetterAvailability, setShowSetterAvailability] = useState(false);
-  const [setterModal, setSetterModal] = useState(null); // { kind, lead?, mode }
+  const [setterModal, setSetterModal] = useState(null); // { kind, lead?, mode, rdv? }
+  const [agendaReload, setAgendaReload] = useState(0);   // relecture de l'agenda après un RDV repositionné (27/10/2026)
   const [setterSubmitting, setSetterSubmitting] = useState(false);
   const [setterToast, setSetterToast] = useState(null); // { text, kind }
   const showSetterToast = useCallback((text, kind = 'ok') => {
@@ -2831,8 +2832,10 @@ export default function TrackingSheetSetter() {
               C={C}
               darkMode={darkMode}
               asUser={urlParams.get('ghost') === 'true' ? viewingSheetId : undefined}
+              reloadKey={agendaReload}
               canOpenLead={(leadId) => leads.some((l) => l.id === leadId)}
               onOpenLead={(leadId) => { setSidebarView('leads'); setTimeout(() => setSelectedLead(leadId), 100); }}
+              onReschedule={(ev) => { const lead = leads.find((l) => l.id === ev.lead_id); if (lead) setSetterModal({ kind: 'reschedule', lead, rdv: ev.rdv_type }); }}
             />
           </div>
         )}
@@ -6175,7 +6178,7 @@ export default function TrackingSheetSetter() {
                         ? <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{formatDateTimeFR(lead.r1)}</span>
                         : <DateTimePicker value={toDatetimeLocal(lead.r1)} onChange={(val) => handleDateChange(lead.id, 'r1', val)} color="#3b82f6" C={C} darkMode={darkMode} />}
                       {canRescheduleSetterR1(lead, { isSetter, readOnly: urlParams.get('ghost') === 'true' }) && (
-                        <button type="button" onClick={() => setSetterModal({ kind: 'rescheduleR1', lead })}
+                        <button type="button" onClick={() => setSetterModal({ kind: 'reschedule', lead, rdv: 'r1' })}
                           aria-label="Reprogrammer le R1"
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 4, padding: '3px 6px', border: 'none', borderRadius: 5, background: darkMode ? 'rgba(59,130,246,0.16)' : 'rgba(59,130,246,0.08)', color: '#3b82f6', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                           <RotateCcw size={13} aria-hidden="true" />Reprogrammer
@@ -6304,7 +6307,8 @@ export default function TrackingSheetSetter() {
                 const handleR2Select = (val) => {
                   if (!val) return;
                   if (val === 'done') return handleWorkflowSubmit(lead.id, { [resultField]: 'done', [completedField]: new Date().toISOString() });
-                  if (val === 'reporte') return setActiveWorkflow({ leadId: lead.id, r2Result: 'reporte', newDate: '' });
+                  // Setter (27/10/2026) : report dans l'agenda du commercial du R2, créneaux libres uniquement, comme pour le R1.
+                  if (val === 'reporte') return isSetter ? setSetterModal({ kind: 'reschedule', lead, rdv: 'r2' }) : setActiveWorkflow({ leadId: lead.id, r2Result: 'reporte', newDate: '' });
                   if (val === 'pas_interesse') return handleWorkflowSubmit(lead.id, { [resultField]: 'pas_interesse' });
                   if (val === 'annule') return handleWorkflowSubmit(lead.id, { [resultField]: 'annule' });
                   handleWorkflowSubmit(lead.id, { [resultField]: val });
@@ -6826,7 +6830,7 @@ export default function TrackingSheetSetter() {
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                           {wfPill('Lapin', '#f59e0b', rabbitIcon, 30, () => handleWorkflowSubmit(lead.id, { r1_result: 'no_show' }), true)}
                           {/* Setter (dev 13/10/2026) : report dans l'agenda du seul commercial du R1, créneaux libres uniquement. */}
-                          {wfPill('Reporter', '#3b82f6', '↻', 70, () => isSetter ? setSetterModal({ kind: 'rescheduleR1', lead }) : setActiveWorkflow(prev => ({ ...prev, r1Result: 'rescheduled', newDate: '' })))}
+                          {wfPill('Reporter', '#3b82f6', '↻', 70, () => isSetter ? setSetterModal({ kind: 'reschedule', lead, rdv: 'r1' }) : setActiveWorkflow(prev => ({ ...prev, r1Result: 'rescheduled', newDate: '' })))}
                           {wfPill('R1 effectué', '#10b981', '✓', 110, () => handleWorkflowSubmit(lead.id, { r1_result: 'done', r1_completed_at: new Date().toISOString() }))}
                           {wfPill('Annulé', '#ef4444', '✕', 150, () => handleWorkflowSubmit(lead.id, { r1_result: 'cancelled' }))}
                         </div>
@@ -8606,11 +8610,15 @@ export default function TrackingSheetSetter() {
       {showSetterAvailability && <SetterJourneyDialog browseOnly dark={darkMode} asSetter={urlParams.get('ghost') === 'true' ? viewingSheetId : null} onClose={() => setShowSetterAvailability(false)}/>}
       {isSetter && (
         <>
-          {setterModal?.kind === 'rescheduleR1' && <SetterRescheduleR1Dialog key={setterModal.lead.id} lead={setterModal.lead} dark={darkMode} onClose={() => setSetterModal(null)}
-            onConfirm={async (r1Date) => {
-              await apiClient.patch(`/api/v1/tracking/leads/${setterModal.lead.id}`, { r1_result: 'rescheduled', r1_date: r1Date });
+          {setterModal?.kind === 'reschedule' && <SetterRescheduleDialog key={`${setterModal.lead.id}-${setterModal.rdv}`} lead={setterModal.lead} kind={setterModal.rdv} dark={darkMode} onClose={() => setSetterModal(null)}
+            onConfirm={async (date) => {
+              // Mêmes écritures que depuis la fiche (R1 : 13/10/2026 ; R2 et agenda : 27/10/2026) : le serveur revérifie le
+              // créneau chez le commercial, déplace l'événement Google et le prévient dans son CRM.
+              const rdv = setterModal.rdv;
+              await apiClient.patch(`/api/v1/tracking/leads/${setterModal.lead.id}`, rdv === 'r2' ? { r2_result: 'reporte', r2_date: date } : { r1_result: 'rescheduled', r1_date: date });
               setActiveWorkflow(null);
-              showSetterToast(`R1 reporté au ${formatDateTimeFR(r1Date)}.`);
+              showSetterToast(`${rdv.toUpperCase()} reporté au ${formatDateTimeFR(date)}.`);
+              setAgendaReload((v) => v + 1);
               refreshData().catch(() => {});
             }}/>}
           {setterModal?.kind === 'qualify' && <SetterJourneyDialog key={setterModal.lead.id} lead={setterModal.lead} teamSales={teamSales} currentEmail={userMeta?.email} dark={darkMode} onClose={() => setSetterModal(null)} onSaved={message => {showSetterToast(message);refreshData().catch(() => {});}}/>}
