@@ -52,6 +52,23 @@ test('ARR perdu : même périmètre que les sorties, un montant inconnu est comp
   assert.equal(computeBoardStats(ROWS, 'all', null, NOW).arrResilies, null);
 });
 
+test('RDV onboarding à venir : même compteur que le menu Onboarding du board, clients partis exclus', () => {
+  // Heures en heure-mur de Paris (étiquetées UTC, comme en base) ; NOW = 27/10, entre 9 h et 13 h à Paris.
+  const rows = [
+    row({ numero_client: 'n°11', rdv_onboarding_date: '2026-11-03T10:00:00+00:00' }),           // à venir
+    row({ numero_client: 'n°12', rdv_onboarding_date_manual: '2026-10-27T18:00:00+00:00' }),    // ce soir
+    row({ numero_client: 'n°13', rdv_onboarding_date: '2026-10-27T08:00:00+00:00' }),           // ce matin, non coché : en retard
+    row({ numero_client: 'n°14', rdv_onboarding_date: '2026-11-05', rdv_onboarding_done: true }), // déjà réalisé
+    row({ numero_client: 'n°15', etat_affiche: 'Résiliation', rdv_onboarding_date: '2026-11-04T09:00:00+00:00' }),
+    row({ numero_client: 'n°16', etat_affiche: 'Sans suite', rdv_onboarding_date: '2026-10-27T08:30:00+00:00' }),
+    row({ numero_client: 'n°17', etat_affiche: 'En cours de résiliation', rdv_onboarding_date: '2026-11-06T09:00:00+00:00' }), // encore client
+    row({ numero_client: 'n°18', is_pending_contract: true, rdv_onboarding_date: '2026-11-07T09:00:00+00:00' }),
+  ];
+  const s = computeBoardStats(rows, 'all', null, NOW);
+  assert.equal(s.onboarding, 4);          // n°11, n°12, n°13, n°17 ; n°15 et n°16 partis, n°14 réalisé, n°18 contrat en vol
+  assert.equal(s.onboardingOverdue, 1);   // n°13 ; n°16 (parti) n'est pas compté en retard
+});
+
 test('mois choisi : signés au plus tard fin de mois, sortis après = encore actifs', () => {
   const s = computeBoardStats(ROWS, '2026-09', ARR, NOW);
   assert.equal(s.total, 6);            // n°8 sans date de signature exclu
