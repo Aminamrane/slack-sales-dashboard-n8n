@@ -1,5 +1,6 @@
 import DetailDisclosure from './components/DetailDisclosure.jsx';
 import './components/DetailSummary.css';
+import './components/DetailLayout.css';
 import ClientHistoryAttachments from '../../components/ClientHistoryAttachments.jsx';
 import BillingCompanies from './components/BillingCompanies.jsx';
 import {formatDateLongFR} from './constants.js';
@@ -855,156 +856,177 @@ export default function DetailPanel({
 
             </section>
 
-            <Section
-              title="Identité, contacts et contrat"
-              delay={0.08}
-              action={canEdit ? (
-                <button
-                  type="button"
-                  onClick={() => setContractEditing((v) => !v)}
-                  title={contractEditing ? 'Terminer l’édition' : 'Modifier la fiche'}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                    border: 'none', cursor: 'pointer',
-                    background: contractEditing ? N.sideHover : 'transparent',
-                    color: contractEditing ? N.text : N.textMuted,
-                    borderRadius: 5, padding: '3px 7px',
-                    fontSize: 11, fontWeight: 600,
-                    transition: 'background 0.12s, color 0.12s',
-                  }}
+            {/* ── Sous la synthèse : quatre chapitres (refonte de présentation, 2026-10-16) ──
+                Même contenu, mêmes composants, mêmes clés et mêmes chargements qu'avant : seul
+                le regroupement change. Rien ici ne dépend de l'ouverture d'un chapitre ; les
+                sections repliables sont des <details> natifs dont le contenu reste monté même
+                fermé. Colonnes en plein écran : components/DetailLayout.css. */}
+            <div className="fd-body">
+
+              {/* 1 · Identité, contacts et contrat — titre, position et contenu d'origine */}
+              <div className="fd-chapter fd-chapter--identity">
+                <Section
+                  title="Identité, contacts et contrat"
+                  delay={0.08}
+                  action={canEdit ? (
+                    <button
+                      type="button"
+                      onClick={() => setContractEditing((v) => !v)}
+                      title={contractEditing ? 'Terminer l’édition' : 'Modifier la fiche'}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        border: 'none', cursor: 'pointer',
+                        background: contractEditing ? N.sideHover : 'transparent',
+                        color: contractEditing ? N.text : N.textMuted,
+                        borderRadius: 5, padding: '3px 7px',
+                        fontSize: 11, fontWeight: 600,
+                        transition: 'background 0.12s, color 0.12s',
+                      }}
+                    >
+                      <Pencil size={12} />
+                      {contractEditing ? 'Terminer' : 'Modifier'}
+                    </button>
+                  ) : null}
                 >
-                  <Pencil size={12} />
-                  {contractEditing ? 'Terminer' : 'Modifier'}
-                </button>
-              ) : null}
-            >
-              <ContractInfoList
-                client={client}
-                profile={profile}
-                focusedRow={focusedRow}
-                boardRow={boardRow}
-                periods={periods}
+                  <ContractInfoList
+                    client={client}
+                    profile={profile}
+                    focusedRow={focusedRow}
+                    boardRow={boardRow}
+                    periods={periods}
 
-                canEdit={canEdit}
-                canEditMoney={canEditMoney}
-                editing={contractEditing}
-                clientId={clientId}
-                onProfileChanged={refreshProfileAndRows}
-                onContractChanged={reloadAfterExit}
-                onContractSaved={onContractSaved}
-                formulaCheck={formulaCheck}
-                onShowToast={onShowToast}
-                onCopied={onCopied}
-              />
-            </Section>
-            <Section title="Contrats signés" delay={0.105}>
-              <SignedContracts
-                clientId={clientId}
-                societe={client?.company_name || client?.societe}
-                numeroClient={client?.numero_client}
-              />
-            </Section>
-
-            <Section title="Sociétés de facturation" delay={0.1}>
-              <BillingCompanies key={`billing-${clientId}`} clientId={clientId} canEdit={canEdit} reloadKey={profile?.companies?.length || 0} />
-            </Section>
-
-            <StateReview clientId={clientId} version={profile} canProcess={canEditMoney} onReview={setStateReview} onChanged={reloadAfterExit}/>
-            {/* Error state */}
-            {error && (
-              <div style={{
-                marginTop: 20, padding: 12, background: N.redBg,
-                color: N.red, borderRadius: 6, fontSize: 13,
-              }}>
-                {error}
+                    canEdit={canEdit}
+                    canEditMoney={canEditMoney}
+                    editing={contractEditing}
+                    clientId={clientId}
+                    onProfileChanged={refreshProfileAndRows}
+                    onContractChanged={reloadAfterExit}
+                    onContractSaved={onContractSaved}
+                    formulaCheck={formulaCheck}
+                    onShowToast={onShowToast}
+                    onCopied={onCopied}
+                    wide={fullscreen}
+                  />
+                </Section>
               </div>
-            )}
 
-            <Section
-              title="État de compte"
-              delay={0.11}
-              action={(
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
-                <StatementMenu
-                  scope={scope}
-                  structures={structures}
-                  busy={pdfGenerating}
-                  onDownload={downloadStatement}
-                />
-                {statementDownload?.clientId === clientId && (
-                  <a href={statementDownload.url} download={statementDownload.filename} style={{ fontSize: 12, color: N.text }}>
-                    PDF prêt · Télécharger à nouveau
-                  </a>
-                )}
-                </div>
-              )}
-            >
-              <InstallmentsList
-                installments={installments}
-                loading={loadingTimeline}
-                focusedRowId={rowId}
-                onSelectRow={onSelectRow}
-              />
-              {canEdit && focusedRow?.id && String(profile?.client_id) === String(clientId) &&
-                <InstallmentFollowup key={`${clientId}-${focusedRow.id}-${scope}`} clientId={clientId} period={focusedRow}
-                  scope={scope} reviews={profile.installment_followups || []} onChanged={reviews => {
-                    setProfile(previous => ({ ...previous, installment_followups: reviews })); reloadAfterExit();
-                  }}/>
-              }
-            </Section>
+              {/* Chapitres 2 à 4 : en plein écran seulement, deux colonnes (DetailLayout.css). L'identité reste
+                  pleine largeur au-dessus, comme avant : la zone du haut ne change pas de forme. */}
+              <div className="fd-cols" data-wide={fullscreen ? 'true' : undefined}>
+                {/* 2 · Paiements et suivi */}
+                <Chapter title="Paiements et suivi" className="fd-chapter--payments">
+                  <StateReview clientId={clientId} version={profile} canProcess={canEditMoney} onReview={setStateReview} onChanged={reloadAfterExit}/>
+                  {/* Error state */}
+                  {error && (
+                    <div style={{
+                      marginTop: 20, padding: 12, background: N.redBg,
+                      color: N.red, borderRadius: 6, fontSize: 13,
+                    }}>
+                      {error}
+                    </div>
+                  )}
+                  <Section
+                    variant="block"
+                    title="État de compte"
+                    delay={0.11}
+                    action={(
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
+                      <StatementMenu
+                        scope={scope}
+                        structures={structures}
+                        busy={pdfGenerating}
+                        onDownload={downloadStatement}
+                      />
+                      {statementDownload?.clientId === clientId && (
+                        <a href={statementDownload.url} download={statementDownload.filename} style={{ fontSize: 12, color: N.text }}>
+                          PDF prêt · Télécharger à nouveau
+                        </a>
+                      )}
+                      </div>
+                    )}
+                  >
+                    <InstallmentsList
+                      installments={installments}
+                      loading={loadingTimeline}
+                      focusedRowId={rowId}
+                      onSelectRow={onSelectRow}
+                    />
+                    {canEdit && focusedRow?.id && String(profile?.client_id) === String(clientId) &&
+                      <div className="fd-followup">
+                        <InstallmentFollowup key={`${clientId}-${focusedRow.id}-${scope}`} clientId={clientId} period={focusedRow}
+                          scope={scope} reviews={profile.installment_followups || []} onChanged={reviews => {
+                            setProfile(previous => ({ ...previous, installment_followups: reviews })); reloadAfterExit();
+                          }}/>
+                      </div>
+                    }
+                  </Section>
+                  <ClientComments key={`comments-${clientId}`} clientId={clientId} onShowToast={onShowToast} variant="block" />
+                </Chapter>
 
-            <ClientComments key={`comments-${clientId}`} clientId={clientId} onShowToast={onShowToast} />
+                {/* 3 · Contrats et facturation */}
+                <Chapter title="Contrats et facturation" className="fd-chapter--billing">
+                  <Section variant="block" title="Contrats signés" delay={0.105}>
+                    <SignedContracts
+                      clientId={clientId}
+                      societe={client?.company_name || client?.societe}
+                      numeroClient={client?.numero_client}
+                    />
+                  </Section>
+                  <Section variant="block" title="Sociétés de facturation" delay={0.1}>
+                    <BillingCompanies key={`billing-${clientId}`} clientId={clientId} canEdit={canEdit} reloadKey={profile?.companies?.length || 0} />
+                  </Section>
+                  <DetailDisclosure key={`billing-${clientId}`} title="Ventilation des règlements" description="Répartir les encaissements entre les sociétés, mois par mois">
 
-            <DetailDisclosure key={`shared-${clientId}`} title="Échanges avec Owner et Opti’Lex" description="Commentaires partagés avec le cabinet et la Finance">
-              <CommonSpaceThread numero={client?.numero_client} onShowToast={onShowToast} />
-            </DetailDisclosure>
+                  <Section title="Structures & ventilation" delay={0.12}>
+                    <StructureSplits
+                      clientId={clientId}
+                      periods={periods}
+                      scope={scope}
+                      canEdit={canEdit}
+                      canEditMoney={canEditMoney}
+                      onShowToast={onShowToast}
+                      reloadKey={profile?.companies?.length || 0}
+                      onReceiptsChanged={reloadAfterExit}
+                    />
+                  </Section>
+                  </DetailDisclosure>
+                </Chapter>
 
-            <DetailDisclosure key={`files-${clientId}`} title="Documents, emails et appels" description="Pièces jointes et appels choisis, consultables par l’équipe CSM">
-            {canViewCalls && <LatestClientCall key={`call-${clientId}`} clientId={clientId}/>}
-              <ClientHistoryAttachments clientId={clientId}/>
-            </DetailDisclosure>
+                {/* 4 · Échanges, documents et historique */}
+                <Chapter title="Échanges, documents et historique" className="fd-chapter--exchanges">
+                  <DetailDisclosure key={`shared-${clientId}`} title="Échanges avec Owner et Opti’Lex" description="Commentaires partagés avec le cabinet et la Finance">
+                    <CommonSpaceThread numero={client?.numero_client} onShowToast={onShowToast} />
+                  </DetailDisclosure>
+                  <DetailDisclosure key={`files-${clientId}`} title="Documents, emails et appels" description="Pièces jointes et appels choisis, consultables par l’équipe CSM">
+                  {canViewCalls && <LatestClientCall key={`call-${clientId}`} clientId={clientId}/>}
+                    <ClientHistoryAttachments clientId={clientId}/>
+                  </DetailDisclosure>
+                  <DetailDisclosure key={`appointments-${clientId}`} title="Rendez-vous et interlocuteurs" description="Onboarding, cabinet et juriste référent">
+                  {boardRow && (clientAgenda?.reference_jurist || (clientAgenda?.rdv?.length || 0) > 0
+                    || boardRow.rdv_onboarding_date || boardRow.rdv_lancement_date
+                    || boardRow.rdv_fiscal_date || boardRow.rdv_social_date) ? (
+                    <Section title="Rendez-vous & juriste référent" delay={0.16}>
+                      <RdvJuristeSection boardRow={boardRow} agenda={clientAgenda} onCopied={onCopied} />
+                      {/* Validation FACTURATION du RDV d'onboarding + recalage (finance).
+                          Statut propre à la finance, indépendant de celui de Vincent ;
+                          le recalage, lui, déplace le RDV partagé (agendas liés). */}
+                      <OnboardingFacturation numeroClient={numeroClient} boardRow={boardRow} />
+                    </Section>
+                  ) : <p style={{fontSize:12,color:N.textMuted}}>Aucun rendez-vous renseigné pour ce dossier.</p>}
 
-
-
-            <DetailDisclosure key={`billing-${clientId}`} title="Ventilation des règlements" description="Répartir les encaissements entre les sociétés, mois par mois">
-
-            <Section title="Structures & ventilation" delay={0.12}>
-              <StructureSplits
-                clientId={clientId}
-                periods={periods}
-                scope={scope}
-                canEdit={canEdit}
-                canEditMoney={canEditMoney}
-                onShowToast={onShowToast}
-                reloadKey={profile?.companies?.length || 0}
-                onReceiptsChanged={reloadAfterExit}
-              />
-            </Section>
-            </DetailDisclosure>
-
-            <DetailDisclosure key={`appointments-${clientId}`} title="Rendez-vous et interlocuteurs" description="Onboarding, cabinet et juriste référent">
-            {boardRow && (clientAgenda?.reference_jurist || (clientAgenda?.rdv?.length || 0) > 0
-              || boardRow.rdv_onboarding_date || boardRow.rdv_lancement_date
-              || boardRow.rdv_fiscal_date || boardRow.rdv_social_date) ? (
-              <Section title="Rendez-vous & juriste référent" delay={0.16}>
-                <RdvJuristeSection boardRow={boardRow} agenda={clientAgenda} onCopied={onCopied} />
-                {/* Validation FACTURATION du RDV d'onboarding + recalage (finance).
-                    Statut propre à la finance, indépendant de celui de Vincent ;
-                    le recalage, lui, déplace le RDV partagé (agendas liés). */}
-                <OnboardingFacturation numeroClient={numeroClient} boardRow={boardRow} />
-              </Section>
-            ) : <p style={{fontSize:12,color:N.textMuted}}>Aucun rendez-vous renseigné pour ce dossier.</p>}
-
-            </DetailDisclosure>
-
-            <DetailDisclosure key={`audit-${clientId}`} title="Historique des actions" description="Modifications de la fiche et opérations financières datées">
-            <ActionsTimeline
-              audit={clientAudit}
-              operations={clientOps}
-              changes={profile?.changes}
-              etatHistory={etatHistory}
-            />
-            </DetailDisclosure>
+                  </DetailDisclosure>
+                  <DetailDisclosure key={`audit-${clientId}`} title="Historique des actions" description="Modifications de la fiche et opérations financières datées">
+                  <ActionsTimeline
+                    hideTitle
+                    audit={clientAudit}
+                    operations={clientOps}
+                    changes={profile?.changes}
+                    etatHistory={etatHistory}
+                  />
+                  </DetailDisclosure>
+                </Chapter>
+              </div>
+            </div>
           </div>
 
           {/* Sortie client — acter un état daté, ou déclarer une perte.
@@ -1637,10 +1659,21 @@ function RefundPrompt({ value, onChange, onCancel, onSubmit }) {
 }
 
 // ── Informations contractuelles (liste compacte icône + libellé / valeur) ───
+// Groupes d'affichage (présentation seulement, 2026-10-16) : les lignes gardent
+// leur ordre et leurs valeurs ; chacune est rangée sous « Identité » ou
+// « Contrat » d'après son libellé. Une ligne non listée comme identité va sous
+// « Contrat » : aucune ne peut disparaître.
+const CONTRACT_GROUPS = [
+  { key: 'identity', label: 'Identité' },
+  { key: 'contract', label: 'Contrat' },
+];
+const IDENTITY_ROW_LABELS = new Set(['Client n°', 'Société', 'Nom du client', 'Personnes du NDA', 'Sales']);
+
 function ContractInfoList({
   client, profile, focusedRow, boardRow, canEdit, canEditMoney, onCopied,
   editing = false, clientId, onProfileChanged, onContractChanged, onShowToast, periods = [],
   formulaCheck = null, onContractSaved,
+  wide = false,   // fiche en plein écran : la carte se répartit en colonnes (présentation seulement)
 }) {
   // Séparation nom du client / société (2026-08-21) : « Nom du client » =
   // la/les personne(s), la société a sa propre ligne. Pas de personne
@@ -1986,8 +2019,17 @@ function ContractInfoList({
     },
   ];
 
+  // Répartition des lignes par groupe. `i` garde l'index d'origine dans `rows`
+  // (le décalage d'apparition de chaque ligne n'a donc pas changé).
+  const GROUPED = CONTRACT_GROUPS.map((group) => ({
+    group,
+    items: rows
+      .map((r, i) => ({ r, i }))
+      .filter(({ r }) => (IDENTITY_ROW_LABELS.has(r.label) ? 'identity' : 'contract') === group.key),
+  }));
+
   return (
-    <div style={{
+    <div className="fd-identity-card" data-wide={wide ? 'true' : undefined} style={{
       border: `1px solid ${N.borderSft}`,
       borderRadius: 10,
       overflow: 'hidden',
@@ -2006,7 +2048,10 @@ function ContractInfoList({
             : null}
         />
       )}
-      {rows.map((r, i) => (
+      {GROUPED.map(({ group, items }) => (
+        <div className="fd-group" key={group.key}>
+        <div className="fd-group-title">{group.label}</div>
+        {items.map(({ r, i }, n) => (
         <motion.div
           key={r.label}
           initial={{ opacity: 0, x: -6 }}
@@ -2017,7 +2062,7 @@ function ContractInfoList({
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             gap: 12,
             padding: '9px 14px',
-            borderTop: i === 0 ? 'none' : `1px solid ${N.borderSft}`,
+            borderTop: n === 0 ? 'none' : `1px solid ${N.borderSft}`,
             fontSize: 13,
             minWidth: 0,
           }}
@@ -2053,6 +2098,8 @@ function ContractInfoList({
             )}
           </span>
         </motion.div>
+        ))}
+        </div>
       ))}
 
       {/* Emails et téléphones, en bas de la fiche (demande dev 2026-08-27) :
@@ -2060,9 +2107,10 @@ function ContractInfoList({
           et enrichissables — le bouton d'ajout n'apparaît qu'en mode
           édition. Composant partagé avec le board, donc une seule vérité. */}
       {clientId && (
+        <div className="fd-group">
+        <div className="fd-group-title">Coordonnées</div>
         <div style={{
           padding: '4px 14px 8px',
-          borderTop: `1px solid ${N.borderSft}`,
         }}>
           <ContactList
             clientId={clientId}
@@ -2084,6 +2132,7 @@ function ContractInfoList({
             onShowToast={onShowToast}
             onCopied={onCopied}
           />
+        </div>
         </div>
       )}
     </div>
@@ -2268,7 +2317,7 @@ const auditEntryDate = (e) => e.changed_at || e.created_at || null;
 // Owner pour août 2026 ») plutôt qu'en « champ : avant → après » — retour dev
 // 2026-09-03 : « on ne comprend pas trop quelle était vraiment la dernière
 // action ». Les phrases vivent dans actionLabel.js, testées.
-function ActionsTimeline({ audit, operations, changes, etatHistory }) {
+function ActionsTimeline({ audit, operations, changes, etatHistory, hideTitle = false }) {
   const [open, setOpen] = useState(false);
 
   const entries = useMemo(() => {
@@ -2317,7 +2366,7 @@ function ActionsTimeline({ audit, operations, changes, etatHistory }) {
   const shown = open ? previous.slice(0, 40) : [];
 
   return (
-    <Section title="Historique des actions" delay={0.14}>
+    <Section title="Historique des actions" delay={0.14} hideTitle={hideTitle}>
       {entries.length === 0 ? (
         <Empty text="Aucune action enregistrée pour ce client." />
       ) : (
@@ -3399,29 +3448,57 @@ function ActionsBar({
 // ── Section wrapper ─────────────────────────────────────────────────────────
 // `action` (optionnel, phase 4) : nœud rendu à droite du titre — ex. le
 // bouton de téléchargement de l'état de compte. Rétro-compatible.
-function Section({ title, children, delay = 0, action = null }) {
+//
+// `variant` (présentation, 2026-10-16) : « section » = rendu d'origine (titre de
+// 11 px en capitales, marge haute de 28 px) ; « block » = sous-bloc d'un chapitre
+// (titre de 13 px, espacement porté par .fd-chapter dans DetailLayout.css).
+// `hideTitle` : le titre est déjà celui de la section repliable qui contient ce
+// bloc (doublon exact) ; le nom reste exposé aux lecteurs d'écran.
+function Section({ title, children, delay = 0, action = null, variant = 'section', hideTitle = false }) {
+  const block = variant === 'block';
   return (
     <motion.section
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay, ease: [0.4, 0, 0.2, 1] }}
-      style={{ marginTop: 28 }}
+      className={block ? 'fd-block' : undefined}
+      style={block ? undefined : { marginTop: 28 }}
+      aria-label={hideTitle ? title : undefined}
     >
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        gap: 10, margin: '0 0 12px',
-      }}>
-        <h2 style={{
-          fontSize: 11, fontWeight: 600, color: N.textMuted,
-          margin: 0,
-          textTransform: 'uppercase', letterSpacing: '0.04em',
+      {(!hideTitle || action) && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: 10, margin: block ? '0 0 10px' : '0 0 12px',
         }}>
-          {title}
-        </h2>
-        {action}
-      </div>
+          {!hideTitle && (block ? (
+            <h3 className="fd-block-title">{title}</h3>
+          ) : (
+            <h2 style={{
+              fontSize: 11, fontWeight: 600, color: N.textMuted,
+              margin: 0,
+              textTransform: 'uppercase', letterSpacing: '0.04em',
+            }}>
+              {title}
+            </h2>
+          ))}
+          {action}
+        </div>
+      )}
       {children}
     </motion.section>
+  );
+}
+
+// ── Chapitre ────────────────────────────────────────────────────────────────
+// Regroupe plusieurs blocs sous un titre de même graphie que celui de `Section`
+// (11 px, capitales, gris) ; le filet et les espacements viennent de
+// DetailLayout.css. Purement visuel : aucun état, aucun chargement.
+function Chapter({ title, className = '', children }) {
+  return (
+    <section className={`fd-chapter ${className}`.trim()}>
+      <h2 className="fd-chapter-title">{title}</h2>
+      {children}
+    </section>
   );
 }
 
@@ -3473,7 +3550,7 @@ const sortComments = (list) => [...list].sort((a, b) => {
   return String(b.created_at || '').localeCompare(String(a.created_at || ''));
 });
 
-export function ClientComments({ clientId, onShowToast }) {
+export function ClientComments({ clientId, onShowToast, variant = 'section' }) {
   const [comments, setComments] = useState(null);   // null = en cours / indispo
   // Au-delà de quatre commentaires le fil noyait le reste de la fiche : on
   // n'affiche que les plus récents, le reste se déplie (demande dev
@@ -3583,7 +3660,7 @@ export function ClientComments({ clientId, onShowToast }) {
   };
 
   return (
-    <Section title="Commentaires internes finance" delay={0.14}>
+    <Section title="Commentaires internes finance" delay={0.14} variant={variant}>
       {loadError && <div role="alert" style={{ color: '#b42318', marginBottom: 10 }}>{loadError} <button type="button" onClick={() => setRetry(v => v + 1)}>Réessayer</button></div>}
       {/* Composer */}
       <div style={{

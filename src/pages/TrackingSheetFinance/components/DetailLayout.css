@@ -1,0 +1,163 @@
+/* DetailLayout.css — mise en page de la fiche client SOUS la synthèse financière.
+
+   Refonte de présentation (2026-10-16) : le contenu, les composants et leur
+   comportement sont inchangés ; seul le regroupement et la hiérarchie visuelle
+   changent. Trois niveaux :
+     chapitre  (.fd-chapter)  — petit titre en capitales + filet de séparation ;
+     bloc      (.fd-block)    — titre de 13 px, contenu dessous ;
+     groupe    (.fd-group-title) — étiquette discrète à l'intérieur d'une carte.
+
+   Portée : TOUTES les règles sont préfixées `.fd-` ou ciblent `.fd-chapter` /
+   `.fd-body`, classes qui n'existent que dans cette fiche. Aucune règle ne
+   s'applique à un sélecteur global ou à un autre écran.
+
+   Pas de `container-type` ici : il rendrait l'élément contenant des
+   descendants à `position: fixed` (ex. le fond du sélecteur de type des
+   contacts), ce qui changerait leur comportement. L'adaptation grand écran
+   passe par l'attribut `data-wide`, posé par la fiche en plein écran. */
+
+.fd-body {
+  display: block;
+}
+
+/* ── Chapitres ───────────────────────────────────────────────────────── */
+.fd-chapter {
+  min-width: 0;
+  margin-top: 44px;
+  padding-top: 22px;
+  border-top: 1px solid #efeeec;
+}
+
+/* Le premier chapitre garde sa propre section « Identité, contacts et
+   contrat » telle quelle (titre, marge de 28 px, animation) : pas de filet. */
+.fd-chapter--identity {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* Même graphie que le titre de section d'origine : l'ordre de lecture des
+   chapitres reste celui de l'existant (11 px, capitales, gris). */
+.fd-chapter-title {
+  margin: 0 0 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #787774;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Rythme vertical régulier entre les éléments d'un chapitre. */
+.fd-chapter > * + * {
+  margin-top: 24px;
+}
+.fd-chapter > .fd-chapter-title + * {
+  margin-top: 0;
+}
+/* Les sections repliables se suivent de plus près que les blocs. */
+.fd-chapter > .finance-detail-disclosure + .finance-detail-disclosure {
+  margin-top: 10px;
+}
+.fd-chapter > .finance-detail-disclosure {
+  margin-top: 10px;
+}
+.fd-chapter > .fd-chapter-title + .finance-detail-disclosure {
+  margin-top: 0;
+}
+.fd-chapter > .fd-block + .finance-detail-disclosure {
+  margin-top: 24px;
+}
+
+/* Un repli se laisse repérer au survol (il n'avait aucun retour visuel). */
+.fd-chapter .finance-detail-disclosure > summary {
+  border-radius: 10px;
+  transition: background 0.12s ease;
+}
+.fd-chapter .finance-detail-disclosure > summary:hover {
+  background: #fafaf9;
+}
+
+/* ── Blocs ───────────────────────────────────────────────────────────── */
+.fd-block-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #37352f;
+  letter-spacing: -0.005em;
+}
+
+/* ── Groupes dans la carte « Identité, contacts et contrat » ─────────── */
+.fd-group-title {
+  padding: 8px 14px 6px;
+  background: #fafaf9;
+  border-top: 1px solid #f1f1ef;
+  border-bottom: 1px solid #f1f1ef;
+  font-size: 10.5px;
+  font-weight: 600;
+  /* Contraste lisible (≥ 4,5:1 sur le fond #fafaf9) : ces étiquettes sont nouvelles. */
+  color: #6b6a66;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.fd-group-title:first-child {
+  border-top: 0;
+}
+/* Groupes empilés : un filet sépare l'étiquette de chaque groupe du précédent. */
+.fd-group + .fd-group > .fd-group-title {
+  border-top: 1px solid #f1f1ef;
+}
+
+/* ── Suivi d'échéance (formulaire sous l'état de compte) ─────────────── */
+/* Le sélecteur natif n'avait aucun style : il reprend celui des autres champs. */
+.fd-followup select {
+  border: 1px solid #e3e2e0;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font: inherit;
+  font-size: 12.5px;
+  background: #fff;
+  color: #37352f;
+}
+
+/* ── Grand écran (fiche en plein écran) : deux colonnes ──────────────── */
+/* Seuls les chapitres 2 à 4 se répartissent en colonnes ; la section
+   « Identité, contacts et contrat » reste pleine largeur au-dessus, comme
+   dans la version d'origine (sa ligne de titre ne change pas de forme).
+   À gauche « Paiements et suivi » ; à droite, l'un sous l'autre, « Contrats et
+   facturation » puis « Échanges, documents et historique ». */
+@media (min-width: 900px) {
+  /* Carte « Identité, contacts et contrat » : trois colonnes au lieu de lignes
+     étirées sur toute la largeur. Seul l'intérieur de la carte change : la ligne
+     de titre (et son bouton Modifier) garde exactement sa forme d'origine. */
+  .fd-identity-card[data-wide="true"] {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+  }
+  .fd-identity-card[data-wide="true"] > .fd-group + .fd-group {
+    border-left: 1px solid #f1f1ef;
+  }
+  .fd-identity-card[data-wide="true"] > .fd-group + .fd-group > .fd-group-title {
+    border-top: 0;
+  }
+
+  .fd-cols[data-wide="true"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    column-gap: 40px;
+    align-items: start;
+  }
+  .fd-cols[data-wide="true"] > .fd-chapter--payments {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+  .fd-cols[data-wide="true"] > .fd-chapter--billing {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .fd-cols[data-wide="true"] > .fd-chapter--exchanges {
+    grid-column: 2;
+    grid-row: 2;
+  }
+}
