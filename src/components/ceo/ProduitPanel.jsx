@@ -93,15 +93,15 @@ export default function ProduitPanel({ boardRows, dark }) {
         </motion.article>
 
         <motion.article className="an-panel" variants={item} aria-busy={pilotage.loading}>
-          <div className="an-panel-title"><h3>Portail client<small>{monthTitle ? `${monthTitle.charAt(0).toUpperCase()}${monthTitle.slice(1)} · ` : ''}mis à jour chaque nuit</small></h3><PanelIcon name="door" /></div>
+          <div className="an-panel-title"><h3>Portail client<small>{monthTitle ? `${monthTitle.charAt(0).toUpperCase()}${monthTitle.slice(1)} · ` : ''}chiffres du portail, mis à jour chaque nuit</small></h3><PanelIcon name="door" /></div>
           <PanelState error={pilotage.error} retry={pilotage.retry}>
             <div className="an-figures an-figures--3">
               <Bubble dark={dark} align="start" rows={def(defs.clients_back_30d)}>
                 <div className="an-figure">
                   <span className="an-figure-label"><UserRoundCheck size={13} strokeWidth={2.2} aria-hidden="true" /> Revenus sur 30 j</span>
                   <span className="an-figure-value an-figure-value--lg">{pilotage.loading ? <Dash /> : <Numeral value={p?.clients_back_30d} />}</span>
-                  <span className="an-figure-cap">sur {intFr(p?.client_accounts)} comptes clients</span>
-                  <Share part={p?.clients_back_30d} total={p?.client_accounts} label="des comptes" />
+                  <span className="an-figure-cap">sur {intFr(p?.client_accounts)} comptes ouverts sur le portail</span>
+                  <Share part={p?.clients_back_30d} total={p?.client_accounts} label="des comptes du portail" />
                 </div>
               </Bubble>
               <Bubble dark={dark} align="start" rows={def(defs.requests_waiting)}>
@@ -116,8 +116,8 @@ export default function ProduitPanel({ boardRows, dark }) {
                 <div className="an-figure">
                   <span className="an-figure-label"><FileUp size={13} strokeWidth={2.2} aria-hidden="true" /> Documents déposés</span>
                   <span className="an-figure-value an-figure-value--lg">{pilotage.loading ? <Dash /> : <Numeral value={p?.documents_month} delay={0.14} />}</span>
-                  <span className="an-figure-cap">{intFr(p?.documents_sent_to_firm)} envois au cabinet{p?.month ? ` en ${monthOf(p.month, { month: 'long' })}` : ' ce mois-ci'}</span>
-                  <Share part={p?.documents_sent_to_firm} total={p?.documents_month} label="envoyés au cabinet" />
+                  <span className="an-figure-cap">déposés sur le portail{p?.month ? ` en ${monthOf(p.month, { month: 'long' })}` : ' ce mois-ci'} · {intFr(p?.documents_sent_to_firm)} annoncés au cabinet</span>
+                  <Share part={p?.documents_sent_to_firm} total={p?.documents_month} label="annoncés au cabinet" />
                 </div>
               </Bubble>
             </div>

@@ -15,28 +15,29 @@ import { DRY_EXIT, EASE_OUT, FOLLOW_DELAY, SPRING, SPRING_POP, useMotionPrefs } 
 // opérationnels après signature se lisent sur les signatures du mois (cohorte
 // « début »), avec les dossiers encore en attente comptés à part.
 export const DELAYS = [
-  ['ads_contact', 'Arrivée du lead Ads → premier contact', 'Leads Ads reçus dans la période et affectés à un sales · minutes calendaires'],
-  ['contact_owner', 'Premier contact → signature Owner', 'Signatures Owner de la période, quel que soit le mois du premier contact'],
-  ['owner_optilex', 'Signature Owner → signature Opti’lex', 'Signatures Owner de la période'],
-  ['owner_onboarding', 'Signature Owner → onboarding Owner effectué', 'Signatures Owner de la période'],
-  ['owner_payment_monthly', 'Signature Owner → premier paiement mensuel', 'Signatures Owner de la période · clients mensuels · reçus réels datés'],
-  ['owner_payment_annual', 'Signature Owner → premier paiement annuel', 'Signatures Owner de la période · clients annuels · reçus réels datés'],
+  ['ads_contact', 'Arrivée du lead Ads → premier contact', 'Leads Ads arrivés dans le mois et affectés à un sales · minutes calendaires'],
+  ['contact_owner', 'Premier contact → signature Owner', 'Signatures Owner du mois, quel que soit le mois du premier contact'],
+  ['owner_optilex', 'Signature Owner → signature Opti’lex', 'Signatures Opti’lex reçues dans le mois'],
+  ['owner_onboarding', 'Signature Owner → onboarding Owner effectué', 'Onboardings effectués dans le mois'],
+  ['owner_payment_monthly', 'Signature Owner → premier paiement mensuel', 'Premiers paiements mensuels reçus dans le mois · reçus réels datés'],
+  ['owner_payment_annual', 'Signature Owner → premier paiement annuel', 'Premiers paiements annuels reçus dans le mois · reçus réels datés'],
 ];
 const LABEL = Object.fromEntries(DELAYS.map(([k, l]) => [k, l]));
 
-// La route : le parcours d'un client, de gauche à droite. Ligne principale du lead
-// à l'intégration ; en dessous, ce qui part de la signature Owner (trois délais qui
-// partent tous de la même station : chaque station marque la fin de son segment).
-// Le délai « Signature Opti'lex → intégration cabinet » n'est plus affiché : les RDV
-// d'intégration (rdv_lancement) n'existent plus, la mesure du back ne reçoit plus rien.
+// La route : le parcours d'un client, de gauche à droite, du lead à la signature Opti'lex.
+// En dessous, trois parcours PARALLÈLES qui partent tous de la signature Owner (onboarding,
+// premier paiement mensuel, premier paiement annuel) : chacun a son départ et son arrivée.
+// Règle (27/10/2026) : chaque étape se mesure sur ce qui s'est TERMINÉ dans le mois ; seul le
+// premier contact se mesure sur les leads ARRIVÉS dans le mois (cohorte renvoyée par l'API).
 const MAIN_LINE = {
   stations: ['Lead Ads', 'Premier contact', 'Signature Owner', 'Signature Opti’lex'],
   segments: ['ads_contact', 'contact_owner', 'owner_optilex'],
 };
-const BRANCH_LINE = {
-  stations: ['Signature Owner', 'Onboarding Owner', 'Premier paiement mensuel', 'Premier paiement annuel'],
-  segments: ['owner_onboarding', 'owner_payment_monthly', 'owner_payment_annual'],
-};
+const BRANCHES = [
+  { stations: ['Signature Owner', 'Onboarding Owner'], segments: ['owner_onboarding'] },
+  { stations: ['Signature Owner', 'Premier paiement mensuel'], segments: ['owner_payment_monthly'] },
+  { stations: ['Signature Owner', 'Premier paiement annuel'], segments: ['owner_payment_annual'] },
+];
 // Chaque station porte le pictogramme de son événement.
 const STATION_ICONS = {
   'Lead Ads': Megaphone, 'Premier contact': PhoneCall, 'Signature Owner': PenLine, 'Signature Opti’lex': Scale,
@@ -75,10 +76,21 @@ const railScale = (d, lineMaxDays) => (d?.unit === 'min' ? DAY : Math.max(lineMa
 function delayFacts(key, d) {
   if (!d) return null;
   const parts = [];
-  const verb = key === 'ads_contact' ? 'contacté' : 'mesuré';
-  if (d.count) parts.push(`${nf(d.count, 0)} ${verb}${plural(d.count, '', 's')} sur ${nf(d.eligible, 0)}`);
-  else if (d.eligible) parts.push(`aucun ${verb} sur ${nf(d.eligible, 0)}`);
-  if (d.pending) parts.push(`${nf(d.pending, 0)} en attente`);
+  if (key === 'ads_contact') {
+    // Leads arrivés dans le mois : contactés sur affectés, jamais contactés.
+    if (d.count) parts.push(`${nf(d.count, 0)} contacté${plural(d.count, '', 's')} sur ${nf(d.eligible, 0)}`);
+    else if (d.eligible) parts.push(`aucun contacté sur ${nf(d.eligible, 0)}`);
+    if (d.pending) parts.push(`${nf(d.pending, 0)} jamais contacté${plural(d.pending, '', 's')}`);
+  } else if (d.cohort === 'end') {
+    // Terminés dans le mois : l'échantillon est complet, il n'y a pas d'« en attente ».
+    if (d.count) parts.push(`${nf(d.count, 0)} dans le mois`);
+    if (d.missing_start) parts.push(`${nf(d.missing_start, 0)} sans départ connu`);
+  } else {
+    // Ancienne règle (API pas encore à jour) : commencés dans le mois, avec les en attente.
+    if (d.count) parts.push(`${nf(d.count, 0)} mesuré${plural(d.count, '', 's')} sur ${nf(d.eligible, 0)}`);
+    else if (d.eligible) parts.push(`aucun mesuré sur ${nf(d.eligible, 0)}`);
+    if (d.pending) parts.push(`${nf(d.pending, 0)} en attente`);
+  }
   const med = readableMedian(d);
   if (med && d.count) parts.push(`médiane ${med}`);
   return parts.join(' · ');
@@ -134,7 +146,7 @@ function Segment({ k, d, index, count, onOpen, onHover, reduce, maxDays }) {
         transition={reduce ? { duration: 0 } : { ...SPRING, delay: delay + 0.2, opacity: { duration: 0.12, delay: delay + 0.2 } }}
       >
         <span className="an-segment-value">
-          {r ? <Numeral value={r.value} format={(v) => nf(v, r.digits)} /> : <span className="an-segment-none">pas encore mesurable</span>}
+          {r ? <Numeral value={r.value} format={(v) => nf(v, r.digits)} /> : <span className="an-segment-none">{d ? (k === 'ads_contact' ? 'aucun contact mesuré' : d.cohort === 'end' ? 'rien de terminé ce mois-ci' : 'pas encore mesurable') : '—'}</span>}
           {r && <span className="an-unit">{r.unit}</span>}
         </span>
         {r?.legend && <span className="an-segment-eq">{r.legend}</span>}
@@ -185,7 +197,9 @@ export default function DelaysFrieze({ dark }) {
           <div className="an-frieze">
             <Line {...MAIN_LINE} metrics={metrics} onOpen={setDetail} reduce={reduce} />
             <p className="an-branch-title">Après la signature Owner</p>
-            <Line {...BRANCH_LINE} metrics={metrics} onOpen={setDetail} reduce={reduce} hollowFirst />
+            <div className="an-branches">
+              {BRANCHES.map((b) => <Line key={b.stations[1]} {...b} metrics={metrics} onOpen={setDetail} reduce={reduce} hollowFirst />)}
+            </div>
           </div>
         )}
         {!state.loading && !state.error && (
@@ -193,7 +207,7 @@ export default function DelaysFrieze({ dark }) {
             <summary>Comment ces délais sont calculés <ChevronDown size={15} aria-hidden="true" /></summary>
             <dl>{DELAYS.map(([key, label, cohort]) => {
               const d = metrics?.[key];
-              return <div key={key}><dt>{label}</dt><dd>{cohort} · {d ? `${nf(d.count, 0)} mesuré${plural(d.count, '', 's')} sur ${nf(d.eligible, 0)}${d.pending ? ` · ${nf(d.pending, 0)} en attente` : ''}` : '—'}</dd></div>;
+              return <div key={key}><dt>{label}</dt><dd>{cohort} · {d ? (d.cohort === 'start' ? `${nf(d.count, 0)} mesuré${plural(d.count, '', 's')} sur ${nf(d.eligible, 0)}${d.pending ? ` · ${nf(d.pending, 0)} ${key === 'ads_contact' ? `jamais contacté${plural(d.pending, '', 's')}` : 'en attente'}` : ''}` : `${nf(d.count, 0)} terminé${plural(d.count, '', 's')} dans le mois${d.missing_start ? ` · ${nf(d.missing_start, 0)} sans départ connu` : ''}`) : '—'}</dd></div>;
             })}</dl>
           </details>
         )}
@@ -204,6 +218,8 @@ export default function DelaysFrieze({ dark }) {
 }
 
 const DETAIL_TABS = [['rows', 'Mesurés'], ['pending', 'En attente'], ['missing', 'Non mesurables']];
+// L'onglet « En attente » n'a de sens que pour les leads arrivés dans le mois (cohorte 'start').
+const tabsFor = (cohort) => DETAIL_TABS.filter(([key]) => key !== 'pending' || cohort === 'start');
 const ROWS_ANIMATED = 24;   // au-delà, les lignes arrivent sans décalage : on ne fait pas attendre une liste
 
 // Ce qu'il y a derrière une moyenne : chaque dossier, du plus long au plus court.
@@ -243,8 +259,10 @@ export function DelayDetailModal({ metric, period, dark, onClose }) {
   const isLead = metric === 'ads_contact';
   const tabLabel = (key) => (key === 'pending' && d?.definition?.pending_label) || (key === 'missing' && d?.definition?.missing_label) || DETAIL_TABS.find(([k]) => k === key)[1];
   const cohortSentence = s?.cohort === 'end'
-    ? 'Toutes les signatures de la période, quel que soit le mois du premier contact.'
-    : 'Dossiers commencés dans la période. Ceux en attente ne pèsent pas dans la moyenne.';
+    ? 'Tout ce qui s’est terminé dans la période, quelle que soit la date de départ : échantillon complet.'
+    : metric === 'ads_contact'
+      ? 'Leads arrivés dans la période. Ceux jamais contactés ne pèsent pas dans la moyenne.'
+      : 'Dossiers commencés dans la période. Ceux en attente ne pèsent pas dans la moyenne.';
   // Barre de chaque ligne : à l'échelle du plus long délai (ou de la plus longue attente) de l'onglet.
   const scaleKey = tab === 'pending' ? 'age' : 'value';
   const longest = Math.max(0, ...rows.map((r) => Number(r[scaleKey]) || 0));
@@ -275,11 +293,13 @@ export function DelayDetailModal({ metric, period, dark, onClose }) {
               <motion.div variants={item} className="is-hero"><dt>Moyenne</dt><dd><Numeral value={s.average} format={(v) => nf(v, digits)} unit={unitLabel(unit)} /></dd></motion.div>
               <motion.div variants={item}><dt>Médiane</dt><dd><Numeral value={s.median} format={(v) => nf(v, digits)} unit={unitLabel(unit)} /></dd></motion.div>
               <motion.div variants={item}><dt>Mesurés</dt><dd><Numeral value={s.count} /> <small>sur {intFr(s.eligible)}</small></dd></motion.div>
-              <motion.div variants={item}><dt>En attente</dt><dd><Numeral value={s.pending} />{s.pending_average_age != null && <small>depuis {fmtValue(s.pending_average_age)} en moyenne</small>}</dd></motion.div>
+              {s.cohort === 'start'
+                ? <motion.div variants={item}><dt>{metric === 'ads_contact' ? 'Jamais contactés' : 'En attente'}</dt><dd><Numeral value={s.pending} />{s.pending_average_age != null && <small>depuis {fmtValue(s.pending_average_age)} en moyenne</small>}</dd></motion.div>
+                : <motion.div variants={item}><dt>Sans départ connu</dt><dd><Numeral value={s.missing_start} /></dd></motion.div>}
             </motion.dl>
             <p className="an-modal-pad an-modal-cohort">{cohortSentence}</p>
             <div className="an-tabs an-modal-pad" role="tablist">
-              {DETAIL_TABS.map(([key]) => (
+              {tabsFor(s?.cohort).map(([key]) => (
                 <button type="button" key={key} role="tab" aria-selected={tab === key} className={`an-tab${tab === key ? ' is-active' : ''}`} onClick={() => setTab(key)}>
                   {tabLabel(key)} <span>{nf(totals[key], 0)}</span>
                   {tab === key && <motion.i className="an-tab-ink" layoutId="an-tab-ink" transition={reduce ? { duration: 0 } : SPRING} aria-hidden="true" />}
