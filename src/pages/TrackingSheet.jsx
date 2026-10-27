@@ -18,6 +18,7 @@ import apiClient from "../services/apiClient";
 import LeadSmsActions from "../components/LeadSmsActions";
 import { CalendarCheck2, ChevronRight, Building2, UserRoundCheck, ArrowRight, PhoneCall, UserSearch, ListChecks, SlidersHorizontal, Funnel, ChartNoAxesCombined } from 'lucide-react';
 import SalesProspection from "../components/setter/prospection/SalesProspection.jsx";
+import { isMobilePhone } from "../components/setter/prospection/mobilePhones.js";
 import R1QualificationDialog from '../components/salesJourney/R1QualificationDialog';
 import DailyQualificationDeck from '../components/salesJourney/DailyQualificationDeck';
 import { ownRdvsToQualify, viewedSheet } from '../utils/dailyQualification';
@@ -1603,6 +1604,7 @@ export default function TrackingSheet() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTags, setFilterTags] = useState([]); // multi-select: r1_result or r2_result values (e.g. ['no_show', 'done'])
   const [filterOrigins, setFilterOrigins] = useState([]); // multi-select: origin values (e.g. ['BTP', 'cc'])
+  const [filterMobileOnly, setFilterMobileOnly] = useState(false); // toggle : ne garde que les leads avec un mobile français (06 / 07) ; fixes, 09, étrangers et sans numéro écartés
   const [filterStatuses, setFilterStatuses] = useState([]); // multi-select: ['r1_done', 'r1_not_done', 'r2_done', 'r2_not_done']
   const [filterCallTime, setFilterCallTime] = useState([]); // multi-select: ['matin', 'apres_midi', 'soir'] — first_call_at time-of-day filter
   const [sortOrder, setSortOrder] = useState('newest'); // 'newest' | 'oldest'
@@ -1771,6 +1773,11 @@ export default function TrackingSheet() {
     if (filterOrigins.length > 0) {
       result = result.filter(l => filterOrigins.includes(l.origin));
     }
+    // Filter "Téléphones mobiles" : numéro normalisé 06 / 07 (+33, 0033…), un champ à plusieurs numéros est gardé
+    // dès qu'un numéro est un mobile ; fixes, 09, numéros étrangers et leads sans numéro sont écartés.
+    if (filterMobileOnly) {
+      result = result.filter(l => isMobilePhone(l.phone));
+    }
     // Filter by tag (qualification result) — tab-contextual field
     if (filterTags.length > 0) {
       if (catKey === 'r1') {
@@ -1827,7 +1834,7 @@ export default function TrackingSheet() {
       result = [...result].sort((a, b) => (b.assigned_at || '').localeCompare(a.assigned_at || ''));
     }
     return result;
-  }, [leads, activeTab, exitingCards, searchQuery, filterTags, filterStatuses, filterOrigins, filterCallTime, sortOrder]);
+  }, [leads, activeTab, exitingCards, searchQuery, filterTags, filterStatuses, filterOrigins, filterMobileOnly, filterCallTime, sortOrder]);
 
   // Dismiss a notification (optimistic + backend persist)
   const dismissNotif = (key) => {
@@ -4732,6 +4739,20 @@ export default function TrackingSheet() {
                     ))
                   );
                 })()}
+
+                {/* Téléphones mobiles — tous les onglets. Toggle binaire : ne garde que les leads dont le
+                    numéro normalisé est un mobile français (06 / 07, +33, 0033…) ; fixes, 09, numéros
+                    étrangers et leads sans numéro sont masqués. */}
+                {renderFilterRow('phone_type', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>, 'Téléphones mobiles', true)}
+                {openFilterSections.has('phone_type') && renderOptionsBox([
+                  <div key="phone_type_toggle">{renderRadio(filterMobileOnly, 'Uniquement les mobiles (06 / 07)', C.accent, () => setFilterMobileOnly(v => !v))}</div>,
+                  filterMobileOnly && (
+                    <div key="phone_type_hint" style={{ fontSize: 12, color: C.muted, padding: '2px 0 4px 26px', lineHeight: 1.45 }}>
+                      <div>{filteredLeads.length} lead{filteredLeads.length > 1 ? 's' : ''} affiché{filteredLeads.length > 1 ? 's' : ''}</div>
+                      <div>Fixes, 09 et sans numéro masqués</div>
+                    </div>
+                  ),
+                ])}
               </div>
 
               {/* ═══ GROUP: TRI & DATES ═══ */}
@@ -4779,9 +4800,9 @@ export default function TrackingSheet() {
               <div style={{ flex: 1 }} />
 
               {/* Clear all — bottom */}
-              {(filterTags.length > 0 || filterStatuses.length > 0 || filterOrigins.length > 0 || filterCallTime.length > 0 || sortOrder !== 'newest') && (
+              {(filterTags.length > 0 || filterStatuses.length > 0 || filterOrigins.length > 0 || filterMobileOnly || filterCallTime.length > 0 || sortOrder !== 'newest') && (
                 <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}` }}>
-                  <button onClick={() => { setFilterTags([]); setFilterStatuses([]); setFilterOrigins([]); setFilterCallTime([]); setSortOrder('newest'); }} style={{
+                  <button onClick={() => { setFilterTags([]); setFilterStatuses([]); setFilterOrigins([]); setFilterMobileOnly(false); setFilterCallTime([]); setSortOrder('newest'); }} style={{
                     width: '100%', padding: '8px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
                     border: `1px solid ${C.accent}40`, background: `${C.accent}08`, color: C.accent,
                     cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
@@ -4836,7 +4857,7 @@ export default function TrackingSheet() {
                 color: C.muted,
                 display: 'flex', alignItems: 'center', gap: 8,
               }}>
-                {activeCat.description} — {tabCounts[activeCat.key]} lead{tabCounts[activeCat.key] !== 1 ? 's' : ''}
+                {activeCat.description} — {filterMobileOnly ? `${filteredLeads.length} sur ${tabCounts[activeCat.key]}` : tabCounts[activeCat.key]} lead{tabCounts[activeCat.key] !== 1 ? 's' : ''}
                 <button
                   onClick={() => setShowAddLeadModal(true)}
                   title="Ajouter un lead"

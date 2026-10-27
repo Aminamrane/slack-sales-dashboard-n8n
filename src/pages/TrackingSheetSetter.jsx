@@ -20,6 +20,7 @@ import {Phone, CalendarDays, ChevronRight, UserSearch, ListChecks, UsersRound, V
 import SecondChance from "../components/setter/secondChance/SecondChance.jsx";
 import ProspectSearch from "../components/setter/prospection/ProspectSearch.jsx";
 import ProspectLists from "../components/setter/prospection/ProspectLists.jsx";
+import { isMobilePhone } from "../components/setter/prospection/mobilePhones.js";
 import PilotageSetting from "../components/setter/PilotageSetting.jsx";
 import SetterWebinarRdv from "../components/setter/SetterWebinarRdv.jsx";
 import InternalCalendar from "../components/calendar/InternalCalendar";
@@ -1132,6 +1133,7 @@ export default function TrackingSheetSetter() {
   const [filterSalesOwners, setFilterSalesOwners] = useState([]); // multi-select setter only: emails des sales propriétaires (scope = teamSales)
   const [filterMyColdCallsOnly, setFilterMyColdCallsOnly] = useState(false); // toggle setter only (Nouveau lead): n'affiche que ses propres cold calls
   const [filterHideOtherTreated, setFilterHideOtherTreated] = useState(false); // toggle setter only: masque les leads déjà appelés par un AUTRE setter (coordination)
+  const [filterMobileOnly, setFilterMobileOnly] = useState(false); // toggle : ne garde que les leads avec un mobile français (06 / 07) ; fixes, 09, étrangers et sans numéro écartés
   const [filterStatuses, setFilterStatuses] = useState([]); // multi-select: ['r1_done', 'r1_not_done', 'r2_done', 'r2_not_done']
   const [filterCallTime, setFilterCallTime] = useState([]); // multi-select: ['matin', 'apres_midi', 'soir'] — first_call_at time-of-day filter
   const [sortOrder, setSortOrder] = useState('newest'); // 'newest' | 'oldest'
@@ -1288,6 +1290,11 @@ export default function TrackingSheetSetter() {
       result = result.filter(l => !(Array.isArray(l.treated_by_setters)
         && l.treated_by_setters.some(e => e?.email && e.email.toLowerCase() !== myEmailLower)));
     }
+    // Filter "Téléphones mobiles" : numéro normalisé 06 / 07 (+33, 0033…), un champ à plusieurs numéros est gardé
+    // dès qu'un numéro est un mobile ; fixes, 09, numéros étrangers et leads sans numéro sont écartés.
+    if (filterMobileOnly) {
+      result = result.filter(l => isMobilePhone(l.phone));
+    }
     // Filter by tag (qualification result) — tab-contextual field
     if (filterTags.length > 0) {
       if (catKey === 'r1') {
@@ -1343,7 +1350,7 @@ export default function TrackingSheetSetter() {
       result = [...result].sort((a, b) => (b.assigned_at || '').localeCompare(a.assigned_at || ''));
     }
     return result;
-  }, [leads, activeTab, exitingCards, searchQuery, filterTags, filterStatuses, filterOrigins, filterSalesOwners, filterMyColdCallsOnly, filterHideOtherTreated, filterCallTime, sortOrder, signedMonth]);
+  }, [leads, activeTab, exitingCards, searchQuery, filterTags, filterStatuses, filterOrigins, filterSalesOwners, filterMyColdCallsOnly, filterHideOtherTreated, filterMobileOnly, filterCallTime, sortOrder, signedMonth]);
 
   // Dismiss a notification (optimistic + backend persist)
   const dismissNotif = (key) => {
@@ -4280,6 +4287,20 @@ export default function TrackingSheetSetter() {
                   );
                 })()}
 
+                {/* Téléphones mobiles — tous les onglets. Toggle binaire comme « Déjà traités » : ne garde que
+                    les leads dont le numéro normalisé est un mobile français (06 / 07, +33, 0033…) ;
+                    fixes, 09, numéros étrangers et leads sans numéro sont masqués. */}
+                {renderFilterRow('phone_type', <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>, 'Téléphones mobiles', true)}
+                {openFilterSections.has('phone_type') && renderOptionsBox([
+                  <div key="phone_type_toggle">{renderRadio(filterMobileOnly, 'Uniquement les mobiles (06 / 07)', C.accent, () => setFilterMobileOnly(v => !v))}</div>,
+                  filterMobileOnly && (
+                    <div key="phone_type_hint" style={{ fontSize: 12, color: C.muted, padding: '2px 0 4px 26px', lineHeight: 1.45 }}>
+                      <div>{filteredLeads.length} lead{filteredLeads.length > 1 ? 's' : ''} affiché{filteredLeads.length > 1 ? 's' : ''}</div>
+                      <div>Fixes, 09 et sans numéro masqués</div>
+                    </div>
+                  ),
+                ])}
+
                 {/* Mes cold calls uniquement — setter only, Nouveau lead.
                     Isole les leads créés par le setter (Scénario 2) parmi
                     les 3 sources du bucket (cold-call / overflow / uncalled
@@ -4372,9 +4393,9 @@ export default function TrackingSheetSetter() {
               <div style={{ flex: 1 }} />
 
               {/* Clear all — bottom */}
-              {(filterTags.length > 0 || filterStatuses.length > 0 || filterOrigins.length > 0 || filterSalesOwners.length > 0 || filterMyColdCallsOnly || filterHideOtherTreated || filterCallTime.length > 0 || sortOrder !== 'newest') && (
+              {(filterTags.length > 0 || filterStatuses.length > 0 || filterOrigins.length > 0 || filterSalesOwners.length > 0 || filterMyColdCallsOnly || filterHideOtherTreated || filterMobileOnly || filterCallTime.length > 0 || sortOrder !== 'newest') && (
                 <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}` }}>
-                  <button onClick={() => { setFilterTags([]); setFilterStatuses([]); setFilterOrigins([]); setFilterSalesOwners([]); setFilterMyColdCallsOnly(false); setFilterHideOtherTreated(false); setFilterCallTime([]); setSortOrder('newest'); }} style={{
+                  <button onClick={() => { setFilterTags([]); setFilterStatuses([]); setFilterOrigins([]); setFilterSalesOwners([]); setFilterMyColdCallsOnly(false); setFilterHideOtherTreated(false); setFilterMobileOnly(false); setFilterCallTime([]); setSortOrder('newest'); }} style={{
                     width: '100%', padding: '8px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
                     border: `1px solid ${C.accent}40`, background: `${C.accent}08`, color: C.accent,
                     cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
@@ -4452,7 +4473,7 @@ export default function TrackingSheetSetter() {
                 color: C.muted,
                 display: 'flex', alignItems: 'center', gap: 8,
               }}>
-                {activeCat.description} — {tabCounts[activeCat.key]} lead{tabCounts[activeCat.key] !== 1 ? 's' : ''}
+                {activeCat.description} — {filterMobileOnly ? `${filteredLeads.length} sur ${tabCounts[activeCat.key]}` : tabCounts[activeCat.key]} lead{tabCounts[activeCat.key] !== 1 ? 's' : ''}
                 {/* Garde Option B : bouton "+" ajouter lead générique caché
                     côté setter — le setter utilise "+ Nouveau lead" dans
                     les folder tabs (CreateColdLeadModal). */}

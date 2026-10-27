@@ -2,7 +2,7 @@
 // entonnoir de prospection, les fiches société, l'export CSV et l'export vers le CRM (leads dans « Mes
 // leads »). `canBook` : prise de RDV depuis la liste (parcours setter ; un commercial pose son R1 depuis
 // sa sheet après l'export).
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Building2, CalendarDays, FileText, Mail, Send, MessageCircle, ChevronRight, ChevronDown, Download, Upload,
   MoreHorizontal, Search, MapPin, Users, Globe, ExternalLink, Phone, UserRound, Star, Trash2, ArrowLeft, Loader2, CheckCircle2,
@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import SetterJourneyDialog from '../SetterJourneyDialog';
 import { prospectionApi, errorMessage } from './prospectionApi';
+import { crmMobileSelection } from './mobilePhones';
 import { Card, Chip, Button, Modal, IconButton, ProspectionStyles } from './ui';
 import { MONO, fmtInt, fmtDay, fmtWallDateTime, inputStyle, STATUS_META, chipColors } from './format';
 
@@ -169,21 +170,34 @@ function ListDetail({ C, darkMode, listId, onBack, onToast, onOpenLeads, teamSal
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [rdvItem, setRdvItem] = useState(null);
+  // Filtre « mobiles uniquement » (06 / 07) : la liste affichée et les deux exports ne gardent que les entreprises à mobile.
+  const [mobileOnly, setMobileOnly] = useState(false);
+  const seq = useRef(0);
 
   const refresh = useCallback(async () => {
+    const mine = ++seq.current;
+    const fetchItems = mobileOnly ? prospectionApi.mobileItems : prospectionApi.items;
     try {
-      const [l, it] = await Promise.all([prospectionApi.getList(listId), prospectionApi.items(listId, { q, status, page, pageSize })]);
+      const [l, it] = await Promise.all([prospectionApi.getList(listId), fetchItems(listId, { q, status, page, pageSize })]);
+      if (mine !== seq.current) return;
       setList(l); setItems(it); setError('');
-    } catch (err) { setError(errorMessage(err)); }
-  }, [listId, q, status, page, pageSize]);
+    } catch (err) { if (mine === seq.current) setError(errorMessage(err)); }
+  }, [listId, q, status, page, pageSize, mobileOnly]);
 
   useEffect(() => { const t = setTimeout(refresh, q ? 250 : 0); return () => clearTimeout(t); }, [refresh, q]);
 
   const exportCrm = async (itemIds = null) => {
     setBusy('crm');
     try {
-      const r = await prospectionApi.exportCrm(listId, itemIds);
-      setExportResult(r);
+      let ids = itemIds;
+      let left = 0;
+      if (!ids && mobileOnly) {
+        ({ ids, left } = crmMobileSelection(await prospectionApi.allItems(listId)));
+        // Jamais une liste vide : le serveur l'entendrait comme « toute la liste », fixes comprises.
+        if (!ids.length) { setExportResult({ created: [], duplicates: [], without_phone: [], left }); return; }
+      }
+      const r = await prospectionApi.exportCrm(listId, ids);
+      setExportResult({ ...r, left });
       await refresh();
     } catch (err) { onToast?.(errorMessage(err), 'err'); } finally { setBusy(''); }
   };
@@ -204,7 +218,11 @@ function ListDetail({ C, darkMode, listId, onBack, onToast, onOpenLeads, teamSal
   };
   const downloadCsv = async () => {
     setBusy('csv');
-    try { await prospectionApi.downloadCsv(listId, list?.name); } catch (err) { onToast?.(errorMessage(err), 'err'); } finally { setBusy(''); }
+    try {
+      const r = await prospectionApi.downloadCsv(listId, { mobileOnly });
+      if (r?.kept) onToast?.(`${fmtInt(r.kept)} entreprise${r.kept > 1 ? 's' : ''} avec un mobile exportée${r.kept > 1 ? 's' : ''}, ${fmtInt(r.dropped)} fixe${r.dropped > 1 ? 's' : ''} ou sans numéro écarté${r.dropped > 1 ? 's' : ''}.`);
+      else if (r) onToast?.('Aucune entreprise avec un mobile (06 / 07) : rien à exporter.', 'err');
+    } catch (err) { onToast?.(errorMessage(err), 'err'); } finally { setBusy(''); }
   };
   const changeStatus = async (item, next) => {
     try { await prospectionApi.setStatus(item.id, next); await refresh(); } catch (err) { onToast?.(errorMessage(err), 'err'); }
@@ -257,10 +275,15 @@ function ListDetail({ C, darkMode, listId, onBack, onToast, onOpenLeads, teamSal
       </Card>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <Button C={C} darkMode={darkMode} onClick={downloadCsv} disabled={busy === 'csv'}><Download size={17} /> Exporter CSV</Button>
-        <Button C={C} darkMode={darkMode} onClick={() => exportCrm(null)} disabled={busy === 'crm' || pending <= 0}
-          title={pending <= 0 ? 'Toutes les entreprises sont déjà dans le CRM' : 'Créer un lead dans « Mes leads » pour chaque entreprise'}>
-          {busy === 'crm' ? <Loader2 size={17} style={{ animation: 'prospSpin 1s linear infinite' }} /> : <Upload size={17} />} Exporter vers CRM
+        <Button C={C} darkMode={darkMode} onClick={downloadCsv} disabled={busy === 'csv'} style={FIT_ROW}
+          title={mobileOnly ? 'Seules les entreprises avec un mobile (06 / 07) sont exportées' : undefined}>
+          <Download size={17} /> Exporter CSV{mobileOnly ? ' (mobiles)' : ''}
+        </Button>
+        <Button C={C} darkMode={darkMode} onClick={() => exportCrm(null)} disabled={busy === 'crm' || pending <= 0} style={FIT_ROW}
+          title={pending <= 0 ? 'Toutes les entreprises sont déjà dans le CRM'
+            : mobileOnly ? 'Créer un lead dans « Mes leads » pour chaque entreprise avec un mobile (06 / 07)'
+              : 'Créer un lead dans « Mes leads » pour chaque entreprise'}>
+          {busy === 'crm' ? <Loader2 size={17} style={{ animation: 'prospSpin 1s linear infinite' }} /> : <Upload size={17} />} Exporter vers CRM{mobileOnly ? ' (mobiles)' : ''}
         </Button>
         <span style={{ width: 1, height: 28, background: C.border, margin: '0 4px' }} />
         <div style={{ position: 'relative' }}>
@@ -284,10 +307,17 @@ function ListDetail({ C, darkMode, listId, onBack, onToast, onOpenLeads, teamSal
         </div>
         <Select C={C} value={status} onChange={(v) => { setStatus(v); setPage(1); }}
           options={[['', 'Tous les statuts'], ...Object.entries(STATUS_META).map(([k, m]) => [k, m.label])]} />
+        <Select C={C} ariaLabel="Type de téléphone" value={mobileOnly ? 'mobile' : ''} onChange={(v) => { setMobileOnly(v === 'mobile'); setPage(1); }}
+          options={[['', 'Tous les téléphones'], ['mobile', 'Mobiles uniquement (06 / 07)']]} />
         <Select C={C} value={String(pageSize)} onChange={(v) => { setPageSize(Number(v)); setPage(1); }}
           options={[['25', '25 / page'], ['50', '50 / page'], ['100', '100 / page']]} />
       </div>
 
+      {mobileOnly && items && (
+        <div style={{ color: C.muted, fontSize: 13 }}>
+          {fmtInt(items.total)} entreprise{items.total > 1 ? 's' : ''} avec un mobile · {fmtInt(items.excluded)} ligne{items.excluded > 1 ? 's' : ''} fixe{items.excluded > 1 ? 's' : ''} ou sans numéro écartée{items.excluded > 1 ? 's' : ''}
+        </div>
+      )}
       {items?.items.length === 0 && <div style={{ color: C.muted, fontSize: 14 }}>Aucune entreprise ne correspond.</div>}
       {items?.items.map((item) => (
         <CompanyCard key={item.id} C={C} darkMode={darkMode} item={item} onStatus={(s) => changeStatus(item, s)}
@@ -324,10 +354,13 @@ function ListDetail({ C, darkMode, listId, onBack, onToast, onOpenLeads, teamSal
   );
 }
 
-function Select({ C, value, onChange, options }) {
+// Écran étroit : le libellé passe à la ligne et le menu se réduit à la largeur de la rangée, au lieu de dépasser la colonne.
+const FIT_ROW = { maxWidth: '100%', whiteSpace: 'normal', textAlign: 'left' };
+
+function Select({ C, value, onChange, options, ariaLabel }) {
   return (
-    <div style={{ position: 'relative' }}>
-      <select value={value} onChange={(e) => onChange(e.target.value)} style={{ ...inputStyle(C), appearance: 'none', padding: '12px 42px 12px 16px', fontSize: 15, cursor: 'pointer' }}>
+    <div style={{ position: 'relative', maxWidth: '100%' }}>
+      <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={ariaLabel} style={{ ...inputStyle(C), appearance: 'none', padding: '12px 42px 12px 16px', fontSize: 15, cursor: 'pointer', maxWidth: '100%' }}>
         {options.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
       </select>
       <ChevronDown size={17} color={C.muted} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
@@ -439,6 +472,9 @@ function ExportResult({ C, darkMode, result, onClose, onOpenLeads }) {
       )}
       {result.without_phone.length > 0 && (
         <p style={{ fontSize: 14, color: C.muted }}>{result.without_phone.length} sans téléphone, laissée{result.without_phone.length > 1 ? 's' : ''} dans la liste.</p>
+      )}
+      {result.left > 0 && (
+        <p style={{ fontSize: 14, color: C.muted }}>{result.left} fixe{result.left > 1 ? 's' : ''} ou sans numéro, laissée{result.left > 1 ? 's' : ''} dans la liste.</p>
       )}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
         <Button C={C} darkMode={darkMode} onClick={onClose}>Fermer</Button>
