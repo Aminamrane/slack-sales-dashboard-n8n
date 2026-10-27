@@ -60,12 +60,15 @@ export const ETAT_STYLE = {
 // programmes ont chacun leur menu ; la météo repasse en chips directes.
 // Retour de Paul (2026-09-03) : « en cours de résiliation » et « en cours de
 // rétractation » restent visibles en première ligne, le reste vit en menus.
-const PRIMARY_TABS = ["Tous", "Signé", "Attente Opti'Lex", "Intégration à venir", "En cours de résiliation", "En cours de rétractation"];
-const SECONDARY_CATS = ["En cours de liquidation", "Résiliation", "Rétractation", "Self-Résiliation", "Liquidation", "Pause", "Renouvellement client", "Inactifs", "En cours", "En attente", "Sans suite"];
+// Dev 2026-10-27 : l'onglet « RDV intégration à venir » (et son sous-filtre « En retard ») n'est plus utile,
+// il sort de la barre ; « En cours de liquidation » y entre à sa place. L'alerte et le badge « En retard »
+// d'une ligne restent (boardPredicates).
+const PRIMARY_TABS = ["Tous", "Signé", "Attente Opti'Lex", "En cours de résiliation", "En cours de rétractation", "En cours de liquidation"];
+const SECONDARY_CATS = ["Résiliation", "Rétractation", "Self-Résiliation", "Liquidation", "Pause", "Renouvellement client", "Inactifs", "En cours", "En attente", "Sans suite"];
 // Onglets à logique de tri PROPRE (pas le tri "entré le plus récemment dans l'état") : tout le
 // reste = onglet d'état -> tri par date d'entrée dans l'état, le plus récent en haut.
-const NON_ETAT_SORTED_TABS = ["Tous", "Renouvellement client", "Inactifs", "Onboarding à venir", "Intégration à venir"];
-const TAB_LABEL = { "Attente Opti'Lex": "En attente Opti'Lex", "Onboarding à venir": "Onboarding Owner à venir", "Intégration à venir": "RDV intégration à venir" };
+const NON_ETAT_SORTED_TABS = ["Tous", "Renouvellement client", "Inactifs", "Onboarding à venir"];
+const TAB_LABEL = { "Attente Opti'Lex": "En attente Opti'Lex", "Onboarding à venir": "Onboarding Owner à venir" };
 const tabLabel = (t) => TAB_LABEL[t] || t;
 // États que le cabinet peut poser manuellement (badge cliquable, table + fiche).
 const ETAT_OPTIONS = ["Signé", "En cours de résiliation", "En cours de rétractation", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation", "En cours de liquidation"];
@@ -158,7 +161,7 @@ const TERMINATED_ETATS = EXITED_ETATS; // liste partagée avec le dashboard CEO 
 // cumuler plusieurs) : elles se combinent en ET avec les états, pour permettre
 // des croisements du type « en cours de résiliation ET contrat qui arrive à
 // échéance ET onboarding encore à faire » (besoin Vincent, 2026-08-26).
-const CRITERIA_CATS = ["Onboarding à venir", "Intégration à venir", "Renouvellement client", "Inactifs"];
+const CRITERIA_CATS = ["Onboarding à venir", "Renouvellement client", "Inactifs"];
 const anniversaryDaysLeft = (r) => {
   const d = sigDateOf(r);
   if (!d) return null;
@@ -183,7 +186,6 @@ const isRenewalUpcoming = (r) => {
 const matchesCat = (r, cat) => {
   if (cat === "Signé") return matchesSignedClient(r, displayEtat(r));
   if (cat === "Onboarding à venir") return isOnboardingUpcoming(r);
-  if (cat === "Intégration à venir") return isIntegrationUpcoming(r);
   if (cat === "Inactifs") return isInactif(r);
   if (cat === "Renouvellement client") return isRenewalUpcoming(r);
   return displayEtat(r) === cat;
@@ -837,7 +839,6 @@ export default function OptilexBoard({ embed = false }) {
   // multi-sélection = UNION au sein du menu, la famille reste en ET avec le reste.
   const [programmeSel, setProgrammeSel] = useState([]);    // 'ambassadeur' | 'parrainage'
   const [onboardingSel, setOnboardingSel] = useState([]);  // 'venir' | 'done' | 'todo' | 'noshow' | 'recaler'
-  const [integrationView, setIntegrationView] = useState("all"); // sous-filtre onglet Intégration : "all" | "overdue"
   const [sortCol, setSortCol] = useState(null);   // tri manuel par en-tête : null | owner_signed | onboarding | integration
   const [sortDir, setSortDir] = useState("asc");  // asc | desc
   const [q, setQ] = useState("");
@@ -907,16 +908,12 @@ export default function OptilexBoard({ embed = false }) {
       if (e) c[e] = (c[e] || 0) + 1;
       if (e !== "Signé" && matchesSignedClient(r, e)) c["Signé"] = (c["Signé"] || 0) + 1;
       if (isOnboardingUpcoming(r)) c["Onboarding à venir"] = (c["Onboarding à venir"] || 0) + 1;
-      if (isIntegrationUpcoming(r)) c["Intégration à venir"] = (c["Intégration à venir"] || 0) + 1;
-      if (isIntegrationOverdue(r)) c["__integration_overdue"] = (c["__integration_overdue"] || 0) + 1;
       if (isInactif(r)) c["Inactifs"] = (c["Inactifs"] || 0) + 1;
       if (isRenewalUpcoming(r)) c["Renouvellement client"] = (c["Renouvellement client"] || 0) + 1;
     }
     return c;
   }, [rows]);
   const establishedCount = useMemo(() => rows.filter((r) => !r.is_pending_contract).length, [rows]);
-  // Quitter l'onglet Intégration -> réinitialise le sous-filtre (pas de filtre "En retard" caché au retour).
-  useEffect(() => { if (etatFilter !== "Intégration à venir") setIntegrationView("all"); }, [etatFilter]);
   // Changer d'onglet réinitialise le tri manuel -> on retombe sur le défaut intelligent de l'onglet.
   useEffect(() => { setSortCol(null); }, [etatFilter]);
 
@@ -956,8 +953,6 @@ export default function OptilexBoard({ embed = false }) {
         const recaler = isOnboardingToReschedule(r, situation);
         if (!onboardingSel.includes(situation) && !(onboardingSel.includes("recaler") && recaler)) return false;
       }
-      // Sous-filtre contextuel "En retard" de l'onglet Intégration à venir.
-      if (etatFilter === "Intégration à venir" && integrationView === "overdue" && !isIntegrationOverdue(r)) return false;
       // Filtre date de signature Owner (mois ou période). Une ligne sans date de
       // signature est exclue dès qu'un filtre date est actif.
       if (sigRange.from || sigRange.to) {
@@ -975,7 +970,7 @@ export default function OptilexBoard({ embed = false }) {
       return true;
     };
     return { passes, situationOf };
-  }, [etatFilter, multiFilter, sigRange, dateTarget, q, integrationView, programmeSel, onboardingSel]);
+  }, [etatFilter, multiFilter, sigRange, dateTarget, q, programmeSel, onboardingSel]);
 
   // Base : toutes les lignes passant les filtres SAUF la météo. Sert de socle à la vue finale
   // ET aux compteurs par bande (qui restent stables quand on coche/décoche une bande météo).
@@ -1019,8 +1014,6 @@ export default function OptilexBoard({ embed = false }) {
     if (multiFilter.length === 0) {
       if (etatFilter === "Renouvellement client")
         return [...base].sort((a, b) => (anniversaryDaysLeft(a) ?? Infinity) - (anniversaryDaysLeft(b) ?? Infinity));
-      if (etatFilter === "Intégration à venir")
-        return [...base].sort(byDateSort(SORT_ACCESSORS.integration, "asc"));   // RDV le plus proche en haut
       if (etatFilter === "Onboarding à venir")
         return [...base].sort(byDateSort(SORT_ACCESSORS.onboarding, "asc"));    // RDV le plus proche en haut
       if (etatFilter === "Signé")
@@ -1042,7 +1035,6 @@ export default function OptilexBoard({ embed = false }) {
   const effectiveSort = useMemo(() => {
     if (sortCol) return { col: sortCol, dir: sortDir };
     if (multiFilter.length === 0) {
-      if (etatFilter === "Intégration à venir") return { col: "integration", dir: "asc" };
       if (etatFilter === "Onboarding à venir") return { col: "onboarding", dir: "asc" };
       if (etatFilter === "Signé") return { col: "owner_signed", dir: "desc" };
     }
@@ -1353,30 +1345,6 @@ export default function OptilexBoard({ embed = false }) {
         </span>
       </div>
 
-      {/* Sous-filtre CONTEXTUEL : n'apparaît que dans l'onglet Intégration à venir. Segmented control
-          "Tous / En retard" -> évite de noyer ce filtre spécifique dans la barre principale. */}
-      {multiFilter.length === 0 && etatFilter === "Intégration à venir" && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: -6, marginBottom: 16 }}>
-          <span style={{ fontSize: 12, color: MUTED, fontWeight: 600 }}>Afficher :</span>
-          <div style={{ display: "inline-flex", background: "#f1f3f7", borderRadius: 11, padding: 3, gap: 2 }}>
-            {[{ key: "all", label: "Tous", n: counts["Intégration à venir"] || 0 }, { key: "overdue", label: "En retard", n: counts["__integration_overdue"] || 0 }].map((opt) => {
-              const on = integrationView === opt.key;
-              const isLate = opt.key === "overdue";
-              return (
-                <button key={opt.key} type="button" onClick={() => setIntegrationView(opt.key)}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 9, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 600, transition: "all 0.15s",
-                    background: on ? "#fff" : "transparent",
-                    color: on ? (isLate ? "#c0392b" : TEXT) : MUTED,
-                    boxShadow: on ? "0 1px 3px rgba(16,24,40,0.14)" : "none" }}>
-                  {isLate && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15 14" /></svg>}
-                  {opt.label}
-                  <span style={{ fontSize: 11, fontWeight: 700, color: on ? (isLate ? "#c0392b" : MUTED) : "#b6bdc9" }}>{opt.n}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       <div style={{ background: CARD, borderRadius: 14, border: `1px solid ${BORDER}`, overflowX: "hidden", overflowY: "auto", maxHeight: "calc(100vh - 190px)" }}>
         {loading ? (
