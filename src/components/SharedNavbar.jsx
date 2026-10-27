@@ -5,7 +5,6 @@ import { AnimatePresence } from 'framer-motion';
 import { GlobalNotificationPanel, GlobalNotificationPreview } from './GlobalNotifications.jsx';
 import { notificationTarget, notificationPlacement, freshNotifications } from '../utils/notificationPresentation.js';
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../lib/supabaseClient";
 import apiClient from "../services/apiClient";
 import { isTypingTarget } from '../utils/typingTarget.js';
 import lightIcon from "../assets/light.png";

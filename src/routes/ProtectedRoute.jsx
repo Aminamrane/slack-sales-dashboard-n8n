@@ -4,13 +4,6 @@ import { Navigate } from 'react-router-dom';
 import apiClient from '../services/apiClient';
 
 // Mapping des rôles vers les pages autorisées
-const ROLE_PERMISSIONS = {
-  admin: ['*'], // Accès à tout
-  head_of_sales: ['/leads-management', '/tracking-sheet', '/', '/admin/leads'],
-  commercial: ['/tracking-sheet', '/'],
-  tech: ['/admin/leads', '/', '/monitoring-perf'],
-  finance: ['/', '/reports'],
-};
 
 export default function ProtectedRoute({ children, allowedRoles = null }) {
   const [loading, setLoading] = useState(true);

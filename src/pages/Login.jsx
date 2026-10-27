@@ -19,9 +19,6 @@ export default function Login() {
     try {
       const res = await apiClient.login(email.trim().toLowerCase(), password);
 
-      console.log("LOGIN RES:", res);
-      console.log("TOKEN AFTER LOGIN:", apiClient.getToken());
-      console.log("USER AFTER LOGIN:", apiClient.getUser());
 
       const token = apiClient.getToken();
       const user = apiClient.getUser();

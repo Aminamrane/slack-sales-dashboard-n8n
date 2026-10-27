@@ -83,7 +83,7 @@ function sevenDaysAgoIso() {
  * endpoints, gracefully handles `_partial: true` from the overview
  * aggregator.
  *
- * Visual references : src/assets/marketing/*.jpg (5 SaaS dashboard mockups).
+ * Visual references : 5 SaaS dashboard mockups (not versioned).
  */
 export default function Marketing() {
   const navigate = useNavigate();

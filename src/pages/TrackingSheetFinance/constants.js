@@ -196,7 +196,7 @@ export const PSP_OPTIONS = ['Learnypay', 'IFX', 'whop', 'Quonto'];
 // (cf. components/BoardEtatCell.jsx) — le PATCH `etat` sur finance-periods
 // est mort côté backend, et « État détail » a été retirée du tableau.
 // `ETAT_COLORS` / `STATUS_DETAIL_COLORS` plus bas restent : encore importés
-// par ClientDetailModal.jsx (legacy conservé), EditableCell.jsx et les
+// par EditableCell.jsx et les
 // fallbacks lecture seule du DetailPanel.
 
 export const PAYMENT_SPECIFICITIES = [

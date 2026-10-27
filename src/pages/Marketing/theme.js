@@ -1,7 +1,7 @@
 /**
  * Marketing dashboard design system.
  *
- * Inspired by the 5 visual refs in src/assets/marketing/* :
+ * Inspired by 5 SaaS dashboard visual references (not versioned) :
  *  - very light lavender-grey backdrop (#ecedf2 / #f0f1f5) in light mode
  *  - white cards, generous border-radius, soft shadow, airy padding
  *  - one hero card filled with a solid/gradient color (emerald or violet)
