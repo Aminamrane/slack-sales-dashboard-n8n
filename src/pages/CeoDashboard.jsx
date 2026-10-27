@@ -16,7 +16,7 @@ import ProduitPanel from "../components/ceo/ProduitPanel.jsx";
 import DelaysFrieze from "../components/ceo/DelaysFrieze.jsx";
 import PodiumPanel from "../components/ceo/PodiumPanel.jsx";
 import GlobeArch from "../components/ceo/GlobeArch.jsx";
-import { Inscription, Meander } from "../components/ceo/Ornaments.jsx";
+import { Inscription } from "../components/ceo/Ornaments.jsx";
 import { useMotionPrefs } from "../components/ceo/motion.js";
 import "../components/ceo/antique.css";
 import "../index.css";
@@ -434,11 +434,9 @@ export default function CeoDashboard() {
           {/* ═══ DASHBOARD ═══ */}
           {activeTab === 'dashboard' && (
             <div className="an-wrap">
-              {/* Frise grecque en tête de page : le seul ornement avant les chiffres (la barre
-                  « Répondre… » a été retirée à la demande du dev, 27/10). */}
-              <div style={{ padding: '72px 0 0' }}><Meander /></div>
-
-              <motion.section className="an-section" style={{ marginTop: 22 }} variants={list(0.09)} initial="hidden" animate="show" aria-label="Clients">
+              {/* Aucun ornement en tête de page (barre « Répondre… » retirée le 27/10, frise
+                  grecque le 28/10, à la demande du dev) : le parc garde sa place, à 104 px. */}
+              <motion.section className="an-section" style={{ marginTop: 104 }} variants={list(0.09)} initial="hidden" animate="show" aria-label="Clients">
                 <ParcPanel
                   stats={stats}
                   period={etatPeriod}
