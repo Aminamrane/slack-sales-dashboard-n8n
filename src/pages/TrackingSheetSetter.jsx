@@ -2835,7 +2835,12 @@ export default function TrackingSheetSetter() {
               reloadKey={agendaReload}
               canOpenLead={(leadId) => leads.some((l) => l.id === leadId)}
               onOpenLead={(leadId) => { setSidebarView('leads'); setTimeout(() => setSelectedLead(leadId), 100); }}
-              onReschedule={(ev) => { const lead = leads.find((l) => l.id === ev.lead_id); if (lead) setSetterModal({ kind: 'reschedule', lead, rdv: ev.rdv_type }); }}
+              onReschedule={(ev) => {
+                // Lead hors de ses listes (R2 pris via son lien webinaire) : la fenêtre se nourrit de l'événement de l'agenda.
+                const lead = leads.find((l) => l.id === ev.lead_id)
+                  || { id: ev.lead_id, full_name: ev.prospect, assigned_to: ev.assigned_email || '', assigned_to_name: ev.assigned?.name, [ev.rdv_type]: ev.start };
+                setSetterModal({ kind: 'reschedule', lead, rdv: ev.rdv_type });
+              }}
             />
           </div>
         )}
