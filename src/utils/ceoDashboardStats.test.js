@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { computeBoardStats, computeOnboarding, computeDirectors, periodEndISO, etatPeriodOptions } from './ceoDashboardStats.js';
+import { computeBoardStats, computeOnboarding, computeDirectors, periodEndISO, etatPeriodOptions, monthsAndDays } from './ceoDashboardStats.js';
 
 const NOW = new Date(2026, 9, 27, 12); // 27/10/2026
 const row = (over) => ({
@@ -67,6 +67,48 @@ test('RDV onboarding à venir : même compteur que le menu Onboarding du board, 
   const s = computeBoardStats(rows, 'all', null, NOW);
   assert.equal(s.onboarding, 4);          // n°11, n°12, n°13, n°17 ; n°15 et n°16 partis, n°14 réalisé, n°18 contrat en vol
   assert.equal(s.onboardingOverdue, 1);   // n°13 ; n°16 (parti) n'est pas compté en retard
+});
+
+test('rétention : taux de résiliation (définitions de la Finance) et durée de vie moyenne', () => {
+  const rows = [
+    row({ numero_client: 'a', owner_signed_at: '2026-01-01' }),                                                    // encore là : 299 j
+    row({ numero_client: 'b', owner_signed_at: '2025-10-05', etat_affiche: 'Résiliation', etat_date: '2026-10-05' }), // 365 j
+    row({ numero_client: 'c', owner_signed_at: '2026-04-10', etat_affiche: 'Self-Résiliation', etat_date: '2026-10-10' }), // 183 j
+    row({ numero_client: 'd', owner_signed_at: '2026-09-20', etat_affiche: 'Rétractation', etat_date: '2026-10-01' }), // hors durée de vie
+    row({ numero_client: 'e', owner_signed_at: '2026-05-01', etat_affiche: 'Pause' }),                              // en cours : 179 j
+    row({ numero_client: 'f', owner_signed_at: '2026-10-20' }),                                                    // signé après le 1er : 7 j
+    row({ numero_client: 'g', owner_signed_at: '2025-06-30', etat_affiche: 'Liquidation', etat_date: '2026-06-30' }), // 365 j
+    row({ numero_client: 'h', owner_signed_at: '2026-01-15', etat_affiche: 'Résiliation', etat_date: '2026-09-15' }), // 243 j
+    row({ numero_client: 'i', owner_signed_at: '2026-02-01', etat_affiche: 'Résiliation' }),                       // sortie sans date
+    row({ numero_client: 'j', is_pending_contract: true }),                                                        // contrat en vol
+    row({ numero_client: 'k', owner_signed_at: null }),                                                            // sans signature
+  ];
+  const s = computeBoardStats(rows, 'all', null, NOW);
+  assert.equal(s.retentionAsOf, '2026-10-27');
+  // Octobre : b et c (self-résiliation comprise) sur 5 clients en cours le 30/09 (a, b, c, d, e).
+  assert.deepEqual(s.resiliationMonth, { key: '2026-10', count: 2, base: 5, rate: 0.4 });
+  // Septembre, complet : h sur 5 en cours le 31/08 (a, b, c, e, h).
+  assert.deepEqual(s.resiliationPreviousMonth, { key: '2026-09', count: 1, base: 5, rate: 0.2 });
+  // Global : b, c, h sur 3 clients en cours aujourd'hui (a, e, f) ; i, sans date, est signalé à part.
+  assert.deepEqual(s.resiliationGlobal, { count: 3, base: 3, rate: 1, undated: 1 });
+  // Durée de vie : 299, 365, 183, 179, 7, 365, 243 j ; d rétracté exclu ; i et k non mesurables.
+  assert.deepEqual({ ...s.lifetime, averageDays: Math.round(s.lifetime.averageDays * 100) / 100 },
+    { averageDays: 234.43, medianDays: 243, measured: 7, open: 3, closed: 4, unmeasured: 2, incoherent: 0 });
+  assert.deepEqual(monthsAndDays(s.lifetime.averageDays), { months: 7, days: 21 });
+
+  // Mois choisi : tout est lu à la fin du mois (30/09), jamais au-delà d'aujourd'hui.
+  const sept = computeBoardStats(rows, '2026-09', null, NOW);
+  assert.equal(sept.retentionAsOf, '2026-09-30');
+  assert.deepEqual(sept.resiliationMonth, { key: '2026-09', count: 1, base: 5, rate: 0.2 });
+  assert.deepEqual(sept.resiliationGlobal, { count: 1, base: 5, rate: 0.2, undated: 1 });
+  assert.equal(sept.lifetime.measured, 6);   // f pas encore signé ; b et c encore clients le 30/09
+  assert.equal(computeBoardStats(rows, '2026-10', null, NOW).retentionAsOf, '2026-10-27');
+});
+
+test('durée en mois et jours', () => {
+  assert.deepEqual(monthsAndDays(293), { months: 9, days: 19 });
+  assert.deepEqual(monthsAndDays(30), { months: 1, days: 0 });   // 30 j ne s'affiche jamais « 0 mois 30 j »
+  assert.equal(monthsAndDays(null), null);
 });
 
 test('mois choisi : signés au plus tard fin de mois, sortis après = encore actifs', () => {
