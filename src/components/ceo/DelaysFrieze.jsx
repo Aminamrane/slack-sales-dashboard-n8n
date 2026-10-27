@@ -47,35 +47,40 @@ const periodLabel = (period) => (period === 'all'
   ? 'Tout l’historique'
   : new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${period}-01T12:00:00Z`)));
 const unitLabel = (unit) => (unit === 'min' ? 'min' : 'j');
-// Un délai en minutes se LIT en heures (ou en jours) : c'est l'heure qui est
-// affichée en grand, la minute reste en légende.
+// Une durée en minutes se LIT en heures (ou en jours) : la minute exacte reste en légende.
+const fromMinutes = (min) => (min == null ? null : min < 90 ? { value: min, unit: 'min', digits: 0 } : min < 2880 ? { value: min / 60, unit: 'h', digits: 1 } : { value: min / 1440, unit: 'j', digits: 1 });
 const readable = (d) => {
   if (d?.average == null) return null;
   if (d.unit !== 'min') return { value: d.average, unit: 'j', digits: 1, legend: null };
-  const min = d.average;
-  if (min < 90) return { value: min, unit: 'min', digits: 0, legend: null };
-  if (min < 2880) return { value: min / 60, unit: 'h', digits: 1, legend: `${nf(min, 0)} min` };
-  return { value: min / 1440, unit: 'j', digits: 1, legend: `${nf(min, 0)} min` };
+  const r = fromMinutes(d.average);
+  return { ...r, legend: r.unit === 'min' ? null : `${nf(d.average, 0)} min` };
 };
-// Une durée en jours, quelle que soit son unité : le remplissage du rail compare
-// les étapes d'une même ligne entre elles.
+const readableMedian = (d) => {
+  if (d?.median == null) return null;
+  if (d.unit !== 'min') return `${nf(d.median, 1)} j`;
+  const r = fromMinutes(d.median);
+  return `${nf(r.value, r.digits)} ${r.unit}`;
+};
+// Une durée en jours, quelle que soit son unité : échelle du rail.
 const inDays = (d) => (d?.average == null ? null : d.unit === 'min' ? d.average / 1440 : d.average);
 const medianInDays = (d) => (d?.median == null ? null : d.unit === 'min' ? d.median / 1440 : d.median);
+// Échelle du rail : les étapes en jours partagent le maximum de leur ligne (avec 12 % de marge :
+// la plus longue n'atteint jamais le bout) ; une étape en minutes se lit sur une journée (24 h).
+const DAY = 1;
+const railScale = (d, lineMaxDays) => (d?.unit === 'min' ? DAY : Math.max(lineMaxDays * 1.12, 0.001));
 
-// Sous chaque moyenne, une ligne de faits, courte : la médiane et sur combien de
-// dossiers elle repose. Jamais une moyenne nue ; le reste (jamais contactés, non
-// horodatés) est dans la modale du détail, un clic plus loin.
+// Sous chaque moyenne, les faits : sur combien de dossiers elle repose (sur combien
+// d'éligibles), combien attendent encore, et la médiane dans la même unité. Jamais une
+// moyenne nue ; le détail complet (non horodatés, non mesurables) est dans la modale.
 function delayFacts(key, d) {
   if (!d) return null;
   const parts = [];
-  if (key === 'ads_contact') {
-    if (d.median != null) parts.push(`médiane ${nf(d.median, 0)} min`);
-    if (d.eligible != null) parts.push(`${nf(d.count, 0)} contacté${plural(d.count, '', 's')} sur ${nf(d.eligible, 0)}`);
-    return parts.join(' · ');
-  }
-  if (d.count) parts.push(`médiane ${nf(d.median)} j · ${nf(d.count, 0)} dossier${plural(d.count, '', 's')}`);
-  else if (d.eligible) parts.push(`aucun dossier mesurable sur ${nf(d.eligible, 0)}`);
+  const verb = key === 'ads_contact' ? 'contacté' : 'mesuré';
+  if (d.count) parts.push(`${nf(d.count, 0)} ${verb}${plural(d.count, '', 's')} sur ${nf(d.eligible, 0)}`);
+  else if (d.eligible) parts.push(`aucun ${verb} sur ${nf(d.eligible, 0)}`);
   if (d.pending) parts.push(`${nf(d.pending, 0)} en attente`);
+  const med = readableMedian(d);
+  if (med && d.count) parts.push(`médiane ${med}`);
   return parts.join(' · ');
 }
 
@@ -106,10 +111,13 @@ function Station({ label, index, hollow, lit, reduce }) {
 function Segment({ k, d, index, count, onOpen, onHover, reduce, maxDays }) {
   const r = readable(d);
   const facts = delayFacts(k, d);
+  const scale = railScale(d, maxDays);
   const days = inDays(d);
   const median = medianInDays(d);
-  const share = days != null && maxDays ? Math.max(0.04, Math.min(1, days / maxDays)) : 0;
-  const medianShare = median != null && maxDays ? Math.max(0, Math.min(1, median / maxDays)) : null;
+  const share = days != null ? Math.max(0.04, Math.min(1, days / scale)) : 0;
+  const medianShare = median != null ? Math.min(0.985, median / scale) : null;
+  // Un repère collé au bout de la barre n'apprend rien : la médiane vaut la moyenne.
+  const showMedian = medianShare != null && Math.abs(medianShare - share) >= 0.035;
   const delay = index * STEP;
   return (
     <div className="an-segment" onMouseEnter={() => onHover(index)} onMouseLeave={() => onHover(null)}>
@@ -126,15 +134,16 @@ function Segment({ k, d, index, count, onOpen, onHover, reduce, maxDays }) {
         transition={reduce ? { duration: 0 } : { ...SPRING, delay: delay + 0.2, opacity: { duration: 0.12, delay: delay + 0.2 } }}
       >
         <span className="an-segment-value">
-          {r ? <Numeral value={r.value} format={(v) => nf(v, r.digits)} /> : '—'}
+          {r ? <Numeral value={r.value} format={(v) => nf(v, r.digits)} /> : <span className="an-segment-none">pas encore mesurable</span>}
           {r && <span className="an-unit">{r.unit}</span>}
         </span>
         {r?.legend && <span className="an-segment-eq">{r.legend}</span>}
       </motion.button>
       <div className="an-rail" aria-hidden="true" style={{ '--sheen-delay': `${count * STEP + 1.2 + index * 0.35}s` }}>
         <motion.div className="an-rail-track" initial={reduce ? false : { scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={{ once: true, amount: 0.5 }} transition={reduce ? { duration: 0 } : { duration: 0.55, ease: EASE_OUT, delay }} />
-        <motion.div className="an-rail-fill" initial={reduce ? false : { scaleX: 0 }} whileInView={{ scaleX: share }} viewport={{ once: true, amount: 0.5 }} transition={reduce ? { duration: 0 } : { ...SPRING, delay: delay + 0.45 }} />
-        {medianShare != null && <motion.b className="an-rail-median" style={{ left: `${medianShare * 100}%` }} initial={reduce ? false : { scaleY: 0 }} whileInView={{ scaleY: 1 }} viewport={{ once: true, amount: 0.5 }} transition={reduce ? { duration: 0 } : { ...SPRING_POP, delay: delay + 0.45 + FOLLOW_DELAY }} />}
+        {r && <motion.div className="an-rail-fill" initial={reduce ? false : { scaleX: 0 }} whileInView={{ scaleX: share }} viewport={{ once: true, amount: 0.5 }} transition={reduce ? { duration: 0 } : { ...SPRING, delay: delay + 0.45 }} />}
+        {showMedian && <motion.b className="an-rail-median" style={{ left: `${medianShare * 100}%` }} initial={reduce ? false : { scaleY: 0 }} whileInView={{ scaleY: 1 }} viewport={{ once: true, amount: 0.5 }} transition={reduce ? { duration: 0 } : { ...SPRING_POP, delay: delay + 0.45 + FOLLOW_DELAY }} />}
+        {d?.unit === 'min' && r && <span className="an-rail-scale">sur 24 h</span>}
       </div>
       {facts && <span className="an-segment-facts">{facts}</span>}
     </div>
