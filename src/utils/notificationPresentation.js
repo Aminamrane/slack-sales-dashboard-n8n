@@ -9,8 +9,9 @@ export function notificationTarget(notif) {
   if (notif.type === 'owner_rating_regression') return '/ceo/optilex-board' + (notif.data?.numero_client ? `?client=${encodeURIComponent(notif.data.numero_client)}` : '');
   if (notif.type === 'board_mention') return notif.data?.path || '/optilex-board';   // chemin choisi par le serveur selon le rôle
   if (notif.type === 'sheet_invitation') return '/tracking-sheet?view=notifications';
-  // Lapin reprogrammé par un setter (dev 14/10/2026) : le commercial retrouve le lead dans sa sheet.
-  if (['setter_placed_r1','setter_placed_r2','setter_rescheduled_no_show'].includes(notif.type)) return '/tracking-sheet';
+  // Lapin reprogrammé (dev 14/10/2026) ou RDV repositionné (agenda setter, dev 27/10/2026) par un setter : le commercial
+  // retrouve le lead dans sa sheet.
+  if (['setter_placed_r1','setter_placed_r2','setter_rescheduled_no_show','setter_rescheduled_rdv'].includes(notif.type)) return '/tracking-sheet';
   // Alertes au setter derrière un RDV (absence R1/R2, RDV reporté ou à reporter, dev 15/10/2026) : sa sheet setter.
   if (['setter_r1_no_show','setter_r2_no_show','setter_rdv_rescheduled','setter_rdv_cancelled'].includes(notif.type)) return '/tracking-setter';
   return null;

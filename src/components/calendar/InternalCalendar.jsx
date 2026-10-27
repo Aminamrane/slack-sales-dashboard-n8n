@@ -4,16 +4,15 @@
 //   · setter   : les RDV qu'il a posés chez les commerciaux (no-show bien visible) et ses rappels ;
 //   · director : tous les RDV, un jour à la fois et par commercial, en distinguant ceux que suit un setter
 //                de ceux à relancer soi-même.
-// Rien n'est écrit chez Google depuis ce calendrier ; côté CRM, la seule écriture est la qualification
-// d'un RDV passé par le commercial (`onQualify`, même fenêtre que dans sa sheet). Style, grille et placement des
+// Rien n'est écrit chez Google depuis ce calendrier ; côté CRM, les seules écritures passent par le parent : la
+// qualification d'un RDV passé par le commercial (`onQualify`, même fenêtre que dans sa sheet) et, pour un setter,
+// le repositionnement d'un RDV qu'il suit (`onReschedule`, dev 27/10/2026 : même fenêtre de report que dans sa sheet,
+// le serveur revérifie le créneau et prévient le commercial). Style, grille et placement des
 // événements repris du calendrier Tedeles (app Linked, WeekView / EventPopover) : pastilles pastel plates,
 // texte teinté, quadrillage fin, police système. Logique pure (testée) dans src/utils/internalCalendar.js.
 import { createElement, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, LoaderCircle, MapPin, Phone,
-  PhoneCall, RefreshCw, TriangleAlert, User, UserRoundCheck, UserX, Video, X,
-} from 'lucide-react';
+import { CalendarClock, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, LoaderCircle, MapPin, Phone, PhoneCall, RefreshCw, TriangleAlert, User, UserRoundCheck, UserX, Video, X } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
 import { originDisplay } from '../../utils/sectors';
 import {
@@ -150,7 +149,7 @@ function Row({ icon, children, T }) {
   );
 }
 
-function Popover({ ev, rect, view, T, dark, onClose, onOpenLead, canOpenLead, onQualify }) {
+function Popover({ ev, rect, view, T, dark, onClose, onOpenLead, canOpenLead, onQualify, onReschedule }) {
   const ref = useRef(null);
   const [pos, setPos] = useState(null);
 
@@ -180,6 +179,10 @@ function Popover({ ev, rect, view, T, dark, onClose, onOpenLead, canOpenLead, on
   const canOpen = Boolean(onOpenLead && ev.lead_id && (!canOpenLead || canOpenLead(ev.lead_id)));
   // Qualification par le commercial (06/10/2026) : seulement un RDV passé ou en cours, pas un RDV à venir.
   const canQualify = Boolean(isRdv && onQualify && ev.lead_id && ev.outcome && ev.outcome !== 'upcoming');
+  // Repositionnement par le setter (27/10/2026) : un R1 ou un R2 d'un lead qu'il voit, à venir, à qualifier ou en
+  // no-show ; jamais un RDV honoré, annulé (Seconde chance) ou retiré de la fiche.
+  const canReschedule = Boolean(isRdv && onReschedule && ev.lead_id && ['r1', 'r2'].includes(ev.rdv_type)
+    && ['upcoming', 'to_qualify', 'no_show'].includes(ev.outcome) && (!canOpenLead || canOpenLead(ev.lead_id)));
   const assigned = ev.assigned?.state === 'assigned' ? ev.assigned.name
     : ev.assigned?.state === 'archived' ? 'Lead archivé' : ev.assigned ? 'Non affecté' : null;
   const kindLabel = isRdv ? `Rendez-vous ${rdvLabel(ev)}` : ev.kind === 'callback' ? 'À rappeler' : ev.kind === 'absence' ? 'Absence' : 'Google Agenda';
@@ -271,8 +274,13 @@ function Popover({ ev, rect, view, T, dark, onClose, onOpenLead, canOpenLead, on
         {ev.private && <Row icon={CalendarDays} T={T}><span style={{ color: T.muted }}>Créneau occupé, détail privé.</span></Row>}
       </div>
 
-      {(ev.meet_link || canOpen || canQualify) && (
+      {(ev.meet_link || canOpen || canQualify || canReschedule) && (
         <div style={{ borderTop: `1px solid ${T.line}`, padding: '12px 20px', display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
+          {canReschedule && (
+            <button type="button" onClick={() => { onClose(); onReschedule(ev); }} style={pill(ev.outcome === 'no_show' ? '#3e7d5a' : T.canvas, ev.outcome === 'no_show' ? '#ffffff' : T.ink)}>
+              <CalendarClock size={14} /> Repositionner
+            </button>
+          )}
           {canQualify && (
             <button type="button" onClick={() => { onClose(); onQualify(ev); }}
               style={pill(ev.outcome === 'to_qualify' ? '#3e7d5a' : T.canvas, ev.outcome === 'to_qualify' ? '#ffffff' : T.ink)}>
@@ -296,7 +304,7 @@ function Popover({ ev, rect, view, T, dark, onClose, onOpenLead, canOpenLead, on
   );
 }
 
-export default function InternalCalendar({ view = 'sales', C, darkMode = false, asUser, onOpenLead, canOpenLead, onQualify, toolbarExtra, reloadKey, fill = true }) {
+export default function InternalCalendar({ view = 'sales', C, darkMode = false, asUser, onOpenLead, canOpenLead, onQualify, onReschedule, toolbarExtra, reloadKey, fill = true }) {
   const byDay = view === 'director';                       // direction : un jour à la fois, une colonne par commercial
   const T = useMemo(() => tokens(C, darkMode), [C, darkMode]);
   const [anchor, setAnchor] = useState(() => {
@@ -623,7 +631,7 @@ export default function InternalCalendar({ view = 'sales', C, darkMode = false, 
         </div>
       </section>
 
-      {popover && <Popover ev={popover.ev} rect={popover.rect} view={view} T={T} dark={darkMode} onClose={closePopover} onOpenLead={onOpenLead} canOpenLead={canOpenLead} onQualify={onQualify} />}
+      {popover && <Popover ev={popover.ev} rect={popover.rect} view={view} T={T} dark={darkMode} onClose={closePopover} onOpenLead={onOpenLead} canOpenLead={canOpenLead} onQualify={onQualify} onReschedule={onReschedule} />}
     </div>
   );
 }
