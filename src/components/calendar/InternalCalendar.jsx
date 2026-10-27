@@ -179,10 +179,11 @@ function Popover({ ev, rect, view, T, dark, onClose, onOpenLead, canOpenLead, on
   const canOpen = Boolean(onOpenLead && ev.lead_id && (!canOpenLead || canOpenLead(ev.lead_id)));
   // Qualification par le commercial (06/10/2026) : seulement un RDV passé ou en cours, pas un RDV à venir.
   const canQualify = Boolean(isRdv && onQualify && ev.lead_id && ev.outcome && ev.outcome !== 'upcoming');
-  // Repositionnement par le setter (27/10/2026) : un R1 ou un R2 d'un lead qu'il voit, à venir, à qualifier ou en
-  // no-show ; jamais un RDV honoré, annulé (Seconde chance) ou retiré de la fiche.
+  // Repositionnement par le setter (27/10/2026) : un R1 ou un R2 qu'il suit (il l'a posé, lien webinaire compris, même si
+  // le lead n'est pas dans ses listes), à venir, à qualifier ou en no-show ; jamais un RDV honoré, annulé (Seconde
+  // chance) ou retiré de la fiche. Le serveur décide de l'accès au lead.
   const canReschedule = Boolean(isRdv && onReschedule && ev.lead_id && ['r1', 'r2'].includes(ev.rdv_type)
-    && ['upcoming', 'to_qualify', 'no_show'].includes(ev.outcome) && (!canOpenLead || canOpenLead(ev.lead_id)));
+    && ['upcoming', 'to_qualify', 'no_show'].includes(ev.outcome));
   const assigned = ev.assigned?.state === 'assigned' ? ev.assigned.name
     : ev.assigned?.state === 'archived' ? 'Lead archivé' : ev.assigned ? 'Non affecté' : null;
   const kindLabel = isRdv ? `Rendez-vous ${rdvLabel(ev)}` : ev.kind === 'callback' ? 'À rappeler' : ev.kind === 'absence' ? 'Absence' : 'Google Agenda';
