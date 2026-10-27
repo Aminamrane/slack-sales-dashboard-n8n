@@ -1,24 +1,8 @@
 // Ornements antiques du dashboard CEO, dessinés en SVG (légers, nets à toute taille).
-// Ils encadrent l'information, ils ne la concurrencent jamais : un filet, une frise
-// grecque en séparateur, des cercles d'orbite en fond, une couronne de laurier.
+// Ils encadrent l'information, ils ne la concurrencent jamais : un filet, des cercles
+// d'orbite en fond, une couronne de laurier.
 import { motion } from 'framer-motion';
 import { EASE_OUT } from './motion.js';
-
-// Frise grecque (méandre) : motif répété, hauteur 10 px, en filet discret.
-export function Meander({ className = '', opacity = 0.45 }) {
-  const id = 'an-meander';
-  return (
-    <svg className={`an-meander ${className}`} height="10" width="100%" aria-hidden="true" style={{ opacity }}>
-      <defs>
-        <pattern id={id} width="20" height="10" patternUnits="userSpaceOnUse">
-          <path d="M0 9.25 H3.5 V0.75 H12.5 V6.25 H6.75 V3.75 H9.5" fill="none" stroke="currentColor" strokeWidth="1.1" />
-          <path d="M12.5 9.25 H20" fill="none" stroke="currentColor" strokeWidth="1.1" />
-        </pattern>
-      </defs>
-      <rect width="100%" height="10" fill={`url(#${id})`} />
-    </svg>
-  );
-}
 
 // Titre gravé d'une section : petites capitales, un filet d'or qui se trace à
 // l'arrivée, un sous-titre en retrait. Le texte reste du texte : lisible, sélectionnable.
