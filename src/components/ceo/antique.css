@@ -303,6 +303,10 @@
 .ceo-antique.is-dark .an-rail-track { background: #3a3c4a; }
 .ceo-antique.is-dark .an-segment-facts, .ceo-antique.is-dark .an-segment-eq { color: #b4b9c9; }
 .an-branch-title { font-size: 11.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--an-muted); display: flex; align-items: center; gap: 10px; }
+/* Trois parcours parallèles depuis la signature Owner : chacun son départ (médaillon pointillé) et son arrivée. */
+.an-branches { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 18px; }
+.an-branches .an-station { width: 96px; }
+@media (max-width: 1100px) { .an-branches { grid-template-columns: 1fr; row-gap: 22px; } }
 .an-branch-title::after { content: ''; flex: 1; height: 1px; background: var(--an-stone); }
 .an-details { margin-top: 6px; font-size: 12px; color: var(--an-muted); }
 .an-details summary { display: flex; align-items: center; gap: 8px; width: fit-content; min-height: 36px; cursor: pointer; list-style: none; font-weight: 600; border-radius: 6px; }
