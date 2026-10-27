@@ -18,12 +18,15 @@ const MISSED = { pending: { label: "Pas encore payées", tone: "waiting" }, lost
 //   (pas encore payés, perdus) ; pour un head, ses ventes puis celles de son équipe ;
 // - « Aurait dû toucher » = va toucher ce mois + manque à gagner ;
 // - « Reporté » (dans aucun total) : clients payés le mois suivant, versé avec la paie de ce mois-là.
-// Chaque ligne ouvre sa modification ou les ventes concernées ; les règles ne valent que pour ce mois.
+// - « À confirmer » (dans aucun total) : ventes de la transition peut-être déjà versées par l'ancienne paie.
+// Chaque ligne ouvre sa modification ou les ventes concernées ; les règles ne valent que pour ce mois. Paie figée
+// (locked : mois clôturé ou versé hors de la page) : rien ne se modifie.
 // Mouvement : tout change dans la même image ; seul le grand total roule, l'identité et les
 // valeurs secondaires glissent de quelques pixels, décalées de 30 ms. Une valeur inchangée ne bouge pas.
 export function PersonCard({
   source, row, model, error, settings, monthText, readingDay, entry, teamShare, missed, signedBefore = { own: 0, team: 0 },
-  onCoefficients, onTiers, onHistory, onFixed, onBreakdown, onTeam, onMissed, onBonusAdd, onBonusRemove, onCheckRules,
+  held = null, locked = false,
+  onCoefficients, onTiers, onHistory, onFixed, onBreakdown, onTeam, onMissed, onHeld, onBonusAdd, onBonusRemove, onCheckRules,
 }) {
   const from = entryOffset(entry, 6);
   const glide = (step) => ({ from, delay: step * GLIDE_STEP });
@@ -82,13 +85,14 @@ export function PersonCard({
             {teamShare && <li>Part d’équipe : chaque vente d’un membre de son équipe CRM, au mois où le client paie sa 1re échéance ; base de la vente × {teamCoefficients}.</li>}
             <li>Manque à gagner : ce que la personne aurait pu toucher en plus si les clients des ventes du mois avaient payé (pas encore payés, perdus). Aurait dû toucher = va toucher ce mois + manque à gagner.</li>
             <li>Dans la paie d’octobre : clients payés le mois suivant ; la commission est dans la rémunération de ce mois-là, pas en plus.</li>
+            <li>Paie clôturée : figée ; une vente versée ne l’est jamais une seconde fois. À confirmer : ventes signées avant la page, peut-être déjà versées par l’ancienne paie.</li>
             <li>Barème en vérification.</li>
             {readingDay && <li>Données CRM lues le {readingDay}.</li>}
           </ul>
         </InfoTip>
         <div className="vr-person-actions">
-          <button type="button" className="vr-button" onClick={onCoefficients}><SlidersHorizontal size={14} />Coefficients</button>
-          <button type="button" className="vr-button" onClick={onTiers}><Layers size={14} />Fixe & paliers</button>
+          {!locked && <button type="button" className="vr-button" onClick={onCoefficients}><SlidersHorizontal size={14} />Coefficients</button>}
+          {!locked && <button type="button" className="vr-button" onClick={onTiers}><Layers size={14} />Fixe & paliers</button>}
           <IconButton label="Historique des modifications" onClick={onHistory}><History size={16} /></IconButton>
         </div>
       </header>
@@ -103,7 +107,7 @@ export function PersonCard({
               <strong className="vr-num vr-total"><Roll id={money(model.total)} direction={entry.direction}>{money(model.total)}</Roll></strong>
             </div>
             <div className="vr-pay-lines">
-              <button type="button" className="vr-pay-line" disabled={!model.fixedCell} onClick={onFixed}>
+              <button type="button" className="vr-pay-line" disabled={locked || !model.fixedCell} onClick={onFixed}>
                 <span className="vr-pay-label">
                   Fixe
                   {(fixedMissing || model.appliedTier) && (
@@ -114,7 +118,7 @@ export function PersonCard({
                   )}
                 </span>
                 <b className="vr-num"><Glide id={fixedText} {...glide(1)}>{fixedText}</Glide></b>
-                <Pencil size={13} className="vr-pay-go" />
+                {locked ? <span /> : <Pencil size={13} className="vr-pay-go" />}
               </button>
               <button type="button" className="vr-pay-line" onClick={onBreakdown}>
                 <span className="vr-pay-label">Commissions<small><Glide id={countedText} {...glide(2)}>{countedText}</Glide></small></span>
@@ -128,16 +132,16 @@ export function PersonCard({
                   <ChevronRight size={15} className="vr-pay-go" />
                 </button>
               )}
-              <button type="button" className="vr-pay-line" onClick={onBonusAdd}>
+              <button type="button" className="vr-pay-line" disabled={locked} onClick={onBonusAdd}>
                 <span className="vr-pay-label">Primes</span>
                 <b className="vr-num"><Glide id={money(model.bonuses)} {...glide(3)}>{money(model.bonuses)}</Glide></b>
-                <Plus size={15} className="vr-pay-go" />
+                {locked ? <span /> : <Plus size={15} className="vr-pay-go" />}
               </button>
               {bonuses.map((b) => (
                 <Glide as="div" key={b.id} id={`${row.person}|${b.id}`} className="vr-pay-sub" {...glide(3)}>
                   <span>{b.label}{b.reason && <small> · {b.reason}</small>}</span>
                   <b className="vr-num">{money(Rational.from(b.amount))}</b>
-                  <IconButton label={`Retirer ${b.label}`} onClick={() => onBonusRemove(b)}><Trash2 size={13} /></IconButton>
+                  {locked ? <span /> : <IconButton label={`Retirer ${b.label}`} onClick={() => onBonusRemove(b)}><Trash2 size={13} /></IconButton>}
                 </Glide>
               ))}
               {model.remainder.n !== 0n && (
@@ -173,6 +177,15 @@ export function PersonCard({
               <span className="vr-later-label">{laterMonth ? `Dans la paie ${ofMonth(laterMonth)}` : "Dans une paie suivante"}
                 <small>{plural(laterCount, "vente")} · clients payés {laterMonth ? `en ${laterMonth}` : "plus tard"}</small></span>
               <b className="vr-num">{money(missed.later)}</b>
+              <ChevronRight size={15} className="vr-pay-go" />
+            </button>
+          )}
+          {held?.count > 0 && (
+            <button type="button" className="vr-later check" data-held onClick={onHeld}
+              title="Ventes signées un mois versé par l’ancienne paie : déjà versées, ou à verser ? Elles ne sont versées qu’après confirmation.">
+              <StatusIcon tone="check" size={15} />
+              <span className="vr-later-label">À confirmer<small>{plural(held.count, "vente")} · peut-être déjà versées par l’ancienne paie</small></span>
+              <b className="vr-num">{money(held.amount)}</b>
               <ChevronRight size={15} className="vr-pay-go" />
             </button>
           )}

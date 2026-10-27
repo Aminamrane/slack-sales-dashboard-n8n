@@ -38,6 +38,7 @@
   --st-upcoming: #2b62c4; --st-upcoming-bg: #e8f0fc;
   --st-lost: #bb3a45; --st-lost-bg: #fbecee;
   --st-unknown: #5d6577; --st-unknown-bg: #eff1f5;
+  --st-check: #1e3a7b; --st-check-bg: #e9eef6;   /* à confirmer : marine et bleu de la charte Owner */
   color: var(--vr-text);
   background: var(--vr-bg);
   font-family: inherit;
@@ -80,6 +81,7 @@
   --st-upcoming: #8fb8f5; --st-upcoming-bg: rgba(143, 184, 245, 0.12);
   --st-lost: #f2a1a8; --st-lost-bg: rgba(242, 161, 168, 0.12);
   --st-unknown: #aab1c2; --st-unknown-bg: rgba(170, 177, 194, 0.12);
+  --st-check: #a9bdf0; --st-check-bg: rgba(169, 189, 240, 0.13);
 }
 .vr-app, .vr-app * { box-sizing: border-box; }
 :where(.vr-app) :is(button, input, select, textarea) { font: inherit; color: inherit; }
@@ -289,6 +291,8 @@
 .vr-pay-line:hover:not(:disabled):not(.static) { background: var(--vr-sunken); }
 .vr-pay-line:hover:not(:disabled) .vr-pay-go { color: var(--vr-accent); }
 .vr-pay-line.static { grid-template-columns: minmax(0, 1fr) auto 16px; cursor: default; }
+/* Paie figée : la ligne ne s'ouvre plus, mais son montant reste lisible (il a été versé). */
+.vr-pay-line:disabled { color: var(--vr-text); cursor: default; }
 .vr-pay-label { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font-size: 13px; color: var(--vr-soft); }
 .vr-pay-label small { font-size: 12px; color: color-mix(in srgb, var(--vr-soft) 75%, var(--vr-muted)); }
 .vr-pay-pills { display: inline-flex; flex-wrap: wrap; gap: 6px; }
@@ -352,7 +356,7 @@ button.vr-origin:hover { background: var(--vr-sunken); }
 .vr-origin.overridden::after { content: ""; position: absolute; top: 2px; right: 2px; width: 6px; height: 6px; border-radius: 50%; background: var(--vr-accent); }
 .vr-line-status { min-width: 0; }
 .vr-line-amount { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
-.vr-line:is(.deferred, .pending, .lost) .vr-amount { color: var(--vr-soft); }
+.vr-line:is(.held, .deferred, .pending, .lost) .vr-amount { color: var(--vr-soft); }
 .vr-line:is(.pending, .lost) .vr-line-text strong { color: var(--vr-soft); }
 
 /* Pastille de statut (référence du dev) : fond teinté doux, icône et texte de la même couleur. */
@@ -367,12 +371,14 @@ button.vr-origin:hover { background: var(--vr-sunken); }
 .vr-badge.upcoming { background: var(--st-upcoming-bg); color: var(--st-upcoming); }
 .vr-badge.lost { background: var(--st-lost-bg); color: var(--st-lost); }
 .vr-badge.unknown { background: var(--st-unknown-bg); color: var(--st-unknown); }
+.vr-badge.check { background: var(--st-check-bg); color: var(--st-check); }
 .vr-status-icon.paid { color: var(--st-paid); }
 .vr-status-icon.later { color: var(--st-later); }
 .vr-status-icon.waiting { color: var(--st-waiting); }
 .vr-status-icon.upcoming { color: var(--st-upcoming); }
 .vr-status-icon.lost { color: var(--st-lost); }
 .vr-status-icon.unknown { color: var(--st-unknown); }
+.vr-status-icon.check { color: var(--st-check); }
 
 /* En-têtes de groupe : où va l'argent, dans la couleur du statut ; intertitre « signées avant » plus discret. */
 .vr-group {
@@ -394,6 +400,7 @@ button.vr-group:hover { background: color-mix(in srgb, var(--vr-sunken) 60%, var
 .vr-group.later .vr-group-title strong { color: var(--st-later); }
 .vr-group.waiting .vr-group-title strong { color: var(--st-waiting); }
 .vr-group.lost .vr-group-title strong { color: var(--st-lost); }
+.vr-group.check .vr-group-title strong { color: var(--st-check); }
 .vr-group-total { font-size: 14px; font-weight: 740; color: var(--vr-text); white-space: nowrap; }
 .vr-group:not(.paid) .vr-group-total { color: var(--vr-soft); }
 .vr-group.sub { padding: 10px 46px 6px 48px; background: color-mix(in srgb, var(--vr-sunken) 50%, var(--vr-card)); }
@@ -589,3 +596,37 @@ button.vr-group:hover { background: color-mix(in srgb, var(--vr-sunken) 60%, var
   .vr-pay-side + .vr-pay-side { border-left: 0; border-top: 1px solid var(--vr-border); }
 
 }
+
+/* Registre des paies : paie du mois affiché, sous l'en-tête (clôturée ici, versée hors de la page, ou à clôturer). */
+.vr-payroll {
+  display: flex; align-items: center; gap: 12px; margin: -6px 0 18px; padding: 11px 16px;
+  border: 1px solid var(--vr-border); border-radius: 12px; background: var(--vr-card); color: var(--vr-text);
+  font-size: 13px; font-weight: 650;
+}
+.vr-payroll > svg { flex-shrink: 0; }
+.vr-payroll > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; flex: 1; min-width: 0; }
+.vr-payroll small { font-size: 12px; font-weight: 500; color: var(--vr-muted); }
+.vr-payroll.closed > svg { color: var(--st-paid); }
+.vr-payroll.outside { background: color-mix(in srgb, var(--vr-sunken) 60%, var(--vr-card)); }
+.vr-payroll.outside > svg { color: var(--vr-muted); }
+.vr-payroll.open { border-color: var(--vr-accent-line); }
+.vr-payroll.open > svg { color: var(--vr-accent); }
+/* Vente à confirmer : sa pastille ouvre la décision. */
+.vr-held-action {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%; padding: 0; border: 0; background: none;
+  color: var(--st-check); font-size: 12px; font-weight: 650;
+}
+.vr-held-action:hover > span, .vr-held-action:focus-visible > span { text-decoration: underline; }
+.vr-coef-text.static { cursor: default; }
+.vr-coef-text.static:hover { background: none; color: var(--vr-soft); }
+/* Fenêtres de clôture et de décision : récapitulatif chiffré, puis la conséquence en une phrase. */
+.vr-closure p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--vr-soft); }
+.vr-closure .vr-muted { font-size: 12px; color: var(--vr-muted); }
+.vr-closure .vr-link { align-self: flex-start; }
+.vr-closure-summary { display: flex; flex-direction: column; margin: 0; border: 1px solid var(--vr-border); border-radius: 12px; }
+.vr-closure-summary > div { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 14px; }
+.vr-closure-summary > div + div { border-top: 1px solid var(--vr-border); }
+.vr-closure-summary dt { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--vr-soft); }
+.vr-closure-summary dd { margin: 0; font-size: 14px; font-weight: 720; color: var(--vr-text); }
+.vr-closure-summary .held dt { color: var(--st-check); }
+

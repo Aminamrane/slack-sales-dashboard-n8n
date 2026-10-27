@@ -12,10 +12,10 @@ import { AutoHeight, Collapse } from "./transitions.jsx";
 import { IconButton } from "./ui.jsx";
 
 // Mêmes mots et mêmes couleurs que les groupes et la carte : où va l'argent.
-const STATUS_CHIPS = [["ALL", "Toutes"], ["counted", "Dans la paie", "paid"], ["deferred", "Paie suivante", "later"],
-  ["pending", "Pas encore payées", "waiting"], ["lost", "Perdues", "lost"]];
-// « Paie suivante » et « Perdues » n'apparaissent que s'il y en a (ou si le filtre est actif).
-const OPTIONAL_CHIPS = new Set(["deferred", "lost"]);
+const STATUS_CHIPS = [["ALL", "Toutes"], ["counted", "Dans la paie", "paid"], ["held", "À confirmer", "check"],
+  ["deferred", "Autre paie", "later"], ["pending", "Pas encore payées", "waiting"], ["lost", "Perdues", "lost"]];
+// « À confirmer », « Autre paie » et « Perdues » n'apparaissent que s'il y en a (ou si le filtre est actif).
+const OPTIONAL_CHIPS = new Set(["held", "deferred", "lost"]);
 const CHANNEL_CHIPS = [...Object.entries(CHANNELS), ["UNKNOWN", "Non retrouvée"]];
 const plural = (n, word) => `${n} ${word}${n > 1 ? "s" : ""}`;
 
@@ -37,9 +37,11 @@ function Chip({ active, count, group, onClick, children }) {
 // dans une paie suivante, pas encore payées, perdues), chaque vente avec son statut en pastille et son montant.
 // Changement de données : l'ancien corps disparaît dans l'image même, le nouveau est déjà là,
 // ses lignes entrent par un court déplacement en cascade ; la hauteur suit en ressort.
+// Paie figée (mois clôturé ou versé hors de la page) : onInline, onDeal et onEdit sont absents, rien ne se modifie.
+// onHeld : décision sur une vente « à confirmer ».
 export function SalesTable({
   readingDay, period, groups, total, rows, counts, breakdown, filters, onFilters, page, pages, onPage,
-  bodyKey, rowEntry, rowDelay, inline, onInline, onDeal, onEdit,
+  bodyKey, rowEntry, rowDelay, inline, onInline, onDeal, onEdit, onHeld,
 }) {
   const setFilter = (patch) => onFilters({ ...filters, ...patch });
   return (
@@ -96,7 +98,7 @@ export function SalesTable({
         <div className="vr-table" role="table" aria-label="Ventes">
           <AutoHeight>
             <SalesBody key={bodyKey} rows={rows} groups={groups} period={period} rowEntry={rowEntry} rowDelay={rowDelay}
-              inline={inline} onInline={onInline} onDeal={onDeal} onEdit={onEdit} />
+              inline={inline} onInline={onInline} onDeal={onDeal} onEdit={onEdit} onHeld={onHeld} />
             {!rows.length && <div className="vr-empty">Aucune vente correspondante</div>}
           </AutoHeight>
         </div>
@@ -199,22 +201,24 @@ export function SectionList({ rows, stats, period, laterMonths, rowEntry, rowDel
 }
 
 // Ventes de la personne : toutes les sections ouvertes.
-function SalesBody({ rows, groups, period, rowEntry, rowDelay, inline, onInline, onDeal, onEdit }) {
-  const laterMonths = [...new Set(rows.filter((r) => r.status === "deferred").map((r) => r.countedMonth).filter(Boolean))];
+function SalesBody({ rows, groups, period, rowEntry, rowDelay, inline, onInline, onDeal, onEdit, onHeld }) {
+  const laterMonths = [...new Set(rows.filter((r) => r.status === "deferred").map((r) => r.payMonth).filter(Boolean))];
   return (
     <SectionList rows={rows} stats={groups} period={period} laterMonths={laterMonths} rowEntry={rowEntry} rowDelay={rowDelay}
       renderRow={(row, motionProps) => (
         <SaleLine key={row.ref} row={row} motionProps={motionProps} inline={inline?.ref === row.ref ? inline : null}
-          onInline={onInline} onDeal={onDeal} onEdit={onEdit} meta={<SaleMeta row={row} plan />} />
+          onInline={onInline} onDeal={onDeal} onEdit={onEdit} onHeld={onHeld} meta={<SaleMeta row={row} plan />} />
       )} />
   );
 }
 
 // Une vente : à gauche l'origine (icône) et le client, avec une seule ligne de détail ; au milieu le statut
-// (pastille) ; à droite le montant et, dessous, son calcul. Canal, coefficient et montant se modifient au clic.
-export function SaleLine({ row, motionProps, inline, onInline, onDeal, onEdit, meta, label }) {
+// (pastille) ; à droite le montant et, dessous, son calcul. Canal, coefficient et montant se modifient au clic
+// (sans onEdit : paie figée, lecture seule). Une vente « à confirmer » ouvre sa décision depuis sa pastille (onHeld).
+export function SaleLine({ row, motionProps, inline, onInline, onDeal, onEdit, onHeld, meta, label }) {
   const amount = inline ? (inline.preview ?? "À vérifier") : row.value;
   const editLabel = label || row.client;
+  const pill = <StatusPill status={rowStatus(row)} />;
   return (
     <Motion.div role="row" className={`vr-line ${row.status} ${row.edited ? "edited" : ""} ${inline ? "editing" : ""}`} data-group={saleGroup(row)} {...motionProps}>
       <div role="cell" className="vr-line-client">
@@ -224,9 +228,17 @@ export function SaleLine({ row, motionProps, inline, onInline, onDeal, onEdit, m
           <span className="vr-line-meta">{meta}</span>
         </span>
       </div>
-      <div role="cell" className="vr-line-status"><StatusPill status={rowStatus(row)} /></div>
+      <div role="cell" className="vr-line-status">
+        {row.status === "held" && onHeld ? (
+          <button type="button" className="vr-held-action" onClick={() => onHeld(row)} aria-label={`Confirmer ${row.client}`}>
+            {pill}<span>Confirmer</span>
+          </button>
+        ) : pill}
+      </div>
       <div role="cell" className="vr-line-amount">
-        <button type="button" className="vr-amount vr-num" onClick={() => onEdit(row.ref, editLabel)} title="Modifier ce montant">{amount}</button>
+        {onEdit
+          ? <button type="button" className="vr-amount vr-num" onClick={() => onEdit(row.ref, editLabel)} title="Modifier ce montant">{amount}</button>
+          : <span className="vr-amount vr-num">{amount}</span>}
         <CalcLine row={row} inline={inline} onInline={onInline} onEdit={onEdit} label={editLabel} />
       </div>
     </Motion.div>
@@ -267,18 +279,22 @@ function OriginMark({ row, onDeal }) {
 // Calcul sous le montant : « 80 % » pour la base total × 80 % de l'Excel (formule au survol), base × coefficient.
 // Le coefficient se modifie en ligne (onInline) ou dans la fenêtre (onEdit). Formule libre : son libellé.
 function CalcLine({ row, inline, onInline, onEdit, label }) {
-  if (row.parts.kind !== "coefficient")
-    return <button type="button" className="vr-calc vr-calc-custom" onClick={() => onEdit(row.ref, label)}>{row.parts.label}<Pencil size={10} /></button>;
+  const editable = !!(onInline || onEdit);
+  if (row.parts.kind !== "coefficient") {
+    return editable
+      ? <button type="button" className="vr-calc vr-calc-custom" onClick={() => onEdit(row.ref, label)}>{row.parts.label}<Pencil size={10} /></button>
+      : <span className="vr-calc vr-calc-custom">{row.parts.label}</span>;
+  }
   return (
     <span className="vr-calc vr-num" title={row.baseCaption || undefined}>
       {row.baseTotal && <span className="vr-base-tag">80 %</span>}
       <span>{euros(Rational.from(row.parts.base))} ×</span>
-      {inline ? <CoefficientField row={row} inline={inline} onInline={onInline} /> : (
+      {inline ? <CoefficientField row={row} inline={inline} onInline={onInline} /> : editable ? (
         <button type="button" className="vr-coef-text" aria-label={`Modifier le coefficient de ${row.client}`} title="Modifier le coefficient"
           onClick={() => (onInline ? onInline.start(row) : onEdit(row.ref, label))}>
           {decimalLabel(row.parts.coefficient)}<Pencil size={10} />
         </button>
-      )}
+      ) : <span className="vr-coef-text static">{decimalLabel(row.parts.coefficient)}</span>}
     </span>
   );
 }

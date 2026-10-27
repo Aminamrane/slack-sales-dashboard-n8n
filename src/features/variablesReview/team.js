@@ -3,9 +3,10 @@ import { ZERO } from "./calculation.js";
 import { statementModel } from "./model.js";
 import { groupText, saleState, signedParis } from "./presentation.js";
 
+// Réglages d'un relevé : ceux de la clôture s'il est clôturé dans la page (figés), sinon ceux du brouillon.
 export const statementSettings = (statement, draft) => ({
   ...statement.defaults,
-  ...draft?.settings?.[statement.id],
+  ...(statement.payroll?.settings ?? draft?.settings?.[statement.id]),
 });
 export const isHead = (source, person) => /^head/i.test(source.profiles?.[person]?.role || "");
 export const periodsOf = (source) => [...new Set(source.statements.map((s) => s.period))].sort();
@@ -13,21 +14,40 @@ export const entryIndex = (source) => new Map((source.entries || []).map((e) => 
 export const teamEntryIndex = (source) =>
   new Map((source.entries || []).filter((e) => e.teamCell).map((e) => [e.teamCell, e]));
 
-// Statut d'une vente dans le relevé d'un mois P, seule source pour la carte, la liste, les puces
-// et le tableau. Règle du 26/10 : une vente compte dans le mois où le client a payé sa 1re échéance
-// Owner ; une même vente peut donc figurer au relevé de sa signature et à celui de son paiement.
+// Mois de paie d'une ligne (« pay » : commission du vendeur, « teamPay » : part d'équipe du head), donné par le
+// registre des paies : versée, à verser, à confirmer, versée hors de la page ; null si elle n'est pas due (1re
+// échéance non payée). Source d'avant le registre : mois du paiement de la 1re échéance.
+export function payMonth(entry, pay = "pay") {
+  const line = entry?.[pay];
+  if (line) return line.state === "non_due" ? null : line.month;
+  return entry?.counted ? entry.countedMonth || null : null;
+}
+
+// Statut d'une ligne dans le relevé d'un mois P, seule source pour la carte, la liste, les puces et le tableau.
+// Règle du 26/10 : une vente compte dans le mois où le client a payé sa 1re échéance Owner ; une même vente peut
+// donc figurer au relevé de sa signature et à celui de son paiement. Registre des paies (27/10) : une ligne versée
+// ne compte qu'au mois où elle l'a été, et une vente de la transition attend une confirmation.
 // - « counted » : dans les countedRefs du relevé (total du mois, y compris signée avant P) ;
-// - « deferred » : signée en P, comptée un autre mois (payée plus tard) ;
+// - « held » : à confirmer (heldRefs) : peut-être déjà versée par l'ancienne paie, hors total ;
+// - « deferred » : signée en P, versée ou versable un autre mois ;
 // - « lost » : non comptée, client perdu ; « pending » : le reste (dont les ventes non déclarées).
-// Relevé sans countedRefs (données d'avant le 26/10) : ancienne règle, entry.counted.
-export function statusFor(statement) {
+// statement : { period, countedRefs, heldRefs } (pour une part d'équipe : countedTeamRefs, heldTeamRefs) ;
+// pay : champ de la ligne dans l'entrée. Relevé sans countedRefs (données d'avant le 26/10) : entry.counted.
+export function statusFor(statement, pay = "pay") {
   const counted = Array.isArray(statement?.countedRefs) ? new Set(statement.countedRefs) : null;
+  const held = new Set(statement?.heldRefs || []);
   return (entry) => {
     if (counted ? counted.has(entry?.amountCell) : entry?.counted !== false) return "counted";
-    if (counted && entry?.counted && entry.countedMonth && entry.countedMonth !== statement.period) return "deferred";
+    if (held.has(entry?.amountCell)) return "held";
+    const month = payMonth(entry, pay);
+    if (counted && month && month !== statement.period) return "deferred";
     return entry?.finance?.status === "lost" ? "lost" : "pending";
   };
 }
+// Statut des parts d'équipe d'un relevé de head.
+export const teamStatusFor = (statement) =>
+  statusFor({ period: statement.period, countedRefs: statement.countedTeamRefs || [], heldRefs: statement.heldTeamRefs || [] },
+    "teamPay");
 
 // Part d'équipe d'un head pour le mois (relevé avec teamRefs) : les parts du total (model.teamRefs,
 // ventes de l'équipe dont la 1re échéance est payée ce mois) et celles des ventes de l'équipe du relevé
@@ -41,7 +61,7 @@ export function teamShareOf(statement, teamEntries, model) {
     }
   };
   const counted = (model.teamRefs || []).map((ref) => ({ ref, entry: teamEntries.get(ref), value: valueOf(ref) }));
-  const status = statusFor({ period: statement.period, countedRefs: statement.countedTeamRefs || [] });
+  const status = teamStatusFor(statement);
   let amount = ZERO;
   const rows = [];
   for (const ref of statement.teamRefs || []) {
@@ -104,8 +124,8 @@ export function teamTotals(rows) {
 }
 
 // Groupes du tableau, dans l'ordre : comptées ce mois et signées dans le mois, comptées ce mois et signées
-// avant (row.signedBefore), reportées, pas encore payées, perdues.
-export const SALE_GROUPS = ["counted", "counted-before", "deferred", "pending", "lost"];
+// avant (row.signedBefore), à confirmer, versées ou versables un autre mois, pas encore payées, perdues.
+export const SALE_GROUPS = ["counted", "counted-before", "held", "deferred", "pending", "lost"];
 export const saleGroup = (row) => (row.status === "counted" && row.signedBefore ? "counted-before" : row.status);
 
 // Par groupe, puis par date de signature.
@@ -170,7 +190,7 @@ export const filterSales = (rows, filters) => rows.filter((r) => matches(r, filt
 // Compteurs des puces : chaque compteur = nombre de lignes affichées si on clique la puce
 // (les autres filtres restent appliqués). La somme des statuts = « Toutes ».
 export function saleCounts(rows, filters) {
-  const status = { ALL: 0, counted: 0, deferred: 0, pending: 0, lost: 0 }, channel = { ALL: 0 };
+  const status = { ALL: 0, counted: 0, held: 0, deferred: 0, pending: 0, lost: 0 }, channel = { ALL: 0 };
   for (const r of rows) {
     if (matches(r, filters, "status")) {
       status.ALL++;
@@ -204,7 +224,7 @@ export function pendingBreakdown(rows) {
 // Montants au barème du mois (model.calculator), comme le tableau ; une valeur illisible compte dans n, pas dans la somme.
 export const MISSED_STATUSES = ["deferred", "pending", "lost"];
 
-function missedGroups(refs, status, entryOf, valueOf, currentMonth) {
+function missedGroups(refs, status, entryOf, valueOf, currentMonth, pay) {
   const groups = Object.fromEntries(MISSED_STATUSES.map((key) => [key, { amount: ZERO, count: 0, refs: [], months: [], reasons: [] }]));
   for (const ref of refs) {
     const entry = entryOf(ref);
@@ -215,7 +235,8 @@ function missedGroups(refs, status, entryOf, valueOf, currentMonth) {
     group.count++;
     group.refs.push(ref);
     if (value) group.amount = group.amount.add(value);
-    if (entry.countedMonth && !group.months.includes(entry.countedMonth)) group.months.push(entry.countedMonth);
+    const month = payMonth(entry, pay);
+    if (month && !group.months.includes(month)) group.months.push(month);
     const state = saleState(entry, currentMonth);
     const reason = group.reasons.find((r) => r.key === state.key);
     if (reason) reason.count++;
@@ -237,10 +258,10 @@ export function missedOf(statement, entries, model, teamEntries, currentMonth) {
       return null;
     }
   };
-  const own = missedGroups(statement.entryRefs || [], statusFor(statement), (ref) => entries.get(ref), valueOf, currentMonth);
+  const own = missedGroups(statement.entryRefs || [], statusFor(statement), (ref) => entries.get(ref), valueOf, currentMonth,
+    "pay");
   const team = Array.isArray(statement.teamRefs) && teamEntries
-    ? missedGroups(statement.teamRefs, statusFor({ period: statement.period, countedRefs: statement.countedTeamRefs || [] }),
-      (ref) => teamEntries.get(ref), valueOf, currentMonth)
+    ? missedGroups(statement.teamRefs, teamStatusFor(statement), (ref) => teamEntries.get(ref), valueOf, currentMonth, "teamPay")
     : null;
   const sum = (keys) => [own, team].filter(Boolean).reduce((s, groups) => keys.reduce((t, key) => t.add(groups[key].amount), s), ZERO);
   return { own, team, total: sum(["pending", "lost"]), later: sum(["deferred"]) };

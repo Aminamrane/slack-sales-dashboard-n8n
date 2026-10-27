@@ -11,3 +11,9 @@ export const loadWorkbench = () => apiClient.get(WORKBENCH);
 export const saveWorkbenchDraft = (body) => apiClient.put(`${WORKBENCH}/draft`, body);
 
 export const isStaleRevision = (error) => error?.status === 409;
+
+// Registre des paies (corps : { expected_revision, … } ; 409 { detail: code } si refusé, rien n'est écrit).
+// Clôture d'un mois : statements = closurePayload(…) ; paie versée hors de la page ; décision sur une vente à confirmer.
+export const closePayrollMonth = (month, body) => apiClient.post(`${WORKBENCH}/months/${month}/close`, body);
+export const markPayrollOutside = (month, body) => apiClient.post(`${WORKBENCH}/months/${month}/outside`, body);
+export const decideHeldSale = (leadId, body) => apiClient.post(`${WORKBENCH}/held/${leadId}`, body);

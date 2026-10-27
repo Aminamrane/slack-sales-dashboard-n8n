@@ -100,6 +100,15 @@ export function signedParis(raw) {
   return { key: `${y}-${mo}-${d} ${h}:${mi}:${sec}`, label: `${day === 1 ? "1er" : day} ${month}` };
 }
 
+// Instant d'une clôture, à l'heure de Paris : « 28 octobre à 15 h », « 2 novembre à 9 h 05 ». Vide si illisible.
+export function closedLabel(iso) {
+  const instant = new Date(String(iso || ""));
+  if (!iso || !Number.isFinite(instant.getTime())) return "";
+  const p = Object.fromEntries(PARIS_PARTS.formatToParts(instant).map((x) => [x.type, x.value]));
+  const minutes = p.minute === "00" ? "" : ` ${p.minute}`;
+  return `${dayMonthLabel(`${p.year}-${p.month}-${p.day}`)} à ${Number(p.hour)} h${minutes}`;
+}
+
 // Mois d'un relevé ou d'un paiement, relatif au mois affiché : « septembre », ou
 // « décembre 2025 » quand l'année diffère de celle du mois affiché.
 export function monthName(period, reference) {
@@ -131,16 +140,6 @@ export function saleTimeline(entry) {
   if (entry?.paidOnUnknown) parts.push("date de paiement inconnue");
   else if (entry?.paidOn) parts.push(`payée le ${shortDay(entry.paidOn, year)}`);
   return parts.join(" · ");
-}
-
-// Pastille de mois croisé dans le relevé du mois P (aucune notion de retard, factuel) :
-// vente comptée en P mais signée avant → « Signée en septembre » ;
-// vente signée en P mais comptée un autre mois → « Comptée en octobre ».
-export function crossMonthLabel(status, entry, period) {
-  const signed = signedMonthOf(entry);
-  if (status === "counted" && signed && signed !== period) return `Signée en ${monthName(signed, period)}`;
-  if (status === "deferred" && entry?.countedMonth) return `Comptée en ${monthName(entry.countedMonth, period)}`;
-  return null;
 }
 
 // Statut Finance d'une vente, calculé par le back (entry.finance.status / statusLabel).
@@ -197,12 +196,24 @@ export const ofMonth = (month) => (/^[aeiouh]/i.test(month) ? `d’${month}` : `
 const sales = (n) => `${n} vente${n > 1 ? "s" : ""}`;
 
 // Statut d'une ligne (ventes, part d'équipe), en pastille : où va l'argent, sans lire le reste.
-// tone : paid (dans la paie du mois), later (client payé après le mois : paie suivante), waiting (1re échéance
-// passée et pas payée), upcoming (onboarding ou 1re échéance à venir), lost (client perdu), unknown (non déclarée…).
+// tone : paid (dans la paie du mois, ou déjà versée), later (client payé après le mois : paie suivante), check (à
+// confirmer : peut-être déjà versée par l'ancienne paie), waiting (1re échéance passée et pas payée), upcoming
+// (onboarding ou 1re échéance à venir), lost (client perdu), unknown (non déclarée…).
+// row.pay : ligne du registre des paies (état, mois) ; row.payMonth : son mois de paie.
 export function rowStatus(row) {
   const timeline = row.timeline || undefined;
   if (row.status === "counted") return { tone: "paid", label: row.paidDay ? `Payée le ${row.paidDay}` : "Payée", title: timeline };
-  if (row.status === "deferred") return { tone: "later", label: row.paidDay ? `Payée le ${row.paidDay}` : "Payée plus tard", title: timeline };
+  if (row.status === "held") {
+    const month = monthName(row.pay?.outsideMonth);
+    const why = month && `Signée en ${month}, mois versé par l’ancienne paie : déjà versée, ou à verser ?`;
+    return { tone: "check", label: "À confirmer", title: [why, timeline].filter(Boolean).join(" · ") || undefined };
+  }
+  if (row.status === "deferred") {
+    const month = monthName(row.payMonth);
+    if (row.pay?.state === "versee") return { tone: "paid", label: `Versée en ${month}`, title: timeline };
+    if (row.pay?.state === "a_confirmer") return { tone: "check", label: `À confirmer en ${month}`, title: timeline };
+    return { tone: "later", label: row.paidDay ? `Payée le ${row.paidDay}` : "Payée plus tard", title: timeline };
+  }
   const state = row.saleState || {};
   const title = [state.label, state.hint, timeline].filter(Boolean).join(" · ") || undefined;
   if (row.status === "lost") return { tone: "lost", label: String(state.key).startsWith("lost:") ? state.short : "Client perdu", title };
@@ -225,6 +236,7 @@ export function groupText(key, period, count, laterMonths = []) {
       ? { tone: "later", title: `Dans la paie ${ofMonth(later)}`, subtitle: `Client payé en ${later} · ${sales(count)}` }
       : { tone: "later", title: "Dans une paie suivante", subtitle: `Client payé plus tard · ${sales(count)}` };
   }
+  if (key === "held") return { tone: "check", title: "À confirmer", subtitle: `Peut-être déjà versées par l’ancienne paie · ${sales(count)}` };
   if (key === "pending") return { tone: "waiting", title: "Pas encore payées", subtitle: `Hors paie, en attente du client · ${sales(count)}` };
   return { tone: "lost", title: "Clients perdus", subtitle: `Hors paie · ${sales(count)}` };
 }

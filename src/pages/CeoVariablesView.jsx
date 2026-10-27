@@ -12,7 +12,9 @@ import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import { navigateBackToDashboard } from "../utils/dashboardNavigation";
 import VariablesWorkbench from "../features/variablesReview/VariablesWorkbench.jsx";
-import { loadWorkbench, saveWorkbenchDraft } from "../features/variablesReview/api.js";
+import {
+  closePayrollMonth, decideHeldSale, loadWorkbench, markPayrollOutside, saveWorkbenchDraft,
+} from "../features/variablesReview/api.js";
 import { preloadAvatars } from "../features/variablesReview/avatars.js";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
@@ -38,7 +40,11 @@ function WorkbenchStatus({ title, detail, onRetry, busy = false, darkMode = fals
   );
 }
 
-// GET /api/v1/variables/workbench → { source, draft }, relu à chaque visite de la page.
+// Registre des paies (clôture, paie versée hors de la page, décision sur une vente à confirmer).
+const PAYROLL = { closeMonth: closePayrollMonth, markOutside: markPayrollOutside, decideHeld: decideHeldSale };
+
+// GET /api/v1/variables/workbench → { source, draft }, relu à chaque visite de la page et après une écriture du
+// registre des paies.
 function LiveVariablesWorkbench({ darkMode }) {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState({ status: "loading" });
@@ -78,7 +84,10 @@ function LiveVariablesWorkbench({ darkMode }) {
   if (!state.source.statements.length) {
     return <WorkbenchStatus darkMode={darkMode} title="Aucune donnée à afficher" />;
   }
-  return <VariablesWorkbench source={state.source} initialDraft={state.draft} saveDraft={saveWorkbenchDraft} darkMode={darkMode} />;
+  return (
+    <VariablesWorkbench source={state.source} initialDraft={state.draft} saveDraft={saveWorkbenchDraft} payroll={PAYROLL}
+      onReload={() => setAttempt((n) => n + 1)} darkMode={darkMode} />
+  );
 }
 
 export default function CeoVariablesView() {

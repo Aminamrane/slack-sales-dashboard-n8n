@@ -1,9 +1,13 @@
-import { CalendarClock, CircleCheck, CircleDashed, CircleHelp, CircleX, TriangleAlert } from "lucide-react";
+import { CalendarClock, CircleCheck, CircleDashed, CircleHelp, CircleX, ShieldQuestionMark, TriangleAlert } from "lucide-react";
 
 // Statut d'une vente, même icône et même couleur partout (pastilles, en-têtes de groupe, puces, carte) :
-// paid = dans la paie du mois, later = paie suivante, waiting = pas encore payée, upcoming = onboarding ou
-// échéance à venir, lost = client perdu, unknown = non déclarée ou à rapprocher.
-const ICONS = { paid: CircleCheck, later: CalendarClock, waiting: TriangleAlert, upcoming: CircleDashed, lost: CircleX, unknown: CircleHelp };
+// paid = dans la paie du mois, later = paie suivante, check = à confirmer (peut-être déjà versée par l'ancienne
+// paie), waiting = pas encore payée, upcoming = onboarding ou échéance à venir, lost = client perdu,
+// unknown = non déclarée ou à rapprocher.
+const ICONS = {
+  paid: CircleCheck, later: CalendarClock, check: ShieldQuestionMark, waiting: TriangleAlert, upcoming: CircleDashed,
+  lost: CircleX, unknown: CircleHelp,
+};
 
 export function StatusIcon({ tone, size = 14 }) {
   const Icon = ICONS[tone] || CircleHelp;

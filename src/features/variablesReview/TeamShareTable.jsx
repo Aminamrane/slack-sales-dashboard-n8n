@@ -10,10 +10,11 @@ import { groupTotals, sortSales } from "./team.js";
 // part et son calcul (base de la vente × coefficient d'équipe). D'abord les ventes
 // de l'équipe comptées ce mois (dans sa rémunération, = la ligne « Part d'équipe » de la carte), puis les
 // autres, comme la carte : reportées (dans la paie du mois du paiement), clients pas encore payés, clients
-// perdus. Chaque part s'ouvre pour être modifiée.
+// perdus. Chaque part s'ouvre pour être modifiée, sauf dans une paie figée (locked : onEdit et onRules absents).
+// Une part « à confirmer » (transition) s'ouvre sur sa décision (onHeld).
 // Mouvement : comme les ventes, entrée en cascade quand la personne ou le mois change.
-export function TeamShareTable({ source, groups, period, total, missedTotal, settings, bodyKey, rowEntry, rowDelay, focus, onEdit, onRules }) {
-  const outside = groups.deferred.length + groups.pending.length + groups.lost.length;
+export function TeamShareTable({ source, groups, period, total, missedTotal, settings, bodyKey, rowEntry, rowDelay, focus, onEdit, onRules, onHeld }) {
+  const outside = groups.held.length + groups.deferred.length + groups.pending.length + groups.lost.length;
   const coefficients = Object.entries(CHANNELS)
     .filter(([key]) => settings.acquisition?.[key]?.team != null)
     .map(([key, name]) => `${decimalLabel(settings.acquisition[key].team)} ${name.toLowerCase()}`)
@@ -29,11 +30,12 @@ export function TeamShareTable({ source, groups, period, total, missedTotal, set
             <li>Équipe du CRM ; aucune part sur ses propres ventes.</li>
           </ul>
         </InfoTip>
-        <button type="button" className="vr-button vr-sales-action" onClick={onRules}><SlidersHorizontal size={14} />Coefficients d’équipe</button>
+        {onRules && <button type="button" className="vr-button vr-sales-action" onClick={onRules}><SlidersHorizontal size={14} />Coefficients d’équipe</button>}
       </div>
       <div className="vr-card vr-table-card">
         <div className="vr-table" role="table" aria-label="Ventes de l’équipe">
-          <TeamBody key={bodyKey} source={source} groups={groups} period={period} rowEntry={rowEntry} rowDelay={rowDelay} focus={focus} onEdit={onEdit} />
+          <TeamBody key={bodyKey} source={source} groups={groups} period={period} rowEntry={rowEntry} rowDelay={rowDelay} focus={focus}
+            onEdit={onEdit} onHeld={onHeld} />
         </div>
         <footer className="vr-table-footer vr-team-footer">
           <span>Part d’équipe du mois{outside > 0 && missedTotal.n !== 0n && <> · manque à gagner <span className="vr-num">{money(missedTotal)}</span></>}</span>
@@ -44,21 +46,21 @@ export function TeamShareTable({ source, groups, period, total, missedTotal, set
   );
 }
 
-// Même liste que les ventes, vendeur dans la ligne de détail. Seule « Dans la paie » est ouverte au départ : c'est
-// la part du head ce mois-ci ; les autres sections montrent leur nombre et leur total, et s'ouvrent au clic ou
-// depuis la carte (focus).
-function TeamBody({ source, groups, period, rowEntry, rowDelay, focus, onEdit }) {
-  const rows = sortSales([...groups.counted, ...groups.deferred, ...groups.pending, ...groups.lost]);
+// Même liste que les ventes, vendeur dans la ligne de détail. « Dans la paie » (la part du head ce mois-ci) et
+// « À confirmer » (une décision attendue) sont ouvertes au départ ; les autres sections montrent leur nombre et leur
+// total, et s'ouvrent au clic ou depuis la carte (focus).
+function TeamBody({ source, groups, period, rowEntry, rowDelay, focus, onEdit, onHeld }) {
+  const rows = sortSales([...groups.counted, ...groups.held, ...groups.deferred, ...groups.pending, ...groups.lost]);
   if (!rows.length) return <div className="vr-empty">Aucune vente de l’équipe ce mois-ci</div>;
   return (
     <SectionList rows={rows} stats={groupTotals(rows)} period={period} laterMonths={groups.months} rowEntry={rowEntry} rowDelay={rowDelay}
-      initialOpen={(key) => key === "counted"} focus={focus}
+      initialOpen={(key) => key === "counted" || key === "held"} focus={focus}
       renderRow={(row, motionProps) => {
         const seller = row.seller && (
           <span className="vr-meta-seller"><ProfileAvatar source={source} person={row.seller} className="tiny" />{row.sellerName}</span>
         );
-        return <SaleLine key={row.ref} row={row} motionProps={motionProps} onEdit={onEdit} label={`Part d’équipe · ${row.client}`}
-          meta={<SaleMeta row={row} prefix={seller} />} />;
+        return <SaleLine key={row.ref} row={row} motionProps={motionProps} onEdit={onEdit} onHeld={onHeld}
+          label={`Part d’équipe · ${row.client}`} meta={<SaleMeta row={row} prefix={seller} />} />;
       }} />
   );
 }

@@ -7,7 +7,6 @@ import {
   auditDetail,
   auditValue,
   baseCaption,
-  crossMonthLabel,
   paidDayOf,
   saleState,
   signedDayOf,
@@ -30,6 +29,7 @@ import {
   saleCounts,
   MISSED_STATUSES,
   missedOf,
+  payMonth,
   sortSales,
   statementSettings,
   statusFor,
@@ -39,6 +39,8 @@ import {
   teamTotals,
 } from "./team.js";
 import { isStaleRevision } from "./api.js";
+import { activeChanges, closurePayload, closureSummary, heldCount, heldOf, isLocked, refusalMessage } from "./payroll.js";
+import { ClosureDialog, HeldDialog, PayrollBanner } from "./PayrollBar.jsx";
 import { Modal } from "./ui.jsx";
 import { ActualCellEditor, BonusEditor, DealEditor, FixedEditor, RulesEditor } from "./editors.jsx";
 import { calculationParts, resolveDeal } from "./dealCalculation.js";
@@ -71,7 +73,9 @@ const TOTAL_BASE = /\/0\.7\*0\.8\/12\)?$/;
 
 // source : données CRM lues en direct. initialDraft : brouillon partagé du serveur.
 // saveDraft(body) → { draft } ; rien n'est appliqué tant que le serveur n'a pas répondu.
-export default function VariablesWorkbench({ source, initialDraft, saveDraft, darkMode = false }) {
+// payroll : { closeMonth(mois, corps), markOutside(mois, corps), decideHeld(lead, corps) }, registre des paies (absent :
+// lecture seule) ; onReload() : relire la page après une écriture du registre (la source change).
+export default function VariablesWorkbench({ source, initialDraft, saveDraft, payroll = null, onReload, darkMode = false }) {
   const loaded = useMemo(() => {
     try {
       return { draft: parseDraft(initialDraft), error: null };
@@ -89,6 +93,9 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
     [saveError, setSaveError] = useState(""),
     [toast, setToast] = useState(null);
   const saving = useRef(false);
+  // Brouillon tel que les calculs le lisent : sans les cellules figées par une clôture (le registre les fixe).
+  const changes = useMemo(() => activeChanges(source, draft.changes), [source, draft.changes]);
+  const view = useMemo(() => ({ ...draft, changes }), [draft, changes]);
   const salesSection = useRef(null);
   const teamSection = useRef(null);
   // Section de la part d'équipe à ouvrir depuis la carte (« Pas encore payées » de l'équipe, etc.).
@@ -101,11 +108,13 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
   const fallbackPeriod = periods.includes(source.defaultPeriod) ? source.defaultPeriod : periods.at(-1);
   const [periodChoice, setPeriod] = useState(fallbackPeriod);
   const period = periods.includes(periodChoice) ? periodChoice : fallbackPeriod;
-  const team = useMemo(() => teamRows(source, draft, period), [source, draft, period]);
+  const team = useMemo(() => teamRows(source, view, period), [source, view, period]);
   const totals = useMemo(() => teamTotals(team), [team]);
   const [person, setPerson] = useState(() => team[0]?.person ?? null);
   const row = team.find((r) => r.person === person) || team[0];
   const statement = row.statement;
+  // Paie figée (clôturée ici, ou versée hors de la page) : plus aucune modification.
+  const locked = isLocked(statement);
   const monthText = monthLabel(period);
   const readingDay = dayMonthLabel(source.snapshotDate);
 
@@ -119,15 +128,15 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
     [editor, setEditor] = useState(null),
     [inline, setInline] = useState(null);
 
-  const settings = useMemo(() => statementSettings(statement, draft), [statement, draft]);
-  const calculator = useMemo(() => createCalculator(source.cells, draft.changes), [source.cells, draft.changes]);
+  const settings = useMemo(() => statementSettings(statement, view), [statement, view]);
+  const calculator = useMemo(() => createCalculator(source.cells, changes), [source.cells, changes]);
   const result = useMemo(() => {
     try {
-      return { model: statementModel(source, statement, draft.changes, settings), error: null };
+      return { model: statementModel(source, statement, changes, settings), error: null };
     } catch (e) {
       return { model: null, error: e.message };
     }
-  }, [source, statement, draft.changes, settings]);
+  }, [source, statement, changes, settings]);
   const model = result.model;
   const entries = useMemo(() => entryIndex(source), [source]);
   // Part d'équipe : seulement pour le relevé d'un head qui mène une équipe (teamRefs fourni par le serveur).
@@ -140,6 +149,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
   const currentMonth = String(source.snapshotDate || "").slice(0, 7) || null;
   const missed = useMemo(() => (model ? missedOf(statement, entries, model, teamEntries, currentMonth) : null),
     [statement, entries, model, teamEntries, currentMonth]);
+  const held = useMemo(() => (model ? heldOf(statement, model) : null), [statement, model]);
 
   const linkedRows = useMemo(() => {
     let refs = [];
@@ -175,7 +185,6 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
         entry,
         client: entry.client,
         status,
-        crossMonth: crossMonthLabel(status, entry, statement.period),
         timeline: saleTimeline(entry),
         paidInfo: !!(entry.paidOn || entry.paidOnUnknown),
         channel: deal.channel || "UNKNOWN",
@@ -195,16 +204,17 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
         paidDay: status === "counted" || status === "deferred" ? paidDayOf(entry) : "",
         saleState: saleState(entry, currentMonth),
         signedBefore: status === "counted" && !!signedMonthOf(entry) && signedMonthOf(entry) < statement.period,
-        countedMonth: entry.countedMonth,
+        pay: entry.pay,
+        payMonth: payMonth(entry, "pay"),
         boardState: entry.finance?.boardState || null,
         boardLost: !!entry.finance?.boardLost,
         amount: valueOf(calc, ref),
         value: calculator.raw(ref) === "" && !applied ? "Non calculée" : safeMoney(calc, ref),
-        edited: Object.hasOwn(draft.changes, ref) || !!settings.deals?.[ref],
+        edited: Object.hasOwn(changes, ref) || !!settings.deals?.[ref],
         search: `${entry.client} ${entry.origin || ""}`,
       };
     });
-  }, [linkedRows, source, settings, calculator, model, draft.changes, statement, currentMonth]);
+  }, [linkedRows, source, settings, calculator, model, changes, statement, currentMonth]);
 
   // Tableau « Part d'équipe » d'un head : ventes de son équipe comptées ce mois, puis hors rémunération du mois
   // par raison (versées plus tard, clients pas encore payés, perdus), comme le manque à gagner de la carte.
@@ -229,26 +239,29 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
         paidDay: e && (status === "counted" || status === "deferred") ? paidDayOf(e) : "",
         saleState: saleState(e, currentMonth),
         signedBefore: status === "counted" && !!e && signedMonthOf(e) < statement.period,
-        countedMonth: e?.countedMonth,
+        pay: e?.teamPay,
+        payMonth: e ? payMonth(e, "teamPay") : null,
+        entry: e,
         signedAt: e?.signedAt,
         boardState: e?.finance?.boardState || null,
         boardLost: !!e?.finance?.boardLost,
         amount: value,
         exception: !!settings.deals?.[ref]?.exception,
-        edited: Object.hasOwn(draft.changes, ref) || !!settings.deals?.[ref],
+        edited: Object.hasOwn(changes, ref) || !!settings.deals?.[ref],
         value: value ? money(value) : "À vérifier",
       };
     };
     const missedRows = (status) => (missed?.team?.[status].refs || []).map((ref) => toRow(status, ref));
     return {
       counted: teamShare.counted.map(({ ref }) => toRow("counted", ref)),
+      held: (statement.heldTeamRefs || []).map((ref) => toRow("held", ref)),
       deferred: missedRows("deferred"),
       pending: missedRows("pending"),
       lost: missedRows("lost"),
       months: missed?.team?.deferred.months || [],
       missed: missed?.team ? missed.team.pending.amount.add(missed.team.lost.amount) : ZERO,
     };
-  }, [teamShare, missed, teamEntries, model, source, settings, draft.changes, currentMonth, statement.period]);
+  }, [teamShare, missed, teamEntries, model, source, settings, changes, currentMonth, statement.period, statement.heldTeamRefs]);
 
   const visible = useMemo(() => sortSales(filterSales(saleRows, filters)), [saleRows, filters]);
   const groups = useMemo(() => groupTotals(visible), [visible]);
@@ -302,15 +315,46 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
     if (saved) notify("Modifications enregistrées");
     return saved;
   }
+  // Registre des paies : clôture du mois, paie versée hors de la page, décision sur une vente à confirmer. Le serveur
+  // vérifie tout sous verrou (révision) ; en cas de succès la page est relue, la source ayant changé ; un refus (409)
+  // bloque l'écriture jusqu'au rechargement, comme une révision dépassée.
+  const [payrollPanel, setPayrollPanel] = useState(null);   // { type: "close" } | { type: "held", row }
+  const [payrollBusy, setPayrollBusy] = useState(false);
+  const closure = useMemo(() => {
+    if (payrollPanel?.type !== "close") return null;
+    try {
+      const statements = closurePayload(source, view, period);
+      return { statements, summary: closureSummary(statements, heldCount(source, period)), error: null };
+    } catch (e) {
+      return { statements: null, summary: null, error: `Un relevé ne se calcule pas : ${e.message} Corrigez-le avant de clôturer.` };
+    }
+  }, [payrollPanel, source, view, period]);
+  async function writePayroll(request) {
+    if (blockingError || payrollBusy) return;
+    setPayrollBusy(true);
+    try {
+      await request({ expected_revision: draft.revision });
+      setPayrollPanel(null);
+      onReload?.();
+    } catch (error) {
+      setPayrollPanel(null);
+      if (error?.status === 409) setBlockingError(refusalMessage(error));
+      else setSaveError(refusalMessage(error));
+    } finally {
+      setPayrollBusy(false);
+    }
+  }
+  const openHeld = payroll && !blockingError ? (r) => setPayrollPanel({ type: "held", row: r }) : null;
+
   // Une cellule (coefficient, montant, fixe) : même chemin pour la saisie en ligne et les fenêtres.
   // La référence reste dans l'audit pour la traçabilité ; l'historique affiché la masque.
   function saveCell(ref, input, reason, label) {
-    const changes = { ...draft.changes, [ref]: input };
-    if (input === String(source.cells[ref]?.input ?? "")) delete changes[ref];
+    const nextChanges = { ...draft.changes, [ref]: input };
+    if (input === String(source.cells[ref]?.input ?? "")) delete nextChanges[ref];
     const nextSettings = model?.appliedAcquisition[ref]
       ? { ...draft.settings, [statement.id]: { ...settings, deals: { ...settings.deals, [ref]: { ...settings.deals?.[ref], exception: true, reason } } } }
       : draft.settings;
-    return commit({ ...draft, changes, settings: nextSettings }, "Cellule modifiée", [ref, label, reason].filter(Boolean).join(" · "), calculator.raw(ref), input);
+    return commit({ ...draft, changes: nextChanges, settings: nextSettings }, "Cellule modifiée", [ref, label, reason].filter(Boolean).join(" · "), calculator.raw(ref), input);
   }
 
   function selectPerson(name) {
@@ -326,7 +370,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
   function changePeriod(next) {
     if (!periods.includes(next) || next === period) return;
     setMotionState({ direction: next > period ? 1 : -1, cause: "month" });
-    const nextTeam = teamRows(source, draft, next);
+    const nextTeam = teamRows(source, view, next);
     if (!nextTeam.some((r) => r.person === row.person)) setPerson(nextTeam[0]?.person ?? null);
     setPeriod(next);
     setFilters(NO_FILTERS);
@@ -364,7 +408,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
     let preview = null;
     if (valid) {
       const formula = `=(${inlineRow.parts.baseExpression})*${inline.text.trim().replace(",", ".")}`;
-      preview = safeMoney(createCalculator(source.cells, { ...draft.changes, [inline.ref]: formula }), inline.ref);
+      preview = safeMoney(createCalculator(source.cells, { ...changes, [inline.ref]: formula }), inline.ref);
     }
     return { ...inline, valid, preview };
   })();
@@ -403,6 +447,8 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
             </div>
           </header>
           {(blockingError || saveError) && <div className="vr-error vr-banner" role="alert">{blockingError || saveError}</div>}
+          <PayrollBanner source={source} statement={statement}
+            onClose={payroll && !blockingError ? () => setPayrollPanel({ type: "close" }) : null} />
           <div className="vr-layout">
             <TeamList source={source} period={period} rows={team} totals={totals} selected={row.person} direction={motionState.direction} onSelect={selectPerson} />
             <section className="vr-content">
@@ -418,6 +464,9 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
                 teamShare={teamShare}
                 missed={missed}
                 signedBefore={signedBefore}
+                held={held}
+                locked={locked}
+                onHeld={() => showMissed(statement.heldRefs?.length ? "own" : "team", "held")}
                 onCoefficients={() => setPanel("coefficients")}
                 onTiers={() => setPanel("rules")}
                 onHistory={() => setPanel("history")}
@@ -447,9 +496,10 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
                   rowEntry={rowEntry}
                   rowDelay={navigating ? TABLE_DELAY : 0}
                   inline={inlineView}
-                  onInline={inlineApi}
-                  onDeal={(r) => setPanel({ type: "deal", row: r })}
-                  onEdit={openEdit}
+                  onInline={locked ? null : inlineApi}
+                  onDeal={locked ? null : (r) => setPanel({ type: "deal", row: r })}
+                  onEdit={locked ? null : openEdit}
+                  onHeld={openHeld}
                 />
               </div>
               {teamTable && (
@@ -464,9 +514,10 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
                     bodyKey={statement.id}
                     rowEntry={rowEntry}
                     rowDelay={navigating ? TABLE_DELAY : 0}
-                    onEdit={openEdit}
+                    onEdit={locked ? null : openEdit}
                     focus={teamFocus}
-                    onRules={() => setPanel("coefficients")}
+                    onRules={locked ? null : () => setPanel("coefficients")}
+                    onHeld={openHeld}
                   />
                 </div>
               )}
@@ -506,7 +557,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
               current={model.fixed}
               tier={model.appliedTier}
               subtitle={who}
-              preview={(input) => ({ total: statementModel(source, statement, { ...draft.changes, [model.fixedCell]: input }, settings).total })}
+              preview={(input) => ({ total: statementModel(source, statement, { ...changes, [model.fixedCell]: input }, settings).total })}
               onClose={() => setPanel(null)}
               onMore={() => { setPanel(null); setEditor({ ref: model.fixedCell, label: "Fixe de base" }); }}
               onSave={async (input, reason) => {
@@ -571,6 +622,29 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
                 await updateSettings({ ...settings, deals: { ...settings.deals, [panel.row.ref]: deal } }, "Rémunération de vente modifiée", `${panel.row.ref} · ${panel.row.client}`);
                 setPanel(null);
               }}
+            />
+          )}
+          {payrollPanel?.type === "close" && closure && (
+            <ClosureDialog
+              key="close"
+              month={period}
+              summary={closure.summary}
+              error={closure.error}
+              canMarkOutside={!!source.payroll?.canMarkOutside}
+              busy={payrollBusy}
+              onCancel={() => setPayrollPanel(null)}
+              onConfirm={() => writePayroll((body) => payroll.closeMonth(period, { ...body, statements: closure.statements }))}
+              onMarkOutside={() => writePayroll((body) => payroll.markOutside(period, body))}
+            />
+          )}
+          {payrollPanel?.type === "held" && (
+            <HeldDialog
+              key={`held-${payrollPanel.row.ref}`}
+              row={payrollPanel.row}
+              target={source.payroll?.months?.[payrollPanel.row.payMonth] ? source.payroll.firstOpen : payrollPanel.row.payMonth}
+              busy={payrollBusy}
+              onCancel={() => setPayrollPanel(null)}
+              onDecide={(decision) => writePayroll((body) => payroll.decideHeld(payrollPanel.row.entry.crmLeadId, { ...body, decision }))}
             />
           )}
           {panel === "history" && (

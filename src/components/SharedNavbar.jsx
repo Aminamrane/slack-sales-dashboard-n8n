@@ -1112,7 +1112,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
 
                 {(apiClient.getUser()?.role === 'admin' || apiClient.getUser()?.role === 'ceo') && (
                   <button
-                    onClick={() => navigate("/variables")}
+                    onClick={() => navigate("/ceo/variables")}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px',
                       borderRadius: '8px', border: 'none', background: 'transparent',
@@ -1123,6 +1123,22 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
                     Calcul des variables
+                  </button>
+                )}
+
+                {(apiClient.getUser()?.role === 'admin' || apiClient.getUser()?.role === 'ceo') && (
+                  <button
+                    onClick={() => navigate("/variables/setters")}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px',
+                      borderRadius: '8px', border: 'none', background: 'transparent',
+                      color: darkMode ? '#f5f5f7' : '#1d1d1f', fontSize: '14px', fontWeight: 500,
+                      cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? '#2a2b2e' : '#f5f5f7'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    Contribution des setters
                   </button>
                 )}
 

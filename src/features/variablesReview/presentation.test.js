@@ -6,7 +6,6 @@ import {
   auditDetail,
   auditValue,
   baseCaption,
-  crossMonthLabel,
   dayMonthLabel,
   decimalLabel,
   financeBadge,
@@ -135,12 +134,7 @@ test("sale timeline, factual: signature day, first due month, payment day or unk
   assert.equal(saleTimeline({ signedAt: "2026-09-11 22:30:00+00:00" }), "Signée le 12/09");
 });
 
-test("cross-month pill: « Signée en septembre » in the payment month, « Comptée en octobre » in the signing month", () => {
-  const sale = { signedAt: "2026-09-30 15:00:00+00:00", countedMonth: "2026-10" };
-  assert.equal(crossMonthLabel("counted", sale, "2026-10"), "Signée en septembre");
-  assert.equal(crossMonthLabel("deferred", sale, "2026-09"), "Comptée en octobre");
-  assert.equal(crossMonthLabel("counted", { signedMonth: "2026-10" }, "2026-10"), null);
-  assert.equal(crossMonthLabel("pending", sale, "2026-09"), null);
-  assert.equal(crossMonthLabel("counted", { signedMonth: "2025-12" }, "2026-01"), "Signée en décembre 2025");
+test("month name relative to the displayed month: the year only when it differs", () => {
   assert.equal(monthName("2026-10", "2026-09"), "octobre");
+  assert.equal(monthName("2025-12", "2026-01"), "décembre 2025");
 });
