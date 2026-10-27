@@ -73,6 +73,10 @@ if (typeof document !== 'undefined' && !document.getElementById(NOTIF_STYLES_ID)
       65%  { opacity: 1; transform: translateX(-2px) scale(1.03); }
       100% { opacity: 1; transform: translateX(0) scale(1); }
     }
+    @keyframes navbarLogoutArm {
+      from { transform: translateX(6px) scale(0.96); }
+      to { transform: none; }
+    }
     @keyframes spin {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
@@ -452,6 +456,16 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
   }, [navigate]);
 
   // ── LOGOUT ──────────────────────────────────────────────────────────────────
+  // En deux temps (dev 27/10/2026 : le bouton, collé à l'interrupteur du mode
+  // sombre, se cliquait par erreur) : un premier clic arme le bouton, qui demande
+  // confirmation pendant 4 s ; seul le second clic déconnecte.
+  const [logoutArmed, setLogoutArmed] = useState(false);
+  const logoutTimerRef = useRef(null);
+  useEffect(() => {
+    if (!logoutArmed) return undefined;
+    logoutTimerRef.current = setTimeout(() => setLogoutArmed(false), 4000);
+    return () => clearTimeout(logoutTimerRef.current);
+  }, [logoutArmed]);
   const logout = () => {
     apiClient.logout();
   };
@@ -1198,40 +1212,85 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
               </button>
             )}
 
-            {/* Logout */}
-            <button
-              onClick={logout}
-              title="Déconnexion"
+            {/* Logout — en deux temps : ⏻ arme, « Se déconnecter » confirme, ✕ annule. */}
+            <div
+              role="group"
+              aria-label="Déconnexion"
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: collapsed ? 0 : '34px',
-                height: '34px',
-                borderRadius: '10px',
-                border: 'none',
-                background: darkMode ? '#2a2b2e' : '#f5f5f7',
-                color: darkMode ? '#8b8d93' : '#86868b',
-                cursor: 'pointer',
-                fontSize: '14px',
-                transition: 'all 0.2s, width 0.35s ease, opacity 0.25s ease',
+                display: 'flex', alignItems: 'center', gap: 4,
+                height: 34,
+                marginLeft: collapsed ? 0 : 6,
+                paddingLeft: collapsed ? 0 : 8,
+                borderLeft: collapsed ? 'none' : `1px solid ${darkMode ? '#2a2b36' : '#e2e6ef'}`,
+                maxWidth: collapsed ? 0 : 220,
                 opacity: collapsed ? 0 : 1,
                 overflow: 'hidden',
-                padding: collapsed ? 0 : undefined,
+                transition: 'max-width 0.35s ease, opacity 0.25s ease',
                 pointerEvents: collapsed ? 'none' : 'auto',
                 flexShrink: 0,
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = darkMode ? '#ff453a' : '#ff3b30';
-                e.currentTarget.style.color = '#fff';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = darkMode ? '#2a2b2e' : '#f5f5f7';
-                e.currentTarget.style.color = darkMode ? '#8b8d93' : '#86868b';
-              }}
             >
-              ⏻
-            </button>
+              {logoutArmed ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={logout}
+                    autoFocus
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      height: 34, padding: '0 12px', borderRadius: 10, border: 'none',
+                      background: darkMode ? '#ff453a' : '#ff3b30', color: '#fff',
+                      fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                      fontFamily: 'inherit',
+                      animation: 'navbarLogoutArm 0.22s cubic-bezier(0.16, 1, 0.3, 1) both',
+                    }}
+                  >
+                    <span aria-hidden="true">⏻</span>
+                    Se déconnecter
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLogoutArmed(false)}
+                    aria-label="Annuler la déconnexion"
+                    title="Annuler"
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      width: 34, height: 34, borderRadius: 10, border: 'none',
+                      background: darkMode ? '#2a2b2e' : '#f5f5f7',
+                      color: darkMode ? '#8b8d93' : '#86868b',
+                      cursor: 'pointer', fontSize: 14, fontFamily: 'inherit',
+                    }}
+                  >
+                    ✕
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setLogoutArmed(true)}
+                  title="Déconnexion"
+                  aria-label="Déconnexion"
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    width: 34, height: 34, borderRadius: 10, border: 'none',
+                    background: darkMode ? '#2a2b2e' : '#f5f5f7',
+                    color: darkMode ? '#8b8d93' : '#86868b',
+                    cursor: 'pointer', fontSize: 14,
+                    transition: 'background 0.2s, color 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = darkMode ? '#3a3b40' : '#e9e9ee';
+                    e.currentTarget.style.color = darkMode ? '#eef0f6' : '#1e2330';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = darkMode ? '#2a2b2e' : '#f5f5f7';
+                    e.currentTarget.style.color = darkMode ? '#8b8d93' : '#86868b';
+                  }}
+                >
+                  ⏻
+                </button>
+              )}
+            </div>
           </>
         )}
       </div>
