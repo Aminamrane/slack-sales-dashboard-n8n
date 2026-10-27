@@ -73,13 +73,14 @@ function Recovery({ title, Icon, received, expected, period, caption, loading, d
   );
 }
 
-// Finance : même vision que la page finance par défaut (Globale = Owner + Opti'lex),
-// le CEO et l'équipe finance lisent les mêmes totaux (demande dev 2026-09-23).
+// Finance : part Owner uniquement (règle du dev, 27/10/2026 : retour à la lecture d'avant
+// le 23/09). La page Finance garde sa propre vision (Globale par défaut) ; ici le CEO lit
+// ce qu'Owner attend et reçoit. Les ventes du mois (cash, ARR) sont déjà en part Owner.
 export default function FinancePanel({ onOpenFinance, dark }) {
   const [period, setPeriod] = useState(todayMonth);
   const finance = useDashboardData(`/api/v1/finance-periods?period=${period}`);
   const sales = useDashboardData(`/api/v1/ceo-dashboard/sales?period=${period}`);
-  const k = useMemo(() => (finance.data ? computeKpis(finance.data.periods, 'global') : null), [finance.data]);
+  const k = useMemo(() => (finance.data ? computeKpis(finance.data.periods, 'owner') : null), [finance.data]);
   const { reduce, item, list } = useMotionPrefs();
   const s = sales.data;
   const salesRows = s ? [
@@ -89,7 +90,7 @@ export default function FinancePanel({ onOpenFinance, dark }) {
   ] : [];
   return (
     <section className="an-section" aria-label="Finance">
-      <Inscription reduce={reduce} sub="Owner + Opti’lex" right={<PeriodSelect value={period} onChange={setPeriod} label="Mois des indicateurs finance" />}>Finance</Inscription>
+      <Inscription reduce={reduce} sub="Owner uniquement" right={<PeriodSelect value={period} onChange={setPeriod} label="Mois des indicateurs finance" />}>Finance</Inscription>
       <motion.div className="an-grid an-grid--2" variants={list()} initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.15 }}>
         <motion.article className="an-panel" variants={item} aria-busy={finance.loading}>
           <div className="an-panel-title"><h3>Récupération<small>reçu / attendu</small></h3><PanelIcon name="wallet" /></div>
@@ -100,7 +101,7 @@ export default function FinancePanel({ onOpenFinance, dark }) {
             </div>
           </PanelState>
           <div className="an-panel-foot">
-            <span>Même vision que la page Finance</span>
+            <span>Part Owner HT</span>
             <button type="button" className="an-link" onClick={() => onOpenFinance(period)}>Voir dans Finance <ArrowUpRight size={15} aria-hidden="true" /></button>
           </div>
         </motion.article>
