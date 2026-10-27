@@ -60,7 +60,7 @@ const LeadAssignmentEquity = lazy(() => import("./pages/LeadAssignmentEquity.jsx
 const LeadAssignmentMonitor = lazy(() => import("./pages/LeadAssignmentMonitor.jsx"));
 const LeadAssignmentLive = lazy(() => import("./pages/LeadAssignmentLive.jsx"));
 const TeamAbsences = lazy(() => import("./pages/TeamAbsences.jsx"));
-const Variables = lazy(() => import("./pages/Variables.jsx"));
+const SettersContribution = lazy(() => import("./pages/SettersContribution.jsx"));
 const OptilexRdvMonitoring = lazy(() => import("./pages/OptilexRdvMonitoring.jsx"));
 const WorkHours = lazy(() => import("./pages/WorkHours.jsx"));
 const CeoWorkHoursView = lazy(() => import("./pages/CeoWorkHoursView.jsx"));
@@ -407,11 +407,13 @@ function App() {
             </ProtectedRoute>
           }
         />
+        {/* Ancien calcul des variables retiré (27/10/2026) : une seule page calcule et verse, /ceo/variables. */}
+        <Route path="/variables" element={<Navigate to="/ceo/variables" replace />} />
         <Route
-          path="/variables"
+          path="/variables/setters"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'ceo', 'hr']}>
-              <Variables />
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'hr', 'finance_director']}>
+              <SettersContribution />
             </ProtectedRoute>
           }
         />

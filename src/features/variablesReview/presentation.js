@@ -100,6 +100,15 @@ export function signedParis(raw) {
   return { key: `${y}-${mo}-${d} ${h}:${mi}:${sec}`, label: `${day === 1 ? "1er" : day} ${month}` };
 }
 
+// Instant à l'heure de Paris : « 28 octobre à 15 h », « 2 novembre à 9 h 05 ». Vide si illisible.
+export function closedLabel(iso) {
+  const instant = new Date(String(iso || ""));
+  if (!iso || !Number.isFinite(instant.getTime())) return "";
+  const p = Object.fromEntries(PARIS_PARTS.formatToParts(instant).map((x) => [x.type, x.value]));
+  const minutes = p.minute === "00" ? "" : ` ${p.minute}`;
+  return `${dayMonthLabel(`${p.year}-${p.month}-${p.day}`)} à ${Number(p.hour)} h${minutes}`;
+}
+
 // Mois d'un relevé ou d'un paiement, relatif au mois affiché : « septembre », ou
 // « décembre 2025 » quand l'année diffère de celle du mois affiché.
 export function monthName(period, reference) {

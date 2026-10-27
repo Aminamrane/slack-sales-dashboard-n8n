@@ -18,6 +18,7 @@ const STATUS_CHIPS = [["ALL", "Toutes"], ["counted", "Dans la paie", "paid"], ["
 const OPTIONAL_CHIPS = new Set(["deferred", "lost"]);
 const CHANNEL_CHIPS = [...Object.entries(CHANNELS), ["UNKNOWN", "Non retrouvée"]];
 const plural = (n, word) => `${n} ${word}${n > 1 ? "s" : ""}`;
+const planLabel = (plan) => (plan === "A" ? "annuel" : "mensuel");
 
 // Les compteurs sont des entiers : remplacés nets, dans la même image que les lignes.
 function Chip({ active, count, group, onClick, children }) {
@@ -224,7 +225,14 @@ export function SaleLine({ row, motionProps, inline, onInline, onDeal, onEdit, m
           <span className="vr-line-meta">{meta}</span>
         </span>
       </div>
-      <div role="cell" className="vr-line-status"><StatusPill status={rowStatus(row)} /></div>
+      <div role="cell" className="vr-line-status">
+        <StatusPill status={rowStatus(row)} />
+        {row.alerts?.length > 0 && (
+          <span className="vr-badge alert" title={row.alerts.map((a) => `${a.title} : ${a.detail}`).join("\n")}>
+            <StatusIcon tone="alert" size={13} />Changée après la paie
+          </span>
+        )}
+      </div>
       <div role="cell" className="vr-line-amount">
         <button type="button" className="vr-amount vr-num" onClick={() => onEdit(row.ref, editLabel)} title="Modifier ce montant">{amount}</button>
         <CalcLine row={row} inline={inline} onInline={onInline} onEdit={onEdit} label={editLabel} />
@@ -241,7 +249,9 @@ export function SaleMeta({ row, plan = false, prefix = null }) {
       {prefix}
       <span className={`vr-meta-signed ${row.signedBefore ? "earlier" : ""}`} title={row.timeline}>Signée le {row.signedDay || "?"}</span>
       <span>{row.range ? `${row.range} salariés` : "Tranche non renseignée"}</span>
-      {plan && <span>{row.plan === "A" ? "annuel" : "mensuel"}</span>}
+      {plan && <span title={row.planDeclared && row.planDeclared !== row.plan ? "Rythme facturé par la Finance, différent de la déclaration" : undefined}>
+        {planLabel(row.plan)}{row.planDeclared && row.planDeclared !== row.plan && ` (déclaré ${planLabel(row.planDeclared)})`}
+      </span>}
       {row.exception && <span className="vr-meta-flag">calcul individuel</span>}
       {row.boardLost && row.status !== "lost" && (
         <span className="vr-meta-board" title="Client fini au board après le paiement de sa 1re échéance : la commission reste due (règle du 25/10).">

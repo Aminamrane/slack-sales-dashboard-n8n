@@ -39,6 +39,8 @@ import {
   teamTotals,
 } from "./team.js";
 import { isStaleRevision } from "./api.js";
+import { alertText, payrollAlerts, rowAlerts } from "./payroll.js";
+import { PayrollAlerts } from "./PayrollAlerts.jsx";
 import { Modal } from "./ui.jsx";
 import { ActualCellEditor, BonusEditor, DealEditor, FixedEditor, RulesEditor } from "./editors.jsx";
 import { calculationParts, resolveDeal } from "./dealCalculation.js";
@@ -140,6 +142,8 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
   const currentMonth = String(source.snapshotDate || "").slice(0, 7) || null;
   const missed = useMemo(() => (model ? missedOf(statement, entries, model, teamEntries, currentMonth) : null),
     [statement, entries, model, teamEntries, currentMonth]);
+  // Changements après la paie (versée le 1er du mois suivant) : alertes du serveur et modifications faites ici.
+  const alerts = useMemo(() => payrollAlerts(source, draft.audit), [source, draft.audit]);
 
   const linkedRows = useMemo(() => {
     let refs = [];
@@ -185,6 +189,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
         range: entry.employeeRange,
         origin: deal.origin,
         plan: deal.plan,
+        planDeclared: entry.planDeclared,
         overridden: deal.overridden,
         originChannel: deal.originChannel,
         exception: deal.exception,
@@ -196,6 +201,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
         saleState: saleState(entry, currentMonth),
         signedBefore: status === "counted" && !!signedMonthOf(entry) && signedMonthOf(entry) < statement.period,
         countedMonth: entry.countedMonth,
+        alerts: rowAlerts(alerts, entry.crmLeadId, "own", statement.period).map((a) => alertText(source, a)),
         boardState: entry.finance?.boardState || null,
         boardLost: !!entry.finance?.boardLost,
         amount: valueOf(calc, ref),
@@ -204,7 +210,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
         search: `${entry.client} ${entry.origin || ""}`,
       };
     });
-  }, [linkedRows, source, settings, calculator, model, draft.changes, statement, currentMonth]);
+  }, [linkedRows, source, settings, calculator, model, draft.changes, statement, currentMonth, alerts]);
 
   // Tableau « Part d'équipe » d'un head : ventes de son équipe comptées ce mois, puis hors rémunération du mois
   // par raison (versées plus tard, clients pas encore payés, perdus), comme le manque à gagner de la carte.
@@ -230,6 +236,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
         saleState: saleState(e, currentMonth),
         signedBefore: status === "counted" && !!e && signedMonthOf(e) < statement.period,
         countedMonth: e?.countedMonth,
+        alerts: e ? rowAlerts(alerts, e.crmLeadId, "team", statement.period).map((a) => alertText(source, a)) : [],
         signedAt: e?.signedAt,
         boardState: e?.finance?.boardState || null,
         boardLost: !!e?.finance?.boardLost,
@@ -248,7 +255,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
       months: missed?.team?.deferred.months || [],
       missed: missed?.team ? missed.team.pending.amount.add(missed.team.lost.amount) : ZERO,
     };
-  }, [teamShare, missed, teamEntries, model, source, settings, draft.changes, currentMonth, statement.period]);
+  }, [teamShare, missed, teamEntries, model, source, settings, draft.changes, currentMonth, statement.period, alerts]);
 
   const visible = useMemo(() => sortSales(filterSales(saleRows, filters)), [saleRows, filters]);
   const groups = useMemo(() => groupTotals(visible), [visible]);
@@ -334,6 +341,17 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
     setInline(null);
     setTeamFocus(null);
   }
+  // Alerte ouverte depuis la liste : le mois de la paie concernée, la personne concernée.
+  function openAlert(alert) {
+    const month = periods.includes(alert.month) ? alert.month : period;
+    setMotionState({ direction: month >= period ? 1 : -1, cause: month === period ? "person" : "month" });
+    setPeriod(month);
+    if (alert.person) setPerson(alert.person);
+    setFilters(NO_FILTERS);
+    setPage(1);
+    setInline(null);
+    setTeamFocus(null);
+  }
   function changeFilters(next) {
     const onlySearch = next.status === filters.status && next.channel === filters.channel;
     if (!onlySearch) setMotionState({ direction: 1, cause: "filter" });
@@ -403,6 +421,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
             </div>
           </header>
           {(blockingError || saveError) && <div className="vr-error vr-banner" role="alert">{blockingError || saveError}</div>}
+          <PayrollAlerts source={source} alerts={alerts} onOpen={openAlert} />
           <div className="vr-layout">
             <TeamList source={source} period={period} rows={team} totals={totals} selected={row.person} direction={motionState.direction} onSelect={selectPerson} />
             <section className="vr-content">
