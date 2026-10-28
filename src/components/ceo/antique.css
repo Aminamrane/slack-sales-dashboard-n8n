@@ -187,6 +187,20 @@
 .an-spark-marker { transform-box: fill-box; transform-origin: center; transform: scale(0); animation: an-pop .5s cubic-bezier(.34, 1.56, .64, 1) 1.45s forwards; }
 .an-spark.is-still .an-spark-line { animation: none; stroke-dashoffset: 0; }
 .an-spark.is-still .an-spark-marker { animation: none; transform: none; }
+/* Lecture de la courbe au survol : repère, point et étiquette suivent la souris de mois en mois. */
+.an-spark-marker-layer { transition: opacity .24s cubic-bezier(.4, 0, .2, 1); }
+.an-spark.is-reading .an-spark-marker-layer { opacity: 0; transition-duration: .12s; }
+.an-spark-reading { position: absolute; inset: 0; pointer-events: none; }
+.an-spark-guide { position: absolute; top: 0; bottom: 0; width: 1px; margin-left: -.5px; background: linear-gradient(to bottom, transparent 0%, var(--an-lapis-accent) 35%, var(--an-lapis-accent) 100%); opacity: .45; }
+.an-spark-dot { position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; box-shadow: 0 0 0 3px rgba(219, 227, 241, .2); }
+.an-spark-tip {
+  position: absolute; top: 2px; transform: translateX(10px); white-space: nowrap;
+  padding: 2px 8px; border-radius: 8px; font-size: 11.5px; line-height: 16px; color: var(--an-lapis-muted);
+  background: rgba(18, 27, 53, .86); border: 1px solid var(--an-lapis-line);
+  transition: transform .34s cubic-bezier(.22, 1, .36, 1);
+}
+.an-spark-tip.is-left { transform: translateX(calc(-100% - 10px)); }
+.an-spark-tip b { color: var(--an-lapis-ink); font-weight: 700; margin-right: 6px; font-variant-numeric: tabular-nums; }
 @keyframes an-draw { to { stroke-dashoffset: 0; } }
 @keyframes an-pop { to { transform: scale(1); } }
 
@@ -370,7 +384,36 @@
 .an-arch-menu { position: absolute; top: -10px; right: -8px; z-index: 20; }
 
 /* ── Bulles de détail ─────────────────────────────────────────────────── */
-.an-bubble-anchor { cursor: help; display: block; min-width: 0; max-width: 100%; }
+/* Un chiffre qui a du détail le dit sans phrase : son libellé est souligné en pointillé au repos.
+   Au survol, une plaque se lève derrière lui, un trait plein recouvre les pointillés de gauche à
+   droite (il repart vers la droite à la sortie), l'icône du libellé se redresse, puis la bulle
+   s'ouvre. Tout revient en douceur, jamais d'un coup. */
+.an-bubble-anchor {
+  --an-plate: rgba(30, 58, 123, .045); --an-plate-line: rgba(30, 58, 123, .12); --an-cue: var(--an-accent);
+  cursor: pointer; display: block; min-width: 0; max-width: 100%; position: relative; isolation: isolate;
+}
+.ceo-antique.is-dark .an-bubble-anchor { --an-plate: rgba(255, 255, 255, .035); --an-plate-line: rgba(255, 255, 255, .09); }
+.ceo-antique .an-panel--lapis .an-bubble-anchor { --an-plate: rgba(255, 255, 255, .055); --an-plate-line: rgba(219, 227, 241, .18); --an-cue: var(--an-lapis-accent); }
+.an-bubble-anchor::before {
+  content: ''; position: absolute; inset: -8px -10px; z-index: -1; border-radius: 12px; pointer-events: none;
+  background: var(--an-plate); border: 1px solid var(--an-plate-line); opacity: 0; transform: scale(.97);
+  transition: opacity .24s cubic-bezier(.4, 0, .2, 1), transform .32s cubic-bezier(.4, 0, .2, 1);
+}
+.an-bubble-anchor:has(> .an-lifetime)::before { top: 6px; }   /* sous le filet de la zone, pas par-dessus */
+.an-bubble-anchor:hover::before, .an-bubble-anchor.is-open::before { opacity: 1; transform: scale(1); transition: opacity .16s linear, transform .5s cubic-bezier(.22, 1, .36, 1); }
+.an-bubble-anchor .an-figure-label, .an-bubble-anchor .an-cue { position: relative; width: fit-content; max-width: 100%; }
+.an-bubble-anchor .an-figure-label::before, .an-bubble-anchor .an-cue::before,
+.an-bubble-anchor .an-figure-label::after, .an-bubble-anchor .an-cue::after { content: ''; position: absolute; left: 0; right: 0; bottom: -3px; height: 0; pointer-events: none; }
+.an-bubble-anchor .an-figure-label::after, .an-bubble-anchor .an-cue::after { border-bottom: 1px dotted currentColor; opacity: .6; }
+.an-bubble-anchor .an-figure-label::before, .an-bubble-anchor .an-cue::before {
+  z-index: 1; border-bottom: 1px solid var(--an-cue); transform: scaleX(0); transform-origin: right;
+  transition: transform .34s cubic-bezier(.4, 0, .2, 1);
+}
+.an-bubble-anchor:hover .an-figure-label::before, .an-bubble-anchor.is-open .an-figure-label::before,
+.an-bubble-anchor:hover .an-cue::before, .an-bubble-anchor.is-open .an-cue::before { transform: scaleX(1); transform-origin: left; transition: transform .46s cubic-bezier(.22, 1, .36, 1) .04s; }
+.an-bubble-anchor .an-figure-label svg, .an-bubble-anchor .an-rdv-icon svg { transition: transform .3s cubic-bezier(.4, 0, .2, 1); }
+.an-bubble-anchor:hover .an-figure-label svg, .an-bubble-anchor.is-open .an-figure-label svg,
+.an-bubble-anchor:hover .an-rdv-icon svg, .an-bubble-anchor.is-open .an-rdv-icon svg { transform: translateY(-1px) scale(1.14); transition: transform .45s cubic-bezier(.34, 1.56, .64, 1); }
 .an-bubble { position: fixed; z-index: 9999; width: max-content; min-width: 220px; max-width: 320px; padding: 12px 14px 11px; border-radius: 14px; background: #ffffff; color: #121b35; border: 1px solid #d5dae5; box-shadow: 0 12px 32px rgba(18, 27, 53, .14), 0 2px 6px rgba(18, 27, 53, .06); font-size: 12.5px; display: flex; flex-direction: column; gap: 7px; pointer-events: none; transform-origin: center top; font-family: var(--an-sans, Inter, system-ui, sans-serif); }
 .an-bubble--top { transform-origin: center bottom; }
 .an-bubble.is-dark { background: #1e1f28; color: #eef0f6; border-color: #2a2b36; box-shadow: 0 12px 32px rgba(0, 0, 0, .45); }
@@ -383,6 +426,15 @@
 .an-bubble-row span { color: #6b7280; }
 .an-bubble.is-dark .an-bubble-row span { color: #a0a5b7; }
 .an-bubble-row strong { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+/* Ventilation : les parts en retrait avec leur signe, le résultat sous un filet. */
+.an-bubble-row--part { padding-left: 14px; font-size: 12px; }
+.an-bubble-row--part strong { font-weight: 600; }
+.an-bubble-sign { display: inline-block; width: 14px; margin-left: -14px; font-style: normal; font-weight: 700; color: #9ca3af; }
+.an-bubble-row--total { padding-top: 6px; border-top: 1px solid #e5e8f0; }
+.an-bubble-row--total span { color: #121b35; font-weight: 650; }
+.an-bubble.is-dark .an-bubble-row--total { border-top-color: #2a2b36; }
+.an-bubble.is-dark .an-bubble-row--total span { color: #eef0f6; }
+.an-bubble.is-dark .an-bubble-sign { color: #6c7185; }
 .an-bubble-note { margin: 2px 0 0; padding-top: 7px; border-top: 1px dashed #e5e8f0; font-size: 12px; line-height: 1.45; color: #6b7280; white-space: normal; }
 .an-bubble.is-dark .an-bubble-note { border-top-color: #2a2b36; color: #a0a5b7; }
 
@@ -478,4 +530,6 @@
   .an-spark-line { stroke-dashoffset: 0 !important; }
   .an-spark-marker { transform: none !important; }
   .an-panel, .an-link svg, .an-segment-btn, .an-details summary svg { transition: none !important; }
+  .an-bubble-anchor::before, .an-bubble-anchor .an-figure-label::before, .an-bubble-anchor .an-cue::before,
+  .an-bubble-anchor .an-figure-label svg, .an-bubble-anchor .an-rdv-icon svg { transition: none !important; }
 }

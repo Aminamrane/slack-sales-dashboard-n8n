@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { CalendarClock, CalendarDays, CircleCheck, Clock, UserRoundX, RotateCcw, Users, TrendingUp, Cloud, BadgeEuro, Hourglass } from 'lucide-react';
 import { METEO_BANDS, meteoBandOf } from '../../utils/meteoBands.js';
-import { monthsAndDays, periodLabelOf } from '../../utils/ceoDashboardStats.js';
+import { MONTH_LABELS_FR, monthsAndDays, periodLabelOf } from '../../utils/ceoDashboardStats.js';
 import { Chip, euro, intFr, Numeral, ReadingSwap, Spark } from './Figures.jsx';
 import { Orbits, CornerTicks } from './Ornaments.jsx';
 import { MeteoShowcase } from './Meteo.jsx';
@@ -27,12 +27,36 @@ const Dash = () => <span className="an-placeholder">—</span>;
 // Taux de résiliation au centième, comme la feuille de la Finance (6,91 %).
 const pctFr = (rate) => (rate == null ? '—' : `${new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(rate * 100)}\u00a0%`);
 const durationFr = (days) => { const d = monthsAndDays(days); return d ? `${d.months} mois ${d.days} j` : '—'; };
+// Heure-mur d'un RDV du CRM, au format des séquences : « 29 octobre à 14 h », « 1er novembre à 9 h 30 ».
+const rdvFr = (wall) => {
+  const day = Number(wall.slice(8, 10));
+  const hm = /T(\d{2}):(\d{2})/.exec(wall);
+  const time = hm ? ` à ${Number(hm[1])} h${hm[2] !== '00' ? ` ${hm[2]}` : ''}` : '';
+  return `${day === 1 ? '1er' : day} ${MONTH_LABELS_FR[Number(wall.slice(5, 7)) - 1].toLowerCase()}${time}`;
+};
 
 // Une colonne de sorties : les actées (cumul ↔ mois en cours), leur trajectoire sur
 // 12 mois, la part Owner HT perdue sur les MÊMES dossiers, et ce qui est en cours.
-function ExitColumn({ Icon, name, count, thisMonth, series, arr, arrFailed, pending, pendingLabel, nounPlural, stats, hovered }) {
+function ExitColumn({ Icon, name, etat, count, thisMonth, series, detail, selfCount, arr, arrFailed, pending, pendingLabel, nounPlural, stats, hovered }) {
   const loading = !stats;
   const p = stats?.periodLabel;
+  // Bulle : la courbe (12 derniers mois), ce qui la précède ou la suit, ce qui n'a pas de date d'effet ;
+  // en « Tout », les quatre font le total. Pour un mois choisi, les sorties de ce mois.
+  const peak = detail?.peak.key ? [{ label: 'Mois le plus chargé', value: `${intFr(detail.peak.count)} en ${periodLabelOf(detail.peak.key)}` }] : [];
+  const self = selfCount != null ? [{ label: p ? `Self-résiliations en ${p}, à part` : 'Self-résiliations, à part', value: intFr(selfCount) }] : [];
+  const note = { note: `État ${etat} du board, à sa date d’effet.${selfCount != null ? ' Les self-résiliations sont à part ici, comptées dans les taux.' : ''}` };
+  const figureRows = !detail ? [] : p ? [
+    { label: `Actées en ${p}`, value: intFr(count) },
+    ...peak, ...self, note,
+  ] : [
+    { kind: 'part', label: 'Sur les 12 derniers mois', value: intFr(detail.last12) },
+    ...(detail.older ? [{ kind: 'part', label: 'Avant', value: intFr(detail.older) }] : []),
+    ...(detail.later ? [{ kind: 'part', label: 'Effet à venir', value: intFr(detail.later) }] : []),
+    ...(detail.undated ? [{ kind: 'part', label: 'Sans date d’effet', value: intFr(detail.undated) }] : []),
+    { kind: 'total', label: `${nounPlural} actées`, value: intFr(count) },
+    ...peak, ...self, note,
+  ];
+  const monthLabels = stats?.seriesMonths?.map((k) => periodLabelOf(k));
   const readings = !p && stats ? [
     { value: intFr(count), sub: `${nounPlural} actées`, icon: CircleCheck },
     { value: intFr(thisMonth), sub: `En ${stats.currentMonthLabel}`, icon: CalendarDays },
@@ -49,38 +73,45 @@ function ExitColumn({ Icon, name, count, thisMonth, series, arr, arrFailed, pend
   ] : [];
   return (
     <div className="an-exit">
-      <div className="an-figure">
-        <span className="an-figure-label"><Icon size={13} strokeWidth={2.2} aria-hidden="true" /> {name}</span>
-        <ReadingSwap
-          readings={readings}
-          paused={hovered}
-          height={82}
-          render={(r) => (
-            <>
-              <span className="an-figure-value an-figure-value--lg">{r?.value == null ? <Dash /> : r.value}</span>
-              <div style={{ marginTop: 6 }}><Chip tone="onlapis" icon={r?.icon}>{r?.sub}</Chip></div>
-            </>
-          )}
-        />
-      </div>
-      {stats && <Spark values={series} color={LAPIS_ACCENT} height={46} />}
+      <Bubble rows={figureRows} dark align="start">
+        <div className="an-figure">
+          <span className="an-figure-label"><Icon size={13} strokeWidth={2.2} aria-hidden="true" /> {name}</span>
+          <ReadingSwap
+            readings={readings}
+            paused={hovered}
+            height={82}
+            render={(r) => (
+              <>
+                <span className="an-figure-value an-figure-value--lg">{r?.value == null ? <Dash /> : r.value}</span>
+                <div style={{ marginTop: 6 }}><Chip tone="onlapis" icon={r?.icon}>{r?.sub}</Chip></div>
+              </>
+            )}
+          />
+        </div>
+      </Bubble>
+      {stats && <Spark values={series} labels={monthLabels} format={intFr} color={LAPIS_ACCENT} height={46} />}
       <div className="an-exit-arr">
-        <span className="an-figure-label"><BadgeEuro size={13} strokeWidth={2.2} aria-hidden="true" /> ARR perdu</span>
         {arrFailed ? (
-          <span className="an-figure-cap">Montants de la Finance indisponibles</span>
+          <>
+            <span className="an-figure-label"><BadgeEuro size={13} strokeWidth={2.2} aria-hidden="true" /> ARR perdu</span>
+            <span className="an-figure-cap">Montants de la Finance indisponibles</span>
+          </>
         ) : (
           <Bubble rows={arrRows} dark>
-            <ReadingSwap
-              readings={arrReadings || [{ value: null, sub: '' }]}
-              paused={hovered}
-              height={62}
-              render={(r) => (
-                <>
-                  <span className="an-figure-value an-figure-value--md">{r?.value == null ? <Dash /> : r.value}</span>
-                  <span className="an-figure-cap">{r?.sub}</span>
-                </>
-              )}
-            />
+            <div>
+              <span className="an-figure-label"><BadgeEuro size={13} strokeWidth={2.2} aria-hidden="true" /> ARR perdu</span>
+              <ReadingSwap
+                readings={arrReadings || [{ value: null, sub: '' }]}
+                paused={hovered}
+                height={62}
+                render={(r) => (
+                  <>
+                    <span className="an-figure-value an-figure-value--md">{r?.value == null ? <Dash /> : r.value}</span>
+                    <span className="an-figure-cap">{r?.sub}</span>
+                  </>
+                )}
+              />
+            </div>
           </Bubble>
         )}
       </div>
@@ -107,17 +138,36 @@ export default function ParcPanel({ stats, period, setPeriod, periodOptions, own
     { label: p ? `Encore actifs fin ${p}` : 'Onglet Signé du board', value: intFr(stats.actifs) },
     { label: 'En cours de sortie (comptés actifs)', value: intFr(stats.pendingResiliation + stats.pendingRetraction) },
   ] : [];
+  // Les clients en cours de la Finance ne sont pas l'onglet Signé : la bulle part des clients actifs
+  // et ajoute ou retire, état par état (pause, attente Opti'Lex…), jusqu'au chiffre de la Finance.
+  const fromActifs = (gap, total, totalLabel) => (gap ? [
+    { label: p ? `Actifs fin ${p}` : 'Clients actifs', value: intFr(stats.actifs) },
+    ...gap.added.map((g) => ({ kind: 'part', sign: '+', label: g.label, value: intFr(g.count) })),
+    ...gap.removed.map((g) => ({ kind: 'part', sign: '−', label: g.label, value: intFr(g.count) })),
+    { kind: 'total', label: totalLabel, value: intFr(total) },
+  ] : [{ label: totalLabel, value: intFr(total) }]);
   // Rétention : durée de vie moyenne (LTV) et taux de résiliation, définitions de la Finance.
   const life = stats?.lifetime;
   const lifeParts = life ? monthsAndDays(life.averageDays) : null;
   const lifeRows = life ? [
     { label: 'Médiane', value: durationFr(life.medianDays) },
-    { label: 'Clients mesurés', value: intFr(life.measured) },
-    { label: 'Encore clients', value: intFr(life.open) },
+    ...fromActifs(stats.lifetimeGap, life.open, 'Encore clients'),
     { label: 'Partis', value: intFr(life.closed) },
+    { label: 'Clients mesurés', value: intFr(life.measured) },
     ...(life.unmeasured ? [{ label: 'Sans date, hors calcul', value: intFr(life.unmeasured) }] : []),
     ...(life.incoherent ? [{ label: 'Dates incohérentes, hors calcul', value: intFr(life.incoherent) }] : []),
     { note: 'De la signature Owner à la sortie, ou à aujourd’hui pour un client encore là. Rétractés exclus.' },
+  ] : [];
+  // RDV onboarding à venir : les mêmes RDV que le compteur, par échéance, et le prochain.
+  const ob = stats?.onboardingDetail;
+  const onboardingRows = ob ? [
+    { kind: 'part', label: 'Aujourd’hui', value: intFr(ob.today) },
+    { kind: 'part', label: 'Dans les 7 jours', value: intFr(ob.week) },
+    { kind: 'part', label: 'Plus tard', value: intFr(ob.later) },
+    { kind: 'total', label: 'À venir', value: intFr(stats.onboarding) },
+    ...(stats.onboardingOverdue ? [{ label: 'Dont en retard', value: intFr(stats.onboardingOverdue) }] : []),
+    ...(ob.next ? [{ label: 'Prochain', value: rdvFr(ob.next) }] : []),
+    { note: 'Le menu Onboarding du board : une case par client, clients partis exclus. En retard : heure passée, pas encore coché réalisé.' },
   ] : [];
   const month = stats?.resiliationMonth;
   const previous = stats?.resiliationPreviousMonth;
@@ -131,7 +181,7 @@ export default function ParcPanel({ stats, period, setPeriod, periodOptions, own
   const global = stats?.resiliationGlobal;
   const globalRows = global ? [
     { label: 'Résiliations depuis le début', value: intFr(global.count) },
-    { label: 'Clients en cours', value: intFr(global.base) },
+    ...fromActifs(stats.inCourseGap, global.base, 'Clients en cours'),
     ...(global.undated ? [{ label: 'Résiliations sans date, hors calcul', value: intFr(global.undated) }] : []),
     { note: 'Résiliations, self-résiliations comprises, rapportées aux clients en cours, comme la Finance.' },
   ] : [];
@@ -191,12 +241,14 @@ export default function ParcPanel({ stats, period, setPeriod, periodOptions, own
         <div>
           <p className="an-parc-zone-title">Sorties</p>
           <div className="an-exits">
-            <ExitColumn Icon={UserRoundX} name="Résiliés" nounPlural="Résiliations" stats={stats} hovered={hovered}
+            <ExitColumn Icon={UserRoundX} name="Résiliés" etat="Résiliation" nounPlural="Résiliations" stats={stats} hovered={hovered}
               count={stats?.resilies} thisMonth={stats?.resiliesThisMonth} series={stats?.resiliesSeries}
+              detail={stats?.resiliesDetail} selfCount={stats?.selfResilies}
               arr={stats?.arrResilies} arrFailed={ownerArrFailed}
               pending={stats?.pendingResiliation} pendingLabel="En cours de résiliation" />
-            <ExitColumn Icon={RotateCcw} name="Rétractés" nounPlural="Rétractations" stats={stats} hovered={hovered}
+            <ExitColumn Icon={RotateCcw} name="Rétractés" etat="Rétractation" nounPlural="Rétractations" stats={stats} hovered={hovered}
               count={stats?.retractes} thisMonth={stats?.retractesThisMonth} series={stats?.retractesSeries}
+              detail={stats?.retractesDetail}
               arr={stats?.arrRetractes} arrFailed={ownerArrFailed}
               pending={stats?.pendingRetraction} pendingLabel="En cours de rétractation" />
           </div>
@@ -235,17 +287,19 @@ export default function ParcPanel({ stats, period, setPeriod, periodOptions, own
             {[
               ['onboarding', 'RDV onboarding à venir', 'Owner', CalendarClock, stats?.onboarding, stats?.onboardingOverdue],
             ].map(([key, label, entity, Icon, upcoming, overdue]) => (
-              <div className="an-rdv-row" key={key}>
-                <span className="an-rdv-icon" aria-hidden="true"><Icon size={17} strokeWidth={1.9} /></span>
-                <div className="an-rdv-copy">
-                  {label}
-                  <small>
-                    {entity}
-                    {!loading && overdue > 0 && <> · <span className="an-rdv-late"><Clock size={11} strokeWidth={2.4} aria-hidden="true" />{intFr(overdue)} en retard</span></>}
-                  </small>
+              <Bubble key={key} rows={onboardingRows} dark>
+                <div className="an-rdv-row">
+                  <span className="an-rdv-icon" aria-hidden="true"><Icon size={17} strokeWidth={1.9} /></span>
+                  <div className="an-rdv-copy">
+                    <span className="an-cue">{label}</span>
+                    <small>
+                      {entity}
+                      {!loading && overdue > 0 && <> · <span className="an-rdv-late"><Clock size={11} strokeWidth={2.4} aria-hidden="true" />{intFr(overdue)} en retard</span></>}
+                    </small>
+                  </div>
+                  <span className="an-rdv-value">{loading ? <Dash /> : <Numeral value={upcoming} />}</span>
                 </div>
-                <span className="an-rdv-value">{loading ? <Dash /> : <Numeral value={upcoming} />}</span>
-              </div>
+              </Bubble>
             ))}
           </div>
           <div className="an-rdv">
@@ -257,7 +311,7 @@ export default function ParcPanel({ stats, period, setPeriod, periodOptions, own
                 <div className="an-rdv-row">
                   <span className="an-rdv-icon" aria-hidden="true"><UserRoundX size={17} strokeWidth={1.9} /></span>
                   <div className="an-rdv-copy">
-                    {label}
+                    <span className="an-cue">{label}</span>
                     <small>{loading ? '' : sub}</small>
                   </div>
                   <span className="an-rdv-value an-rdv-value--rate">{loading || rate == null ? <Dash /> : <Numeral value={rate} format={pctFr} />}</span>

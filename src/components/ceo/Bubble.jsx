@@ -1,17 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useMotionPrefs } from './motion.js';
+import { EASE_OUT, useMotionPrefs } from './motion.js';
 
 // Bulle de détail : le calcul, la source, la ventilation d'un chiffre — au survol, au
 // clavier ou au clic, jamais en phrase sous le chiffre. Une ligne = { label, value } ;
-// une explication = { note } (texte en bas de la bulle).
-// Ancrée sous le CONTENU (le premier enfant), pas sous la cellule étirée de la grille.
-// Entre sur un ressort (montée + légère échelle), sort sèchement ; un court délai
+// une ligne de ventilation = { kind: 'part', sign: '+' | '−', label, value } ; son résultat =
+// { kind: 'total', label, value } ; une explication = { note } (texte en bas de la bulle).
+// Le chiffre s'annonce de lui-même : libellé souligné en pointillé au repos, plaque et trait plein
+// au survol (antique.css), puis la bulle. Ancrée sous le CONTENU (le premier enfant), pas sous la
+// cellule étirée de la grille. Elle grandit depuis sa pointe sur un ressort amorti, ses lignes
+// arrivent l'une après l'autre ; elle se referme en douceur vers sa pointe. Un court délai
 // d'ouverture au survol évite le clignotement quand la souris ne fait que passer.
 // Rendue dans un portail pour échapper aux cadres masqués ; repositionnée au
 // défilement tant qu'elle est ouverte ; bascule au-dessus si elle déborde en bas.
 const OPEN_DELAY = 110;
+const OPEN_SPRING = { type: 'spring', stiffness: 320, damping: 28, mass: 0.8 };
+const CLOSE = { duration: 0.2, ease: [0.4, 0, 0.2, 1] };
+const ROW_STAGGER = 0.03;
 
 export default function Bubble({ rows, title, children, className = '', dark = false, align = 'center' }) {
   const anchorRef = useRef(null);
@@ -55,10 +61,12 @@ export default function Bubble({ rows, title, children, className = '', dark = f
   const hide = () => { clearTimeout(timer.current); setOpen(false); };
 
   if (!hasRows) return <div className={className}>{children}</div>;
+  const below = pos.placement === 'bottom';
+  const lines = rows.filter((row) => row.label != null);
   return (
     <div
       ref={anchorRef}
-      className={`an-bubble-anchor ${className}`}
+      className={`an-bubble-anchor${open ? ' is-open' : ''} ${className}`}
       tabIndex={0}
       onMouseEnter={() => show(OPEN_DELAY)}
       onMouseLeave={hide}
@@ -75,18 +83,32 @@ export default function Bubble({ rows, title, children, className = '', dark = f
               role="tooltip"
               className={`an-bubble an-bubble--${pos.placement}${dark ? ' is-dark' : ''}`}
               style={{ top: pos.top, left: pos.left }}
-              initial={reduce ? { x: '-50%', opacity: 1 } : { x: '-50%', opacity: 0, y: pos.placement === 'bottom' ? 6 : -6, scale: 0.97 }}
-              animate={{ x: '-50%', opacity: 1, y: 0, scale: 1, transition: reduce ? { duration: 0 } : { type: 'spring', stiffness: 340, damping: 26, mass: 0.8, opacity: { duration: 0.12 } } }}
-              exit={reduce ? { x: '-50%', opacity: 0, transition: { duration: 0 } } : { x: '-50%', opacity: 0, y: pos.placement === 'bottom' ? 4 : -4, scale: 0.985, transition: { duration: 0.12, ease: [0.4, 0, 1, 1] } }}
+              initial={reduce ? { x: '-50%', opacity: 1 } : { x: '-50%', opacity: 0, y: below ? 8 : -8, scale: 0.94 }}
+              animate={{ x: '-50%', opacity: 1, y: 0, scale: 1, transition: reduce ? { duration: 0 } : { ...OPEN_SPRING, opacity: { duration: 0.16, ease: 'linear' } } }}
+              exit={reduce ? { x: '-50%', opacity: 0, transition: { duration: 0 } } : { x: '-50%', opacity: 0, y: below ? 6 : -6, scale: 0.96, transition: CLOSE }}
             >
               {title && <div className="an-bubble-title">{title}</div>}
-              {rows.filter((row) => row.label != null).map((row) => (
-                <div key={row.label} className="an-bubble-row">
-                  <span>{row.label}</span>
+              {lines.map((row, i) => (
+                <motion.div
+                  key={`${row.kind || 'row'}-${row.label}`}
+                  className={`an-bubble-row${row.kind ? ` an-bubble-row--${row.kind}` : ''}`}
+                  initial={reduce ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0, transition: { delay: 0.06 + i * ROW_STAGGER, duration: 0.28, ease: EASE_OUT } }}
+                >
+                  <span>{row.sign && <i className="an-bubble-sign" aria-hidden="true">{row.sign}</i>}{row.label}</span>
                   <strong>{row.value}</strong>
-                </div>
+                </motion.div>
               ))}
-              {rows.filter((row) => row.note).map((row, i) => <p key={`note-${i}`} className="an-bubble-note">{row.note}</p>)}
+              {rows.filter((row) => row.note).map((row, i) => (
+                <motion.p
+                  key={`note-${i}`}
+                  className="an-bubble-note"
+                  initial={reduce ? false : { opacity: 0 }}
+                  animate={{ opacity: 1, transition: { delay: 0.06 + lines.length * ROW_STAGGER, duration: 0.3, ease: 'linear' } }}
+                >
+                  {row.note}
+                </motion.p>
+              ))}
             </motion.div>
           )}
         </AnimatePresence>,
