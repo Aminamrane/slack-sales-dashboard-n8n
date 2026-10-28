@@ -1637,6 +1637,8 @@ function OnboardingCard({ row, onStart, onManualDone, onReschedule, onCancel, on
           {row.onboarding_meet_link && !done && (
             <a href={row.onboarding_meet_link} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 4, fontSize: 12, fontWeight: 700, color: GREEN, textDecoration: "none" }}>Rejoindre le Meet</a>
           )}
+          {/* Lien public de réservation / déplacement par le client (dev 28/10/2026), copiable comme les liens de lancement. */}
+          {row.onboarding_url && !done && <RdvLink url={row.onboarding_url} />}
         </div>
         <motion.button type="button" whileTap={{ scale: 0.97 }} onClick={onStart}
           style={{ padding: "10px 16px", display: "inline-flex", alignItems: "center", gap: 8, borderRadius: 10, border: "none", background: done ? CARD : NAVY, color: done ? NAVY : "#fff", boxShadow: done ? `inset 0 0 0 1px ${NAVY}` : "none", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
@@ -2573,6 +2575,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
               <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date_manual || row.rdv_onboarding_date || row.rdv_onboarding_done_date} done={row.rdv_onboarding_done}
                 editable={!!num && ["customer_success_manager", "admin", "ceo"].includes((apiClient.getUser() || {}).role)}
+                link={!row.rdv_onboarding_done ? row.onboarding_url || null : null}
                 meetLink={row.onboarding_meet_link}
                 onToggle={(v) => patch(num, { rdv_onboarding_done: v })} />
               {!!num && ["customer_success_manager", "admin", "ceo"].includes((apiClient.getUser() || {}).role) && (
