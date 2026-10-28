@@ -71,14 +71,15 @@ export function computeBoardStats(boardRows, etatPeriod = 'all', ownerArr = null
   // Un client aujourd'hui sorti était ACTIF avant sa sortie : `etat_date` le dit.
   // Les états intermédiaires (pause, en cours de…) ne sont PAS historisés : ils
   // comptent à leur valeur actuelle. Approximation assumée.
-  const actifs = established.filter((r) => {
+  const isActif = (r) => {
     if (!signedBy(r)) return false;
     const e = displayEtat(r);
     if (matchesSignedClient(r, e)) return true;
     if (allTime || !BOARD_TERMINAL_ETATS.has(e)) return false;
     const d = dateOnly(r.etat_date);
     return !!d && d > end;   // sorti après la fin de période → encore actif à cette date
-  }).length;
+  };
+  const actifs = established.filter(isActif).length;
 
   // ── FLUX : les entrées dans l'état pendant la période ──
   const exitsOf = (name) => established
@@ -109,6 +110,23 @@ export function computeBoardStats(boardRows, etatPeriod = 'all', ownerArr = null
   };
   const resiliesExits = monthlyExits(BOARD_RESILIE);
   const retractesExits = monthlyExits(BOARD_RETRACTE);
+  // Bulle d'une colonne de sorties : la courbe des 12 mois, ce qui la précède, ce qui la suit, ce qui
+  // n'a pas de date d'effet. Les quatre font le total de l'état, sans période (comme la courbe).
+  const exitDetail = (name, exits) => {
+    const all = established.filter((r) => displayEtat(r) === name);
+    const keyOf = (r) => (dateOnly(r.etat_date) || '').slice(0, 7);
+    const first = exits.months[0];
+    const lastKey = exits.months[exits.months.length - 1];
+    const peak = exits.series.reduce((best, v, i) => (v > best.count ? { key: exits.months[i], count: v } : best), { key: null, count: 0 });
+    return {
+      total: all.length,
+      last12: exits.series.reduce((a, b) => a + b, 0),
+      older: all.filter((r) => keyOf(r) && keyOf(r) < first).length,
+      later: all.filter((r) => keyOf(r) > lastKey).length,
+      undated: all.filter((r) => !keyOf(r)).length,
+      peak,
+    };
+  };
 
   // ── ARR PERDU : part Owner des MÊMES sorties que « Résiliés » et « Rétractés »
   // (même filtre de période), montants de la Finance. null tant qu'ils manquent.
@@ -129,7 +147,19 @@ export function computeBoardStats(boardRows, etatPeriod = 'all', ownerArr = null
   const parisNow = parisWallTime(now);
   // Rétention à la fin de la période choisie, jamais au-delà d'aujourd'hui (le mois en cours n'est pas fini).
   const todayISO = parisNow.slice(0, 10);
-  const retention = computeRetention(established, allTime || end > todayISO ? todayISO : end, allTime ? currentMonthKey : etatPeriod);
+  const retentionAsOf = allTime || end > todayISO ? todayISO : end;
+  const retention = computeRetention(established, retentionAsOf, allTime ? currentMonthKey : etatPeriod);
+  // Bulle « RDV onboarding à venir » : les mêmes RDV que le compteur, rangés par échéance, et le prochain.
+  const inAWeek = new Date(Date.parse(`${todayISO}T00:00:00Z`) + 7 * 86400000).toISOString().slice(0, 10);
+  const rdvOf = (r) => String(r.rdv_onboarding_date_manual || r.rdv_onboarding_date);
+  const upcoming = established.filter((r) => isActiveOnboardingUpcoming(r, parisNow));
+  const nextRdv = upcoming.filter((r) => !isActiveOnboardingOverdue(r, parisNow)).map(rdvOf).sort()[0] || null;
+  const onboardingDetail = {
+    today: upcoming.filter((r) => rdvOf(r).slice(0, 10) === todayISO).length,
+    week: upcoming.filter((r) => rdvOf(r).slice(0, 10) > todayISO && rdvOf(r).slice(0, 10) <= inAWeek).length,
+    later: upcoming.filter((r) => rdvOf(r).slice(0, 10) > inAWeek).length,
+    next: nextRdv,
+  };
   const signedNow = established.filter((r) => matchesSignedClient(r, displayEtat(r)));
   const scores = signedNow
     .map((r) => r.meteo_score)
@@ -154,8 +184,13 @@ export function computeBoardStats(boardRows, etatPeriod = 'all', ownerArr = null
     currentMonthKey,
     currentMonthLabel: `${MONTH_LABELS_FR[now.getMonth()].toLowerCase()} ${now.getFullYear()}`,
     // Même compteur que « Onboarding à venir » du menu Onboarding du board : clients partis exclus.
-    onboarding: established.filter((r) => isActiveOnboardingUpcoming(r, parisNow)).length,
+    onboarding: upcoming.length,
     onboardingOverdue: established.filter((r) => isActiveOnboardingOverdue(r, parisNow)).length,
+    onboardingDetail,
+    resiliesDetail: exitDetail(BOARD_RESILIE, resiliesExits),
+    retractesDetail: exitDetail(BOARD_RETRACTE, retractesExits),
+    // Hors de la carte « Résiliés » (état Résiliation seul), mais comptées dans les taux, comme la Finance.
+    selfResilies: countEtat('Self-Résiliation'),
     meteoAvg: scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null,
     meteoRated: scores.length,
     meteoSigned: signedNow.length,
@@ -163,7 +198,54 @@ export function computeBoardStats(boardRows, etatPeriod = 'all', ownerArr = null
     pendingRetraction: established.filter((r) => displayEtat(r) === 'En cours de rétractation' && signedBy(r)).length,
     meteoBands,
     ...retention,
+    // Les clients en cours (durée de vie, taux global) ne sont pas l'onglet Signé : l'écart, état par état.
+    lifetimeGap: gapFromActifs(established, isActif, (r) => isLifetimeOpenAt(r, retentionAsOf), retentionAsOf),
+    inCourseGap: gapFromActifs(established, isActif, (r) => isInCourseAt(r, retentionAsOf), retentionAsOf),
   };
+}
+
+// Client en cours à une date (définition de la Finance) : signé au plus tard ce jour-là et pas encore
+// sorti ; pause, attente Opti'Lex et sorties en cours comprises. Sans date de signature : placé nulle part.
+const isInCourseAt = (r, d) => {
+  const signed = dateOnly(r.owner_signed_at);
+  if (!signed || signed > d) return false;
+  if (!EXITED_ETATS.includes(displayEtat(r))) return true;
+  const x = dateOnly(r.etat_date);
+  return !!x && x > d;
+};
+// Client encore là pour la durée de vie : en cours à cette date, rétractés exclus.
+const isLifetimeOpenAt = (r, d) => displayEtat(r) !== 'Rétractation' && isInCourseAt(r, d);
+
+const frDate = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+// Pourquoi un client en cours n'est pas actif (pause, attente Opti'Lex, liquidation en cours…), et
+// pourquoi un actif n'est pas en cours (pas de date de signature…).
+const addedReason = (r, asOf) => {
+  const e = displayEtat(r);
+  return EXITED_ETATS.includes(e) ? `${e}, effet après le ${frDate(asOf)}` : (e || 'Sans état');
+};
+const removedReason = (r, asOf) => {
+  const signed = dateOnly(r.owner_signed_at);
+  if (!signed) return 'Sans date de signature';
+  if (signed > asOf) return `Signés après le ${frDate(asOf)}`;
+  if (displayEtat(r) === 'Rétractation') return 'Rétractés';
+  return displayEtat(r) || 'Sans état';
+};
+
+// Écart entre les clients actifs et un autre périmètre de clients, par raison, du plus grand au plus
+// petit : actifs + ajoutés − retirés = périmètre, à l'unité près, sans rien d'arrondi ni de supposé.
+export function gapFromActifs(rows, isActif, isIn, asOf) {
+  const added = new Map();
+  const removed = new Map();
+  const bump = (m, k) => m.set(k, (m.get(k) || 0) + 1);
+  rows.forEach((r) => {
+    const a = isActif(r);
+    const i = isIn(r);
+    if (i && !a) bump(added, addedReason(r, asOf));
+    if (a && !i) bump(removed, removedReason(r, asOf));
+  });
+  const list = (m) => [...m].map(([label, count]) => ({ label, count }))
+    .sort((x, y) => y.count - x.count || x.label.localeCompare(y.label, 'fr'));
+  return { added: list(added), removed: list(removed) };
 }
 
 // Résiliation au sens de la Finance (onglet « Résiliation/Rétractation » de Perf.Financière) :
@@ -187,13 +269,7 @@ const lastDayBefore = (monthKeyStr) => {
 export function computeRetention(established, asOf, monthKeyStr) {
   const exited = (r) => EXITED_ETATS.includes(displayEtat(r));
   const exitDate = (r) => dateOnly(r.etat_date);
-  const inCourseAt = (r, d) => {
-    const signed = dateOnly(r.owner_signed_at);
-    if (!signed || signed > d) return false;
-    if (!exited(r)) return true;
-    const x = exitDate(r);
-    return !!x && x > d;
-  };
+  const inCourseAt = isInCourseAt;
   const isResiliation = (r) => RESILIATION_ETATS.includes(displayEtat(r));
 
   const monthRate = (key, upTo) => {

@@ -67,6 +67,22 @@ test('RDV onboarding à venir : même compteur que le menu Onboarding du board, 
   const s = computeBoardStats(rows, 'all', null, NOW);
   assert.equal(s.onboarding, 4);          // n°11, n°12, n°13, n°17 ; n°15 et n°16 partis, n°14 réalisé, n°18 contrat en vol
   assert.equal(s.onboardingOverdue, 1);   // n°13 ; n°16 (parti) n'est pas compté en retard
+  // Bulle : les mêmes 4 RDV par échéance (aujourd'hui n°12 et n°13, sous 7 jours n°11, plus tard n°17) ;
+  // le prochain n'est pas celui de ce matin, déjà passé.
+  assert.deepEqual(s.onboardingDetail, { today: 2, week: 1, later: 1, next: '2026-10-27T18:00:00+00:00' });
+});
+
+test('bulles des sorties : 12 mois + avant + après + sans date = total de l’état', () => {
+  const s = computeBoardStats([
+    ...ROWS,
+    row({ numero_client: 'n°20', etat_affiche: 'Résiliation', etat_date: '2025-06-01' }),   // avant la courbe
+    row({ numero_client: 'n°21', etat_affiche: 'Résiliation' }),                           // sans date d'effet
+    row({ numero_client: 'n°22', etat_affiche: 'Self-Résiliation', etat_date: '2026-10-09' }),
+  ], 'all', ARR, NOW);
+  assert.deepEqual(s.resiliesDetail, { total: 4, last12: 2, older: 1, later: 0, undated: 1, peak: { key: '2026-08', count: 1 } });
+  assert.equal(s.resilies, s.resiliesDetail.total);
+  assert.deepEqual(s.retractesDetail, { total: 1, last12: 1, older: 0, later: 0, undated: 0, peak: { key: '2026-10', count: 1 } });
+  assert.equal(s.selfResilies, 1);
 });
 
 test('rétention : taux de résiliation (définitions de la Finance) et durée de vie moyenne', () => {
@@ -103,6 +119,42 @@ test('rétention : taux de résiliation (définitions de la Finance) et durée d
   assert.deepEqual(sept.resiliationGlobal, { count: 1, base: 5, rate: 0.2, undated: 1 });
   assert.equal(sept.lifetime.measured, 6);   // f pas encore signé ; b et c encore clients le 30/09
   assert.equal(computeBoardStats(rows, '2026-10', null, NOW).retentionAsOf, '2026-10-27');
+});
+
+test('écart avec les clients actifs : actifs + ajoutés − retirés = clients en cours', () => {
+  const rows = [
+    row({ numero_client: 'a' }),
+    row({ numero_client: 'b', etat_affiche: 'En cours de résiliation' }),   // actif et en cours
+    row({ numero_client: 'c', etat_affiche: 'Pause' }),
+    row({ numero_client: 'd', etat_affiche: "Attente Opti'Lex" }),
+    row({ numero_client: 'e', etat_affiche: "Attente Opti'Lex" }),
+    row({ numero_client: 'f', etat_affiche: 'En cours de liquidation' }),
+    row({ numero_client: 'g', owner_signed_at: null }),                     // actif, mais placé nulle part
+    row({ numero_client: 'h', etat_affiche: 'Résiliation', etat_date: '2026-11-30' }),   // effet à venir
+    row({ numero_client: 'i', etat_affiche: 'Résiliation', etat_date: '2026-09-01' }),   // parti
+    row({ numero_client: 'j', etat_affiche: 'Rétractation', etat_date: '2026-10-02' }),  // parti
+  ];
+  const s = computeBoardStats(rows, 'all', null, NOW);
+  assert.equal(s.actifs, 3);                 // a, b, g
+  assert.equal(s.lifetime.open, 7);          // a, b, c, d, e, f, h
+  assert.deepEqual(s.lifetimeGap, {
+    added: [
+      { label: "Attente Opti'Lex", count: 2 },
+      { label: 'En cours de liquidation', count: 1 },
+      { label: 'Pause', count: 1 },
+      { label: 'Résiliation, effet après le 27/10/2026', count: 1 },
+    ],
+    removed: [{ label: 'Sans date de signature', count: 1 }],
+  });
+  const sum = (list) => list.reduce((n, g) => n + g.count, 0);
+  assert.equal(s.actifs + sum(s.lifetimeGap.added) - sum(s.lifetimeGap.removed), s.lifetime.open);
+  assert.equal(s.actifs + sum(s.inCourseGap.added) - sum(s.inCourseGap.removed), s.resiliationGlobal.base);
+
+  // Mois passé : les actifs comptent aussi les sortis après la fin du mois, la durée de vie pas les rétractés.
+  const sept = computeBoardStats(rows, '2026-09', null, NOW);
+  assert.deepEqual(sept.lifetimeGap.removed, [{ label: 'Rétractés', count: 1 }]);
+  assert.equal(sept.actifs + sum(sept.lifetimeGap.added) - sum(sept.lifetimeGap.removed), sept.lifetime.open);
+  assert.equal(sept.actifs + sum(sept.inCourseGap.added) - sum(sept.inCourseGap.removed), sept.resiliationGlobal.base);
 });
 
 test('durée en mois et jours', () => {

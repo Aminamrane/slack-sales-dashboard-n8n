@@ -124,15 +124,37 @@ function sparkPaths(values) {
   }
   const last = pts[pts.length - 1];
   line += ` L ${SW} ${last[1].toFixed(1)}`;
-  return { line, area: `${line} L ${SW} ${SH} L 0 ${SH} Z`, last };
+  return { line, area: `${line} L ${SW} ${SH} L 0 ${SH} Z`, last, pts };
 }
 
-export function Spark({ values, color = 'currentColor', height = 56, className = '' }) {
-  const { line, area, last } = useMemo(() => sparkPaths(values), [values]);
+// Avec `labels` (un par valeur), la courbe se lit au survol : un repère suit la souris de mois en
+// mois, le point glisse sur la courbe et l'étiquette (valeur, mois) l'accompagne, à droite du repère
+// puis à gauche passé les deux tiers. Le dernier point s'efface le temps de la lecture ; tout
+// s'évanouit en douceur à la sortie.
+export function Spark({ values, labels, format = (v) => v, color = 'currentColor', height = 56, className = '' }) {
+  const { line, area, last, pts } = useMemo(() => sparkPaths(values), [values]);
   const { reduce } = useMotionPrefs();
+  const [scrub, setScrub] = useState(null);
   if (!line) return null;
+  const readable = Array.isArray(labels) && labels.length === pts.length;
+  const onMove = (e) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - box.left) / box.width) * SW;
+    let i = 0;
+    pts.forEach((p, k) => { if (Math.abs(p[0] - x) < Math.abs(pts[i][0] - x)) i = k; });
+    setScrub(i);
+  };
+  const p = scrub != null ? pts[scrub] : null;
+  const glide = reduce ? { duration: 0 } : SPRING_SLIDE;
+  const xPct = p ? (p[0] / SW) * 100 : 0;
   return (
-    <div className={`an-spark${reduce ? ' is-still' : ''} ${className}`} style={{ height }} aria-hidden="true">
+    <div
+      className={`an-spark${reduce ? ' is-still' : ''}${p ? ' is-reading' : ''}${readable ? ' is-readable' : ''} ${className}`}
+      style={{ height }}
+      aria-hidden="true"
+      onPointerMove={readable ? onMove : undefined}
+      onPointerLeave={readable ? () => setScrub(null) : undefined}
+    >
       <svg width="100%" height="100%" viewBox={`0 0 ${SW} ${SH}`} preserveAspectRatio="none">
         {/* Aplat, pas de dégradé : une aire qui se dissout donne une tache, pas une surface. */}
         <path d={area} fill={color} fillOpacity="0.14" />
@@ -143,6 +165,23 @@ export function Spark({ values, color = 'currentColor', height = 56, className =
           <circle className="an-spark-marker" cx={last[0]} cy={last[1]} r="3.4" fill={color} vectorEffect="non-scaling-stroke" />
         </svg>
       )}
+      <AnimatePresence>
+        {p && (
+          <motion.div
+            key="reading"
+            className="an-spark-reading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: { duration: reduce ? 0 : 0.16, ease: 'linear' } }}
+            exit={{ opacity: 0, transition: { duration: reduce ? 0 : 0.24, ease: [0.4, 0, 0.2, 1] } }}
+          >
+            <motion.span className="an-spark-guide" initial={false} animate={{ left: `${xPct}%` }} transition={glide} />
+            <motion.span className="an-spark-dot" initial={false} animate={{ left: `${xPct}%`, top: `${(p[1] / SH) * 100}%` }} transition={glide} style={{ background: color }} />
+            <motion.span className={`an-spark-tip${xPct > 66 ? ' is-left' : ''}`} initial={false} animate={{ left: `${xPct}%` }} transition={glide}>
+              <b>{format(values[scrub])}</b>{labels[scrub]}
+            </motion.span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
