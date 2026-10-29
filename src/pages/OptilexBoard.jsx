@@ -1608,7 +1608,7 @@ const roleOf = () => { try { return (apiClient.getUser() || {}).role; } catch { 
 // bouton « Faire l'onboarding » ; les rendez-vous de lancement, la convention et la météo
 // vivent dans le parcours. Les autres rôles gardent les lignes détaillées. Les RDV fiscal et
 // social se reprogramment aussi d'ici (client absent, Vincent 29/09).
-function OnboardingCard({ row, onStart, onManualDone, onReschedule, onCancel, onDateSaved }) {
+function OnboardingCard({ row, onStart, onManualDone, onReschedule, onCancel, onDateSaved, hostInfo, onTransfer }) {
   const reduce = useReducedMotion();
   const date = row.rdv_onboarding_date_manual || row.rdv_onboarding_date;
   const done = !!row.rdv_onboarding_done;
@@ -1639,6 +1639,25 @@ function OnboardingCard({ row, onStart, onManualDone, onReschedule, onCancel, on
           )}
           {/* Lien public de réservation / déplacement par le client (dev 28/10/2026), copiable comme les liens de lancement. */}
           {row.onboarding_url && !done && <RdvLink url={row.onboarding_url} />}
+          {/* Animateur du RDV, recalage direct, et transfert à l'équipe pour le responsable (dev 29/10/2026). */}
+          {date && !done && hostInfo?.host && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8, fontSize: 12, color: MUTED }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <HostFace name={hostInfo.host.name} photo={hostInfo.host.photo} size={20} />
+                avec <strong style={{ color: TEXT }}>{hostInfo.host.name}</strong>
+              </span>
+              {onReschedule && (
+                <button type="button" className="ob-detail-link" onClick={() => onReschedule("onboarding")} style={{ padding: 0, margin: 0 }}>Reprogrammer</button>
+              )}
+              {onTransfer && (hostInfo.transfer_to || []).map((t) => (
+                <button key={t.name} type="button" onClick={() => onTransfer(t)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px 3px 4px", borderRadius: 999, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 12, fontWeight: 650, cursor: "pointer", fontFamily: "inherit" }}>
+                  <HostFace name={t.name} photo={t.photo} size={18} />
+                  Confier à {t.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <motion.button type="button" whileTap={{ scale: 0.97 }} onClick={onStart}
           style={{ padding: "10px 16px", display: "inline-flex", alignItems: "center", gap: 8, borderRadius: 10, border: "none", background: done ? CARD : NAVY, color: done ? NAVY : "#fff", boxShadow: done ? `inset 0 0 0 1px ${NAVY}` : "none", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
@@ -2479,6 +2498,9 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
   const [cancelOpen, setCancelOpen] = useState(false);   // "fiscal" | "social" : annuler un RDV de lancement (30/09)
   const [apptVersion, setApptVersion] = useState(0);      // recalage fait depuis le parcours : il relit ses RDV
   const [onboardingOpen, setOnboardingOpen] = useState(false); // parcours « Faire l'onboarding » (Client Success)
+  const [transferTo, setTransferTo] = useState(null);      // « Confier à … » : animateur cible (dev 29/10/2026)
+  const onboardingHost = useOnboardingHost(num, ONBOARDING_FLOW_ROLES.includes(roleOf()) && !row.rdv_onboarding_done
+    && !!(row.rdv_onboarding_date_manual || row.rdv_onboarding_date), apptVersion);
   // Antériorité emails : à l'ouverture d'une fiche, on enregistre les emails vus (Owner + Opti'Lex
   // courant par SIREN) dans l'historique -> on garde la trace même quand l'email change ensuite,
   // pour pouvoir revenir à un email antérieur dans le dropdown. Best-effort (silencieux).
@@ -2570,7 +2592,8 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
             // Onglet Détails allégé (dev 24/09/2026) : un seul bouton, le reste vit dans le parcours.
             <OnboardingCard row={row} onStart={() => setOnboardingOpen(true)} onDateSaved={reload}
               onManualDone={(d) => patch(num, { rdv_onboarding_done: true, rdv_onboarding_done_date: d })}
-              onReschedule={(kind) => setReschedOpen(kind)} onCancel={!isFinanceTeam() ? (kind) => setCancelOpen(kind) : undefined} />
+              onReschedule={(kind) => setReschedOpen(kind)} onCancel={!isFinanceTeam() ? (kind) => setCancelOpen(kind) : undefined}
+              hostInfo={onboardingHost} onTransfer={(t) => setTransferTo(t)} />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
               <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date_manual || row.rdv_onboarding_date || row.rdv_onboarding_done_date} done={row.rdv_onboarding_done}
@@ -2784,6 +2807,8 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
             onCancel={!isFinanceTeam() ? (kind) => setCancelOpen(kind) : undefined}
             blocked={!!reschedOpen || !!cancelOpen} refreshKey={apptVersion} onChanged={() => { reload(); reloadRatings?.(); }} />}
           {reschedOpen && <ReschedOnboardingModal kind={reschedOpen} row={row} num={num} onClose={() => { setReschedOpen(false); setApptVersion((v) => v + 1); reload(); }} onDone={() => { setReschedOpen(false); setApptVersion((v) => v + 1); reload(); }} />}
+          {transferTo && <TransferOnboardingModal row={row} num={num} target={transferTo} current={onboardingHost?.host} slot={onboardingHost?.slot}
+            onClose={() => setTransferTo(null)} onDone={() => { setTransferTo(null); setApptVersion((v) => v + 1); reload(); }} />}
           {cancelOpen && <CancelLaunchModal kind={cancelOpen} row={row} num={num} onClose={() => setCancelOpen(false)} onDone={() => { setCancelOpen(false); setApptVersion((v) => v + 1); reload(); }} />}
 
           <DetailFold title="Facturation et suivi">
@@ -2822,6 +2847,94 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
 // Recalage du RDV Onboarding Owner depuis le board (chantier Vincent 2026-08-25).
 // Créneaux libres = API de la déclaration de vente (freebusy Vincent + facturation,
 // heures-mur Paris). La confirmation déplace la date CRM et les événements agenda.
+// ── Animateur de l'onboarding (dev 29/10/2026) : qui anime, avec sa photo, et ce que l'utilisateur peut en faire.
+//    Le back décide : choisir l'animateur au recalage (responsable d'équipe) et confier ses rendez-vous à son équipe.
+function useOnboardingHost(num, enabled, version = 0) {
+  const [info, setInfo] = useState(null);
+  useEffect(() => {
+    if (!enabled || !num) { setInfo(null); return undefined; }
+    let alive = true;
+    apiClient.get(`/api/v1/optilex/board-onboarding-host?numero_client=${encodeURIComponent(num)}`)
+      .then((r) => { if (alive) setInfo(r || null); })
+      .catch(() => { if (alive) setInfo(null); });
+    return () => { alive = false; };
+  }, [num, enabled, version]);
+  return info;
+}
+
+function HostFace({ name, photo, size = 20, ring = false }) {
+  const base = { width: size, height: size, borderRadius: "50%", flexShrink: 0, boxShadow: ring ? "0 0 0 1.5px #fff" : "none" };
+  return photo ? (
+    <img src={photo} alt={name || ""} draggable={false} style={{ ...base, objectFit: "cover" }} />
+  ) : (
+    <span aria-hidden="true" style={{ ...base, display: "inline-flex", alignItems: "center", justifyContent: "center", background: "#e9eef6", color: NAVY, fontSize: Math.round(size * 0.48), fontWeight: 800 }}>
+      {(name || "?").slice(0, 1).toUpperCase()}
+    </span>
+  );
+}
+
+// Confier l'onboarding à l'équipe, au même créneau : l'événement passe d'un agenda à l'autre, même lien Meet,
+// et le client ne reçoit rien (dev 29/10/2026).
+function TransferOnboardingModal({ row, num, target, current, slot, onClose, onDone }) {
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState(null);
+  const label = ov(row, "contact_name_ovr", "contact_name") || row.crm_societe || num;
+  const confirm = async () => {
+    if (saving || done) return;
+    setSaving(true); setError(null);
+    try {
+      await apiClient.post("/api/v1/optilex/board-transfer-onboarding", { numero_client: num, host: target.name });
+      setDone(true);
+      setTimeout(() => onDone(), 1400);
+    } catch (e) {
+      const d = e?.data?.detail;
+      setError(typeof d === "string" ? d : "Le rendez-vous n’a pas pu être confié. Rien n’a changé.");
+      setSaving(false);
+    }
+  };
+  return createPortal(
+    <div className="ob-transfer-modal" role="dialog" aria-modal="true" aria-label={`Confier le rendez-vous à ${target.name}`} style={{ position: "fixed", inset: 0, zIndex: 10070, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={() => { if (!saving) onClose(); }} style={{ position: "absolute", inset: 0, background: "rgba(17,24,39,0.42)" }} />
+      <motion.div initial={{ opacity: 0, scale: 0.97, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+        style={{ position: "relative", width: "min(440px, 100%)", background: CARD, borderRadius: 16, border: `1px solid ${BORDER}`, boxShadow: "0 24px 60px rgba(17,24,39,0.28)", padding: "20px 22px" }}>
+        {done ? (
+          <div style={{ textAlign: "center", padding: "10px 0" }}>
+            <div style={{ display: "inline-flex" }}><HostFace name={target.name} photo={target.photo} size={44} /></div>
+            <div style={{ marginTop: 10, fontSize: 15, fontWeight: 800, color: GREEN }}>Rendez-vous confié à {target.name}</div>
+            <div style={{ marginTop: 4, fontSize: 12.5, color: MUTED }}>Il est dans son agenda. Le client n’a rien reçu.</div>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {current && <HostFace name={current.name} photo={current.photo} size={34} />}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></svg>
+              <HostFace name={target.name} photo={target.photo} size={34} />
+              <div style={{ minWidth: 0, marginLeft: 4 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>Confier le rendez-vous à {target.name}</div>
+                <div style={{ fontSize: 12, color: MUTED, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}{slot ? ` · ${fmtDT(slot)}` : ""}</div>
+              </div>
+            </div>
+            <div style={{ marginTop: 14, fontSize: 13, color: TEXT, lineHeight: 1.55 }}>
+              Le rendez-vous passe de votre agenda à celui {/^[aeiouyàâéèêîïôû]/i.test(target.name) ? `d’${target.name}` : `de ${target.name}`}, au même créneau et avec le même lien Meet. La facturation ne bouge pas. Le client ne reçoit rien.
+            </div>
+            {error && <div role="alert" style={{ marginTop: 10, fontSize: 12, color: "#b42318", lineHeight: 1.5 }}>{error}</div>}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
+              <button type="button" disabled={saving} onClick={onClose}
+                style={{ padding: "9px 14px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 13, fontWeight: 600, cursor: saving ? "default" : "pointer", fontFamily: "inherit" }}>Annuler</button>
+              <motion.button type="button" whileTap={{ scale: 0.97 }} disabled={saving} onClick={confirm}
+                style={{ padding: "9px 16px", borderRadius: 10, border: "none", background: GREEN, color: "#fff", fontSize: 13, fontWeight: 700, cursor: saving ? "default" : "pointer", fontFamily: "inherit", opacity: saving ? 0.75 : 1 }}>
+                {saving ? "Transfert…" : `Confier à ${target.name}`}
+              </motion.button>
+            </div>
+          </>
+        )}
+      </motion.div>
+    </div>,
+    document.body
+  );
+}
+
 function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding" }) {
   const todayIso = () => new Date().toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" });
   const [start, setStart] = useState(todayIso());
@@ -2832,17 +2945,26 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
   const [completed, setCompleted] = useState(null);
   const [uncertain, setUncertain] = useState(false);
   const [error, setError] = useState(null);
+  // Onboarding : animateur du RDV et sa photo ; le responsable d'équipe peut en choisir un autre (dev 29/10/2026).
+  const hostInfo = useOnboardingHost(num, kind === "onboarding");
+  const [chosenHost, setChosenHost] = useState(null);
+  const [hostPhotos, setHostPhotos] = useState({});
+  const currentHost = hostInfo?.host?.name || null;
+  const hostName = chosenHost || currentHost;
+  const hostParam = hostInfo?.can_choose && chosenHost && chosenHost !== currentHost ? chosenHost : null;
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    // Onboarding : créneaux de l'animateur du client (Emilie, Vincent, ou Paul pour un ancien dossier).
+    // Onboarding : créneaux de l'animateur du client (Emilie, Vincent, ou Paul pour un ancien dossier),
+    // ou de l'animateur choisi par le responsable d'équipe.
     const client = kind === "onboarding" && num ? `&numero_client=${encodeURIComponent(num)}` : "";
-    apiClient.get(`/api/v1/optilex/board-reschedule-slots?kind=${kind}&start=${start}${client}`)
-      .then((r) => { if (alive) { setDays(r.days || []); setLoading(false); } })
+    const chosen = hostParam ? `&host=${encodeURIComponent(hostParam)}` : "";
+    apiClient.get(`/api/v1/optilex/board-reschedule-slots?kind=${kind}&start=${start}${client}${chosen}`)
+      .then((r) => { if (alive) { setDays(r.days || []); setHostPhotos(r.host_photos || {}); setLoading(false); } })
       .catch(() => { if (alive) { setDays([]); setError("Impossible de charger les disponibilités. Réessayez."); setLoading(false); } });
     return () => { alive = false; };
-  }, [start, kind, num]);
+  }, [start, kind, num, hostParam]);
 
   const shiftWeek = (dir) => {
     const d = new Date(start + "T00:00:00");
@@ -2856,7 +2978,7 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
     if (!sel || saving || completed) return;
     setSaving(true); setError(null);
     try {
-      const result = await apiClient.post("/api/v1/optilex/board-reschedule", { numero_client: num, kind, new_dt: `${sel.date}T${sel.slot}` });
+      const result = await apiClient.post("/api/v1/optilex/board-reschedule", { numero_client: num, kind, new_dt: `${sel.date}T${sel.slot}`, ...(hostParam ? { host: hostParam } : {}) });
       appointmentConfirmation(result, sel);
       setCompleted(result);
       setSaving(false);
@@ -2887,10 +3009,28 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
           </div>
           <button type="button" aria-label="Fermer la reprogrammation" disabled={saving} onClick={() => { if (!saving) onClose(); }} style={{ border: "none", background: "none", cursor: "pointer", color: MUTED, fontSize: 17, lineHeight: 1, padding: 4, flexShrink: 0 }}>✕</button>
         </div>
+        {kind === "onboarding" && hostInfo?.can_choose && (hostInfo.options || []).length > 1 && (
+          // Responsable d'équipe : il choisit qui anime (dev 29/10/2026). Un autre animateur = l'événement passe
+          // dans son agenda, même lien Meet ; le client n'est prévenu que du nouveau créneau.
+          <div role="radiogroup" aria-label="Animateur de l'onboarding" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "10px 20px", borderBottom: `1px solid ${BORDER}` }}>
+            <span style={{ fontSize: 12, color: MUTED, marginRight: 2 }}>Animateur</span>
+            {hostInfo.options.map((o) => {
+              const active = o.name === hostName;
+              return (
+                <button key={o.name} type="button" role="radio" aria-checked={active} disabled={saving || uncertain}
+                  onClick={() => { if (!active) { setChosenHost(o.name); setSel(null); } }}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "4px 11px 4px 5px", borderRadius: 999, border: `1px solid ${active ? NAVY : BORDER}`, background: active ? NAVY : CARD, color: active ? "#fff" : NAVY, fontSize: 12.5, fontWeight: 650, cursor: active ? "default" : "pointer", fontFamily: "inherit", transition: "all .12s ease" }}>
+                  <HostFace name={o.name} photo={o.photo} size={22} ring={active} />
+                  {o.name}{o.name === currentHost ? <span style={{ fontWeight: 500, opacity: 0.7 }}> · actuel</span> : null}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 20px", borderBottom: `1px solid ${BORDER}` }}>
           <button type="button" onClick={() => shiftWeek(-1)} disabled={saving || uncertain || start <= todayIso()}
             style={{ border: `1px solid ${BORDER}`, background: CARD, borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, color: start <= todayIso() ? MUTED : NAVY, cursor: start <= todayIso() ? "default" : "pointer", fontFamily: "inherit" }}>← Sem. préc.</button>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>Créneaux libres · {kind === "onboarding" ? "animateur + facturation" : kind} · heure de Paris</span>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>Créneaux libres · {kind === "onboarding" ? `${hostName || "animateur"} + facturation` : kind} · heure de Paris</span>
           <button type="button" disabled={saving || uncertain} onClick={() => shiftWeek(1)}
             style={{ border: `1px solid ${BORDER}`, background: CARD, borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, color: NAVY, cursor: "pointer", fontFamily: "inherit" }}>Sem. suiv. →</button>
         </div>
@@ -2913,15 +3053,27 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
                   {d.slots.map((s) => {
                     const on = sel && sel.date === d.date && sel.slot === s.t;
+                    const host = s.free ? s.host : null;
+                    const photo = host && hostPhotos[host];
                     return (
                       <button key={s.t} type="button" disabled={saving || uncertain || !s.free}
                         onClick={() => s.free && setSel({ date: d.date, slot: s.t })}
+                        title={host || undefined}
                         style={{ padding: "6px 12px", borderRadius: 8,
                           border: `1px solid ${on ? GREEN : (s.free ? BORDER : "transparent")}`,
                           background: on ? GREEN : (s.free ? CARD : "#f3f4f6"),
                           color: on ? "#fff" : (s.free ? NAVY : "#c3cad6"),
                           textDecoration: s.free ? "none" : "line-through",
-                          fontSize: 12.5, fontWeight: 600, cursor: s.free ? "pointer" : "default", fontFamily: "inherit", transition: "all .12s ease" }}>{s.t}</button>
+                          fontSize: 12.5, fontWeight: 600, cursor: s.free ? "pointer" : "default", fontFamily: "inherit", transition: "all .12s ease" }}>
+                        {s.t}
+                        {/* Animateur : sa photo comme sur le calendrier du sales, sinon son prénom. */}
+                        {photo ? (
+                          <img src={photo} alt={host} draggable={false}
+                            style={{ width: 20, height: 20, margin: "-4px 0 -4px 7px", verticalAlign: "middle", borderRadius: "50%", objectFit: "cover", boxShadow: on ? "0 0 0 1.5px #fff" : "none" }} />
+                        ) : host && (
+                          <span style={{ marginLeft: 6, fontSize: 11.5, fontWeight: 500, color: on ? "rgba(255,255,255,0.78)" : MUTED }}>{host}</span>
+                        )}
+                      </button>
                     );
                   })}
                 </div>
