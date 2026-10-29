@@ -32,12 +32,14 @@ export function validateTiers(tiers) {
 }
 // Palier du relevé (statement.tier, décidé par le serveur), règle de la feuille de paie « Apports d'affaires » : un
 // minimum sur le total du mois, fixe + commissions des ventes du mois (tier.refs, aux coefficients du brouillon) +
-// primes. Il ne joue que si ce total est en dessous (tier.binding) ; le complément est la différence, jamais négative.
+// part d'un head sur les ventes de son équipe signées dans le mois (tier.teamRefs) + primes. Il ne joue que si ce total
+// est en dessous (tier.binding) ; le complément est la différence, jamais négative.
 export function tierOf(statement, calculator, { fixed = ZERO, bonuses = ZERO } = {}) {
   const tier = statement.tier;
   if (!tier?.reached || tier.binding === false) return null;
-  const monthCommission = (tier.refs || []).reduce((n, r) => n.add(calculator.value(r)), ZERO);
-  const monthTotal = fixed.add(monthCommission).add(bonuses);
+  const sum = (refs) => (refs || []).reduce((n, r) => n.add(calculator.value(r)), ZERO);
+  const monthCommission = sum(tier.refs);
+  const monthTotal = fixed.add(monthCommission).add(sum(tier.teamRefs)).add(bonuses);
   const gap = Rational.from(tier.reached.amount).sub(monthTotal);
   return {
     reached: tier.reached,

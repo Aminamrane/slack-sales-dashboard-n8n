@@ -33,6 +33,10 @@ test("palier : un minimum sur le total du mois, fixe, commissions et primes comp
   assert.equal(over.total.toFixed(2), "700.00");
   const edited = tiered("2500", { binding: true, changes: { E1: "1000" } });
   assert.equal(edited.tier.complement.toFixed(2), "1000.00");       // commission corrigée à la main : complément recalculé
+  const head = statementModel({ ...data, cells: { ...data.cells, T1: { input: "300" } } }, {
+    totalCell: "N1", tier: { reached: { sales: 5, amount: "2500" }, refs: ["E1"], teamRefs: ["T1"], binding: true },
+  });
+  assert.equal(head.tier.complement.toFixed(2), "1500.00");          // head : sa part d'équipe du mois compte aussi
   const notBinding = tiered("2500", { binding: false });              // le serveur : total au-dessus, le palier ne joue pas
   assert.deepEqual([notBinding.tier, notBinding.total.toFixed(2)], [null, "700.00"]);
   assert.equal(statementModel(data, { totalCell: "N1", tier: { reached: null, refs: [] } }).tier, null);
