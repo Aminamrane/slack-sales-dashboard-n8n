@@ -1,5 +1,7 @@
 import { createCalculator, Rational, ZERO } from "./calculation.js";
 import { resolveDeal, splitCoefficient } from "./dealCalculation.js";
+// Paliers (dev 28/10/2026) : un seuil entier de ventes par palier, deux paliers jamais au même seuil, montants
+// positifs qui progressent avec le nombre de ventes. Écrits par le serveur (PUT /variables/workbench/tiers).
 export function validateTiers(tiers) {
   const seen = new Set();
   for (const tier of tiers) {
@@ -15,7 +17,7 @@ export function validateTiers(tiers) {
       throw new Error("Deux paliers ne peuvent pas avoir le même seuil.");
     seen.add(Number(tier.sales));
     if (Rational.from(tier.amount).n < 0n)
-      throw new Error("Le fixe garanti ne peut pas être négatif.");
+      throw new Error("Le montant d’un palier ne peut pas être négatif.");
   }
   const sorted = [...tiers].sort((a, b) => Number(a.sales) - Number(b.sales));
   for (let i = 1; i < sorted.length; i++)
@@ -24,27 +26,25 @@ export function validateTiers(tiers) {
         .n < 0n
     )
       throw new Error(
-        "Le fixe garanti doit progresser avec le nombre de ventes.",
+        "Le montant doit progresser avec le nombre de ventes.",
       );
   return sorted;
 }
-export function fixedByTiers(base, tiers, sales) {
-  const sorted = validateTiers(tiers);
-  if (tiers.length && (!/^\d+$/.test(String(sales)) || Number(sales) > 10000))
-    throw new Error(
-      "Renseignez le nombre de ventes validées pour appliquer les paliers.",
-    );
-  let effective = base,
-    applied = null;
-  for (const tier of sorted)
-    if (
-      Number(sales) >= Number(tier.sales) &&
-      Rational.from(tier.amount).sub(effective).n > 0n
-    ) {
-      effective = Rational.from(tier.amount);
-      applied = tier;
-    }
-  return { effective, applied };
+// Palier du relevé (statement.tier, calculé par le serveur) : si un palier est atteint, la personne touche le plus
+// grand de ses commissions des ventes du mois (tier.refs, aux coefficients du mois) et du montant du palier ; le
+// complément est la différence, jamais négative.
+export function tierOf(statement, calculator) {
+  const tier = statement.tier;
+  if (!tier?.reached) return null;
+  const monthCommission = (tier.refs || []).reduce((n, r) => n.add(calculator.value(r)), ZERO);
+  const gap = Rational.from(tier.reached.amount).sub(monthCommission);
+  return {
+    reached: tier.reached,
+    monthSales: tier.monthSales,
+    retracted: tier.retracted,
+    monthCommission,
+    complement: gap.n > 0n ? gap : ZERO,
+  };
 }
 export function statementModel(data, statement, changes = {}, settings = {}) {
   const scopedChanges = { ...changes };
@@ -105,26 +105,13 @@ export function statementModel(data, statement, changes = {}, settings = {}) {
   );
   const fixedCell = fixedRefs.length === 1 ? fixedRefs[0] : null;
   const fixed = fixedCell ? base.value(fixedCell) : ZERO;
-  const tierResult = fixedByTiers(fixed, settings.tiers || [], settings.sales);
-  if ((settings.tiers || []).length && !fixedCell)
-    throw new Error(
-      "Le fixe de ce relevé doit être identifié avant d’appliquer un palier.",
-    );
-  const effective =
-    fixedCell && tierResult.applied
-      ? createCalculator(data.cells, {
-          ...scopedChanges,
-          [fixedCell]: tierResult.applied.amount,
-        })
-      : base;
+  const tier = tierOf(statement, base);
+  const complement = tier ? tier.complement : ZERO;
   const sourceTotal = createCalculator(data.cells).value(statement.totalCell);
   const baseTotal = base.value(statement.totalCell),
-    effectiveTotal = effective.value(statement.totalCell);
-  const commission = amountRefs.reduce(
-    (n, r) => n.add(effective.value(r)),
-    ZERO,
-  );
-  const teamShare = teamRefs.reduce((n, r) => n.add(effective.value(r)), ZERO);
+    effectiveTotal = baseTotal.add(complement);
+  const commission = amountRefs.reduce((n, r) => n.add(base.value(r)), ZERO);
+  const teamShare = teamRefs.reduce((n, r) => n.add(base.value(r)), ZERO);
   const bonuses = (settings.bonuses || []).reduce(
     (n, b) => n.add(Rational.from(b.amount)),
     ZERO,
@@ -134,8 +121,7 @@ export function statementModel(data, statement, changes = {}, settings = {}) {
     appliedAcquisition,
     fixedCell,
     fixed,
-    appliedTier: tierResult.applied,
-    effectiveFixed: tierResult.effective,
+    tier,
     sourceTotal,
     baseTotal,
     effectiveTotal,
@@ -144,11 +130,11 @@ export function statementModel(data, statement, changes = {}, settings = {}) {
     bonuses,
     total,
     delta: total.sub(sourceTotal),
-    remainder: effectiveTotal.sub(tierResult.effective).sub(commission).sub(teamShare),
+    remainder: baseTotal.sub(fixed).sub(commission).sub(teamShare),
     amountRefs,
     teamRefs,
     allRefs,
-    calculator: effective,
+    calculator: base,
   };
 }
 export function impactedStatements(data, changes) {

@@ -1,7 +1,7 @@
 // Vue d'équipe et ventes d'une personne : logique pure, sans React (testée par team.test.js).
 import { ZERO } from "./calculation.js";
 import { statementModel } from "./model.js";
-import { groupText, saleState, signedParis } from "./presentation.js";
+import { groupText, saleState, signedMonthOf, signedParis } from "./presentation.js";
 
 export const statementSettings = (statement, draft) => ({
   ...statement.defaults,
@@ -20,14 +20,20 @@ export const teamEntryIndex = (source) =>
 // - « deferred » : signée en P, comptée un autre mois (payée plus tard) ;
 // - « lost » : non comptée, client perdu ; « pending » : le reste (dont les ventes non déclarées).
 // Relevé sans countedRefs (données d'avant le 26/10) : ancienne règle, entry.counted.
-export function statusFor(statement) {
+// monthKey : mois où la ligne compte, « countedMonth » pour la commission (paiement, ou signature sous palier),
+// « teamCountedMonth » pour la part d'équipe (toujours le paiement du client, dev 28/10).
+export function statusFor(statement, monthKey = "countedMonth") {
   const counted = Array.isArray(statement?.countedRefs) ? new Set(statement.countedRefs) : null;
   return (entry) => {
     if (counted ? counted.has(entry?.amountCell) : entry?.counted !== false) return "counted";
-    if (counted && entry?.counted && entry.countedMonth && entry.countedMonth !== statement.period) return "deferred";
+    const month = monthOf(entry, monthKey);
+    if (counted && entry?.counted && month && month !== statement.period) return "deferred";
     return entry?.finance?.status === "lost" ? "lost" : "pending";
   };
 }
+
+// Source d'avant les paliers (sans teamCountedMonth) : la part comptait au même mois que la vente.
+const monthOf = (entry, monthKey) => (entry && monthKey in entry ? entry[monthKey] : entry?.countedMonth);
 
 // Part d'équipe d'un head pour le mois (relevé avec teamRefs) : les parts du total (model.teamRefs,
 // ventes de l'équipe dont la 1re échéance est payée ce mois) et celles des ventes de l'équipe du relevé
@@ -41,7 +47,7 @@ export function teamShareOf(statement, teamEntries, model) {
     }
   };
   const counted = (model.teamRefs || []).map((ref) => ({ ref, entry: teamEntries.get(ref), value: valueOf(ref) }));
-  const status = statusFor({ period: statement.period, countedRefs: statement.countedTeamRefs || [] });
+  const status = statusFor({ period: statement.period, countedRefs: statement.countedTeamRefs || [] }, "teamCountedMonth");
   let amount = ZERO;
   const rows = [];
   for (const ref of statement.teamRefs || []) {
@@ -204,7 +210,7 @@ export function pendingBreakdown(rows) {
 // Montants au barème du mois (model.calculator), comme le tableau ; une valeur illisible compte dans n, pas dans la somme.
 export const MISSED_STATUSES = ["deferred", "pending", "lost"];
 
-function missedGroups(refs, status, entryOf, valueOf, currentMonth) {
+function missedGroups(refs, status, entryOf, valueOf, currentMonth, monthKey = "countedMonth") {
   const groups = Object.fromEntries(MISSED_STATUSES.map((key) => [key, { amount: ZERO, count: 0, refs: [], months: [], reasons: [] }]));
   for (const ref of refs) {
     const entry = entryOf(ref);
@@ -215,7 +221,8 @@ function missedGroups(refs, status, entryOf, valueOf, currentMonth) {
     group.count++;
     group.refs.push(ref);
     if (value) group.amount = group.amount.add(value);
-    if (entry.countedMonth && !group.months.includes(entry.countedMonth)) group.months.push(entry.countedMonth);
+    const month = monthOf(entry, monthKey);
+    if (month && !group.months.includes(month)) group.months.push(month);
     const state = saleState(entry, currentMonth);
     const reason = group.reasons.find((r) => r.key === state.key);
     if (reason) reason.count++;
@@ -239,9 +246,68 @@ export function missedOf(statement, entries, model, teamEntries, currentMonth) {
   };
   const own = missedGroups(statement.entryRefs || [], statusFor(statement), (ref) => entries.get(ref), valueOf, currentMonth);
   const team = Array.isArray(statement.teamRefs) && teamEntries
-    ? missedGroups(statement.teamRefs, statusFor({ period: statement.period, countedRefs: statement.countedTeamRefs || [] }),
-      (ref) => teamEntries.get(ref), valueOf, currentMonth)
+    ? missedGroups(statement.teamRefs, statusFor({ period: statement.period, countedRefs: statement.countedTeamRefs || [] }, "teamCountedMonth"),
+      (ref) => teamEntries.get(ref), valueOf, currentMonth, "teamCountedMonth")
     : null;
   const sum = (keys) => [own, team].filter(Boolean).reduce((s, groups) => keys.reduce((t, key) => t.add(groups[key].amount), s), ZERO);
   return { own, team, total: sum(["pending", "lost"]), later: sum(["deferred"]) };
+}
+
+// Règle de paliers en vigueur un mois donné (la dernière commencée au plus tard ce mois), générale (userId null) ou
+// d'une personne ; null sans règle. Le serveur applique les paliers ; l'éditeur part de ces règles.
+export function latestTierRule(rules, userId, month) {
+  return (rules || [])
+    .filter((r) => (r.userId ?? null) === (userId ?? null) && r.fromMonth <= month)
+    .sort((a, b) => a.fromMonth.localeCompare(b.fromMonth))
+    .at(-1) || null;
+}
+// Premier mois qu'un changement de palier peut encore toucher : la paie de M est versée le 1er de M+1, donc le mois
+// de la date de lecture (AAAA-MM-JJ) n'est pas encore versé ; un mois affiché plus tard reste le sien.
+export const tierFromMonth = (period, today) => {
+  const open = String(today || "").slice(0, 7);
+  return open && period < open ? open : period;
+};
+
+// Brut du mois (dev 28/10 : « toutes les ventes qu'il a faites en octobre », « la commission du mois séparée des
+// clients qui paient plus tard », « commission ventes antérieures ») : ventes de la personne signées dans le mois par
+// statut du relevé (statusFor), et ventes signées avant et payées ce mois (before). Montants au barème du mois.
+// Sous palier, une vente comptée ce mois sans y être payée est « tiered » (payée plus tard) ou « tieredUnpaid ».
+export const GROSS_STATUSES = ["counted", "tiered", "tieredUnpaid", "deferred", "pending", "lost"];
+const tieredIn = (entry, period) => entry.tierMonth === period && entry.paidMonth !== period;
+
+export function grossOf(statement, entries, model) {
+  const status = statusFor(statement);
+  const groups = Object.fromEntries(GROSS_STATUSES.map((key) => [key, { amount: ZERO, count: 0, months: [] }]));
+  const before = { amount: ZERO, count: 0, bySigned: {} };
+  let count = 0;
+  for (const ref of statement.entryRefs || []) {
+    const entry = entries.get(ref);
+    if (!entry) continue;
+    let key = status({ ...entry, amountCell: ref });
+    if (key === "counted" && tieredIn(entry, statement.period)) key = entry.paidMonth ? "tiered" : "tieredUnpaid";
+    const signed = signedMonthOf(entry);
+    let value = null;
+    try {
+      value = model.calculator.value(ref);
+    } catch {
+      value = null;
+    }
+    const group = signed === statement.period ? groups[key] : key === "counted" && signed < statement.period ? before : null;
+    if (!group) continue;
+    group.count++;
+    if (value) group.amount = group.amount.add(value);
+    if (group === before) {
+      const bySigned = (before.bySigned[signed] ||= { amount: ZERO, count: 0 });
+      bySigned.count++;
+      if (value) bySigned.amount = bySigned.amount.add(value);
+      continue;
+    }
+    count++;
+    const month = key === "tiered" ? entry.paidMonth : entry.countedMonth;
+    if (month && !group.months.includes(month)) group.months.push(month);
+  }
+  for (const group of Object.values(groups)) group.months.sort();
+  // Clients qui paient plus tard : signées dans le mois, payées un mois suivant ou pas encore payées.
+  const later = { amount: groups.deferred.amount.add(groups.pending.amount), count: groups.deferred.count + groups.pending.count };
+  return { count, groups, before, later };
 }

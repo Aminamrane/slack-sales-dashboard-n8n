@@ -100,7 +100,7 @@
 .vr-heading-actions { display: flex; align-items: center; gap: 12px; }
 .vr-layout { display: grid; grid-template-columns: 276px minmax(0, 1fr); gap: 24px; align-items: start; }
 .vr-content { min-width: 0; }
-.vr-card { background: var(--vr-card); border: 1px solid var(--vr-border); border-radius: 16px; box-shadow: var(--vr-shadow); }
+.vr-card { background: var(--vr-card); border: 1px solid var(--vr-border); border-radius: 20px; box-shadow: var(--vr-shadow); }
 
 /* Boutons */
 .vr-button {
@@ -255,6 +255,8 @@
 .vr-pay-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 20px 12px 14px; }
 .vr-pay-side + .vr-pay-side { border-left: 1px solid var(--vr-border); }
 .vr-pay-side.missed { background: color-mix(in srgb, var(--vr-sunken) 55%, var(--vr-card)); }
+/* Bloc gris au coin de la carte (sans ligne de report dessous) : même arrondi que la carte. */
+.vr-pay:not(:has(.vr-later)) .vr-pay-side.missed { border-bottom-right-radius: 19px; }
 
 .vr-pay-head { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 0 12px 6px; }
 .vr-pay-head .vr-total { font-size: 38px; font-weight: 760; letter-spacing: -1.4px; line-height: 1.12; }
@@ -266,17 +268,41 @@
 .vr-missed-reasons li { display: flex; justify-content: space-between; gap: 12px; }
 .vr-missed-reasons li span { color: var(--vr-soft); font-weight: 600; }
 .vr-pay-none { padding: 10px 12px; font-size: 12px; color: var(--vr-muted); }
-/* Total des deux blocs : aurait dû toucher = va toucher ce mois + manque à gagner. */
-.vr-should {
-  grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: 14px;
-  padding: 14px 24px; border-top: 1px solid var(--vr-border);
+/* Brut du mois en ticket de caisse : libellé, nombre de ventes, montant, action, colonnes alignées sur toutes les
+   lignes (subgrid) ; détail « dont » en retrait, sous-total « Brut » en pointillés, net « Va toucher » en double trait.
+   Le padding d'une ligne se retranche des pistes du bord : 28 px = icône de 16 px + 12 px de padding. */
+.vr-ticket { display: grid; grid-template-columns: minmax(0, 1fr) auto auto 28px; column-gap: 14px; }
+.vr-ticket-line {
+  grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: baseline;
+  padding: 8px 12px; border: 0; border-radius: 8px; background: transparent; text-align: left; color: var(--vr-text); font: inherit;
 }
-.vr-should small { font-size: 11.5px; color: var(--vr-muted); }
-.vr-should strong { font-size: 22px; font-weight: 740; letter-spacing: -0.5px; color: var(--vr-text); }
+button.vr-ticket-line { cursor: pointer; }
+button.vr-ticket-line:hover:not(:disabled) { background: var(--vr-sunken); }
+button.vr-ticket-line:hover:not(:disabled) .vr-ticket-go { color: var(--vr-accent); }
+.vr-ticket-label { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; font-size: 13.5px; }
+.vr-ticket-label small { font-size: 11px; color: var(--vr-muted); }
+.vr-ticket-count { font-size: 12px; color: var(--vr-muted); text-align: right; white-space: nowrap; }
+.vr-ticket-amount { font-size: 14px; font-weight: 700; text-align: right; white-space: nowrap; }
+.vr-ticket-amount.struck { color: var(--vr-muted); font-weight: 600; }
+.vr-ticket-go { display: inline-flex; align-self: center; color: var(--vr-soft); }
+.vr-ticket-line.sub { padding-top: 3px; padding-bottom: 3px; }
+.vr-ticket-line.sub .vr-ticket-label { padding-left: 16px; font-size: 12px; color: var(--vr-muted); }
+.vr-ticket-line.sub .vr-ticket-count { font-size: 11.5px; }
+.vr-ticket-line.sub .vr-ticket-amount { font-size: 12.5px; font-weight: 600; color: var(--vr-soft); }
+.vr-ticket-line:is(.total, .subtotal) { margin-top: 8px; padding-top: 12px; border-top: 1px dashed var(--vr-border-strong); border-radius: 0; }
+.vr-ticket-line:is(.total, .subtotal) .vr-ticket-label { font-weight: 650; }
+.vr-ticket-line.subtotal { margin-bottom: 4px; }
+/* Calcul d'une ligne (« 3 200 € garantis − 2 154 € de commissions ») : sous la ligne, sans montant. */
+.vr-ticket-line.note { padding-top: 0; padding-bottom: 4px; }
+.vr-ticket-line.note .vr-ticket-label { grid-column: 1 / 4; padding-left: 16px; font-size: 11.5px; color: var(--vr-muted); }
+.vr-ticket-line.sub .vr-pill { padding: 1px 7px; font-size: 10.5px; }
+.vr-ticket-line.net { margin-top: 4px; padding-top: 12px; border-top: 3px double var(--vr-border-strong); border-radius: 0; }
+.vr-ticket-line.net .vr-ticket-label { font-weight: 700; }
+.vr-ticket-line.net .vr-ticket-amount { font-size: 18px; letter-spacing: -0.3px; }
 /* Report sous les deux blocs (dans aucun total) : clients payés le mois suivant. */
 .vr-later {
   grid-column: 1 / -1; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto 16px; align-items: center; gap: 12px;
-  width: 100%; padding: 11px 24px; border: 0; border-top: 1px solid var(--vr-border); border-radius: 0 0 16px 16px;
+  width: 100%; padding: 11px 24px; border: 0; border-top: 1px solid var(--vr-border); border-radius: 0 0 19px 19px;
   background: var(--vr-card); color: var(--vr-soft); text-align: left;
 }
 .vr-later:hover { background: var(--vr-sunken); }
@@ -502,6 +528,7 @@ button.vr-group:hover { background: color-mix(in srgb, var(--vr-sunken) 60%, var
 .vr-tier { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12.5px; color: var(--vr-soft); }
 .vr-tier > input { width: 72px; }
 .vr-tier .vr-input-unit { width: 130px; }
+.vr-tier-own { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--vr-text); cursor: pointer; }
 .vr-rules-grid { border: 1px solid var(--vr-border); border-radius: 12px; overflow: hidden; }
 .vr-rules-row { display: grid; grid-template-columns: minmax(0, 1.4fr) 64px minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 12px; padding: 8px 14px; border-top: 1px solid var(--vr-border); font-size: 12.5px; }
 .vr-rules-row.head { border-top: 0; background: var(--vr-sunken); font-size: 10px; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; color: var(--vr-muted); }

@@ -16,15 +16,19 @@ import {
   financeBadge,
   formatTime,
   monthLabel,
+  ofMonth,
   safeMoney,
   saleTimeline,
+  saveFile,
   signedMonthOf,
   signedParis,
 } from "./presentation.js";
 import {
   entryIndex,
   filterSales,
+  grossOf,
   groupTotals,
+  latestTierRule,
   pendingBreakdown,
   periodsOf,
   saleCounts,
@@ -37,6 +41,7 @@ import {
   teamRows,
   teamShareOf,
   teamTotals,
+  tierFromMonth,
 } from "./team.js";
 import { isStaleRevision } from "./api.js";
 import { alertText, payrollAlerts, rowAlerts } from "./payroll.js";
@@ -48,6 +53,7 @@ import { RemunerationBreakdown } from "./RemunerationBreakdown.jsx";
 import { MonthNav } from "./MonthNav.jsx";
 import { TeamList } from "./TeamList.jsx";
 import { PersonCard } from "./PersonCard.jsx";
+import { payslipOf } from "./payslip.js";
 import { SalesTable } from "./SalesTable.jsx";
 import { TeamShareTable } from "./TeamShareTable.jsx";
 import { entryOffset, EXIT, SPRING_UI, TABLE_DELAY } from "./motion.js";
@@ -73,7 +79,7 @@ const TOTAL_BASE = /\/0\.7\*0\.8\/12\)?$/;
 
 // source : données CRM lues en direct. initialDraft : brouillon partagé du serveur.
 // saveDraft(body) → { draft } ; rien n'est appliqué tant que le serveur n'a pas répondu.
-export default function VariablesWorkbench({ source, initialDraft, saveDraft, darkMode = false }) {
+export default function VariablesWorkbench({ source, initialDraft, saveDraft, saveTierRule, reload, darkMode = false }) {
   const loaded = useMemo(() => {
     try {
       return { draft: parseDraft(initialDraft), error: null };
@@ -142,6 +148,8 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
   const currentMonth = String(source.snapshotDate || "").slice(0, 7) || null;
   const missed = useMemo(() => (model ? missedOf(statement, entries, model, teamEntries, currentMonth) : null),
     [statement, entries, model, teamEntries, currentMonth]);
+  // Brut du mois : toutes les ventes de la personne signées dans le mois, payées ou non.
+  const gross = useMemo(() => (model ? grossOf(statement, entries, model) : null), [statement, entries, model]);
   // Changements après la paie (versée le 1er du mois suivant) : alertes du serveur et modifications faites ici.
   const alerts = useMemo(() => payrollAlerts(source, draft.audit), [source, draft.audit]);
 
@@ -200,6 +208,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
         paidDay: status === "counted" || status === "deferred" ? paidDayOf(entry) : "",
         saleState: saleState(entry, currentMonth),
         signedBefore: status === "counted" && !!signedMonthOf(entry) && signedMonthOf(entry) < statement.period,
+        tiered: status === "counted" && entry.tierMonth === statement.period && entry.paidMonth !== statement.period,
         countedMonth: entry.countedMonth,
         alerts: rowAlerts(alerts, entry.crmLeadId, "own", statement.period).map((a) => alertText(source, a)),
         boardState: entry.finance?.boardState || null,
@@ -235,7 +244,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
         paidDay: e && (status === "counted" || status === "deferred") ? paidDayOf(e) : "",
         saleState: saleState(e, currentMonth),
         signedBefore: status === "counted" && !!e && signedMonthOf(e) < statement.period,
-        countedMonth: e?.countedMonth,
+        countedMonth: e?.teamCountedMonth ?? e?.countedMonth,
         alerts: e ? rowAlerts(alerts, e.crmLeadId, "team", statement.period).map((a) => alertText(source, a)) : [],
         signedAt: e?.signedAt,
         boardState: e?.finance?.boardState || null,
@@ -259,10 +268,6 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
 
   const visible = useMemo(() => sortSales(filterSales(saleRows, filters)), [saleRows, filters]);
   const groups = useMemo(() => groupTotals(visible), [visible]);
-  const signedBefore = useMemo(() => ({
-    own: saleRows.filter((r) => r.status === "counted" && r.signedBefore).length,
-    team: teamTable ? teamTable.counted.filter((r) => r.signedBefore).length : 0,
-  }), [saleRows, teamTable]);
   const counts = useMemo(() => saleCounts(saleRows, filters), [saleRows, filters]);
   const breakdown = useMemo(() => pendingBreakdown(filterSales(saleRows, { ...filters, status: "ALL" })), [saleRows, filters]);
   const pages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
@@ -302,6 +307,66 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
       return false;
     } finally {
       saving.current = false;
+    }
+  }
+  // Paliers (dev 28/10) : généraux ou de la personne, à partir du premier mois non versé ; chaque changement est un
+  // enregistrement (révision + journal), puis la source est relue (le palier déplace des ventes d'un mois à l'autre).
+  const tierFrom = tierFromMonth(statement.period, source.snapshotDate);
+  const userId = source.profiles?.[statement.person]?.userId || null;
+  async function saveTiers(changes, reason) {
+    if (blockingError) {
+      notify("Rechargez cette page avant de continuer.");
+      return;
+    }
+    if (saving.current) return;
+    saving.current = true;
+    let revision = draft.revision;
+    try {
+      for (const change of changes) {
+        const general = change.scope === "general";
+        const action = general ? "Paliers généraux modifiés" : change.tiers ? "Paliers propres modifiés" : "Retour aux paliers généraux";
+        const detail = [reason, `à partir ${ofMonth(monthLabel(tierFrom).toLowerCase())}`].filter(Boolean).join(" · ");
+        const item = { id: crypto.randomUUID(), at: new Date().toISOString(), statementId: statement.id, person: statement.person,
+          action, detail, before: change.before ?? null, after: change.tiers };
+        const response = await saveTierRule({ expected_revision: revision, user_id: general ? null : userId,
+          from_month: tierFrom, tiers: change.tiers, audit_item: item });
+        revision = response.revision;
+      }
+      setPanel(null);
+      notify("Paliers enregistrés");
+    } catch (error) {
+      if (error?.data?.detail === "month_paid") setSaveError("Ce mois est déjà versé : choisissez un mois suivant.");
+      else if (isStaleRevision(error)) setBlockingError(STALE_MESSAGE);
+      else setSaveError(SAVE_FAILED_MESSAGE);
+    } finally {
+      // Un palier a pu être écrit avant l'échec : la source relue montre l'état réel.
+      if (revision !== draft.revision) {
+        try {
+          const data = await reload();
+          setDraft(parseDraft(data.draft));
+          setMotionState({ direction: 1, cause: "edit" });
+        } catch {
+          setSaveError(SAVE_FAILED_MESSAGE);
+        }
+      }
+      saving.current = false;
+    }
+  }
+  // Relevé du mois en PDF (ticket envoyé au sales) : contenu calculé ici, rendu par le module PDF chargé à la demande.
+  const [payslipBusy, setPayslipBusy] = useState(false);
+  async function downloadPayslip() {
+    if (payslipBusy || !model || !gross) return;
+    setPayslipBusy(true);
+    try {
+      const data = payslipOf({ statement, row, model, gross, teamShare, bonuses: settings.bonuses || [], saleRows,
+        teamRows: teamTable?.counted || [], readingDay, today: new Date().toLocaleDateString("fr-FR") });
+      const { generatePayslip } = await import("./PayslipPdf.jsx");
+      saveFile(data.fileName, await generatePayslip(data));
+    } catch (error) {
+      console.error("Relevé PDF", error);
+      setSaveError("Le relevé PDF n’a pas pu être préparé. Réessayez.");
+    } finally {
+      setPayslipBusy(false);
     }
   }
   async function updateSettings(next, action, detail) {
@@ -436,7 +501,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
                 entry={entry}
                 teamShare={teamShare}
                 missed={missed}
-                signedBefore={signedBefore}
+                gross={gross}
                 onCoefficients={() => setPanel("coefficients")}
                 onTiers={() => setPanel("rules")}
                 onHistory={() => setPanel("history")}
@@ -447,6 +512,8 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
                 onBonusAdd={() => setPanel("bonus")}
                 onBonusRemove={(b) => updateSettings({ ...settings, bonuses: settings.bonuses.filter((x) => x.id !== b.id) }, "Retrait de prime", b.label)}
                 onCheckRules={() => setPanel("rules")}
+                onPayslip={downloadPayslip}
+                payslipBusy={payslipBusy}
               />
               <div ref={salesSection} className="vr-sales-anchor">
                 <SalesTable
@@ -515,6 +582,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
               onClose={() => setPanel(null)}
               onFixed={() => setPanel("fixed")}
               onRules={() => setPanel("coefficients")}
+              onTiers={() => setPanel("rules")}
               onBonus={() => setPanel("bonus")}
               onCommission={(ref, label) => { setPanel(null); openEdit(ref, label); }}
             />
@@ -523,7 +591,7 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
             <FixedEditor
               key="fixed"
               current={model.fixed}
-              tier={model.appliedTier}
+              tier={model.tier}
               subtitle={who}
               preview={(input) => ({ total: statementModel(source, statement, { ...draft.changes, [model.fixedCell]: input }, settings).total })}
               onClose={() => setPanel(null)}
@@ -557,14 +625,18 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, da
               key="rules"
               initialSection={panel === "coefficients" ? "acquisition" : "fixed"}
               settings={settings}
-              computedSales={statement.defaults?.sales ?? String(row.counted)}
-              fixedCell={model?.fixedCell}
-              subtitle={`${monthText} · ${row.name} uniquement`}
+              tier={statement.tier}
+              general={latestTierRule(source.tierRules, null, tierFrom)?.tiers || []}
+              own={latestTierRule(source.tierRules, userId, tierFrom)?.tiers || null}
+              personName={row.name}
+              fromMonthLabel={monthLabel(tierFrom).toLowerCase()}
+              subtitle={`${monthText} · ${row.name}`}
               onClose={() => setPanel(null)}
               onSave={async (next) => {
                 await updateSettings(next, "Règles modifiées", next.rulesReason || "");
                 setPanel(null);
               }}
+              onSaveTiers={saveTiers}
             />
           )}
           {panel === "bonus" && (

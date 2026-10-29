@@ -1,9 +1,10 @@
-import { ChevronRight, History, Layers, Pencil, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
-import { money, Rational } from "./calculation.js";
+import { ChevronRight, FileDown, History, Layers, Pencil, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
+import { money } from "./calculation.js";
 import { InfoTip } from "./InfoTip.jsx";
 import { entryOffset, GLIDE_STEP } from "./motion.js";
 import { CHANNELS, decimalLabel, monthName, ofMonth } from "./presentation.js";
 import { StatusIcon } from "./StatusIcon.jsx";
+import { ticketLines, tierNote } from "./ticket.js";
 import { ProfileAvatar } from "./profileAvatar.jsx";
 import { Glide, Roll } from "./transitions.jsx";
 import { IconButton } from "./ui.jsx";
@@ -22,19 +23,15 @@ const MISSED = { pending: { label: "Pas encore payées", tone: "waiting" }, lost
 // Mouvement : tout change dans la même image ; seul le grand total roule, l'identité et les
 // valeurs secondaires glissent de quelques pixels, décalées de 30 ms. Une valeur inchangée ne bouge pas.
 export function PersonCard({
-  source, row, model, error, settings, monthText, readingDay, entry, teamShare, missed, signedBefore = { own: 0, team: 0 },
+  source, row, model, error, settings, monthText, readingDay, entry, teamShare, missed, gross,
   onCoefficients, onTiers, onHistory, onFixed, onBreakdown, onTeam, onMissed, onBonusAdd, onBonusRemove, onCheckRules,
+  onPayslip, payslipBusy = false,
 }) {
   const from = entryOffset(entry, 6);
   const glide = (step) => ({ from, delay: step * GLIDE_STEP });
   const period = row.statement.period;
-  const fixedMissing = !!model?.fixedCell && row.statement.fixedNeedsReview && model.effectiveFixed.n === 0n;
+  const fixedMissing = !!model?.fixedCell && row.statement.fixedNeedsReview && model.fixed.n === 0n;
   const bonuses = settings.bonuses || [];
-  const fixedText = model?.fixedCell ? money(model.effectiveFixed) : "Non identifié";
-  // « dont 7 signées avant » : ventes comptées ce mois mais signées un mois précédent (groupe à part dans les tableaux).
-  const before = (n) => (n > 0 ? ` · dont ${n} signée${n > 1 ? "s" : ""} avant` : "");
-  const countedText = `${row.counted} vente${row.counted > 1 ? "s" : ""} comptée${row.counted > 1 ? "s" : ""}${before(signedBefore.own)}`;
-  const teamText = teamShare && `${plural(teamShare.counted.length, "vente")} de l’équipe${before(signedBefore.team)}`;
   const teamCoefficients = Object.entries(CHANNELS)
     .filter(([key]) => settings.acquisition?.[key]?.team != null)
     .map(([key, name]) => `${decimalLabel(settings.acquisition[key].team)} ${name.toLowerCase()}`)
@@ -64,6 +61,47 @@ export function PersonCard({
   const laterMonth = laterMonths.length === 1 ? monthName(laterMonths[0], period) : null;
   const ownMissed = missed ? missedLines(missed.own, "own") : [];
   const teamMissed = missed?.team ? missedLines(missed.team, "team") : [];
+  // Ticket « Brut du mois » : lignes calculées par ticketLines (même source que le relevé PDF), branchées ici sur
+  // les actions de la carte (ventes concernées, paliers, fixe, primes, détail de la rémunération).
+  const ticket = model && gross ? ticketLines({ period, model, gross, teamShare, bonuses, fixedMissing }) : null;
+  const brut = ticket ? ticket.brut : model?.total;
+  const actions = {
+    "sales:ALL": () => onMissed("own", "ALL"), "sales:counted": () => onMissed("own", "counted"),
+    "sales:deferred": () => onMissed("own", "deferred"), "sales:pending": () => onMissed("own", "pending"),
+    "sales:lost": () => onMissed("own", "lost"), tiers: onTiers, team: onTeam || onBreakdown, fixed: onFixed,
+    bonus: onBonusAdd, breakdown: onBreakdown,
+  };
+  const icons = { chevron: <ChevronRight size={15} />, pencil: <Pencil size={13} />, plus: <Plus size={15} /> };
+  const tierPill = <span className="vr-pill" title="Comptée ce mois-ci grâce au palier atteint, même si le client n’a pas encore payé">au palier</span>;
+  const lineView = (l) => {
+    if (l.kind === "note") {
+      return (
+        <div key={l.key} data-line={l.key} className="vr-ticket-line note static">
+          <span className="vr-ticket-label">{tierNote(l.tier, money)}</span>
+        </div>
+      );
+    }
+    const amount = typeof l.amount === "string" ? l.amount : `${l.sign ? `${l.sign} ` : ""}${money(l.amount)}`;
+    const remove = l.action === "bonus-remove";
+    const onClick = remove ? null : actions[l.action];
+    const Tag = onClick ? "button" : "div";
+    return (
+      <Tag key={l.key} {...(onClick ? { type: "button", onClick, disabled: l.disabled } : {})} data-line={l.key}
+        className={`vr-ticket-line${l.kind ? ` ${l.kind}` : ""}${onClick ? "" : " static"}`}>
+        <span className="vr-ticket-label">
+          {l.label}{l.detail && <small> · {l.detail}</small>}{l.pill && tierPill}
+          {l.attention && <span className="vr-pay-pills"><span className="vr-pill attention">{l.attention}</span></span>}
+        </span>
+        <span className="vr-ticket-count vr-num">{l.count}</span>
+        <b className={`vr-ticket-amount vr-num${l.struck ? " struck" : ""}`}>
+          <Glide id={`${l.key}|${amount}`} {...glide(2)}>{l.struck ? <s>{amount}</s> : amount}</Glide>
+        </b>
+        <span className="vr-ticket-go">
+          {remove ? <IconButton label={`Retirer ${l.label}`} onClick={() => onBonusRemove(l.bonus)}><Trash2 size={13} /></IconButton> : icons[l.icon]}
+        </span>
+      </Tag>
+    );
+  };
   return (
     <section className="vr-card vr-person-card" aria-label="Rémunération du mois">
       <header className="vr-person-head">
@@ -76,17 +114,24 @@ export function PersonCard({
         </Glide>
         <InfoTip label="À propos de ce calcul">
           <ul>
-            <li>{teamShare ? "Rémunération : fixe, commissions personnelles, part d’équipe et primes du mois." : "Rémunération : fixe, commissions personnelles et primes du mois."}</li>
+            <li>Brut du mois : fixe, commissions des ventes signées dans le mois (payées ce mois ou plus tard), commissions des ventes antérieures payées ce mois{teamShare ? ", part d’équipe" : ""} et primes. Les clients perdus n’y sont pas.</li>
+            <li>Va toucher ce mois : le brut moins les clients qui paient plus tard ; versé le 1er du mois suivant.</li>
             <li>Une vente compte dans la rémunération du mois où le client a payé sa première échéance Owner.</li>
+            <li>Palier atteint (ventes signées dans le mois, rétractations actées retirées) : toutes ces ventes comptent ce mois-ci, payées ou non, et la personne touche le plus grand de leurs commissions et du montant du palier, fixe en plus.</li>
             <li>Commission : base × coefficient. Base : prix Owner / 12 ; à partir de 6 salariés en cold call, Ads et cold call setter, (total × 80 %) / 12, comme l’Excel.</li>
             {teamShare && <li>Part d’équipe : chaque vente d’un membre de son équipe CRM, au mois où le client paie sa 1re échéance ; base de la vente × {teamCoefficients}.</li>}
-            <li>Manque à gagner : ce que la personne aurait pu toucher en plus si les clients des ventes du mois avaient payé (pas encore payés, perdus). Aurait dû toucher = va toucher ce mois + manque à gagner.</li>
+            <li>Manque à gagner : ce que la personne aurait pu toucher en plus si les clients des ventes du mois avaient payé (pas encore payés, perdus).</li>
             <li>Dans la paie d’octobre : clients payés le mois suivant ; la commission est dans la rémunération de ce mois-là, pas en plus.</li>
             <li>Barème en vérification.</li>
             {readingDay && <li>Données CRM lues le {readingDay}.</li>}
           </ul>
         </InfoTip>
         <div className="vr-person-actions">
+          {onPayslip && !error && (
+            <button type="button" className="vr-button" onClick={onPayslip} disabled={payslipBusy}>
+              <FileDown size={14} />{payslipBusy ? "Préparation…" : "Relevé PDF"}
+            </button>
+          )}
           <button type="button" className="vr-button" onClick={onCoefficients}><SlidersHorizontal size={14} />Coefficients</button>
           <button type="button" className="vr-button" onClick={onTiers}><Layers size={14} />Fixe & paliers</button>
           <IconButton label="Historique des modifications" onClick={onHistory}><History size={16} /></IconButton>
@@ -99,54 +144,10 @@ export function PersonCard({
         <div className="vr-pay">
           <div className="vr-pay-side" data-side="paid">
             <div className="vr-pay-head">
-              <span className="vr-kicker">Va toucher ce mois</span>
-              <strong className="vr-num vr-total"><Roll id={money(model.total)} direction={entry.direction}>{money(model.total)}</Roll></strong>
+              <span className="vr-kicker">Brut du mois</span>
+              <strong className="vr-num vr-total"><Roll id={money(brut)} direction={entry.direction}>{money(brut)}</Roll></strong>
             </div>
-            <div className="vr-pay-lines">
-              <button type="button" className="vr-pay-line" disabled={!model.fixedCell} onClick={onFixed}>
-                <span className="vr-pay-label">
-                  Fixe
-                  {(fixedMissing || model.appliedTier) && (
-                    <Glide id={`${row.person}|${fixedMissing}|${model.appliedTier?.sales ?? ""}`} className="vr-pay-pills" {...glide(1)}>
-                      {fixedMissing && <span className="vr-pill attention">Fixe à saisir</span>}
-                      {model.appliedTier && <span className="vr-pill">Palier {model.appliedTier.sales} ventes</span>}
-                    </Glide>
-                  )}
-                </span>
-                <b className="vr-num"><Glide id={fixedText} {...glide(1)}>{fixedText}</Glide></b>
-                <Pencil size={13} className="vr-pay-go" />
-              </button>
-              <button type="button" className="vr-pay-line" onClick={onBreakdown}>
-                <span className="vr-pay-label">Commissions<small><Glide id={countedText} {...glide(2)}>{countedText}</Glide></small></span>
-                <b className="vr-num"><Glide id={money(model.commission)} {...glide(2)}>{money(model.commission)}</Glide></b>
-                <ChevronRight size={15} className="vr-pay-go" />
-              </button>
-              {teamShare && (
-                <button type="button" className="vr-pay-line" data-line="team" onClick={onTeam || onBreakdown}>
-                  <span className="vr-pay-label">Part d’équipe<small><Glide id={teamText} {...glide(3)}>{teamText}</Glide></small></span>
-                  <b className="vr-num"><Glide id={money(teamShare.amount)} {...glide(3)}>{money(teamShare.amount)}</Glide></b>
-                  <ChevronRight size={15} className="vr-pay-go" />
-                </button>
-              )}
-              <button type="button" className="vr-pay-line" onClick={onBonusAdd}>
-                <span className="vr-pay-label">Primes</span>
-                <b className="vr-num"><Glide id={money(model.bonuses)} {...glide(3)}>{money(model.bonuses)}</Glide></b>
-                <Plus size={15} className="vr-pay-go" />
-              </button>
-              {bonuses.map((b) => (
-                <Glide as="div" key={b.id} id={`${row.person}|${b.id}`} className="vr-pay-sub" {...glide(3)}>
-                  <span>{b.label}{b.reason && <small> · {b.reason}</small>}</span>
-                  <b className="vr-num">{money(Rational.from(b.amount))}</b>
-                  <IconButton label={`Retirer ${b.label}`} onClick={() => onBonusRemove(b)}><Trash2 size={13} /></IconButton>
-                </Glide>
-              ))}
-              {model.remainder.n !== 0n && (
-                <div className="vr-pay-line static">
-                  <span className="vr-pay-label">Autres ajustements</span>
-                  <b className="vr-num">{money(model.remainder)}</b>
-                </div>
-              )}
-            </div>
+            <div className="vr-ticket">{ticket?.lines.map(lineView)}</div>
           </div>
           <div className="vr-pay-side missed" data-side="missed">
             <div className="vr-pay-head">
@@ -160,11 +161,6 @@ export function PersonCard({
               {teamMissed.length > 0 && <span className="vr-pay-group">Part d’équipe</span>}
               {teamMissed}
             </div>
-          </div>
-          <div className="vr-should" data-should>
-            <span className="vr-kicker">Aurait dû toucher</span>
-            <small className="vr-num">{money(model.total)} + {money(missed?.total ?? null)} de manque à gagner</small>
-            <strong className="vr-num"><Glide id={money(missed ? model.total.add(missed.total) : null)} {...glide(2)}>{money(missed ? model.total.add(missed.total) : null)}</Glide></strong>
           </div>
           {laterCount > 0 && (
             <button type="button" className="vr-later" data-later onClick={() => onMissed("own", "deferred")}

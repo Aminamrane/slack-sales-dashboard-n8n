@@ -11,6 +11,8 @@ import {
   periodsOf,
   entryIndex,
   saleCounts,
+  grossOf,
+  latestTierRule,
   missedOf,
   MISSED_STATUSES,
   sortSales,
@@ -19,6 +21,7 @@ import {
   teamRows,
   teamShareOf,
   teamTotals,
+  tierFromMonth,
 } from "./team.js";
 
 const source = {
@@ -74,6 +77,54 @@ test("missed amount: commissions of sales not counted (not paid yet, lost), neve
   assert.equal(missed.total.toFixed(2), "120.00");
   const alice = teamRows(source, emptyDraft, "2026-09").find((r) => r.person === "Alice");
   assert.equal(alice.total.toFixed(2), "600.00");
+});
+
+test("gross of the month: sales signed in the month by status, earlier sales paid this month apart", () => {
+  const cells = { E1: { input: "100" }, E2: { input: "50" }, E3: { input: "30" }, E4: { input: "70" }, E5: { input: "20" } };
+  const entries = new Map([
+    { amountCell: "E1", signedMonth: "2026-10", counted: true, countedMonth: "2026-10" },
+    { amountCell: "E2", signedMonth: "2026-10", counted: true, countedMonth: "2026-11" },
+    { amountCell: "E3", signedMonth: "2026-10", counted: false, finance: { status: "onboarding_pending" } },
+    { amountCell: "E4", signedMonth: "2026-10", counted: false, finance: { status: "lost" } },
+    { amountCell: "E5", signedMonth: "2026-09", counted: true, countedMonth: "2026-10" },
+  ].map((e) => [e.amountCell, e]));
+  const statement = { period: "2026-10", entryRefs: ["E1", "E2", "E3", "E4", "E5"], countedRefs: ["E1", "E5"] };
+  const gross = grossOf(statement, entries, { calculator: createCalculator(cells) });
+  assert.equal(gross.count, 4);
+  assert.deepEqual(["counted", "deferred", "pending", "lost"].map((k) => [gross.groups[k].count, gross.groups[k].amount.toFixed(2)]),
+    [[1, "100.00"], [1, "50.00"], [1, "30.00"], [1, "70.00"]]);
+  assert.deepEqual(gross.groups.deferred.months, ["2026-11"]);
+  assert.deepEqual([gross.later.count, gross.later.amount.toFixed(2)], [2, "80.00"]);
+  assert.deepEqual([gross.before.count, gross.before.amount.toFixed(2), Object.keys(gross.before.bySigned)], [1, "20.00", ["2026-09"]]);
+});
+
+test("gross under a tier: sales counted by the tier and not paid in the month are told apart (dev 28/10)", () => {
+  const cells = { E1: { input: "100" }, E2: { input: "50" }, E3: { input: "30" } };
+  const entries = new Map([
+    { amountCell: "E1", signedMonth: "2026-10", counted: true, countedMonth: "2026-10", paidMonth: "2026-10", tierMonth: "2026-10" },
+    { amountCell: "E2", signedMonth: "2026-10", counted: true, countedMonth: "2026-10", paidMonth: "2026-11", tierMonth: "2026-10" },
+    { amountCell: "E3", signedMonth: "2026-10", counted: false, countedMonth: "2026-10", paidMonth: null, tierMonth: "2026-10" },
+  ].map((e) => [e.amountCell, e]));
+  const statement = { period: "2026-10", entryRefs: ["E1", "E2", "E3"], countedRefs: ["E1", "E2", "E3"] };
+  const gross = grossOf(statement, entries, { calculator: createCalculator(cells) });
+  assert.deepEqual(["counted", "tiered", "tieredUnpaid"].map((k) => [gross.groups[k].count, gross.groups[k].amount.toFixed(2)]),
+    [[1, "100.00"], [1, "50.00"], [1, "30.00"]]);
+  assert.deepEqual(gross.groups.tiered.months, ["2026-11"]);
+  assert.equal(gross.later.count, 0);                                  // soldées : rien ne reste à payer plus tard
+});
+
+test("tier rules in force and the first month a change can reach", () => {
+  const rules = [
+    { userId: null, fromMonth: "2026-03", tiers: [{ sales: 5, amount: "2500" }] },
+    { userId: null, fromMonth: "2026-11", tiers: [] },
+    { userId: "u1", fromMonth: "2026-10", tiers: [{ sales: 3, amount: "1000" }] },
+  ];
+  assert.equal(latestTierRule(rules, null, "2026-10").fromMonth, "2026-03");
+  assert.deepEqual(latestTierRule(rules, null, "2026-12").tiers, []);
+  assert.equal(latestTierRule(rules, "u1", "2026-09"), null);
+  assert.equal(latestTierRule(rules, "u1", "2026-10").fromMonth, "2026-10");
+  assert.equal(tierFromMonth("2026-09", "2026-10-28"), "2026-10");     // septembre est versé : à partir d'octobre
+  assert.equal(tierFromMonth("2026-11", "2026-10-28"), "2026-11");
 });
 
 test("a statement whose calculation fails is listed last, without breaking the team total", () => {

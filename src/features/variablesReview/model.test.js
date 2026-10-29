@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { createCalculator, Rational } from "./calculation.js";
 import { calculationParts, resolveDeal } from "./dealCalculation.js";
 import {
-  fixedByTiers,
   statementModel,
   impactedStatements,
   parseDraft,
@@ -19,37 +18,30 @@ const data = {
   },
   statements: [{ totalCell: "N1" }, { totalCell: "N2" }],
 };
-test("paliers non cumulés, seuil inclusif, base jamais réduite", () => {
-  const tiers = [
-      { sales: 5, amount: "1000" },
-      { sales: 10, amount: "2000" },
-    ],
-    base = Rational.from("500");
-  assert.equal(fixedByTiers(base, tiers, "4").effective.toFixed(2), "500.00");
-  assert.equal(fixedByTiers(base, tiers, "5").effective.toFixed(2), "1000.00");
-  assert.equal(fixedByTiers(base, tiers, "10").effective.toFixed(2), "2000.00");
-  assert.equal(
-    fixedByTiers(Rational.from("2500"), tiers, "10").effective.toFixed(2),
-    "2500.00",
-  );
+test("palier atteint : le plus grand des commissions du mois et du montant, fixe en plus (dev 28/10)", () => {
+  const tiered = (amount, refs = ["E1"]) => statementModel(data, {
+    totalCell: "N1", tier: { reached: { sales: 5, amount }, monthSales: 5, retracted: 0, refs },
+  });
+  const under = tiered("2500");
+  assert.deepEqual([under.tier.monthCommission.toFixed(2), under.tier.complement.toFixed(2)], ["200.00", "2300.00"]);
+  assert.equal(under.total.toFixed(2), "3000.00");                   // 500 de fixe + 2 500
+  assert.equal(under.remainder.toFixed(2), "0.00");
+  const over = tiered("150");
+  assert.equal(over.tier.complement.toFixed(2), "0.00");             // commissions au-dessus : aucun complément
+  assert.equal(over.total.toFixed(2), "700.00");
+  const edited = statementModel(data, { totalCell: "N1", tier: { reached: { sales: 5, amount: "2500" }, refs: ["E1"] } },
+    { E1: "1000" });
+  assert.equal(edited.tier.complement.toFixed(2), "1500.00");       // commission corrigée à la main : complément recalculé
+  assert.equal(statementModel(data, { totalCell: "N1", tier: { reached: null, refs: [] } }).tier, null);
 });
-test("source unchanged, fixed substitution and negative prime do not double count", () => {
-  const model = statementModel(
-    data,
-    data.statements[0],
-    {},
-    {
-      sales: "5",
-      tiers: [{ sales: "5", amount: "1000" }],
-      bonuses: [{ label: "Reprise", amount: "-10.25" }],
-    },
-  );
-  assert.equal(model.total.toFixed(2), "1189.75");
+test("negative prime does not double count", () => {
+  const model = statementModel(data, data.statements[0], {}, { bonuses: [{ label: "Reprise", amount: "-10.25" }] });
+  assert.equal(model.total.toFixed(2), "689.75");
   assert.equal(model.sourceTotal.toFixed(2), "700.00");
-  assert.equal(model.delta.toFixed(2), "489.75");
+  assert.equal(model.delta.toFixed(2), "-10.25");
   assert.equal(data.cells.H1.input, "500");
 });
-test("invalid rules and missing verified sales block calculation", () => {
+test("invalid tiers are refused", () => {
   for (const tiers of [
     [{ sales: "2.5", amount: "100" }],
     [{ sales: "2", amount: "-1" }],
@@ -63,11 +55,6 @@ test("invalid rules and missing verified sales block calculation", () => {
     ],
   ])
     assert.throws(() => validateTiers(tiers));
-  assert.throws(
-    () =>
-      fixedByTiers(Rational.from("500"), [{ sales: "5", amount: "1000" }], ""),
-    /ventes/,
-  );
 });
 test("editing a shared source lists all affected statements", () => {
   assert.equal(impactedStatements(data, { E1: "300" }).length, 2);
