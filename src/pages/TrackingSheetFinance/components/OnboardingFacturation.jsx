@@ -232,7 +232,6 @@ export default function OnboardingFacturation({ numeroClient, boardRow }) {
   );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
-  const [modal, setModal] = useState(false);
 
   useEffect(() => {
     setDone(!!boardRow?.rdv_onboarding_facturation_done);
@@ -277,15 +276,7 @@ export default function OnboardingFacturation({ numeroClient, boardRow }) {
   return (
     <div style={{ marginTop: 12, padding: "12px 14px", borderRadius: 12,
       border: `1px solid ${BORDER}`, background: "#fbfcfd" }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 800, color: NAVY }}>Facturation Owner</div>
-        <button type="button" onClick={() => setModal(true)}
-          style={{ border: `1px solid ${BORDER}`, background: CARD, borderRadius: 8,
-            padding: "5px 11px", fontSize: 12, fontWeight: 600, color: NAVY,
-            cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
-          Reprogrammer
-        </button>
-      </div>
+      <div style={{ fontSize: 12.5, fontWeight: 800, color: NAVY }}>Facturation Owner</div>
 
       <div style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>
         {when ? whenLabel(when) : "Aucune date de rendez-vous connue"}
@@ -303,14 +294,35 @@ export default function OnboardingFacturation({ numeroClient, boardRow }) {
         <div style={{ fontSize: 11, color: RED, marginTop: 8, lineHeight: 1.45 }}>{err}</div>
       )}
 
-      {modal && (
+    </div>
+  );
+}
+
+// ── Bouton « Reprogrammer » posé sur la ligne « RDV d'onboarding » de la fiche (dev 2026-10-29 :
+//    dans la section repliée, la finance ne le trouvait pas). Même fenêtre, même endpoint, mêmes
+//    agendas qu'avant ; visible tant que l'onboarding daté n'est pas réalisé.
+export function OnboardingRescheduleButton({ numeroClient, boardRow, onDone }) {
+  const [open, setOpen] = useState(false);
+  const date = boardRow?.rdv_onboarding_date_manual || boardRow?.rdv_onboarding_date;
+  if (!numeroClient || !boardRow || !date || boardRow.rdv_onboarding_done) return null;
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} title="Reprogrammer le rendez-vous d’onboarding"
+        style={{ display: "inline-flex", alignItems: "center", gap: 5, border: `1px solid ${BORDER}`, background: CARD,
+          borderRadius: 7, padding: "4px 9px", fontSize: 12, fontWeight: 600, color: NAVY,
+          cursor: "pointer", fontFamily: "inherit", flexShrink: 0, lineHeight: 1.2 }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round"
+          strokeLinejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg>
+        Reprogrammer
+      </button>
+      {open && (
         <ReschedModal
           numeroClient={numeroClient}
           label={boardRow.crm_societe || boardRow.contact_name || numeroClient}
-          onClose={() => setModal(false)}
-          onDone={(newDt) => { setWhen(newDt); setModal(false); }}
+          onClose={() => setOpen(false)}
+          onDone={(newDt) => { setOpen(false); onDone?.(newDt); }}
         />
       )}
-    </div>
+    </>
   );
 }

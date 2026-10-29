@@ -113,7 +113,7 @@ import BillingStopDialog from './components/BillingStopDialog.jsx';
 import StructureSplits from './components/StructureSplits.jsx';
 import ExpectedManager from './components/ExpectedManager.jsx';
 import PortalDropdown from './components/PortalDropdown.jsx';
-import OnboardingFacturation from './components/OnboardingFacturation.jsx';
+import OnboardingFacturation, { OnboardingRescheduleButton } from './components/OnboardingFacturation.jsx';
 import SignedContracts from './components/SignedContracts.jsx';
 // Espace commun Owner / Opti'Lex / finance : le fil du board, pour répondre depuis la page finance.
 import CommonSpaceThread from '../../components/CommonSpaceThread.jsx';
@@ -1877,7 +1877,13 @@ function ContractInfoList({
           width="auto"
         />
       ) : (
-        <span>{formatDateLongFR(profile?.rdv_onboarding) || <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }}>Vide</span>}</span>
+        // Reprogrammer depuis la ligne (dev 2026-10-29) : le recalage déplace les agendas de
+        // l'animateur et de la facturation ; la fiche est relue ensuite.
+        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 10 }}>
+          <span>{formatDateLongFR(profile?.rdv_onboarding) || <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }}>Vide</span>}</span>
+          <OnboardingRescheduleButton numeroClient={client?.numero_client || profile?.numero_client} boardRow={boardRow}
+            onDone={() => { onProfileChanged?.(); onContractChanged?.(); }} />
+        </span>
       ),
     },
     // Premier paiement réel, puis jour modifiable par la direction financière.
