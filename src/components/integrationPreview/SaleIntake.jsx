@@ -1,7 +1,7 @@
 import SalesAssessmentFields from '../SalesAssessmentFields';
 import { salesAssessmentComplete, rankedMissions } from '../../utils/salesAssessment';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, CloudSun, FileCheck2, LoaderCircle, Check, UserCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CloudSun, FileCheck2, LoaderCircle, Check, UserCheck, UserRound } from 'lucide-react';
 import { eligibleHandoffDirectors, prepareHandoffAccess, handoffAccountAccesses, handoffAccessError } from './handoffAccess';
 import apiClient from '../../services/apiClient';
 import './integrationPreview.css';
@@ -37,6 +37,8 @@ export function SaleIntake({ leadId, onBack, onSaved, backLabel = "Rendez-vous" 
         ...(context.account_access_required ? {account_accesses: handoffAccountAccesses(draft)} : {}),
         sales_assessment: {...draft.sales_assessment, priority_missions: rankedMissions(draft.sales_assessment.priority_missions)},
         missions: rankedMissions(draft.sales_assessment.priority_missions),
+        professional_situation: (draft.professional_situation || '').trim(),
+        personal_situation: (draft.personal_situation || '').trim(),
       });
       onSaved(saved);
     } catch (e) { setError(e.message || 'La fiche n’a pas pu être enregistrée.'); }
@@ -49,6 +51,15 @@ export function SaleIntake({ leadId, onBack, onSaved, backLabel = "Rendez-vous" 
     {context && <div className="si-client-caption"><Check size={15}/><strong>{context.client_name}</strong><span>Dossier signé</span></div>}
     {!draft && !error && <p role="status"><LoaderCircle size={18} className="ip-spin"/> Chargement de la fiche…</p>}
     {draft && <fieldset disabled={busy}>
+      {/* Info pro / perso du dirigeant (dev 29/10/2026) : facultatives, reprises dans la fiche d'intégration (PDF du board). */}
+      <section className="si-section"><div className="si-section-title"><UserRound size={19}/><h3>Le dirigeant</h3><span>Facultatif</span></div>
+        <div className="ip-fields-two">
+          <label className="ip-field"><span>Info pro</span><textarea rows={3} maxLength={2000} value={draft.professional_situation || ''}
+            onChange={e => update('professional_situation', e.target.value)} placeholder="Parcours, activité, projets…"/></label>
+          <label className="ip-field"><span>Info perso</span><textarea rows={3} maxLength={2000} value={draft.personal_situation || ''}
+            onChange={e => update('personal_situation', e.target.value)} placeholder="Famille, centres d’intérêt…"/></label>
+        </div>
+      </section>
       {context.account_access_required && <section className="si-section si-account-access">
         <div className="si-section-title"><UserCheck size={19}/><h3>Accès à la plateforme</h3><span>Obligatoire</span></div>
         <p>Choisissez au moins un dirigeant qui recevra son accès.</p>
