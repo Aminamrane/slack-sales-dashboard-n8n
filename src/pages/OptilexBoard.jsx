@@ -433,6 +433,62 @@ export function SectorIcon({ secteur, size = 18 }) {
   );
 }
 
+// ── Icônes des onglets d'état (dev 29/10/2026, « très bons svg ») ────────────
+// Une image par onglet, en deux tons : trait dans la teinte de l'état, volume en aplat pâle ; blanches sur la
+// pastille marine. Au survol, chacune bouge à sa façon : les feuilles s'écartent, la coche se redessine, le
+// sablier se retourne, la croix se trace, la flèche sort du contrat, le marteau frappe.
+const TAB_DOC = "M14 3H7.2A2.2 2.2 0 0 0 5 5.2v13.6A2.2 2.2 0 0 0 7.2 21h9.6a2.2 2.2 0 0 0 2.2-2.2V8z";
+const TAB_DOC_FOLD = "M14 3v3.8A1.2 1.2 0 0 0 15.2 8H19";
+const TAB_ICONS = {
+  "Tous": (t) => <>
+    <path className="ob-ti-l3" d="M3.5 16.4 12 20.6l8.5-4.2" />
+    <path d="M3.5 12.2 12 16.4l8.5-4.2" />
+    <path className="ob-ti-l1" d="M12 3.4 3.5 7.7 12 12l8.5-4.3z" fill={t} />
+  </>,
+  "Signé": (t) => <>
+    <path d={TAB_DOC} fill={t} /><path d={TAB_DOC_FOLD} />
+    <path className="ob-ti-check" d="M8.4 14.4l2.6 2.6 4.8-5" pathLength="1" />
+  </>,
+  "Attente Opti'Lex": (t) => <g className="ob-ti-glass">
+    <path d="M8 3v2.4a5 5 0 0 0 1.8 3.85L12 12l2.2-2.75A5 5 0 0 0 16 5.4V3z" fill={t} />
+    <path d="M8 21v-2.4a5 5 0 0 1 1.8-3.85L12 12l2.2 2.75A5 5 0 0 1 16 18.6V21z" fill={t} />
+    <path d="M9.4 19.8c.5-1.4 1.4-2.2 2.6-2.2s2.1.8 2.6 2.2z" fill="currentColor" stroke="none" />
+    <path d="M6.5 3h11M6.5 21h11" />
+  </g>,
+  "En cours de résiliation": (t) => <>
+    <path d={TAB_DOC} fill={t} /><path d={TAB_DOC_FOLD} />
+    <path className="ob-ti-x" d="M9.4 12.4l5.2 5.2" pathLength="1" /><path className="ob-ti-x ob-ti-x2" d="M14.6 12.4l-5.2 5.2" pathLength="1" />
+  </>,
+  "En cours de rétractation": (t) => <>
+    <path d="M9 9.6V5.2A2.2 2.2 0 0 1 11.2 3H16l4 4v11.8a2.2 2.2 0 0 1-2.2 2.2h-6.6A2.2 2.2 0 0 1 9 18.8v-2.4" fill={t} />
+    <path d="M16 3v2.8A1.2 1.2 0 0 0 17.2 7H20" />
+    <g className="ob-ti-arrow"><path d="M14.5 13H3.8" /><path d="M7.1 9.7 3.8 13l3.3 3.3" /></g>
+  </>,
+  "En cours de liquidation": (t) => <>
+    <rect x="12.2" y="17.9" width="9" height="3.3" rx="1.1" fill={t} />
+    <g className="ob-ti-gavel">
+      <path d="M11.9 11.3 4 19.2" strokeWidth="2.2" />
+      <g transform="rotate(45 14.3 8.7)">
+        <rect x="8.4" y="5.6" width="11.8" height="6.2" rx="1.5" fill={t} />
+        <path d="M11.3 5.6v6.2M17.3 5.6v6.2" />
+      </g>
+    </g>
+  </>,
+};
+function TabIcon({ tab, on }) {
+  const draw = TAB_ICONS[tab];
+  if (!draw) return null;
+  const s = ETAT_STYLE[tab];
+  const ink = on ? "#fff" : s ? s.fg : "#3f4a5f";
+  const tint = on ? "rgba(255,255,255,0.22)" : s ? `${s.dot}38` : "#3f4a5f26";
+  return (
+    <svg className="ob-tab-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+      style={{ color: ink }}>
+      {draw(tint)}
+    </svg>
+  );
+}
+
 // ── Filtre par date de signature Owner ──────────────────────────────────────
 // owner_signed_at (fallback fiche appliqué côté back) -> date seule YYYY-MM-DD.
 const sigDateOf = (r) => (r.owner_signed_at ? String(r.owner_signed_at).slice(0, 10) : null);
@@ -1636,6 +1692,26 @@ export default function OptilexBoard({ embed = false }) {
         .ob-seg-btn.is-on .ob-n{color:rgba(255,255,255,0.7)}
         .ob-seg-pill{position:absolute;inset:0;background:${NAVY};border-radius:8px;z-index:0;box-shadow:0 1px 3px rgba(17,24,39,0.18)}
         .ob-seg-txt{position:relative;z-index:1;display:flex;align-items:center;gap:7px}
+        /* Icônes des onglets : rebond à l'activation, un geste propre à chacune au survol. */
+        .ob-tab-ic{flex-shrink:0;margin-right:-1px;overflow:visible;transition:color .18s}
+        .ob-tab-ic path,.ob-tab-ic rect{transition:fill .18s}
+        .ob-seg-btn.is-on .ob-tab-ic{animation:obPop .45s cubic-bezier(.34,1.56,.64,1)}
+        .ob-ti-l1,.ob-ti-l3{transition:transform .32s cubic-bezier(.34,1.56,.64,1)}
+        .ob-seg-btn:hover .ob-ti-l1{transform:translateY(-2.2px)}
+        .ob-seg-btn:hover .ob-ti-l3{transform:translateY(1.8px)}
+        .ob-ti-check{stroke-dasharray:1}
+        @keyframes obTiDraw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+        .ob-seg-btn:hover .ob-ti-check{animation:obTiDraw .42s cubic-bezier(.65,0,.35,1)}
+        .ob-ti-glass{transform-box:fill-box;transform-origin:center;transition:transform .6s cubic-bezier(.34,1.4,.64,1)}
+        .ob-seg-btn:hover .ob-ti-glass{transform:rotate(180deg)}
+        .ob-ti-x{stroke-dasharray:1}
+        .ob-seg-btn:hover .ob-ti-x{animation:obTiDraw .24s cubic-bezier(.65,0,.35,1) backwards}
+        .ob-seg-btn:hover .ob-ti-x2{animation-delay:.14s}
+        @keyframes obTiOut{0%,100%{transform:none}45%{transform:translateX(-2.2px)}70%{transform:translateX(.6px)}}
+        .ob-seg-btn:hover .ob-ti-arrow{animation:obTiOut .55s cubic-bezier(.34,1.3,.64,1)}
+        @keyframes obTiStrike{0%,100%{transform:none}35%{transform:rotate(-16deg)}58%{transform:rotate(9deg)}74%{transform:rotate(4deg)}}
+        .ob-ti-gavel{transform-box:view-box;transform-origin:4px 19.2px}
+        .ob-seg-btn:hover .ob-ti-gavel{animation:obTiStrike .6s cubic-bezier(.34,1.3,.64,1)}
         /* Météo : puces à bascule, l'icône se redresse au survol. */
         .ob-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;border:1px solid ${BORDER};background:${CARD};color:${TEXT};font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .18s,border-color .18s,color .18s}
         .ob-chip:not(.is-on):hover{background:#f7f8fa;border-color:#d5dae3}
@@ -1717,7 +1793,7 @@ export default function OptilexBoard({ embed = false }) {
         .ob-meteo-dialog footer{animation:obWcRise .4s cubic-bezier(.16,1,.3,1) .34s backwards}
         .ob-meteo-dialog .wc-description,.ob-meteo-dialog .wc-form,.ob-meteo-dialog .wc-note,.ob-meteo-dialog .wc-recipients,.ob-meteo-dialog .wc-delivery{animation:obWcRise .36s cubic-bezier(.16,1,.3,1) backwards}
         @media (prefers-reduced-motion: reduce){.ob-meteo-dialog *{animation:none!important;transition:none!important}}
-        @media (prefers-reduced-motion: reduce){.ob-chip-ic,.ob-trigger>svg:first-child,.ob-caret,.ob-seg-btn,.ob-chip,.ob-trigger,.ob-etat-ic,.ob-row,.ob-edit,.ob-meteo-tile,.ob-ghost-body,.ob-ghost-shadow,.ob-ghost-eye,.ob-noshow,.ob-sector-ic{transition:none!important;animation:none!important}}
+        @media (prefers-reduced-motion: reduce){.ob-chip-ic,.ob-trigger>svg:first-child,.ob-caret,.ob-seg-btn,.ob-chip,.ob-trigger,.ob-etat-ic,.ob-row,.ob-edit,.ob-meteo-tile,.ob-ghost-body,.ob-ghost-shadow,.ob-ghost-eye,.ob-noshow,.ob-sector-ic,.ob-tab-ic,.ob-tab-ic *{transition:none!important;animation:none!important}}
       `}</style>
       {/* Échec d'enregistrement : l'UI a été restaurée (rollback), on le DIT clairement. */}
       <AnimatePresence>
@@ -1755,7 +1831,7 @@ export default function OptilexBoard({ embed = false }) {
                   {active && (soloPill
                     ? <motion.span layoutId="obActiveTab" className="ob-seg-pill" transition={{ type: "spring", stiffness: 560, damping: 42 }} />
                     : <span className="ob-seg-pill" />)}
-                  <span className="ob-seg-txt">{tabLabel(t)}<span className="ob-n">{n}</span></span>
+                  <span className="ob-seg-txt"><TabIcon tab={t} on={active} />{tabLabel(t)}<span className="ob-n">{n}</span></span>
                 </motion.button>
               );
             })}
