@@ -6,16 +6,19 @@ import { appointmentConfirmation, appointmentFailure } from "../../../utils/appo
 // finance (Aurélie, Ismahane). Demande dev 2026-09-02.
 //
 // Le point clé du besoin : il n'y a QU'UN rendez-vous, mais DEUX constats
-// indépendants. Vincent peut avoir mené son onboarding plateforme alors que la
+// indépendants. L'animateur peut avoir mené son onboarding plateforme alors que la
 // facturation n'a pas pu se faire (client sans carte bancaire, etc.). La finance
 // pose donc son propre statut, distinct de `rdv_onboarding_done` qui appartient
 // au Client Success, et distinct du board Owner/Opti'Lex.
 //
 // Le recalage, lui, est PARTAGÉ : même rendez-vous, agendas liés. Il déplace la
 // date CRM (les sales la voient sur le lead) et les deux événements Google
-// (Vincent + facturation), via l'endpoint déjà utilisé par le board.
-// Créneaux = exactement ceux de la déclaration de vente (freebusy Vincent +
-// facturation), donc aucune règle de disponibilité n'est réinventée ici.
+// (animateur + facturation), via l'endpoint déjà utilisé par le board.
+// Créneaux = exactement ceux de la déclaration de vente (freebusy de l'animateur du
+// client + facturation), donc aucune règle de disponibilité n'est réinventée ici.
+// Chaque créneau libre porte le prénom de l'animateur (`host`) et sa photo
+// (`host_photos`), montrés comme sur le calendrier du sales (dev 2026-10-29 :
+// « they should see the face like the sales »).
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -58,6 +61,8 @@ const whenLabel = (raw) => {
 function ReschedModal({ numeroClient, label, onClose, onDone }) {
   const [start, setStart] = useState(todayIso());
   const [days, setDays] = useState(null);
+  const [hostPhotos, setHostPhotos] = useState({});
+  const [hostName, setHostName] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sel, setSel] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -68,10 +73,21 @@ function ReschedModal({ numeroClient, label, onClose, onDone }) {
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    // Créneaux de l'animateur du client (Vincent, ou Paul s'il a pris le relais) : le recalage
+    // Créneaux de l'animateur du client (y compris un ancien dossier du relais) : le recalage
     // déplace l'événement dans son agenda, on ne propose donc que ses disponibilités.
     apiClient.get(`/api/v1/optilex/board-reschedule-slots?kind=onboarding&start=${start}&numero_client=${encodeURIComponent(numeroClient)}`)
-      .then((r) => { if (alive) { setDays(r.days || []); setLoading(false); } })
+      .then((r) => {
+        if (!alive) return;
+        const list = r.days || [];
+        const photos = r.host_photos || {};
+        // Un seul animateur par client : le prénom vient d'un créneau libre, sinon de sa photo ;
+        // une semaine sans créneau libre garde le prénom déjà connu.
+        const freeHost = list.flatMap((d) => d.slots || []).find((s) => s.free && s.host)?.host;
+        setDays(list);
+        setHostPhotos(photos);
+        setHostName((prev) => freeHost || Object.keys(photos)[0] || prev);
+        setLoading(false);
+      })
       .catch(() => { if (alive) { setDays([]); setLoading(false); } });
     return () => { alive = false; };
   }, [start, numeroClient]);
@@ -124,7 +140,7 @@ function ReschedModal({ numeroClient, label, onClose, onDone }) {
             <div style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>Reprogrammer le rendez-vous</div>
             <div style={{ fontSize: 12, color: MUTED, marginTop: 2, overflow: "hidden",
               textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {label} : le créneau change aussi pour Vincent et pour le sales sur le lead
+              {label} : le créneau change aussi pour {hostName || "l’animateur"} et pour le sales sur le lead
             </div>
           </div>
           <button type="button" disabled={saving} onClick={() => { if (!saving) onClose(); }} style={{ border: "none", background: "none",
@@ -137,7 +153,7 @@ function ReschedModal({ numeroClient, label, onClose, onDone }) {
             style={{ border: `1px solid ${BORDER}`, background: CARD, borderRadius: 8, padding: "5px 11px",
               fontSize: 12, fontWeight: 600, color: start <= todayIso() ? MUTED : NAVY,
               cursor: start <= todayIso() ? "default" : "pointer", fontFamily: "inherit" }}>← Sem. préc.</button>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>Créneaux libres (Vincent + facturation)</span>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>Créneaux libres ({hostName || "animateur"} + facturation)</span>
           <button type="button" disabled={saving || uncertain} onClick={() => shiftWeek(1)}
             style={{ border: `1px solid ${BORDER}`, background: CARD, borderRadius: 8, padding: "5px 11px",
               fontSize: 12, fontWeight: 600, color: NAVY, cursor: "pointer", fontFamily: "inherit" }}>Sem. suiv. →</button>
@@ -155,16 +171,31 @@ function ReschedModal({ numeroClient, label, onClose, onDone }) {
               <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
                 {d.slots.map((s) => {
                   const on = sel && sel.date === d.date && sel.slot === s.t;
+                  const host = s.free ? s.host : null;
+                  const photo = host && hostPhotos[host];
                   return (
                     <button key={s.t} type="button" disabled={saving || uncertain || !s.free}
                       onClick={() => s.free && setSel({ date: d.date, slot: s.t })}
+                      title={host || undefined}
                       style={{ padding: "6px 12px", borderRadius: 8,
                         border: `1px solid ${on ? GREEN : (s.free ? BORDER : "transparent")}`,
                         background: on ? GREEN : (s.free ? CARD : "#f3f4f6"),
                         color: on ? "#fff" : (s.free ? NAVY : "#c3cad6"),
                         textDecoration: s.free ? "none" : "line-through",
                         fontSize: 12.5, fontWeight: 600, cursor: s.free ? "pointer" : "default",
-                        fontFamily: "inherit", transition: "all .12s ease" }}>{s.t}</button>
+                        fontFamily: "inherit", transition: "all .12s ease" }}>
+                      {s.t}
+                      {/* Animateur : sa photo comme sur le calendrier du sales, sinon son prénom
+                          (marges négatives = hauteur du bouton inchangée). */}
+                      {photo ? (
+                        <img src={photo} alt={host} draggable={false}
+                          style={{ width: 20, height: 20, margin: "-4px 0 -4px 7px", verticalAlign: "middle",
+                            borderRadius: "50%", objectFit: "cover", boxShadow: on ? "0 0 0 1.5px #fff" : "none" }} />
+                      ) : host && (
+                        <span style={{ marginLeft: 6, fontSize: 11.5, fontWeight: 500,
+                          color: on ? "rgba(255,255,255,0.78)" : MUTED }}>{host}</span>
+                      )}
+                    </button>
                   );
                 })}
               </div>
