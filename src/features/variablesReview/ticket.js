@@ -13,10 +13,10 @@ const plural = (n, word) => `${n} ${word}${n > 1 ? "s" : ""}`;
 const s = (n) => (n > 1 ? "s" : "");
 const salesText = (n) => (n ? plural(n, "vente") : "");
 
-// Calcul du complément, sous sa ligne : « 3 200,00 € garantis − 2 154,00 € de commissions ».
-export const tierNote = ({ guaranteed, commission, over }, format) => (over
-  ? `commissions au-dessus des ${format(guaranteed)} garantis`
-  : `${format(guaranteed)} garantis − ${format(commission)} de commissions`);
+// Calcul du complément, sous sa ligne : « 3 200,00 € garantis − 3 054,00 € de fixe, commissions et primes ».
+export const tierNote = ({ guaranteed, total, over }, format) => (over
+  ? `fixe, commissions et primes au-dessus des ${format(guaranteed)} garantis`
+  : `${format(guaranteed)} garantis − ${format(total)} de fixe, commissions et primes`);
 
 export function ticketLines({ period, model, gross, teamShare, bonuses = [], fixedMissing = false }) {
   const month = monthName(period);
@@ -50,7 +50,7 @@ export function ticketLines({ period, model, gross, teamShare, bonuses = [], fix
   if (tier) {
     const guaranteed = Rational.from(tier.reached.amount);
     add({ key: "tier", label: `Complément palier ${tier.reached.sales} ventes`, amount: tier.complement, action: "tiers", icon: "pencil" });
-    add({ key: "tier-math", kind: "note", tier: { guaranteed, commission: tier.monthCommission, over: tier.complement.n === 0n } });
+    add({ key: "tier-math", kind: "note", tier: { guaranteed, total: tier.monthTotal, over: tier.complement.n === 0n } });
   }
   if (gross.before.count) {
     add({ key: "before", label: "Commissions ventes antérieures", count: salesText(gross.before.count),

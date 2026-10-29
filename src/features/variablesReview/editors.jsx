@@ -282,7 +282,7 @@ export function RulesEditor({ initialSection = "fixed", settings, tier, general,
       subtitle={subtitle}
       info={
         <ul>
-          <li>Paliers : ventes signées dans le mois, payées ou non, sauf rétractation actée au board. Palier atteint : la personne touche le plus grand de ses commissions du mois et du montant du palier, fixe en plus ; toutes ses ventes du mois comptent ce mois-ci.</li>
+          <li>Paliers : ventes signées dans le mois, payées ou non, sauf rétractation actée au board. Le palier est un minimum sur le total du mois : fixe, commissions de ces ventes et primes. S’il est au-dessus de ce total, la personne touche le palier et toutes ses ventes du mois comptent ce mois-ci ; sinon, chaque vente compte au mois où le client paie.</li>
           <li>Paliers généraux : pour tous les sales et heads. Paliers propres : remplacent les généraux pour cette personne.</li>
           <li>Un changement de palier vaut à partir du mois indiqué ; les mois déjà versés ne bougent pas.</li>
           <li>Coefficients : pour cette personne et ce mois. Une source désactivée garde le calcul d’origine ; une vente en calcul individuel garde sa formule. CCS : cold call setter.</li>
@@ -301,6 +301,10 @@ export function RulesEditor({ initialSection = "fixed", settings, tier, general,
                 <b className="vr-num">{tier?.monthSales ?? 0}{tier?.retracted ? ` · ${tier.retracted} rétractation${tier.retracted > 1 ? "s" : ""} actée${tier.retracted > 1 ? "s" : ""} retirée${tier.retracted > 1 ? "s" : ""}` : ""}</b></div>
               <div><span>Palier atteint</span>
                 <b className="vr-num">{tier?.reached ? `${tier.reached.sales} ventes · ${money(Rational.from(tier.reached.amount))}` : "Aucun"}</b></div>
+              {tier?.reached && tier.binding === false && (
+                <div><span>Total du mois (fixe, commissions, primes)</span>
+                  <b className="vr-num">{money(Rational.from(tier.monthTotal))} · au-dessus, le palier ne joue pas</b></div>
+              )}
             </div>
             <span className="vr-pay-group">Paliers généraux · tous les sales et heads</span>
             <TierRows label="Paliers généraux" tiers={generalTiers} onChange={setGeneralTiers} />

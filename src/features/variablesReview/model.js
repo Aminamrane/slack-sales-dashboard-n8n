@@ -30,19 +30,21 @@ export function validateTiers(tiers) {
       );
   return sorted;
 }
-// Palier du relevé (statement.tier, calculé par le serveur) : si un palier est atteint, la personne touche le plus
-// grand de ses commissions des ventes du mois (tier.refs, aux coefficients du mois) et du montant du palier ; le
-// complément est la différence, jamais négative.
-export function tierOf(statement, calculator) {
+// Palier du relevé (statement.tier, décidé par le serveur), règle de la feuille de paie « Apports d'affaires » : un
+// minimum sur le total du mois, fixe + commissions des ventes du mois (tier.refs, aux coefficients du brouillon) +
+// primes. Il ne joue que si ce total est en dessous (tier.binding) ; le complément est la différence, jamais négative.
+export function tierOf(statement, calculator, { fixed = ZERO, bonuses = ZERO } = {}) {
   const tier = statement.tier;
-  if (!tier?.reached) return null;
+  if (!tier?.reached || tier.binding === false) return null;
   const monthCommission = (tier.refs || []).reduce((n, r) => n.add(calculator.value(r)), ZERO);
-  const gap = Rational.from(tier.reached.amount).sub(monthCommission);
+  const monthTotal = fixed.add(monthCommission).add(bonuses);
+  const gap = Rational.from(tier.reached.amount).sub(monthTotal);
   return {
     reached: tier.reached,
     monthSales: tier.monthSales,
     retracted: tier.retracted,
     monthCommission,
+    monthTotal,
     complement: gap.n > 0n ? gap : ZERO,
   };
 }
@@ -105,17 +107,17 @@ export function statementModel(data, statement, changes = {}, settings = {}) {
   );
   const fixedCell = fixedRefs.length === 1 ? fixedRefs[0] : null;
   const fixed = fixedCell ? base.value(fixedCell) : ZERO;
-  const tier = tierOf(statement, base);
+  const bonuses = (settings.bonuses || []).reduce(
+    (n, b) => n.add(Rational.from(b.amount)),
+    ZERO,
+  );
+  const tier = tierOf(statement, base, { fixed, bonuses });
   const complement = tier ? tier.complement : ZERO;
   const sourceTotal = createCalculator(data.cells).value(statement.totalCell);
   const baseTotal = base.value(statement.totalCell),
     effectiveTotal = baseTotal.add(complement);
   const commission = amountRefs.reduce((n, r) => n.add(base.value(r)), ZERO);
   const teamShare = teamRefs.reduce((n, r) => n.add(base.value(r)), ZERO);
-  const bonuses = (settings.bonuses || []).reduce(
-    (n, b) => n.add(Rational.from(b.amount)),
-    ZERO,
-  );
   const total = effectiveTotal.add(bonuses);
   return {
     appliedAcquisition,

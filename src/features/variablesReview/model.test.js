@@ -18,20 +18,23 @@ const data = {
   },
   statements: [{ totalCell: "N1" }, { totalCell: "N2" }],
 };
-test("palier atteint : le plus grand des commissions du mois et du montant, fixe en plus (dev 28/10)", () => {
-  const tiered = (amount, refs = ["E1"]) => statementModel(data, {
-    totalCell: "N1", tier: { reached: { sales: 5, amount }, monthSales: 5, retracted: 0, refs },
-  });
-  const under = tiered("2500");
-  assert.deepEqual([under.tier.monthCommission.toFixed(2), under.tier.complement.toFixed(2)], ["200.00", "2300.00"]);
-  assert.equal(under.total.toFixed(2), "3000.00");                   // 500 de fixe + 2 500
+test("palier : un minimum sur le total du mois, fixe, commissions et primes compris (feuille Apports d'affaires)", () => {
+  const tiered = (amount, { refs = ["E1"], changes = {}, settings = {}, binding } = {}) => statementModel(data, {
+    totalCell: "N1", tier: { reached: { sales: 5, amount }, monthSales: 5, retracted: 0, refs, binding },
+  }, changes, settings);
+  const under = tiered("2500", { binding: true });
+  assert.deepEqual([under.tier.monthTotal.toFixed(2), under.tier.complement.toFixed(2)], ["700.00", "1800.00"]);
+  assert.equal(under.total.toFixed(2), "2500.00");                   // 500 de fixe + 200 + 1 800 = le palier
   assert.equal(under.remainder.toFixed(2), "0.00");
-  const over = tiered("150");
-  assert.equal(over.tier.complement.toFixed(2), "0.00");             // commissions au-dessus : aucun complément
+  const withBonus = tiered("2500", { binding: true, settings: { bonuses: [{ label: "Prime", amount: "300" }] } });
+  assert.deepEqual([withBonus.tier.complement.toFixed(2), withBonus.total.toFixed(2)], ["1500.00", "2500.00"]);
+  const over = tiered("650", { binding: true });
+  assert.equal(over.tier.complement.toFixed(2), "0.00");             // 700 ≥ 650 : aucun complément
   assert.equal(over.total.toFixed(2), "700.00");
-  const edited = statementModel(data, { totalCell: "N1", tier: { reached: { sales: 5, amount: "2500" }, refs: ["E1"] } },
-    { E1: "1000" });
-  assert.equal(edited.tier.complement.toFixed(2), "1500.00");       // commission corrigée à la main : complément recalculé
+  const edited = tiered("2500", { binding: true, changes: { E1: "1000" } });
+  assert.equal(edited.tier.complement.toFixed(2), "1000.00");       // commission corrigée à la main : complément recalculé
+  const notBinding = tiered("2500", { binding: false });              // le serveur : total au-dessus, le palier ne joue pas
+  assert.deepEqual([notBinding.tier, notBinding.total.toFixed(2)], [null, "700.00"]);
   assert.equal(statementModel(data, { totalCell: "N1", tier: { reached: null, refs: [] } }).tier, null);
 });
 test("negative prime does not double count", () => {

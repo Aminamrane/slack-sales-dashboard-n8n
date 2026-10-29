@@ -285,6 +285,8 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, sa
     setToast({ id, text });
     setTimeout(() => setToast((t) => (t?.id === id ? null : t)), 3600);
   }
+  // Ce qui, dans le brouillon, entre dans le total du mois comparé au palier : fixe corrigé et primes du relevé.
+  const tierInputs = (d) => JSON.stringify([d.changes?.[statement.fixedCell] ?? null, d.settings?.[statement.id]?.bonuses ?? null]);
   // Envoie l'état complet suivant + l'entrée d'audit ; le brouillon affiché
   // devient celui renvoyé par le serveur. Une seule écriture à la fois.
   async function commit(next, action, detail, before, after) {
@@ -300,6 +302,16 @@ export default function VariablesWorkbench({ source, initialDraft, saveDraft, sa
       setDraft(parseDraft(response?.draft));
       setSaveError("");
       setMotionState({ direction: 1, cause: "edit" });
+      // Le serveur décide si le palier joue avec le fixe et les primes du mois : s'ils changent, la source est relue
+      // (le palier solde les ventes du mois, ou les rend au mois où le client paie).
+      if (statement.tier?.reached && tierInputs(next) !== tierInputs(draft)) {
+        try {
+          const data = await reload();
+          setDraft(parseDraft(data.draft));
+        } catch {
+          setSaveError(SAVE_FAILED_MESSAGE);
+        }
+      }
       return true;
     } catch (error) {
       if (isStaleRevision(error)) setBlockingError(STALE_MESSAGE);

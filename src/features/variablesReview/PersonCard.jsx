@@ -117,7 +117,7 @@ export function PersonCard({
             <li>Brut du mois : fixe, commissions des ventes signées dans le mois (payées ce mois ou plus tard), commissions des ventes antérieures payées ce mois{teamShare ? ", part d’équipe" : ""} et primes. Les clients perdus n’y sont pas.</li>
             <li>Va toucher ce mois : le brut moins les clients qui paient plus tard ; versé le 1er du mois suivant.</li>
             <li>Une vente compte dans la rémunération du mois où le client a payé sa première échéance Owner.</li>
-            <li>Palier atteint (ventes signées dans le mois, rétractations actées retirées) : toutes ces ventes comptent ce mois-ci, payées ou non, et la personne touche le plus grand de leurs commissions et du montant du palier, fixe en plus.</li>
+            <li>Palier (ventes signées dans le mois, rétractations actées retirées) : un minimum sur le total du mois, fixe, commissions de ces ventes et primes. S’il est au-dessus, la personne touche le palier et toutes ces ventes comptent ce mois-ci, payées ou non ; sinon, chaque vente compte au mois où le client paie.</li>
             <li>Commission : base × coefficient. Base : prix Owner / 12 ; à partir de 6 salariés en cold call, Ads et cold call setter, (total × 80 %) / 12, comme l’Excel.</li>
             {teamShare && <li>Part d’équipe : chaque vente d’un membre de son équipe CRM, au mois où le client paie sa 1re échéance ; base de la vente × {teamCoefficients}.</li>}
             <li>Manque à gagner : ce que la personne aurait pu toucher en plus si les clients des ventes du mois avaient payé (pas encore payés, perdus).</li>

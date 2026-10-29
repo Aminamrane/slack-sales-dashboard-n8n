@@ -35,7 +35,7 @@ export function RemunerationBreakdown({ model, rows, settings, subtitle, missed,
         {model.tier && (
           <div className="vr-remuneration-line" data-line="tier">
             <div><strong>Complément palier {model.tier.reached.sales} ventes</strong>
-              <small>{money(Rational.from(model.tier.reached.amount))} − {money(model.tier.monthCommission)} de commissions des {plural(model.tier.monthSales, "vente")} du mois</small></div>
+              <small>{money(Rational.from(model.tier.reached.amount))} − {money(model.tier.monthTotal)} de fixe, commissions des {plural(model.tier.monthSales, "vente")} du mois et primes</small></div>
             <b className="vr-num">{money(model.tier.complement)}</b>
             <button type="button" className="vr-button" onClick={onTiers}><Pencil size={13} />Paliers</button>
           </div>
