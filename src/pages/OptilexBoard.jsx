@@ -17,7 +17,7 @@ import { mentionedIds, notifiedSummary } from "../utils/mentions.js";
 import { isOnboardingToReschedule, onboardingDateOf, onboardingSituation } from "../utils/boardIntegration.js";
 import { isOnboardingUpcoming, isOnboardingOverdue, isIntegrationUpcoming, isIntegrationOverdue } from "../utils/boardPredicates.js";
 import { createLatestRequestTracker, displayEtat, EXITED_ETATS, matchesSignedClient, withConfirmedEtat } from "../utils/boardClientState.js";
-import { Fragment, useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { Fragment, memo, useState, useEffect, useMemo, useCallback, useRef, useId } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import { phoneDisplay, sharedEmailOptions } from "../utils/boardContacts.js";
@@ -69,6 +69,9 @@ const SECONDARY_CATS = ["Résiliation", "Rétractation", "Self-Résiliation", "L
 // reste = onglet d'état -> tri par date d'entrée dans l'état, le plus récent en haut.
 const NON_ETAT_SORTED_TABS = ["Tous", "Renouvellement client", "Inactifs", "Onboarding à venir"];
 const TAB_LABEL = { "Attente Opti'Lex": "En attente Opti'Lex", "Onboarding à venir": "Onboarding Owner à venir" };
+// Libellés courts des filtres posés, rappelés sous la barre (dev 28/10/2026).
+const ONBOARDING_TAGS = { venir: "À venir", done: "Réalisé", todo: "À faire", noshow: "No show", recaler: "À recaler" };
+const PROGRAMME_TAGS = { ambassadeur: "Ambassadeur", parrainage: "Parrainage" };
 const tabLabel = (t) => TAB_LABEL[t] || t;
 // États que le cabinet peut poser manuellement (badge cliquable, table + fiche).
 const ETAT_OPTIONS = ["Signé", "En cours de résiliation", "En cours de rétractation", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation", "En cours de liquidation"];
@@ -292,6 +295,144 @@ const exportRowsToCsv = (rows, label) => {
   URL.revokeObjectURL(url);
 };
 
+// ── Colonnes du tableau (dev 28/10/2026) ────────────────────────────────────
+// Chaque colonne a la largeur de son contenu mesuré sur tout le board, plus la même marge ; aucune ne prend
+// « le reste ». Sur un écran plus large, le surplus est partagé À PARTS ÉGALES (et non au prorata, qui
+// creusait surtout la colonne État, dimensionnée pour « En cours de rétractation ») : les espaces entre
+// colonnes grandissent tous de la même quantité.
+const TABLE_COLS = [
+  256, // client : nom et société, coupés au-delà
+  172, // secteur : icône + libellé (« Grande Distribution »)
+  148, // météo : tuile + libellé sur une ligne
+  228, // état : « En cours de rétractation » + flèche du menu
+  138, // contrat owner
+  172, // contrat opti'lex + badge d'intégration
+  168, // onboarding : date + heure, badges dessous
+];
+const TABLE_CHEVRON_W = 36;
+const TABLE_MIN_W = TABLE_COLS.reduce((a, b) => a + b, 0) + TABLE_CHEVRON_W;
+
+// Changement de vue (dev 28/10/2026) : la liste glisse comme une page de carrousel. L'ancienne part vers le côté
+// opposé au contrôle cliqué, la nouvelle arrive de son côté, sur un ressort. Elle n'arrive qu'avec ses premières
+// lignes : le reste se dessine par paquets une fois la glissade posée (hors de la vue), sans saccade.
+const ROWS_FIRST = 30;
+const ROWS_CHUNK = 120;
+const ROWS_SETTLE_MS = 520;
+const VIEW_SLIDE = {
+  enter: (dir) => ({ x: 72 * dir, opacity: 0 }),
+  center: { x: 0, opacity: 1, transition: { x: { type: "spring", stiffness: 360, damping: 36, mass: 0.9 }, opacity: { duration: 0.24, ease: [0.16, 1, 0.3, 1] } } },
+  exit: (dir) => ({ x: -72 * dir, opacity: 0, transition: { duration: 0.17, ease: [0.4, 0, 1, 1] } }),
+};
+const VIEW_FADE = { enter: { opacity: 0 }, center: { opacity: 1, transition: { duration: 0.15 } }, exit: { opacity: 0, transition: { duration: 0.1 } } };
+
+const ROW_TD = { padding: "12px 14px", fontSize: 13, color: TEXT, borderTop: "1px solid #eef0f4", verticalAlign: "middle", whiteSpace: "nowrap" };
+
+// ── Secteur d'activité (dev 28/10/2026) ─────────────────────────────────────
+// Type d'entreprise du NDA (client_data.business_type), déduit du code NAF trouvé sur Pappers.
+// Seule l'orthographe de la valeur enregistrée « Micro créche » est corrigée à l'affichage.
+const secteurLabel = (v) => (v === "Micro créche" ? "Micro-crèche" : v);
+// Une icône dessinée par secteur de la liste du NDA, en deux tons : trait marine, volumes en bleu
+// Owner pâle ; seuls la croix de l'ambulance et celle de la pharmacie gardent leur couleur.
+// Secteur inconnu : l'immeuble de « Générales ».
+const SECTEUR_INK = "#27324f";
+const SECTEUR_FILL = "#e6ecf6";
+const SECTEUR_ICONS = {
+  "Ambulance": (f) => <>
+    <rect x="2.5" y="7" width="11" height="10" rx="1.6" fill={f} />
+    <path d="M13.5 10h4.1l3.4 3.7V17h-7.5z" fill={f} />
+    <path d="M15.2 11.6h1.8l1.9 2.1h-3.7z" fill="#fff" />
+    <rect x="6.6" y="5" width="2.8" height="2" rx=".7" fill="#fbe3e3" stroke="#d14343" />
+    <path d="M8 10.2v3.6M6.2 12h3.6" stroke="#d14343" strokeWidth="1.8" />
+    <circle cx="6.6" cy="17.4" r="1.9" fill="#fff" /><circle cx="17.4" cy="17.4" r="1.9" fill="#fff" />
+  </>,
+  "Micro créche": (f) => <>
+    <path d="M4 11.2a7 7 0 0 1 7-7v7z" fill={f} />
+    <path d="M7.1 6.3 11 11.2" />
+    <path d="M3.5 11.2H19c0 3.3-2.9 6-6.5 6H10c-3.6 0-6.5-2.7-6.5-6z" fill={f} />
+    <path d="M19 11.2l1.1-4.4h1.7" />
+    <circle cx="7.6" cy="19.6" r="1.6" fill="#fff" /><circle cx="15.4" cy="19.6" r="1.6" fill="#fff" />
+  </>,
+  "Dentiste": (f) => <>
+    <path d="M7.4 3.6c-2.4 0-4 2-4 4.6 0 2.3 1 3.6 1.7 5.6.6 1.8.8 3.6 1.3 5.3.3 1.1.8 1.7 1.5 1.7 1 0 1.3-1 1.6-2.4l.6-2.8c.3-1.2.9-1.8 1.9-1.8s1.6.6 1.9 1.8l.6 2.8c.3 1.4.6 2.4 1.6 2.4.7 0 1.2-.6 1.5-1.7.5-1.7.7-3.5 1.3-5.3.7-2 1.7-3.3 1.7-5.6 0-2.6-1.6-4.6-4-4.6-1.9 0-2.7 1-4.6 1s-2.7-1-4.6-1z" fill={f} />
+    <path d="M6.6 7.1c.3-.9.9-1.4 1.8-1.6" stroke="#fff" strokeWidth="1.5" />
+  </>,
+  "Pharmacie": () => <>
+    <path d="M9.4 3.5h5.2v5.9h5.9v5.2h-5.9v5.9H9.4v-5.9H3.5V9.4h5.9z" fill="#e2f1e8" stroke="#2f7a52" />
+    <path d="M12 9.6v4.8M9.6 12h4.8" stroke="#2f7a52" strokeWidth="1.4" opacity=".55" />
+  </>,
+  "Salle de sport": (f) => <g transform="rotate(-35 12 12)">
+    <path d="M7.5 12h9" strokeWidth="2" />
+    <rect x="4.2" y="7" width="3.3" height="10" rx="1.2" fill={f} />
+    <rect x="16.5" y="7" width="3.3" height="10" rx="1.2" fill={f} />
+    <rect x="1.8" y="9.3" width="2.4" height="5.4" rx=".9" fill={f} />
+    <rect x="19.8" y="9.3" width="2.4" height="5.4" rx=".9" fill={f} />
+  </g>,
+  "Esthétique": (f) => <>
+    <path d="M9.4 11.4V6.6l5.2-3v7.8" fill={f} />
+    <rect x="8.4" y="11.4" width="7.2" height="2.8" rx=".7" fill="#fff" />
+    <rect x="7.4" y="14.2" width="9.2" height="7" rx="1.4" fill={f} />
+    <path d="M11 7.4v2.4" stroke="#fff" strokeWidth="1.4" />
+    <path d="M19.6 4.4l.6 1.5 1.5.6-1.5.6-.6 1.5-.6-1.5-1.5-.6 1.5-.6z" fill={SECTEUR_INK} strokeWidth=".8" />
+  </>,
+  "Tech": (f) => <>
+    <rect x="4" y="4.5" width="16" height="11.5" rx="1.6" fill={f} />
+    <path d="M2.5 18.2h19c0 1-.8 1.8-1.8 1.8H4.3c-1 0-1.8-.8-1.8-1.8z" fill={f} />
+    <path d="M9.8 8.4 7.6 10.3l2.2 1.9M14.2 8.4l2.2 1.9-2.2 1.9" />
+  </>,
+  "Hôtellerie": (f) => <>
+    <path d="M4.5 16.6a7.5 7.5 0 0 1 15 0z" fill={f} />
+    <rect x="2.8" y="16.6" width="18.4" height="2.8" rx="1.3" fill={f} />
+    <path d="M12 9.1V7.6" /><path d="M10.4 6.2h3.2" strokeWidth="1.8" />
+    <path d="M7.9 14.4a4.6 4.6 0 0 1 2.3-2.9" stroke="#fff" strokeWidth="1.5" />
+  </>,
+  "Grande Distribution": (f) => <>
+    <path d="M6 8h14.8l-2.1 6.5a1.5 1.5 0 0 1-1.4 1H8.6a1.5 1.5 0 0 1-1.5-1.2z" fill={f} />
+    <path d="M2.5 4.2h2.2l2.4 10.1a1.5 1.5 0 0 0 1.5 1.2h8.7" />
+    <path d="M10.6 8.4v6.6M14.6 8.4v6.6" strokeWidth="1.2" opacity=".55" />
+    <circle cx="9.2" cy="19.4" r="1.6" fill="#fff" /><circle cx="16.6" cy="19.4" r="1.6" fill="#fff" />
+  </>,
+  "Tertiaire": (f) => <>
+    <path d="M9 7V5.6A1.6 1.6 0 0 1 10.6 4h2.8A1.6 1.6 0 0 1 15 5.6V7" />
+    <rect x="3" y="7" width="18" height="12.5" rx="2" fill={f} />
+    <path d="M3 12.4h18" />
+    <rect x="10.5" y="10.9" width="3" height="3" rx=".7" fill="#fff" />
+  </>,
+  "BTP": (f) => <>
+    <path d="M4.4 16.2a7.6 7.6 0 0 1 15.2 0z" fill={f} />
+    <rect x="10.4" y="7.4" width="3.2" height="6.4" rx="1.3" fill="#fff" />
+    <path d="M7.6 16.2v-3.4M16.4 16.2v-3.4" strokeWidth="1.3" opacity=".55" />
+    <rect x="2.4" y="16.2" width="19.2" height="2.8" rx="1.4" fill={f} />
+  </>,
+  "Boulangerie": (f) => <g transform="rotate(-38 12 12)">
+    <rect x="1.8" y="8.8" width="20.4" height="6.4" rx="3.2" fill={f} />
+    <path d="M6.6 10.4l1.6 3.2M10.6 10.4l1.6 3.2M14.6 10.4l1.6 3.2" />
+  </g>,
+  "Immobilier": (f) => <>
+    <path d="M15.6 6.8V4.4h2.2v4.3" fill={f} />
+    <path d="M5.4 9.6V19a1 1 0 0 0 1 1h11.2a1 1 0 0 0 1-1V9.6L12 4.4z" fill={f} />
+    <path d="M3.4 11.2 12 4.2l8.6 7" />
+    <path d="M10 20v-4.8a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V20" fill="#fff" />
+  </>,
+  "Restauration": (f) => <>
+    <path d="M6.4 3.2v4.4a2.6 2.6 0 0 0 5.2 0V3.2M9 3.2v4.9M9 10.2V21" />
+    <path d="M17.4 21V3.4c-2 1-3.4 3.5-3.4 6.6V14h3.4" fill={f} />
+  </>,
+  "Générales": (f) => <>
+    <rect x="4" y="3.8" width="10" height="16.2" rx="1.2" fill={f} />
+    <rect x="14" y="9.6" width="6" height="10.4" rx="1.2" fill={f} />
+    <path d="M7.2 7.6h.6M10.2 7.6h.6M7.2 11.2h.6M10.2 11.2h.6M7.2 14.8h.6M10.2 14.8h.6M16.7 13.2h.6M16.7 16.4h.6" strokeWidth="1.9" />
+    <path d="M2.6 20h18.8" />
+  </>,
+};
+export function SectorIcon({ secteur, size = 18 }) {
+  const draw = SECTEUR_ICONS[secteur] || SECTEUR_ICONS["Générales"];
+  return (
+    <svg className="ob-sector-ic" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={SECTEUR_INK} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {draw(SECTEUR_FILL)}
+    </svg>
+  );
+}
+
 // ── Filtre par date de signature Owner ──────────────────────────────────────
 // owner_signed_at (fallback fiche appliqué côté back) -> date seule YYYY-MM-DD.
 const sigDateOf = (r) => (r.owner_signed_at ? String(r.owner_signed_at).slice(0, 10) : null);
@@ -300,7 +441,6 @@ const sigDateOf = (r) => (r.owner_signed_at ? String(r.owner_signed_at).slice(0,
 const SORT_ACCESSORS = {
   owner_signed: (r) => sigDateOf(r),
   onboarding: (r) => { const d = r.rdv_onboarding_date_manual || r.rdv_onboarding_date; return d ? String(d).slice(0, 10) : null; },
-  integration: (r) => (r.rdv_lancement_date ? String(r.rdv_lancement_date).slice(0, 10) : null),
 };
 // Comparateur : dates absentes toujours en bas, sinon ascendant / descendant.
 const byDateSort = (accessor, dir) => (a, b) => {
@@ -384,11 +524,72 @@ function Avatar({ name, n, src, size = 30 }) {
   const c = AVATAR_COLORS[(n != null ? n : hashStr(name)) % AVATAR_COLORS.length];
   const letter = (name || "?").trim().charAt(0).toUpperCase();
   if (src) return <img src={src} alt="" style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
-  return <div style={{ width: size, height: size, borderRadius: "50%", background: c, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: Math.round(size * 0.43), fontWeight: 700, flexShrink: 0 }}>{letter}</div>;
+  // Lettre de couleur sur fond pâle (dev 28/10/2026, « meilleur tableau ») : la couleur repère sans crier.
+  return <div style={{ width: size, height: size, borderRadius: Math.round(size * 0.32), background: `${c}1a`, boxShadow: `inset 0 0 0 1px ${c}24`, color: c, display: "flex", alignItems: "center", justifyContent: "center", fontSize: Math.round(size * 0.43), fontWeight: 700, flexShrink: 0 }}>{letter}</div>;
 }
 
-export function EtatBadge({ etat }) {
+// ── Icônes de statut (dev 28/10/2026 : « meilleur état en svg ») ─────────────────
+// Une seule famille, dessinée sur 16 px : le cercle dit où en est le client. Pointillé = pas commencé,
+// demi = en attente, trois quarts = sortie en cours, plein avec coche = signé, plein avec glyphe = sorti.
+const ETAT_ICON = {
+  "Signé": "done",
+  "Attente Opti'Lex": "half",
+  "En cours": "half",
+  "En cours de résiliation": "three",
+  "En cours de rétractation": "three",
+  "En cours de liquidation": "three",
+  "Résiliation": "cross",
+  "Self-Résiliation": "outcross",
+  "Rétractation": "back",
+  "Liquidation": "minus",
+  "Pause": "pause",
+  "Renouvellement client": "renew",
+  "Inactifs": "clock",
+  "En attente": "dashed",
+  "Sans suite": "dashslash",
+};
+const FILLED_GLYPHS = new Set(["done", "cross", "back", "minus"]);
+export function StatusGlyph({ kind, color, size = 14 }) {
+  const ring = <circle cx="8" cy="8" r="6.25" fill="none" stroke={color} strokeWidth="1.5" />;
+  const ink = { fill: "none", stroke: color, strokeWidth: 1.5, strokeLinecap: "round", strokeLinejoin: "round" };
+  const white = { fill: "none", stroke: "#fff", strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round" };
+  const disc = <circle cx="8" cy="8" r="7" fill={color} />;
+  const glyphs = {
+    done: <>{disc}<path d="M5 8.3 7.1 10.3 11 6.2" {...white} /></>,
+    cross: <>{disc}<path d="M5.8 5.8l4.4 4.4M10.2 5.8l-4.4 4.4" {...white} /></>,
+    back: <>{disc}<path d="M6.9 5.1 5 7l1.9 1.9M5.2 7h4a2.1 2.1 0 0 1 0 4.2H7.8" {...white} strokeWidth="1.4" /></>,
+    minus: <>{disc}<path d="M5.2 8h5.6" {...white} /></>,
+    half: <>{ring}<path d="M8 8V3.6a4.4 4.4 0 0 1 0 8.8Z" fill={color} /></>,
+    three: <>{ring}<path d="M8 8V3.6a4.4 4.4 0 1 1-4.4 4.4Z" fill={color} /></>,
+    outcross: <>{ring}<path d="M6 6l4 4M10 6l-4 4" {...ink} /></>,
+    pause: <>{ring}<path d="M6.6 5.9v4.2M9.4 5.9v4.2" {...ink} /></>,
+    clock: <>{ring}<path d="M8 5.1V8l1.9 1.3" {...ink} /></>,
+    renew: <path d="M12.5 8a4.5 4.5 0 1 1-1.32-3.18M11.3 2.7l-.1 2.1 2.1.2" {...ink} />,
+    dashslash: <><circle cx="8" cy="8" r="6.25" fill="none" stroke={color} strokeWidth="1.5" strokeDasharray="2.2 1.73" /><path d="M5.4 10.6l5.2-5.2" {...ink} /></>,
+    dashed: <circle cx="8" cy="8" r="6.25" fill="none" stroke={color} strokeWidth="1.5" strokeDasharray="2.2 1.73" />,
+  };
+  return <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true" style={{ display: "block", flexShrink: 0 }}>{glyphs[kind] || glyphs.dashed}</svg>;
+}
+// Icône d'un état du board : glyphe plein dans la teinte du texte, contour dans la teinte vive.
+export function EtatIcon({ etat, size = 14 }) {
+  const s = ETAT_STYLE[etat];
+  const kind = ETAT_ICON[etat] || "dashed";
+  const color = !s ? "#b6bdc9" : FILLED_GLYPHS.has(kind) ? s.fg : s.dot;
+  return <StatusGlyph kind={kind} color={color} size={size} />;
+}
+
+// `withIcon` : pastille à icône SVG du board (Signé, en cours, sorti…) ; sans, l'ancien point de couleur,
+// que la page Finance réutilise telle quelle. `pop` change à chaque nouvel état : l'icône rebondit une fois.
+export function EtatBadge({ etat, withIcon = false, pop = 0 }) {
   const s = ETAT_STYLE[etat] || { bg: "#eef1f6", fg: MUTED, dot: "#cbd2e0" };
+  if (withIcon) {
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px 4px 7px", borderRadius: 8, background: s.bg, color: s.fg, fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap" }}>
+        <span key={pop} className={`ob-etat-ic${pop ? " is-pop" : ""}`}><EtatIcon etat={etat} /></span>
+        {etat || "—"}
+      </span>
+    );
+  }
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 20, background: s.bg, color: s.fg, fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>
       <span style={{ width: 7, height: 7, borderRadius: "50%", background: s.dot }} />{etat || "—"}
@@ -406,6 +607,14 @@ function EtatPicker({ etat, onPick, disabled }) {
   // Pose en cours : l'état affiché vient du serveur, le badge garde donc l'état confirmé,
   // estompé, jusqu'à sa réponse (pas d'état deviné, pas de double pose).
   const [saving, setSaving] = useState(false);
+  // Rebond de l'icône quand l'état change (pas au premier affichage : 700 lignes rebondiraient d'un coup).
+  const [pop, setPop] = useState(0);
+  const shownEtat = useRef(etat);
+  useEffect(() => {
+    if (shownEtat.current === etat) return;
+    shownEtat.current = etat;
+    setPop((n) => n + 1);
+  }, [etat]);
   const btnRef = useRef(null);
   useEffect(() => {
     if (!open) return undefined;
@@ -414,7 +623,7 @@ function EtatPicker({ etat, onPick, disabled }) {
     window.addEventListener("resize", close);
     return () => { window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); };
   }, [open]);
-  if (disabled) return <EtatBadge etat={etat} />;
+  if (disabled) return <EtatBadge etat={etat} withIcon />;
   const toggle = (e) => {
     e.stopPropagation();
     if (open) { setOpen(false); return; }
@@ -435,8 +644,8 @@ function EtatPicker({ etat, onPick, disabled }) {
   return (
     <span onClick={(e) => e.stopPropagation()}>
       <button ref={btnRef} type="button" onClick={toggle} title="Changer l'état" disabled={saving} aria-busy={saving || undefined}
-        style={{ border: "none", background: "transparent", padding: 0, cursor: saving ? "progress" : "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4, opacity: saving ? 0.5 : 1, transition: "opacity 0.2s ease" }}>
-        <EtatBadge etat={etat} />
+        className="ob-etat" style={{ border: "none", background: "transparent", padding: 0, cursor: saving ? "progress" : "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 4, opacity: saving ? 0.5 : 1, transition: "opacity 0.2s ease" }}>
+        <EtatBadge etat={etat} withIcon pop={pop} />
         {/* Caret d'affordance : le badge est cliquable ; pivote quand le menu est ouvert. */}
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
           style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.16s ease", flexShrink: 0 }}>
@@ -448,7 +657,6 @@ function EtatPicker({ etat, onPick, disabled }) {
           <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 10050 }} />
           <div style={{ position: "fixed", ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }), left: pos.left, zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 8px 28px rgba(17,24,39,0.14)", padding: 5, minWidth: 210, maxHeight: ETAT_MENU_H, overflowY: "auto", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", animation: "obMenuIn 0.15s cubic-bezier(0.16,1,0.3,1) both", transformOrigin: pos.up ? "bottom left" : "top left" }}>
             {items.map(({ opt, label }) => {
-              const st = opt ? (ETAT_STYLE[opt] || {}) : null;
               const sel = opt === etat;
               return (
                 <button key={label} type="button" onClick={() => { setOpen(false); if (!sel) pick(opt); }}
@@ -457,7 +665,7 @@ function EtatPicker({ etat, onPick, disabled }) {
                     fontSize: 12.5, fontWeight: 600, color: opt ? TEXT : MUTED, fontFamily: "inherit", whiteSpace: "nowrap" }}
                   onMouseEnter={(e) => { if (!sel) e.currentTarget.style.background = "#f7f8fa"; }}
                   onMouseLeave={(e) => { if (!sel) e.currentTarget.style.background = "transparent"; }}>
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: st ? (st.dot || "#cbd2e0") : "transparent", border: opt ? "none" : `1.5px dashed ${MUTED}`, flexShrink: 0 }} />
+                  {opt ? <EtatIcon etat={opt} size={13} /> : <StatusGlyph kind="dashed" color={MUTED} size={13} />}
                   {label}
                   {sel && (
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: "auto", flexShrink: 0 }}>
@@ -475,39 +683,66 @@ function EtatPicker({ etat, onPick, disabled }) {
   );
 }
 
-// Badge météo : note colorée très visible (1-2 rouge / 3 orange / 4-5 vert).
+// Badge météo : la tuile colorée (1-2 rouge / 3 orange / 4-5 vert), puis le libellé sur une ligne et la note
+// dessous en petit, alignés à gauche comme la colonne Client (dev 28/10/2026 : « meilleur agencement »).
 function MeteoBadge({ score, context, showLabel = true }) {
   const s = weatherPresentation(score, context);
   if (!s) return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#b6bdc9", fontSize: 12, fontWeight: 600 }}>
-      <span style={{ width: 26, height: 26, borderRadius: 8, border: "1.5px dashed #cbd2e0", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#cbd2e0" }}>?</span>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "#b6bdc9", fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap" }}>
+      <span className="ob-meteo-tile" style={{ width: 26, height: 26, borderRadius: 8, border: "1.5px dashed #cbd2e0", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#cbd2e0", flexShrink: 0, boxSizing: "border-box" }}>?</span>
       {showLabel && "À noter"}
     </span>
   );
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
-      <span style={{ width: 26, height: 26, borderRadius: 8, background: s.bg, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0, textAlign: "left" }}>
+      <span className="ob-meteo-tile" style={{ width: 26, height: 26, borderRadius: 8, background: s.bg, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <MeteoIcon score={score} size={16} color={s.color} />
       </span>
-      {/* Le libellé reste dans sa colonne (124 px) : il passe à la ligne au lieu de déborder sous l'état (dev 27/10/2026). */}
-      {showLabel && <span style={{ fontSize: 12, fontWeight: 700, color: s.color, minWidth: 0, whiteSpace: "normal", lineHeight: 1.2 }}>{s.legacy ? <>{s.label}<small style={{ display: "block", fontSize: 10, fontWeight: 400, color: MUTED, marginTop: 2, lineHeight: 1.2 }}>Ancienne échelle · {score}/5</small></> : `${score} · ${s.label}`}</span>}
+      {showLabel && (
+        <span style={{ display: "flex", flexDirection: "column", minWidth: 0, lineHeight: 1.2 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: s.color, whiteSpace: "nowrap" }}>{s.label}</span>
+          <span style={{ fontSize: 10.5, fontWeight: 600, color: MUTED, marginTop: 2, whiteSpace: "nowrap" }}
+            title={s.legacy ? `Note posée sur l'ancienne échelle : ${score}/5` : undefined}>
+            {s.legacy ? `${score}/5 · ancienne` : `${score}/5`}
+          </span>
+        </span>
+      )}
     </span>
   );
 }
 
 // Sélecteur météo CLIQUABLE : popup (portal) avec les 5 notes (sens + action) + une note
 // d'interaction. onSave(score, note). Read-only si disabled (badge seul).
+// Ouverture (dev 28/10/2026) : la fenêtre naît de la tuile cliquée et s'installe au centre sur un ressort,
+// puis son contenu arrive en cascade (titre, les 5 tuiles, icônes qui éclosent) ; à la fermeture elle
+// repart vers la tuile. Police posée sur la fenêtre : rendue dans document.body, elle héritait sinon
+// de la police par défaut du navigateur (titre à empattements).
+const METEO_DIALOG_FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif";
 function MeteoPicker({ score, context, onSave, disabled, triggerLabel }) {
   const [open,setOpen]=useState(false);
+  const [from,setFrom]=useState({x:0,y:0});
+  const reduce=useReducedMotion();
   const button=useRef(null);
   const dialog=useRef(null);
+  const close=()=>{setOpen(false);button.current?.focus();};
+  const openFromTrigger=()=>{const r=button.current?.getBoundingClientRect();
+    if(r)setFrom({x:r.left+r.width/2-window.innerWidth/2,y:r.top+r.height/2-window.innerHeight/2});setOpen(true);};
   useEffect(()=>{if(!open)return; dialog.current?.querySelector('button')?.focus();
-    const key=e=>{if(e.key==='Escape'){e.stopPropagation();setOpen(false);button.current?.focus();}
+    const key=e=>{if(e.key==='Escape'){e.stopPropagation();close();}
       if(e.key==='Tab'){const nodes=[...dialog.current.querySelectorAll('button:not(:disabled),textarea,input,summary')].filter(el=>el.getClientRects().length);const first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}};
     const oldOverflow=document.body.style.overflow;document.body.style.overflow='hidden';
     window.addEventListener('keydown',key);return()=>{window.removeEventListener('keydown',key);document.body.style.overflow=oldOverflow;};},[open]);
-  return <span onClick={e=>e.stopPropagation()}><button ref={button} type="button" disabled={disabled} onClick={()=>setOpen(true)} aria-label={triggerLabel || "Mettre à jour la météo"} className={triggerLabel ? "wc-add-weather" : undefined} style={triggerLabel ? undefined : {border:0,background:'transparent',cursor:disabled?'default':'pointer'}}>{triggerLabel ? <><MeteoIcon score={5} size={18}/>{triggerLabel}</> : <MeteoBadge score={score} context={context}/>}</button>
-    {open && createPortal(<div role="presentation" style={{position:'fixed',inset:0,zIndex:10050,background:'#15251f66',display:'grid',placeItems:'center',padding:16}} onMouseDown={e=>{if(e.target===e.currentTarget){setOpen(false);button.current?.focus();}}}><div ref={dialog} role="dialog" aria-modal="true" aria-label="Mettre à jour la météo client" style={{width:'min(680px,100%)',maxHeight:'90vh',overflowY:'auto',background:'white',borderRadius:18,padding:24,boxShadow:'0 20px 80px #142c2540'}}><WeatherCaseComposer onSave={async payload=>{const ok=await onSave(payload);if(ok!==false){setOpen(false);button.current?.focus();}return ok;}} onCancel={()=>{setOpen(false);button.current?.focus();}}/></div></div>,document.body)}
+  const enter=reduce?{opacity:0}:{opacity:0,x:from.x*0.6,y:from.y*0.6,scale:0.72};
+  const leave=reduce?{opacity:0,transition:{duration:0.12}}:{opacity:0,x:from.x*0.3,y:from.y*0.3,scale:0.9,transition:{duration:0.18,ease:[0.4,0,1,1]}};
+  return <span onClick={e=>e.stopPropagation()}><button ref={button} type="button" disabled={disabled} onClick={openFromTrigger} aria-label={triggerLabel || "Mettre à jour la météo"} className={triggerLabel ? "wc-add-weather" : "ob-meteo"} style={triggerLabel ? undefined : {border:0,background:'transparent',padding:0,textAlign:'left',font:'inherit',cursor:disabled?'default':'pointer'}}>{triggerLabel ? <><MeteoIcon score={5} size={18}/>{triggerLabel}</> : <MeteoBadge score={score} context={context}/>}</button>
+    {createPortal(<AnimatePresence>{open && <motion.div key="meteo-overlay" role="presentation" initial={{opacity:0}} animate={{opacity:1,transition:{duration:0.22,ease:'easeOut'}}} exit={{opacity:0,transition:{duration:0.2,ease:'easeIn'}}}
+      style={{position:'fixed',inset:0,zIndex:10050,background:'rgba(18,27,53,0.34)',backdropFilter:'blur(3px)',WebkitBackdropFilter:'blur(3px)',display:'grid',placeItems:'center',padding:16}} onMouseDown={e=>{if(e.target===e.currentTarget)close();}}>
+      <motion.div ref={dialog} role="dialog" aria-modal="true" aria-label="Mettre à jour la météo client" className="ob-meteo-dialog"
+        initial={enter} animate={{opacity:1,x:0,y:0,scale:1,transition:reduce?{duration:0.15}:{type:'spring',stiffness:420,damping:34,mass:0.9,opacity:{duration:0.16}}}} exit={leave}
+        style={{width:'min(680px,100%)',maxHeight:'90vh',overflowY:'auto',background:'white',borderRadius:18,padding:24,boxShadow:'0 24px 70px rgba(18,27,53,0.22), 0 2px 6px rgba(18,27,53,0.06)',fontFamily:METEO_DIALOG_FONT}}>
+        <WeatherCaseComposer onSave={async payload=>{const ok=await onSave(payload);if(ok!==false)close();return ok;}} onCancel={close}/>
+      </motion.div>
+    </motion.div>}</AnimatePresence>,document.body)}
   </span>;
 }
 
@@ -523,7 +758,7 @@ function FunnelIcon({ size = 13, color = "currentColor" }) {
 // fontFamily Inter réappliquée, se ferme au scroll/resize, flip vers le haut si besoin.
 // Cocher/décocher plusieurs états -> union affichée dans la table.
 const FILTER_MENU_H = 380;
-function FilterMenu({ cats, counts, selected, onToggle, onClear }) {
+function FilterMenu({ label = "Filtre", cats, counts, selected, onToggle, onClear }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const btnRef = useRef(null);
@@ -535,7 +770,8 @@ function FilterMenu({ cats, counts, selected, onToggle, onClear }) {
     // sa hauteur max, et l'écouteur en phase capture attrapait aussi le scroll
     // interne -> le menu se fermait dès qu'on essayait de le faire défiler.
     const close = (e) => {
-      if (e && menuRef.current && menuRef.current.contains(e.target)) return;
+      // Un redimensionnement vise la fenêtre, qui n'est pas un nœud : contains() lèverait une erreur.
+      if (e && e.target instanceof Node && menuRef.current && menuRef.current.contains(e.target)) return;
       setOpen(false);
     };
     window.addEventListener("scroll", close, true);
@@ -554,12 +790,11 @@ function FilterMenu({ cats, counts, selected, onToggle, onClear }) {
   return (
     <span onClick={(e) => e.stopPropagation()}>
       <button ref={btnRef} type="button" onClick={toggle} title="Filtrer par état"
-        style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${active || open ? NAVY : BORDER}`, background: active ? NAVY : CARD, color: active ? "#fff" : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 7 }}>
+        className={`ob-trigger${active ? " is-on" : ""}${open ? " is-open" : ""}`}>
         <FunnelIcon color={active ? "#fff" : MUTED} />
-        Filtre
+        {label}
         {active && <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>{selected.length}</span>}
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={active ? "rgba(255,255,255,0.75)" : MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
-          style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.16s ease", flexShrink: 0 }}>
+        <svg className="ob-caret" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={active ? "rgba(255,255,255,0.75)" : MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
@@ -573,7 +808,6 @@ function FilterMenu({ cats, counts, selected, onToggle, onClear }) {
             </div>
             {cats.map((cat) => {
               const on = selected.includes(cat);
-              const st = ETAT_STYLE[cat] || {};
               const n = counts[cat] || 0;
               return (
                 <button key={cat} type="button" onClick={() => onToggle(cat)}
@@ -587,7 +821,7 @@ function FilterMenu({ cats, counts, selected, onToggle, onClear }) {
                       </svg>
                     )}
                   </span>
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: st.dot || "#cbd2e0", flexShrink: 0 }} />
+                  <EtatIcon etat={cat} size={13} />
                   <span style={{ flex: 1 }}>{cat}</span>
                   <span style={{ fontSize: 11, fontWeight: 700, color: MUTED }}>{n}</span>
                 </button>
@@ -631,12 +865,11 @@ function ChecklistMenu({ label, title, icon, items, selected, onToggle, onClear 
   return (
     <span onClick={(e) => e.stopPropagation()}>
       <button ref={btnRef} type="button" onClick={toggle} title={title}
-        style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${active || open ? NAVY : BORDER}`, background: active ? NAVY : CARD, color: active ? "#fff" : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 7 }}>
+        className={`ob-trigger${active ? " is-on" : ""}${open ? " is-open" : ""}`}>
         {icon(active ? "#fff" : MUTED)}
         {label}
         {active && <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>{selected.length}</span>}
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={active ? "rgba(255,255,255,0.75)" : MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
-          style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.16s ease", flexShrink: 0 }}>
+        <svg className="ob-caret" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={active ? "rgba(255,255,255,0.75)" : MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
@@ -704,13 +937,12 @@ function SigDateFilter({ from, to, onChange, months = [], target = "signature", 
     <span onClick={(e) => e.stopPropagation()}>
       <button ref={btnRef} type="button" onClick={toggle}
         title={isOnb ? "Filtrer par date d'onboarding Owner" : "Filtrer par date de signature Owner"}
-        style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${active || open ? NAVY : BORDER}`, background: active ? NAVY : CARD, color: active ? "#fff" : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 7 }}>
+        className={`ob-trigger${active ? " is-on" : ""}${open ? " is-open" : ""}`}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={active ? "#fff" : MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
         </svg>
         {active ? `${isOnb ? "Onboarding" : "Signature"} · ${label}` : (isOnb ? "Date onboarding" : "Date signature")}
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={active ? "rgba(255,255,255,0.75)" : MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
-          style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.16s ease", flexShrink: 0 }}>
+        <svg className="ob-caret" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={active ? "rgba(255,255,255,0.75)" : MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
@@ -793,15 +1025,15 @@ function SecTitle({ icon, children, style }) {
 
 // Statut de signature riche : signé / envoyé (en attente) / planifié / expiré…
 function sigInfo(status, sentAt, signedAt, scheduledAt) {
-  if (status === "done") return { label: "Signé", sub: fmt(signedAt), color: GREEN, icon: "✓" };
+  if (status === "done") return { label: "Signé", sub: fmt(signedAt), color: GREEN, kind: "done" };
   // Pas de contrat lié mais une date de signature (fiche client interne, remplie à la
   // déclaration de vente) : le client est signé, on l'affiche au lieu d'un "—" trompeur.
-  if (!status && signedAt) return { label: "Signé", sub: fmt(signedAt), color: GREEN, icon: "✓" };
-  if (status === "ongoing") return { label: "Envoyé", sub: fmt(sentAt) + " · en attente", color: "#b45309", icon: "•" };
-  if (status === "scheduled") return { label: "Planifié", sub: fmt(scheduledAt), color: "#5b6472", icon: "◷" };
-  if (status === "expired") return { label: "Expiré", sub: "", color: "#b42318", icon: "✕" };
-  if (status === "canceled") return { label: "Annulé", sub: "", color: "#b42318", icon: "✕" };
-  if (status === "failed") return { label: "Échec", sub: "", color: "#b42318", icon: "!" };
+  if (!status && signedAt) return { label: "Signé", sub: fmt(signedAt), color: GREEN, kind: "done" };
+  if (status === "ongoing") return { label: "Envoyé", sub: fmt(sentAt) + " · en attente", color: "#b45309", kind: "half" };
+  if (status === "scheduled") return { label: "Planifié", sub: fmt(scheduledAt), color: "#5b6472", kind: "dashed" };
+  if (status === "expired") return { label: "Expiré", sub: "", color: "#b42318", kind: "cross" };
+  if (status === "canceled") return { label: "Annulé", sub: "", color: "#b42318", kind: "cross" };
+  if (status === "failed") return { label: "Échec", sub: "", color: "#b42318", kind: "cross" };
   return null;
 }
 function SigCell({ status, sentAt, signedAt, scheduledAt, grouped }) {
@@ -809,20 +1041,139 @@ function SigCell({ status, sentAt, signedAt, scheduledAt, grouped }) {
   // Contrat groupé (pas de volet Opti'Lex séparé) : Opti'Lex est inclus dans l'Owner signé.
   if (!i && grouped) {
     return (
-      <div style={{ lineHeight: 1.25 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 600, color: GREEN }}>✓ Inclus</div>
-        <div style={{ fontSize: 11, color: MUTED, marginTop: 1 }}>au contrat Owner</div>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 7, lineHeight: 1.25 }}>
+        <span style={{ marginTop: 1 }}><StatusGlyph kind="done" color={GREEN} /></span>
+        <div>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: GREEN }}>Inclus</div>
+          <div style={{ fontSize: 11, color: MUTED, marginTop: 1 }}>au contrat Owner</div>
+        </div>
       </div>
     );
   }
   if (!i) return <span style={{ color: "#cbd2e0" }}>—</span>;
   return (
-    <div style={{ lineHeight: 1.25 }}>
-      <div style={{ fontSize: 12.5, fontWeight: 600, color: i.color }}>{i.icon} {i.label}</div>
-      {i.sub && <div style={{ fontSize: 11, color: MUTED, marginTop: 1 }}>{i.sub}</div>}
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 7, lineHeight: 1.25 }}>
+      <span style={{ marginTop: 1 }}><StatusGlyph kind={i.kind} color={i.color} /></span>
+      <div>
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: i.color }}>{i.label}</div>
+        {i.sub && <div style={{ fontSize: 11, color: MUTED, marginTop: 1 }}>{i.sub}</div>}
+      </div>
     </div>
   );
 }
+
+// Ligne du tableau, mémorisée (dev 28/10/2026) : elle ne se redessine que si SES données changent (client,
+// sélection, no show, entrée animée). Avant, tout rendu de la page redessinait les 700 à 900 lignes
+// (400 à 550 ms à chaque onglet, chaque sélection) ; les rappels reçus sont stables (useCallback, setState).
+const BoardRow = memo(function BoardRow({ r, rk, isSel, newIdx, noShow, renewal, onSelect, patch, changeEtat, recordMeteo }) {
+  const td = ROW_TD;
+  return (
+    <tr onClick={() => onSelect(rk)} className={`ob-row${isSel ? " is-sel" : ""}`}
+      style={newIdx !== undefined ? { animation: "obRowIn 0.28s cubic-bezier(0.16,1,0.3,1) both", animationDelay: `${Math.min(newIdx, 14) * 20}ms` } : undefined}>
+      <td style={td}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <Avatar name={primaryName(r)} n={r.sheet_num} size={32} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={primaryName(r)}>{primaryName(r)}</div>
+              {isInactif(r) && (
+                <span title="Aucune mission suivie par le cabinet depuis 60 jours"
+                  style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: "#b45309", background: "#fff3e3", padding: "1px 7px", borderRadius: 10, whiteSpace: "nowrap" }}>
+                  Inactif{r.days_since_last_mission != null ? ` · ${r.days_since_last_mission} j` : ""}
+                </span>
+              )}
+              {renewal && (() => {
+                const days = anniversaryDaysLeft(r);
+                if (days == null) return null;
+                const tone = days <= 30 ? { fg: "#b42318", bg: "#fdecec", dot: "#ef4444" }
+                  : days <= 90 ? { fg: "#b45309", bg: "#fff3e3", dot: "#f59e0b" }
+                  : { fg: "#3730a3", bg: "#eef2ff", dot: "#6366f1" };
+                return (
+                  <span title={`Anniversaire du contrat dans ${days} jour${days > 1 ? "s" : ""}`}
+                    style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, color: tone.fg, background: tone.bg, padding: "1px 7px", borderRadius: 10, whiteSpace: "nowrap" }}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden>
+                      <circle cx="12" cy="12" r="9" stroke={tone.dot} strokeWidth="2.4" />
+                      <path d="M12 7.5V12l3 2" stroke={tone.dot} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    J-{days}
+                  </span>
+                );
+              })()}
+            </div>
+            <div style={{ fontSize: 11, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{rowSubtitle(r) || "en cours d'envoi"}</div>
+          </div>
+        </div>
+      </td>
+      <td style={{ ...td, color: r.secteur_activite ? TEXT : "#cbd2e0" }}>
+        {r.secteur_activite ? (
+          <div className="ob-sector" title={`Secteur d'activité (NDA) : ${secteurLabel(r.secteur_activite)}`}>
+            <SectorIcon secteur={r.secteur_activite} size={20} />
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{secteurLabel(r.secteur_activite)}</span>
+          </div>
+        ) : <span title="Secteur non renseigné au NDA">—</span>}
+      </td>
+      <td style={{ ...td, whiteSpace: "normal" }}>
+        <MeteoPicker score={r.meteo_score} context={r.meteo_context} disabled={!r.numero_client}
+          onSave={payload => recordMeteo(r.numero_client, payload)} />
+      </td>
+      {/* État daté (Résiliation, Pause…) posé depuis la table -> on ouvre la fiche
+          pour saisir la date dans la foulée. + rappel sous le badge si la pause est
+          échue ou si la date d'effet manque. */}
+      <td style={td}>
+        <EtatPicker etat={displayEtat(r)} disabled={!r.numero_client}
+          onPick={(v) => { const saving = changeEtat(r.numero_client, { etat: v }); if (ETAT_DATE_CONFIG[v]) onSelect(rk); return saving; }} />
+        {isEtatPending(r) && r.etat_date && (
+          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 700, color: "#b45309", marginTop: 5, lineHeight: 1.3 }}
+            title={`${r.etat_manuel} prévue le ${fmt(r.etat_date)} — pas encore effective, le client reste actif jusqu'à cette date`}>
+            <StatusGlyph kind="clock" color="#b45309" size={11} />{r.etat_manuel} · prévu {fmt(r.etat_date)}
+          </div>
+        )}
+        {(() => {
+          const h = etatHint(r);
+          return h ? (
+            <div style={{ fontSize: 10.5, fontWeight: 600, color: h.urgent ? "#b45309" : "#a3a9b6", marginTop: 3 }}>{h.text}</div>
+          ) : null;
+        })()}
+      </td>
+      <td style={td}><SigCell status={r.owner_status} sentAt={r.owner_sent_at} signedAt={r.owner_signed_at} /></td>
+      {/* Colonne Intégration retirée (dev 28/10/2026) : ses deux alertes passent sous le contrat Opti'Lex. */}
+      <td style={td}>
+        <SigCell status={r.optilex_status} sentAt={r.optilex_sent_at} signedAt={r.optilex_signed_at} scheduledAt={r.optilex_scheduled_at} grouped={r.owner_status === "done" && r.optilex_status == null} />
+        {/* « À venir » englobe le retard (non effectué) : un seul badge, le retard d'abord ; le contrat non signé se lit déjà au-dessus. */}
+        {isIntegrationOverdue(r) ? <div><IntegrationOverdueBadge /></div> : integrationAlert(r) && <div><OptilexAlertBadge /></div>}
+      </td>
+      <td style={td}>
+        <TableDateEdit value={r.rdv_onboarding_date_manual || r.rdv_onboarding_date}
+          disabled={!r.numero_client || isFinanceTeam()}
+          onSave={(d) => patch(r.numero_client, { rdv_onboarding_date_manual: d })} />
+        {r.rdv_onboarding_done && r.rdv_onboarding_done_date && (
+          <div title="Onboarding réalisé saisi à la main (ancien client)" style={{ marginTop: 3, fontSize: 10.5, fontWeight: 600, color: GREEN }}>
+            Réalisé le {fmtDT(r.rdv_onboarding_done_date)}
+          </div>
+        )}
+        {(() => {
+          // Pastilles sous la date, pas sur sa ligne (elles débordaient sur la colonne voisine).
+          const recaler = r.onboarding_reschedule_pending && !r.rdv_onboarding_done;
+          return (noShow || recaler) ? (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 3 }}>
+              {noShow && <OnboardingNoShowBadge date={r.rdv_onboarding_date_manual || r.rdv_onboarding_date} />}
+              {recaler && (
+                <div title={r.onboarding_reschedule_note || "Onboarding à recaler, sans date"} style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, background: "#fff4e0", color: "#b45309", fontSize: 10.5, fontWeight: 700 }}>À recaler</div>
+              )}
+            </div>
+          ) : null;
+        })()}
+      </td>
+      <td style={{ ...td, textAlign: "center" }}>
+        <span className="ob-chev">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </span>
+      </td>
+    </tr>
+  );
+});
 
 export default function OptilexBoard({ embed = false }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -840,7 +1191,18 @@ export default function OptilexBoard({ embed = false }) {
   // multi-sélection = UNION au sein du menu, la famille reste en ET avec le reste.
   const [programmeSel, setProgrammeSel] = useState([]);    // 'ambassadeur' | 'parrainage'
   const [onboardingSel, setOnboardingSel] = useState([]);  // 'venir' | 'done' | 'todo' | 'noshow' | 'recaler'
-  const [sortCol, setSortCol] = useState(null);   // tri manuel par en-tête : null | owner_signed | onboarding | integration
+  const [sortCol, setSortCol] = useState(null);   // tri manuel par en-tête : null | owner_signed | onboarding
+  // Largeur disponible du tableau -> part égale du surplus pour chaque colonne (cf. TABLE_COLS).
+  const tableWrapRef = useRef(null);
+  const [tableW, setTableW] = useState(0);
+  useEffect(() => {
+    const el = tableWrapRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(([entry]) => setTableW(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const colExtra = Math.max(0, Math.floor((tableW - TABLE_MIN_W) / TABLE_COLS.length));
   const [sortDir, setSortDir] = useState("asc");  // asc | desc
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState(null); // numero_client du client ouvert
@@ -1157,13 +1519,30 @@ export default function OptilexBoard({ embed = false }) {
 
   const selRow = useMemo(() => rows.find((r) => rowKey(r) === selected) || null, [rows, selected]);
 
-  // Stagger d'entrée SEEN-KEYS : seules les lignes jamais affichées s'animent. Plein replay au
-  // changement d'onglet primaire (reset + remount du tbody) ; les lignes révélées par la
-  // recherche (backspace) ou le multi-filtre entrent proprement SANS faire clignoter celles
-  // déjà en place (même famille que le fix cardStaggerIn du setter). Le polling ne rejoue rien.
+  // Vue = l'ensemble des filtres (onglets, autres états, météo, affiner ; ni la frappe de la recherche ni le tri).
+  // Quand elle change, la liste glisse (VIEW_SLIDE) dans le sens du contrôle cliqué : `navTo(position)` le note
+  // (un contrôle plus à droite que le précédent pousse la liste vers la gauche) ; sans clic noté, elle avance.
+  const reduceMotion = useReducedMotion();
+  const viewKey = JSON.stringify([etatFilter, multiFilter, meteoFilter, sigRange, dateTarget, onboardingSel, programmeSel]);
+  const slideNav = useRef({ pos: 1, dir: 1 });
+  const navTo = (pos) => { const n = slideNav.current; n.dir = pos < n.pos ? -1 : 1; n.pos = pos; };
+  const [view, setView] = useState({ key: viewKey, dir: 1, limit: Infinity });
+  if (view.key !== viewKey) setView({ key: viewKey, dir: slideNav.current.dir, limit: ROWS_FIRST });
+  useEffect(() => { slideNav.current.dir = 1; }, [viewKey]);
+  // Rendu progressif : les premières lignes glissent, le reste suit par paquets après la glissade.
+  useEffect(() => {
+    if (view.limit >= filtered.length) return undefined;
+    const t = setTimeout(() => setView((v) => ({ ...v, limit: v.limit + ROWS_CHUNK })), view.limit === ROWS_FIRST ? ROWS_SETTLE_MS : 0);
+    return () => clearTimeout(t);
+  }, [view.limit, filtered.length]);
+  const shownRows = view.limit >= filtered.length ? filtered : filtered.slice(0, view.limit);
+
+  // Entrée SEEN-KEYS : seules les lignes jamais affichées s'animent. Au changement de vue, la glissade porte
+  // toute la liste : ses lignes sont marquées vues d'emblée (pas de cascade en plus). Les lignes révélées par la
+  // recherche (backspace) entrent proprement SANS faire clignoter celles déjà en place. Le polling ne rejoue rien.
   const seenRows = useRef(new Set());
-  const prevTabRef = useRef(etatFilter);
-  if (prevTabRef.current !== etatFilter) { seenRows.current = new Set(); prevTabRef.current = etatFilter; }
+  const prevViewRef = useRef(viewKey);
+  if (prevViewRef.current !== viewKey) { seenRows.current = new Set(filtered.map(rowKey)); prevViewRef.current = viewKey; }
   const newIdxByKey = new Map();
   { let ni = 0; for (const r of filtered) { const k = rowKey(r); if (!seenRows.current.has(k)) newIdxByKey.set(k, ni++); } }
   useEffect(() => { for (const r of filtered) seenRows.current.add(rowKey(r)); }, [filtered]);
@@ -1175,6 +1554,7 @@ export default function OptilexBoard({ embed = false }) {
   // onboarding, date, recherche) restent en ET par-dessus.
   const pickTab = (t) => {
     setSortCol(null);
+    navTo(PRIMARY_TABS.indexOf(t));
     // « Tous » réinitialise ; sinon l'onglet se COCHE/DÉCOCHE et se cumule avec
     // les autres (Vincent doit pouvoir voir résiliation + rétractation +
     // liquidation ensemble). `etatFilter` ne sert plus qu'au tri par défaut :
@@ -1186,6 +1566,7 @@ export default function OptilexBoard({ embed = false }) {
   };
   const toggleCat = (cat) => {
     setSortCol(null);
+    navTo(PRIMARY_TABS.length);
     setMultiFilter((prev) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]));
   };
   // Export CSV de la vue filtrée courante (onglet + filtres + date + recherche).
@@ -1196,8 +1577,31 @@ export default function OptilexBoard({ embed = false }) {
     exportRowsToCsv(filtered, label);
   };
 
-  const th = { textAlign: "left", padding: "11px 14px", fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: "0.02em", whiteSpace: "nowrap", position: "sticky", top: 0, background: "#f2f4f7", zIndex: 1 };
-  const td = { padding: "11px 14px", fontSize: 13, color: TEXT, borderTop: `1px solid ${BORDER}`, verticalAlign: "middle", whiteSpace: "nowrap" };
+  // Filtres posés hors des onglets d'état, rappelés sous la barre et retirables un par un.
+  const activeTags = [
+    ...multiFilter.filter((c) => !PRIMARY_TABS.includes(c)).map((c) => ({ key: `etat-${c}`, group: "État", label: c, clear: () => toggleCat(c) })),
+    ...meteoFilter.map((b) => ({ key: `meteo-${b}`, group: "Météo", label: b === "none" ? "Non noté" : WEATHER[b].label, clear: () => setMeteoFilter((p) => p.filter((x) => x !== b)) })),
+    ...(sigRange.from || sigRange.to ? [{ key: "date", group: dateTarget === "onboarding" ? "Onboarding" : "Signature", label: sigRangeLabel(sigRange.from, sigRange.to), clear: () => setSigRange({ from: "", to: "" }) }] : []),
+    ...onboardingSel.map((k) => ({ key: `onb-${k}`, group: "Onboarding", label: ONBOARDING_TAGS[k] || k, clear: () => setOnboardingSel((p) => p.filter((x) => x !== k)) })),
+    ...programmeSel.map((k) => ({ key: `prog-${k}`, group: "Programme", label: PROGRAMME_TAGS[k] || k, clear: () => setProgrammeSel((p) => p.filter((x) => x !== k)) })),
+    ...(q ? [{ key: "q", group: "Recherche", label: `« ${q} »`, clear: () => setQ("") }] : []),
+  ];
+  // « Tout effacer » retire ces filtres et garde les onglets d'état choisis.
+  const clearRefinements = () => {
+    setSortCol(null);
+    navTo(0);
+    setMultiFilter((p) => p.filter((c) => PRIMARY_TABS.includes(c)));
+    setMeteoFilter([]);
+    setSigRange({ from: "", to: "" });
+    setOnboardingSel([]);
+    setProgrammeSel([]);
+    setQ("");
+  };
+
+  // En-tête léger (le filet du bas est une ombre : une bordure ne suit pas un en-tête collant) ; sa hauteur
+  // fixe est celle que l'ascenseur saute (.ob-table-wrap).
+  const th = { textAlign: "left", padding: "0 14px", height: 40, boxSizing: "border-box", fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", position: "sticky", top: 0, background: "#fbfcfd", boxShadow: `inset 0 -1px 0 ${BORDER}`, zIndex: 1 };
+  const td = ROW_TD;
 
   return (
     <div style={{ minHeight: embed ? "auto" : "100vh", background: embed ? "transparent" : BG, padding: embed ? "10px 24px 28px" : "24px 28px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", color: TEXT }}>
@@ -1211,6 +1615,109 @@ export default function OptilexBoard({ embed = false }) {
         .ob-chev{display:inline-flex;color:#c3cad6;transition:transform .18s ease,color .18s ease}
         tr:hover .ob-chev{transform:translateX(3px);color:#1e2330}
         .ob-sec{animation:obFadeUp .32s cubic-bezier(0.16,1,0.3,1) both}
+        /* Barre de filtres : une carte, une ligne par famille, un libellé par ligne. */
+        .ob-filters{container-type:inline-size;background:${CARD};border:1px solid ${BORDER};border-radius:14px;padding:0 14px;margin-bottom:14px;box-shadow:0 1px 2px rgba(17,24,39,0.03)}
+        .ob-frow{display:flex;align-items:center;flex-wrap:wrap;gap:10px 12px;padding:10px 0}
+        .ob-frows{border-top:1px solid ${BORDER}}
+        .ob-frows>.ob-frow+.ob-frow{border-top:1px solid ${BORDER}}
+        .ob-flabel{flex:0 0 56px;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:${MUTED}}
+        .ob-fgroup{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+        @container (min-width: 1400px){
+          .ob-frows{display:flex;align-items:center;gap:24px}
+          .ob-frows>.ob-frow+.ob-frow{border-top:0;margin-left:auto}
+          .ob-frow--refine .ob-flabel{flex:none}
+        }
+        .ob-n{font-size:11px;font-weight:700;color:${MUTED};font-variant-numeric:tabular-nums;transition:color .18s}
+        /* États : contrôle segmenté, la pastille marine glisse d'un onglet à l'autre. */
+        .ob-seg{display:inline-flex;align-items:center;flex-wrap:wrap;gap:2px;padding:3px;background:#f2f4f7;border-radius:11px}
+        .ob-seg-btn{position:relative;border:0;background:transparent;border-radius:8px;padding:6px 12px;font:inherit;font-size:12.5px;font-weight:600;color:${TEXT};cursor:pointer;white-space:nowrap;transition:background .16s,color .18s}
+        .ob-seg-btn:not(.is-on):hover{background:rgba(255,255,255,0.85)}
+        .ob-seg-btn.is-on{color:#fff}
+        .ob-seg-btn.is-on .ob-n{color:rgba(255,255,255,0.7)}
+        .ob-seg-pill{position:absolute;inset:0;background:${NAVY};border-radius:8px;z-index:0;box-shadow:0 1px 3px rgba(17,24,39,0.18)}
+        .ob-seg-txt{position:relative;z-index:1;display:flex;align-items:center;gap:7px}
+        /* Météo : puces à bascule, l'icône se redresse au survol. */
+        .ob-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;border:1px solid ${BORDER};background:${CARD};color:${TEXT};font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .18s,border-color .18s,color .18s}
+        .ob-chip:not(.is-on):hover{background:#f7f8fa;border-color:#d5dae3}
+        .ob-chip-ic{display:inline-flex;transition:transform .32s cubic-bezier(.34,1.56,.64,1)}
+        .ob-chip:hover .ob-chip-ic{transform:translateY(-1px) scale(1.14)}
+        /* Menus : rectangle arrondi, la flèche pivote à l'ouverture. */
+        .ob-trigger{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:10px;border:1px solid ${BORDER};background:${CARD};color:${TEXT};font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .16s,border-color .16s,color .16s}
+        .ob-trigger:not(.is-on):not(:disabled):hover{background:#f7f8fa;border-color:#d5dae3}
+        .ob-trigger.is-open{border-color:${NAVY}}
+        .ob-trigger.is-on{background:${NAVY};border-color:${NAVY};color:#fff}
+        .ob-trigger:disabled{opacity:.55;cursor:default;color:${MUTED}}
+        .ob-trigger>svg:first-child{transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+        .ob-trigger:not(:disabled):hover>svg:first-child{transform:translateY(-1px) scale(1.1)}
+        .ob-caret{flex-shrink:0;transition:transform .22s cubic-bezier(.22,1,.36,1)}
+        .ob-trigger.is-open .ob-caret{transform:rotate(180deg)}
+        /* Filtres posés : une étiquette par filtre. */
+        .ob-toolbar{display:flex;align-items:center;gap:12px;margin-bottom:12px;min-height:38px}
+        .ob-active{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;flex:1;min-width:0;padding:0 4px}
+        .ob-tag{display:inline-flex;align-items:center;gap:6px;padding:3px 4px 3px 10px;border-radius:999px;background:#eef1f6;color:${TEXT};font-size:12px;font-weight:600;white-space:nowrap}
+        .ob-tag small{font-size:11px;font-weight:600;color:${MUTED}}
+        .ob-tag button{display:grid;place-items:center;width:18px;height:18px;border:0;border-radius:50%;background:transparent;color:${MUTED};cursor:pointer;transition:background .14s,color .14s}
+        .ob-tag button:hover{background:#dfe4ec;color:${TEXT}}
+        .ob-clear{border:0;background:transparent;padding:0 4px;color:#2563eb;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+        /* Tableau : une carte ; l'ascenseur vit dedans (pas de piste, pouce fin et arrondi), commence sous
+           l'en-tête collant (40 px) et s'arrête avant les coins arrondis. */
+        .ob-table-wrap{background:${CARD};border:1px solid ${BORDER};border-radius:14px;overflow:auto;max-height:calc(100vh - 190px);box-shadow:0 1px 2px rgba(17,24,39,0.03)}
+        .ob-table-wrap.is-sliding{overflow-x:hidden}
+        .ob-table-wrap::-webkit-scrollbar{width:12px;height:12px}
+        .ob-table-wrap::-webkit-scrollbar-track{background:transparent}
+        .ob-table-wrap::-webkit-scrollbar-track:vertical{margin:40px 0 10px}
+        .ob-table-wrap::-webkit-scrollbar-track:horizontal{margin:0 12px}
+        .ob-table-wrap::-webkit-scrollbar-thumb{background-color:#dde1e8;border:4px solid transparent;border-radius:999px;background-clip:padding-box}
+        .ob-table-wrap:hover::-webkit-scrollbar-thumb{background-color:#c4cad5}
+        .ob-table-wrap::-webkit-scrollbar-thumb:hover{background-color:#a9b1bf}
+        .ob-table-wrap::-webkit-scrollbar-corner{background:transparent}
+        @supports not selector(::-webkit-scrollbar){.ob-table-wrap{scrollbar-width:thin;scrollbar-color:#cfd5df transparent}}
+        .ob-row{cursor:pointer;transition:background .14s}
+        .ob-row:hover{background:#f8f9fb}
+        .ob-row.is-sel{background:#eff3fb}
+        .ob-row.is-sel>td:first-child{box-shadow:inset 3px 0 0 ${NAVY}}
+        .ob-edit{color:${MUTED};opacity:0;transition:opacity .16s}
+        .ob-row:hover .ob-edit{opacity:.7}
+        /* No show : une petite carte ; le fantôme flotte au-dessus de son ombre, cligne des yeux, fait « bouh » au survol. */
+        .ob-noshow{display:inline-flex;align-items:center;gap:6px;padding:2px 9px 2px 5px;border-radius:8px;background:#fdeeee;box-shadow:inset 0 0 0 1px #f7d4d1;color:#b42318;font-size:11px;font-weight:700;white-space:nowrap;transition:background .18s,box-shadow .18s}
+        .ob-noshow:hover{background:#fbe2e0;box-shadow:inset 0 0 0 1px #f1bdb8}
+        @keyframes obGhostFloat{0%,100%{transform:translateY(.4px) rotate(-4deg)}50%{transform:translateY(-2.4px) rotate(4deg)}}
+        @keyframes obGhostShadow{0%,100%{transform:scaleX(1);opacity:.22}50%{transform:scaleX(.6);opacity:.09}}
+        @keyframes obGhostBlink{0%,91%,100%{transform:scaleY(1)}94%{transform:scaleY(.12)}}
+        @keyframes obGhostBoo{0%{transform:translateY(0) scale(1)}30%{transform:translateY(-3.5px) scale(1.28) rotate(-7deg)}55%{transform:translateY(-1px) scale(.94) rotate(5deg)}78%{transform:translateY(-1.6px) scale(1.04) rotate(-2deg)}100%{transform:translateY(0) scale(1)}}
+        .ob-ghost-body{transform-box:fill-box;transform-origin:50% 85%;animation:obGhostFloat 3s ease-in-out var(--ob-ghost-delay,0s) infinite}
+        .ob-ghost-shadow{transform-box:fill-box;transform-origin:center;animation:obGhostShadow 3s ease-in-out var(--ob-ghost-delay,0s) infinite}
+        .ob-ghost-eye{transform-box:fill-box;transform-origin:center;animation:obGhostBlink 4.8s ease-in-out var(--ob-ghost-delay,0s) infinite}
+        .ob-noshow:hover .ob-ghost-body{animation:obGhostBoo .75s cubic-bezier(.34,1.56,.64,1)}
+        /* Météo : la tuile se soulève au survol. */
+        .ob-meteo-tile{transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+        .ob-meteo:not(:disabled):hover .ob-meteo-tile{transform:translateY(-1px) scale(1.08)}
+        /* État : l'icône se redresse au survol et rebondit une fois quand l'état change. */
+        .ob-etat-ic{display:inline-flex;transition:transform .32s cubic-bezier(.34,1.56,.64,1)}
+        .ob-etat:hover .ob-etat-ic{transform:rotate(-14deg) scale(1.1)}
+        @keyframes obPop{0%{transform:scale(.55);opacity:.4}60%{transform:scale(1.14);opacity:1}100%{transform:scale(1)}}
+        .ob-etat-ic.is-pop{animation:obPop .45s cubic-bezier(.34,1.56,.64,1)}
+        /* Secteur : l'icône se soulève au survol de la ligne. */
+        .ob-sector{display:flex;align-items:center;gap:8px;min-width:0;font-size:12.5px;font-weight:500}
+        .ob-sector-ic{flex-shrink:0;transition:transform .32s cubic-bezier(.34,1.56,.64,1)}
+        .ob-row:hover .ob-sector-ic{transform:translateY(-1px) rotate(-6deg) scale(1.12)}
+        /* Fenêtre météo : le contenu arrive en cascade après le ressort de la fenêtre ; les icônes éclosent.
+           Remplissage « backwards » : une fois jouée, l'animation rend la main aux effets de survol. */
+        @keyframes obWcRise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+        @keyframes obWcTile{from{opacity:0;transform:translateY(12px) scale(.9)}to{opacity:1;transform:none}}
+        @keyframes obWcBloom{0%{opacity:0;transform:scale(.3) rotate(-20deg)}60%{opacity:1;transform:scale(1.18) rotate(5deg)}100%{opacity:1;transform:none}}
+        .ob-meteo-dialog .wc-heading{animation:obWcRise .42s cubic-bezier(.16,1,.3,1) .05s backwards}
+        .ob-meteo-dialog .wc-symbol svg{animation:obWcBloom .55s cubic-bezier(.34,1.56,.64,1) .1s backwards}
+        .ob-meteo-dialog .wc-choices>button{animation:obWcTile .5s cubic-bezier(.34,1.4,.64,1) backwards;transition:transform .25s cubic-bezier(.34,1.56,.64,1),background .18s,border-color .18s,box-shadow .18s}
+        .ob-meteo-dialog .wc-choices>button>svg{animation:obWcBloom .6s cubic-bezier(.34,1.56,.64,1) backwards;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+        ${[1, 2, 3, 4, 5].map((i) => `.ob-meteo-dialog .wc-choices>button:nth-child(${i}){animation-delay:${0.09 + i * 0.045}s}.ob-meteo-dialog .wc-choices>button:nth-child(${i})>svg{animation-delay:${0.16 + i * 0.045}s}`).join("")}
+        .ob-meteo-dialog .wc-choices>button:hover{transform:translateY(-2px);border-color:var(--wc-color)}
+        .ob-meteo-dialog .wc-choices>button:hover>svg{transform:scale(1.14) rotate(-6deg)}
+        .ob-meteo-dialog .wc-choices>button:active{transform:translateY(0) scale(.97)}
+        .ob-meteo-dialog footer{animation:obWcRise .4s cubic-bezier(.16,1,.3,1) .34s backwards}
+        .ob-meteo-dialog .wc-description,.ob-meteo-dialog .wc-form,.ob-meteo-dialog .wc-note,.ob-meteo-dialog .wc-recipients,.ob-meteo-dialog .wc-delivery{animation:obWcRise .36s cubic-bezier(.16,1,.3,1) backwards}
+        @media (prefers-reduced-motion: reduce){.ob-meteo-dialog *{animation:none!important;transition:none!important}}
+        @media (prefers-reduced-motion: reduce){.ob-chip-ic,.ob-trigger>svg:first-child,.ob-caret,.ob-seg-btn,.ob-chip,.ob-trigger,.ob-etat-ic,.ob-row,.ob-edit,.ob-meteo-tile,.ob-ghost-body,.ob-ghost-shadow,.ob-ghost-eye,.ob-noshow,.ob-sector-ic{transition:none!important;animation:none!important}}
       `}</style>
       {/* Échec d'enregistrement : l'UI a été restaurée (rollback), on le DIT clairement. */}
       <AnimatePresence>
@@ -1226,130 +1733,153 @@ export default function OptilexBoard({ embed = false }) {
           </motion.div>
         )}
       </AnimatePresence>
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: NAVY }}>Suivi cabinet Opti'Lex</div>
-          <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>{establishedCount} clients{counts["Attente Opti'Lex"] ? ` · ${counts["Attente Opti'Lex"]} en attente Opti'Lex` : ""}{counts["En cours"] ? ` · ${counts["En cours"]} en cours` : ""} · temps réel</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: NAVY, marginBottom: 18 }}>Board Cabinet partenaire</div>
+      {/* Barre de filtres (dev 28/10/2026 : « séparer les choses ») : trois familles nommées, chacune sa forme.
+          États = contrôle segmenté (la pastille glisse d'un onglet à l'autre), Météo = puces à bascule,
+          Affiner = menus. Le filtrage ne change pas : mêmes onglets, mêmes unions, mêmes menus qu'avant. */}
+      <div className="ob-filters">
+        <div className="ob-frow">
+          <span className="ob-flabel">États</span>
+          <div className="ob-seg" role="group" aria-label="États du client">
+            {PRIMARY_TABS.map((t) => {
+              const active = t === "Tous"
+                ? (multiFilter.length === 0 && etatFilter === "Tous")
+                : (multiFilter.includes(t) || (multiFilter.length === 0 && etatFilter === t));
+              // Pilule animée uniquement en sélection unique : plusieurs éléments
+              // partageant un layoutId feraient sauter l'animation Framer Motion.
+              const soloPill = active && multiFilter.length <= 1;
+              const n = t === "Tous" ? establishedCount : (counts[t] || 0);
+              return (
+                <motion.button key={t} type="button" onClick={() => pickTab(t)} whileTap={{ scale: 0.97 }} aria-pressed={active}
+                  className={`ob-seg-btn${active ? " is-on" : ""}`}>
+                  {active && (soloPill
+                    ? <motion.span layoutId="obActiveTab" className="ob-seg-pill" transition={{ type: "spring", stiffness: 560, damping: 42 }} />
+                    : <span className="ob-seg-pill" />)}
+                  <span className="ob-seg-txt">{tabLabel(t)}<span className="ob-n">{n}</span></span>
+                </motion.button>
+              );
+            })}
+          </div>
+          <FilterMenu label="Autres états" cats={SECONDARY_CATS} counts={counts} selected={multiFilter.filter((c) => SECONDARY_CATS.includes(c))}
+            onToggle={toggleCat} onClear={() => setMultiFilter((p) => p.filter((c) => PRIMARY_TABS.includes(c)))} />
         </div>
-        <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            style={{ position: "absolute", left: 11, pointerEvents: "none" }}>
-            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-          </svg>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un client…"
-            onFocus={(e) => { e.target.style.borderColor = NAVY; }}
-            onBlur={(e) => { e.target.style.borderColor = BORDER; }}
-            style={{ ...inputStyle, width: 260, padding: "9px 12px 9px 33px", transition: "border-color 0.18s" }} />
-        </span>
+        {/* Météo et Affiner : une ligne chacun, côte à côte quand la barre est assez large. */}
+        <div className="ob-frows">
+          <div className="ob-frow">
+            {/* Météo client : puces directes (demande dev 2026-09-03), multi-sélection = union. */}
+            <span className="ob-flabel">Météo</span>
+            <div className="ob-fgroup" role="group" aria-label="Météo client">
+              {["5", "4", "3", "2", "1", "none"].map((b, i) => {
+                const st = b === "none"
+                  ? { label: "Non noté", bg: "#eef1f6", fg: MUTED, dot: "#cbd2e0" }
+                  : { label: WEATHER[b].label, bg: WEATHER[b].bg, fg: WEATHER[b].color, dot: WEATHER[b].color };
+                const on = meteoFilter.includes(b);
+                return (
+                  <motion.button key={b} type="button" whileTap={{ scale: 0.96 }} title={`Météo client : ${st.label}`} aria-pressed={on}
+                    onClick={() => { navTo(10 + i); setMeteoFilter((prev) => (prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b])); }}
+                    className={`ob-chip${on ? " is-on" : ""}`}
+                    style={on ? { background: st.bg, borderColor: st.dot, color: st.fg } : undefined}>
+                    <span className="ob-chip-ic">
+                      {b === "none"
+                        ? <span style={{ width: 12, height: 12, borderRadius: "50%", border: `1.5px dashed ${st.dot}`, display: "inline-block" }} />
+                        : <MeteoIcon score={Number(b)} size={14} color={on ? st.fg : st.dot} />}
+                    </span>
+                    {st.label}
+                    <span className="ob-n" style={on ? { color: st.fg } : undefined}>{meteoCounts[b] || 0}</span>
+                  </motion.button>
+                );
+              })}
+            </div>
+          </div>
+          {/* Affiner : dates, onboarding et programmes, chacun dans UN menu (demande dev 2026-09-03). */}
+          <div className="ob-frow ob-frow--refine">
+            <span className="ob-flabel">Affiner</span>
+            <div className="ob-fgroup">
+              <SigDateFilter from={sigRange.from} to={sigRange.to} onChange={setSigRange}
+                months={dateTarget === "onboarding" ? onbMonths : sigMonths}
+                target={dateTarget} onTarget={setDateTarget} />
+              <ChecklistMenu label="Onboarding" title={`Onboarding Owner · ${onboardingCounts.total} client${onboardingCounts.total > 1 ? "s" : ""}`}
+                icon={(c) => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>}
+                items={[
+                  { key: "venir", label: "Onboarding à venir", count: onboardingCounts.venir,
+                    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg> },
+                  { key: "done", label: "Onboarding réalisé", count: onboardingCounts.done,
+                    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></svg> },
+                  { key: "todo", label: "Onboarding à faire", count: onboardingCounts.todo,
+                    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="M12 14v4M12 14h.01" /></svg> },
+                  { key: "noshow", label: "Onboarding no show", count: onboardingCounts.noshow,
+                    icon: <span style={{ display: "inline-flex", color: MUTED }}><GhostIcon size={14} /></span> },
+                  { key: "recaler", label: "Onboarding à recaler", count: onboardingCounts.recaler,
+                    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg> },
+                ]}
+                selected={onboardingSel}
+                onToggle={(k) => setOnboardingSel((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]))}
+                onClear={() => setOnboardingSel([])} />
+              <ChecklistMenu label="Programmes" title="Programmes clients"
+                icon={(c) => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6" /><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" /></svg>}
+                items={[
+                  { key: "ambassadeur", label: "Programme ambassadeur", count: rows.filter((r) => r.ambassador_eligible).length,
+                    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 11 18-5v12L3 13v-2z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" /></svg> },
+                  { key: "parrainage", label: "Programme de parrainage", count: rows.filter((r) => r.parrainage_eligible).length,
+                    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M19 8v6" /><path d="M22 11h-6" /></svg> },
+                ]}
+                selected={programmeSel}
+                onToggle={(k) => setProgrammeSel((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]))}
+                onClear={() => setProgrammeSel([])} />
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-        {PRIMARY_TABS.map((t) => {
-          const active = t === "Tous"
-            ? (multiFilter.length === 0 && etatFilter === "Tous")
-            : (multiFilter.includes(t) || (multiFilter.length === 0 && etatFilter === t));
-          // Pilule animée uniquement en sélection unique : plusieurs éléments
-          // partageant un layoutId feraient sauter l'animation Framer Motion.
-          const soloPill = active && multiFilter.length <= 1;
-          const n = t === "Tous" ? establishedCount : (counts[t] || 0);
-          return (
-            <motion.button key={t} onClick={() => pickTab(t)} whileTap={{ scale: 0.96 }}
-              onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "#f7f8fa"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = active ? "transparent" : CARD; }}
-              style={{ position: "relative", padding: "7px 14px", borderRadius: 20, border: `1px solid ${active ? "transparent" : BORDER}`, background: active ? "transparent" : CARD, color: active ? "#fff" : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 7, transition: "color 0.18s, border-color 0.18s" }}>
-              {/* Pilule active : GLISSE d'un onglet à l'autre (layoutId partagé, ressort sobre). */}
-              {active && (soloPill ? (
-                <motion.span layoutId="obActiveTab" transition={{ type: "spring", stiffness: 560, damping: 42 }}
-                  style={{ position: "absolute", inset: -1, background: NAVY, borderRadius: 20, zIndex: 0 }} />
-              ) : (
-                <span style={{ position: "absolute", inset: -1, background: NAVY, borderRadius: 20, zIndex: 0 }} />
-              ))}
-              <span style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 7 }}>
-                {tabLabel(t)}<span style={{ fontSize: 11, fontWeight: 700, color: active ? "rgba(255,255,255,0.7)" : MUTED, transition: "color 0.18s" }}>{n}</span>
-              </span>
-            </motion.button>
-          );
-        })}
-        <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
-        <FilterMenu cats={SECONDARY_CATS} counts={counts} selected={multiFilter} onToggle={toggleCat} onClear={() => setMultiFilter([])} />
-        <SigDateFilter from={sigRange.from} to={sigRange.to} onChange={setSigRange}
-          months={dateTarget === "onboarding" ? onbMonths : sigMonths}
-          target={dateTarget} onTarget={setDateTarget} />
-        {/* Météo client : de retour en chips DIRECTES (demande dev 2026-09-03) —
-            Critique / Mécontent / Satisfait / Non noté, multi-sélection = union. */}
-        <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
-        {["5", "4", "3", "2", "1", "none"].map((b) => {
-          const st = b === "none"
-            ? { label: "Non noté", bg: "#eef1f6", fg: MUTED, dot: "#cbd2e0" }
-            : { label: WEATHER[b].label, bg: WEATHER[b].bg, fg: WEATHER[b].color, dot: WEATHER[b].color };
-          const on = meteoFilter.includes(b);
-          const n = meteoCounts[b] || 0;
-          return (
-            <motion.button key={b} type="button" whileTap={{ scale: 0.96 }} title={`Météo client : ${st.label}`}
-              onClick={() => setMeteoFilter((prev) => (prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b]))}
-              onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = "#f7f8fa"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = on ? st.bg : CARD; }}
-              style={{ padding: "7px 12px", borderRadius: 20, border: `1px solid ${on ? st.dot : BORDER}`, background: on ? st.bg : CARD, color: on ? st.fg : TEXT, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
-              {b === "none"
-                ? <span style={{ width: 12, height: 12, borderRadius: "50%", border: `1.5px dashed ${st.dot}`, display: "inline-block", flexShrink: 0 }} />
-                : <MeteoIcon score={Number(b)} size={14} color={on ? st.fg : st.dot} />}
-              {st.label}
-              <span style={{ fontSize: 11, fontWeight: 700, color: on ? st.fg : MUTED }}>{n}</span>
-            </motion.button>
-          );
-        })}
-        {/* Onboarding + Programmes : regroupés chacun dans UN menu (demande dev
-            2026-09-03, moins de gros blocs). Multi-sélection = union dans le menu. */}
-        <span style={{ width: 1, height: 22, background: BORDER, margin: "0 2px" }} />
-        <ChecklistMenu label="Onboarding" title={`Onboarding Owner · ${onboardingCounts.total} client${onboardingCounts.total > 1 ? "s" : ""}`}
-          icon={(c) => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>}
-          items={[
-            { key: "venir", label: "Onboarding à venir", count: onboardingCounts.venir,
-              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg> },
-            { key: "done", label: "Onboarding réalisé", count: onboardingCounts.done,
-              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></svg> },
-            { key: "todo", label: "Onboarding à faire", count: onboardingCounts.todo,
-              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="M12 14v4M12 14h.01" /></svg> },
-            { key: "noshow", label: "Onboarding no show", count: onboardingCounts.noshow,
-              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m14 14-4 4M10 14l4 4" /></svg> },
-            { key: "recaler", label: "Onboarding à recaler", count: onboardingCounts.recaler,
-              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg> },
-          ]}
-          selected={onboardingSel}
-          onToggle={(k) => setOnboardingSel((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]))}
-          onClear={() => setOnboardingSel([])} />
-        <ChecklistMenu label="Programmes" title="Programmes clients"
-          icon={(c) => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6" /><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" /></svg>}
-          items={[
-            { key: "ambassadeur", label: "Programme ambassadeur", count: rows.filter((r) => r.ambassador_eligible).length,
-              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 11 18-5v12L3 13v-2z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" /></svg> },
-            { key: "parrainage", label: "Programme de parrainage", count: rows.filter((r) => r.parrainage_eligible).length,
-              icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M19 8v6" /><path d="M22 11h-6" /></svg> },
-          ]}
-          selected={programmeSel}
-          onToggle={(k) => setProgrammeSel((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]))}
-          onClear={() => setProgrammeSel([])} />
-        <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-          {(sigRange.from || sigRange.to || multiFilter.length || etatFilter !== "Tous" || q || meteoFilter.length || onboardingSel.length || programmeSel.length) && (
-            <span style={{ fontSize: 11.5, color: MUTED, fontWeight: 600 }}>{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</span>
-          )}
-          <motion.button type="button" onClick={handleExportCsv} disabled={filtered.length === 0} whileTap={{ scale: 0.96 }}
-            title="Exporter la vue filtrée au format CSV"
-            onMouseEnter={(e) => { if (filtered.length) e.currentTarget.style.background = "#f7f8fa"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = CARD; }}
-            style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${BORDER}`, background: CARD, color: filtered.length ? TEXT : MUTED, fontSize: 12.5, fontWeight: 600, cursor: filtered.length ? "pointer" : "default", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 7, opacity: filtered.length ? 1 : 0.55 }}>
+      {/* Barre d'outils entre les filtres et le tableau (dev 28/10/2026) :
+          à gauche, les filtres posés hors des onglets, une étiquette chacun, retirable d'un clic (le nombre de
+          résultats, jugé inutile, a été retiré) ; à droite, la recherche et l'export. */}
+      <div className="ob-toolbar">
+        <div className="ob-active">
+          <AnimatePresence initial={false}>
+            {activeTags.map((tag) => (
+              <motion.span key={tag.key} layout className="ob-tag"
+                initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.14 } }}
+                transition={{ type: "spring", stiffness: 520, damping: 34 }}>
+                <small>{tag.group}</small>{tag.label}
+                <button type="button" onClick={tag.clear} aria-label={`Retirer le filtre ${tag.group} : ${tag.label}`}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                </button>
+              </motion.span>
+            ))}
+            {activeTags.length > 1 && (
+              <motion.button key="clear" layout type="button" className="ob-clear" onClick={clearRefinements}
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.12 } }}>
+                Tout effacer
+              </motion.button>
+            )}
+          </AnimatePresence>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              style={{ position: "absolute", left: 11, pointerEvents: "none" }}>
+              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+            </svg>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un client…"
+              onFocus={(e) => { e.target.style.borderColor = NAVY; }}
+              onBlur={(e) => { e.target.style.borderColor = BORDER; }}
+              style={{ ...inputStyle, width: 260, padding: "9px 12px 9px 33px", transition: "border-color 0.18s" }} />
+          </span>
+          <motion.button type="button" className="ob-trigger" onClick={handleExportCsv} disabled={filtered.length === 0} whileTap={{ scale: 0.96 }}
+            title="Exporter la vue filtrée au format CSV" style={{ padding: "8px 14px" }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
             </svg>
             Exporter CSV
           </motion.button>
-        </span>
+        </div>
       </div>
-
 
       {/* Fenêtre étroite ou zoomée (dev 27/10/2026) : le tableau garde une largeur minimale et défile horizontalement,
           au lieu d'écraser la colonne Client (noms coupés puis invisibles). */}
-      <div style={{ background: CARD, borderRadius: 14, border: `1px solid ${BORDER}`, overflowX: "auto", overflowY: "auto", maxHeight: "calc(100vh - 190px)" }}>
+      <div className="ob-table-wrap" ref={tableWrapRef}>
         {loading ? (
           // Skeleton shimmer : la structure de la table se devine pendant le chargement.
           <div style={{ padding: "6px 0" }}>
@@ -1365,167 +1895,60 @@ export default function OptilexBoard({ embed = false }) {
             ))}
           </div>
         ) : (
-          <table style={{ width: "100%", minWidth: 1420, borderCollapse: "collapse", tableLayout: "fixed" }}>
-            <colgroup>
-              <col />{/* client (reste) */}
-              <col style={{ width: 124 }} />{/* météo */}
-              <col style={{ width: 232 }} />{/* état (large pour "En cours de rétractation", le libellé le plus long) */}
-              <col style={{ width: 150 }} />{/* owner */}
-              <col style={{ width: 170 }} />{/* opti'lex */}
-              <col style={{ width: 162 }} />{/* onboarding — date + heure */}
-              <col style={{ width: 162 }} />{/* lancement — date + heure (+ badge alerte) */}
-              <col style={{ width: 120 }} />{/* facturation */}
-              <col style={{ width: 44 }} />{/* chevron */}
-            </colgroup>
-            <thead>
-              <tr>
-                <th style={th}>Client</th>
-                <th style={th}>Météo</th>
-                <th style={th}>État</th>
-                <th style={{ ...th, cursor: "pointer", userSelect: "none" }} onClick={() => clickSort("owner_signed")} title="Trier par date de signature">
-                  <span style={{ display: "inline-flex", alignItems: "center" }}>Contrat Owner<SortArrow dir={effectiveSort.col === "owner_signed" ? effectiveSort.dir : null} /></span>
-                </th>
-                <th style={th}>Contrat Opti'Lex</th>
-                <th style={{ ...th, cursor: "pointer", userSelect: "none" }} onClick={() => clickSort("onboarding")} title="Trier par date d'onboarding">
-                  <span style={{ display: "inline-flex", alignItems: "center" }}>Onboarding<SortArrow dir={effectiveSort.col === "onboarding" ? effectiveSort.dir : null} /></span>
-                </th>
-                <th style={{ ...th, cursor: "pointer", userSelect: "none" }} onClick={() => clickSort("integration")} title="Trier par date d'intégration">
-                  <span style={{ display: "inline-flex", alignItems: "center" }}>Intégration<SortArrow dir={effectiveSort.col === "integration" ? effectiveSort.dir : null} /></span>
-                </th>
-                <th style={th}>Facturation</th>
-                <th style={th}></th>
-              </tr>
-            </thead>
-            {/* key = onglet primaire : remount + plein stagger au changement d'onglet uniquement.
-                Recherche/multi-filtre/polling : DOM stable, seules les lignes NOUVELLES s'animent. */}
-            <tbody key={etatFilter}>
-              {filtered.map((r) => {
-                const key = rowKey(r);
-                const isSel = selected === key;
-                const newIdx = newIdxByKey.get(key);   // undefined = déjà vue -> pas d'animation
-                return (
-                  <tr key={key} onClick={() => setSelected(key)}
-                    style={{ cursor: "pointer", background: isSel ? "#eff3fb" : "transparent",
-                      ...(newIdx !== undefined ? { animation: "obRowIn 0.28s cubic-bezier(0.16,1,0.3,1) both", animationDelay: `${Math.min(newIdx, 14) * 20}ms` } : {}) }}
-                    onMouseEnter={(e) => { if (!isSel) e.currentTarget.style.background = "#f7f8fa"; }}
-                    onMouseLeave={(e) => { if (!isSel) e.currentTarget.style.background = "transparent"; }}>
-                    <td style={td}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                        <Avatar name={primaryName(r)} n={r.sheet_num} />
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={primaryName(r)}>{primaryName(r)}</div>
-                            {isInactif(r) && (
-                              <span title="Aucune mission suivie par le cabinet depuis 60 jours"
-                                style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: "#b45309", background: "#fff3e3", padding: "1px 7px", borderRadius: 10, whiteSpace: "nowrap" }}>
-                                Inactif{r.days_since_last_mission != null ? ` · ${r.days_since_last_mission} j` : ""}
-                              </span>
-                            )}
-                            {etatFilter === "Renouvellement client" && (() => {
-                              const days = anniversaryDaysLeft(r);
-                              if (days == null) return null;
-                              const tone = days <= 30 ? { fg: "#b42318", bg: "#fdecec", dot: "#ef4444" }
-                                : days <= 90 ? { fg: "#b45309", bg: "#fff3e3", dot: "#f59e0b" }
-                                : { fg: "#3730a3", bg: "#eef2ff", dot: "#6366f1" };
-                              return (
-                                <span title={`Anniversaire du contrat dans ${days} jour${days > 1 ? "s" : ""}`}
-                                  style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, color: tone.fg, background: tone.bg, padding: "1px 7px", borderRadius: 10, whiteSpace: "nowrap" }}>
-                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden>
-                                    <circle cx="12" cy="12" r="9" stroke={tone.dot} strokeWidth="2.4" />
-                                    <path d="M12 7.5V12l3 2" stroke={tone.dot} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
-                                  J-{days}
-                                </span>
-                              );
-                            })()}
-                          </div>
-                          <div style={{ fontSize: 11, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{rowSubtitle(r) || "en cours d'envoi"}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{ ...td, whiteSpace: "normal" }}>
-                      <MeteoPicker score={r.meteo_score} context={r.meteo_context} disabled={!r.numero_client}
-                        onSave={payload => recordMeteo(r.numero_client, payload)} />
-                    </td>
-                    {/* État daté (Résiliation, Pause…) posé depuis la table -> on ouvre la fiche
-                        pour saisir la date dans la foulée. + rappel sous le badge si la pause est
-                        échue ou si la date d'effet manque. */}
-                    <td style={td}>
-                      <EtatPicker etat={displayEtat(r)} disabled={!r.numero_client}
-                        onPick={(v) => { const saving = changeEtat(r.numero_client, { etat: v }); if (ETAT_DATE_CONFIG[v]) setSelected(key); return saving; }} />
-                      {isEtatPending(r) && r.etat_date && (
-                        <div style={{ fontSize: 10.5, fontWeight: 700, color: "#b45309", marginTop: 4, lineHeight: 1.3 }}
-                          title={`${r.etat_manuel} prévue le ${fmt(r.etat_date)} — pas encore effective, le client reste actif jusqu'à cette date`}>
-                          ⏳ {r.etat_manuel} · prévu {fmt(r.etat_date)}
-                        </div>
-                      )}
-                      {(() => {
-                        const h = etatHint(r);
-                        return h ? (
-                          <div style={{ fontSize: 10.5, fontWeight: 600, color: h.urgent ? "#b45309" : "#a3a9b6", marginTop: 3 }}>{h.text}</div>
-                        ) : null;
-                      })()}
-                    </td>
-                    <td style={td}><SigCell status={r.owner_status} sentAt={r.owner_sent_at} signedAt={r.owner_signed_at} /></td>
-                    <td style={td}><SigCell status={r.optilex_status} sentAt={r.optilex_sent_at} signedAt={r.optilex_signed_at} scheduledAt={r.optilex_scheduled_at} grouped={r.owner_status === "done" && r.optilex_status == null} /></td>
-                    <td style={td}>
-                      <TableDateEdit value={r.rdv_onboarding_date_manual || r.rdv_onboarding_date}
-                        disabled={!r.numero_client || isFinanceTeam()}
-                        onSave={(d) => patch(r.numero_client, { rdv_onboarding_date_manual: d })} />
-                      {r.rdv_onboarding_done && r.rdv_onboarding_done_date && (
-                        <div title="Onboarding réalisé saisi à la main (ancien client)" style={{ marginTop: 3, fontSize: 10.5, fontWeight: 600, color: GREEN }}>
-                          Réalisé le {fmtDT(r.rdv_onboarding_done_date)}
-                        </div>
-                      )}
-                      {(() => {
-                        // Pastilles sous la date (sur la ligne de la date, elles débordaient sur la colonne Intégration).
-                        const noShow = viewFilter.situationOf(r) === "noshow";
-                        const recaler = r.onboarding_reschedule_pending && !r.rdv_onboarding_done;
-                        return (noShow || recaler) ? (
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 3 }}>
-                            {noShow && <OnboardingNoShowBadge date={r.rdv_onboarding_date_manual || r.rdv_onboarding_date} />}
-                            {recaler && (
-                              <div title={r.onboarding_reschedule_note || "Onboarding à recaler, sans date"} style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, background: "#fff4e0", color: "#b45309", fontSize: 10.5, fontWeight: 700 }}>À recaler</div>
-                            )}
-                          </div>
-                        ) : null;
-                      })()}
-                    </td>
-                    <td style={{ ...td, color: r.rdv_lancement_date ? TEXT : "#cbd2e0" }}>
-                      {fmtDT(r.rdv_lancement_date) || "—"}
-                      {isIntegrationOverdue(r) && <div><IntegrationOverdueBadge /></div>}
-                      {integrationAlert(r) && <div><OptilexAlertBadge compact /></div>}
-                    </td>
-                    <td style={td}>
-                      <div style={{ display: "flex", gap: 5 }}>
-                        <MiniDot label="O" on={r.facturation_honoraires_done} />
-                        <MiniDot label="OL" on={r.setup_facturation_done} />
-                        <MiniDot label="+2M" on={r.rdv_plus1mois_done} />
-                      </div>
-                    </td>
-                    <td style={{ ...td, textAlign: "center" }}>
-                      <span className="ob-chev">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="9 18 15 12 9 6" />
-                        </svg>
-                      </span>
-                    </td>
+          <AnimatePresence mode="wait" initial={false} custom={view.dir}
+            onExitComplete={() => { if (tableWrapRef.current) tableWrapRef.current.scrollTop = 0; }}>
+            {/* Une page par vue : la clé change avec les filtres, l'ancienne page sort, la nouvelle entre. Pendant la
+                glissade, le défilement horizontal est coupé (sinon la page décalée ferait apparaître l'ascenseur). */}
+            <motion.div key={view.key} custom={view.dir} variants={reduceMotion ? VIEW_FADE : VIEW_SLIDE}
+              initial="enter" animate="center" exit="exit"
+              onAnimationStart={() => tableWrapRef.current?.classList.add("is-sliding")}
+              onAnimationComplete={(def) => { if (def === "center") tableWrapRef.current?.classList.remove("is-sliding"); }}>
+              <table style={{ width: "100%", minWidth: TABLE_MIN_W, borderCollapse: "collapse", tableLayout: "fixed" }}>
+                <colgroup>
+                  {TABLE_COLS.map((w, i) => <col key={i} style={{ width: w + colExtra }} />)}
+                  <col style={{ width: TABLE_CHEVRON_W }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th style={th}>Client</th>
+                    <th style={th}>Secteur</th>
+                    <th style={th}>Météo</th>
+                    <th style={th}>État</th>
+                    <th style={{ ...th, cursor: "pointer", userSelect: "none" }} onClick={() => clickSort("owner_signed")} title="Trier par date de signature">
+                      <span style={{ display: "inline-flex", alignItems: "center" }}>Contrat Owner<SortArrow dir={effectiveSort.col === "owner_signed" ? effectiveSort.dir : null} /></span>
+                    </th>
+                    <th style={th}>Contrat Opti'Lex</th>
+                    <th style={{ ...th, cursor: "pointer", userSelect: "none" }} onClick={() => clickSort("onboarding")} title="Trier par date d'onboarding">
+                      <span style={{ display: "inline-flex", alignItems: "center" }}>Onboarding<SortArrow dir={effectiveSort.col === "onboarding" ? effectiveSort.dir : null} /></span>
+                    </th>
+                    <th style={th}></th>
                   </tr>
-                );
-              })}
-              {filtered.length === 0 && (
-                <tr style={{ animation: "obRowIn 0.3s cubic-bezier(0.16,1,0.3,1) both" }}>
-                  <td colSpan={9} style={{ ...td, textAlign: "center", padding: "52px 0" }}>
-                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#cbd2e0" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 8 }}>
-                      <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-                    </svg>
-                    <div style={{ fontSize: 13.5, fontWeight: 600, color: MUTED }}>Aucun client</div>
-                    <div style={{ fontSize: 12, color: "#b6bdc9", marginTop: 3 }}>Modifiez vos filtres ou votre recherche.</div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {shownRows.map((r) => {
+                    const key = rowKey(r);
+                    return (
+                      <BoardRow key={key} r={r} rk={key} isSel={selected === key}
+                        newIdx={newIdxByKey.get(key)}   // undefined = déjà vue -> pas d'animation
+                        noShow={viewFilter.situationOf(r) === "noshow"} renewal={etatFilter === "Renouvellement client"}
+                        onSelect={setSelected} patch={patch} changeEtat={changeEtat} recordMeteo={recordMeteo} />
+                    );
+                  })}
+                  {filtered.length === 0 && (
+                    <tr style={{ animation: "obRowIn 0.3s cubic-bezier(0.16,1,0.3,1) both" }}>
+                      <td colSpan={8} style={{ ...td, textAlign: "center", padding: "52px 0" }}>
+                        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#cbd2e0" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 8 }}>
+                          <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+                        </svg>
+                        <div style={{ fontSize: 13.5, fontWeight: 600, color: MUTED }}>Aucun client</div>
+                        <div style={{ fontSize: 12, color: "#b6bdc9", marginTop: 3 }}>Modifiez vos filtres ou votre recherche.</div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </motion.div>
+          </AnimatePresence>
         )}
       </div>
 
@@ -1536,21 +1959,15 @@ export default function OptilexBoard({ embed = false }) {
   );
 }
 
-function MiniDot({ label, on }) {
-  return (
-    <span title={label} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 26, height: 20, padding: "0 5px", borderRadius: 6, fontSize: 10, fontWeight: 700, background: on ? "#e9f9f0" : "#eef1f6", color: on ? GREEN : "#b6bdc9" }}>{label}</span>
-  );
-}
-
 // Alerte : RDV d'intégration à venir mais contrat Opti'Lex non signé. Disparaît dès signature.
-function OptilexAlertBadge({ compact }) {
+function OptilexAlertBadge() {
   return (
     <span title="RDV d'intégration à venir, mais le contrat Opti'Lex n'est pas signé"
       style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, padding: "2px 7px", borderRadius: 10, background: "#fff3e3", color: "#b45309", fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap" }}>
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
         <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
       </svg>
-      {compact ? "Opti'Lex non signé" : "Contrat Opti'Lex non signé"}
+      Intégration prévue
     </span>
   );
 }
@@ -1564,20 +1981,52 @@ function IntegrationOverdueBadge() {
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
         <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15 14" />
       </svg>
-      En retard
+      Intégration en retard
     </span>
   );
 }
 
 // Badge « No show » (dev 26/10/2026) : pastille en contour (ghost) dans la colonne Onboarding, même
 // pictogramme que la ligne du menu ; la bulle dit pourquoi le client est compté en no show.
-function OnboardingNoShowBadge({ date }) {
+// Le client ne s'est pas présenté : un petit fantôme (dev 28/10/2026, « better ghost, better animation »).
+// Un drap blanc cerné de la teinte du badge, qui s'estompe vers le bas ; yeux avec reflet, joues roses,
+// bouche en « o ». Il flotte au-dessus de son ombre (qui rétrécit quand il monte), son ourlet ondule (morphose
+// du tracé entre deux phases de vague), il cligne des yeux, et fait « bouh » au survol. `phase` décale le cycle
+// d'un fantôme à l'autre pour qu'ils ne bougent pas tous ensemble.
+const GHOST_HEM_A = "M5 18V10a7 7 0 0 1 14 0v8c-.78 1.9-3.89 1.9-4.67 0c-.78-1.4-3.89-1.4-4.67 0c-.78 1.9-3.89 1.9-4.66 0Z";
+const GHOST_HEM_B = "M5 18V10a7 7 0 0 1 14 0v8c-.78-1.4-3.89-1.4-4.67 0c-.78 1.9-3.89 1.9-4.67 0c-.78-1.4-3.89-1.4-4.66 0Z";
+function GhostIcon({ size = 18, phase = 0 }) {
+  const reduce = useReducedMotion();
+  const gid = `ob-ghost-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   return (
-    <span title={`No show : onboarding du ${fmt(date)} passé, ni coché réalisé ni noté par le Client Success`}
-      style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "1px 6px", borderRadius: 999, border: "1px solid #c0392b", background: "transparent", color: "#c0392b", fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap" }}>
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-        <rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m14 14-4 4M10 14l4 4" />
-      </svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0, overflow: "visible", "--ob-ghost-delay": `-${phase}s` }}>
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0.55" />
+        </linearGradient>
+      </defs>
+      <ellipse className="ob-ghost-shadow" cx="12" cy="22.8" rx="5" ry="1.1" fill="currentColor" opacity="0.2" />
+      <g className="ob-ghost-body">
+        <path d={GHOST_HEM_A} fill={`url(#${gid})`} stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+          {!reduce && <animate attributeName="d" dur="1.5s" repeatCount="indefinite" values={`${GHOST_HEM_A};${GHOST_HEM_B};${GHOST_HEM_A}`} calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1" />}
+        </path>
+        <ellipse cx="7.7" cy="12.9" rx="1.05" ry=".6" fill="#f4a6a0" opacity=".75" />
+        <ellipse cx="16.3" cy="12.9" rx="1.05" ry=".6" fill="#f4a6a0" opacity=".75" />
+        <g className="ob-ghost-eye"><ellipse cx="9.5" cy="10.4" rx="1.15" ry="1.5" fill="currentColor" /><circle cx="9.85" cy="9.85" r=".38" fill="#fff" /></g>
+        <g className="ob-ghost-eye"><ellipse cx="14.5" cy="10.4" rx="1.15" ry="1.5" fill="currentColor" /><circle cx="14.85" cy="9.85" r=".38" fill="#fff" /></g>
+        <ellipse cx="12" cy="13.6" rx=".85" ry="1" fill="currentColor" />
+      </g>
+    </svg>
+  );
+}
+
+function OnboardingNoShowBadge({ date }) {
+  // Phase du fantôme tirée de la date : stable d'un rendu à l'autre, différente d'une ligne à l'autre.
+  const phase = (hashStr(String(date || "")) % 30) / 10;
+  return (
+    <span className="ob-noshow" title={`No show : onboarding du ${fmt(date)} passé, ni coché réalisé ni noté par le Client Success`}>
+      <GhostIcon size={18} phase={phase} />
       No show
     </span>
   );
@@ -1941,7 +2390,7 @@ function TableDateEdit({ value, onSave, disabled }) {
       style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", fontFamily: "inherit", fontSize: "inherit",
         display: "inline-flex", alignItems: "center", gap: 6, color: value ? TEXT : "#cbd2e0" }}>
       {fmtDT(value) || "—"}
-      <span style={{ opacity: 0.4, display: "inline-flex", lineHeight: 0 }}><PencilIcon /></span>
+      <span className="ob-edit" style={{ display: "inline-flex", lineHeight: 0 }}><PencilIcon /></span>
     </button>
   );
 }
@@ -2627,7 +3076,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
               <Avatar name={primaryName(row)} n={row.sheet_num} />
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{primaryName(row)}</div>
-                <div style={{ marginTop: 5, marginBottom: 5 }}><EtatBadge etat={displayEtat(row)} /></div>
+                <div style={{ marginTop: 5, marginBottom: 5 }}><EtatBadge etat={displayEtat(row)} withIcon /></div>
                 <div style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{[companyName(row) !== primaryName(row) ? companyName(row) : null, row.numero_client, row.periodicite].filter(Boolean).join(" · ") || row.email || "—"}</div>
               </div>
             </div>
