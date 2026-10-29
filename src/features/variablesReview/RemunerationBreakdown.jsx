@@ -4,14 +4,14 @@ import { Modal } from "./ui.jsx";
 
 const plural = (n, word) => `${n} ${word}${n > 1 ? "s" : ""}`;
 
-export function RemunerationBreakdown({ model, rows, settings, subtitle, missed, teamShare, onClose, onFixed, onRules, onBonus, onCommission }) {
+export function RemunerationBreakdown({ model, rows, settings, subtitle, missed, teamShare, onClose, onFixed, onRules, onTiers, onBonus, onCommission }) {
   return (
     <Modal title="Détail de la rémunération" subtitle={subtitle} onClose={onClose}
-      info={<span>Seules les ventes comptées ce mois-ci (première échéance Owner payée dans le mois) entrent dans le total.</span>}>
+      info={<span>Entrent dans le total les ventes comptées ce mois-ci : première échéance Owner payée dans le mois, ou toutes les ventes du mois quand un palier est atteint.</span>}>
       <div className="vr-form-body vr-remuneration-detail">
         <div className="vr-remuneration-line">
-          <div><strong>Fixe</strong>{model.appliedTier && <small>Palier de {model.appliedTier.sales} ventes atteint</small>}</div>
-          <b className="vr-num">{money(model.effectiveFixed)}</b>
+          <div><strong>Fixe</strong></div>
+          <b className="vr-num">{money(model.fixed)}</b>
           <button type="button" className="vr-button" disabled={!model.fixedCell} onClick={onFixed}><Pencil size={13} />Modifier</button>
         </div>
         <div className="vr-remuneration-line">
@@ -30,6 +30,14 @@ export function RemunerationBreakdown({ model, rows, settings, subtitle, missed,
                 </button>
               );
             })}
+          </div>
+        )}
+        {model.tier && (
+          <div className="vr-remuneration-line" data-line="tier">
+            <div><strong>Complément palier {model.tier.reached.sales} ventes</strong>
+              <small>{money(Rational.from(model.tier.reached.amount))} − {money(model.tier.monthTotal)} de fixe, commissions des {plural(model.tier.monthSales, "vente")} du mois et primes</small></div>
+            <b className="vr-num">{money(model.tier.complement)}</b>
+            <button type="button" className="vr-button" onClick={onTiers}><Pencil size={13} />Paliers</button>
           </div>
         )}
         {teamShare && (

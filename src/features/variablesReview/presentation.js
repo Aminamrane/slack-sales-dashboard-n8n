@@ -210,6 +210,9 @@ const sales = (n) => `${n} vente${n > 1 ? "s" : ""}`;
 // passée et pas payée), upcoming (onboarding ou 1re échéance à venir), lost (client perdu), unknown (non déclarée…).
 export function rowStatus(row) {
   const timeline = row.timeline || undefined;
+  // Comptée au palier sans être payée dans le mois (dev 28/10) : dans la paie, mais pas « payée ».
+  if (row.status === "counted" && row.tiered)
+    return { tone: "paid", label: row.paidDay ? `Palier · payée le ${row.paidDay}` : "Comptée au palier", title: timeline };
   if (row.status === "counted") return { tone: "paid", label: row.paidDay ? `Payée le ${row.paidDay}` : "Payée", title: timeline };
   if (row.status === "deferred") return { tone: "later", label: row.paidDay ? `Payée le ${row.paidDay}` : "Payée plus tard", title: timeline };
   const state = row.saleState || {};
@@ -260,9 +263,10 @@ export function safeMoney(calc, ref) {
     return "À vérifier";
   }
 }
+// contents : texte JSON, ou fichier déjà prêt (Blob, ex. le relevé PDF).
 export function saveFile(filename, contents) {
   const url = URL.createObjectURL(
-    new Blob([contents], { type: "application/json" }),
+    contents instanceof Blob ? contents : new Blob([contents], { type: "application/json" }),
   );
   const a = document.createElement("a");
   a.href = url;

@@ -7,7 +7,7 @@ import { Modal, IconButton } from "./ui.jsx";
 import { ChannelIcon } from "./ChannelIcon.jsx";
 import { calculationParts } from "./dealCalculation.js";
 import { SPRING_UI } from "./motion.js";
-import { amountInput, CHANNELS, decimalLabel, safeMoney } from "./presentation.js";
+import { amountInput, CHANNELS, decimalLabel, ofMonth, safeMoney } from "./presentation.js";
 
 const personName = (source, person) => source.profiles?.[person]?.name || person;
 
@@ -170,7 +170,7 @@ export function FixedEditor({ current, subtitle, tier, preview, onClose, onSave,
           </label>
           <div className="vr-facts">
             {next && <div><span>Rémunération du mois</span><b className="vr-num">{money(next.total)}</b></div>}
-            {tier && <div><span>Palier atteint</span><b className="vr-num">{tier.sales} ventes · {money(Rational.from(tier.amount))}</b></div>}
+            {tier && <div><span>Palier atteint</span><b className="vr-num">{tier.reached.sales} ventes · {money(Rational.from(tier.reached.amount))}</b></div>}
           </div>
           <HrNote value={reason} onChange={setReason} placeholder="Ex. fixe convenu à l’embauche" />
           {error && amount.trim() && <div className="vr-error" role="alert">{error}</div>}
@@ -195,25 +195,53 @@ const withComma = (rules) =>
 
 const toDot = (rule, key) => (rule[key] == null ? {} : { [key]: String(rule[key]).trim().replace(",", ".") });
 
-// Règles de rémunération de la personne pour le mois ouvert : fixe et paliers, coefficients par source.
-export function RulesEditor({ initialSection = "fixed", settings, computedSales, fixedCell, subtitle, onClose, onSave }) {
+// Une liste de paliers modifiable : « À partir de N ventes : montant ».
+function TierRows({ label, tiers, onChange }) {
+  const change = (i, key, value) => onChange(tiers.map((t, index) => (index === i ? { ...t, [key]: value } : t)));
+  return (
+    <>
+      {tiers.map((t, i) => (
+        <div className="vr-tier" key={i}>
+          <span>À partir de</span>
+          <input aria-label={`${label} : seuil du palier ${i + 1}`} type="number" min="1" step="1" value={t.sales} onChange={(e) => change(i, "sales", e.target.value)} />
+          <span>ventes :</span>
+          <span className="vr-input-unit">
+            <input aria-label={`${label} : montant du palier ${i + 1}`} inputMode="decimal" value={t.amount} onChange={(e) => change(i, "amount", e.target.value)} />
+            <span>€</span>
+          </span>
+          <IconButton label={`Supprimer le palier ${i + 1}`} onClick={() => onChange(tiers.filter((_, n) => n !== i))}><Trash2 size={14} /></IconButton>
+        </div>
+      ))}
+      <button type="button" className="vr-button dashed" onClick={() => onChange([...tiers, { sales: "", amount: "" }])}>
+        <Plus size={15} />Ajouter un palier
+      </button>
+    </>
+  );
+}
+
+const editable = (tiers) => (tiers || []).map((t) => ({ sales: String(t.sales), amount: decimalLabel(t.amount) }));
+// Paliers saisis → liste envoyée au serveur (montants au point), validée (seuils, montants, progression).
+function cleanTiers(tiers) {
+  const normalized = tiers.map((t) => ({ sales: String(t.sales).trim(), amount: normalizeInput(t.amount) }));
+  return validateTiers(normalized).map((t) => ({ sales: Number(t.sales), amount: t.amount }));
+}
+const sameTiers = (a, b) => JSON.stringify(a) === JSON.stringify((b || []).map((t) => ({ sales: Number(t.sales), amount: String(t.amount) })));
+
+// Règles de rémunération de la personne. « Fixe & paliers » (dev 28/10) : paliers généraux (tous les sales et heads)
+// ou propres à la personne, à partir d'un mois non versé ; « Coefficients » : par source, pour ce mois.
+export function RulesEditor({ initialSection = "fixed", settings, tier, general, own, personName, fromMonthLabel, subtitle, onClose, onSave, onSaveTiers }) {
   const [section, setSection] = useState(initialSection),
-    [tiers, setTiers] = useState((settings.tiers || []).map((t) => ({ ...t, amount: decimalLabel(t.amount) }))),
-    [sales, setSales] = useState(String(settings.sales ?? computedSales ?? "")),
-    [editingSales, setEditingSales] = useState(String(settings.sales ?? "") !== String(computedSales ?? "")),
+    [generalTiers, setGeneralTiers] = useState(editable(general)),
+    [ownOn, setOwnOn] = useState(!!own),
+    [ownTiers, setOwnTiers] = useState(editable(own || general)),
     [acquisition, setAcquisition] = useState(withComma(settings.acquisition)),
     [reason, setReason] = useState(""),
     [error, setError] = useState("");
-  const changeTier = (i, key, value) => setTiers(tiers.map((t, index) => (index === i ? { ...t, [key]: value } : t)));
   const changeRule = (key, patch) => setAcquisition({ ...acquisition, [key]: { ...acquisition[key], ...patch } });
   // Head qui mène une équipe : le serveur fournit un coefficient d'équipe par source.
   const hasTeam = Object.values(acquisition).some((r) => r?.team != null);
-  const save = () => {
+  const saveCoefficients = () => {
     try {
-      const normalized = tiers.map((t) => ({ ...t, amount: normalizeInput(t.amount) }));
-      validateTiers(normalized);
-      if (tiers.length && (!fixedCell || !/^\d+$/.test(String(sales))))
-        throw Error("Identifiez le fixe et renseignez un nombre entier de ventes comptées.");
       const rules = Object.fromEntries(
         Object.entries(acquisition).map(([k, r]) => {
           // Source désactivée : conservée telle quelle (comme Codex), seule la virgule redevient un point.
@@ -228,7 +256,22 @@ export function RulesEditor({ initialSection = "fixed", settings, computedSales,
           return [k, { ...r, coefficient, coefficientAnnual, team }];
         }),
       );
-      onSave({ ...settings, tiers: normalized, sales, acquisition: rules, rulesReason: reason });
+      // Les anciens paliers par relevé (fixe garanti) ne sont plus lus : retirés du réglage.
+      const { tiers: _tiers, sales: _sales, ...rest } = settings;
+      onSave({ ...rest, acquisition: rules, rulesReason: reason });
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+  const saveTiers = () => {
+    try {
+      const nextGeneral = cleanTiers(generalTiers);
+      const nextOwn = ownOn ? cleanTiers(ownTiers) : null;
+      const changes = [];
+      if (!sameTiers(nextGeneral, general)) changes.push({ scope: "general", tiers: nextGeneral, before: general });
+      if (ownOn ? !own || !sameTiers(nextOwn, own) : !!own) changes.push({ scope: "person", tiers: nextOwn, before: own });
+      if (!changes.length) return onClose();
+      onSaveTiers(changes, reason.trim());
     } catch (e) {
       setError(e.message);
     }
@@ -239,11 +282,11 @@ export function RulesEditor({ initialSection = "fixed", settings, computedSales,
       subtitle={subtitle}
       info={
         <ul>
-          <li>Ces règles ne valent que pour cette personne et ce mois.</li>
-          <li>Un palier s’applique dès le nombre de ventes indiqué ; le fixe garanti ne baisse jamais.</li>
-          <li>Une source désactivée garde le calcul d’origine ; une vente en calcul individuel garde sa formule.</li>
-          <li>CCS : cold call setter.</li>
-          {hasTeam && <li>Équipe : part du head sur chaque vente de son équipe, base de la vente × coefficient, sans mensuel ni annuel.</li>}
+          <li>Paliers : ventes signées dans le mois, payées ou non, sauf rétractation actée au board. Le palier est un minimum sur le total du mois : fixe, commissions de ces ventes et primes. S’il est au-dessus de ce total, la personne touche le palier et toutes ses ventes du mois comptent ce mois-ci ; sinon, chaque vente compte au mois où le client paie.</li>
+          <li>Paliers généraux : pour tous les sales et heads. Paliers propres : remplacent les généraux pour cette personne.</li>
+          <li>Un changement de palier vaut à partir du mois indiqué ; les mois déjà versés ne bougent pas.</li>
+          <li>Coefficients : pour cette personne et ce mois. Une source désactivée garde le calcul d’origine ; une vente en calcul individuel garde sa formule. CCS : cold call setter.</li>
+          {hasTeam && <li>Équipe : part du head sur chaque vente de son équipe, base de la vente × coefficient, sans mensuel ni annuel, au mois où le client paie.</li>}
         </ul>
       }
       onClose={onClose}
@@ -253,38 +296,27 @@ export function RulesEditor({ initialSection = "fixed", settings, computedSales,
       <div className="vr-form-body">
         {section === "fixed" ? (
           <>
-            <div className="vr-computed">
-              <span>Ventes comptées ce mois</span>
-              {editingSales ? (
-                <span className="vr-computed-edit">
-                  <input autoFocus aria-label="Nombre de ventes comptées" type="number" min="0" step="1" value={sales} onChange={(e) => setSales(e.target.value)} />
-                  <button type="button" className="vr-link" onClick={() => { setSales(String(computedSales ?? "")); setEditingSales(false); }}>
-                    Rétablir {computedSales ?? ""}
-                  </button>
-                </span>
-              ) : (
-                <span className="vr-computed-edit">
-                  <b className="vr-num">{sales || "Non renseigné"}</b>
-                  <button type="button" className="vr-link" onClick={() => setEditingSales(true)}>modifier</button>
-                </span>
+            <div className="vr-facts">
+              <div><span>Ventes du mois pour les paliers</span>
+                <b className="vr-num">{tier?.monthSales ?? 0}{tier?.retracted ? ` · ${tier.retracted} rétractation${tier.retracted > 1 ? "s" : ""} actée${tier.retracted > 1 ? "s" : ""} retirée${tier.retracted > 1 ? "s" : ""}` : ""}</b></div>
+              <div><span>Palier atteint</span>
+                <b className="vr-num">{tier?.reached ? `${tier.reached.sales} ventes · ${money(Rational.from(tier.reached.amount))}` : "Aucun"}</b></div>
+              {tier?.reached && tier.binding === false && (
+                <div><span>Total du mois (fixe, commissions, primes)</span>
+                  <b className="vr-num">{money(Rational.from(tier.monthTotal))} · au-dessus, le palier ne joue pas</b></div>
               )}
             </div>
-            {tiers.map((t, i) => (
-              <div className="vr-tier" key={i}>
-                <span>À partir de</span>
-                <input aria-label={`Seuil du palier ${i + 1}`} type="number" min="1" step="1" value={t.sales} onChange={(e) => changeTier(i, "sales", e.target.value)} />
-                <span>ventes, fixe de</span>
-                <span className="vr-input-unit">
-                  <input aria-label={`Fixe du palier ${i + 1}`} inputMode="decimal" value={t.amount} onChange={(e) => changeTier(i, "amount", e.target.value)} />
-                  <span>€</span>
-                </span>
-                <IconButton label={`Supprimer le palier ${i + 1}`} onClick={() => setTiers(tiers.filter((_, n) => n !== i))}><Trash2 size={14} /></IconButton>
-              </div>
-            ))}
-            <button type="button" className="vr-button dashed" disabled={!fixedCell} onClick={() => setTiers([...tiers, { sales: "", amount: "" }])}>
-              <Plus size={15} />Ajouter un palier
-            </button>
-            {!fixedCell && <div className="vr-warning">Fixe non identifié : paliers indisponibles.</div>}
+            <span className="vr-pay-group">Paliers généraux · tous les sales et heads</span>
+            <TierRows label="Paliers généraux" tiers={generalTiers} onChange={setGeneralTiers} />
+            <label className="vr-tier-own">
+              <span className="vr-switch">
+                <input type="checkbox" aria-label={`Paliers propres à ${personName}`} checked={ownOn} onChange={(e) => setOwnOn(e.target.checked)} />
+                <span aria-hidden="true" />
+              </span>
+              Paliers propres à {personName}
+            </label>
+            {ownOn && <TierRows label={`Paliers de ${personName}`} tiers={ownTiers} onChange={setOwnTiers} />}
+            <div className="vr-warning">S’applique à partir {ofMonth(fromMonthLabel)} ; les mois déjà versés ne changent pas.</div>
           </>
         ) : (
           <div className={`vr-rules-grid ${hasTeam ? "team" : ""}`} role="table" aria-label="Coefficients par source">
@@ -330,7 +362,9 @@ export function RulesEditor({ initialSection = "fixed", settings, computedSales,
       </div>
       <div className="vr-dialog-footer">
         <button type="button" className="vr-button" onClick={onClose}>Annuler</button>
-        <button type="button" className="vr-button primary" onClick={save}>Enregistrer les règles</button>
+        <button type="button" className="vr-button primary" onClick={section === "fixed" ? saveTiers : saveCoefficients}>
+          {section === "fixed" ? "Enregistrer les paliers" : "Enregistrer les coefficients"}
+        </button>
       </div>
     </Modal>
   );

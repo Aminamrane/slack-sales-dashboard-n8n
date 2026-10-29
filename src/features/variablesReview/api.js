@@ -10,4 +10,8 @@ export const loadWorkbench = () => apiClient.get(WORKBENCH);
 // 409 { detail: "stale_revision" } si quelqu'un a enregistré entre-temps.
 export const saveWorkbenchDraft = (body) => apiClient.put(`${WORKBENCH}/draft`, body);
 
-export const isStaleRevision = (error) => error?.status === 409;
+// Paliers (dev 28/10/2026) : body { expected_revision, user_id (absent = généraux), from_month, tiers, audit_item }
+// → { revision }. 409 { detail: "stale_revision" | "month_paid" }.
+export const saveTierRule = (body) => apiClient.put(`${WORKBENCH}/tiers`, body);
+
+export const isStaleRevision = (error) => error?.status === 409 && error?.data?.detail !== "month_paid";

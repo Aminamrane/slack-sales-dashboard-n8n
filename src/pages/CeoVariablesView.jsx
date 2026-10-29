@@ -12,7 +12,7 @@ import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import { navigateBackToDashboard } from "../utils/dashboardNavigation";
 import VariablesWorkbench from "../features/variablesReview/VariablesWorkbench.jsx";
-import { loadWorkbench, saveWorkbenchDraft } from "../features/variablesReview/api.js";
+import { loadWorkbench, saveTierRule, saveWorkbenchDraft } from "../features/variablesReview/api.js";
 import { preloadAvatars } from "../features/variablesReview/avatars.js";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
@@ -67,6 +67,13 @@ function LiveVariablesWorkbench({ darkMode }) {
       });
     return () => { cancelled = true; };
   }, [attempt]);
+  // Relecture sans écran de chargement (après un changement de palier, qui déplace des ventes d'un mois à l'autre).
+  const reload = async () => {
+    const data = await loadWorkbench();
+    if (!data?.source || !Array.isArray(data.source.statements)) throw new Error("Réponse inattendue du serveur.");
+    setState({ status: "ready", source: data.source, draft: data.draft });
+    return data;
+  };
 
   if (state.status === "loading") return <WorkbenchStatus busy darkMode={darkMode} title="Lecture des données CRM…" />;
   if (state.status === "forbidden") {
@@ -78,7 +85,10 @@ function LiveVariablesWorkbench({ darkMode }) {
   if (!state.source.statements.length) {
     return <WorkbenchStatus darkMode={darkMode} title="Aucune donnée à afficher" />;
   }
-  return <VariablesWorkbench source={state.source} initialDraft={state.draft} saveDraft={saveWorkbenchDraft} darkMode={darkMode} />;
+  return (
+    <VariablesWorkbench source={state.source} initialDraft={state.draft} saveDraft={saveWorkbenchDraft}
+      saveTierRule={saveTierRule} reload={reload} darkMode={darkMode} />
+  );
 }
 
 export default function CeoVariablesView() {
