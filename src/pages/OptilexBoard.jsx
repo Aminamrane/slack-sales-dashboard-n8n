@@ -2164,7 +2164,8 @@ function OnboardingCard({ row, onStart, onManualDone, onReschedule, onCancel, on
           )}
           {/* Lien public de réservation / déplacement par le client (dev 28/10/2026), copiable comme les liens de lancement. */}
           {row.onboarding_url && !done && <RdvLink url={row.onboarding_url} />}
-          {/* Animateur du RDV, recalage direct, et transfert à l'équipe pour le responsable (dev 29/10/2026). */}
+          {/* Animateur du RDV, recalage direct (client prévenu) et transfert entre animateurs de l'équipe Client
+              Success, au même créneau et sans notification (dev 29/10/2026). */}
           {date && !done && hostInfo?.host && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8, fontSize: 12, color: MUTED }}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -2178,7 +2179,7 @@ function OnboardingCard({ row, onStart, onManualDone, onReschedule, onCancel, on
                 <button key={t.name} type="button" onClick={() => onTransfer(t)}
                   style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px 3px 4px", borderRadius: 999, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 12, fontWeight: 650, cursor: "pointer", fontFamily: "inherit" }}>
                   <HostFace name={t.name} photo={t.photo} size={18} />
-                  Confier à {t.name}
+                  Transférer à {t.name}
                 </button>
               ))}
             </div>
@@ -3023,7 +3024,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
   const [cancelOpen, setCancelOpen] = useState(false);   // "fiscal" | "social" : annuler un RDV de lancement (30/09)
   const [apptVersion, setApptVersion] = useState(0);      // recalage fait depuis le parcours : il relit ses RDV
   const [onboardingOpen, setOnboardingOpen] = useState(false); // parcours « Faire l'onboarding » (Client Success)
-  const [transferTo, setTransferTo] = useState(null);      // « Confier à … » : animateur cible (dev 29/10/2026)
+  const [transferTo, setTransferTo] = useState(null);      // « Transférer à … » : animateur cible (dev 29/10/2026)
   const onboardingHost = useOnboardingHost(num, ONBOARDING_FLOW_ROLES.includes(roleOf()) && !row.rdv_onboarding_done
     && !!(row.rdv_onboarding_date_manual || row.rdv_onboarding_date), apptVersion);
   // Antériorité emails : à l'ouverture d'une fiche, on enregistre les emails vus (Owner + Opti'Lex
@@ -3398,8 +3399,12 @@ function HostFace({ name, photo, size = 20, ring = false }) {
   );
 }
 
-// Confier l'onboarding à l'équipe, au même créneau : l'événement passe d'un agenda à l'autre, même lien Meet,
+// Transférer l'onboarding à l'autre animateur de l'équipe, au même créneau : l'événement passe d'un agenda à l'autre,
+// même lien Meet, même si l'autre a déjà un rendez-vous à cette heure ; ce n'est pas une reprogrammation,
 // et le client ne reçoit rien (dev 29/10/2026).
+// Élision devant une voyelle : « de … » devient « d’… ».
+const deName = (name) => (/^[aeiouyàâéèêîïôû]/i.test(name || "") ? `d’${name}` : `de ${name}`);
+
 function TransferOnboardingModal({ row, num, target, current, slot, onClose, onDone }) {
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
@@ -3414,19 +3419,19 @@ function TransferOnboardingModal({ row, num, target, current, slot, onClose, onD
       setTimeout(() => onDone(), 1400);
     } catch (e) {
       const d = e?.data?.detail;
-      setError(typeof d === "string" ? d : "Le rendez-vous n’a pas pu être confié. Rien n’a changé.");
+      setError(typeof d === "string" ? d : "Le rendez-vous n’a pas pu être transféré. Rien n’a changé.");
       setSaving(false);
     }
   };
   return createPortal(
-    <div className="ob-transfer-modal" role="dialog" aria-modal="true" aria-label={`Confier le rendez-vous à ${target.name}`} style={{ position: "fixed", inset: 0, zIndex: 10070, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+    <div className="ob-transfer-modal" role="dialog" aria-modal="true" aria-label={`Transférer le rendez-vous à ${target.name}`} style={{ position: "fixed", inset: 0, zIndex: 10070, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={() => { if (!saving) onClose(); }} style={{ position: "absolute", inset: 0, background: "rgba(17,24,39,0.42)" }} />
       <motion.div initial={{ opacity: 0, scale: 0.97, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
         style={{ position: "relative", width: "min(440px, 100%)", background: CARD, borderRadius: 16, border: `1px solid ${BORDER}`, boxShadow: "0 24px 60px rgba(17,24,39,0.28)", padding: "20px 22px" }}>
         {done ? (
           <div style={{ textAlign: "center", padding: "10px 0" }}>
             <div style={{ display: "inline-flex" }}><HostFace name={target.name} photo={target.photo} size={44} /></div>
-            <div style={{ marginTop: 10, fontSize: 15, fontWeight: 800, color: GREEN }}>Rendez-vous confié à {target.name}</div>
+            <div style={{ marginTop: 10, fontSize: 15, fontWeight: 800, color: GREEN }}>Rendez-vous transféré à {target.name}</div>
             <div style={{ marginTop: 4, fontSize: 12.5, color: MUTED }}>Il est dans son agenda. Le client n’a rien reçu.</div>
           </div>
         ) : (
@@ -3436,12 +3441,12 @@ function TransferOnboardingModal({ row, num, target, current, slot, onClose, onD
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></svg>
               <HostFace name={target.name} photo={target.photo} size={34} />
               <div style={{ minWidth: 0, marginLeft: 4 }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>Confier le rendez-vous à {target.name}</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>Transférer le rendez-vous à {target.name}</div>
                 <div style={{ fontSize: 12, color: MUTED, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}{slot ? ` · ${fmtDT(slot)}` : ""}</div>
               </div>
             </div>
             <div style={{ marginTop: 14, fontSize: 13, color: TEXT, lineHeight: 1.55 }}>
-              Le rendez-vous passe de votre agenda à celui {/^[aeiouyàâéèêîïôû]/i.test(target.name) ? `d’${target.name}` : `de ${target.name}`}, au même créneau et avec le même lien Meet. La facturation ne bouge pas. Le client ne reçoit rien.
+              Le rendez-vous passe de l’agenda {current ? deName(current.name) : "de l’animateur actuel"} à celui {deName(target.name)}, au même créneau et avec le même lien Meet, même si {target.name} a déjà un rendez-vous à cette heure. La facturation ne bouge pas. Le client ne reçoit rien.
             </div>
             {error && <div role="alert" style={{ marginTop: 10, fontSize: 12, color: "#b42318", lineHeight: 1.5 }}>{error}</div>}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
@@ -3449,7 +3454,7 @@ function TransferOnboardingModal({ row, num, target, current, slot, onClose, onD
                 style={{ padding: "9px 14px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 13, fontWeight: 600, cursor: saving ? "default" : "pointer", fontFamily: "inherit" }}>Annuler</button>
               <motion.button type="button" whileTap={{ scale: 0.97 }} disabled={saving} onClick={confirm}
                 style={{ padding: "9px 16px", borderRadius: 10, border: "none", background: GREEN, color: "#fff", fontSize: 13, fontWeight: 700, cursor: saving ? "default" : "pointer", fontFamily: "inherit", opacity: saving ? 0.75 : 1 }}>
-                {saving ? "Transfert…" : `Confier à ${target.name}`}
+                {saving ? "Transfert…" : `Transférer à ${target.name}`}
               </motion.button>
             </div>
           </>
