@@ -2956,7 +2956,7 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    // Onboarding : créneaux de l'animateur du client (Emilie, Vincent, ou Paul pour un ancien dossier),
+    // Onboarding : créneaux de l'animateur du client (celui du rendez-vous, y compris un ancien relais),
     // ou de l'animateur choisi par le responsable d'équipe.
     const client = kind === "onboarding" && num ? `&numero_client=${encodeURIComponent(num)}` : "";
     const chosen = hostParam ? `&host=${encodeURIComponent(hostParam)}` : "";
