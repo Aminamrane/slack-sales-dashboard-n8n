@@ -44,6 +44,7 @@ import SharedNavbar from "../components/SharedNavbar.jsx";
 import ChannelBreakdown from "../components/leaderboard/ChannelBreakdown.jsx";
 import RevenuePace from "../components/leaderboard/RevenuePace.jsx";
 import PacePanel from "../components/leaderboard/PacePanel.jsx";
+import SettersBoard from "../components/leaderboard/SettersBoard.jsx";
 
 import Chart from "chart.js/auto";
 
@@ -62,6 +63,8 @@ const REQUIRED_TEAM = import.meta.env.VITE_SLACK_TEAM_ID || "";
 // Canaux d'acquisition du Suivi des ventes (clés de l'API /leaderboard, dev 13/10/2026).
 const CORE_CHANNELS = ["ads", "linkedin", "cold_call", "cold_call_setter", "referral", "webinar"];
 // Types du CCS (dev 13/10/2026) : lead créé par le setter, lead ads au R1 posé par un setter, reprise Seconde chance.
+// Premier mois du classement des setters (onglet « Setters », dev 01/11/2026 : « les stats à partir d'octobre 2026 »).
+const SETTERS_SINCE = "2026-10";
 const CCS_KIND_SHORT = { cold_call: "cold call", ads_setter: "ads traités", second_chance: "seconde chance" };
 const CCS_KIND_LABEL = { cold_call: "Cold call", ads_setter: "Lead ads traité", second_chance: "Seconde chance" };
 const CHANNEL_COLORS = {
@@ -1549,6 +1552,9 @@ export default function Leaderboard() {
 
   const [view, setView] = useState("table");
 
+  // Onglet « Setters » (dev 31/10/2026) : classement des setters, mois par mois depuis octobre 2026.
+  const [setterBoard, setSetterBoard] = useState(null);
+
   const [range, setRange] = useState(() => {
 
     const now = new Date();
@@ -1574,6 +1580,24 @@ export default function Leaderboard() {
     return () => { disposed = true; };
 
   }, [view, range, canSeeChannelDetail]);
+
+  useEffect(() => {
+
+    if (view !== "setters" || range === "all" || range < SETTERS_SINCE) return undefined;
+
+    let disposed = false;
+
+    setSetterBoard(null);
+
+    apiClient.get(`/api/v1/leaderboard/setters?period=${encodeURIComponent(range)}`)
+
+      .then((data) => { if (!disposed) setSetterBoard(data); })
+
+      .catch(() => { if (!disposed) setSetterBoard({ error: true }); });
+
+    return () => { disposed = true; };
+
+  }, [view, range]);
 
   const [sales, setSales] = useState([]);
 
@@ -2237,10 +2261,14 @@ export default function Leaderboard() {
               padding: '3px',
               border: `1px solid ${darkMode ? '#2a2b36' : '#dfe3ed'}`,
             }}>
-              {[{ key: 'table', label: 'Tableaux' }, { key: 'charts', label: 'Charts' }].map(t => (
+              {[{ key: 'table', label: 'Tableaux' }, { key: 'charts', label: 'Charts' }, { key: 'setters', label: 'Setters' }].map(t => (
                 <button
                   key={t.key}
-                  onClick={() => setView(t.key)}
+                  onClick={() => {
+                    // Le classement des setters commence en octobre 2026 : un mois plus ancien (ou « All time ») ramène au mois en cours.
+                    if (t.key === 'setters' && (range === 'all' || range < SETTERS_SINCE)) setRange(new Date().toISOString().slice(0, 7));
+                    setView(t.key);
+                  }}
                   style={{
                     padding: '6px 16px',
                     borderRadius: '8px',
@@ -2276,7 +2304,7 @@ export default function Leaderboard() {
             >
               {(() => {
                 const options = [];
-                const startDate = new Date('2025-09-01');
+                const startDate = new Date(view === 'setters' ? `${SETTERS_SINCE}-01` : '2025-09-01');
                 const today = new Date();
                 const months = [];
                 const current = new Date(startDate);
@@ -2301,7 +2329,7 @@ export default function Leaderboard() {
                 months.forEach(m => {
                   options.push(<option key={m.value} value={m.value}>{m.label}</option>);
                 });
-                options.push(<option key="all" value="all">All time</option>);
+                if (view !== 'setters') options.push(<option key="all" value="all">All time</option>);
                 return options;
               })()}
             </select>
@@ -2486,11 +2514,15 @@ export default function Leaderboard() {
             margin: '0 auto 36px',
             padding: '0 20px',
           }}>
-            {[
+            {(view === 'setters' ? [
+              { label: 'RDV posés', value: setterBoard?.totals?.rdv, digits: 3 },
+              { label: 'RDV qualifiés', value: setterBoard?.totals?.qualified, digits: 3 },
+              { label: 'Ventes setters', value: setterBoard?.totals?.sales, digits: 3 },
+            ] : [
               { label: 'Total Cash', value: totals.cash, digits: Math.max(5, String(Math.floor(totals.cash || 0)).length), suffix: '€' },
               { label: 'Total Ventes', value: totals.ventes, digits: 3 },
               { label: 'Total Revenu', value: totals.revenu, digits: Math.max(5, String(Math.floor(totals.revenu || 0)).length), suffix: '€' },
-            ].map((kpi) => (
+            ]).map((kpi) => (
               <div key={kpi.label} style={{
                 background: darkMode ? '#16171f' : CARD.bg,
                 border: `1px solid ${darkMode ? '#2a2b36' : CARD.border}`,
@@ -2515,14 +2547,14 @@ export default function Leaderboard() {
                 }}>
                   {kpi.label}
                 </span>
-                <AirportKPI key={`${kpi.label}-${range}`} label="" value={kpi.value} minDigits={kpi.digits} darkMode={darkMode} suffix={kpi.suffix} />
+                <AirportKPI key={`${kpi.label}-${range}-${view === 'setters' && !setterBoard?.totals ? 'wait' : 'ok'}`} label="" value={kpi.value} minDigits={kpi.digits} darkMode={darkMode} suffix={kpi.suffix} />
               </div>
             ))}
           </div>
         </div>
 
-        {loading && <p style={{ textAlign: 'center', color: CARD.muted }}>Loading...</p>}
-        {!loading && rows.length === 0 && <p style={{ textAlign: 'center', color: CARD.muted }}>Aucune vente ce mois-ci pour l'instant.</p>}
+        {view !== "setters" && loading && <p style={{ textAlign: 'center', color: CARD.muted }}>Loading...</p>}
+        {view !== "setters" && !loading && rows.length === 0 && <p style={{ textAlign: 'center', color: CARD.muted }}>Aucune vente ce mois-ci pour l'instant.</p>}
 
         {view === "table" && !loading && rows.length > 0 && (() => {
 
@@ -2658,6 +2690,11 @@ export default function Leaderboard() {
           </div>
           );
         })()}
+
+        {view === "setters" && (
+          <SettersBoard data={setterBoard} darkMode={darkMode} card={CARD}
+            medals={{ first: firstPlace, second: secondPlace, third: thirdPlace }} />
+        )}
 
         {view === "charts" && !loading && (
 
