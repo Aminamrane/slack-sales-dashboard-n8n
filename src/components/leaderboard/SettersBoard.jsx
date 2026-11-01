@@ -153,11 +153,13 @@ function SetterRow({ setter, index, open, onToggle, card, darkMode, medals }) {
             <div style={{ padding: '2px 4px 10px' }}>
               {setter.by_provenance.map((p, i) => (
                 <motion.div key={p.key} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.25, ease: EASE, delay: 0.04 + i * 0.03 }}
-                  style={{ display: 'grid', gridTemplateColumns: COLS, alignItems: 'center', padding: '4px 0' }}>
-                  <span />
-                  <span style={{ fontSize: 12.5, color: card.secondary, paddingLeft: 46 }}>{p.label}</span>
-                  <Figures row={p} card={card} />
+                  transition={{ duration: 0.25, ease: EASE, delay: 0.04 + i * 0.03 }} style={{ padding: '4px 0' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: COLS, alignItems: 'center' }}>
+                    <span />
+                    <span style={{ fontSize: 12.5, color: card.secondary, paddingLeft: 46 }}>{p.label}</span>
+                    <Figures row={p} card={card} />
+                  </div>
+                  {p.clients?.length > 0 && <ClientLines clients={p.clients} card={card} darkMode={darkMode} />}
                 </motion.div>
               ))}
             </div>
@@ -166,6 +168,33 @@ function SetterRow({ setter, index, open, onToggle, card, darkMode, medals }) {
       </AnimatePresence>
     </motion.div>
   );
+}
+
+const shortDate = (iso) => new Date(iso).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit' });
+
+// Clients signés d'une provenance (dev 31/10/2026 : « savoir qui est ce client ») ; le back ne les envoie qu'aux
+// admins et au CEO. Une vente comptée sur son seul contrat signé, pas encore déclarée, porte une pastille.
+function ClientLines({ clients, card, darkMode }) {
+  return clients.map((c, i) => (
+    <div key={`${c.client}-${c.signed_at}-${i}`} style={{ display: 'grid', gridTemplateColumns: COLS, alignItems: 'center',
+      padding: '2px 0' }}>
+      <span />
+      <span style={{ fontSize: 12, color: card.text, paddingLeft: 58, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ width: 4, height: 4, borderRadius: '50%', background: card.muted, flex: 'none' }} />
+        <span title={c.client || undefined} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.client || 'Client sans nom'}</span>
+      </span>
+      <span style={{ gridColumn: '3 / 6', textAlign: 'right', fontSize: 11.5, color: card.muted, whiteSpace: 'nowrap',
+        display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
+        {!c.declared && (
+          <span style={{ fontSize: 10.5, fontWeight: 600, padding: '1px 7px', borderRadius: 999,
+            color: darkMode ? '#fbbf77' : '#b45309', background: darkMode ? 'rgba(251,191,119,0.12)' : '#fef3c7' }}>
+            Non déclarée
+          </span>
+        )}
+        {[c.sales_name, shortDate(c.signed_at)].filter(Boolean).join(' · ')}
+      </span>
+    </div>
+  ));
 }
 
 function ProvenanceTable({ rows, card, darkMode, title }) {
