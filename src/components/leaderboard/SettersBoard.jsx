@@ -159,6 +159,7 @@ function SetterRow({ setter, index, open, onToggle, card, darkMode, medals }) {
                     <span style={{ fontSize: 12.5, color: card.secondary, paddingLeft: 46 }}>{p.label}</span>
                     <Figures row={p} card={card} />
                   </div>
+                  {p.origins?.length > 0 && <OriginLines origins={p.origins} card={card} indent={56} />}
                   {p.clients?.length > 0 && <ClientLines clients={p.clients} card={card} darkMode={darkMode} />}
                 </motion.div>
               ))}
@@ -197,6 +198,23 @@ function ClientLines({ clients, card, darkMode }) {
   ));
 }
 
+// Origine des leads repris en Seconde chance (dev 31/10/2026 : « il faut bien avoir l'origine ») : leads ads, cold call
+// des sales, CCS, webinaire, LinkedIn, ou l'origine écrite sur la fiche.
+function OriginLines({ origins, card, indent }) {
+  return origins.map((o) => (
+    <div key={o.label} style={{ display: 'grid', gridTemplateColumns: COLS, alignItems: 'center', padding: '2px 0' }}>
+      <span />
+      <span style={{ fontSize: 12, color: card.secondary, paddingLeft: indent, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ width: 8, height: 1, background: card.muted, flex: 'none' }} />
+        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.label}</span>
+      </span>
+      {[o.rdv, o.qualified, o.sales].map((n, i) => (
+        <span key={i} style={{ textAlign: 'right', fontSize: 12, color: card.muted, fontVariantNumeric: 'tabular-nums' }}>{n}</span>
+      ))}
+    </div>
+  ));
+}
+
 function ProvenanceTable({ rows, card, darkMode, title }) {
   return (
     <div>
@@ -207,11 +225,16 @@ function ProvenanceTable({ rows, card, darkMode, title }) {
       {rows.map((p, i) => (
         <motion.div key={p.key} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, ease: EASE, delay: i * 0.03 }}
-          style={{ display: 'grid', gridTemplateColumns: COLS, alignItems: 'center', padding: '8px 4px',
-            borderBottom: `1px solid ${darkMode ? '#2a2b36' : '#eef1f6'}`, opacity: p.rdv || p.sales ? 1 : 0.45 }}>
-          <span />
-          <span style={{ fontSize: 13, fontWeight: 500, color: card.text }}>{p.label}</span>
-          <Figures row={p} card={card} />
+          style={{ padding: '8px 4px', borderBottom: `1px solid ${darkMode ? '#2a2b36' : '#eef1f6'}`,
+            opacity: p.rdv || p.sales ? 1 : 0.45 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: COLS, alignItems: 'center' }}>
+            <span />
+            <span style={{ fontSize: 13, fontWeight: 500, color: card.text }}>{p.label}</span>
+            <Figures row={p} card={card} />
+          </div>
+          {p.origins?.length > 0 && (
+            <div style={{ paddingTop: 4 }}><OriginLines origins={p.origins} card={card} indent={10} /></div>
+          )}
         </motion.div>
       ))}
     </div>
