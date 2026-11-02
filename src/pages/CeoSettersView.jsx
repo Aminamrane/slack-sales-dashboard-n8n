@@ -1,15 +1,15 @@
 // src/pages/CeoSettersView.jsx
 //
-// « Setters » dans le dashboard (section Acquisition, demande dev 05/10/2026) : RDV posés par les setters,
-// via le CRM ou leur lien webinaire, et clients amenés au mois de signature. Même gabarit que
-// CeoSmallLeadsView : sidebar CEO filtrée par rôle + navbar, page SettersStats.
+// « Perf Setter » dans le dashboard (section Acquisition ; page « Setters » née le 05/10/2026, devenue Perf Setter le 30/10/2026) : le pilotage
+// des setters : leurs chiffres du mois, leur classement et les clients qu'ils amènent, et le suivi des RDV Setter → Sales. Même gabarit que
+// CeoSmallLeadsView : sidebar CEO filtrée par rôle + navbar, puis la page PerfSetter (components/perfSetter/).
 // Accès : CEO, admin et Gaylord (acquisition_director, 06/10) ; l'API garde sa propre porte.
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import { navigateBackToDashboard } from "../utils/dashboardNavigation";
-import SettersStats from "./SettersStats/index.jsx";
+import PerfSetter from "../components/perfSetter/PerfSetter.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
@@ -106,7 +106,7 @@ export default function CeoSettersView() {
       style={{
         display: "flex",
         minHeight: "100vh",
-        background: darkMode ? "#0f1117" : "#ecedf2",
+        background: C.surface,
         fontFamily: "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
         WebkitFontSmoothing: "antialiased",
         MozOsxFontSmoothing: "grayscale",
@@ -146,7 +146,7 @@ export default function CeoSettersView() {
 
       <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingTop: 64 }}>
         <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
-        <SettersStats C={C} darkMode={darkMode} />
+        <PerfSetter darkMode={darkMode} />
       </div>
     </div>
   );

@@ -1,0 +1,109 @@
+/* Page CEO « Setters » : ligne d'appels sous un RDV, panneau « Appels du prospect » et lecteur d'un enregistrement.
+   Le panneau reprend les jetons et les classes de Perf Sales v2 (.ps2-*, v2.css), comme la fiche de « Gestion des leads » ; seuls les ajouts sont ici. */
+
+/* ── La ligne sous un RDV (dans le tiroir du setter, hors .ps2) : un bouton discret, qui se remplit au survol ─ */
+.sc-trigger { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; max-width: 100%; padding: 5px 12px; border: 1px solid var(--sc-line, currentColor); border-radius: 999px; background: transparent; color: inherit;
+  font: inherit; font-size: 12.5px; font-weight: 600; text-align: left; cursor: pointer; transition: background .2s, border-color .2s; }
+.sc-trigger:hover, .sc-trigger:focus-visible { background: var(--sc-hover, transparent); border-color: var(--sc-accent, currentColor); }
+.sc-trigger .sc-chev, .sc-trigger .sc-phone { flex: none; transition: transform .3s cubic-bezier(.22, 1, .36, 1); }
+.sc-trigger:hover .sc-chev, .sc-trigger:focus-visible .sc-chev { transform: translateX(3px); }
+.sc-trigger:hover .sc-phone, .sc-trigger:focus-visible .sc-phone { transform: rotate(-12deg) scale(1.1); }
+.sc-trigger:focus-visible { outline: 2px solid var(--sc-accent, currentColor); outline-offset: 2px; }
+.sc-trigger .sc-rec { display: inline-flex; align-items: center; gap: 5px; color: var(--sc-accent, inherit); }
+
+/* ── Le panneau : trois parties titrées ─────────────────────────────────────────────────────────────────── */
+.sc-panel:focus { outline: none; }
+.sc-panel .ps2-panel-body { gap: 28px; }
+.sc-section { display: flex; flex-direction: column; gap: 12px; }
+.sc-section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
+.sc-title { margin: 0; font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--soft); }
+.sc-note { display: block; margin-top: 1px; font-size: 12px; color: var(--soft); }
+.sc-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sc-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.sc-chip i { flex: none; width: 6px; height: 6px; border-radius: 50%; }
+
+/* Les repères d'un prospect : une carte légère, deux colonnes, le libellé au-dessus de la valeur (une seule colonne sur mobile). */
+.sc-facts { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 28px; padding: 18px 20px; background: var(--bg); border: 1px solid var(--line-2); border-radius: 14px; font-size: 13px; }
+.sc-facts dt { font-family: var(--mono); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--soft); }
+.sc-facts dd { margin: 3px 0 0; line-height: 1.4; }
+
+/* Les libellés gris clair du design system (--muted, 3,1:1) passent sous le seuil de lisibilité sur le fond du panneau : ici ils prennent --soft. */
+.sc-panel .ps2-hist-day, .sc-panel .ps2-hist-time { color: var(--soft); }
+/* L'onglet actif est blanc sur --navy : en mode sombre --navy est un bleu clair, le texte prend alors la couleur de la carte (blanc inchangé en clair). */
+.sc-panel .ps2-hist-filters button.is-on { color: var(--card); }
+
+/* ── La frise : l'heure et la pastille à gauche (le trait passe au centre des pastilles), la carte de l'appel à droite ─ */
+.sc-panel .ps2-hist-list::before { left: 68px; }
+.sc-panel .ps2-hist-day { padding-left: 56px; padding-bottom: 8px; }
+.sc-panel .ps2-hist-days > li + li { margin-top: 22px; }
+.ps2-hist-ev.sc-ev { grid-template-columns: 46px 26px minmax(0, 1fr); padding: 6px 0; }
+.sc-day-sum { color: var(--soft); }
+
+.sc-card { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 14px 16px; background: var(--bg); border: 1px solid var(--line-2); border-radius: 14px; }
+.sc-ev.has-card .ps2-hist-time { padding-top: 18px; }
+.sc-ev.has-card .ps2-hist-dot { margin-top: 12px; }
+.sc-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.sc-card-head b { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.ps2-hist-ev.is-good .sc-card-head b { color: var(--good); }
+.sc-dur { flex: none; font-family: var(--mono); font-size: 12px; color: var(--soft); }
+.sc-sub { margin-top: -6px; font-size: 12px; line-height: 1.45; color: var(--soft); }
+.sc-card > .sc-sub:last-child { margin-top: 0; }
+.sc-summary { font-size: 13px; line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; }
+.sc-eyebrow { display: block; margin-bottom: 3px; font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--soft); }
+.sc-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.sc-error { margin-top: -6px; font-size: 12.5px; color: var(--low-strong); }
+.sc-none { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--soft); }
+.sc-none svg { flex: none; color: var(--muted); }
+
+/* ── Le lecteur : une pastille, bien visible dès l'ouverture ───────────────────────────────────────────────── */
+.sc-audio { display: flex; align-items: center; gap: 12px; padding: 6px 16px 6px 6px; background: var(--card); border: 1px solid var(--line); border-radius: 999px; transition: border-color .2s; }
+.sc-audio.is-error { border-color: var(--low-strong); }
+
+/* Le bouton : rond, 36 px. Au repos bleu pâle, au survol il se remplit, grossit légèrement, s'entoure d'un halo et son tracé se redessine. */
+.sc-listen { position: relative; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: var(--blue-bg); color: var(--blue);
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: color .2s, background .2s, box-shadow .25s, transform .35s cubic-bezier(.22, 1, .36, 1); }
+.sc-listen::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; }          /* zone de clic élargie, sans élargir le dessin */
+.sc-listen svg path { stroke-dasharray: 1; stroke-dashoffset: 0; }
+.sc-listen .sc-nudge { transform: translateX(1px); }                                              /* le triangle de lecture paraît centré */
+.sc-listen:hover, .sc-listen:focus-visible { background: var(--navy); color: var(--card); box-shadow: 0 0 0 4px var(--blue-bg); transform: scale(1.06); }
+.sc-listen:hover svg path, .sc-listen:focus-visible svg path { animation: scDraw .5s cubic-bezier(.22, 1, .36, 1); }
+.sc-listen:active { transform: scale(.95); }
+.sc-listen:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.sc-listen.is-on, .sc-listen.is-on:hover, .sc-listen.is-on:focus-visible { background: var(--navy); color: var(--card); }
+.sc-listen.is-error { background: var(--low-bg); color: var(--low-strong); }
+.sc-listen.is-error:hover, .sc-listen.is-error:focus-visible { background: var(--low-strong); color: var(--card); box-shadow: 0 0 0 4px var(--low-bg); }
+.sc-listen[aria-busy="true"] { cursor: progress; }
+.sc-listen[aria-busy="true"]:hover { transform: none; box-shadow: none; background: var(--blue-bg); color: var(--blue); }
+.sc-spin { animation: scSpin .9s linear infinite; }
+.sc-listen .sc-spin path, .sc-listen:hover .sc-spin path, .sc-listen:focus-visible .sc-spin path { stroke-dasharray: none; animation: none; }
+@keyframes scDraw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes scSpin { to { transform: rotate(360deg); } }
+
+/* La barre de position : 5 px de trait, 24 px de zone à saisir, la poignée n'apparaît qu'une fois le fichier chargé. */
+.sc-seek { -webkit-appearance: none; appearance: none; flex: 1; min-width: 56px; height: 24px; margin: 0; background: transparent; cursor: pointer; }
+.sc-seek::-webkit-slider-runnable-track { height: 5px; border-radius: 999px; background: linear-gradient(to right, var(--navy) var(--p, 0%), var(--line) var(--p, 0%)); }
+.sc-seek::-moz-range-track { height: 5px; border-radius: 999px; background: var(--line); }
+.sc-seek::-moz-range-progress { height: 5px; border-radius: 999px; background: var(--navy); }
+.sc-seek::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; margin-top: -4.5px; border-radius: 50%; background: var(--navy); border: 2px solid var(--card); box-shadow: 0 0 0 1px var(--navy); transition: transform .2s; }
+.sc-seek::-moz-range-thumb { width: 10px; height: 10px; border-radius: 50%; background: var(--navy); border: 2px solid var(--card); box-shadow: 0 0 0 1px var(--navy); }
+.sc-seek:hover::-webkit-slider-thumb, .sc-seek:focus-visible::-webkit-slider-thumb { transform: scale(1.2); }
+.sc-seek:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 6px; }
+.sc-seek:disabled { cursor: default; }
+.sc-seek:disabled::-webkit-slider-thumb { opacity: 0; }
+.sc-seek:disabled::-moz-range-thumb { opacity: 0; }
+.sc-time { flex: none; font-family: var(--mono); font-size: 11px; color: var(--soft); white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .sc-facts { grid-template-columns: minmax(0, 1fr); padding: 16px; }
+  .sc-card { padding: 12px 14px; }
+  .sc-audio { gap: 10px; padding-right: 12px; }
+  .sc-total { display: none; }                                                                  /* la durée totale reste dans l'en-tête de la carte : la barre gagne la place */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-listen, .sc-trigger, .sc-trigger .sc-chev, .sc-trigger .sc-phone, .sc-seek::-webkit-slider-thumb { transition: none; }
+  .sc-listen:hover, .sc-listen:focus-visible { transform: none; }
+  .sc-listen:hover svg path, .sc-listen:focus-visible svg path, .sc-spin { animation: none; }
+  .sc-trigger:hover .sc-chev, .sc-trigger:hover .sc-phone, .sc-trigger:focus-visible .sc-chev, .sc-trigger:focus-visible .sc-phone { transform: none; }
+}

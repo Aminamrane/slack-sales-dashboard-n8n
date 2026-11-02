@@ -179,7 +179,6 @@
 .ps2-segment button { border: 0; background: none; padding: 6px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 600; cursor: pointer; color: var(--soft); }
 .ps2-segment button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(18, 27, 53, .08); }
 
-
 /* ── v2.1 (14/10) : en-tête de pilotage, bulles de détail, entonnoir par canal, simulateur, équipes ── */
 .ps2-strong { font-weight: 700; color: var(--ink); }
 .ps2-hero-line { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
@@ -763,13 +762,9 @@ button.ps2-tile { font: inherit; color: var(--ink); width: 100%; min-height: 168
 .ps2-target button { width: 26px; height: 26px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); cursor: pointer; font-weight: 700; color: var(--ink); }
 .ps2-target button:hover { border-color: var(--muted); }
 .ps2-target b { font-size: 18px; color: var(--ink); min-width: 18px; text-align: center; }
-.ps2-setters-table td small { font-size: 11px; }
-.ps2-setter-flow { display: inline-flex; align-items: flex-end; gap: 4px; height: 30px; padding: 2px 4px; border-radius: 8px; }
-.ps2-setter-flow:hover { background: var(--bg); }
-.ps2-setter-flow > span { width: 22px; height: 100%; display: flex; align-items: flex-end; }
-.ps2-setter-flow i { display: block; width: 100%; border-radius: 4px 4px 2px 2px; background: #2c6448; }
-.ps2-setter-flow > span:nth-child(1) i { background: #cfdaf0; } .ps2-setter-flow > span:nth-child(2) i { background: #9fb3df; }
-.ps2-setter-flow > span:nth-child(3) i { background: #5d79c2; } .ps2-setter-flow > span:nth-child(4) i { background: #1e3a7b; }
+
+ 
+ 
 .ps2-vbars { display: flex; flex-direction: column; gap: 4px; margin-top: 14px; }
 .ps2-vbars-row { width: 100%; display: grid; grid-template-columns: 170px minmax(0, 1fr) 40px 44px; align-items: center; gap: 12px; padding: 7px 6px; border-radius: 10px; border: 0; background: none; text-align: left; font-size: 13px; }
 .ps2-vbars-row.is-click { cursor: pointer; } .ps2-vbars-row.is-click:hover { background: var(--bg); }
@@ -1066,24 +1061,6 @@ button.ps2-tile { font: inherit; color: var(--ink); width: 100%; min-height: 168
 .ps2-flow-bar { grid-column: 1 / -1; height: 5px; border-radius: 3px; background: var(--line-2); overflow: hidden; }
 .ps2-flow-bar i { display: block; height: 100%; }
 
-/* ── Éligibles aux RDV setters (15/10/2026) : une tuile par sales, son meilleur mois en carrés ────────────────── */
-.ps2-elig-count { display: inline-flex; align-items: baseline; gap: 6px; border: 0; background: none; cursor: pointer; padding: 2px 6px; border-radius: 8px; color: var(--soft); }
-.ps2-elig-count:hover { background: var(--blue-bg); }
-.ps2-elig-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 8px; margin-top: 14px; }
-.ps2-elig { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 10px; row-gap: 5px; align-items: center;
-  padding: 9px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); font: inherit; text-align: left; cursor: pointer;
-  transition: border-color .2s, box-shadow .2s, background .2s; }
-.ps2-elig:hover, .ps2-elig:focus-visible { border-color: var(--blue); box-shadow: 0 4px 14px rgba(18, 27, 53, .08); outline: none; }
-.ps2-elig > .ps2-avatar { grid-row: 1 / span 2; }
-.ps2-elig-name { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ps2-elig-pips { grid-column: 2; display: inline-flex; gap: 4px; }
-.ps2-elig-pips i { width: 12px; height: 12px; border-radius: 3px; background: var(--line-2); box-shadow: inset 0 0 0 1px var(--line); }
-.ps2-elig-pips i.is-on { background: #9fb3df; box-shadow: none; }
-.ps2-elig.is-in .ps2-elig-pips i.is-on { background: var(--good-strong); }
-.ps2-elig-state { grid-column: 3; grid-row: 1 / span 2; font-size: 11.5px; font-weight: 650; padding: 3px 8px; border-radius: 999px; background: var(--good-bg); color: var(--good); }
-.ps2-elig-state.is-out { background: var(--grey-bg); color: var(--soft); }
-.ps2-elig:not(.is-in) .ps2-elig-name { color: var(--soft); }
-
 /* Graphique des ventes cumulées (15/10/2026) : la zone de tracé occupe la hauteur laissée par le simulateur, sans
    déformer (la hauteur de la viewBox suit, Studio.usePlotHeight) ; jamais moins que le format 960 × 322, hauteur minimale
    posée en pixels par le composant (pas d'aspect-ratio : Safari en déduisait la largeur et le graphique débordait). */
@@ -1355,49 +1332,3 @@ button.ps2-tile { font: inherit; color: var(--ink); width: 100%; min-height: 168
   .ps2-agenda-chip-name, .ps2-agenda-sum em { display: none; }
 }
 
-/* RDV posés par jour, setters (16/10/2026) */
-.ps2-place-periods { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 3px; border: 1px solid var(--line-2); border-radius: 12px; }
-.ps2-place-periods > button { position: relative; border: 0; background: none; padding: 6px 12px; border-radius: 9px; cursor: pointer; font-size: 12.5px; color: var(--soft); }
-.ps2-place-periods > button > span:not(.ps2-place-pill) { position: relative; z-index: 1; }
-.ps2-place-periods > button.is-on { color: var(--navy); font-weight: 600; }
-.ps2-place-periods > button::first-letter { text-transform: uppercase; }
-.ps2-place-pill { position: absolute; inset: 0; border-radius: 9px; background: var(--blue-bg); z-index: 0; }
-.ps2-place-day { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 10px; border-radius: 9px; font-size: 12.5px; color: var(--soft); }
-.ps2-place-day.is-on { background: var(--blue-bg); color: var(--navy); font-weight: 600; }
-.ps2-place-day input { border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; font: inherit; font-size: 12px; color: var(--ink); background: var(--card); }
-.ps2-place-kpis { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
-.ps2-place-kpis > span, .ps2-place-kpi-btn { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border: 1px solid var(--line-2); border-radius: 12px; font-size: 12px; color: var(--soft); min-width: 130px; }
-.ps2-place-kpis b { font-size: 24px; font-weight: 600; color: var(--ink); letter-spacing: -.02em; }
-.ps2-place-wrap { margin-top: 14px; overflow-x: auto; }
-.ps2-place-grid { border-collapse: separate; border-spacing: 3px; font-size: 12px; min-width: 100%; }
-.ps2-place-grid th { font-family: var(--mono); font-size: 10px; color: var(--muted); font-weight: 500; text-align: center; padding: 0 0 4px; }
-.ps2-place-grid th.is-name, .ps2-place-grid td.is-name { text-align: left; white-space: nowrap; padding-right: 10px; }
-.ps2-place-grid td.is-name > span { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
-.ps2-place-grid th.is-we { opacity: .5; }
-.ps2-place-grid th.is-today { color: #fff; background: var(--navy); border-radius: 6px; }
-.ps2-place-grid td { text-align: center; padding: 0; }
-.ps2-place-grid td.is-we { opacity: .55; }
-.ps2-place-grid th.is-tot, .ps2-place-grid td.is-tot { padding: 0 8px; text-align: right; white-space: nowrap; }
-.ps2-place-grid td.is-tot small { color: var(--soft); font-size: 10.5px; }
-.ps2-place-cell { width: 100%; min-width: 22px; height: 26px; border: 0; border-radius: 6px; cursor: pointer; font: 600 11.5px var(--sans); font-variant-numeric: tabular-nums; transition: transform .15s, box-shadow .15s; }
-.ps2-place-cell:hover { transform: scale(1.12); box-shadow: 0 4px 12px rgba(30, 58, 123, .25); }
-.ps2-place-empty { display: block; width: 100%; min-width: 22px; height: 26px; border-radius: 6px; background: var(--line-2); opacity: .55; }
-.ps2-place-grid tr.is-team td { font-weight: 600; color: var(--soft); padding-top: 6px; border-top: 1px solid var(--line-2); }
-.ps2-place-bars { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
-.ps2-place-bar { display: grid; grid-template-columns: 24px 170px minmax(0, 1fr) 40px 90px; gap: 10px; align-items: center; border: 0; background: none; padding: 6px 8px; border-radius: 10px; cursor: pointer; text-align: left; color: var(--ink); font: inherit; font-size: 12.5px; }
-.ps2-place-bar:hover:not(:disabled) { background: var(--blue-bg); }
-.ps2-place-bar:disabled { cursor: default; opacity: .6; }
-.ps2-place-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ps2-place-track { height: 10px; border-radius: 5px; background: var(--line-2); overflow: hidden; }
-.ps2-place-track i { display: block; height: 100%; border-radius: 5px; background: var(--navy); }
-.ps2-place-bar b { font-size: 18px; font-weight: 600; text-align: right; }
-.ps2-place-bar small { color: var(--soft); font-size: 11px; }
-.ps2-place-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow: auto; }
-.ps2-place-list button { width: 100%; display: grid; grid-template-columns: 44px auto minmax(0, 1fr); gap: 8px; align-items: center; border: 0; background: none; border-radius: 8px; padding: 6px; cursor: pointer; text-align: left; color: var(--ink); font: inherit; font-size: 12px; }
-.ps2-place-list button:hover { background: var(--blue-bg); }
-.ps2-place-who { display: flex; flex-direction: column; min-width: 0; }
-.ps2-place-who b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ps2-place-who small { font-size: 10.5px; color: var(--soft); }
-@media (max-width: 640px) { .ps2-place-bar { grid-template-columns: 24px minmax(0, 1fr) 40px; } .ps2-place-track, .ps2-place-bar small { display: none; } }
-.ps2-place-kpi-btn { background: var(--card); cursor: pointer; text-align: left; font: inherit; }
-.ps2-place-kpi-btn:hover { background: var(--blue-bg); }

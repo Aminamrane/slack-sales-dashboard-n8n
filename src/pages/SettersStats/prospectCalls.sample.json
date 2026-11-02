@@ -1,0 +1,270 @@
+{
+ "allo_since": "2026-10-10",
+ "rdv": {
+  "1": {
+   "after_pose": 2,
+   "before_pose": 3,
+   "calls": 5,
+   "first_at": "2026-10-12T14:00:00Z",
+   "human": 2,
+   "inbound": 1,
+   "items": [
+    {
+     "after_pose": false,
+     "at": "2026-10-12T14:00:00Z",
+     "direction": "OUTBOUND",
+     "id": "cll-test-00001",
+     "inbound": null,
+     "left": null,
+     "recorded": false,
+     "result": "CLOSED",
+     "state": "no_answer",
+     "summary": null,
+     "tags": [],
+     "talk_s": null,
+     "total_s": 18
+    },
+    {
+     "after_pose": false,
+     "at": "2026-10-13T09:30:00Z",
+     "direction": "OUTBOUND",
+     "id": "cll-test-00002",
+     "inbound": null,
+     "left": true,
+     "recorded": true,
+     "result": "ANSWERED",
+     "state": "voicemail",
+     "summary": "Messagerie : message laissé, rappel demandé.",
+     "tags": [
+      "to_call_back"
+     ],
+     "talk_s": 32,
+     "total_s": 44
+    },
+    {
+     "after_pose": false,
+     "at": "2026-10-13T15:00:00Z",
+     "direction": "OUTBOUND",
+     "id": "cll-test-00003",
+     "inbound": null,
+     "left": false,
+     "recorded": true,
+     "result": "ANSWERED",
+     "state": "human",
+     "summary": "Prospect intéressé, demande une relance jeudi.",
+     "tags": [
+      "interested",
+      "follow_up_later"
+     ],
+     "talk_s": 300,
+     "total_s": 312
+    },
+    {
+     "after_pose": true,
+     "at": "2026-10-14T08:45:00Z",
+     "direction": "OUTBOUND",
+     "id": "cll-test-00004",
+     "inbound": null,
+     "left": false,
+     "recorded": true,
+     "result": "ANSWERED",
+     "state": "human",
+     "summary": "RDV confirmé pour vendredi à 10 h.",
+     "tags": [
+      "interested",
+      "meeting_booked"
+     ],
+     "talk_s": 83,
+     "total_s": 95
+    },
+    {
+     "after_pose": true,
+     "at": "2026-10-16T11:00:00Z",
+     "direction": "INBOUND",
+     "id": "cll-test-00005",
+     "inbound": "answered",
+     "left": null,
+     "recorded": true,
+     "result": "ANSWERED",
+     "state": "inbound",
+     "summary": "Le prospect rappelle pour décaler le RDV.",
+     "tags": [
+      "to_call_back"
+     ],
+     "talk_s": 58,
+     "total_s": 70
+    }
+   ],
+   "last_at": "2026-10-16T11:00:00Z",
+   "left": 1,
+   "no_answer": 1,
+   "outbound": 4,
+   "pose_at": "2026-10-13T18:00:00+02:00",
+   "status": "calls",
+   "talk_s": 473,
+   "total_s": 539,
+   "voicemail": 1
+  },
+  "2": {
+   "after_pose": 2,
+   "before_pose": 1,
+   "calls": 3,
+   "first_at": "2026-10-14T16:00:00Z",
+   "human": 1,
+   "inbound": 2,
+   "items": [
+    {
+     "after_pose": false,
+     "at": "2026-10-14T16:00:00Z",
+     "direction": "OUTBOUND",
+     "id": "cll-test-00006",
+     "inbound": null,
+     "left": false,
+     "recorded": true,
+     "result": "ANSWERED",
+     "state": "human",
+     "summary": "Prospect partant pour un RDV, créneau fixé.",
+     "tags": [
+      "meeting_booked"
+     ],
+     "talk_s": 118,
+     "total_s": 130
+    },
+    {
+     "after_pose": true,
+     "at": "2026-10-17T09:00:00Z",
+     "direction": "INBOUND",
+     "id": "cll-test-00007",
+     "inbound": "voicemail",
+     "left": null,
+     "recorded": true,
+     "result": "VOICEMAIL",
+     "state": "inbound",
+     "summary": "Le prospect a laissé un message vocal.",
+     "tags": [],
+     "talk_s": 21,
+     "total_s": 33
+    },
+    {
+     "after_pose": true,
+     "at": "2026-10-18T09:00:00Z",
+     "direction": "INBOUND",
+     "id": "cll-test-00008",
+     "inbound": "missed",
+     "left": null,
+     "recorded": false,
+     "result": "CLOSED",
+     "state": "inbound",
+     "summary": null,
+     "tags": [],
+     "talk_s": null,
+     "total_s": 12
+    }
+   ],
+   "last_at": "2026-10-18T09:00:00Z",
+   "left": 0,
+   "no_answer": 0,
+   "outbound": 1,
+   "pose_at": "2026-10-15T11:00:00+02:00",
+   "status": "calls",
+   "talk_s": 139,
+   "total_s": 175,
+   "voicemail": 0
+  },
+  "3": {
+   "after_pose": 0,
+   "before_pose": 0,
+   "calls": 0,
+   "first_at": null,
+   "human": 0,
+   "inbound": 0,
+   "items": [],
+   "last_at": null,
+   "left": 0,
+   "no_answer": 0,
+   "outbound": 0,
+   "pose_at": "2026-10-16T11:00:00+02:00",
+   "status": "none",
+   "talk_s": 0,
+   "total_s": 0,
+   "voicemail": 0
+  },
+  "4": {
+   "after_pose": 0,
+   "before_pose": 0,
+   "calls": 0,
+   "first_at": null,
+   "human": 0,
+   "inbound": 0,
+   "items": [],
+   "last_at": null,
+   "left": 0,
+   "no_answer": 0,
+   "outbound": 0,
+   "pose_at": "2026-10-16T12:00:00+02:00",
+   "status": "no_phone",
+   "talk_s": 0,
+   "total_s": 0,
+   "voicemail": 0
+  },
+  "5": {
+   "after_pose": 0,
+   "before_pose": 0,
+   "calls": 0,
+   "first_at": null,
+   "human": 0,
+   "inbound": 0,
+   "items": [],
+   "last_at": null,
+   "left": 0,
+   "no_answer": 0,
+   "outbound": 0,
+   "pose_at": "2026-09-10T11:00:00+02:00",
+   "status": "before_allo",
+   "talk_s": 0,
+   "total_s": 0,
+   "voicemail": 0
+  }
+ },
+ "setter_id": "00000000-0000-4000-8000-0000000000a1",
+ "status": "linked",
+ "totals": {
+  "attempts": {
+   "1": 1,
+   "2": 0,
+   "3": 1,
+   "4": 1,
+   "5+": 0
+  },
+  "calls": 11,
+  "calls_per_prospect": 2.7,
+  "days": 5,
+  "human": 5,
+  "human_talk_s": 597,
+  "inbound": 3,
+  "inbound_answered": 1,
+  "inbound_missed": 1,
+  "inbound_voicemail": 1,
+  "last_at": "2026-10-18T09:00:00+00:00",
+  "left": 1,
+  "no_answer": 1,
+  "outbound": 8,
+  "prospects": 3,
+  "prospects_3plus": 2,
+  "reached": 3,
+  "tags": {
+   "follow_up_later": 1,
+   "interested": 2,
+   "meeting_booked": 2,
+   "not_interested": 2,
+   "to_call_back": 2
+  },
+  "talk_s": 726,
+  "total_s": 864,
+  "voicemail": 2
+ },
+ "window": {
+  "end": "2026-10-23",
+  "start": "2026-09-01"
+ }
+}

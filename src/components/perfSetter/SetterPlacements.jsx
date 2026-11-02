@@ -1,9 +1,9 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { motion as Motion } from 'framer-motion';
-import { CountUp, EASE, ITEM, Reveal } from '../motion';
-import { Detail, usePop } from './Pop';
-import { fr, initials } from './model';
-import LeadHistoryPanel from './LeadHistory';
+import { CountUp, EASE, ITEM, Reveal } from '../perfSales/motion';
+import { Detail, usePop } from '../perfSales/v2/Pop';
+import { fr, initials } from '../perfSales/v2/model';
+import LeadHistoryPanel from '../perfSales/v2/LeadHistory';
 import { monthRange, usePlacements } from './setterApi';
 
 // RDV posés par jour par les setters (dev 16/10/2026 : « il nous faut les rendez-vous par jour, la moyenne de chacun,
@@ -30,7 +30,7 @@ const shade = (n, max) => {
   return `rgb(${mix(219, 30)}, ${mix(227, 58)}, ${mix(241, 123)})`;
 };
 
-export default function SetterPlacements({ period, dark, avatarFor, rdvMonth }) {
+export default function SetterPlacements({ period, dark, avatarFor, rdvMonth, refreshKey = 0 }) {
   const today = parisToday();
   const month = /^\d{4}-\d{2}$/.test(period || '') ? period : today.slice(0, 7);
   const PRESETS = [
@@ -42,7 +42,7 @@ export default function SetterPlacements({ period, dark, avatarFor, rdvMonth }) 
   const [preset, setPreset] = useState('month');
   const [day, setDay] = useState('');
   const range = day ? [day, day] : PRESETS.find(([k]) => k === preset)[2];
-  const [data, error] = usePlacements(range[0], range[1]);
+  const [data, error] = usePlacements(range[0], range[1], refreshKey);
   const [hist, setHist] = useState(null);
   const closeHist = useCallback(() => setHist(null), []);
   const open = usePop();

@@ -69,8 +69,8 @@ const SIDEBAR_TABS = [
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
   )},
   // RDV posés par les setters (CRM, lien webinaire) et clients amenés au mois de signature (05/10).
-  // Icône : casque-micro, l'outil du setter (appels et prise de RDV).
-  { key: 'setters_stats', label: 'Setters', icon: (
+  // Icône : casque-micro, l'outil du setter (appels et prise de RDV). Page « Perf Setter » depuis le 30/10 (comme « Perf Sales »).
+  { key: 'setters_stats', label: 'Perf Setters', icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 1 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z"/><path d="M21 16v2a4 4 0 0 1-4 4h-5"/></svg>
   )},
   // Agenda des RDV de l'équipe, jour par jour et par commercial : suivis par un setter ou à relancer

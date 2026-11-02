@@ -3,17 +3,21 @@
 // Garde-fou de rendu : capture toute exception d'un sous-arbre React et affiche
 // un message au lieu de faire écran blanc sur toute la page. À utiliser autour
 // des vues pilotées par des données externes (scorecards, bilans) dont le payload
-// peut varier. Réinitialisé par un changement de `key` (remount).
+// peut varier. Réinitialisé par un changement de `key` (remount) ou, sans remonter
+// ce qui a bien tourné, par un changement de `resetKey` (ex. « Actualiser », 30/10/2026).
 
 import { Component } from "react";
 
 export default class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { err: null };
+    this.state = { err: null, resetKey: props.resetKey };
   }
   static getDerivedStateFromError(err) {
     return { err };
+  }
+  static getDerivedStateFromProps(props, state) {
+    return props.resetKey !== state.resetKey ? { err: null, resetKey: props.resetKey } : null;
   }
   componentDidCatch(err, info) {
     // Trace pour le debug ; ne remonte pas à l'utilisateur.

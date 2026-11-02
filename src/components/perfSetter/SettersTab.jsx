@@ -1,74 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { motion as Motion } from 'framer-motion';
-import apiClient from '../../../services/apiClient';
-import { CountUp, EASE, ITEM, Reveal, useRevealed } from '../motion';
-import { Detail, Info } from './Pop';
-import { euro, fr, initials } from './model';
+import { EASE, ITEM, Reveal, useRevealed } from '../perfSales/motion';
+import { Detail, Info } from '../perfSales/v2/Pop';
+import { euro, fr, initials } from '../perfSales/v2/model';
 import SetterPlacements from './SetterPlacements';
 import { monthRange, usePlacements } from './setterApi';
 
-// Onglet Setters (dev 14/10/2026 : « prends exemple sur la page Setters du dashboard : plus de détails, de vraies stats ;
-// par rapport à leur taux de transfo, voir combien de volume il doit faire chacun »). Même calcul que la page Setters
-// (RDV posés au mois du RDV, honorés, no-show, ventes au mois de signature) et les appels Allo du mois. Pour chaque
-// setter : son parcours appels → répondus → RDV → honorés → ventes, ses taux, et le volume d'appels par jour qu'il lui
-// faut, à ses propres taux, pour atteindre l'objectif de ventes choisi d'ici la fin du mois.
-export default function SettersTab({ period, days, avatarFor, dark }) {
-  const [placed] = usePlacements(...(/^\d{4}-\d{2}$/.test(period || '') ? monthRange(period) : [null, null]));
-  const [data, setData] = useState(null);
-  const [calls, setCalls] = useState(null);
-  const [error, setError] = useState(false);
+// Onglet « Setters » de Perf Setter (dev 14/10/2026 : « prends exemple sur la page Setters du dashboard : plus de détails, de vraies stats ;
+// par rapport à leur taux de transfo, voir combien de volume il doit faire chacun »), déplacé de la Performance Sales dans Perf Setter le
+// 30/10/2026. Même calcul que l'ancien onglet (RDV posés au mois du RDV, honorés, no-show, ventes au mois de signature, appels Allo du mois,
+// voir ./figures.js) ; les cinq chiffres du mois sont passés dans le bandeau de la page (SetterKpis). Ici : les RDV posés par jour et, pour
+// chaque setter, son parcours appels → répondus → RDV → honorés → ventes, ses taux, et le volume d'appels par jour qu'il lui faut, à ses propres
+// taux, pour atteindre l'objectif de ventes choisi d'ici la fin du mois.
+export default function SettersTab({ month, figures, calls, error, avatarFor, dark, refreshKey = 0 }) {
+  const [placed] = usePlacements(...(/^\d{4}-\d{2}$/.test(month || '') ? monthRange(month) : [null, null]), refreshKey);
   const [target, setTarget] = useState(3);
-  useEffect(() => {
-    if (!/^\d{4}-\d{2}$/.test(period || '')) return undefined;
-    let alive = true;
-    setData(null); setCalls(null); setError(false);
-    apiClient.get(`/api/v1/monitoring/performance/v2/setters?period=${period}`).then((d) => alive && setData(d)).catch(() => alive && setError(true));
-    apiClient.get(`/api/v1/monitoring/performance/v2/setters/calls?period=${period}`).then((d) => alive && setCalls(d)).catch(() => alive && setCalls({ status: 'error', setters: {} }));
-    return () => { alive = false; };
-  }, [period]);
   if (error) return <div className="ps2-empty" role="alert">Setters non chargés</div>;
-  if (!data) return <div className="ps2-loading" aria-label="Chargement"><i /><i /><i /><i /></div>;
-
-  const month = data.month;
-  const rows = data.setters.map((s) => {
-    const m = s.months?.[month] || {};
-    const rdv = m.rdv || {}, sales = m.sales || {};
-    const c = calls?.setters?.[s.id];
-    return { id: s.id, name: s.name, active: s.active, rdv, sales, calls: c?.status === 'linked' ? c : null, callsStatus: c?.status };
-  }).filter((r) => r.active || r.sales.count)
-    .sort((a, b) => (b.sales.count || 0) - (a.sales.count || 0) || (b.rdv.total || 0) - (a.rdv.total || 0) || (a.name || '').localeCompare(b.name || ''));
-  const team = data.team?.months?.[month] || {};
-  const callsTotal = rows.reduce((a, r) => a + (r.calls?.calls || 0), 0);
-  const answeredTotal = rows.reduce((a, r) => a + (r.calls?.answered || 0), 0);
-  const teamSales = team.sales?.count || 0;
-  const callsPerSaleTeam = teamSales ? callsTotal / teamSales : null;
-  const remaining = days?.remaining ?? null;
-  const presenceTeam = (team.rdv?.held || 0) + (team.rdv?.no_show || 0) ? team.rdv.held / (team.rdv.held + team.rdv.no_show) : null;
-  // Moyenne par jour ouvré des RDV (demande du 15/10/2026 : « le chiffre suivi de / et la moyenne par jour ») : le chiffre
-  // du mois ÷ les jours ouvrés écoulés, ceux de « jour ouvré 11 / 22 » de l'en-tête. Aucun jour écoulé : le chiffre seul.
-  const elapsed = days?.elapsed > 0 ? days.elapsed : null;
-  const withPerDay = (n) => (
-    <>
-      <CountUp value={n} />
-      {elapsed && <small title={`Moyenne par jour ouvré : ${fr(n)} ÷ ${elapsed} j ouvrés écoulés`}> / {fr(n / elapsed, 1)} par&nbsp;jour</small>}
-    </>
-  );
+  if (!figures) return <div className="ps2-loading" aria-label="Chargement"><i /><i /><i /><i /></div>;
+  const { rows, team, callsPerSaleTeam, remaining, elapsed } = figures;
 
   return (
     <div className="ps2-grid">
-      <Reveal as="section" className="ps2-span-12 ps2-setter-kpis" aria-label="Setters, le mois" variants={{ hidden: {}, shown: { transition: { staggerChildren: 0.07 } } }}>
-        {[
-          ['Appels', callsTotal ? withPerDay(callsTotal) : (calls ? '–' : '…'), callsTotal ? `${fr((answeredTotal / callsTotal) * 100, 0)} % répondus` : 'Allo'],
-          ['RDV posés', withPerDay(team.rdv?.total || 0), `${fr(team.rdv?.upcoming || 0)} à venir · ${fr(team.rdv?.to_qualify || 0)} à qualifier`],
-          ['RDV honorés', withPerDay(team.rdv?.held || 0), presenceTeam == null ? '' : `${fr(presenceTeam * 100, 0)} % de présence`],
-          ['Ventes', <CountUp value={teamSales} />, euro(team.sales?.amount || 0)],
-          ['Appels pour 1 vente', callsPerSaleTeam ? <CountUp value={callsPerSaleTeam} /> : '–', 'équipe setters, ce mois'],
-        ].map(([l, v, n]) => (
-          <Motion.div key={l} className="ps2-setter-kpi" variants={ITEM}><span>{l}</span><b className="ps2-num">{v}</b><small>{n}</small></Motion.div>
-        ))}
-      </Reveal>
-
-      <SetterPlacements period={period} dark={dark} avatarFor={avatarFor} rdvMonth={team.rdv?.total} />
+      <SetterPlacements period={month} dark={dark} avatarFor={avatarFor} rdvMonth={team.rdv?.total} refreshKey={refreshKey} />
 
       <Reveal as="section" className="ps2-card ps2-span-12" aria-labelledby="ps2-setters-title">
         <Motion.div className="ps2-card-head" variants={ITEM}>

@@ -9,7 +9,6 @@ import VerifyPanel from './VerifyPanel';
 import WeeksBoard from './WeeksBoard';
 import ChannelBoard from './ChannelBoard';
 import AutoAssignTab from './AutoAssignTab';
-import SettersTab from './SettersTab';
 import VentesTab from './VentesTab';
 import ChannelTable from './ChannelTable';
 import ChannelFilter from './ChannelFilter';
@@ -21,7 +20,8 @@ import LeadsTab from './LeadsTab';
 import RdvAgenda from './RdvAgenda';
 import { RegistrantsBlock, RegistrantsPanel } from './Registrants';
 import { FUNNEL, SOURCES, buildModel, byPersonForAd, dm, euro, fr, initials, scopeFigures, signedNum } from './model';
-import TabIcon from './TabIcons';
+import Tabs from './Tabs';
+import Controls from './Controls';
 import './v2.css';
 import './v2-nav.css';
 
@@ -32,32 +32,12 @@ import './v2-nav.css';
 // dossiers (panneau latéral).
 const TABS = [
   ['overview', 'Vue d’ensemble'], ['channels', 'Canaux'], ['leads', 'Leads'], ['sales', 'Sales'], ['teams', 'Équipes'], ['rdv', 'Rendez-vous'], ['reactivity', 'Réactivité'],
-  ['cohort', 'Cohorte'], ['ventes', 'Ventes'], ['setters', 'Setters'], ['auto', 'Auto-affectation'],
+  ['cohort', 'Cohorte'], ['ventes', 'Ventes'], ['auto', 'Auto-affectation'],
 ];
 const CHECK = <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>;
 const ARROW = (up) => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{up ? <path d="M12 19V5M5 12l7-7 7 7" /> : <path d="M12 5v14M5 12l7 7 7-7" />}</svg>;
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : null);
 const signedPct = (n) => (n == null ? '–' : `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n)} %`);
-
-// Mois et actualisation, dans l'en-tête (dev 14/10 : « cette partie-là, il y a une meilleure manière de l'intégrer »).
-function Controls({ controls }) {
-  if (!controls) return null;
-  const current = controls.options.find((o) => o.value === controls.value);
-  return (
-    <span className="ps2-controls">
-      <label className="ps2-month">
-        <span>{current?.label || controls.value}</span>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-        <select aria-label="Mois affiché" value={controls.value} onChange={(e) => controls.onChange(e.target.value)}>
-          {controls.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-      </label>
-      <button type="button" className={`ps2-refresh${controls.loading ? ' is-loading' : ''}`} onClick={controls.onRefresh} disabled={controls.loading} aria-label="Actualiser" title="Actualiser">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8" /><path d="M21 3v5h-5" /></svg>
-      </button>
-    </span>
-  );
-}
 
 function Hero({ model, onOpen, controls }) {
   const p = model.pilot;
@@ -242,34 +222,6 @@ function WeekDetail({ w, i, pace, ref_ }) {
         </tbody>
       </table>
     </Detail>
-  );
-}
-
-// Onglets (dev 14/10 : « des beaux SVG pour chaque catégorie, animation quand on clique dessus ») : un rail blanc, la
-// pastille marine glisse d'un onglet à l'autre et l'icône de l'onglet choisi joue son geste. Le rail tient sur une ligne
-// à 1440 px avec la barre latérale du CEO ; plus étroit, il défile horizontalement (jamais de retour à la ligne).
-function Tabs({ tab, onTab }) {
-  const [beat, setBeat] = useState(0);
-  const still = reducedMotion();
-  const pick = (key, el) => {
-    setBeat((b) => b + 1);
-    el.scrollIntoView?.({ block: 'nearest', inline: 'nearest', behavior: still ? 'auto' : 'smooth' });
-    onTab(key);
-  };
-  return (
-    <Motion.div className="ps2-tabbar" layoutScroll>
-      <div className="ps2-tabs" role="tablist" aria-label="Vues de la Performance Sales">
-        {TABS.map(([key, label]) => {
-          const on = tab === key;
-          return (
-            <button type="button" key={key} role="tab" aria-selected={on} className="ps2-tab" onClick={(e) => pick(key, e.currentTarget)}>
-              {on && <Motion.span layoutId="ps2-tab-pill" className="ps2-tab-pill" transition={still ? { duration: 0 } : { duration: 0.45, ease: EASE }} />}
-              <span className="ps2-tab-label"><TabIcon name={key} active={on} beat={on ? beat : 0} />{label}</span>
-            </button>
-          );
-        })}
-      </div>
-    </Motion.div>
   );
 }
 
@@ -898,7 +850,7 @@ export default function PerfSalesV2({ data, dark, period, tab, onTab, front, con
     <div className={`ps2${dark ? ' is-dark' : ''}${loading ? ' is-loading' : ''}`}>
       <PopLayer>
         <Hero model={model} onOpen={open} controls={controls} />
-        <Tabs tab={tab} onTab={onTab} />
+        <Tabs tabs={TABS} tab={tab} onTab={onTab} label="Vues de la Performance Sales" />
         <AnimatePresence mode="wait">
           <Motion.div key={tab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.35, ease: EASE }}>
             {tab === 'overview' && <Overview model={model} onOpen={open} onPilot={pilotTeam} />}
@@ -915,7 +867,6 @@ export default function PerfSalesV2({ data, dark, period, tab, onTab, front, con
             {tab === 'reactivity' && reactivityNode}
             {tab === 'cohort' && <Cohort model={model} />}
             {tab === 'ventes' && <VentesTab breakdown={ventesData} model={model} onOpen={open} />}
-            {tab === 'setters' && <SettersTab period={period} days={model.pilot?.days} avatarFor={model.avatarFor} dark={dark} />}
             {tab === 'auto' && <AutoAssignTab month={period} avatarFor={model.avatarFor} />}
           </Motion.div>
         </AnimatePresence>

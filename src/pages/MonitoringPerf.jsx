@@ -12,6 +12,8 @@ import iconGlobal from "../assets/global.png";
 import iconFinance from "../assets/finance.png";
 import "../index.css";
 import { performanceRows, performanceTotals, ratio, isPerformanceSalesPerson, visibleHeadcount } from "../utils/performanceSales.js";
+import { getCanonicalKey } from "../utils/salesNames.js";
+import useAvatarMap from "../components/perfSales/v2/useAvatarMap.js";
 import PerfSalesV2 from "../components/perfSales/v2/PerfSalesV2.jsx";
 import PresenceGrid from "../components/perfSales/v2/PresenceGrid.jsx";
 import Reactivity, { PeriodBar } from "../components/perfSales/v2/Reactivity.jsx";
@@ -81,38 +83,7 @@ const COLORS = { primary: "#6366f1", secondary: "#fb923c", tertiary: "#10b981" }
 const MONTHS_FR = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
 const monthLabelFR = (ym) => { const p = String(ym || '').split('-'); return (MONTHS_FR[(+p[1] || 1) - 1] || '') + ' ' + (p[0] || ''); };
 
-const stripDiacritics = (str) => str ? str.normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
-const normalizeSalesKey = (name) => {
-  if (!name) return "unknown";
-  return stripDiacritics(name).toLowerCase().trim().replace(/\s+/g, " ").replace(/[^a-z\s'-]/g, "");
-};
 
-const NAME_VARIANTS_TO_CANONICAL = {
-  "kyle dif": "kail", "kail": "kail", "kyle": "kail",
-  "yohan": "yohan debowski", "yohan debowski": "yohan debowski", "debowski": "yohan debowski",
-  "leo": "leo mafrici", "leo mafrici": "leo mafrici", "mafrici": "leo mafrici",
-  "yanis": "yanis zairi", "yanis zairi": "yanis zairi", "zairi": "yanis zairi",
-  "youness": "youness el boukhrissi", "youness el boukhrissi": "youness el boukhrissi", "el boukhrissi": "youness el boukhrissi",
-  "mourad": "mourad derradji", "mourad derradji": "mourad derradji", "derradji": "mourad derradji",
-  "alex": "alex gaudrillet", "alex gaudrillet": "alex gaudrillet", "gaudrillet": "alex gaudrillet",
-  "sebastien": "sebastien itema", "sebastien itema": "sebastien itema", "itema": "sebastien itema",
-  "quentin": "quentin rattez", "quentin rattez": "quentin rattez", "rattez": "quentin rattez",
-  "gwenael": "gwenael", "gwenaelle": "gwenael",
-  "david": "david dubois", "david dubois": "david dubois", "dubois": "david dubois",
-  "eva": "eva meilhac", "eva meilhac": "eva meilhac", "meilhac": "eva meilhac",
-  "gwenael derouet": "gwenael", "derouet": "gwenael",
-  "aurelie": "aurelie briquet", "aurelie briquet": "aurelie briquet", "briquet": "aurelie briquet",
-  "selim": "selim kouay", "selim kouay": "selim kouay", "kouay": "selim kouay",
-  "mehdi": "mehdi bouffessil", "mehdi bouffessil": "mehdi bouffessil", "bouffessil": "mehdi bouffessil",
-  "mehdi mestiri": "mehdi mestiri", "mestiri": "mehdi mestiri",
-  "sarah": "sarah amroune", "sarah amroune": "sarah amroune", "amroune": "sarah amroune",
-  "sara": "sara benabid", "sara benabid": "sara benabid", "benabid": "sara benabid",
-  "mohamed": "mohamed bouaksa", "mohamed bouaksa": "mohamed bouaksa", "bouaksa": "mohamed bouaksa",
-  "youcef": "youcef amrane", "youcef amran": "youcef amrane", "youcef amrane": "youcef amrane", "amran": "youcef amrane", "amrane": "youcef amrane", "yamraneownertechnologycom": "youcef amrane"
-};
-
-
-const getCanonicalKey = (rawName) => { const n = normalizeSalesKey(rawName); return NAME_VARIANTS_TO_CANONICAL[n] || n; };
 
 function CalcTip({ text, rect, darkMode }) {
   const [typed, setTyped] = useState('');
@@ -199,14 +170,13 @@ export default function MonitoringPerf({ embed = false } = {}) {
   const [colMenuOpen, setColMenuOpen] = useState(false);
   const [tip, setTip] = useState(null); // tooltip calcul custom
   useEffect(()=>{ try { localStorage.setItem('perfHiddenCols', JSON.stringify([...hiddenCols])); } catch { /* noop */ } }, [hiddenCols]);
-  const [avatarMap, setAvatarMap] = useState({});
-  useEffect(()=>{ if(!hasAccess) return; let cancelled=false; apiClient.get('/api/v1/users/assignable').then(d=>{ if(cancelled) return; const m={}; (d?.users||[]).forEach(u=>{ const url=u.avatar_url?(/^https?:\/\//i.test(u.avatar_url)?u.avatar_url:apiClient.baseUrl+u.avatar_url):null; m[getCanonicalKey(u.full_name)]={av:url,role:u.role}; }); setAvatarMap(m); }).catch(()=>{}); return ()=>{cancelled=true;}; }, [hasAccess]);
+  const avatarMap = useAvatarMap(hasAccess);   // avatars et rôles par nom canonique (hook partagé avec Perf Setter)
   // Appointment figures are supplied by the selected performance channel.
   const [rdvAnalytics, setRdvAnalytics] = useState(null); // from /tracking/rdv-analytics (délai R1→R2 + heatmap no-show)
   const [salesBreakdown, setSalesBreakdown] = useState(null); // from /tracking/sales-breakdown (vue Ventes)
-  // Onglet de la Performance Sales v2 ; « Ventes » et « Setters » sont deux de ses onglets (dev 14/10/2026).
+  // Onglet de la Performance Sales v2 ; « Ventes » est l'un d'eux (dev 14/10/2026). L'onglet « Setters » est passé dans Perf Setter (/ceo/setters, 30/10/2026).
   const [v2Tab, setV2Tab] = useState('overview');
-  const perfView = ['ventes', 'setters'].includes(v2Tab) ? v2Tab : 'default';
+  const perfView = ['ventes'].includes(v2Tab) ? v2Tab : 'default';
   const [heatmapSales, setHeatmapSales] = useState('global'); // taux de présence : global | nom d'un sales
 
   const [appointmentDetail, setAppointmentDetail] = useState(null);

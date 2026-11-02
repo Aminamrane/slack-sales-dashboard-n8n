@@ -1,20 +1,28 @@
-// Page CEO « Setters » (demande dev 05/10/2026, pour Paul ; refonte UX le même jour).
-// Une période (« Depuis mai » ou un mois), le classement des setters (appels Allo, RDV posés, résultat des RDV,
-// clients signés, CA, transformation), les clients signés mois par mois, et la fiche d'un setter : ses clients
-// signés et ses RDV posés, regroupés par mois et triés par date. Lecture seule.
+// Onglet « Classement » de Perf Setter (page CEO « Setters » née le 05/10/2026, refonte UX le même jour ; passée dans Perf Setter le 30/10/2026).
+// Une période (« Depuis mai » ou un mois), le classement des setters (appels Allo, RDV posés, résultat des RDV, clients signés, CA, transformation),
+// les clients signés mois par mois, et la fiche d'un setter : ses clients signés et ses RDV posés, regroupés par mois et triés par date. Lecture seule.
 // Calculs côté serveur (app/services/ceo_setters.py) ; logique d'affichage testée dans ./settersStats.js.
-// Données : GET /ceo-dashboard/setters et /ceo-dashboard/setters/calls?period= (admin, CEO).
-// Lien direct vers une fiche : ?setter=<id>.
-import { useEffect, useMemo, useState } from "react";
+// Données : GET /ceo-dashboard/setters et /ceo-dashboard/setters/calls?period= (admin, CEO). Lien direct vers une fiche : ?setter=<id>.
+// Aucune donnée, aucun calcul n'a changé : la présentation reprend la charte de la Performance Sales (classes ps2 de perfSales/v2/v2.css).
+import { useEffect, useMemo, useRef, useState } from "react";
+import { motion as Motion } from "framer-motion";
 import apiClient from "../../services/apiClient";
 import { fmtTalk } from "../../utils/setterPilotage.js";
+import { ITEM, Reveal } from "../../components/perfSales/motion";
+import { CallsOverview, RdvCallsPanel } from "./RdvCalls.jsx";
+import CallsPanel from "./CallsPanel.jsx";
+import useProspectCalls from "./useProspectCalls.js";
+import { overviewOf, rdvCallsView } from "./setterCalls.js";
 import {
   ALL, CHANNEL_LABELS, CLIENT_STATE_LABELS, ORIGIN_LABELS, ORIGIN_TONES, OUTCOME_HINTS, OUTCOME_LABELS, OUTCOME_TONES,
   assignedLabel, clientState, conversion, fmtDay, fmtEuro, fmtInt, fmtMonth, fmtMonthShort, fmtRate, fmtRdv,
   groupByMonth, hasActivity, initials, originEntries, periodOptions, periodStats, resultSegments, splitClient,
 } from "./settersStats.js";
 
-const CLIENT_TONES = { client: "#10b981", already_client: "#94a3b8", signed_not_declared: "#f59e0b" };
+// Couleurs des résultats : la charte Owner (vert, terre cuite, or, bleu clair), les mêmes dans la barre, la légende et les pastilles de la fiche.
+const RESULT_TONES = { held: "#3e7d5a", no_show: "#c2410c", to_qualify: "#d4a017", upcoming: "#9fb3df" };
+const outcomeTone = (key) => RESULT_TONES[key] || OUTCOME_TONES[key] || OUTCOME_TONES.removed;
+const CLIENT_TONES = { client: "#3e7d5a", already_client: "#8a93a6", signed_not_declared: "#d4a017" };
 const RESULT_LABELS = { held: "Honorés", no_show: "No-show", to_qualify: "À qualifier", upcoming: "À venir" };
 
 function readSetterParam() {
@@ -38,7 +46,64 @@ function callsOf(response, setterId) {
   return { state: "ok", ...st };
 }
 
-export default function SettersStats({ C, darkMode }) {
+// Lectures gardées le temps de la page Perf Setter (le changement d'onglet ne relit pas Allo) ; « Actualiser » (refreshKey) les relit.
+const keep = (map, key, load) => {
+  if (!map.has(key)) map.set(key, load().catch((e) => { map.delete(key); throw e; }));
+  return map.get(key);
+};
+const loadOverview = (store, refreshKey) => keep(store.overview, String(refreshKey), () => apiClient.get("/api/v1/ceo-dashboard/setters"));
+const loadCalls = (store, period, refreshKey) => keep(store.calls, `${refreshKey}|${period}`, () => apiClient.get(`/api/v1/ceo-dashboard/setters/calls?period=${period}`));
+
+// ── Pièces de présentation (charte ps2) ───────────────────────────────────────────────────────────
+function Face({ name, size = 30, url }) {
+  const [broken, setBroken] = useState(false);
+  return (
+    <span className="ps2-avatar is-soft" style={{ flex: `0 0 ${size}px`, width: size, height: size, fontSize: Math.round(size * 0.37), overflow: "hidden" }}>
+      {url && !broken ? <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={() => setBroken(true)} /> : initials(name)}
+    </span>
+  );
+}
+
+const resultBar = (rdv, height = 14) => {
+  const parts = resultSegments(rdv);
+  const text = parts.map((p) => `${RESULT_LABELS[p.key]} : ${p.value}`).join(" · ");
+  return (
+    <div className="ps2-compo" role="img" aria-label={text || "Aucun RDV posé"} title={text || undefined} style={{ height, marginTop: 0 }}>
+      {parts.map((p) => <i key={p.key} style={{ width: `${p.pct}%`, background: RESULT_TONES[p.key] }} />)}
+    </div>
+  );
+};
+
+const legend = (rdv) => (
+  <div className="ps2-compo-legend" style={{ marginTop: 12 }}>
+    {Object.keys(RESULT_LABELS).map((k) => (
+      <span key={k} title={OUTCOME_HINTS[k]}><i style={{ background: RESULT_TONES[k] }} />{RESULT_LABELS[k]} <b className="ps2-num">{fmtInt(rdv?.[k])}</b></span>
+    ))}
+  </div>
+);
+
+const pill = (tone, text, title) => (
+  <span title={title} className="pst-pill" style={{ color: `color-mix(in srgb, ${tone} 58%, var(--ink))`, background: `${tone}1f` }}>
+    <span style={{ background: tone }} />{text}
+  </span>
+);
+
+const kpi = (title, value, detailText, tone) => (
+  <div className="ps2-setter-kpi" key={title}>
+    <span>{title}</span>
+    <b className="ps2-num" style={tone ? { color: tone } : undefined}>{value}</b>
+    {detailText && <small>{detailText}</small>}
+  </div>
+);
+
+const Chevron = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+);
+
+export default function SettersStats({ C, darkMode, refreshKey = 0, cache, avatarFor }) {
+  const own = useRef(null);
+  if (!own.current) own.current = { overview: new Map(), calls: new Map() };
+  const store = cache || own.current;
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [period, setPeriod] = useState(ALL);
@@ -50,22 +115,23 @@ export default function SettersStats({ C, darkMode }) {
 
   useEffect(() => {
     let alive = true;
-    apiClient.get("/api/v1/ceo-dashboard/setters")
+    setData(null); setError(""); setCalls({});
+    loadOverview(store, refreshKey)
       .then((d) => { if (alive) setData(d); })
       .catch(() => { if (alive) setError("Impossible de charger les statistiques des setters. Réessayez dans un instant."); });
     return () => { alive = false; };
-  }, []);
+  }, [store, refreshKey]);
 
   // Allo à la demande, par période (le cache du serveur rend les relectures immédiates).
   const wanted = useMemo(() => [...new Set([period, ...(detailId ? [ALL] : [])])], [period, detailId]);
   useEffect(() => {
     wanted.filter((p) => !(p in calls)).forEach((p) => {
       setCalls((c) => ({ ...c, [p]: null }));
-      apiClient.get(`/api/v1/ceo-dashboard/setters/calls?period=${p}`)
+      loadCalls(store, p, refreshKey)
         .then((res) => setCalls((c) => ({ ...c, [p]: res })))
         .catch(() => setCalls((c) => ({ ...c, [p]: { status: "error", setters: {} } })));
     });
-  }, [wanted, calls]);
+  }, [wanted, calls, store, refreshKey]);
 
   const openDetail = (id) => { setDetailId(id); setTab("clients"); writeSetterParam(id); };
   const closeDetail = () => { setDetailId(null); writeSetterParam(null); };
@@ -96,159 +162,119 @@ export default function SettersStats({ C, darkMode }) {
   const detail = useMemo(() => (data?.setters || []).find((s) => s.id === detailId) || null, [data, detailId]);
   const periodLabel = options.find((o) => o.value === period)?.label || "";
 
-  // ── Styles ─────────────────────────────────────────────────────────────────────────────────
-  const card = { background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14, boxShadow: C.shadow };
-  const label = { fontSize: 10.5, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" };
-  const th = { ...label, padding: "11px 14px", textAlign: "left", whiteSpace: "nowrap" };
-  const thNum = { ...th, textAlign: "right" };
-  const td = { padding: "12px 14px", fontSize: 13, color: C.text, verticalAlign: "middle" };
-  const tdNum = { ...td, textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" };
   const sub = { fontSize: 11.5, color: C.secondary, marginTop: 2 };
-  const h2 = { fontSize: 15, fontWeight: 700, color: C.text, margin: "30px 0 12px", letterSpacing: "-0.01em" };
-  const pill = (tone, text, title) => (
-    <span title={title} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 9px", borderRadius: 999, fontSize: 11.5, fontWeight: 600, color: tone, background: `${tone}1f`, whiteSpace: "nowrap" }}>
-      <span style={{ width: 6, height: 6, borderRadius: 999, background: tone }} />{text}
-    </span>
-  );
-  const avatar = (name, size = 32) => (
-    <span style={{ width: size, height: size, borderRadius: 999, background: darkMode ? "#2a2b36" : "#e8ebf5", color: C.accent, fontSize: size * 0.38, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-      {initials(name)}
-    </span>
-  );
-  const resultBar = (rdv, height = 8) => {
-    const parts = resultSegments(rdv);
-    if (!parts.length) return <div style={{ height, borderRadius: 999, background: C.subtle }} />;
-    return (
-      <div title={parts.map((p) => `${RESULT_LABELS[p.key]} : ${p.value}`).join(" · ")}
-        style={{ display: "flex", height, borderRadius: 999, overflow: "hidden", background: C.subtle }}>
-        {parts.map((p) => <span key={p.key} style={{ width: `${p.pct}%`, background: OUTCOME_TONES[p.key] }} />)}
-      </div>
-    );
+  const styles = {
+    card: { background: C.bg, border: `1px solid ${C.border}`, borderRadius: 18 },
+    label: { fontFamily: "var(--mono)", fontSize: 10.5, fontWeight: 500, color: C.secondary, textTransform: "uppercase", letterSpacing: "0.05em" },
+    sub, pill, resultBar, legend,
+    avatar: (name, size = 32) => <Face name={name} size={size} url={avatarFor?.(name)} />,
   };
-  const legend = (rdv) => (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", marginTop: 10 }}>
-      {Object.keys(RESULT_LABELS).map((k) => (
-        <span key={k} title={OUTCOME_HINTS[k]} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: C.secondary }}>
-          <span style={{ width: 8, height: 8, borderRadius: 999, background: OUTCOME_TONES[k] }} />
-          {RESULT_LABELS[k]} <b style={{ color: C.text, fontVariantNumeric: "tabular-nums" }}>{fmtInt(rdv?.[k])}</b>
-        </span>
-      ))}
-    </div>
-  );
-  const kpi = (title, value, detailText, tone) => (
-    <div style={{ ...card, padding: "16px 18px" }}>
-      <div style={label}>{title}</div>
-      <div style={{ fontSize: 26, fontWeight: 700, color: tone || C.text, fontVariantNumeric: "tabular-nums", marginTop: 6 }}>{value}</div>
-      {detailText && <div style={{ ...sub, marginTop: 4 }}>{detailText}</div>}
-    </div>
-  );
   const callsCell = (c) => {
-    if (c.state === "loading") return <span style={{ color: C.muted }}>…</span>;
-    if (c.state === "missing") return <span style={{ fontSize: 12, color: C.muted }}>Pas de compte Allo</span>;
-    if (c.state === "error") return <span style={{ fontSize: 12, color: C.muted }}>Allo indisponible</span>;
+    if (c.state === "loading") return <span className="ps2-muted">…</span>;
+    if (c.state === "missing") return <small className="ps2-muted">Pas de compte Allo</small>;
+    if (c.state === "error") return <small className="ps2-muted">Allo indisponible</small>;
     return (
       <>
-        <div style={{ fontWeight: 600 }}>{fmtInt(c.calls)}</div>
-        <div style={sub}>{fmtInt(c.answered)} répondus · {fmtTalk(c.duration)}</div>
+        <b>{fmtInt(c.calls)}</b>
+        <small>{fmtInt(c.answered)} répondus · {fmtTalk(c.duration)}</small>
       </>
     );
   };
 
   return (
-    <div style={{ padding: "28px 32px 56px", maxWidth: 1320 }}>
-      {/* En-tête et période */}
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap", marginBottom: 22 }}>
-        <div style={{ flex: "1 1 420px" }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: C.text, margin: "0 0 6px", letterSpacing: "-0.01em" }}>Setters</h1>
-          <p style={{ fontSize: 13, color: C.muted, margin: 0, lineHeight: 1.55 }}>
-            Appels, rendez-vous posés et clients amenés par chaque setter. Cliquez sur un setter pour voir ses clients et ses RDV.
-          </p>
-        </div>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={label}>Période</span>
-          <select value={period} onChange={(e) => setPeriod(e.target.value)} disabled={!data}
-            style={{ minWidth: 200, padding: "9px 12px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>
-            {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        </label>
+    <div className="pst-rank">
+      {/* Période */}
+      <div className="pst-rank-top">
+        <p>Cliquez sur un setter pour voir ses clients et ses RDV.</p>
+        <span className="pst-rank-period">
+          <span className="ps2-mono">Période</span>
+          <label className="ps2-month">
+            <span>{periodLabel || "Depuis mai"}</span>
+            <Chevron />
+            <select aria-label="Période" value={period} onChange={(e) => setPeriod(e.target.value)} disabled={!data}>
+              {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </label>
+        </span>
       </div>
 
-      {error && <div role="alert" style={{ ...card, padding: 18, fontSize: 13.5, color: "#b42318", marginBottom: 16 }}>{error}</div>}
+      {error && <div role="alert" className="ps2-empty">{error}</div>}
 
       {/* Chiffres clés de la période */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
-        {kpi("Appels passés", teamCalls ? fmtInt(teamCalls.calls) : (periodCalls?.status === "error" ? "Indisponible" : "…"),
-          teamCalls ? `${fmtInt(teamCalls.answered)} répondus · ${fmtTalk(teamCalls.duration)} au téléphone` : "Allo")}
-        {kpi("RDV posés", data ? fmtInt(team.rdv.total) : "…", data ? `dont ${fmtInt(team.rdv.webinar_link)} via un lien webinaire` : null)}
-        {kpi("Clients signés", data ? fmtInt(team.sales.count) : "…", "à la suite d'un RDV de setter", "#10b981")}
-        {kpi("CA des contrats", data ? fmtEuro(team.sales.amount) : "…", data ? `${fmtEuro(team.sales.cash)} encaissés à la signature` : null)}
-        {kpi("Transformation", data ? fmtRate(conversion(team.rdv)) : "…", "clients signés / RDV honorés")}
-      </div>
-      <div style={{ ...card, padding: "16px 18px", marginTop: 12 }}>
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
-          <div style={label}>Résultat des RDV posés</div>
-          <div style={{ fontSize: 12, color: C.muted }}>{periodLabel}</div>
-        </div>
-        {resultBar(team.rdv, 12)}
-        {legend(team.rdv)}
-      </div>
+      <Reveal as="section" className="ps2-setter-kpis" aria-label="Chiffres clés de la période" variants={{ hidden: {}, shown: { transition: { staggerChildren: 0.07 } } }}>
+        {[
+          kpi("Appels passés", teamCalls ? fmtInt(teamCalls.calls) : (periodCalls?.status === "error" ? "Indisponible" : "…"),
+            teamCalls ? `${fmtInt(teamCalls.answered)} répondus · ${fmtTalk(teamCalls.duration)} au téléphone` : "Allo"),
+          kpi("RDV posés", data ? fmtInt(team.rdv.total) : "…", data ? `dont ${fmtInt(team.rdv.webinar_link)} via un lien webinaire` : null),
+          kpi("Clients signés", data ? fmtInt(team.sales.count) : "…", "à la suite d'un RDV de setter", "var(--good-strong)"),
+          kpi("CA des contrats", data ? fmtEuro(team.sales.amount) : "…", data ? `${fmtEuro(team.sales.cash)} encaissés à la signature` : null),
+          kpi("Transformation", data ? fmtRate(conversion(team.rdv)) : "…", "clients signés / RDV honorés"),
+        ].map((tile) => <Motion.div key={tile.key} variants={ITEM}>{tile}</Motion.div>)}
+      </Reveal>
+
+      <Reveal as="section" className="ps2-card" aria-labelledby="pst-rank-result">
+        <Motion.div className="ps2-card-head" variants={ITEM}>
+          <h2 id="pst-rank-result">Résultat des RDV posés</h2>
+          <span className="ps2-chip-soft">{periodLabel}</span>
+        </Motion.div>
+        <Motion.div variants={ITEM} style={{ marginTop: 14 }}>
+          {resultBar(team.rdv, 14)}
+          {legend(team.rdv)}
+        </Motion.div>
+      </Reveal>
 
       {/* Classement */}
-      <h2 style={h2}>Classement des setters</h2>
-      <div style={{ ...card, overflow: "hidden" }}>
+      <Reveal as="section" className="ps2-card" aria-labelledby="pst-rank-title">
+        <Motion.div className="ps2-card-head" variants={ITEM}>
+          <h2 id="pst-rank-title">Classement des setters</h2>
+          <span className="ps2-chip-soft">{periodLabel}</span>
+        </Motion.div>
         {!data ? (
-          <div style={{ padding: 22, fontSize: 13.5, color: C.muted }}>{error ? "" : "Chargement…"}</div>
+          error ? null : <div className="ps2-loading" aria-label="Chargement"><i /><i /><i /><i /></div>
         ) : !active.length ? (
-          <div style={{ padding: 22, fontSize: 13.5, color: C.muted }}>Aucune activité de setter sur cette période.</div>
+          <div className="ps2-empty">Aucune activité de setter sur cette période.</div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", minWidth: 980 }}>
-              <colgroup>
-                <col style={{ width: "23%" }} /><col style={{ width: "13%" }} /><col style={{ width: "9%" }} /><col style={{ width: "22%" }} />
-                <col style={{ width: "9%" }} /><col style={{ width: "11%" }} /><col style={{ width: "8%" }} /><col style={{ width: 36 }} />
-              </colgroup>
+          <div className="ps2-ctable-wrap" style={{ marginTop: 12 }}>
+            <table className="ps2-ctable pst-ranktable" style={{ "--c": "var(--navy)" }}>
               <thead>
-                <tr style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
-                  <th style={th}>Setter</th>
-                  <th style={thNum}>Appels Allo</th>
-                  <th style={thNum}>RDV posés</th>
-                  <th style={th}>Résultat des RDV</th>
-                  <th style={thNum}>Clients</th>
-                  <th style={thNum}>CA contrats</th>
-                  <th style={thNum} title="Clients signés / RDV honorés">Transfo</th>
-                  <th style={th} aria-label="Ouvrir" />
+                <tr>
+                  <th>Setter</th>
+                  <th>Appels Allo</th>
+                  <th>RDV posés</th>
+                  <th style={{ textAlign: "left" }}>Résultat des RDV</th>
+                  <th>Clients</th>
+                  <th>CA contrats</th>
+                  <th title="Clients signés / RDV honorés">Transfo</th>
+                  <th><span className="pst-sr">Ouvrir la fiche</span></th>
                 </tr>
               </thead>
               <tbody>
                 {active.map((s) => (
-                  <tr key={s.id} onClick={() => openDetail(s.id)} title="Voir ses clients et ses RDV"
-                    style={{ borderBottom: `1px solid ${C.border}`, cursor: "pointer", transition: "background 0.12s" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = C.subtle; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
-                    <td style={td}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        {avatar(s.name)}
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name || "Setter inconnu"}</div>
-                          <div style={sub}>{s.has_webinar_link ? "Lien webinaire" : "CRM"}{!s.active ? " · compte désactivé" : ""}</div>
-                        </div>
+                  <tr key={s.id} onClick={() => openDetail(s.id)} title="Voir ses clients et ses RDV" className="pst-row">
+                    <td>
+                      <span className="pst-who">
+                        <Face name={s.name} url={avatarFor?.(s.name)} />
+                        <span>
+                          <button type="button" className="pst-open" onClick={(e) => { e.stopPropagation(); openDetail(s.id); }} aria-label={`Ouvrir la fiche de ${s.name || "Setter inconnu"}`}>{s.name || "Setter inconnu"}</button>
+                          <small>{s.has_webinar_link ? "Lien webinaire" : "CRM"}{!s.active ? " · compte désactivé" : ""}</small>
+                        </span>
+                      </span>
+                    </td>
+                    <td className="pst-two">{callsCell(callsOf(periodCalls, s.id))}</td>
+                    <td className="pst-two">
+                      <b>{fmtInt(s.st.rdv.total)}</b>
+                      {(s.st.rdv.webinar_link || 0) > 0 && <small>dont {fmtInt(s.st.rdv.webinar_link)} lien</small>}
+                    </td>
+                    <td style={{ textAlign: "left" }}>
+                      <div className="pst-result">
+                        {resultBar(s.st.rdv, 8)}
+                        <small>{fmtInt(s.st.rdv.held)} honorés · {fmtInt(s.st.rdv.no_show)} no-show · {fmtInt(s.st.rdv.to_qualify)} à qualifier</small>
                       </div>
                     </td>
-                    <td style={tdNum}>{callsCell(callsOf(periodCalls, s.id))}</td>
-                    <td style={tdNum}>
-                      <div style={{ fontWeight: 600 }}>{fmtInt(s.st.rdv.total)}</div>
-                      {(s.st.rdv.webinar_link || 0) > 0 && <div style={sub}>dont {fmtInt(s.st.rdv.webinar_link)} lien</div>}
-                    </td>
-                    <td style={td}>
-                      {resultBar(s.st.rdv)}
-                      <div style={{ ...sub, marginTop: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {fmtInt(s.st.rdv.held)} honorés · {fmtInt(s.st.rdv.no_show)} no-show · {fmtInt(s.st.rdv.to_qualify)} à qualifier
-                      </div>
-                    </td>
-                    <td style={{ ...tdNum, fontSize: 15, fontWeight: 700, color: (s.st.sales.count || 0) > 0 ? "#10b981" : C.muted }}>{fmtInt(s.st.sales.count)}</td>
-                    <td style={tdNum}>{fmtEuro(s.st.sales.amount)}</td>
-                    <td style={tdNum}>{fmtRate(conversion(s.st.rdv))}</td>
-                    <td style={{ ...td, color: C.muted, fontSize: 18, textAlign: "center" }}>›</td>
+                    <td className="pst-clients" style={(s.st.sales.count || 0) > 0 ? { color: "var(--good-strong)" } : { color: "var(--muted)" }}>{fmtInt(s.st.sales.count)}</td>
+                    <td>{fmtEuro(s.st.sales.amount)}</td>
+                    <td>{fmtRate(conversion(s.st.rdv))}</td>
+                    <td className="pst-chev" aria-hidden="true">›</td>
                   </tr>
                 ))}
               </tbody>
@@ -256,62 +282,56 @@ export default function SettersStats({ C, darkMode }) {
           </div>
         )}
         {data && idle.length > 0 && (
-          <div style={{ padding: "12px 16px", fontSize: 12.5, color: C.muted, borderTop: `1px solid ${C.border}`, background: C.surface }}>
-            Sans activité sur la période : {idle.map((s) => s.name || "Setter inconnu").join(", ")}
-          </div>
+          <p className="ps2-note">Sans activité sur la période : {idle.map((s) => s.name || "Setter inconnu").join(", ")}</p>
         )}
-      </div>
+      </Reveal>
 
       {/* Clients signés par mois */}
       {data && everActive.length > 0 && (
-        <>
-          <h2 style={h2}>Clients signés par mois</h2>
-          <div style={{ ...card, overflow: "hidden" }}>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}>
-                    <th style={th}>Setter</th>
-                    {shownMonths.map((m) => (
-                      <th key={m} style={{ ...thNum, color: m === period ? C.accent : C.muted }}>
-                        <button type="button" onClick={() => setPeriod(m)} title={`Voir ${fmtMonth(m).toLowerCase()}`}
-                          style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", font: "inherit", color: "inherit", textTransform: "inherit", letterSpacing: "inherit" }}>
-                          {fmtMonthShort(m)}
-                        </button>
-                      </th>
-                    ))}
-                    <th style={thNum}>Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...everActive, { id: "__team", name: "Équipe", months: data.team.months, totals: data.team.totals, team: true }].map((s) => (
-                    <tr key={s.id} onClick={s.team ? undefined : () => openDetail(s.id)}
-                      style={{ borderBottom: `1px solid ${C.border}`, background: s.team ? C.surface : "transparent", cursor: s.team ? "default" : "pointer" }}>
-                      <td style={{ ...td, fontWeight: s.team ? 700 : 600, whiteSpace: "nowrap" }}>{s.name || "Setter inconnu"}</td>
-                      {shownMonths.map((m) => {
-                        const st = s.months?.[m]?.sales || {};
-                        return (
-                          <td key={m} style={{ ...tdNum, background: m === period ? C.subtle : "transparent", color: st.count ? C.text : C.muted, fontWeight: s.team ? 700 : 500 }}>
-                            <div>{st.count ? fmtInt(st.count) : "·"}</div>
-                            {st.count > 0 && <div style={sub}>{fmtEuro(st.amount)}</div>}
-                          </td>
-                        );
-                      })}
-                      <td style={{ ...tdNum, fontWeight: 700 }}>
-                        <div>{fmtInt(s.totals.sales.count)}</div>
-                        <div style={sub}>{fmtEuro(s.totals.sales.amount)}</div>
-                      </td>
-                    </tr>
+        <Reveal as="section" className="ps2-card" aria-labelledby="pst-rank-months">
+          <Motion.div className="ps2-card-head" variants={ITEM}><h2 id="pst-rank-months">Clients signés par mois</h2></Motion.div>
+          <div className="ps2-ctable-wrap" style={{ marginTop: 12 }}>
+            <table className="ps2-ctable pst-monthtable" style={{ "--c": "var(--navy)", minWidth: 0 }}>
+              <thead>
+                <tr>
+                  <th>Setter</th>
+                  {shownMonths.map((m) => (
+                    <th key={m} className={m === period ? "is-on" : undefined}>
+                      <button type="button" onClick={() => setPeriod(m)} title={`Voir ${fmtMonth(m).toLowerCase()}`}>{fmtMonthShort(m)}</button>
+                    </th>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...everActive, { id: "__team", name: "Équipe", months: data.team.months, totals: data.team.totals, team: true }].map((s) => (
+                  <tr key={s.id} className={s.team ? "is-total" : "pst-row"} onClick={s.team ? undefined : () => openDetail(s.id)}>
+                    <td className="pst-name">{s.team ? s.name || "Setter inconnu" : (
+                      <button type="button" className="pst-open" onClick={(e) => { e.stopPropagation(); openDetail(s.id); }} aria-label={`Ouvrir la fiche de ${s.name || "Setter inconnu"}`}>{s.name || "Setter inconnu"}</button>
+                    )}</td>
+                    {shownMonths.map((m) => {
+                      const st = s.months?.[m]?.sales || {};
+                      return (
+                        <td key={m} className={`pst-two${m === period ? " is-on" : ""}${st.count ? "" : " is-nil"}`}>
+                          <b>{st.count ? fmtInt(st.count) : "·"}</b>
+                          {st.count > 0 && <small>{fmtEuro(st.amount)}</small>}
+                        </td>
+                      );
+                    })}
+                    <td className="pst-two">
+                      <b>{fmtInt(s.totals.sales.count)}</b>
+                      <small>{fmtEuro(s.totals.sales.amount)}</small>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </>
+        </Reveal>
       )}
 
       {detail && <SetterDetail detail={detail} rdvAll={data?.rdv_all || []} allCalls={callsOf(calls[ALL], detail.id)} tab={tab} setTab={setTab}
-        onClose={closeDetail} C={C} darkMode={darkMode} styles={{ card, label, sub, pill, avatar, resultBar, legend }} />}
+        onClose={closeDetail} C={C} darkMode={darkMode} styles={styles} />}
     </div>
   );
 }
@@ -322,8 +342,20 @@ function SetterDetail({ detail, rdvAll, allCalls, tab, setTab, onClose, C, darkM
   const rdvs = useMemo(() => rdvAll.filter((r) => r.setter_id === detail.id), [rdvAll, detail]);
   const rdvByMonth = useMemo(() => groupByMonth(rdvs, "rdv_at"), [rdvs]);
   const t = detail.totals;
+  const calls = useProspectCalls(detail.id);                       // appels Allo de ce setter, par prospect de RDV (ajout du 23/10)
+  const [openCall, setOpenCall] = useState(null);                  // { entry, rdv } : le prospect dont le panneau d'appels est ouvert (fermé par défaut)
   const callsValue = allCalls.state === "ok" ? fmtInt(allCalls.calls) : allCalls.state === "loading" ? "…" : allCalls.state === "missing" ? "Pas de compte" : "Indisponible";
   const callsDetail = allCalls.state === "ok" ? `${fmtInt(allCalls.answered)} répondus · ${fmtTalk(allCalls.duration)}` : "Allo";
+  // Le cadre « Appels Allo vers les prospects » (sous les tuiles) reprend déjà le total d'appels, les répondus et la durée, ou dit pourquoi il n'y en a pas :
+  // la tuile « Appels Allo » ne reste que tant qu'il n'est pas affiché (chargement, route absente), pour que ces chiffres ne figurent pas deux fois.
+  const overviewShown = calls.state === "ready" && Boolean(overviewOf(calls.data));
+  const tiles = [
+    ...(overviewShown ? [] : [["Appels Allo", callsValue, callsDetail]]),
+    ["RDV posés", fmtInt(t.rdv.total), `${fmtInt(t.rdv.crm)} CRM · ${fmtInt(t.rdv.webinar_link)} lien webinaire`],
+    ["Clients signés", fmtInt(t.sales.count), null],
+    ["CA des contrats", fmtEuro(t.sales.amount), `${fmtEuro(t.sales.cash)} encaissés`],
+    ["Transformation", fmtRate(conversion(t.rdv)), "clients / RDV honorés"],
+  ];
   const tabBtn = (key, text) => (
     <button type="button" onClick={() => setTab(key)} style={{
       padding: "9px 14px", border: "none", borderBottom: `2px solid ${tab === key ? C.accent : "transparent"}`, background: "transparent",
@@ -340,9 +372,9 @@ function SetterDetail({ detail, rdvAll, allCalls, tab, setTab, onClose, C, darkM
   const ellipsis = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,17,23,0.35)", display: "flex", justifyContent: "flex-end" }}>
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(18,27,53,.32)", display: "flex", justifyContent: "flex-end" }}>
       <div role="dialog" aria-label={`Fiche de ${detail.name}`} onClick={(e) => e.stopPropagation()}
-        style={{ width: "min(1080px, 100vw)", height: "100%", overflowY: "auto", background: darkMode ? "#0f1117" : "#f6f7f9", boxShadow: "-12px 0 40px rgba(0,0,0,0.18)", padding: "24px 28px 48px" }}>
+        style={{ width: "min(1080px, 100vw)", height: "100%", overflowY: "auto", background: "var(--bg)", boxShadow: "-24px 0 60px rgba(18,27,53,.18)", padding: "24px 28px 48px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           {avatar(detail.name, 44)}
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -353,12 +385,8 @@ function SetterDetail({ detail, rdvAll, allCalls, tab, setTab, onClose, C, darkM
             style={{ width: 36, height: 36, borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, cursor: "pointer", fontSize: 20, lineHeight: 1, fontFamily: "inherit" }}>×</button>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 10, marginTop: 18 }}>
-          {[["Appels Allo", callsValue, callsDetail],
-            ["RDV posés", fmtInt(t.rdv.total), `${fmtInt(t.rdv.crm)} CRM · ${fmtInt(t.rdv.webinar_link)} lien webinaire`],
-            ["Clients signés", fmtInt(t.sales.count), null],
-            ["CA des contrats", fmtEuro(t.sales.amount), `${fmtEuro(t.sales.cash)} encaissés`],
-            ["Transformation", fmtRate(conversion(t.rdv)), "clients / RDV honorés"]].map(([k, v, d]) => (
+        <div className="pst-dkpis" style={{ display: "grid", gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))`, gap: 10, marginTop: 18 }}>
+          {tiles.map(([k, v, d]) => (
             <div key={k} style={{ ...card, padding: "12px 14px" }}>
               <div style={label}>{k}</div>
               <div style={{ fontSize: 20, fontWeight: 700, color: C.text, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>{v}</div>
@@ -366,6 +394,7 @@ function SetterDetail({ detail, rdvAll, allCalls, tab, setTab, onClose, C, darkM
             </div>
           ))}
         </div>
+        <CallsOverview calls={calls} C={C} dark={darkMode} styles={styles} />
         <div style={{ ...card, padding: "12px 14px", marginTop: 10 }}>
           {resultBar(t.rdv, 10)}
           {legend(t.rdv)}
@@ -396,7 +425,7 @@ function SetterDetail({ detail, rdvAll, allCalls, tab, setTab, onClose, C, darkM
                     {g.items.map((c, i) => {
                       const who = splitClient(c.client_name, c.societe);
                       return (
-                        <div key={`${c.numero_client || i}-${c.signed_at}`} style={{ ...row, gridTemplateColumns: "78px minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1.9fr) 104px minmax(0, 1.3fr)" }}>
+                        <div key={`${c.numero_client || i}-${c.signed_at}`} className="pst-drow" style={{ ...row, gridTemplateColumns: "78px minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1.9fr) 104px minmax(0, 1.3fr)" }}>
                           <div style={{ fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums" }}>{c.numero_client || "Sans n°"}</div>
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontWeight: 600, color: C.text, ...ellipsis }}>{who.company}</div>
@@ -441,8 +470,9 @@ function SetterDetail({ detail, rdvAll, allCalls, tab, setTab, onClose, C, darkM
                     {g.items.map((r) => {
                       const state = clientState(r);
                       const waiting = r.assigned?.state !== "assigned";
+                      const callsView = rdvCallsView(calls, r.lead_id);
                       return (
-                        <div key={`${r.lead_id}-${r.kind}`} style={{ ...row, gridTemplateColumns: "172px minmax(0, 2fr) minmax(0, 1.1fr) 120px minmax(0, 1.4fr) minmax(0, 1.2fr)" }}>
+                        <div key={`${r.lead_id}-${r.kind}`} className="pst-drow" style={{ ...row, gridTemplateColumns: "172px minmax(0, 2fr) minmax(0, 1.1fr) 120px minmax(0, 1.4fr) minmax(0, 1.2fr)" }}>
                           <div>
                             <div style={{ fontWeight: 600, color: C.text, whiteSpace: "nowrap" }}>{fmtRdv(r.rdv_at)}</div>
                             <div style={sub}>{r.kind === "r1" ? "R1" : "R2"} · {CHANNEL_LABELS[r.channel]}</div>
@@ -452,7 +482,7 @@ function SetterDetail({ detail, rdvAll, allCalls, tab, setTab, onClose, C, darkM
                             {r.company && r.full_name && <div style={{ ...sub, ...ellipsis }}>{r.full_name}</div>}
                           </div>
                           <div style={{ minWidth: 0 }}>{pill(ORIGIN_TONES[r.origin] || ORIGIN_TONES.other, ORIGIN_LABELS[r.origin] || r.origin)}</div>
-                          <div>{pill(OUTCOME_TONES[r.outcome] || OUTCOME_TONES.removed, OUTCOME_LABELS[r.outcome] || r.outcome, OUTCOME_HINTS[r.outcome])}</div>
+                          <div>{pill(outcomeTone(r.outcome), OUTCOME_LABELS[r.outcome] || r.outcome, OUTCOME_HINTS[r.outcome])}</div>
                           <div style={{ minWidth: 0 }}>
                             {state
                               ? <>{pill(CLIENT_TONES[state], state === "client" && r.client?.numero_client ? `Client ${r.client.numero_client}` : CLIENT_STATE_LABELS[state])}
@@ -463,6 +493,7 @@ function SetterDetail({ detail, rdvAll, allCalls, tab, setTab, onClose, C, darkM
                             <div style={{ ...label, fontSize: 9.5 }}>Affecté à</div>
                             <div style={{ fontSize: 12.5, color: waiting ? C.muted : C.text, fontStyle: waiting ? "italic" : "normal", ...ellipsis }}>{assignedLabel(r.assigned)}</div>
                           </div>
+                          <RdvCallsPanel view={callsView} C={C} onOpen={() => setOpenCall({ entry: callsView.entry, rdv: r })} />
                         </div>
                       );
                     })}
@@ -471,6 +502,7 @@ function SetterDetail({ detail, rdvAll, allCalls, tab, setTab, onClose, C, darkM
               );
             })
         )}
+        <CallsPanel target={openCall} setter={detail} dark={darkMode} onClose={() => setOpenCall(null)} />
       </div>
     </div>
   );
