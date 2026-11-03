@@ -1129,7 +1129,9 @@ function PanelHeader({ client, onClose, fullscreen, onToggleFullscreen }) {
         <span style={{
           color: N.text, fontWeight: 500,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
+        }}
+          title={societeName || ''}
+        >
           {societeName || 'Client'}
         </span>
       </div>
@@ -1218,6 +1220,10 @@ function ClientHeader({ client }) {
   // L'avatar reste sur la SOCIÉTÉ (identité visuelle stable). Le numéro et
   // la date de signature ne sont pas répétés ici : ils vivent dans
   // « Informations contractuelles » (retour dev 2026-09-03).
+  // Nom très long (retour dev 2026-11-03) : la ligne se coupe avec « … » au
+  // lieu de pousser le bouton « Actions » hors du panneau (`minWidth: 0` sur le
+  // conteneur, sinon il garde la largeur du texte entier) ; le nom complet
+  // s'affiche au survol (`title`), comme dans les cellules du tableau.
   const { societeName, representant: repFromSociete } = splitClientIdentity(client);
   const personne = client?.representative_name || repFromSociete;
   const av = avatarMeta(societeName);
@@ -1227,7 +1233,7 @@ function ClientHeader({ client }) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-      style={{ display: 'flex', alignItems: 'center', gap: 14 }}
+      style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}
     >
       {/* Avatar initiales */}
       <div style={{
@@ -1249,14 +1255,18 @@ function ClientHeader({ client }) {
           margin: 0, letterSpacing: '-0.02em', lineHeight: 1.25,
           overflow: 'hidden', textOverflow: 'ellipsis',
           display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-        }}>
+        }}
+          title={personne || societeName || ''}
+        >
           {personne || societeName || '—'}
         </h1>
         {personne && societeName && (
           <div style={{
             marginTop: 2, fontSize: 13.5, fontWeight: 500, color: N.textMuted,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
+          }}
+            title={societeName}
+          >
             {societeName}
           </div>
         )}
