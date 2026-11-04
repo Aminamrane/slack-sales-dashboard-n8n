@@ -4,7 +4,7 @@
 // 3. la convention Opti'Lex (prévenir Lisa), 4. la météo d'onboarding qui finalise la fiche,
 // 5. la clôture : réalisé, ou à recaler (avec ou sans date). Règle finance affichée telle
 // que le moteur l'applique : le jour J, rien n'est dû avant la fin du rendez-vous.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion as Motion, AnimatePresence } from "framer-motion";
 import apiClient from "../services/apiClient";
@@ -215,7 +215,7 @@ function OptilexStep({ brief, num }) {
   );
 }
 
-function MeteoStep({ brief, num, onRated, rated }) {
+function MeteoStep({ brief, num, onRated, rated, controlRef }) {
   const sheet = brief.sheet;
   const done = rated || sheet?.onboarding?.completed;
   if (!sheet || !sheet.has_form) {
@@ -239,21 +239,25 @@ function MeteoStep({ brief, num, onRated, rated }) {
       <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.5, marginBottom: 8 }}>
         Le commercial a posé sa météo à la vente. La vôtre s'ajoute à la suite et finalise la fiche d'intégration. Elle entre aussi dans l'historique météo du client.
       </div>
-      <OnboardingRatingForm numero={num} compact onSaved={onRated} />
+      <OnboardingRatingForm numero={num} compact onSaved={onRated} controlRef={controlRef} />
     </Card>
   );
 }
 
-function ClotureStep({ brief, busy, onDone, onRescheduleWithDate, onRescheduleLater, note, setNote }) {
+function ClotureStep({ brief, busy, onDone, onRescheduleWithDate, onRescheduleLater, note, setNote, weatherDue, onWeather }) {
   const alreadyDone = brief.onboarding.done;
   return (
     <>
+      {weatherDue && <section role="alert" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12, padding: "12px 14px", border: "1px solid #f3dfb4", borderRadius: 12, background: "#fff7e6" }}>
+        <div style={{ flex: 1, minWidth: 220, fontSize: 13, color: TEXT, lineHeight: 1.5 }}><strong style={{ color: AMBER }}>Météo d'onboarding pas encore posée.</strong> Elle finalise la fiche d'intégration : posez-la avant de conclure.</div>
+        <Button small primary onClick={onWeather}>Poser la météo</Button>
+      </section>}
       <Card title="Conclure l'onboarding">
         <div style={{ fontSize: 13, color: TEXT, lineHeight: 1.6, marginBottom: 12 }}>
           {alreadyDone ? "Cet onboarding est déjà réalisé. Pour corriger sa date, utilisez « Modifier la date de réalisation » en haut du parcours. Les actions ci-dessous servent à prévoir un nouveau rendez-vous." : "Trois issues possibles. Seul « réalisé » clôt l'onboarding ; les deux autres laissent la fiche en « à recaler » jusqu'à la nouvelle date."}
         </div>
         <div style={{ display: "grid", gap: 8 }}>
-          <Button primary disabled={busy || alreadyDone} onClick={onDone}>{alreadyDone ? "Onboarding déjà réalisé" : busy === "done" ? "Enregistrement…" : "Onboarding réalisé"}</Button>
+          <Button primary disabled={busy || alreadyDone || weatherDue} onClick={onDone}>{alreadyDone ? "Onboarding déjà réalisé" : busy === "done" ? "Enregistrement…" : "Onboarding réalisé"}</Button>
           <Button disabled={busy} onClick={onRescheduleWithDate}>À recaler : je fixe la nouvelle date maintenant</Button>
           <div style={{ border: `1px dashed ${BORDER}`, borderRadius: 10, padding: 10 }}>
             <div style={{ fontSize: 12.5, fontWeight: 700, color: TEXT, marginBottom: 6 }}>À recaler, sans date pour le moment</div>
@@ -277,6 +281,9 @@ export default function OnboardingFlowModal({ row, num, onClose, patch, onResche
   const [closingMessage, setClosingMessage] = useState("");
   const [completedDate, setCompletedDate] = useState(() => onboardingDateOf(row));
   const noteLoaded = useRef(false);
+  // Météo en cours de saisie (étape 4) : quitter l'étape l'enregistre, ou montre ce qui manque.
+  const weatherRef = useRef(null);
+  const [unsavedClose, setUnsavedClose] = useState(false);
 
   useEffect(() => { setCompletedDate(onboardingDateOf(row)); }, [row.rdv_onboarding_done_date, row.rdv_onboarding_date_manual, row.rdv_onboarding_date, row.rdv_onboarding_done]);
 
@@ -294,15 +301,27 @@ export default function OnboardingFlowModal({ row, num, onClose, patch, onResche
     return () => { alive = false; };
   }, [num, refreshKey]);
 
-  // Échap ferme le parcours, sauf quand la fenêtre de recalage est ouverte par-dessus (blocked).
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape" && !busy && !blocked) onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [busy, blocked, onClose]);
-
   const current = STEPS[step];
   const progress = useMemo(() => ((step + 1) / STEPS.length) * 100, [step]);
+  // La fiche attend la météo du Client Success : tant qu'elle manque, l'onboarding ne se conclut pas.
+  const sheet = brief?.sheet;
+  const weatherDue = !!(sheet?.has_form && sheet.available && !sheet.onboarding?.completed && !rated);
+  const draft = () => (current.key === "meteo" ? weatherRef.current : null);
+  const saveDraft = async () => {
+    const d = draft();
+    if (!d?.dirty) return true;
+    if (!d.complete) { d.reveal(); return false; }
+    setBusy("meteo");
+    const ok = await d.save();
+    setBusy(null);
+    return ok;
+  };
+  const goTo = async (to) => { if (to !== step && await saveDraft()) { setUnsavedClose(false); setStep(to); } };
+  const requestClose = useCallback(() => {
+    if (busy) return;
+    if (current.key === "meteo" && weatherRef.current?.dirty && !unsavedClose) { setUnsavedClose(true); return; }
+    onClose();
+  }, [busy, current.key, unsavedClose, onClose]);
 
   const finish = async (changes, message, key) => {
     setBusy(key); setError("");
@@ -317,9 +336,16 @@ export default function OnboardingFlowModal({ row, num, onClose, patch, onResche
     }
   };
 
+  // Échap ferme le parcours, sauf quand la fenêtre de recalage est ouverte par-dessus (blocked).
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape" && !blocked) requestClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [blocked, requestClose]);
+
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label="Faire l'onboarding" style={{ position: "fixed", inset: 0, zIndex: 10060, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
-      <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => { if (!busy) onClose(); }} style={{ position: "absolute", inset: 0, background: "rgba(17,24,39,0.46)" }} />
+      <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={requestClose} style={{ position: "absolute", inset: 0, background: "rgba(17,24,39,0.46)" }} />
       <Motion.div initial={{ opacity: 0, y: 18, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.28, ease: EASE }}
         style={{ position: "relative", width: "min(720px, 100%)", maxHeight: "88vh", display: "flex", flexDirection: "column", background: "#f8faf9", borderRadius: 18, border: `1px solid ${BORDER}`, boxShadow: "0 28px 70px rgba(17,24,39,0.30)", overflow: "hidden" }}>
         <div style={{ padding: "16px 20px 12px", background: CARD, borderBottom: `1px solid ${BORDER}` }}>
@@ -329,18 +355,22 @@ export default function OnboardingFlowModal({ row, num, onClose, patch, onResche
               <div style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.crm_societe || row.societe_sheet || num}</div>
               <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>Étape {step + 1} sur {STEPS.length} · {current.hint}</div>
             </div>
-            <button type="button" aria-label="Fermer" disabled={!!busy} onClick={() => { if (!busy) onClose(); }} style={{ border: "none", background: "none", cursor: "pointer", color: MUTED, fontSize: 18, lineHeight: 1, padding: 4 }}>✕</button>
+            <button type="button" aria-label="Fermer" disabled={!!busy} onClick={requestClose} style={{ border: "none", background: "none", cursor: "pointer", color: MUTED, fontSize: 18, lineHeight: 1, padding: 4 }}>✕</button>
           </div>
           <div style={{ height: 4, borderRadius: 999, background: "#e9ebf0", marginTop: 12, overflow: "hidden" }}>
             <Motion.div animate={{ width: `${progress}%` }} transition={{ duration: 0.45, ease: EASE }} style={{ height: "100%", background: BRAND, borderRadius: 999 }} />
           </div>
           <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
-            {STEPS.map((s, i) => (
-              <button key={s.key} type="button" onClick={() => brief && setStep(i)} disabled={!brief}
-                style={{ padding: "4px 10px", borderRadius: 999, border: `1px solid ${i === step ? NAVY : BORDER}`, background: i === step ? NAVY : i < step ? "#e3f4ea" : CARD, color: i === step ? "#fff" : i < step ? GREEN : MUTED, fontSize: 11.5, fontWeight: 700, cursor: brief ? "pointer" : "default", fontFamily: "inherit" }}>
-                {i < step ? "✓ " : ""}{s.title}
-              </button>
-            ))}
+            {STEPS.map((s, i) => {
+              const missing = s.key === "meteo" && weatherDue && i < step;
+              const passed = i < step && !missing;
+              return (
+                <button key={s.key} type="button" onClick={() => brief && goTo(i)} disabled={!brief || !!busy} title={missing ? "Météo d'onboarding à poser" : undefined}
+                  style={{ padding: "4px 10px", borderRadius: 999, border: `1px solid ${i === step ? NAVY : missing ? "#f3dfb4" : BORDER}`, background: i === step ? NAVY : missing ? "#fff7e6" : passed ? "#e3f4ea" : CARD, color: i === step ? "#fff" : missing ? AMBER : passed ? GREEN : MUTED, fontSize: 11.5, fontWeight: 700, cursor: brief ? "pointer" : "default", fontFamily: "inherit" }}>
+                  {passed ? "✓ " : missing ? "! " : ""}{s.title}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -365,9 +395,10 @@ export default function OnboardingFlowModal({ row, num, onClose, patch, onResche
                 {current.key === "situation" && <SituationStep brief={brief} row={row} />}
                 {current.key === "rdv" && <RdvStep brief={brief} onReschedule={onReschedule} onCancel={onCancel} />}
                 {current.key === "optilex" && <OptilexStep brief={brief} num={num} />}
-                {current.key === "meteo" && <MeteoStep brief={brief} num={num} rated={rated} onRated={(d) => { setRated(d); onChanged?.(); }} />}
+                {current.key === "meteo" && <MeteoStep brief={brief} num={num} rated={rated} controlRef={weatherRef} onRated={(d) => { setRated(d); setUnsavedClose(false); onChanged?.(); }} />}
                 {current.key === "cloture" && (
                   <ClotureStep brief={brief} busy={busy} note={note} setNote={setNote}
+                    weatherDue={weatherDue} onWeather={() => goTo(STEPS.findIndex((s) => s.key === "meteo"))}
                     onDone={() => finish({ rdv_onboarding_done: true }, "Onboarding réalisé. Bravo !", "done")}
                     onRescheduleWithDate={() => { onClose(); onRescheduleWithDate?.(); }}
                     onRescheduleLater={() => finish({ onboarding_reschedule_pending: true, onboarding_reschedule_note: note.trim() || null }, "Onboarding marqué à recaler.", "later")} />
@@ -378,12 +409,19 @@ export default function OnboardingFlowModal({ row, num, onClose, patch, onResche
           )}
         </div>
 
+        {!closingMessage && unsavedClose && (
+          <div role="alert" style={{ padding: "10px 20px", background: "#fff7e6", borderTop: "1px solid #f3dfb4", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 200, fontSize: 12.5, color: TEXT }}><strong style={{ color: AMBER }}>Météo choisie mais pas enregistrée.</strong> Elle sera perdue si vous fermez.</div>
+            <Button small onClick={onClose}>Fermer sans enregistrer</Button>
+            <Button small primary disabled={!!busy} onClick={async () => { if (await saveDraft()) onClose(); }}>{busy === "meteo" ? "Enregistrement…" : "Enregistrer et fermer"}</Button>
+          </div>
+        )}
         {!closingMessage && (
           <div style={{ padding: "12px 20px", background: CARD, borderTop: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", gap: 10 }}>
-            <Button small disabled={!brief || step === 0 || !!busy} onClick={() => setStep((s) => Math.max(0, s - 1))}>← Précédent</Button>
+            <Button small disabled={!brief || step === 0 || !!busy} onClick={() => goTo(Math.max(0, step - 1))}>← Précédent</Button>
             {step < STEPS.length - 1
-              ? <Button small primary disabled={!brief || !!busy} onClick={() => setStep((s) => Math.min(STEPS.length - 1, s + 1))}>Suivant →</Button>
-              : <Button small disabled={!!busy} onClick={onClose}>Fermer sans conclure</Button>}
+              ? <Button small primary disabled={!brief || !!busy} onClick={() => goTo(Math.min(STEPS.length - 1, step + 1))}>{busy === "meteo" ? "Enregistrement…" : "Suivant →"}</Button>
+              : <Button small disabled={!!busy} onClick={requestClose}>Fermer sans conclure</Button>}
           </div>
         )}
       </Motion.div>

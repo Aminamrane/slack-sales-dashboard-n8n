@@ -14,8 +14,8 @@ const fmtDate = (iso) => { try { return iso ? new Date(iso).toLocaleDateString('
 
 // Notation d'onboarding : 5 niveaux + description obligatoire. Réutilisé par le parcours
 // « Faire l'onboarding » ; ici il apparaît dès que la partie commerciale est terminée.
-export function OnboardingRatingForm({ numero, onSaved }) {
-  return <WeatherCaseComposer requireNote saveLabel="Enregistrer et finaliser la fiche" onSave={async payload=>{
+export function OnboardingRatingForm({ numero, onSaved, controlRef }) {
+  return <WeatherCaseComposer requireNote controlRef={controlRef} saveLabel="Enregistrer et finaliser la fiche" onSave={async payload=>{
     const data=await apiClient.put('/api/v1/optilex/integration-sheet/onboarding', {
       numero_client:numero, weather:payload.score, weather_note:payload.note,
       weather_context:{version:2,qualification:payload.qualification},request_key:payload.request_key,mentions:payload.mentions,
