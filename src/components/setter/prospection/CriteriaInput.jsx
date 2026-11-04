@@ -1,27 +1,30 @@
-// Saisie assistée des critères de l'API Leads : on tape un métier, un code NAF, un département ou une
-// ville, et seuls un code NAF ou un département réels peuvent être choisis (jamais du texte libre).
+// Saisie assistée des critères de l'API Leads : on tape un métier, un code NAF, un département, une ville ou un
+// code postal, et seuls un code NAF, un département ou des codes postaux réels peuvent être choisis (jamais du
+// texte libre). `places` : une ville part avec tous ses codes postaux, un code postal seul.
 import { useEffect, useRef, useState } from 'react';
 import { Search, Briefcase, MapPin } from 'lucide-react';
 import { prospectionApi } from './prospectionApi';
 import { MONO } from './format';
 
-const SECTIONS = { activities: 'Activité (code NAF)', departements: 'Département' };
+const SECTIONS = { activities: 'Activité (code NAF)', departements: 'Département', places: 'Ville ou code postal' };
+const EMPTY = { activities: [], departements: [], places: [] };
+const keyOf = (kind, item) => (kind === 'places' ? `${kind}-${item.name}-${item.codes.join(',')}` : `${kind}-${item.code}`);
 
 export default function CriteriaInput({ C, kinds = ['activities', 'departements'], placeholder, onPick, autoFocus, compact }) {
   const [q, setQ] = useState('');
-  const [found, setFound] = useState({ activities: [], departements: [] });
+  const [found, setFound] = useState(EMPTY);
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const boxRef = useRef(null);
 
   useEffect(() => {
     const needle = q.trim();
-    if (!needle) { setFound({ activities: [], departements: [] }); return undefined; }
+    if (!needle) { setFound(EMPTY); return undefined; }
     let alive = true;
     const t = setTimeout(() => {
       prospectionApi.suggest(needle)
-        .then((r) => { if (alive) { setFound(r || { activities: [], departements: [] }); setHighlight(0); } })
-        .catch(() => { if (alive) setFound({ activities: [], departements: [] }); });
+        .then((r) => { if (alive) { setFound({ ...EMPTY, ...r }); setHighlight(0); } })
+        .catch(() => { if (alive) setFound(EMPTY); });
     }, 150);
     return () => { alive = false; clearTimeout(t); };
   }, [q]);
@@ -34,8 +37,10 @@ export default function CriteriaInput({ C, kinds = ['activities', 'departements'
 
   const options = kinds.flatMap((kind) => (found[kind] || []).map((item) => ({ kind, item })));
   const pick = (option) => {
-    onPick(option.kind === 'activities' ? { type: 'activity', code: option.item.code, label: option.item.label }
-      : { type: 'departement', code: option.item.code, name: option.item.name });
+    const { kind, item } = option;
+    onPick(kind === 'activities' ? { type: 'activity', code: item.code, label: item.label }
+      : kind === 'places' ? { type: 'place', codes: item.codes, label: item.label, departement: item.departement }
+        : { type: 'departement', code: item.code, name: item.name });
     setQ(''); setOpen(false);
   };
   const onKeyDown = (e) => {
@@ -50,7 +55,7 @@ export default function CriteriaInput({ C, kinds = ['activities', 'departements'
     const active = index === highlight;
     const { kind, item } = option;
     return (
-      <button key={`${kind}-${item.code}`} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pick(option)}
+      <button key={keyOf(kind, item)} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pick(option)}
         onMouseEnter={() => setHighlight(index)} style={{
           display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '9px 14px', border: 'none',
           background: active ? C.surface : 'transparent', color: C.text, fontSize: 14, fontFamily: 'inherit', cursor: 'pointer',
@@ -58,6 +63,8 @@ export default function CriteriaInput({ C, kinds = ['activities', 'departements'
         {kind === 'activities' ? <Briefcase size={15} color={C.muted} /> : <MapPin size={15} color={C.muted} />}
         {kind === 'activities' ? (
           <span><span style={{ fontFamily: MONO, fontSize: 13 }}>{item.code}</span> · {item.label}</span>
+        ) : kind === 'places' ? (
+          <span>{item.label}</span>
         ) : (
           <span>{item.name} <span style={{ fontFamily: MONO, fontSize: 13 }}>({item.code})</span>
             {item.via && <span style={{ color: C.muted }}> · contient {item.via}</span>}</span>
@@ -82,7 +89,8 @@ export default function CriteriaInput({ C, kinds = ['activities', 'departements'
           boxShadow: '0 16px 36px rgba(16,24,40,0.14)', padding: '6px 0' }}>
           {options.length === 0 && (
             <div style={{ padding: '10px 14px', fontSize: 13, color: C.muted }}>
-              Aucun code correspondant. Essayez un métier (« plombier »), un code NAF (« 43.22A »), un département ou une ville.
+              Aucun code correspondant. Essayez un métier (« plombier »), un code NAF (« 43.22A »){kinds.includes('places')
+                ? ', une ville ou un code postal.' : ', un département ou une ville.'}
             </div>
           )}
           {kinds.map((kind) => (found[kind] || []).length > 0 && (

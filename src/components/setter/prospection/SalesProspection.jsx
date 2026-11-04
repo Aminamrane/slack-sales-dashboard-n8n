@@ -1,6 +1,6 @@
 // Prospection dans la tracking sheet des commerciaux (demande dev 06/10/2026) : le même outil que les
-// setters (« Trouver des contacts » par code NAF et département, « Mes listes » réservées), avec ses
-// propres notifications. Différence : pas de prise de RDV depuis une liste ; « Exporter vers CRM » crée
+// setters (« Trouver des contacts », par code NAF et ville ou code postal depuis le 29/10/2026, « Mes listes »
+// réservées), avec ses propres notifications. Différence : pas de prise de RDV depuis une liste ; « Exporter vers CRM » crée
 // les leads dans « Nouveaux leads » de la sheet du commercial (origine cold call), où il pose son R1.
 import { useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -23,11 +23,11 @@ export default function SalesProspection({ view, C, darkMode, onNavigate, onOpen
       </h2>
       <p style={{ fontSize: 13, color: C.muted, margin: '0 0 24px' }}>
         {search
-          ? "Saisissez un code NAF, puis réservez les entreprises dans une liste : personne d'autre ne les appellera."
+          ? "Saisissez un code NAF, et si besoin une ville ou un code postal, puis réservez les entreprises dans une liste : personne d'autre ne les appellera."
           : "Suivez votre prospection entreprise par entreprise. « Exporter vers CRM » crée les leads dans vos Nouveaux leads, où vous posez le R1."}
       </p>
       {search ? (
-        <ProspectSearch C={C} darkMode={darkMode} onToast={onToast} nafOnly
+        <ProspectSearch C={C} darkMode={darkMode} onToast={onToast} where="ville"
           onOpenList={(id) => { setListId(id); onNavigate('prospect_lists'); }} />
       ) : (
         <ProspectLists C={C} darkMode={darkMode} onToast={onToast} canBook={false}

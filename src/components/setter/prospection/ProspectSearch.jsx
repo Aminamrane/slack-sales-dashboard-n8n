@@ -1,12 +1,13 @@
 // « Trouver des contacts » : le stock de l'outil de scraping, interrogé avec les seuls critères que son
-// API accepte (code NAF, département). Le total affiché est celui de l'API, exact ; la pagination suit
-// son curseur ; « Créer une liste » réserve exactement ce stock-là. `nafOnly` (sheet des commerciaux,
-// demande dev 06/10/2026) : la recherche ne demande que le code NAF, partout en France.
+// API accepte (code NAF, département, codes postaux). Le total affiché est celui de l'API, exact ; la
+// pagination suit son curseur ; « Créer une liste » réserve exactement ce stock-là. `where="ville"` (sheet
+// des commerciaux) : le code NAF partout en France (demande dev 06/10/2026), et en plus, si besoin, une ville ou
+// un code postal (29/10/2026, additif : sans ville, la recherche et la liste sont celles d'avant).
 import { useEffect, useRef, useState } from 'react';
 import { MapPin, Landmark, Loader2, ListPlus, Radar } from 'lucide-react';
 import { prospectionApi, errorMessage } from './prospectionApi';
 import { Card, Chip, Button, Modal, ProspectionStyles } from './ui';
-import { MONO, FONT, fmtInt, inputStyle, chipColors } from './format';
+import { MONO, FONT, fmtInt, inputStyle, chipColors, locationLabel } from './format';
 import CriteriaInput from './CriteriaInput';
 import PappersSearch from './PappersSearch';
 
@@ -27,10 +28,11 @@ const NAF_EXAMPLES = [
 const activityLabel = (a) => `${a.code} · ${a.label}`;
 const departementLabel = (d) => `${d.name} (${d.code})`;
 
-export default function ProspectSearch({ C, darkMode, onToast, onOpenList, nafOnly = false }) {
+export default function ProspectSearch({ C, darkMode, onToast, onOpenList, where = 'departement' }) {
+  const byCity = where === 'ville';
   const [meta, setMeta] = useState(null);
   const [stockSize, setStockSize] = useState(null);
-  const [criteria, setCriteria] = useState({ activity: null, departement: null });
+  const [criteria, setCriteria] = useState({ activity: null, departement: null, place: null });
   const [result, setResult] = useState(null);
   const [cursors, setCursors] = useState([null]);
   const [pageIndex, setPageIndex] = useState(0);
@@ -49,7 +51,7 @@ export default function ProspectSearch({ C, darkMode, onToast, onOpenList, nafOn
   // Une page du stock : critères + curseur de la page (null pour la première).
   const load = async (nextCriteria, nextCursors, nextIndex) => {
     setCriteria(nextCriteria);
-    if (!nextCriteria.activity && !nextCriteria.departement) {
+    if (!nextCriteria.activity && !nextCriteria.departement && !nextCriteria.place) {
       seq.current += 1;
       setResult(null); setError(''); setLoading(false); setCursors([null]); setPageIndex(0);
       return;
@@ -58,7 +60,7 @@ export default function ProspectSearch({ C, darkMode, onToast, onOpenList, nafOn
     setLoading(true); setError('');
     try {
       const page = await prospectionApi.available({
-        departement: nextCriteria.departement?.code, codeNaf: nextCriteria.activity?.code,
+        departement: nextCriteria.departement?.code, codeNaf: nextCriteria.activity?.code, codePostal: nextCriteria.place?.codes,
         cursor: nextCursors[nextIndex], limit: PAGE_SIZE,
       });
       if (mine !== seq.current) return;
@@ -72,12 +74,12 @@ export default function ProspectSearch({ C, darkMode, onToast, onOpenList, nafOn
   };
 
   const setCriterion = (key, value) => load({ ...criteria, [key]: value }, [null], 0);
-  const onPick = (picked) => setCriterion(picked.type, picked.type === 'activity'
-    ? { code: picked.code, label: picked.label } : { code: picked.code, name: picked.name });
+  const onPick = ({ type, ...picked }) => setCriterion(type, type === 'activity' ? { code: picked.code, label: picked.label }
+    : type === 'place' ? picked : { code: picked.code, name: picked.name });
   const goNext = () => load(criteria, [...cursors.slice(0, pageIndex + 1), result.next_cursor], pageIndex + 1);
   const goPrev = () => load(criteria, cursors, pageIndex - 1);
 
-  const hasCriteria = Boolean(criteria.activity || criteria.departement);
+  const hasCriteria = Boolean(criteria.activity || criteria.departement || criteria.place);
   const total = result?.available_total || 0;
   const canLaunch = Boolean(meta?.can_launch_search);
 
@@ -90,8 +92,8 @@ export default function ProspectSearch({ C, darkMode, onToast, onOpenList, nafOn
       <ProspectionStyles />
       <Card C={C} darkMode={darkMode} style={{ padding: '6px 20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 4px' }}>
-          <CriteriaInput C={C} onPick={onPick} autoFocus kinds={nafOnly ? ['activities'] : undefined}
-            placeholder={nafOnly ? 'Code NAF (ex. 43.22A)' : 'Activité, code NAF, département ou ville (ex. plombier, 43.22A, Rhône, Lyon)'} />
+          <CriteriaInput C={C} onPick={onPick} autoFocus kinds={byCity ? ['activities', 'places'] : undefined}
+            placeholder={byCity ? 'Code NAF (ex. 43.22A), puis une ville ou un code postal si besoin' : 'Activité, code NAF, département ou ville (ex. plombier, 43.22A, Rhône, Lyon)'} />
           {loading && <Loader2 size={18} color={C.muted} style={{ animation: 'prospSpin 1s linear infinite', flexShrink: 0 }} />}
         </div>
 
@@ -101,9 +103,11 @@ export default function ProspectSearch({ C, darkMode, onToast, onOpenList, nafOn
             {criteria.activity
               ? <Chip C={C} darkMode={darkMode} label={activityLabel(criteria.activity)} onRemove={() => setCriterion('activity', null)} />
               : <MutedChip C={C} label="Toutes activités" />}
-            {!nafOnly && (criteria.departement
-              ? <Chip C={C} darkMode={darkMode} label={departementLabel(criteria.departement)} onRemove={() => setCriterion('departement', null)} />
-              : <MutedChip C={C} label="Toute la France" />)}
+            {byCity
+              ? criteria.place && <Chip C={C} darkMode={darkMode} label={criteria.place.label} onRemove={() => setCriterion('place', null)} />
+              : (criteria.departement
+                ? <Chip C={C} darkMode={darkMode} label={departementLabel(criteria.departement)} onRemove={() => setCriterion('departement', null)} />
+                : <MutedChip C={C} label="Toute la France" />)}
           </div>
         )}
 
@@ -138,10 +142,10 @@ export default function ProspectSearch({ C, darkMode, onToast, onOpenList, nafOn
 
       {!hasCriteria && (
         <div style={{ color: C.muted, fontSize: 14, lineHeight: 1.7 }}>
-          {nafOnly ? 'Saisissez un code NAF. Par exemple :' : "Choisissez une activité (code NAF), un département, ou les deux : ce sont les critères de l'outil de scraping. Par exemple :"}
+          {byCity ? 'Saisissez un code NAF, et si besoin une ville ou un code postal. Par exemple :' : "Choisissez une activité (code NAF), un département, ou les deux : ce sont les critères de l'outil de scraping. Par exemple :"}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
-            {(nafOnly ? NAF_EXAMPLES : EXAMPLES).map((ex) => (
-              <button key={ex.title} type="button" onClick={() => load({ activity: ex.activity, departement: ex.departement }, [null], 0)} style={{
+            {(byCity ? NAF_EXAMPLES : EXAMPLES).map((ex) => (
+              <button key={ex.title} type="button" onClick={() => load({ activity: ex.activity, departement: ex.departement, place: null }, [null], 0)} style={{
                 border: `1px solid ${C.border}`, background: col.bg, color: col.text, borderRadius: 999, padding: '6px 12px',
                 fontSize: 13, fontFamily: 'inherit', cursor: 'pointer',
               }}>{ex.title}</button>
@@ -174,7 +178,7 @@ export default function ProspectSearch({ C, darkMode, onToast, onOpenList, nafOn
           onClose={() => setCreateOpen(false)}
           onCreate={async ({ name, count }) => {
             const list = await prospectionApi.createList({
-              name, count, departement: criteria.departement?.code, codeNaf: criteria.activity?.code,
+              name, count, departement: criteria.departement?.code, codeNaf: criteria.activity?.code, codePostal: criteria.place?.codes,
             });
             setCreateOpen(false);
             const short = list.total < count ? ` (le stock n'en avait plus que ${fmtInt(list.total)})` : '';
@@ -183,7 +187,8 @@ export default function ProspectSearch({ C, darkMode, onToast, onOpenList, nafOn
           }} />
       )}
       {pappersOpen && meta && (
-        <PappersSearch C={C} darkMode={darkMode} meta={meta} initial={criteria} onToast={onToast}
+        <PappersSearch C={C} darkMode={darkMode} meta={meta} onToast={onToast}
+          initial={{ ...criteria, departement: criteria.departement || (criteria.place && { code: criteria.place.departement }) }}
           onClose={() => { setPappersOpen(false); if (hasCriteria) load(criteria, [null], 0); }} />
       )}
     </div>
@@ -216,7 +221,7 @@ function ResultsTable({ C, darkMode, result, loading, page, pages, onPrev, onNex
               <tr key={c.id}>
                 <td style={{ ...td, fontWeight: 500, borderRight: `1px solid ${C.border}` }}>{c.name}</td>
                 <td style={mono}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><MapPin size={16} color={C.muted} />{c.location_label || 'Non renseigné'}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><MapPin size={16} color={C.muted} />{locationLabel(c) || 'Non renseigné'}</span>
                   {c.local_establishment && (
                     <div style={{ fontFamily: FONT, fontSize: 12, color: C.muted, margin: '4px 0 0 24px' }}>Établissement à {c.local_establishment.label}</div>
                   )}
@@ -242,8 +247,8 @@ function ResultsTable({ C, darkMode, result, loading, page, pages, onPrev, onNex
 
 function CreateListModal({ C, darkMode, criteria, total, max, onClose, onCreate }) {
   const limit = Math.min(total, max);
-  const defaultName = [criteria.activity ? activityLabel(criteria.activity) : 'Toutes activités',
-    criteria.departement ? departementLabel(criteria.departement) : 'Toute la France'].join(' · ').slice(0, 120);
+  const area = criteria.place?.label || (criteria.departement ? departementLabel(criteria.departement) : 'Toute la France');
+  const defaultName = [criteria.activity ? activityLabel(criteria.activity) : 'Toutes activités', area].join(' · ').slice(0, 120);
   const [name, setName] = useState(defaultName);
   const [count, setCount] = useState(Math.min(limit, 100));
   const [busy, setBusy] = useState(false);

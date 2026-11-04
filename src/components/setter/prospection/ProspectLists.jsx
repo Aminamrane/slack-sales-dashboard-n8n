@@ -12,7 +12,7 @@ import SetterJourneyDialog from '../SetterJourneyDialog';
 import { prospectionApi, errorMessage } from './prospectionApi';
 import { crmMobileSelection } from './mobilePhones';
 import { Card, Chip, Button, Modal, IconButton, ProspectionStyles } from './ui';
-import { MONO, fmtInt, fmtDay, fmtWallDateTime, inputStyle, STATUS_META, chipColors } from './format';
+import { MONO, fmtInt, fmtDay, fmtWallDateTime, inputStyle, STATUS_META, chipColors, locationLabel } from './format';
 
 export default function ProspectLists({ C, darkMode, onToast, openListId, onOpenList, onOpenLeads, teamSales = [], canBook = true }) {
   const [lists, setLists] = useState(null);
@@ -164,6 +164,8 @@ function ListDetail({ C, darkMode, listId, onBack, onToast, onOpenLeads, teamSal
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  // Tri par code postal (dev 29/10/2026) : appeler les plombiers de Lille, puis ceux de Lyon.
+  const [sort, setSort] = useState('name');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
   const [exportResult, setExportResult] = useState(null);
@@ -178,11 +180,11 @@ function ListDetail({ C, darkMode, listId, onBack, onToast, onOpenLeads, teamSal
     const mine = ++seq.current;
     const fetchItems = mobileOnly ? prospectionApi.mobileItems : prospectionApi.items;
     try {
-      const [l, it] = await Promise.all([prospectionApi.getList(listId), fetchItems(listId, { q, status, page, pageSize })]);
+      const [l, it] = await Promise.all([prospectionApi.getList(listId), fetchItems(listId, { q, status, page, pageSize, sort })]);
       if (mine !== seq.current) return;
       setList(l); setItems(it); setError('');
     } catch (err) { if (mine === seq.current) setError(errorMessage(err)); }
-  }, [listId, q, status, page, pageSize, mobileOnly]);
+  }, [listId, q, status, page, pageSize, sort, mobileOnly]);
 
   useEffect(() => { const t = setTimeout(refresh, q ? 250 : 0); return () => clearTimeout(t); }, [refresh, q]);
 
@@ -302,13 +304,15 @@ function ListDetail({ C, darkMode, listId, onBack, onToast, onOpenLeads, teamSal
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: '1 1 320px', maxWidth: 520 }}>
           <Search size={18} color={C.muted} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
-          <input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} placeholder="Rechercher (nom, SIREN, téléphone…)"
+          <input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} placeholder="Rechercher (nom, ville, code postal, SIREN, téléphone…)"
             style={{ ...inputStyle(C), width: '100%', padding: '12px 14px 12px 42px', fontSize: 15 }} />
         </div>
         <Select C={C} value={status} onChange={(v) => { setStatus(v); setPage(1); }}
           options={[['', 'Tous les statuts'], ...Object.entries(STATUS_META).map(([k, m]) => [k, m.label])]} />
         <Select C={C} ariaLabel="Type de téléphone" value={mobileOnly ? 'mobile' : ''} onChange={(v) => { setMobileOnly(v === 'mobile'); setPage(1); }}
           options={[['', 'Tous les téléphones'], ['mobile', 'Mobiles uniquement (06 / 07)']]} />
+        <Select C={C} ariaLabel="Tri" value={sort} onChange={(v) => { setSort(v); setPage(1); }}
+          options={[['name', 'Trier par nom'], ['postal_code', 'Trier par code postal']]} />
         <Select C={C} value={String(pageSize)} onChange={(v) => { setPageSize(Number(v)); setPage(1); }}
           options={[['25', '25 / page'], ['50', '50 / page'], ['100', '100 / page']]} />
       </div>
@@ -387,7 +391,7 @@ function CompanyCard({ C, darkMode, item, onStatus, onBook, onExport, onRemove, 
             <div style={{ fontSize: 17, fontWeight: 700, color: C.text }}>{c.name}</div>
             <div style={{ fontSize: 15, color: C.text }}>{c.activity}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap', fontSize: 15, color: C.text }}>
-              {c.location_label && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><MapPin size={17} color={C.muted} />{c.location_label}</span>}
+              {locationLabel(c) && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><MapPin size={17} color={C.muted} />{locationLabel(c)}</span>}
               {c.workforce_label && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: MONO, fontSize: 14 }}><Users size={17} color={C.muted} />{c.workforce_label}{c.workforce_year ? ` (${c.workforce_year})` : ''}</span>}
               {c.creation_label && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><CalendarDays size={17} color={C.muted} />{c.creation_label}</span>}
             </div>
