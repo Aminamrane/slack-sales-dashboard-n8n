@@ -6,6 +6,9 @@ export const FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sys
 
 export const fmtInt = (n) => new Intl.NumberFormat('fr-FR').format(Number(n) || 0);
 
+// « LILLE (59000) » : le code postal du siège quand la fiche l'a, sinon le libellé de la source (« LILLE (59) »).
+export const locationLabel = (c) => (c.city && c.postal_code ? `${c.city} (${c.postal_code})` : c.location_label);
+
 export const fmtDay = (iso) => {
   if (!iso) return '';
   const d = new Date(iso);

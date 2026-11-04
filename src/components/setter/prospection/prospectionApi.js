@@ -1,6 +1,6 @@
 // Accès aux routes /prospection du backend (l'API Leads n'est jamais appelée depuis le navigateur).
-// Les critères sont ceux de la doc de l'API Leads : département et code NAF pour le stock et les
-// listes ; en plus, pour une recherche Pappers : tranches d'effectif, catégories juridiques, âge.
+// Les critères sont ceux de la doc de l'API Leads : département, code NAF et codes postaux (une ville) pour le
+// stock et les listes ; en plus, pour une recherche Pappers : tranches d'effectif, catégories juridiques, âge.
 import apiClient from '../../../services/apiClient';
 import { keepMobileRows, mobilePage } from './mobilePhones';
 
@@ -26,25 +26,26 @@ export const prospectionApi = {
   meta: () => apiClient.get(`${BASE}/meta`),
   stockSize: () => apiClient.get(`${BASE}/stock-size`),
   suggest: (q) => apiClient.get(`${BASE}/suggest${query({ q })}`),
-  available: ({ departement, codeNaf, cursor, limit = 50 }) =>
-    apiClient.get(`${BASE}/available${query({ departement, code_naf: codeNaf, cursor, limit })}`),
+  available: ({ departement, codeNaf, codePostal, cursor, limit = 50 }) =>
+    apiClient.get(`${BASE}/available${query({ departement, code_naf: codeNaf, code_postal: codePostal?.join(','), cursor, limit })}`),
   lists: () => apiClient.get(`${BASE}/lists`),
-  createList: ({ name, departement, codeNaf, count }) =>
-    apiClient.post(`${BASE}/lists`, { name, departement: departement || null, code_naf: codeNaf || null, count }),
+  createList: ({ name, departement, codeNaf, codePostal, count }) =>
+    apiClient.post(`${BASE}/lists`, { name, departement: departement || null, code_naf: codeNaf || null, code_postal: codePostal || [], count }),
   getList: (id) => apiClient.get(`${BASE}/lists/${id}`),
   deleteList: (id) => apiClient.delete(`${BASE}/lists/${id}`),
-  items: (id, { q = '', status = '', page = 1, pageSize = 50 } = {}) =>
-    apiClient.get(`${BASE}/lists/${id}/items${query({ q, status, page, page_size: pageSize })}`),
+  // `sort` : 'name' (défaut) ou 'postal_code' (par code postal, puis par nom).
+  items: (id, { q = '', status = '', page = 1, pageSize = 50, sort = 'name' } = {}) =>
+    apiClient.get(`${BASE}/lists/${id}/items${query({ q, status, page, page_size: pageSize, sort: sort === 'name' ? '' : sort })}`),
   // Toute la liste (500 entreprises au plus, 100 par page côté serveur) : le serveur ne filtre pas sur le type de numéro.
-  async allItems(id, { q = '', status = '' } = {}) {
-    const first = await prospectionApi.items(id, { q, status, page: 1, pageSize: 100 });
+  async allItems(id, { q = '', status = '', sort = 'name' } = {}) {
+    const first = await prospectionApi.items(id, { q, status, page: 1, pageSize: 100, sort });
     const rest = await Promise.all(Array.from({ length: Math.max(0, first.pages - 1) },
-      (_, i) => prospectionApi.items(id, { q, status, page: i + 2, pageSize: 100 })));
+      (_, i) => prospectionApi.items(id, { q, status, page: i + 2, pageSize: 100, sort })));
     return [...new Map([first, ...rest].flatMap((page) => page.items).map((item) => [item.id, item])).values()];
   },
   // Une page de la liste réduite aux numéros 06 / 07, dans la forme de `items`.
-  async mobileItems(id, { q, status, page, pageSize }) {
-    return mobilePage(await prospectionApi.allItems(id, { q, status }), { page, pageSize });
+  async mobileItems(id, { q, status, page, pageSize, sort }) {
+    return mobilePage(await prospectionApi.allItems(id, { q, status, sort }), { page, pageSize });
   },
   setStatus: (itemId, status) => apiClient.patch(`${BASE}/items/${itemId}`, { status }),
   removeItem: (itemId) => apiClient.delete(`${BASE}/items/${itemId}`),
