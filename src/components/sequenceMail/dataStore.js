@@ -7,11 +7,13 @@
 //   3. les compteurs d'envoi par cohorte   GET …/webinars/{id}/overview et …/campaigns/post-nurture
 //      (les mêmes appels que le dashboard Marketing, mêmes formes de réponse).
 // Le contenu est chargé à la demande, cohorte par cohorte ; les compteurs sont mis en cache 60 s.
-// Tout est en LECTURE SEULE : aucun appel d'écriture vers le CRM.
+// Les trois sources ci-dessus sont en LECTURE SEULE. La seule écriture vers le CRM est l'enregistrement d'une version d'e-mail
+// (« Confirmer les modifications » : `recordSavedVersion` reçoit la version que le serveur vient de créer).
 //
-// À ces trois sources s'ajoute, en mémoire seulement, la couche des brouillons de l'éditeur de
-// mail (PROTOTYPE, cf. MailEditor.jsx) : elle se superpose au contenu d'origine sans jamais le
-// modifier, et vit dans le même store pour qu'il n'existe qu'une seule source de vérité.
+// Deux couches se superposent au contenu d'origine, sans jamais le modifier, dans le même store (une seule source de vérité) :
+//   · les versions ENREGISTRÉES dans le CRM (`saved`, relues au chargement : elles survivent au rechargement) ;
+//   · les brouillons de l'éditeur de mail (`drafts`, en mémoire : perdus au rechargement tant qu'ils ne sont pas confirmés).
+// Une cohorte de TEST (`testCohorts`) est une copie ISOLÉE d'une cohorte existante : elle n'existe que dans le CRM, jamais dans la landing.
 
 import { useSyncExternalStore } from 'react';
 import apiClient from '../../services/apiClient';
@@ -19,6 +21,8 @@ import { SEQUENCE_CATALOG, hasCohortSequence, loadCohortSequence } from '../../d
 import { MINUTE_MS, fmtDayMonth } from './format.js';
 import { parisToday } from '../../utils/parisDates.js';
 import { parseKey } from './model.js';
+import { fetchSavedVersions } from './emailVersionsApi.js';
+import { cloneTestCohort, isTestCohortId, retargetForTest } from './savedVersions.js';
 
 /** @brief Durée de vie d'un relevé de compteurs : au-delà, il est redemandé à la prochaine consultation. */
 const STATS_TTL_MS = MINUTE_MS;
@@ -39,6 +43,10 @@ let data = {
   //   `unavailable` = la cohorte n'existe pas dans le CRM ; `error` = le CRM n'a pas répondu (réessayable).
   stats: {},
   drafts: {}, // cohortId -> { [kind]: brouillon } — mémoire seulement, jamais envoyé ni enregistré
+  // cohortId -> { [kind]: version enregistrée dans le CRM } ; `savedState` : idle | loading | ready | unavailable (route absente ou accès refusé) | error
+  saved: {},
+  savedState: { status: 'idle', error: null, canWriteProduction: false, historicalCohorts: [], failedAt: null },
+  testCohorts: [], // [{ id, source_cohort_id, label }] : cohortes de test de CE compte (jamais celles des autres)
 };
 const listeners = new Set();
 const inflight = new Map();
@@ -106,6 +114,9 @@ export function ensureApiCohorts(force = false) {
 
 // ── Contenu des séquences ──────────────────────────────────────────────────────
 
+/** @brief Cohorte de test de ce compte portant cet identifiant, ou `null` (une cohorte de production, ou inconnue). */
+export const testCohortOf = (cohortId) => data.testCohorts.find((t) => t.id === cohortId) ?? null;
+
 export function ensureContent(cohortId, force = false) {
   const cur = data.content[cohortId];
   if (!force && cur) {
@@ -113,14 +124,26 @@ export function ensureContent(cohortId, force = false) {
     if (cur.status !== 'error' || cur.reload) return inflight.get(`content:${cohortId}`) ?? Promise.resolve();
   }
   return once(`content:${cohortId}`, async () => {
-    if (!hasCohortSequence(cohortId)) {
+    let test = testCohortOf(cohortId);
+    // La liste des cohortes de test de CE compte vient de la lecture des versions enregistrées : après un rechargement la page peut rouvrir une cohorte de test
+    // AVANT qu'elle ait répondu. On l'attend au lieu de conclure (et de mémoriser) « contenu absent ». Toujours inconnue ensuite : elle n'est pas à ce compte.
+    if (!test && isTestCohortId(cohortId)) {
+      await ensureSavedVersions();
+      test = testCohortOf(cohortId);
+      if (!test) {
+        patch({ content: { ...data.content, [cohortId]: { status: 'missing', data: null, error: null, reload: false } } });
+        return;
+      }
+    }
+    const sourceId = test ? test.source_cohort_id : cohortId;
+    if (!hasCohortSequence(sourceId)) {
       patch({ content: { ...data.content, [cohortId]: { status: 'missing', data: null, error: null, reload: false } } });
       return;
     }
     patch({ content: { ...data.content, [cohortId]: { status: 'loading', data: null, error: null, reload: false } } });
     try {
-      const loaded = await loadCohortSequence(cohortId);
-      patch({ content: { ...data.content, [cohortId]: { status: 'ready', data: loaded, error: null, reload: false } } });
+      const loaded = await loadCohortSequence(sourceId);
+      patch({ content: { ...data.content, [cohortId]: { status: 'ready', data: test ? retargetForTest(loaded, test) : loaded, error: null, reload: false } } });
     } catch (e) {
       const error = e?.name === 'SequenceLoadError' && e.message ? e.message : 'Le contenu des e-mails de cette cohorte est indisponible. Réessayez.';
       patch({ content: { ...data.content, [cohortId]: { status: 'error', data: null, error, reload: Boolean(e?.needsReload) } } });
@@ -128,7 +151,7 @@ export function ensureContent(cohortId, force = false) {
   }, force);
 }
 
-// ── Brouillons de l'éditeur de mail (prototype : en mémoire, rien n'est enregistré) ───────────
+// ── Brouillons de l'éditeur de mail (en mémoire : jamais envoyés ; enregistrés seulement par « Confirmer » → saveFlow.js) ───────────
 
 const DRAFT_CONTENT_FIELDS = ['subject', 'html', 'text'];
 
@@ -173,15 +196,65 @@ export function resetMailDraft(key) {
   patch({ drafts });
 }
 
+// ── Versions enregistrées dans le CRM ────────────────────────────────────────────
+
+const SAVED_RETRY_MS = 8_000;
+
 /**
- * @brief Marque le brouillon de `key` comme « confirmé » — SIMULATION : seul un horodatage local change.
- * La moindre modification suivante le repasse en « modifications en cours ».
+ * @brief Relit les versions enregistrées (et les cohortes de test de CE compte). Appelée au chargement de la page : une modification confirmée survit
+ * donc à l'actualisation. Une route absente ou un accès refusé (`unavailable`) n'est pas une panne : l'éditeur le dit et n'enregistre rien.
  */
-export function confirmMailDraft(key) {
-  const { cohortId, kind } = parseKey(key);
-  const draft = data.drafts[cohortId]?.[kind];
-  if (!draft) return;
-  patch({ drafts: { ...data.drafts, [cohortId]: { ...data.drafts[cohortId], [kind]: { ...draft, confirmedAt: Date.now() } } } });
+export function ensureSavedVersions(force = false) {
+  const { status, failedAt } = data.savedState;
+  if (!force) {
+    if (status === 'ready' || status === 'unavailable') return Promise.resolve();
+    if (status === 'loading') return inflight.get('saved') ?? Promise.resolve();
+    if (status === 'error' && failedAt && Date.now() - failedAt < SAVED_RETRY_MS) return Promise.resolve();
+  }
+  return once('saved', async () => {
+    patch({ savedState: { ...data.savedState, status: 'loading', error: null } });
+    try {
+      const result = await fetchSavedVersions();
+      patch({
+        saved: result.emails,
+        testCohorts: result.testCohorts,
+        savedState: { status: 'ready', error: null, canWriteProduction: result.canWriteProduction, historicalCohorts: result.historicalCohorts, failedAt: null },
+      });
+    } catch (e) {
+      const unavailable = e?.status === 404 || e?.status === 403;
+      patch({
+        savedState: {
+          status: unavailable ? 'unavailable' : 'error',
+          error: unavailable ? "L'enregistrement des e-mails n'est pas disponible pour ce compte ou pas encore activé sur le serveur." : describeError(e, 'Versions enregistrées indisponibles'),
+          canWriteProduction: false,
+          historicalCohorts: [],
+          failedAt: Date.now(),
+        },
+      });
+    }
+  }, force);
+}
+
+/** @brief Range la version que le serveur vient de créer comme dernière version de son e-mail (et retire le brouillon devenu identique). */
+export function recordSavedVersion(version) {
+  if (!version?.cohort_id || !version?.kind) return;
+  const slice = { ...(data.saved[version.cohort_id] ?? {}) };
+  slice[version.kind] = version;
+  const drafts = { ...data.drafts };
+  if (drafts[version.cohort_id]) {
+    const rest = { ...drafts[version.cohort_id] };
+    delete rest[version.kind];
+    if (Object.keys(rest).length) drafts[version.cohort_id] = rest;
+    else delete drafts[version.cohort_id];
+  }
+  patch({ saved: { ...data.saved, [version.cohort_id]: slice }, drafts });
+}
+
+/** @brief Marque la dernière version d'un e-mail comme publiée sur la landing (après une republication réussie) ; ne touche ni au contenu ni aux brouillons. */
+export function markVersionPublished(cohortId, kind, version) {
+  const current = data.saved[cohortId]?.[kind];
+  if (!current || current.version !== version) return;
+  patch({ saved: { ...data.saved, [cohortId]: { ...data.saved[cohortId], [kind]: { ...current, published: true, publish_error: null } } } });
 }
 
 // ── Compteurs d'envoi ──────────────────────────────────────────────────────────
@@ -267,6 +340,21 @@ const todayIso = () => parisToday();
  */
 export function ensureStats(cohortId, force = false) {
   return once(`stats:${cohortId}`, async () => {
+    if (isTestCohortId(cohortId)) {
+      // Cohorte de test : aucun inscrit, aucun envoi, aucun compteur — et surtout AUCUN appel aux statistiques de production, connue ou non de ce compte.
+      await ensureSavedVersions();
+      if (data.stats[cohortId]?.test) return;
+      const known = Boolean(testCohortOf(cohortId));
+      patch({
+        stats: {
+          ...data.stats,
+          [cohortId]: known
+            ? { status: 'ready', test: true, fetchedAt: Date.now(), byKind: NO_KINDS, summary: null, error: null, failedAt: null }
+            : { status: 'unavailable', fetchedAt: null, byKind: NO_KINDS, summary: null, error: 'Cohorte de test inconnue pour ce compte', failedAt: null },
+        },
+      });
+      return;
+    }
     await ensureApiCohorts();
     const cur = data.stats[cohortId];
     const cohort = data.api.cohorts.find((c) => c.id === cohortId);
@@ -350,8 +438,9 @@ const shortFromId = (id) => {
 /** @brief Jour (`AAAA-MM-JJ`) qui sert à ranger les cohortes de la plus récente à la plus ancienne. */
 const sortDay = (c) => (c.liveAt ? String(c.liveAt).slice(0, 10) : dateFromId(c.id) || String(c.dateEnd || c.dateStart || '').slice(0, 10));
 
-/** @brief Résultat de `deriveCohorts` par objet `api` : tous les appelants d'un même état reçoivent le MÊME tableau. */
+/** @brief Résultat de `deriveCohorts` par couple (`api`, `testCohorts`) : tous les appelants d'un même état reçoivent le MÊME tableau. */
 const cohortsCache = new WeakMap();
+const NO_TEST_COHORTS = Object.freeze([]);
 
 /**
  * @brief Cohortes affichées : celles du catalogue (contenu disponible) ∪ celles du CRM.
@@ -359,16 +448,21 @@ const cohortsCache = new WeakMap();
  * PAS connue (le CRM ne l'expose pas) : `liveAt` vaut `null` — rien n'est deviné (ni l'heure, ni le décalage horaire).
  * @returns Un tableau PARTAGÉ (mémoïsé par état `api`) : ne pas le modifier.
  */
-export function deriveCohorts(api) {
-  let cohorts = cohortsCache.get(api);
+export function deriveCohorts(api, testCohorts = NO_TEST_COHORTS) {
+  let byTests = cohortsCache.get(api);
+  if (!byTests) {
+    byTests = new WeakMap();
+    cohortsCache.set(api, byTests);
+  }
+  let cohorts = byTests.get(testCohorts);
   if (!cohorts) {
-    cohorts = buildCohorts(api);
-    cohortsCache.set(api, cohorts);
+    cohorts = buildCohorts(api, testCohorts);
+    byTests.set(testCohorts, cohorts);
   }
   return cohorts;
 }
 
-function buildCohorts(api) {
+function buildCohorts(api, testCohorts) {
   const map = new Map();
   for (const c of SEQUENCE_CATALOG) {
     map.set(c.id, { ...c, inCatalog: true, inApi: false, apiTitle: null, dateStart: null, dateEnd: null });
@@ -397,6 +491,12 @@ function buildCohorts(api) {
         dateEnd: w.date_end || null,
       });
     }
+  }
+  // Cohortes de TEST de ce compte : une copie isolée de la cohorte source (même contenu, même calendrier), sans aucun lien avec le CRM ni la landing.
+  for (const t of testCohorts) {
+    const source = map.get(t.source_cohort_id);
+    if (!source || !source.inCatalog || map.has(t.id)) continue;
+    map.set(t.id, cloneTestCohort(source, t));
   }
   return [...map.values()].sort((a, b) => sortDay(b).localeCompare(sortDay(a)) || b.id.localeCompare(a.id));
 }

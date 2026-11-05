@@ -25,6 +25,7 @@ export const MAIL_EDITOR_CSS = `
   color: var(--smx-warn-text); background: var(--smx-warn-bg); border-bottom: 1px solid var(--smx-warn-line);
 }
 .smx-ed-banner svg { flex-shrink: 0; margin-top: 1px; }
+.smx-ed-banner.is-info { color: var(--smx-text-2); background: var(--smx-card-2); border-bottom-color: var(--smx-line); }
 
 /* ── En-tête : titre, expéditeur, destinataires, objet (comme la fenêtre de rédaction d'un client mail) ── */
 .smx-ed-head { flex-shrink: 0; padding: 10px 18px 0; background: var(--smx-card); border-bottom: 1px solid var(--smx-line); }
@@ -101,6 +102,15 @@ export const MAIL_EDITOR_CSS = `
 .smx-ed-status.is-editing .smx-ed-dot { background: #f29900; animation: smx-ed-pulse 1.6s ease-in-out infinite; }
 .smx-ed-status.is-confirmed { color: var(--smx-ok); }
 .smx-ed-status.is-confirmed .smx-ed-dot { background: var(--smx-ok); }
+.smx-ed-status.is-saved { color: var(--smx-ok); }
+.smx-ed-status.is-saved .smx-ed-dot { background: var(--smx-ok); }
+.smx-ed-status.is-unpublished { color: var(--smx-warn-text); }
+.smx-ed-status.is-unpublished .smx-ed-dot { background: #f29900; }
+.smx-ed-status.is-saving { color: var(--smx-text-2); }
+.smx-ed-status.is-saving .smx-ed-dot { background: var(--smx-accent); animation: smx-ed-pulse 1.1s ease-in-out infinite; }
+.smx-ed-status.has-error { color: var(--smx-warn-text); }
+.smx-ed-toast-list { margin: 4px 0 6px; padding-left: 18px; font-size: 12px; color: var(--smx-text-3); }
+.smx-ed-toast-body .smx-btn { margin-top: 6px; }
 @keyframes smx-ed-pulse { 50% { opacity: 0.35; } }
 .smx-ed-foot .smx-btn { height: 32px; padding: 0 14px; border-radius: 16px; font-size: 12.5px; }
 .smx-ed-foot .smx-btn:disabled { opacity: 0.45; cursor: default; }
@@ -116,6 +126,9 @@ export const MAIL_EDITOR_CSS = `
   box-shadow: var(--smx-shadow-2); animation: smx-pop 0.16s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 .smx-ed-toast.is-ok { border-color: var(--smx-ok); }
+.smx-ed-toast.is-warn { border-color: var(--smx-warn-line); background: var(--smx-warn-bg); }
+.smx-ed-toast.is-warn .smx-ed-toast-ico { color: var(--smx-warn-text); }
+.smx-ed-toast.is-warn .smx-ed-toast-body span { color: var(--smx-warn-text); }
 .smx-ed-toast-ico { flex-shrink: 0; margin-top: 1px; color: var(--smx-ok); }
 .smx-ed-toast-body { flex: 1; min-width: 0; font-size: 12.5px; }
 .smx-ed-toast-body strong { display: block; font-size: 13px; font-weight: 600; }
@@ -159,7 +172,7 @@ export const MAIL_EDITOR_CSS = `
 .smx-ed-dialog .smx-ed-dialog-err { margin: 12px 0 0; font-size: 12.5px; color: var(--smx-danger); }
 
 @media (prefers-reduced-motion: reduce) {
-  .smx-ed-toast, .smx-ed-scrim, .smx-ed-status.is-editing .smx-ed-dot { animation: none !important; }
+  .smx-ed-toast, .smx-ed-scrim, .smx-ed-status.is-editing .smx-ed-dot, .smx-ed-status.is-saving .smx-ed-dot { animation: none !important; }
 }
 `;
 

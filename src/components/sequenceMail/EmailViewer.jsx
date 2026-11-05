@@ -15,6 +15,7 @@ import { PHASES, SEGMENTS, SEQUENCES, audienceTone, describeTiming, emailKey, ti
 import { Chip, RetryButton } from './ui';
 import EmailBodyFrame from './EmailBodyFrame';
 import { hasMergeFields } from './emailHtml.js';
+import { publishesToLanding } from './savedVersions.js';
 import SequenceInfo from './SequenceInfo';
 
 /** @brief Position de défilement de chaque e-mail, gardée le temps de la session (changement d'onglet sans perte d'état). */
@@ -139,6 +140,7 @@ export default function EmailViewer({ detail, context, tabId, panelId, apiStatus
   }
 
   const cohort = detail.cohort;
+  const publishes = publishesToLanding(cohort, detail.savedState?.historicalCohorts);
   const phase = PHASES[step.phase];
   const sender = parseAddress(step.from);
   const subject = step.subject || '';
@@ -225,11 +227,21 @@ export default function EmailViewer({ detail, context, tabId, panelId, apiStatus
             </>
           )}
           <Chip large tone={detail.status.tone}>{detail.status.label}</Chip>
-          {step.draftStatus && (
-            <Chip large tone="amber" title="Modifié dans l'éditeur de mail : brouillon en mémoire, ni enregistré ni envoyé (prototype)">
-              {step.draftStatus === 'confirmed' ? 'Confirmé (démo)' : 'Brouillon local (démo)'}
+          {step.draftStatus ? (
+            <Chip large tone="amber" title="Modifié dans l'éditeur de mail : brouillon en mémoire, pas encore enregistré (perdu au rechargement)">
+              Modifications non enregistrées
             </Chip>
-          )}
+          ) : step.savedVersion ? (
+            <Chip large tone={publishes && step.savedPublished === false ? 'amber' : 'green'}
+              title={`Version enregistrée dans le CRM${step.savedBy ? ` par ${step.savedBy}` : ''}, relue à chaque actualisation. ${
+                cohort?.isTest ? 'Cohorte de test : jamais envoyée.'
+                  : !publishes ? 'Cohorte historique : jamais publiée sur la landing, aucun envoi n\'est modifié.'
+                  : step.savedPublished === true ? 'Publiée sur la landing : elle est envoyée à la place de l\'original aux prochains destinataires.'
+                    : step.savedPublished === false ? `PAS publiée sur la landing${step.publishError ? ` (${step.publishError})` : ''} : les inscrits reçoivent encore l'e-mail d'origine. Ouvrez l'éditeur pour la republier.`
+                      : 'État de publication inconnu (la landing n\'a pas répondu).'}`}>
+              Version {step.savedVersion} enregistrée{publishes && step.savedPublished === false ? ' — pas en ligne' : ''}
+            </Chip>
+          ) : null}
         </div>
 
         {!step.fallback && (

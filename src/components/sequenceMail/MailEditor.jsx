@@ -10,12 +10,16 @@
 //   brouillon superposé (cf. hooks.js) et se mettent donc à jour d'eux-mêmes. L'éditeur lit
 //   lui aussi l'e-mail par `useEmailDetail` : s'il est modifié ailleurs (« Rétablir l'original »), il suit.
 //
-//   RIEN N'EST ENREGISTRÉ — les brouillons ne vivent qu'en mémoire (perdus au rechargement de la page) ;
-//   « Confirmer les modifications » est une SIMULATION. Un seul bouton envoie un e-mail, et seulement à
-//   soi-même : « Tester son mail » (TestMailDialog.jsx, testMail.js) adresse le brouillon affiché à l'adresse
-//   du compte connecté, par un serveur d'Owner ; aucun inscrit, aucune séquence, aucune cohorte n'est touché. Un
-//   bandeau PERMANENT le dit en haut de la fenêtre, et le navigateur demande confirmation avant de recharger
-//   ou de quitter tant qu'un brouillon existe (draftsGuard.js).
+//   « Confirmer les modifications » ENREGISTRE RÉELLEMENT une nouvelle version de l'e-mail dans le CRM (saveFlow.js → PUT /marketing/sequence-emails) :
+//   validation locale puis serveur, clé d'idempotence (un double clic ne crée jamais deux versions), contrôle de version (conflit si quelqu'un a enregistré
+//   entre-temps), erreurs dites en clair. La version enregistrée est relue au chargement de la page (savedVersions.js) : elle survit à l'actualisation.
+//   Tant qu'un brouillon n'est pas confirmé il reste en mémoire (perdu au rechargement : le navigateur le rappelle, cf. draftsGuard.js).
+//
+//   À dire sans détour (bandeau permanent) : pour une cohorte de production, « Confirmer » enregistre la version dans le CRM ET la publie sur la landing (envoyée aux prochains
+//   destinataires ; les e-mails déjà partis ne changent pas). Si la publication échoue, la version reste enregistrée : avertissement + « Republier sur la landing ».
+//   Un seul bouton envoie un e-mail, et seulement à soi-même : « Tester son mail » (TestMailDialog.jsx, testMail.js) adresse le brouillon affiché à
+//   l'adresse du compte connecté, par un serveur d'Owner ; aucun inscrit, aucune séquence, aucune cohorte n'est touché.
+//   Une cohorte de TEST est une copie isolée d'une cohorte existante, réservée à un compte : mêmes composants, mêmes routes, mêmes règles de validation.
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -26,8 +30,11 @@ import './styles'; // feuilles posées une fois dans <head> (injectStyles.js)
 import './mailEditorStyles';
 import { actions } from './store';
 import { useEmailDetail } from './hooks';
-import { confirmMailDraft, resetMailDraft, retryCohort, setMailDraft } from './dataStore';
-import { deriveFromHtml, draftState, normalizeLinkUrl, snippetOf } from './mailDraft';
+import { ensureSavedVersions, markVersionPublished, recordSavedVersion, resetMailDraft, retryCohort, setMailDraft } from './dataStore';
+import { putEmailVersion, republishEmail } from './emailVersionsApi';
+import { saveEmail } from './saveFlow';
+import { describePublishError, publishesToLanding, shortHash } from './savedVersions';
+import { deriveFromHtml, normalizeLinkUrl, snippetOf } from './mailDraft';
 import { normalizeEmailHtml } from './editorDom';
 import { hasMergeFields } from './emailHtml';
 import { PHASES, SEGMENTS, SEQUENCES, audienceTone } from './model';
@@ -41,8 +48,20 @@ const NO_FORMAT = Object.freeze({
   hasSelection: false, bold: false, italic: false, underline: false, ul: false, ol: false, link: false, personalLink: false, locked: false,
 });
 const TOAST_MS = 8000;
-/** Le bandeau permanent du haut de la fenêtre : le prototype n'enregistre rien ; seul le test s'envoie, à soi-même. */
-const BANNER_TEXT = "Prototype : brouillons gardés en mémoire, rien n'est enregistré — perdus au rechargement. Seul « Tester son mail » envoie un e-mail, à votre adresse";
+/**
+ * Le bandeau permanent du haut de la fenêtre : il dit ce que « Confirmer » fait vraiment, et ce qu'il ne fait pas.
+ * @returns `{ tone, text }` ; `tone: 'warn'` = limite ou indisponibilité, `'info'` = fonctionnement normal.
+ */
+function bannerFor({ isTest, historical, savedState }) {
+  const unsaved = "Vos modifications restent en mémoire, perdues au rechargement de la page.";
+  if (savedState.status === 'loading' || savedState.status === 'idle') return { tone: 'info', text: "Vérification de la fonction d'enregistrement…" };
+  if (savedState.status === 'unavailable') return { tone: 'warn', text: `Enregistrement indisponible : ${savedState.error} ${unsaved}` };
+  if (savedState.status === 'error') return { tone: 'warn', text: `Enregistrement momentanément indisponible (${savedState.error}). ${unsaved}` };
+  if (isTest) return { tone: 'info', text: "Cohorte de TEST isolée : aucun inscrit, aucun envoi, aucune statistique. « Confirmer » enregistre réellement dans le CRM ; « Tester son mail » envoie à votre adresse seulement." };
+  if (!savedState.canWriteProduction) return { tone: 'warn', text: `Lecture seule : votre rôle ne permet pas d'enregistrer un e-mail de production. ${unsaved}` };
+  if (historical) return { tone: 'info', text: "Cohorte HISTORIQUE : cet e-mail est restitué tel qu'il a été envoyé à l'époque (le code d'envoi a changé depuis). « Confirmer » enregistre une version dans le CRM mais ne la publie PAS sur la landing : aucun envoi n'est modifié. « Tester son mail » envoie à votre adresse seulement." };
+  return { tone: 'info', text: "« Confirmer » enregistre une nouvelle version de cet e-mail dans le CRM ET la publie sur la landing : elle sera envoyée à la place de l'original aux prochains destinataires de cette cohorte (les e-mails déjà partis ne changent pas). « Tester son mail » envoie à votre adresse seulement." };
+}
 const NO_CARET_HINT = "placez d'abord le curseur dans le message (ou sélectionnez le texte à transformer en lien)";
 const sameFormat = (a, b) => Object.keys(a).every((k) => a[k] === b[k]);
 /** Heure à Paris, comme tout le reste de l'outil (les séquences sont planifiées en Europe/Paris). */
@@ -168,9 +187,21 @@ function EditorBody({ emailKey, detail }) {
   const [fmt, setFmt] = useState(NO_FORMAT);
   const [linkBar, setLinkBar] = useState(null); // null | { value, error, range }
   const [testOpen, setTestOpen] = useState(false);
-  const [toast, setToast] = useState(null); // null | { id, kind: 'confirmed' | 'protected' }
+  const [toast, setToast] = useState(null); // null | { id, kind: 'saved' | 'protected' | 'error', ... }
+  const [saving, setSaving] = useState(false);
+  const [republishing, setRepublishing] = useState(false);
+  const savingRef = useRef(false); // verrou SYNCHRONE : deux clics dans la même image ne partent jamais en double (l'état React, lui, arrive après)
+  const keyStateRef = useRef({ key: null, signature: null }); // clé d'idempotence conservée d'une tentative à l'autre pour un même contenu
+  const [saveError, setSaveError] = useState(null);
 
-  const status = draftState(draft) ?? 'pristine';
+  const isTest = Boolean(cohort?.isTest);
+  const savedState = detail.savedState;
+  const savedVersion = detail.savedVersion;
+  const publishes = publishesToLanding(cohort, savedState.historicalCohorts);       // « Confirmer » publie-t-il sur la landing ? (non : cohorte de test ou historique)
+  const historical = Boolean(cohort) && !isTest && !publishes;
+  // Peut-on enregistrer ? Cohorte de test : toute la fonction doit répondre. Production : en plus, le rôle doit le permettre (le serveur le re-vérifie).
+  const canSave = savedState.status === 'ready' && (isTest || savedState.canWriteProduction);
+  const status = saving ? 'saving' : draft ? 'editing' : 'pristine';
   // Rang de l'étape dans SA chaîne (séquence × segment), le même découpage et le même libellé que « Schéma de séquence » :
   // « Étape 3 sur 13 », pas un rang dans toute la cohorte.
   const chain = useMemo(() => {
@@ -261,11 +292,63 @@ function EditorBody({ emailKey, detail }) {
     setLinkBar(null);
     actions.announce("E-mail rétabli à son contenu d'origine");
   };
-  const onConfirm = () => {
-    // SIMULATION : seul un horodatage local est posé (dataStore.js) ; rien n'est enregistré.
-    confirmMailDraft(emailKey);
-    setToast({ id: Date.now(), kind: 'confirmed' });
-    actions.announce("Confirmation simulée : rien n'est enregistré ni envoyé, les modifications restent en mémoire jusqu'au rechargement de la page");
+  const onConfirm = async () => {
+    if (savingRef.current || !draft || !canSave) return; // double clic, rien à enregistrer, ou fonction indisponible : aucune demande
+    savingRef.current = true;
+    setSaving(true);
+    setSaveError(null);
+    setToast(null);
+    try {
+      const result = await saveEmail({
+        step,
+        cohortId: detail.cohortId,
+        kind: detail.kind,
+        expectedVersion: savedVersion,
+        baseHash: shortHash(originalStep.html || originalStep.text || ''),
+        put: putEmailVersion,
+        keyState: keyStateRef.current,
+      });
+      if (result.ok) {
+        recordSavedVersion(result.version); // la version du serveur devient la référence ; le brouillon, devenu identique, disparaît
+        const v = result.version;
+        setToast({ id: Date.now(), kind: 'saved', version: v.version, replayed: v.replayed, published: v.published, publishError: v.publish_error });
+        actions.announce(v.published === false ? `Version ${v.version} enregistrée dans le CRM, mais pas publiée sur la landing`
+          : v.published === true ? `Version ${v.version} enregistrée et publiée sur la landing` : `Version ${v.version} enregistrée dans le CRM`);
+      } else {
+        setSaveError(result.error);
+        setToast({ id: Date.now(), kind: 'error', error: result.error });
+        actions.announce(`Enregistrement non effectué : ${result.error.message}`);
+      }
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+  // Republier la dernière version enregistrée sur la landing (après une publication ratée) : ne modifie jamais la version.
+  const onRepublish = async () => {
+    if (republishing) return;
+    setRepublishing(true);
+    setToast(null);
+    try {
+      const done = await republishEmail({ cohortId: detail.cohortId, kind: detail.kind });
+      markVersionPublished(detail.cohortId, detail.kind, done.version);
+      setToast({ id: Date.now(), kind: 'saved', version: done.version, replayed: false, published: true, republished: true });
+      actions.announce(`Version ${done.version} publiée sur la landing`);
+    } catch (e) {
+      const message = describePublishError(e);
+      setToast({ id: Date.now(), kind: 'error', error: { message, problems: [] }, publishOnly: true });
+      actions.announce(`Publication non effectuée : ${message}`);
+    } finally {
+      setRepublishing(false);
+    }
+  };
+  // Revenir à l'e-mail d'ORIGINE après des versions enregistrées : le contenu d'origine devient un brouillon, à confirmer comme n'importe quelle modification.
+  const onRestorePristine = () => {
+    const base = detail.pristineStep;
+    if (!base) return;
+    setSaveError(null);
+    if (base.html) setMailDraft(emailKey, { subject: base.subject, html: base.html, ...deriveFromHtml(base.html) });
+    else setMailDraft(emailKey, { subject: base.subject, text: base.text, snippet: snippetOf(base.text) });
   };
   const onProtectedRestore = useCallback(() => setToast({ id: Date.now(), kind: 'protected' }), []);
   useEffect(() => {
@@ -280,13 +363,20 @@ function EditorBody({ emailKey, detail }) {
 
   const phase = PHASES[step.phase];
   const recipients = step.recipientsLabel || `Inscrits de la cohorte ${cohort?.short ?? ''}`.trim();
-  const showToast = toast && (toast.kind !== 'confirmed' || status === 'confirmed');
-  const statusText =
-    status === 'confirmed'
-      ? `Confirmation simulée à ${clock(draft.confirmedAt)} — rien n'est enregistré ni envoyé`
+  const showToast = Boolean(toast);
+  const toastWarns = toast?.kind === 'saved' && publishes && toast.published === false;      // enregistrée dans le CRM mais PAS publiée sur la landing : à dire comme un avertissement, pas comme un succès
+  const notPublished = publishes && savedVersion > 0 && detail.step.savedPublished === false;
+  const savedAt = detail.step.savedAt ? clock(Date.parse(detail.step.savedAt)) : null;
+  const statusText = saving
+    ? 'Enregistrement en cours…'
+    : saveError && status === 'editing'
+      ? `Non enregistré : ${saveError.message}`
       : status === 'editing'
-        ? 'Modifications en cours — visibles en direct dans Gestion de séquence, en mémoire seulement'
-        : "Aucune modification — c'est l'e-mail d'origine";
+        ? 'Modifications non enregistrées — visibles dans Gestion de séquence, perdues au rechargement tant qu\'elles ne sont pas confirmées'
+        : savedVersion > 0
+          ? `Version ${savedVersion} enregistrée${detail.step.savedBy ? ` par ${detail.step.savedBy}` : ''}${savedAt ? ` à ${savedAt}` : ''}${
+            !publishes ? '' : detail.step.savedPublished === true ? ' — en ligne sur la landing' : detail.step.savedPublished === false ? ' — PAS encore en ligne sur la landing' : ' — état de publication inconnu'}`
+          : "Aucune modification — c'est l'e-mail d'origine";
 
   return (
     <>
@@ -294,7 +384,11 @@ function EditorBody({ emailKey, detail }) {
         <div className="smx-ed-title">
           <span className="smx-ed-title-mark" aria-hidden><Pencil size={15} /></span>
           <h2>Modifier l'e-mail</h2>
-          <Chip tone="amber" title="Prototype : rien n'est enregistré ; seul « Tester son mail » envoie un e-mail, à votre adresse">Mode démonstration</Chip>
+          {isTest
+            ? <Chip tone="amber" title="Copie isolée d'une cohorte existante, réservée à votre compte : aucun inscrit, aucun envoi, aucune statistique">Cohorte de test</Chip>
+            : historical
+              ? <Chip tone="grey" title="Cohorte historique : restituée avec d'anciennes versions du code d'envoi. Confirmer garde la version dans le CRM mais ne la publie pas sur la landing">Historique : sans effet sur l'envoi</Chip>
+              : <Chip tone="amber" title="Confirmer publie la version sur la landing : elle sera envoyée à la place de l'original aux prochains destinataires de cette cohorte (les e-mails déjà partis ne changent pas)">Modifie l'envoi réel</Chip>}
         </div>
         <div className="smx-ed-ctx">
           {cohort && <Chip tone={audienceTone(cohort.audience)} title={cohort.label}>{cohort.short}{cohort.audience ? ` · ${cohort.audience}` : ''}</Chip>}
@@ -388,15 +482,36 @@ function EditorBody({ emailKey, detail }) {
           )}
         </div>
         {showToast && (
-          <div className={`smx-ed-toast${toast.kind === 'confirmed' ? ' is-ok' : ''}`} role="status">
+          <div className={`smx-ed-toast${toast.kind === 'saved' && !toastWarns ? ' is-ok' : ''}${toastWarns ? ' is-warn' : ''}`} role={toast.kind === 'error' || toastWarns ? 'alert' : 'status'}>
             <span className="smx-ed-toast-ico">
-              {toast.kind === 'confirmed' ? <CircleCheck size={18} aria-hidden /> : <ShieldCheck size={18} aria-hidden />}
+              {toast.kind === 'saved' && !toastWarns ? <CircleCheck size={18} aria-hidden /> : toast.kind === 'error' || toastWarns ? <TriangleAlert size={18} aria-hidden /> : <ShieldCheck size={18} aria-hidden />}
             </span>
             <div className="smx-ed-toast-body">
-              {toast.kind === 'confirmed' ? (
+              {toast.kind === 'saved' ? (
                 <>
-                  <strong>Confirmation simulée</strong>
-                  <span>Rien n'est enregistré ni envoyé : les modifications restent en mémoire jusqu'au rechargement de la page.</span>
+                  <strong>{toast.republished ? `Version ${toast.version} publiée sur la landing` : toast.replayed ? `Version ${toast.version} déjà enregistrée` : `Version ${toast.version} enregistrée`}</strong>
+                  <span>
+                    {isTest
+                      ? "Conservée dans la cohorte de test, relue à chaque actualisation."
+                      : historical
+                        ? "Conservée dans le CRM, relue à chaque actualisation. Cohorte historique : jamais publiée sur la landing, aucun envoi n'est modifié."
+                      : toast.published === true
+                        ? "Conservée dans le CRM et publiée sur la landing : elle sera envoyée à la place de l'original aux prochains destinataires de cette cohorte."
+                        : toast.published === false
+                          ? `Conservée dans le CRM mais PAS publiée sur la landing${toast.publishError ? ` (${toast.publishError})` : ''} : les inscrits reçoivent encore l'e-mail d'origine. Utilisez « Republier sur la landing ».`
+                          : "Conservée dans le CRM, relue à chaque actualisation."}
+                  </span>
+                </>
+              ) : toast.kind === 'error' ? (
+                <>
+                  <strong>{toast.publishOnly ? 'Toujours pas publiée sur la landing' : "Rien n'a été enregistré"}</strong>
+                  <span>{toast.error.message}</span>
+                  {toast.error.problems?.length > 0 && (
+                    <ul className="smx-ed-toast-list">{toast.error.problems.map((p) => <li key={p}>{p}</li>)}</ul>
+                  )}
+                  {toast.error.kind === 'conflict' && (
+                    <button type="button" className="smx-btn is-sm" onClick={() => void ensureSavedVersions(true)}>Recharger la dernière version</button>
+                  )}
                 </>
               ) : (
                 <>
@@ -421,13 +536,30 @@ function EditorBody({ emailKey, detail }) {
       </div>
 
       <div className="smx-ed-foot">
-        <span className={`smx-ed-status is-${status}`} role="status">
+        <span className={`smx-ed-status is-${status === 'pristine' && savedVersion > 0 ? 'saved' : status}${saveError && status === 'editing' ? ' has-error' : ''}${status === 'pristine' && notPublished ? ' is-unpublished' : ''}`} role="status">
           <span className="smx-ed-dot" aria-hidden />
           {statusText}
         </span>
         <div className="smx-ed-actions">
-        <button type="button" className="smx-btn is-ghost" onClick={onReset} disabled={status === 'pristine'} title="Abandonner les modifications et revenir à l'e-mail d'origine">
-          <RotateCcw size={14} aria-hidden /> Rétablir l'original
+        {publishes && savedVersion > 0 && status === 'pristine' && canSave && detail.step.savedPublished !== true && (
+          <button type="button" className="smx-btn is-ghost" onClick={() => void onRepublish()} disabled={republishing} aria-busy={republishing || undefined}
+            title="Publie la dernière version enregistrée sur la landing : elle sera envoyée à la place de l'original aux prochains destinataires de cette cohorte">
+            {republishing ? 'Publication…' : 'Republier sur la landing'}
+          </button>
+        )}
+        {savedVersion > 0 && status === 'pristine' && detail.pristineStep && (
+          <button type="button" className="smx-btn is-ghost" onClick={onRestorePristine} title="Remettre le contenu de l'e-mail d'origine, à confirmer comme une modification">
+            <RotateCcw size={14} aria-hidden /> Revenir à l'original
+          </button>
+        )}
+        <button
+          type="button"
+          className="smx-btn is-ghost"
+          onClick={onReset}
+          disabled={status !== 'editing'}
+          title={savedVersion > 0 ? 'Abandonner les modifications non enregistrées et revenir à la version enregistrée' : "Abandonner les modifications et revenir à l'e-mail d'origine"}
+        >
+          <RotateCcw size={14} aria-hidden /> {savedVersion > 0 ? 'Rétablir la version enregistrée' : "Rétablir l'original"}
         </button>
         <button ref={testButtonRef} type="button" className="smx-btn" onClick={() => setTestOpen(true)}>
           <FlaskConical size={14} aria-hidden /> Tester son mail
@@ -435,11 +567,17 @@ function EditorBody({ emailKey, detail }) {
         <button
           type="button"
           className="smx-btn is-solid"
-          onClick={onConfirm}
-          disabled={status !== 'editing'}
-          title={status === 'pristine' ? 'Aucune modification à confirmer' : 'Simulation : rien n\'est enregistré'}
+          onClick={() => void onConfirm()}
+          disabled={status !== 'editing' || !canSave}
+          aria-busy={saving || undefined}
+          title={
+            saving ? 'Enregistrement en cours…'
+              : !canSave ? (savedState.status === 'ready' ? "Votre rôle ne permet pas d'enregistrer un e-mail de production" : "L'enregistrement n'est pas disponible")
+                : status === 'pristine' ? (savedVersion > 0 ? `Version ${savedVersion} enregistrée : rien de nouveau à confirmer` : 'Aucune modification à confirmer')
+                  : isTest ? 'Enregistre une nouvelle version dans la cohorte de test' : historical ? 'Enregistre une nouvelle version dans le CRM (cohorte historique : jamais publiée sur la landing)' : 'Enregistre une nouvelle version dans le CRM et la publie sur la landing (envoyée aux prochains destinataires de cette cohorte)'
+          }
         >
-          {status === 'confirmed' ? (<><Check size={14} aria-hidden /> Modifications confirmées</>) : 'Confirmer les modifications'}
+          {saving ? 'Enregistrement…' : status === 'pristine' && savedVersion > 0 ? (<><Check size={14} aria-hidden /> Version {savedVersion} enregistrée</>) : 'Confirmer les modifications'}
         </button>
         </div>
       </div>
@@ -454,6 +592,8 @@ function EditorBody({ emailKey, detail }) {
 export default function MailEditor({ emailKey, darkMode = false }) {
   useDraftsUnloadGuard();
   const detail = useEmailDetail(emailKey);
+  const savedState = detail.savedState ?? { status: 'idle' };
+  const banner = bannerFor({ isTest: Boolean(detail.cohort?.isTest), historical: Boolean(detail.cohort) && !detail.cohort.isTest && !publishesToLanding(detail.cohort, savedState.historicalCohorts), savedState });
   let content;
   if (detail.state === 'ready' && detail.originalStep) {
     content = <EditorBody key={emailKey} emailKey={emailKey} detail={detail} />;
@@ -477,10 +617,10 @@ export default function MailEditor({ emailKey, darkMode = false }) {
   }
   return (
     <div className={`smx-ed smx-theme-${darkMode ? 'dark' : 'light'}`} role="region" aria-label="Éditeur de mail">
-      {/* Bandeau PERMANENT, quel que soit l'état de l'e-mail : rien de ce qui est écrit ici n'est enregistré, et seul le test s'envoie (à soi-même). */}
-      <p className="smx-ed-banner" role="note">
+      {/* Bandeau PERMANENT, quel que soit l'état de l'e-mail : ce que « Confirmer » fait vraiment, et ce qu'il ne fait pas. */}
+      <p className={`smx-ed-banner is-${banner.tone}`} role="note">
         <Info size={14} aria-hidden />
-        <span>{BANNER_TEXT}</span>
+        <span>{banner.text}</span>
       </p>
       {content}
     </div>

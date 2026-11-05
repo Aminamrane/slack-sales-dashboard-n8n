@@ -66,7 +66,7 @@ export default function CohortNav({
             type="button"
             className={`smx-nav-item${active ? ' is-active' : ''}`}
             aria-current={active ? 'page' : undefined}
-            aria-label={[c.short, c.audience, countLabel(count)].filter(Boolean).join(', ')}
+            aria-label={[c.short, c.isTest ? 'cohorte test' : null, c.audience, countLabel(count)].filter(Boolean).join(', ')}
             title={tip}
             onClick={() => onSelectCohort(c.id)}
           >
@@ -74,8 +74,9 @@ export default function CohortNav({
               <span className="smx-nav-dot" style={{ background: DOT[audienceTone(c.audience)] }} aria-hidden />
             </span>
             <span className="smx-nav-label">
-              {c.short}
-              {c.audience && <span className="smx-nav-sub">{c.audience}</span>}
+              {c.isTest ? c.baseShort : c.short}
+              {c.isTest && <span className="smx-nav-sub smx-nav-test">Cohorte test</span>}
+              {!c.isTest && c.audience && <span className="smx-nav-sub">{c.audience}</span>}
             </span>
             <span className="smx-nav-count">{typeof count === 'number' ? fmtInt(count) : '—'}</span>
           </button>

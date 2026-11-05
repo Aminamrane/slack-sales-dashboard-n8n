@@ -86,6 +86,7 @@ const STATUS = {
  *  - `unknown` : le relevé a échoué, ou la cohorte n'existe pas dans le CRM.
  */
 export function stepStatus(step, stats, nowMs) {
+  if (stats?.test) return STATUS.idle; // cohorte de test : aucun inscrit, aucun envoi
   if (!stats || stats.status === 'idle') return STATUS.notloaded;
   if (stats.status === 'loading') {
     if (!Number.isFinite(stats.fetchedAt)) return STATUS.loading;

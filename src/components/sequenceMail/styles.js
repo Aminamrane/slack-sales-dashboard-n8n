@@ -209,6 +209,10 @@ html.smx-dragging iframe { pointer-events: none !important; }
 .smx-nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .smx-nav-sub { color: var(--smx-text-3); font-weight: 400; margin-left: 6px; font-size: 12px; }
 .smx-nav-item.is-active .smx-nav-sub { color: inherit; opacity: 0.75; }
+.smx-nav-item .smx-nav-sub.smx-nav-test, .smx-nav-item.is-active .smx-nav-sub.smx-nav-test {
+  padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; opacity: 1;
+  color: var(--smx-warn-text); background: var(--smx-warn-bg); border: 1px solid var(--smx-warn-line);
+}
 .smx-nav-count { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--smx-text-3); flex-shrink: 0; }
 .smx-nav-item.is-active .smx-nav-count { color: inherit; }
 .smx-nav.is-collapsed .smx-nav-item { padding: 0; justify-content: center; }

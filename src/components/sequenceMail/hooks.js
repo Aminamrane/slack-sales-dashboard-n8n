@@ -8,12 +8,14 @@ import {
   deriveCohorts,
   ensureApiCohorts,
   ensureContent,
+  ensureSavedVersions,
   ensureStats,
   reloadAll,
   useDataStore,
 } from './dataStore.js';
 import { MINUTE_MS, normalize } from './format.js';
 import { draftedSteps } from './mailDraft';
+import { savedSteps } from './savedVersions.js';
 import { PHASES, SEQUENCES, emailKey, fallbackStep, neighborsOf, parseKey, reuseStable, stepStatus } from './model.js';
 
 const useIsoLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
@@ -210,11 +212,11 @@ const NO_EMAILS = Object.freeze([]);
  * @note Sans contenu local mais avec des compteurs du CRM, on liste les types d'e-mails connus
  * du CRM (nom technique) plutôt que de cacher des envois réels : ces e-mails sont marqués `fallback: true`.
  */
-function deriveEmails(cohort, contentEntry, statsEntry, nowMs, cohortDrafts) {
+function deriveEmails(cohort, contentEntry, statsEntry, nowMs, cohortDrafts, cohortSaved) {
   if (contentEntry?.status === 'ready' && contentEntry.data) {
     // Brouillons de l'éditeur de mail superposés au contenu d'origine (cf. mailDraft.js) : liste,
     // onglets et schéma lisent ainsi la version en cours d'édition, sans autre source de vérité.
-    return draftedSteps(contentEntry.data.steps, cohortDrafts).map((step) => ({
+    return draftedSteps(savedSteps(contentEntry.data.steps, cohortSaved), cohortDrafts).map((step) => ({
       key: emailKey(cohort.id, step.kind),
       cohortId: cohort.id,
       cohortShort: cohort.short,
@@ -230,6 +232,7 @@ function deriveEmails(cohort, contentEntry, statsEntry, nowMs, cohortDrafts) {
       timing: step.timing,
       hasContent: Boolean(step.html || step.text),
       draftStatus: step.draftStatus ?? null,
+      savedVersion: step.savedVersion ?? null,
       stats: statsEntry?.byKind?.[step.kind] ?? null,
       status: stepStatus(step, statsEntry, nowMs),
       searchText: searchTextOf(cohort, step),
@@ -271,16 +274,16 @@ function deriveEmails(cohort, contentEntry, statsEntry, nowMs, cohortDrafts) {
  * e-mails qui n'ont en fait pas bougé gardent leur identité (lignes `memo` de la liste intactes).
  */
 const derivedCache = new Map();
-function emailsOfCohort(cohort, contentEntry, statsEntry, cohortDrafts, nowMs) {
+function emailsOfCohort(cohort, contentEntry, statsEntry, cohortDrafts, nowMs, cohortSaved) {
   const hit = derivedCache.get(cohort.id);
   if (
     hit && hit.cohort === cohort && hit.content === contentEntry && hit.stats === statsEntry
-    && hit.drafts === cohortDrafts && hit.nowMs === nowMs
+    && hit.drafts === cohortDrafts && hit.saved === cohortSaved && hit.nowMs === nowMs
   ) {
     return hit.value;
   }
-  const value = reuseStable(hit?.value, deriveEmails(cohort, contentEntry, statsEntry, nowMs, cohortDrafts));
-  derivedCache.set(cohort.id, { cohort, content: contentEntry, stats: statsEntry, drafts: cohortDrafts, nowMs, value });
+  const value = reuseStable(hit?.value, deriveEmails(cohort, contentEntry, statsEntry, nowMs, cohortDrafts, cohortSaved));
+  derivedCache.set(cohort.id, { cohort, content: contentEntry, stats: statsEntry, drafts: cohortDrafts, saved: cohortSaved, nowMs, value });
   return value;
 }
 
@@ -305,11 +308,15 @@ export function useSequenceMail({ cohortId, openKeys }) {
   const content = useDataStore((d) => d.content);
   const stats = useDataStore((d) => d.stats);
   const drafts = useDataStore((d) => d.drafts);
+  const saved = useDataStore((d) => d.saved);
+  const testCohorts = useDataStore((d) => d.testCohorts);
   const nowMs = useNow();
-  const cohorts = useMemo(() => deriveCohorts(api), [api]);
+  const cohorts = useMemo(() => deriveCohorts(api, testCohorts), [api, testCohorts]);
 
   useEffect(() => {
     void ensureApiCohorts();
+    // Versions enregistrées (et cohortes de test de ce compte) : relues à chaque ouverture de la page, donc une modification confirmée survit à l'actualisation.
+    void ensureSavedVersions();
   }, []);
 
   const openCohortIds = useMemo(() => [...new Set(openKeys.map((k) => parseKey(k).cohortId).filter(Boolean))].sort(), [openKeys]);
@@ -339,10 +346,10 @@ export function useSequenceMail({ cohortId, openKeys }) {
     for (const c of cohorts) {
       if (!contentIds.includes(c.id)) continue;
       const entry = stats[c.id] ?? (wantedStats.has(c.id) ? PENDING_STATS : undefined);
-      map.set(c.id, emailsOfCohort(c, content[c.id], entry, drafts[c.id], nowMs));
+      map.set(c.id, emailsOfCohort(c, content[c.id], entry, drafts[c.id], nowMs, saved[c.id]));
     }
     return map;
-  }, [cohorts, contentIds, content, stats, drafts, nowMs, wantedStats]);
+  }, [cohorts, contentIds, content, stats, drafts, saved, nowMs, wantedStats]);
 
   const emails = useStableBy(
     scopeIds.map((id) => byCohort.get(id) ?? NO_EMAILS),
@@ -386,8 +393,14 @@ export function useEmailDetail(key) {
   const statsEntry = useDataStore((d) => d.stats[cohortId]);
   // Brouillons de la seule cohorte de cet e-mail : modifier un autre e-mail ne re-rend pas celui-ci.
   const cohortDrafts = useDataStore((d) => d.drafts[cohortId]);
+  const cohortSaved = useDataStore((d) => d.saved[cohortId]);
+  const testCohorts = useDataStore((d) => d.testCohorts);
+  const savedState = useDataStore((d) => d.savedState);
   const nowMs = useNow();
 
+  useEffect(() => {
+    void ensureSavedVersions();
+  }, []);
   useEffect(() => {
     if (!cohortId) return;
     void ensureContent(cohortId);
@@ -395,7 +408,7 @@ export function useEmailDetail(key) {
     void ensureStats(cohortId);
   }, [cohortId]);
 
-  const cohorts = useMemo(() => deriveCohorts(api), [api]);
+  const cohorts = useMemo(() => deriveCohorts(api, testCohorts), [api, testCohorts]);
   const cohort = useMemo(() => cohorts.find((c) => c.id === cohortId) ?? null, [cohorts, cohortId]);
 
   return useMemo(() => {
@@ -431,7 +444,9 @@ export function useEmailDetail(key) {
     }
     const { sequences, rules } = contentEntry.data;
     // Les voisins (« Précédent »/« Suivant ») portent aussi leurs brouillons : leurs objets changent avec eux.
-    const steps = draftedSteps(contentEntry.data.steps, cohortDrafts);
+    // Couches : e-mail d'origine < dernière version ENREGISTRÉE < brouillon en cours d'édition.
+    const baseSteps = savedSteps(contentEntry.data.steps, cohortSaved);
+    const steps = draftedSteps(baseSteps, cohortDrafts);
     const index = steps.findIndex((s) => s.kind === kind);
     if (index < 0) return { ...base, state: 'missing' };
     const step = steps[index];
@@ -440,8 +455,12 @@ export function useEmailDetail(key) {
       ...base,
       state: 'ready',
       step,
-      // Pour l'éditeur : l'étape d'origine (sans brouillon) et le brouillon lui-même.
-      originalStep: contentEntry.data.steps[index],
+      // Pour l'éditeur : l'étape de RÉFÉRENCE (dernière version enregistrée, sinon l'origine — sans brouillon), l'origine pure, le brouillon lui-même,
+      // la version enregistrée dont part l'édition (0 = aucune) et l'état de la fonction d'enregistrement.
+      originalStep: baseSteps[index],
+      pristineStep: contentEntry.data.steps[index],
+      savedVersion: cohortSaved?.[kind]?.version ?? 0,
+      savedState,
       draft: cohortDrafts?.[kind] ?? null,
       steps,
       index,
@@ -458,5 +477,5 @@ export function useEmailDetail(key) {
       meta: contentEntry.data.cohort,
       generatedAt: contentEntry.data.generatedAt,
     };
-  }, [key, cohortId, kind, cohort, statsEntry, contentEntry, cohortDrafts, nowMs]);
+  }, [key, cohortId, kind, cohort, statsEntry, contentEntry, cohortDrafts, cohortSaved, savedState, nowMs]);
 }

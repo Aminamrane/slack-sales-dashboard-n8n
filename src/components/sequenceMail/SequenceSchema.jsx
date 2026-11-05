@@ -74,7 +74,7 @@ function SchemaMessage({ danger = false, accent = false, footer, children }) {
 }
 
 /** Champs d'une étape que la case montre : deux étapes égales sur ces champs donnent la même case. */
-const STEP_FIELDS = ['key', 'kind', 'subject', 'hasContent', 'phase', 'segment', 'draftStatus', 'timing'];
+const STEP_FIELDS = ['key', 'kind', 'subject', 'hasContent', 'phase', 'segment', 'draftStatus', 'savedVersion', 'timing'];
 const NODE_PROPS = [
   'ordinal', 'total', 'isSelected', 'isOpen', 'isEditing', 'isStop', 'hintId', 'conditionFull', 'conditionShort', 'skippable', 'onJump', 'onEdit',
 ];
@@ -104,7 +104,7 @@ const SchemaNode = memo(function SchemaNode({
   const t = step.timing;
   const when = t?.mode === 'calendar' ? fmtWhenShort(t.at) : shortRelative(t);
   const status = step.status && !HIDDEN_STATUS.has(step.status.key) ? step.status : null;
-  const edited = Boolean(step.draftStatus);
+  const edited = Boolean(step.draftStatus || step.savedVersion);
 
   // Les morceaux sont séparés par un point : on retire celui qui termine déjà un sujet ou une condition (« là.. »).
   const ariaLabel = [`Étape ${ordinal} sur ${total}`, title, phaseLabel, segmentLabel, when, status?.label, conditionFull]
@@ -112,7 +112,7 @@ const SchemaNode = memo(function SchemaNode({
     .map((part) => String(part).replace(/[.\s]+$/, ''))
     .join('. ');
   const hint = `Ctrl/Cmd + clic (ou Entrée) : ouvrir « ${title} » dans Gestion de séquence`;
-  const editLabel = edited ? `Modifier l'e-mail « ${title} » (déjà modifié)` : `Modifier l'e-mail « ${title} »`;
+  const editLabel = edited ? `Modifier l'e-mail « ${title} » (${step.draftStatus ? 'modifications non enregistrées' : `version ${step.savedVersion} enregistrée`})` : `Modifier l'e-mail « ${title} »`;
 
   return (
     <div className={`smx-sn t-${toneOf(phase?.tone)}`}>
@@ -169,7 +169,7 @@ const SchemaNode = memo(function SchemaNode({
           data-email-edit={step.key}
           tabIndex={isStop ? 0 : -1}
           aria-label={editLabel}
-          title={edited ? 'Modifier le contenu de cet e-mail (déjà modifié, brouillon local)' : 'Modifier le contenu de cet e-mail'}
+          title={edited ? (step.draftStatus ? 'Modifier le contenu de cet e-mail (modifications non enregistrées)' : `Modifier le contenu de cet e-mail (version ${step.savedVersion} enregistrée)`) : 'Modifier le contenu de cet e-mail'}
           onClick={() => onEdit(step.key)}
         >
           <Pencil aria-hidden size={12} strokeWidth={2.4} />
