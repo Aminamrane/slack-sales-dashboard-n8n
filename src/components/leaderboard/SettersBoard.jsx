@@ -173,6 +173,14 @@ function SetterRow({ setter, index, open, onToggle, card, darkMode, medals }) {
 
 const shortDate = (iso) => new Date(iso).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit' });
 
+// Effectif du client (dev 05/11/2026 : « ajoute le volume de salariés ») : la tranche du contrat signé, « 3-5 » →
+// « 3-5 salariés » ; une tranche déjà libellée reste telle quelle.
+const headcountLabel = (band) => {
+  if (!band) return 'effectif inconnu';
+  if (/[a-z]/i.test(band)) return band;
+  return band === '1' ? '1 salarié' : `${band} salariés`;
+};
+
 // Clients signés d'une provenance (dev 31/10/2026 : « savoir qui est ce client ») ; le back ne les envoie qu'aux
 // admins et au CEO. Une vente comptée sur son seul contrat signé, pas encore déclarée, porte une pastille.
 function ClientLines({ clients, card, darkMode }) {
@@ -182,7 +190,12 @@ function ClientLines({ clients, card, darkMode }) {
       <span />
       <span style={{ fontSize: 12, color: card.text, paddingLeft: 58, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={{ width: 4, height: 4, borderRadius: '50%', background: card.muted, flex: 'none' }} />
-        <span title={c.client || undefined} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.client || 'Client sans nom'}</span>
+        <span style={{ minWidth: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 6 }}>
+          <span title={c.client || undefined} style={{ maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.client || 'Client sans nom'}</span>
+          <span style={{ maxWidth: '100%', fontSize: 11.5, color: card.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {headcountLabel(c.headcount)}
+          </span>
+        </span>
       </span>
       <span style={{ gridColumn: '3 / 6', textAlign: 'right', fontSize: 11.5, color: card.muted, whiteSpace: 'nowrap',
         display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
