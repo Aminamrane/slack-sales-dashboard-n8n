@@ -25,8 +25,16 @@
 // La logique (agrégation, attendu, moyennes) vit dans utils/workHoursPeriod.js,
 // testée. Rien ne s'anime hors une entrée de page ; l'écran reste pendant les
 // chargements.
+//
+// Planning daté (2026-11-05) : le crayon de la colonne « Attendu » ouvre l'arrivée
+// de la personne et son rythme à chaque date d'effet (ScheduleEditor, PUT
+// /api/v1/hr/work-hours/schedule). Un jour compte dans l'attendu seulement après
+// l'arrivée et au rythme en vigueur ce jour-là ; le réalisé n'est jamais touché.
+// Tant que le serveur ne sert pas working_days_history, l'ancien éditeur des jours
+// reste proposé.
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import SharedNavbar from "../components/SharedNavbar";
@@ -38,6 +46,7 @@ import {
 import {
   DAY_LABELS, MONTHS_FR, DEFAULT_WORKING_DAYS,
   mondayOf, iso, addDays, fmtDay, monthKey, fmtH, statusFor, buildPeriod, aggregate, mondaysCovering,
+  draftFromRow, validateDraft,
 } from "../utils/workHoursPeriod.js";
 import crownIcon from "../assets/crown.png";
 import firstPlace from "../assets/1st-place.png";
@@ -145,6 +154,133 @@ function WorkingDaysEditor({ initial, onSave, onCancel, saving }) {
       </div>
     </div>
   );
+}
+
+// Sept cases, une par jour (rendu de l'éditeur ci-dessus, réutilisé par le planning daté).
+function DayToggles({ days, onToggle, label }) {
+  return (
+    <div role="group" aria-label={label} style={{ display: "flex", gap: 4 }}>
+      {DAY_SHORT.map((l, i) => {
+        const d = i + 1;
+        const on = days.includes(d);
+        return (
+          <button key={d} type="button" onClick={() => onToggle(d)} title={DAY_LABELS[i]} aria-pressed={on}
+            style={{ flex: 1, height: 28, borderRadius: 7, border: `1px solid ${on ? VIOLET : BORDER}`, background: on ? VIOLET : CARD, color: on ? "#fff" : i >= 5 ? FAINT : TEXT, fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            {l}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Écran étroit : l'éditeur devient une feuille pleine largeur rendue dans le body (un popover ancré dans le tableau
+// sortirait de l'écran, et un ancêtre animé empêche un « fixed » de se repérer sur la fenêtre).
+function useNarrow(query = "(max-width: 640px)") {
+  const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && window.matchMedia(query).matches);
+  useEffect(() => {
+    const m = window.matchMedia(query);
+    const on = () => setNarrow(m.matches);
+    m.addEventListener("change", on);
+    return () => m.removeEventListener("change", on);
+  }, [query]);
+  return narrow;
+}
+
+const EDITOR_LABEL = { fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: MUTED, marginBottom: 6 };
+const EDITOR_DATE = { border: `1px solid ${BORDER}`, borderRadius: 7, padding: "4px 7px", fontSize: 12, color: TEXT, fontFamily: "inherit", background: CARD, minWidth: 0, flex: 1 };
+const EDITOR_LINK = { border: "none", background: "transparent", color: "#2563eb", fontSize: 11.5, fontWeight: 650, cursor: "pointer", fontFamily: "inherit", padding: 0 };
+
+// Planning daté (RH) : date d'arrivée + rythme initial + changements, chacun avec sa date d'effet.
+// Un brouillon local, validé puis envoyé d'un bloc ; rien n'est rétroactif : un rythme ne vaut qu'à partir de sa date.
+function ScheduleEditor({ row, today, onSave, onCancel, saving, error }) {
+  const [draft, setDraft] = useState(() => draftFromRow(row));
+  const [problem, setProblem] = useState(null);
+  const [seq, setSeq] = useState(0);
+  const narrow = useNarrow();
+  const checked = validateDraft(draft);
+  const dirty = JSON.stringify(checked.payload) !== JSON.stringify(validateDraft(draftFromRow(row)).payload);
+  const edit = (fn) => { setProblem(null); setDraft(fn); };
+  const setRowOf = (key, patch) => edit((d) => ({ ...d, rows: d.rows.map((r) => (r.key === key ? { ...r, ...patch } : r)) }));
+  const toggleDay = (key, day) => edit((d) => ({
+    ...d,
+    rows: d.rows.map((r) => (r.key !== key ? r : { ...r, days: r.days.includes(day) ? r.days.filter((x) => x !== day) : [...r.days, day].sort((a, b) => a - b) })),
+  }));
+  const addChange = () => {
+    const taken = new Set(draft.rows.map((r) => r.from));
+    let from = today;
+    while (taken.has(from)) from = addDays(from, 1);
+    const last = draft.rows[draft.rows.length - 1];
+    edit((d) => ({ ...d, rows: [...d.rows, { key: `n${seq}`, from, days: [...last.days] }] }));
+    setSeq((n) => n + 1);
+  };
+  const submit = () => {
+    if (!checked.ok) { setProblem(checked.errors[0]); return; }
+    onSave(checked.payload);
+  };
+  // Le rythme en vigueur aujourd'hui, et ceux à venir.
+  const currentKey = draft.rows.reduce((best, r) => (r.from <= today && (best === null || r.from >= best.from) ? r : best), null)?.key;
+
+  const place = narrow
+    ? { position: "fixed", left: 12, right: 12, top: 72, zIndex: 1000, maxHeight: "calc(100vh - 96px)", overflowY: "auto" }
+    : { position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 20, width: 340 };
+  const panel = (
+    <div role="dialog" aria-label="Arrivée et rythme de travail" onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => { if (e.key === "Escape") onCancel(); }}
+      style={{ ...place, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 12px 32px rgba(17,24,39,0.14)", padding: "10px 12px", textAlign: "left", fontFamily: FONT, color: TEXT }}>
+      <div style={EDITOR_LABEL}>Arrivée</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <input type="date" aria-label="Date d'arrivée" value={draft.start} onChange={(e) => edit((d) => ({ ...d, start: e.target.value }))} style={EDITOR_DATE} />
+        {draft.start && <button type="button" onClick={() => edit((d) => ({ ...d, start: "" }))} style={EDITOR_LINK}>Effacer</button>}
+      </div>
+
+      <div style={EDITOR_LABEL}>Rythme de travail</div>
+      {draft.rows.map((r, i) => (
+        <div key={r.key} style={{ marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5, minHeight: 26 }}>
+            {i === 0 ? (
+              <span style={{ fontSize: 11.5, fontWeight: 650, color: TEXT, flex: 1 }}>{draft.start ? "Dès l'arrivée" : "Rythme initial"}</span>
+            ) : (
+              <>
+                <span style={{ fontSize: 11.5, fontWeight: 650, color: TEXT, whiteSpace: "nowrap" }}>À partir du</span>
+                <input type="date" aria-label={`Date d'effet du changement ${i}`} value={r.from} onChange={(e) => setRowOf(r.key, { from: e.target.value })} style={EDITOR_DATE} />
+              </>
+            )}
+            {r.key === currentKey && <span style={{ fontSize: 10, fontWeight: 700, color: GREEN, whiteSpace: "nowrap" }}>en cours</span>}
+            {r.from > today && <span style={{ fontSize: 10, fontWeight: 700, color: MUTED, whiteSpace: "nowrap" }}>à venir</span>}
+            {i > 0 && (
+              <button type="button" onClick={() => edit((d) => ({ ...d, rows: d.rows.filter((x) => x.key !== r.key) }))} title="Supprimer ce changement" aria-label={`Supprimer le changement ${i}`}
+                style={{ border: "none", background: "transparent", color: MUTED, fontSize: 16, lineHeight: 1, cursor: "pointer", padding: "0 2px", fontFamily: "inherit" }}>×</button>
+            )}
+          </div>
+          <DayToggles days={r.days} onToggle={(d) => toggleDay(r.key, d)} label={i === 0 ? "Jours du rythme initial" : `Jours du changement ${i}`} />
+          <div style={{ fontSize: 10.5, color: MUTED, marginTop: 3 }}>{r.days.length} j/sem</div>
+        </div>
+      ))}
+      <button type="button" onClick={addChange} style={EDITOR_LINK}>+ Ajouter un changement</button>
+
+      {(problem || error) && (
+        <div role="alert" style={{ marginTop: 8, padding: "6px 9px", borderRadius: 8, background: "#fdecec", color: "#b42318", fontSize: 11.5 }}>{problem || error}</div>
+      )}
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, marginTop: 10 }}>
+        <button type="button" onClick={onCancel} style={{ border: "none", background: "transparent", color: MUTED, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Annuler</button>
+        <button type="button" disabled={saving || !dirty} onClick={submit}
+          style={{ border: "none", background: VIOLET, color: "#fff", borderRadius: 7, padding: "5px 10px", fontSize: 11.5, fontWeight: 700, cursor: saving || !dirty ? "default" : "pointer", fontFamily: "inherit", opacity: !dirty ? 0.5 : 1 }}>
+          {saving ? "…" : "Enregistrer"}
+        </button>
+      </div>
+    </div>
+  );
+  return narrow ? createPortal(panel, document.body) : panel;
+}
+
+// Détail d'un attendu qui n'est pas « le même rythme tout le mois » : une ligne par période (arrivée, changements).
+function segmentLines(r) {
+  return (r.segments || []).map((g) => {
+    const range = g.from === g.to ? fmtDay(g.from) : `${fmtDay(g.from)} – ${fmtDay(g.to)}`;
+    if (!g.employed) return `${range} : avant l'arrivée, rien d'attendu`;
+    return `${range} : ${g.days.length} j/sem (${g.days.map((d) => DAY_LABELS[d - 1]).join(", ")}) → ${g.available.toLocaleString("fr-FR")} j · ${fmtH(g.perDay * g.available)}`;
+  });
 }
 
 /* ──────────────────────────────── Page ─────────────────────────────────── */
@@ -266,6 +402,22 @@ export default function WorkHours({ embed = false }) {
       setSaving(false);
     }
   };
+
+  // Planning daté : le serveur remplace l'arrivée et l'historique d'un bloc, puis on relit la période.
+  const saveSchedule = async (email, payload) => {
+    setSaving(true);
+    setEditError(null);
+    try {
+      await apiClient.put("/api/v1/hr/work-hours/schedule", { email, ...payload });
+      setEditing(null);
+      setReloadTick((t) => t + 1);
+    } catch (e) {
+      setEditError(e?.data?.detail || "Enregistrement impossible");
+    } finally {
+      setSaving(false);
+    }
+  };
+  const editingSchedule = !!rows.find((r) => r.email === editing)?.scheduleSupported;
 
   const cells = period?.cells || [];
   // Tout tient dans la largeur, sans défilement : colonnes de chiffres
@@ -477,7 +629,7 @@ export default function WorkHours({ embed = false }) {
                 </span>
               </div>
 
-              {editError && (
+              {editError && !editingSchedule && (
                 <div style={{ marginBottom: 10, padding: "8px 12px", borderRadius: 9, background: "#fdecec", color: "#b42318", fontSize: 12 }}>{editError}</div>
               )}
 
@@ -535,7 +687,8 @@ export default function WorkHours({ embed = false }) {
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: pc, fontWeight: 700 }}>
                             <span style={{ width: 6, height: 6, borderRadius: "50%", background: pc }} />{r.pole}
                           </span>
-                          {partTime && <span style={{ color: VIOLET, fontWeight: 700 }}>· {r.workingDays.length} j/sem</span>}
+                          {(partTime || r.rhythmChanged) && <span style={{ color: VIOLET, fontWeight: 700 }}>· {r.rhythmChanged ? r.rhythmLabel : `${r.workingDays.length} j/sem`}</span>}
+                          {r.arrival && <span title="Rien n'est attendu avant cette date" style={{ fontWeight: 600 }}>· {r.notArrived ? "arrive" : "arrivée"} le {fmtDay(r.arrival)}</span>}
                           {r.vacCount > 0 && <span style={{ color: "#b45309", fontWeight: 600 }}>· {r.vacCount.toLocaleString("fr-FR")} j. d'absence</span>}
                         </span>
                       </span>
@@ -552,6 +705,14 @@ export default function WorkHours({ embed = false }) {
                           );
                         }
                         const h = c.hours;
+                        if (c.beforeStart && !(h > 0)) {
+                          return (
+                            <span key={c.key} title={`${c.label} : avant l'arrivée${r.start ? ` (${fmtDay(r.start)})` : ""}, rien d'attendu`}
+                              style={{ textAlign: "center", fontSize: 10, fontWeight: 700, padding: "5px 0", borderRadius: 7, background: "repeating-linear-gradient(45deg, #f6f7fa, #f6f7fa 3px, #eceff4 3px, #eceff4 6px)", color: FAINT }}>
+                              —
+                            </span>
+                          );
+                        }
                         const tone = c.weekend ? VIOLET : GREEN;
                         const alpha = Math.min(Math.round((h / denom) * 46) + 10, 56).toString(16).padStart(2, "0");
                         return (
@@ -576,20 +737,25 @@ export default function WorkHours({ embed = false }) {
                     {/* Attendu sur la période + jours travaillés (crayon) */}
                     <span style={{ textAlign: "right", position: "relative" }} onClick={(e) => e.stopPropagation()}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 4, justifyContent: "flex-end" }}>
-                        <span title={`${r.workingDays.length} jour${r.workingDays.length > 1 ? "s" : ""} travaillé${r.workingDays.length > 1 ? "s" : ""} par semaine (${r.workingDays.map((d) => DAY_LABELS[d - 1]).join(", ")}) × ${fmtH(r.perDay)} · absences déduites${!period?.closed ? ` · ${fmtH(r.expectedNow)} à ce stade` : ""}`}
+                        <span title={r.rhythmChanged || r.arrival
+                          ? [`Attendu : ${fmtH(r.expectedFull)} · absences déduites${!period?.closed ? ` · ${fmtH(r.expectedNow)} à ce stade` : ""}`, ...segmentLines(r)].join("\n")
+                          : `${r.workingDays.length} jour${r.workingDays.length > 1 ? "s" : ""} travaillé${r.workingDays.length > 1 ? "s" : ""} par semaine (${r.workingDays.map((d) => DAY_LABELS[d - 1]).join(", ")}) × ${fmtH(r.perDay)} · absences déduites${!period?.closed ? ` · ${fmtH(r.expectedNow)} à ce stade` : ""}`}
                           style={{ fontSize: 12.5, fontWeight: 700, color: TEXT, fontVariantNumeric: "tabular-nums" }}>
-                          {fmtH(r.expectedFull)}
+                          {r.notArrived ? "—" : fmtH(r.expectedFull)}
                         </span>
-                        <button type="button" className="wh-edit" title="Jours travaillés par semaine (temps partiel…)"
+                        <button type="button" className="wh-edit" title={r.scheduleSupported ? "Arrivée et rythme de travail" : "Jours travaillés par semaine (temps partiel…)"}
                           onClick={() => { setEditError(null); setEditing(isEditing ? null : r.email); }}
                           style={{ border: "none", background: "transparent", cursor: "pointer", padding: 2, color: MUTED, display: "inline-flex" }}>
                           <PencilIcon size={12} />
                         </button>
                       </span>
-                      {isEditing && (
+                      {isEditing && (r.scheduleSupported ? (
+                        <ScheduleEditor row={r} today={today} saving={saving} error={editError}
+                          onSave={(payload) => saveSchedule(r.email, payload)} onCancel={() => setEditing(null)} />
+                      ) : (
                         <WorkingDaysEditor initial={r.workingDays} saving={saving}
                           onSave={(days) => saveWorkingDays(r.email, days)} onCancel={() => setEditing(null)} />
-                      )}
+                      ))}
                     </span>
 
                     <span style={{ textAlign: "right" }}>
