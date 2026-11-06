@@ -1439,3 +1439,23 @@
 .si-waiver-reasons button:hover {border-color:#9aa6c2;}
 .si-waiver-reasons button.is-selected {background:#1e2330;border-color:#1e2330;color:#fff;}
 @media(max-width:600px) {.si-waiver-reasons {margin-left:0;}}
+/* Déclaration anticipée sans documents (onboarding à J-4 ou moins) : même famille que .si-waiver, teinte ambre douce (ni erreur ni alerte). */
+.si-early {border-color:#e6d3a8;background:#fffaf0;}
+.si-early-head {display:flex;align-items:flex-start;gap:12px;}
+.si-early-head>svg {flex-shrink:0;color:#a8741a;margin-top:1px;}
+.si-early-head strong {display:block;font-size:13px;}
+.si-early-head small {display:block;font-size:12px;color:#657084;margin-top:3px;line-height:1.5;}
+.si-early .si-early-ask {display:block;margin:14px 0 0 32px;font-size:12px;font-weight:600;color:#1e2330;}
+.si-early .si-waiver-reasons {margin:8px 0 0 32px;}
+.si-early-action {display:flex;justify-content:flex-end;margin-top:14px;}
+/* « Autre motif » : note libre de 200 caractères, alignée sur les choix ; le champ est le .ip-field des notes de la fiche d'intégration. */
+.si-early-note {margin:12px 0 0 32px;}
+.si-early-note .ip-field {margin-bottom:0;gap:6px;}
+.si-early-note .ip-field>span {font-weight:600;color:#1e2330;}
+.si-early-note textarea {min-height:78px;}
+.si-early-count {display:block;margin-top:5px;text-align:right;font-size:11px;color:#657084;}
+.si-early-count.is-full {color:#a8741a;font-weight:600;}
+@media(max-width:600px) {.si-early .si-early-ask,.si-early .si-waiver-reasons,.si-early-note {margin-left:0;}.si-early-action>button {width:100%;}}
+/* Reprogrammer l'onboarding depuis l'écran « Rendez-vous réservé » (avant la déclaration de la vente). */
+.si-reservation-date .si-reschedule {margin-left:auto;align-self:center;flex-shrink:0;padding:8px 12px;font-size:13px;}
+@media(max-width:600px) {.si-reservation-date {flex-wrap:wrap;}.si-reservation-date .si-reschedule {margin-left:0;width:100%;}}

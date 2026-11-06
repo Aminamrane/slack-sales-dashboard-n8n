@@ -147,7 +147,9 @@ function SituationStep({ brief, row }) {
         <Row label="Contrat Owner">{brief.contracts?.owner_status === "done" ? <Pill color={GREEN}>Signé{brief.contracts.owner_signed_at ? ` le ${fmtDate(brief.contracts.owner_signed_at)}` : ""}</Pill> : <Pill color={AMBER}>{brief.contracts?.owner_status || "Non signé"}</Pill>}</Row>
         <Row label="Convention Opti'Lex"><Pill color={optilex[1]}>{optilex[0]}</Pill></Row>
         {brief.sheet && <Row label="Fiche d'intégration">{brief.sheet.final ? <Pill color={GREEN}>Finalisée</Pill> : brief.sheet.available ? <Pill color={AMBER}>À finaliser par votre météo</Pill> : <Pill color={MUTED}>Partie commerciale non terminée</Pill>}</Row>}
-        {brief.documents?.waiver && <Row label="Pièces du dossier"><Pill color={AMBER}>Aucune à la déclaration · {brief.documents.waiver.label}</Pill></Row>}
+        {brief.documents?.waiver && <Row label="Pièces du dossier"><Pill color={AMBER}>{brief.documents.waiver.early ? "Vente déclarée sans documents" : "Aucune à la déclaration"} · {brief.documents.waiver.label}</Pill></Row>}
+        {brief.documents?.waiver?.early && <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.5, marginTop: 4 }}>Le commercial n’a pas pu récupérer les documents avant l’onboarding (déclaration anticipée{brief.documents.waiver.days_before > 0 ? ` à J-${brief.documents.waiver.days_before}` : brief.documents.waiver.days_before === 0 ? " le jour J" : ""}).</div>}
+        {brief.documents?.waiver?.early && brief.documents.waiver.note && <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.5, marginTop: 4, overflowWrap: "anywhere" }}>Précision du commercial : « {brief.documents.waiver.note} »</div>}
       </Card>
     </>
   );

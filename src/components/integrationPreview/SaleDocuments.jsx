@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, FileUp, FileText, UsersRound, Building2, Check, Clock3, LoaderCircle, RefreshCw, Trash2, CircleAlert, FileX2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, FileUp, FileText, UsersRound, Building2, Check, Clock3, LoaderCircle, RefreshCw, Trash2, CircleAlert, FileX2, CalendarClock } from 'lucide-react';
 import apiClient from '../../services/apiClient';
 import { validateIntakeFile, documentStatus, hasRequiredSaleDocuments, canDeclareSale, DOCUMENT_WAIVERS } from '../../utils/intakeDocuments';
+import { EARLY_DOCUMENT_REASONS, EARLY_NOTE_MAX, EARLY_OTHER_REASON, canDeclareWithoutDocuments, canSubmitEarlyReason, cleanEarlyNote, daysUntilOnboarding, onboardingCountdown } from '../../utils/earlySaleDeclaration';
 
 // `standalone` : dépôt hors de la déclaration (fiche du lead), avant la signature comme après la
 // déclaration. Même circuit et mêmes règles ; seuls la dispense et « Déclarer la vente » disparaissent.
-export default function SaleDocuments({ leadId, draft, onBack, onContinue, continueLabel = "Continuer vers la facturation", submitting = false, standalone = false, onClose }) {
+// `onboardingAt` : date du rendez-vous d'onboarding réservé (heure de Paris). À J-4 ou moins, sans aucun document, le
+// bloc « Déclarer la vente sans documents » apparaît ; le serveur revérifie la règle à la déclaration.
+export default function SaleDocuments({ leadId, draft, onBack, onContinue, continueLabel = "Continuer vers la facturation", submitting = false, standalone = false, onClose, onboardingAt = '' }) {
   const [files, setFiles] = useState([]), [platform, setPlatform] = useState(null);
   const [account, setAccount] = useState(null), [scope, setScope] = useState(null);
   const uploading = useRef(false);
@@ -13,13 +16,20 @@ export default function SaleDocuments({ leadId, draft, onBack, onContinue, conti
   const [otherType, setOtherType] = useState('other'), [otherCompany, setOtherCompany] = useState('');
   // Société en création ou trop récente : pas encore de pièce (case cochée + situation choisie).
   const [waiverOn, setWaiverOn] = useState(false), [waiver, setWaiver] = useState('');
+  // Client qui n'a pas transmis ses documents, onboarding à J-4 ou moins : motif obligatoire (choix du sales) ; « Autre motif »
+  // demande en plus une note libre (200 caractères au plus).
+  const [earlyReason, setEarlyReason] = useState(''), [earlyNote, setEarlyNote] = useState('');
+  const earlyNoteField = useRef(null);
   const hasDocuments = hasRequiredSaleDocuments(files);
   const chosenWaiver = !hasDocuments && waiverOn ? waiver : '';
+  const earlyAllowed = !standalone && canDeclareWithoutDocuments(onboardingAt);
+  const earlyReady = canSubmitEarlyReason(earlyReason, earlyNote);
   const dossier = draft || scope?.draft;
   const companies = dossier?.companies?.filter(c => c.selected) || [];
   const directors = dossier?.directors?.filter(d => d.companies?.some(id => companies.some(c => c.id === id))) || [];
   const root = `/api/v1/owner-integration/leads/${leadId}/sale-documents`;
-  useEffect(() => { if (hasDocuments) { setWaiverOn(false); setWaiver(''); } }, [hasDocuments]);
+  useEffect(() => { if (hasDocuments) { setWaiverOn(false); setWaiver(''); setEarlyReason(''); setEarlyNote(''); } }, [hasDocuments]);
+  useEffect(() => { if (earlyReason === EARLY_OTHER_REASON) earlyNoteField.current?.focus(); }, [earlyReason]);
   useEffect(() => {
     let live = true;
     apiClient.get(root + '?remote=true').then(result => {if (live) {setFiles(result.documents);setPlatform(result.platform);setAccount(result.account);setScope(result);if (result.available === false) setError(result.reason || 'Le dépôt n’est pas encore ouvert pour ce dossier.');}})
@@ -63,6 +73,19 @@ export default function SaleDocuments({ leadId, draft, onBack, onContinue, conti
     } catch(e) {setError(e.message || 'Impossible de vérifier les documents. Réessayez.');}
     finally {setBusy('');}
   }
+  // « Déclarer la vente sans documents » : les documents sont relus juste avant (un dépôt arrivé entre-temps prime : la
+  // vente se déclare alors normalement, sans mention). Sinon elle part avec le motif choisi, que le serveur revérifie (J-4).
+  async function declareWithoutDocuments() {
+    if (busy || loading || submitting || !earlyAllowed || !earlyReady) return;
+    setBusy('Vérification des documents'); setError('');
+    try {
+      const result = await apiClient.get(root);
+      setFiles(result.documents);
+      if (hasRequiredSaleDocuments(result.documents)) {await onContinue(null); return;}
+      await onContinue(earlyReason, earlyReason === EARLY_OTHER_REASON ? cleanEarlyNote(earlyNote) : undefined);
+    } catch(e) {setError(e.message || 'Impossible de vérifier les documents. Réessayez.');}
+    finally {setBusy('');}
+  }
   function drop(label, meta, icon) {
     const Icon = icon;
     return <label className={`si-drop ${busy ? 'is-busy' : ''}`} onDragOver={e => e.preventDefault()} onDrop={e => {e.preventDefault();if(!busy) upload(e.dataTransfer.files, meta);}}>
@@ -95,9 +118,22 @@ export default function SaleDocuments({ leadId, draft, onBack, onContinue, conti
       {waiverOn && <div className="si-waiver-reasons" role="radiogroup" aria-label="Situation de la société">{DOCUMENT_WAIVERS.map(([value, label]) =>
         <button type="button" key={value} role="radio" aria-checked={waiver === value} className={waiver === value ? 'is-selected' : ''} disabled={!!busy || submitting} onClick={() => {setWaiver(value); setError('');}}>{waiver === value && <Check size={14}/>}{label}</button>)}</div>}
     </div>}
+    {earlyAllowed && !loading && !hasDocuments && <section className="si-waiver si-early" aria-label="Déclarer la vente sans documents">
+      <div className="si-early-head"><CalendarClock size={20}/><span><strong>{onboardingCountdown(daysUntilOnboarding(onboardingAt))}</strong>
+        <small>Le client n’a pas encore transmis ses documents ? Vous pouvez déclarer la vente maintenant, sans attendre : le motif sera indiqué sur la fiche d’intégration, pour que l’équipe qui prend le relais sache pourquoi le dossier est incomplet.</small></span></div>
+      <strong className="si-early-ask" id="si-early-ask">Pourquoi n’avez-vous pas les documents ?</strong>
+      <div className="si-waiver-reasons" role="radiogroup" aria-labelledby="si-early-ask">{EARLY_DOCUMENT_REASONS.map(([value, label]) =>
+        <button type="button" key={value} role="radio" aria-checked={earlyReason === value} className={earlyReason === value ? 'is-selected' : ''} disabled={!!busy || submitting} onClick={() => {setEarlyReason(value); setError('');}}>{earlyReason === value && <Check size={14}/>}{label}</button>)}</div>
+      {earlyReason === EARLY_OTHER_REASON && <div className="si-early-note">
+        <label className="ip-field"><span>Précisez le motif</span>
+          <textarea ref={earlyNoteField} rows={3} maxLength={EARLY_NOTE_MAX} value={earlyNote} placeholder="Ex. : le client attend la signature de son expert-comptable." aria-describedby="si-early-count" disabled={!!busy || submitting} onChange={e => {setEarlyNote(e.target.value); setError('');}}/></label>
+        <small id="si-early-count" className={`si-early-count ${earlyNote.length >= EARLY_NOTE_MAX ? 'is-full' : ''}`}>{earlyNote.length} / {EARLY_NOTE_MAX} caractères</small>
+      </div>}
+      <div className="si-early-action"><button type="button" className="ip-primary" disabled={!!busy || submitting || loading || !earlyReady} title={earlyReady ? undefined : earlyReason ? 'Précisez le motif' : 'Choisissez d’abord le motif'} onClick={declareWithoutDocuments}>{submitting ? 'Déclaration…' : 'Déclarer la vente sans documents'}<ArrowRight size={17}/></button></div>
+    </section>}
     {!standalone && !loading && !hasDocuments && (chosenWaiver
       ? <p role="status">Déclaration sans pièce : {DOCUMENT_WAIVERS.find(([value]) => value === chosenWaiver)?.[1]}. La dispense sera visible par l’équipe d’onboarding.</p>
-      : <p role="status">{waiverOn ? 'Choisissez la situation de la société pour continuer.' : 'Un document doit être enregistré avant de continuer. Les dépôts refusés doivent être corrigés.'}</p>)}
+      : <p role="status">{waiverOn ? 'Choisissez la situation de la société pour continuer.' : `Un document doit être enregistré avant de continuer. Les dépôts refusés doivent être corrigés.${earlyAllowed ? ' L’onboarding approche : vous pouvez aussi déclarer la vente sans documents (ci-dessus).' : ''}`}</p>)}
     {error && <div className="si-error" role="alert">{error}</div>}
     {standalone ? <footer className="si-actions"><span/><button className="ip-primary" disabled={!!busy} onClick={onClose}>Terminé<Check size={17}/></button></footer>
     : <footer className="si-actions"><button className="ip-secondary" disabled={!!busy || submitting} onClick={onBack}><ArrowLeft size={16}/> Fiche</button><button className="ip-primary" disabled={!!busy || submitting || loading || !canDeclareSale(files, chosenWaiver)} onClick={continueToBilling}>{submitting ? "Déclaration…" : continueLabel}<ArrowRight size={17}/></button></footer>}

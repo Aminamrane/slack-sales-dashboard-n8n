@@ -4,6 +4,7 @@ import { X, ArrowLeft, FileCheck2, ShieldCheck, PenLine, CalendarDays, Check, Se
 import apiClient from "../../services/apiClient";
 import { presentContractError, validateContractPreparation } from "../../utils/contractErrors";
 import IntegrationPreviewStudio, { IntegrationSummary } from "./IntegrationPreviewStudio";
+import EarlyDeclarationNote from "../EarlyDeclarationNote";
 import "./trackingIntegration.css";
 import PortalAccess from "../salesJourney/PortalAccess";
 import { intakeDraft, isStaleIntake, mergeIntakeDraft } from "./draftRecovery.js";
@@ -395,7 +396,7 @@ export function IntegrationDialog({ context: initialContext, onClose, onSaved, c
           </p>
         )}
         {context.nextAction && <SalesJourneySteps phase={stage} />}
-        {recovery ? null : context.readOnly ? <div className="integration-preview ti-saved-view"><IntegrationSummary draft={context.draft} clientName={context.client_name} validated={context.validated} /></div> : stage === "setup" ? (
+        {recovery ? null : context.readOnly ? <div className="integration-preview ti-saved-view"><EarlyDeclarationNote documents={context.early_declaration} margin="0 0 14px" /><IntegrationSummary draft={context.draft} clientName={context.client_name} validated={context.validated} /></div> : stage === "setup" ? (
           <form className="ti-contract-review ti-preparation" onSubmit={prepare} noValidate>
             <div className="ti-review-icon"><UsersRound size={30} strokeWidth={1.6} /></div>
             <span className="ti-review-eyebrow">PRÉPARER LE CONTRAT</span>

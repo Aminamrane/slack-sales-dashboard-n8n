@@ -1,5 +1,5 @@
 import SalePaymentMode from '../components/SalePaymentMode';
-import {canRescheduleAfterSale} from '../utils/saleRescheduling';
+import {canRescheduleAfterSale, onboardingDateOf, onboardingAwaitingConfirmation} from '../utils/saleRescheduling';
 import OnboardingReschedule from '../components/integrationPreview/OnboardingReschedule';
 import { generateSavedNda } from '../contracts/ndaGeneration.js';
 import { ndaRepresentatives, emptyRepresentative } from '../contracts/representatives.js';
@@ -1267,7 +1267,7 @@ export default function TrackingSheet() {
     } finally {saleRequestBusy.current = false; setSaleSubmitting(false);}
   };
 
-  const handleSaleSubmit = async (leadId, documentsWaiver = null) => {
+  const handleSaleSubmit = async (leadId, documentsWaiver = null, documentsWaiverNote = '') => {
     if (saleRequestBusy.current) return;
     saleRequestBusy.current = true;
     setSaleSubmitting(true);
@@ -1291,6 +1291,7 @@ export default function TrackingSheet() {
           discount: saleForm.discount === true ? ((saleForm.discountValue || '').trim() || 'Oui') : (saleForm.discount === false ? 'Non' : null),
           // Aucune pièce : société en création ou trop récente (case de l'étape documents).
           ...(documentsWaiver ? { documents_waiver: documentsWaiver } : {}),
+          ...(documentsWaiverNote ? { documents_waiver_note: documentsWaiverNote } : {}),
         });
         clientNumero = res.client_numero || null;
       } catch (err) {
@@ -7683,6 +7684,9 @@ export default function TrackingSheet() {
                 // Les pickers date/heure libres n'apparaissent qu'APRÈS déclaration (dates
                 // posées) -> avant, seul le bouton Déclarer (qui ouvre le pop-up créneaux).
                 const rdvDatesSet = canRescheduleAfterSale(lead, intakeJourneys[lead.id]);
+                // Date d'onboarding réservée (partie 1 de la déclaration) : lisible et reprogrammable AVANT la déclaration de la vente.
+                const onbDate = onboardingDateOf(lead, intakeJourneys[lead.id]);
+                const onbAwaiting = onboardingAwaitingConfirmation(lead, intakeJourneys[lead.id]);
                 // Statut contrats (Owner + Opti'Lex) — depuis la donnée du lead (marche en vue admin, sans fetch user-scopé).
                 const _ownerDone = !!lead.contract_signed_at;   // onglet Signés -> Owner signé
                 const _ol = lead.contract_optilex_status;        // null = contrat groupé (pré-split), pas de statut Opti'Lex séparé
@@ -7711,8 +7715,15 @@ export default function TrackingSheet() {
                     )}
                     <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Post-signature</div>
 
+                    {!rdvDatesSet && onbAwaiting && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '8px 12px', borderRadius: 10,
+                        background: darkMode ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.05)', border: `1px solid ${darkMode ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.15)'}` }}>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Onboarding</span>
+                        <span role="status" style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: C.text }}>{fmtRdvLabel(onbDate)} · Réservation en cours de confirmation</span>
+                      </div>
+                    )}
                     {rdvDatesSet && (<>
-                    {/* Reprogrammation disponible aussi après finalisation du parcours en deux parties. */}
+                    {/* Reprogrammation disponible dès la réservation confirmée, avant comme après la déclaration de la vente. */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                       <div style={{
                         display: 'flex', alignItems: 'center', gap: 8, flex: 1, padding: '8px 12px', borderRadius: 10,
@@ -7723,11 +7734,11 @@ export default function TrackingSheet() {
                         <button type="button" onClick={() => setReschedRdv({ leadId: lead.id, kind: 'onboarding', twoStage: isSignedPilot(lead) })}
                           title="Reprogrammer (créneaux libres de l'agenda)"
                           style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '6px 10px', borderRadius: 8,
-                            border: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#f9fafb', color: lead.rdv_onboarding_date ? C.text : C.muted,
+                            border: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#f9fafb', color: onbDate ? C.text : C.muted,
                             fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', transition: 'border-color 0.15s' }}
                           onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#10b981'; }}
                           onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; }}>
-                          <span>{lead.rdv_onboarding_date ? `${fmtRdvLabel(lead.rdv_onboarding_date)} · Reprogrammer` : 'Choisir un créneau'}</span>
+                          <span>{onbDate ? `${fmtRdvLabel(onbDate)} · Reprogrammer` : 'Choisir un créneau'}</span>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                             <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
                           </svg>
@@ -9181,6 +9192,7 @@ export default function TrackingSheet() {
           const leadId = reschedRdv.leadId;
           setLeads(previous => previous.map(l => l.id === leadId ? {...l, rdv_onboarding_date:result.new_dt} : l));
           setIntakeJourneys(previous => ({...previous, [leadId]:{...previous[leadId], preparation:result.preparation}}));
+          setSalePreparation(previous => (previous && showSaleModal === leadId ? result.preparation : previous));
           setRescheduleNotice({leadId, message:result.notification_sent === false ? 'Rendez-vous reprogrammé. La notification au client reste à vérifier.' : 'Rendez-vous reprogrammé dans les agendas.'});
           setReschedRdv(null);
         }}/>}
@@ -9317,7 +9329,8 @@ export default function TrackingSheet() {
                   <div style={{ fontSize: 13, color: C.muted }}>La vente a été enregistrée avec succès</div>
                 </div>
               ) : saleStep === 'reserved' ? (
-                <SaleReservation preparation={salePreparation} busy={saleSubmitting} error={saleReservationError} onRetry={() => reserveSaleAppointment(showSaleModal)} onContinue={() => setSaleStep('handoff')} onClose={() => setShowSaleModal(null)} />
+                <SaleReservation preparation={salePreparation} busy={saleSubmitting} error={saleReservationError} onRetry={() => reserveSaleAppointment(showSaleModal)} onContinue={() => setSaleStep('handoff')} onClose={() => setShowSaleModal(null)}
+                  onReschedule={() => setReschedRdv({ leadId: showSaleModal, kind: 'onboarding', twoStage: true })} />
               ) : saleStep === 'form' ? (
                 <>
                   {/* Header */}
@@ -9378,7 +9391,7 @@ export default function TrackingSheet() {
               ) : saleStep === 'handoff' ? (
                 <SaleIntake key={showSaleModal} leadId={showSaleModal} backLabel="Rendez-vous réservé" onBack={() => setSaleStep('reserved')} onSaved={value => {setSaleIntake(value); setSaleStep('documents');}} />
               ) : saleStep === 'documents' ? (
-                <SaleDocuments leadId={showSaleModal} draft={saleIntake?.draft} submitting={saleSubmitting} continueLabel="Déclarer la vente" onBack={() => setSaleStep('handoff')} onContinue={(documentsWaiver) => handleSaleSubmit(showSaleModal, documentsWaiver)} />
+                <SaleDocuments leadId={showSaleModal} draft={saleIntake?.draft} onboardingAt={salePreparation?.slot} submitting={saleSubmitting} continueLabel="Déclarer la vente" onBack={() => setSaleStep('handoff')} onContinue={(documentsWaiver, documentsWaiverNote) => handleSaleSubmit(showSaleModal, documentsWaiver, documentsWaiverNote)} />
               ) : saleStep === 'questions' ? (
                 <>
                   {/* Étape questions facturation (après les créneaux, avant la déclaration).

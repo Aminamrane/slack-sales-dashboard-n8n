@@ -90,10 +90,12 @@ test('le R3 se pose depuis la qualification du R2, comme le R2 depuis le R1',()=
 });
 
 import {canRescheduleAfterSale} from './saleRescheduling.js';
-test('onboarding recalage waits for the journey and the complete declaration',()=>{
+test('onboarding recalage waits for the journey and the confirmed reservation',()=>{
  const lead={rdv_onboarding_date:'2026-09-30T10:00'};
  assert.equal(canRescheduleAfterSale(lead,undefined),false);
- for(const status of ['pending_confirmation','booked']) assert.equal(canRescheduleAfterSale(lead,{onboarding_only:true,preparation:{status}}),false);
+ assert.equal(canRescheduleAfterSale(lead,{onboarding_only:true,preparation:{status:'pending_confirmation'}}),false);
+ // dev 2026-11-05 : une réservation confirmée se reprogramme avant même la déclaration de la vente
+ assert.equal(canRescheduleAfterSale(lead,{onboarding_only:true,preparation:{status:'booked'}}),true);
  assert.equal(canRescheduleAfterSale(lead,{onboarding_only:true,preparation:{status:'finalized'}}),true);
  assert.equal(canRescheduleAfterSale({}, {onboarding_only:true,preparation:{status:'finalized'}}),false);
  assert.equal(canRescheduleAfterSale(lead,{onboarding_only:true,preparation:null}),true);

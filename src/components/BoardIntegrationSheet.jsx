@@ -4,6 +4,7 @@ import { weatherRatingLabel } from '../utils/weatherCase';
 import { useEffect, useRef, useState } from 'react';
 import { Download, FileText, LoaderCircle } from 'lucide-react';
 import apiClient from '../services/apiClient';
+import EarlyDeclarationNote from './EarlyDeclarationNote';
 import { METEO_MEANING, MeteoPicker, MeteoMeaning } from './meteo.jsx';
 
 const buttonStyle = { display:'inline-flex', alignItems:'center', justifyContent:'center', gap:7, padding:'9px 12px', borderRadius:9, fontSize:12, fontWeight:650, cursor:'pointer', textDecoration:'none' };
@@ -84,6 +85,7 @@ export default function BoardIntegrationSheet({ numero, onRated, compact = false
       </button>}
     </div>
     {state && <SalesEntryCard entry={state.sales_entry}/> }
+    <EarlyDeclarationNote documents={state?.documents} compact/>
     {state && !state.available && <p style={{ margin:'6px 0 0', fontSize:11.5, color:'#687483' }}>{state.message}</p>}
     {state?.available && !state.final && <p style={{ margin:'6px 0 0', fontSize:11.5, color:'#687483' }}>La météo d’onboarding se saisit dans « Faire l’onboarding ».</p>}
     {pdf && <a href={pdf} target="_blank" rel="noopener noreferrer" style={{ display:'inline-block', fontSize:11, color:'#526b68', marginTop:6 }}>Ouvrir si le nouvel onglet a été bloqué</a>}
@@ -97,6 +99,7 @@ export default function BoardIntegrationSheet({ numero, onRated, compact = false
       </div>
     </div>
     {state && <SalesEntryCard entry={state.sales_entry}/> }
+    <EarlyDeclarationNote documents={state?.documents}/>
     {state?.available && <>
       <div style={{ margin:'10px 0 0', fontSize:11.5, lineHeight:1.6, color:'#687483' }}>
         <div>Partie commerciale : {state.author_name || 'commercial'}{state.updated_at ? ` · ${fmtDate(state.updated_at)}` : ''}</div>
