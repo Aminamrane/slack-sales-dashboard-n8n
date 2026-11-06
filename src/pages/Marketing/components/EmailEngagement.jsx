@@ -95,6 +95,24 @@ const EMAIL_KIND_LABELS = {
   email_oct22_h1: 'H-1',
   email_oct22_live: 'On est en live',
   email_oct22_live15: 'Live +15 min',
+  // 17 novembre (TPE/PME). Les relances post-live (email_post17_*) sont dans
+  // « Séquences post-webinaire » : la landing ne les remonte pas ici.
+  email_nov17_invite_j14: 'Invitation J-14',
+  email_nov17_invite_j8: 'Invitation J-8',
+  email_nov17_invite_j1: 'Invitation J-1',
+  email_nov17_invite_j0: 'Invitation jour J',
+  email_nov17_remuneration: 'Parlons de votre rémunération',
+  email_nov17_decouvrir: 'Ce que vous allez découvrir',
+  email_nov17_holding: 'TPE/PME : une holding peut-elle avoir du sens ?',
+  email_nov17_simulateur: 'Redevance de marque · simulateur',
+  email_nov17_pertes: 'Combien perdez-vous chaque année ?',
+  email_nov17_j7: 'J-7 · dernière ligne droite',
+  email_nov17_j3: 'J-3 · confirmez votre présence',
+  email_nov17_j1: 'J-1 · demain',
+  email_nov17_morning: 'Matin J · 6 h 30',
+  email_nov17_h1: 'H-1',
+  email_nov17_live: 'On est en live',
+  email_nov17_live15: 'Live +15 min',
 };
 
 // Ordre chronologique d'envoi. Une cohorte ne remonte que ses propres kinds,
@@ -178,6 +196,23 @@ const EMAIL_KIND_ORDER = [
   'email_oct22_h1',
   'email_oct22_live',
   'email_oct22_live15',
+  // 17 novembre
+  'email_nov17_invite_j14',
+  'email_nov17_invite_j8',
+  'email_nov17_invite_j1',
+  'email_nov17_invite_j0',
+  'email_nov17_remuneration',
+  'email_nov17_decouvrir',
+  'email_nov17_holding',
+  'email_nov17_simulateur',
+  'email_nov17_pertes',
+  'email_nov17_j7',
+  'email_nov17_j3',
+  'email_nov17_j1',
+  'email_nov17_morning',
+  'email_nov17_h1',
+  'email_nov17_live',
+  'email_nov17_live15',
 ];
 
 /**

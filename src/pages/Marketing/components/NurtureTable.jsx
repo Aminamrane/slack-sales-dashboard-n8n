@@ -47,6 +47,15 @@ const LABELS_BY_COHORT = {
     email_post22_j3: { subject: 'Combien votre entreprise sort pour vous payer ?' },
     email_post22_j4: { subject: 'Dernier mail sur le sujet' },
   },
+  // 17 novembre (TPE/PME) : même suivi que le 22 octobre, sujets seulement.
+  'webinar-2026-11-17': {
+    email_post17_missed:   { subject: 'Vous avez raté quelque chose…' },
+    email_post17_attended: { subject: 'Merci pour votre présence' },
+    email_post17_j1: { subject: 'Payez-vous trop de charges ? Voici comment le savoir' },
+    email_post17_j2: { subject: '3 façons de garantir que vous perdez de l\'argent' },
+    email_post17_j3: { subject: 'Combien votre entreprise sort pour vous payer ?' },
+    email_post17_j4: { subject: 'Dernier mail sur le sujet' },
+  },
 };
 
 // Cohorte sans jeu d'étiquettes (20/07, 07/09…) : le sujet retombe sur le kind
