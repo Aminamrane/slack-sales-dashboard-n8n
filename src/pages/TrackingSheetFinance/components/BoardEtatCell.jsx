@@ -116,15 +116,16 @@ function DateField({ label, value, onCommit }) {
 // la main au dialogue de sortie client, qui demande la date d'effet et règle le
 // sort des créances. Sans cette prop (tableau), le comportement historique
 // reste : POST immédiat.
-export default function BoardEtatCell({ boardRow, onEtatChange, disabled = false, onActedEtat = null }) {
+export default function BoardEtatCell({ boardRow, onEtatChange, disabled = false, onActedEtat = null, canActe: canActeProp }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   // Pose en cours : l'état affiché vient du serveur, le badge garde donc l'état
   // confirmé, estompé, jusqu'à sa réponse (même règle que le board).
   const [saving, setSaving] = useState(false);
   const btnRef = useRef(null);
-  // Acter une résiliation ou une rétractation : direction seulement.
-  const canActe = canEditAmounts(apiClient.getUser()?.role);
+  // Acter une résiliation ou une rétractation : direction seulement (la fiche
+  // passe le rôle de la page Finance, servi par l'API).
+  const canActe = canActeProp ?? canEditAmounts(apiClient.getUser()?.role);
 
   // Même hygiène que le board : le menu (position: fixed) se ferme dès que la
   // table scrolle ou que la fenêtre est resize, sinon il "flotte" détaché.

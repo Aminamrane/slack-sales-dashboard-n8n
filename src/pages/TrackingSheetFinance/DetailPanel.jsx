@@ -148,6 +148,7 @@ export default function DetailPanel({
   onSelectRow,     // (rowId) → caller updates rowId
   boardMap,        // Map numero_client → row board Owner/Opti'Lex (états)
   onBoardEtatChange, // (numero_client, payload) → POST /optilex/etat-change
+  financeRole = apiClient.getUser()?.role, // rôle de la page Finance servi par l'API
   onShowToast,     // (msg, type?) → reuses page-level toast
   onPromiseChanged, // () → le parent recharge la ligne (promesse de règlement)
   rows,            // current period rows (so we can find focused row immediately)
@@ -203,7 +204,7 @@ export default function DetailPanel({
   // Deux niveaux de droits (dev 2026-08-27) : l'équipe finance entretient la
   // fiche (modalités, sociétés, associés, contacts) mais ne touche ni aux
   // encaissements, ni à la formule, ni au SIREN, ni à l'état board.
-  const role = apiClient.getUser()?.role;
+  const role = financeRole;
   const canEdit = canEditContract(role);
   const canEditMoney = canEditAmounts(role);
   // Équipe finance : le même poste de pilotage, mais chaque geste part en
@@ -960,7 +961,7 @@ export default function DetailPanel({
                       </div>
                     }
                   </Section>
-                  <ClientComments key={`comments-${clientId}`} clientId={clientId} onShowToast={onShowToast} variant="block" />
+                  <ClientComments key={`comments-${clientId}`} clientId={clientId} onShowToast={onShowToast} variant="block" role={role} />
                 </Chapter>
 
                 {/* 3 · Contrats et facturation */}
@@ -1306,6 +1307,7 @@ function StatusStrip({
           <BoardEtatCell
             boardRow={boardRow}
             disabled={!canEditEtat}
+            canActe={canEditEtat}
             onEtatChange={(payload) => onBoardEtatChange?.(client?.numero_client, payload)}
             onActedEtat={onActedEtat}
           />
@@ -3566,7 +3568,7 @@ const sortComments = (list) => [...list].sort((a, b) => {
   return String(b.created_at || '').localeCompare(String(a.created_at || ''));
 });
 
-export function ClientComments({ clientId, onShowToast, variant = 'section' }) {
+export function ClientComments({ clientId, onShowToast, variant = 'section', role = apiClient.getUser()?.role }) {
   const [comments, setComments] = useState(null);   // null = en cours / indispo
   // Au-delà de quatre commentaires le fil noyait le reste de la fiche : on
   // n'affiche que les plus récents, le reste se déplie (demande dev
@@ -3588,7 +3590,7 @@ export function ClientComments({ clientId, onShowToast, variant = 'section' }) {
   const [draft, setDraft] = useState('');
   const [loadError, setLoadError] = useState('');
   const [retry, setRetry] = useState(0);
-  const canPin = ['admin', 'ceo', 'finance_director'].includes(apiClient.getUser()?.role);
+  const canPin = ['admin', 'ceo', 'finance_director'].includes(role);
   const [posting, setPosting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null); // id en attente
   const taRef = useRef(null);

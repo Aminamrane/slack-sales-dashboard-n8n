@@ -730,6 +730,7 @@ const RowRenderer = React.memo(function RowRenderer({
   collapsingCol,
   scope,              // vision active : 'owner' | 'optilex' | 'global'
   onShowToast,        // (msg, type) — retours de la saisie par structure
+  amountsEditable,    // encaissements saisissables (rôle de la page Finance)
 }) {
   const [hover, setHover] = useState(false);
 
@@ -745,7 +746,6 @@ const RowRenderer = React.memo(function RowRenderer({
     row.client?.structure_count || 0,
     parsePaymentSpecCount(row.payment_specificity) || 0,
   ) > 1;
-  const amountsEditable = canEditAmounts(apiClient.getUser()?.role);
 
   // Valeurs numériques de l'entité active (sommes Owner+Opti'lex en Globale).
   const isGlobal = scope === 'global';
@@ -1458,6 +1458,7 @@ export default function TableView({
   rows,
   onPatchRow,
   paymentDatesEditable = false, // permission nominative servie par l'API
+  financeRole = apiClient.getUser()?.role, // rôle de la page Finance servi par l'API
   boardMap,            // Map numero_client → row board (états Owner/Opti'Lex)
   onOpenClient,        // legacy (kept for back-compat)
   onOpenRow,           // (row) → opens the DetailPanel (only via OUVRIR button)
@@ -1472,7 +1473,8 @@ export default function TableView({
   showColRef,          // ref whose .current = (key) => show one col (called from parent)
 }) {
   const [scrollParent, setScrollParent] = useState(null);
-  const { keys: allKeys, cols: allCols } = useColumnConfig(splitActive, scope, paymentDatesEditable, apiClient.getUser()?.role);
+  const { keys: allKeys, cols: allCols } = useColumnConfig(splitActive, scope, paymentDatesEditable, financeRole);
+  const amountsEditable = canEditAmounts(financeRole);
 
   // ── Bascule de vision : fondu SANS démontage ─────────────────────────────
   // La page ne reconstruit plus la table quand on change d'entité (elle le
@@ -1761,6 +1763,7 @@ export default function TableView({
                 onOpenCommentPopup={handleOpenCommentPopup}
                 scope={scope}
                 onShowToast={onShowToast}
+                amountsEditable={amountsEditable}
               />
             )}
           />
