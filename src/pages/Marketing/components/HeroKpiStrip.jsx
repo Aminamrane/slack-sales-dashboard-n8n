@@ -305,6 +305,17 @@ export default function HeroKpiStrip({ webinar, summary, realtimeLeads, rankingP
       // qui chevauchent (retour dev 06/07). Slugs webinar-YYYY-MM-DD →
       // comparaison lexicographique = chronologique (couvre les futures).
       const isV2Cohort = (webinar?.id || '') >= 'webinar-2026-07-20';
+      // Une seule page d'inscription pour la cohorte (TPE/PME : /tpe-pme, déclarée par la
+      // landing) : sa conversion, inscrits de la page ÷ visiteurs de la page.
+      if (isV2Cohort && summary.lpComparison?.length === 1) {
+        const lp = summary.lpComparison[0];
+        return {
+          label: 'Taux conversion LP',
+          value: fmtPct(lp.conversionPct),
+          hint: `${lp.path} : ${fmtInt(lp.leadsDb)} inscrits / ${fmtInt(lp.visitors)} visiteurs`,
+          tone: lp.conversionPct >= 10 ? 'emerald' : undefined,
+        };
+      }
       const lp1 = summary.lpComparison?.find((l) => l.key === 'landing');
       const lp2 = summary.lpComparison?.find((l) => l.key === 'landing-v2');
       if (!isV2Cohort || !lp1 || !lp2) {
