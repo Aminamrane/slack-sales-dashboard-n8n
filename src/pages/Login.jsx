@@ -37,7 +37,7 @@ export default function Login() {
         acquisition_director: '/acquisition-director',
         head_of_acquisition: '/acquisition-director',
         head_of_acquisition: '/acquisition-director',
-        hr: '/rh-dashboard',
+        hr: '/ceo',  // RH : les pages de la direction financière, en lecture seule (06/11/2026)
         customer_success_manager: '/ceo/leaderboard',
       };
       navigate(dashboardByRole[user.role] || '/');

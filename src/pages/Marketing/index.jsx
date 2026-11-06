@@ -20,6 +20,7 @@ import LeadsPipeline from './components/LeadsPipeline';
 import SatisfactionGauge from './components/SatisfactionGauge';
 import Heatmap from './components/Heatmap';
 import BudgetEditor from './components/BudgetEditor';
+import { READ_ONLY_DIRECTION_ROLES } from '../../utils/readOnlyRoles.js';
 import BudgetByDayChart from './components/BudgetByDayChart';
 import SalesWebinarRanking from './components/SalesWebinarRanking';
 import SalesWebinarRankingCompact from './components/SalesWebinarRankingCompact';
@@ -29,7 +30,8 @@ import WebinarLiveReplay from './components/WebinarLiveReplay';
 import { WEBINAR_REPLAY } from './data/webinarReplay';
 import Card from './components/Card';
 
-const ALLOWED_ROLES = ['admin', 'ceo', 'marketing', 'acquisition_director', 'head_of_acquisition', 'finance_director'];
+// Les rôles en lecture seule (RH) consultent la page ; les budgets leur restent en lecture (ROLES_WITH_BUDGET_EDIT).
+const ALLOWED_ROLES = ['admin', 'ceo', 'marketing', 'acquisition_director', 'head_of_acquisition', 'finance_director', ...READ_ONLY_DIRECTION_ROLES];
 // Édition des budgets réservée à Timothy (marketing) + admin (debug/safety).
 // CEO/AcqDir/head_of_acquisition voient le BudgetEditor en lecture seule.
 const ROLES_WITH_BUDGET_EDIT = ['admin', 'marketing'];

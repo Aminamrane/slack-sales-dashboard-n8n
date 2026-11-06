@@ -25,6 +25,7 @@ import { motion } from 'framer-motion';
 import { Building2, Check, Pencil, Sparkles } from 'lucide-react';
 
 import apiClient from '../../../services/apiClient.js';
+import { READ_ONLY_PROPS } from '../../../utils/readOnlyRoles.js';
 import { formatEUR, formatMonthLabel } from '../constants.js';
 
 const N = {
@@ -40,9 +41,10 @@ const N = {
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
+// `readOnly` (rôles en lecture seule) : recherche des sociétés et enregistrement visibles, désactivés.
 export default function StructureSplits({
   clientId, periods, scope, canEdit, canEditMoney, onShowToast,
-  reloadKey = 0, onReceiptsChanged,
+  reloadKey = 0, onReceiptsChanged, readOnly = false,
 }) {
   const [structures, setStructures] = useState(null);
   const [splits, setSplits] = useState([]);
@@ -223,11 +225,12 @@ export default function StructureSplits({
           total du mois en découle. Une société ajoutée dans la fiche crée sa
           structure.
         </div>
-        {canEdit && structures.some((s) => !s.named) && (
+        {(canEdit || readOnly) && structures.some((s) => !s.named) && (
           <button
             type="button"
             onClick={suggest}
             disabled={suggesting}
+            {...(readOnly ? READ_ONLY_PROPS : {})}
             title="Rechercher toutes les sociétés du dirigeant et remplir les structures encore sans nom"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -311,7 +314,7 @@ export default function StructureSplits({
               <button
                 type="button"
                 onClick={canEdit ? () => setRenaming(s.id) : undefined}
-                title={canEdit ? 'Renommer cette structure' : undefined}
+                title={canEdit ? 'Renommer cette structure' : readOnly ? 'Lecture seule' : undefined}
                 style={{
                   flex: 1, minWidth: 0, textAlign: 'left', border: 'none',
                   background: 'transparent', padding: 0, font: 'inherit', fontSize: 12.5,
@@ -323,7 +326,7 @@ export default function StructureSplits({
                 }}
               >
                 {s.name}
-                {canEdit && <Pencil size={10} style={{ opacity: 0.4, flexShrink: 0 }} />}
+                {(canEdit || readOnly) && <Pencil size={10} style={{ opacity: readOnly ? 0.2 : 0.4, flexShrink: 0 }} />}
               </button>
             )}
 
@@ -354,7 +357,7 @@ export default function StructureSplits({
         ))}
       </div>
 
-      {canEditMoney && current && (
+      {(canEditMoney || readOnly) && current && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'flex-end' }}>
           <span style={{ fontSize: 11.5, color: N.textMuted, marginRight: 'auto' }}>
             Encaissé sur le mois : <strong>{formatEUR(current.received)}</strong> ·
@@ -364,6 +367,7 @@ export default function StructureSplits({
             type="button"
             onClick={save}
             disabled={saving}
+            {...(readOnly ? READ_ONLY_PROPS : {})}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               border: 'none', borderRadius: 6, padding: '7px 13px',

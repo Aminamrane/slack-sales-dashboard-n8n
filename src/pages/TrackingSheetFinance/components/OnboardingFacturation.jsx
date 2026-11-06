@@ -24,6 +24,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import apiClient from "../../../services/apiClient";
+import { READ_ONLY_PROPS } from "../../../utils/readOnlyRoles.js";
 
 const GREEN = "#15794a";
 const NAVY = "#1e2330";
@@ -225,7 +226,8 @@ function ReschedModal({ numeroClient, label, onClose, onDone }) {
 }
 
 // ── Bloc principal, inséré dans la section « Rendez-vous » du panneau détail ──
-export default function OnboardingFacturation({ numeroClient, boardRow }) {
+// `readOnly` (rôles en lecture seule) : les deux boutons restent visibles, désactivés.
+export default function OnboardingFacturation({ numeroClient, boardRow, readOnly = false }) {
   const [done, setDone] = useState(!!boardRow?.rdv_onboarding_facturation_done);
   const [when, setWhen] = useState(
     boardRow?.rdv_onboarding_date_manual || boardRow?.rdv_onboarding_date || null
@@ -241,7 +243,7 @@ export default function OnboardingFacturation({ numeroClient, boardRow }) {
   if (!numeroClient || !boardRow) return null;
 
   const setStatut = async (value) => {
-    if (busy || value === done) return;
+    if (readOnly || busy || value === done) return;
     setBusy(true); setErr(null);
     const previous = done;
     setDone(value);                                  // optimiste
@@ -267,7 +269,8 @@ export default function OnboardingFacturation({ numeroClient, boardRow }) {
           background: active ? tone : CARD,
           color: active ? "#fff" : NAVY,
           fontSize: 12.5, fontWeight: 700, cursor: busy ? "default" : "pointer",
-          fontFamily: "inherit", opacity: busy ? 0.6 : 1, transition: "all .12s ease" }}>
+          fontFamily: "inherit", opacity: busy ? 0.6 : 1, transition: "all .12s ease" }}
+        {...(readOnly ? READ_ONLY_PROPS : {})}>
         {label}
       </button>
     );
@@ -301,7 +304,8 @@ export default function OnboardingFacturation({ numeroClient, boardRow }) {
 // ── Bouton « Reprogrammer » posé sur la ligne « RDV d'onboarding » de la fiche (dev 2026-10-29 :
 //    dans la section repliée, la finance ne le trouvait pas). Même fenêtre, même endpoint, mêmes
 //    agendas qu'avant ; visible tant que l'onboarding daté n'est pas réalisé.
-export function OnboardingRescheduleButton({ numeroClient, boardRow, onDone }) {
+// `readOnly` (rôles en lecture seule) : bouton visible, désactivé, la fenêtre ne s'ouvre pas.
+export function OnboardingRescheduleButton({ numeroClient, boardRow, onDone, readOnly = false }) {
   const [open, setOpen] = useState(false);
   const date = boardRow?.rdv_onboarding_date_manual || boardRow?.rdv_onboarding_date;
   if (!numeroClient || !boardRow || !date || boardRow.rdv_onboarding_done) return null;
@@ -310,12 +314,13 @@ export function OnboardingRescheduleButton({ numeroClient, boardRow, onDone }) {
       <button type="button" onClick={() => setOpen(true)} title="Reprogrammer le rendez-vous d’onboarding"
         style={{ display: "inline-flex", alignItems: "center", gap: 5, border: `1px solid ${BORDER}`, background: CARD,
           borderRadius: 7, padding: "4px 9px", fontSize: 12, fontWeight: 600, color: NAVY,
-          cursor: "pointer", fontFamily: "inherit", flexShrink: 0, lineHeight: 1.2 }}>
+          cursor: "pointer", fontFamily: "inherit", flexShrink: 0, lineHeight: 1.2 }}
+        {...(readOnly ? READ_ONLY_PROPS : {})}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round"
           strokeLinejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg>
         Reprogrammer
       </button>
-      {open && (
+      {open && !readOnly && (
         <ReschedModal
           numeroClient={numeroClient}
           label={boardRow.crm_societe || boardRow.contact_name || numeroClient}

@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 import apiClient from '../services/apiClient';
+import { READ_ONLY_PROPS } from '../utils/readOnlyRoles.js';
 
 const CONF_KEY = '__confirmation__';
 const NOSHOW_KEY = '__noshow__';
@@ -15,7 +16,8 @@ function target(active) {
   return { url: `/api/v1/tracking/broad-sequence/${encodeURIComponent(active)}/test`, what: 'les 10 emails de la séquence, dans l’ordre', phone: false };
 }
 
-export default function SequenceTestPanel({ active, label, C }) {
+// `readOnly` (rôles en lecture seule) : le panneau reste visible, champs et envoi désactivés.
+export default function SequenceTestPanel({ active, label, C, readOnly = false }) {
   const [email, setEmail] = useState(() => apiClient.getUser()?.email || '');
   const [phone, setPhone] = useState('');
   const [busy, setBusy] = useState(false);
@@ -25,8 +27,9 @@ export default function SequenceTestPanel({ active, label, C }) {
 
   useEffect(() => { setResult(null); setError(''); }, [active]);
 
+  const ro = readOnly ? READ_ONLY_PROPS : {};
   const send = async () => {
-    if (busy || !email.trim()) return;
+    if (readOnly || busy || !email.trim()) return;
     setBusy(true); setError(''); setResult(null);
     try {
       const body = t.phone ? { email: email.trim(), phone: phone.trim() || null } : { email: email.trim() };
@@ -52,11 +55,11 @@ export default function SequenceTestPanel({ active, label, C }) {
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
         <input style={input} type="email" placeholder="votre@email.fr" value={email} onChange={(e) => setEmail(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') send(); }} aria-label="Email de test" />
+          onKeyDown={(e) => { if (e.key === 'Enter') send(); }} aria-label="Email de test" {...ro} />
         {t.phone && <input style={input} type="tel" placeholder="Mobile pour les SMS (facultatif)" value={phone} onChange={(e) => setPhone(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') send(); }} aria-label="Mobile de test" />}
+          onKeyDown={(e) => { if (e.key === 'Enter') send(); }} aria-label="Mobile de test" {...ro} />}
         <button type="button" onClick={send} disabled={busy || !email.trim()}
-          style={{ padding: '8px 16px', borderRadius: 9, border: 'none', background: busy || !email.trim() ? C.border : C.text, color: busy || !email.trim() ? C.muted : C.bg, fontSize: 13, fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+          style={{ padding: '8px 16px', borderRadius: 9, border: 'none', background: busy || !email.trim() ? C.border : C.text, color: busy || !email.trim() ? C.muted : C.bg, fontSize: 13, fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: 'inherit' }} {...ro}>
           {busy ? 'Envoi en cours…' : 'Envoyer le test'}
         </button>
       </div>

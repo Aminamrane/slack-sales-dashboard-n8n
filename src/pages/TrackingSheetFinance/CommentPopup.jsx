@@ -30,6 +30,7 @@ import {
   Loader2, AlertCircle,
 } from 'lucide-react';
 import apiClient from '../../services/apiClient.js';
+import { READ_ONLY_PROPS } from '../../utils/readOnlyRoles.js';
 
 // ── Notion palette (kept in sync with TableView.jsx N constant) ──────────
 const N = {
@@ -115,6 +116,7 @@ export default function CommentPopup({
   currentUser,    // { id, full_name, name, first_name, email }
   onCountChange,  // (count: number) => void — pour updater le cache pastille
   onError,        // (msg: string) => void — toast côté parent
+  readOnly = false, // rôles en lecture seule (RH) : fil lu, composer visible et désactivé
 }) {
   const panelRef = useRef(null);
   const inputRef = useRef(null);
@@ -394,6 +396,7 @@ export default function CommentPopup({
           submitting={submitting}
           hasComments={comments.length > 0}
           currentUser={currentUser}
+          readOnly={readOnly}
         />
       </motion.div>
     </AnimatePresence>,
@@ -634,8 +637,9 @@ function MenuItem({ icon, label, onClick, danger }) {
 // ════════════════════════════════════════════════════════════════════════════
 // COMPOSER (input + paperclip + @ + send)
 // ════════════════════════════════════════════════════════════════════════════
-function Composer({ inputRef, value, onChange, onSubmit, submitting, hasComments, currentUser }) {
-  const canSubmit = value.trim().length > 0 && !submitting;
+function Composer({ inputRef, value, onChange, onSubmit, submitting, hasComments, currentUser, readOnly = false }) {
+  const canSubmit = !readOnly && value.trim().length > 0 && !submitting;
+  const ro = readOnly ? READ_ONLY_PROPS : {};
   const [mentionOpen, setMentionOpen] = useState(false);
   const [users, setUsers] = useState([]);
   const [usersLoaded, setUsersLoaded] = useState(false);
@@ -783,6 +787,7 @@ function Composer({ inputRef, value, onChange, onSubmit, submitting, hasComments
           }}
           onFocus={(e) => e.currentTarget.parentElement.style.borderColor = N.accent}
           onBlur={(e) => e.currentTarget.parentElement.style.borderColor = N.borderSft}
+          {...ro}
         />
         {/* Paperclip : visuel MVP, non-fonctionnel */}
         <button
@@ -800,6 +805,7 @@ function Composer({ inputRef, value, onChange, onSubmit, submitting, hasComments
             ref={mentionBtnRef}
             type="button"
             title="Mentionner une personne"
+            {...ro}
             onClick={(e) => {
               e.preventDefault();
               if (!mentionOpen) {
@@ -922,6 +928,7 @@ function Composer({ inputRef, value, onChange, onSubmit, submitting, hasComments
         onClick={onSubmit}
         disabled={!canSubmit}
         title="Envoyer (Entrée)"
+        {...ro}
         style={{
           width: 30, height: 30,
           flexShrink: 0,

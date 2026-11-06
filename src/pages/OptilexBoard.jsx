@@ -23,6 +23,7 @@ import { useSearchParams } from "react-router-dom";
 import { phoneDisplay, sharedEmailOptions } from "../utils/boardContacts.js";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import apiClient from "../services/apiClient";
+import { isReadOnlyViewer, READ_ONLY_PROPS, READ_ONLY_TITLE } from "../utils/readOnlyRoles";
 // Météo client : primitives partagées avec la météo d'onboarding (fiche d'intégration, parcours).
 import { METEO_BANDS, meteoBandOf, meteoStyle, METEO_MEANING, MeteoIcon } from "../components/meteo.jsx";
 
@@ -83,6 +84,10 @@ const CABINET_FORBIDDEN_ETATS = ["Résiliation", "Rétractation"];
 // (+ noter la météo + cocher l'onboarding owner). Tout le reste = lecture seule.
 const FINANCE_TEAM_ETATS = ["En cours de résiliation", "En cours de rétractation"];
 const isFinanceTeam = () => { try { return (apiClient.getUser() || {}).role === "finance_team"; } catch { return false; } };
+// Rôles en lecture seule (RH, 06/11/2026) : le board de la direction financière, rien ne s'y écrit, plus
+// strict que finance_team (ni état, ni onboarding, ni météo, ni commentaire, ni rendez-vous). Les contrôles
+// d'écriture restent visibles et désactivés ; les valeurs éditables s'affichent comme des valeurs.
+const isBoardReadOnly = () => { try { return isReadOnlyViewer((apiClient.getUser() || {}).role); } catch { return false; } };
 const etatOptionsForUser = () => {
   try {
     const role = (apiClient.getUser() || {}).role;
@@ -774,7 +779,8 @@ function MeteoBadge({ score, context, showLabel = true }) {
 // repart vers la tuile. Police posée sur la fenêtre : rendue dans document.body, elle héritait sinon
 // de la police par défaut du navigateur (titre à empattements).
 const METEO_DIALOG_FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif";
-function MeteoPicker({ score, context, onSave, disabled, triggerLabel }) {
+// `readOnly` (rôles en lecture seule) : badge affiché comme valeur ; le bouton « Ajouter une météo » désactivé.
+function MeteoPicker({ score, context, onSave, disabled, triggerLabel, readOnly = false }) {
   const [open,setOpen]=useState(false);
   const [from,setFrom]=useState({x:0,y:0});
   const reduce=useReducedMotion();
@@ -790,7 +796,8 @@ function MeteoPicker({ score, context, onSave, disabled, triggerLabel }) {
     window.addEventListener('keydown',key);return()=>{window.removeEventListener('keydown',key);document.body.style.overflow=oldOverflow;};},[open]);
   const enter=reduce?{opacity:0}:{opacity:0,x:from.x*0.6,y:from.y*0.6,scale:0.72};
   const leave=reduce?{opacity:0,transition:{duration:0.12}}:{opacity:0,x:from.x*0.3,y:from.y*0.3,scale:0.9,transition:{duration:0.18,ease:[0.4,0,1,1]}};
-  return <span onClick={e=>e.stopPropagation()}><button ref={button} type="button" disabled={disabled} onClick={openFromTrigger} aria-label={triggerLabel || "Mettre à jour la météo"} className={triggerLabel ? "wc-add-weather" : "ob-meteo"} style={triggerLabel ? undefined : {border:0,background:'transparent',padding:0,textAlign:'left',font:'inherit',cursor:disabled?'default':'pointer'}}>{triggerLabel ? <><MeteoIcon score={5} size={18}/>{triggerLabel}</> : <MeteoBadge score={score} context={context}/>}</button>
+  const ro = !readOnly ? {} : triggerLabel ? READ_ONLY_PROPS : { disabled: true, title: READ_ONLY_TITLE };
+  return <span onClick={e=>e.stopPropagation()}><button ref={button} type="button" disabled={disabled} onClick={openFromTrigger} aria-label={triggerLabel || "Mettre à jour la météo"} className={triggerLabel ? "wc-add-weather" : "ob-meteo"} style={triggerLabel ? undefined : {border:0,background:'transparent',padding:0,textAlign:'left',font:'inherit',cursor:disabled||readOnly?'default':'pointer'}} {...ro}>{triggerLabel ? <><MeteoIcon score={5} size={18}/>{triggerLabel}</> : <MeteoBadge score={score} context={context}/>}</button>
     {createPortal(<AnimatePresence>{open && <motion.div key="meteo-overlay" role="presentation" initial={{opacity:0}} animate={{opacity:1,transition:{duration:0.22,ease:'easeOut'}}} exit={{opacity:0,transition:{duration:0.2,ease:'easeIn'}}}
       style={{position:'fixed',inset:0,zIndex:10050,background:'rgba(18,27,53,0.34)',backdropFilter:'blur(3px)',WebkitBackdropFilter:'blur(3px)',display:'grid',placeItems:'center',padding:16}} onMouseDown={e=>{if(e.target===e.currentTarget)close();}}>
       <motion.div ref={dialog} role="dialog" aria-modal="true" aria-label="Mettre à jour la météo client" className="ob-meteo-dialog"
@@ -1121,7 +1128,7 @@ function SigCell({ status, sentAt, signedAt, scheduledAt, grouped }) {
 // Ligne du tableau, mémorisée (dev 28/10/2026) : elle ne se redessine que si SES données changent (client,
 // sélection, no show, entrée animée). Avant, tout rendu de la page redessinait les 700 à 900 lignes
 // (400 à 550 ms à chaque onglet, chaque sélection) ; les rappels reçus sont stables (useCallback, setState).
-const BoardRow = memo(function BoardRow({ r, rk, isSel, newIdx, noShow, renewal, onSelect, patch, changeEtat, recordMeteo }) {
+const BoardRow = memo(function BoardRow({ r, rk, isSel, newIdx, noShow, renewal, onSelect, patch, changeEtat, recordMeteo, readOnly = false }) {
   const td = ROW_TD;
   return (
     <tr onClick={() => onSelect(rk)} className={`ob-row${isSel ? " is-sel" : ""}`}
@@ -1169,14 +1176,14 @@ const BoardRow = memo(function BoardRow({ r, rk, isSel, newIdx, noShow, renewal,
         ) : <span title="Secteur non renseigné au NDA">—</span>}
       </td>
       <td style={{ ...td, whiteSpace: "normal" }}>
-        <MeteoPicker score={r.meteo_score} context={r.meteo_context} disabled={!r.numero_client}
+        <MeteoPicker score={r.meteo_score} context={r.meteo_context} disabled={!r.numero_client} readOnly={readOnly}
           onSave={payload => recordMeteo(r.numero_client, payload)} />
       </td>
       {/* État daté (Résiliation, Pause…) posé depuis la table -> on ouvre la fiche
           pour saisir la date dans la foulée. + rappel sous le badge si la pause est
           échue ou si la date d'effet manque. */}
       <td style={td}>
-        <EtatPicker etat={displayEtat(r)} disabled={!r.numero_client}
+        <EtatPicker etat={displayEtat(r)} disabled={!r.numero_client || readOnly}
           onPick={(v) => { const saving = changeEtat(r.numero_client, { etat: v }); if (ETAT_DATE_CONFIG[v]) onSelect(rk); return saving; }} />
         {isEtatPending(r) && r.etat_date && (
           <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 700, color: "#b45309", marginTop: 5, lineHeight: 1.3 }}
@@ -1200,7 +1207,7 @@ const BoardRow = memo(function BoardRow({ r, rk, isSel, newIdx, noShow, renewal,
       </td>
       <td style={td}>
         <TableDateEdit value={r.rdv_onboarding_date_manual || r.rdv_onboarding_date}
-          disabled={!r.numero_client || isFinanceTeam()}
+          disabled={!r.numero_client || isFinanceTeam() || readOnly}
           onSave={(d) => patch(r.numero_client, { rdv_onboarding_date_manual: d })} />
         {r.rdv_onboarding_done && r.rdv_onboarding_done_date && (
           <div title="Onboarding réalisé saisi à la main (ancien client)" style={{ marginTop: 3, fontSize: 10.5, fontWeight: 600, color: GREEN }}>
@@ -1233,6 +1240,8 @@ const BoardRow = memo(function BoardRow({ r, rk, isSel, newIdx, noShow, renewal,
 
 export default function OptilexBoard({ embed = false }) {
   const [searchParams, setSearchParams] = useSearchParams();
+  // Lu une fois : passé aux lignes du tableau (des centaines) plutôt que relu ligne par ligne.
+  const [readOnly] = useState(isBoardReadOnly);
   const requestedClient = searchParams.get('client');
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1481,6 +1490,7 @@ export default function OptilexBoard({ embed = false }) {
 
   const patch = useCallback(async (numero, changes) => {
     if (!numero) return; // contrat pré-client : pas de jalons éditables
+    if (isBoardReadOnly()) return; // rôles en lecture seule : aucun contrôle ne mène ici, garde-fou
     // finance_team : lecture seule sauf cocher l'onboarding owner.
     if (isFinanceTeam()) {
       if (!("rdv_onboarding_done" in changes)) return;
@@ -1510,6 +1520,7 @@ export default function OptilexBoard({ embed = false }) {
   const [etatHistVersion, setEtatHistVersion] = useState(0);
   const [etatRequests] = useState(createLatestRequestTracker);
   const changeEtat = useCallback(async (numero, payload) => {
+    if (isBoardReadOnly()) return; // rôles en lecture seule : aucun contrôle ne mène ici, garde-fou
     if (requiresExitDecision(apiClient.getUser()?.role, payload.etat)) {
       payload = await confirmBoardFinanceExit(numero, payload);
       if (!payload) return { cancelled: true };
@@ -1551,6 +1562,7 @@ export default function OptilexBoard({ embed = false }) {
   const recordMeteo = useCallback(async (numero, payload) => {
     const {score,note,qualification}=payload;
     if (!numero || !score) return;
+    if (isBoardReadOnly()) return false; // rôles en lecture seule : aucun contrôle ne mène ici, garde-fou
     mutSeq.current += 1;
     const u = apiClient.getUser() || {};
     const by = u.name || u.full_name || u.first_name || u.email || "";
@@ -2007,7 +2019,7 @@ export default function OptilexBoard({ embed = false }) {
                       <BoardRow key={key} r={r} rk={key} isSel={selected === key}
                         newIdx={newIdxByKey.get(key)}   // undefined = déjà vue -> pas d'animation
                         noShow={viewFilter.situationOf(r) === "noshow"} renewal={etatFilter === "Renouvellement client"}
-                        onSelect={setSelected} patch={patch} changeEtat={changeEtat} recordMeteo={recordMeteo} />
+                        onSelect={setSelected} patch={patch} changeEtat={changeEtat} recordMeteo={recordMeteo} readOnly={readOnly} />
                     );
                   })}
                   {filtered.length === 0 && (
@@ -2392,7 +2404,8 @@ function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContac
         <SecTitle icon="infos" style={{ marginBottom: 0 }}>Informations client</SecTitle>
         {num && !editing && !isFinanceTeam() && (
           <button type="button" onClick={startEdit} title="Modifier les informations"
-            style={{ border: "none", background: "transparent", padding: 3, cursor: "pointer", color: MUTED, display: "inline-flex", lineHeight: 0 }}>
+            style={{ border: "none", background: "transparent", padding: 3, cursor: "pointer", color: MUTED, display: "inline-flex", lineHeight: 0 }}
+            {...(isBoardReadOnly() ? READ_ONLY_PROPS : {})}>
             <PencilIcon size={14} />
           </button>
         )}
@@ -2435,9 +2448,11 @@ function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContac
 
 // Toggle segmenté animé (remplace le dropdown Oui/Non). Pastille qui glisse en
 // spring (navy -> vert quand positif) + check qui pop. labels[1] = état positif.
-function StatusToggle({ value, onChange, labels = ["Non", "Oui"] }) {
+// `disabled` (rôles en lecture seule) : la valeur reste affichée, les deux boutons sont désactivés.
+function StatusToggle({ value, onChange, labels = ["Non", "Oui"], disabled = false }) {
   return (
-    <div style={{ position: "relative", display: "grid", gridTemplateColumns: "1fr 1fr", background: "#eef1f6", borderRadius: 9, minWidth: 150, userSelect: "none", flexShrink: 0 }}>
+    <div style={{ position: "relative", display: "grid", gridTemplateColumns: "1fr 1fr", background: "#eef1f6", borderRadius: 9, minWidth: 150, userSelect: "none", flexShrink: 0 }}
+      {...(disabled ? { title: READ_ONLY_TITLE, "data-read-only": "true" } : {})}>
       <motion.div
         animate={{ x: value ? "100%" : "0%", backgroundColor: value ? GREEN : NAVY }}
         transition={{ type: "spring", stiffness: 480, damping: 34 }}
@@ -2446,7 +2461,7 @@ function StatusToggle({ value, onChange, labels = ["Non", "Oui"] }) {
       {labels.map((lab, i) => {
         const active = (i === 1) === !!value;
         return (
-          <button key={i} type="button" onClick={() => onChange(i === 1)}
+          <button key={i} type="button" onClick={() => onChange(i === 1)} disabled={disabled}
             style={{ position: "relative", zIndex: 1, border: "none", background: "transparent", cursor: "pointer",
               padding: "7px 6px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit",
               color: active ? "#fff" : MUTED, transition: "color 0.25s",
@@ -2493,7 +2508,8 @@ function TableDateEdit({ value, onSave, disabled }) {
 
 // Ligne RDV : date (planifiée ou saisie manuellement) + toggle "effectué" + lien (optionnel).
 // onDate présent -> crayon pour saisir/modifier la date à la main (antériorité).
-function RdvRow({ label, date, done, editable, onToggle, link, onDate, meetLink, onReschedule, onCancel }) {
+// `readOnly` (rôles en lecture seule) : bascule, crayon, « Reprogrammer » et « Annuler » visibles, désactivés.
+function RdvRow({ label, date, done, editable, onToggle, link, onDate, meetLink, onReschedule, onCancel, readOnly = false }) {
   const [editing, setEditing] = useState(false);
   const cancelRef = useRef(false);
   return (
@@ -2510,15 +2526,16 @@ function RdvRow({ label, date, done, editable, onToggle, link, onDate, meetLink,
             <div style={{ fontSize: 14, fontWeight: 700, color: date ? TEXT : "#cbd2e0" }}>{fmtDT(date) || "—"}</div>
             {onDate && (
               <button type="button" onClick={() => setEditing(true)} title="Saisir/modifier la date"
-                style={{ border: "none", background: "transparent", padding: 2, cursor: "pointer", color: MUTED, display: "inline-flex", lineHeight: 0 }}>
+                style={{ border: "none", background: "transparent", padding: 2, cursor: "pointer", color: MUTED, display: "inline-flex", lineHeight: 0 }}
+                {...(readOnly ? READ_ONLY_PROPS : {})}>
                 <PencilIcon />
               </button>
             )}
           </div>
         )}
         {link && <RdvLink url={link} />}
-        {onReschedule && <button type="button" className="ob-detail-link" onClick={onReschedule}>Reprogrammer ce rendez-vous</button>}
-        {onCancel && <button type="button" className="ob-detail-link" onClick={onCancel} style={{ color: CANCEL_RED }}>Annuler ce rendez-vous</button>}
+        {onReschedule && <button type="button" className="ob-detail-link" onClick={onReschedule} {...(readOnly ? READ_ONLY_PROPS : {})}>Reprogrammer ce rendez-vous</button>}
+        {onCancel && <button type="button" className="ob-detail-link" onClick={onCancel} style={{ color: CANCEL_RED }} {...(readOnly ? READ_ONLY_PROPS : {})}>Annuler ce rendez-vous</button>}
         {meetLink && (
           <a href={meetLink} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
             style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 6, padding: "4px 10px", borderRadius: 8, background: GREEN + "14", border: `1px solid ${GREEN}44`, color: GREEN, fontSize: 11.5, fontWeight: 700, textDecoration: "none" }}>
@@ -2527,7 +2544,7 @@ function RdvRow({ label, date, done, editable, onToggle, link, onDate, meetLink,
           </a>
         )}
       </div>
-      {editable && <StatusToggle value={!!done} onChange={onToggle} labels={["À venir", "Effectué"]} />}
+      {editable && <StatusToggle value={!!done} onChange={onToggle} labels={["À venir", "Effectué"]} disabled={readOnly} />}
     </div>
   );
 }
@@ -2721,13 +2738,19 @@ function RenewBlock({ email, sentAt, onRenewed }) {
 // ── PANNEAU DÉTAILS (slide-in droite, façon Notion) ──────────────────────────
 // Toutes les dates de situation utilisent le calendrier français partagé.
 // La validation se fait en quittant le contrôle complet ou avec Entrée.
+// Sans onChange (lecture seule) : le même champ, désactivé, avec la date enregistrée.
 function DateRow({ label, value, onChange }) {
   const committed = toDateInput(value);
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
       <div style={{ fontSize: 13.5, fontWeight: 500, color: TEXT }}>{label}</div>
-      <BoardStateDateInput key={committed} value={committed} label={label} onChange={onChange}
-        style={{ ...inputStyle, width: 168, padding: "7px 10px", fontSize: 12.5 }} />
+      {onChange ? (
+        <BoardStateDateInput key={committed} value={committed} label={label} onChange={onChange}
+          style={{ ...inputStyle, width: 168, padding: "7px 10px", fontSize: 12.5 }} />
+      ) : (
+        <input type="text" aria-label={label} value={fmt(committed)} placeholder="jj/mm/aaaa" readOnly
+          style={{ ...inputStyle, width: 168, padding: "7px 10px", fontSize: 12.5 }} {...READ_ONLY_PROPS} />
+      )}
     </div>
   );
 }
@@ -2755,6 +2778,7 @@ const etatAuthor = (h) => {
 // Bloc "État du client" (détail, sous le SIREN) : sélecteur d'état + date(s) selon l'état
 // (fiscaliste), révélation animée. Toute pose passe par changeEtat -> trace l'historique.
 function EtatSection({ row, num, changeEtat, compact = false }) {
+  const readOnly = isBoardReadOnly();  // rôles en lecture seule : état affiché, dates en champs désactivés
   const etat = row.etat_manuel || displayEtat(row);  // le détail montre l'état POSÉ (pour éditer sa date d'effet, même s'il est encore prévu)
   const cfg = ETAT_DATE_CONFIG[etat];
   // Mode fin de pause : connue (date de fin) vs indéterminée (date de relance). Dérivé des
@@ -2766,14 +2790,15 @@ function EtatSection({ row, num, changeEtat, compact = false }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row.numero_client]);
   // Applique un changement de date en conservant l'état + les autres dates courantes.
-  const applyDate = (chg) => changeEtat(num, {
+  const applyDate = readOnly ? undefined : (chg) => changeEtat(num, {
     etat, etat_date: row.etat_date, pause_end_date: row.pause_end_date,
     pause_relance_date: row.pause_relance_date, ...chg,
   });
+  const dateChange = (build) => (applyDate ? (d) => applyDate(build(d)) : undefined);
   return (
     <div style={{ marginBottom: compact ? 0 : 22, minWidth: 0, ...(compact && (cfg || isEtatPending(row)) ? { gridColumn: "1 / -1" } : {}) }}>
       {compact ? <div style={{ fontSize: 12, color: MUTED, marginBottom: 5 }}>Situation du client</div> : <SecTitle icon="etat">État du client</SecTitle>}
-      <EtatPicker etat={etat} disabled={!num} onPick={(v) => changeEtat(num, { etat: v })} />
+      <EtatPicker etat={etat} disabled={!num || readOnly} onPick={(v) => changeEtat(num, { etat: v })} />
       {num && row.finance_review_status === 'pending' && <div style={{marginTop:9,padding:'8px 10px',borderRadius:8,background:'#fff8e9',color:'#866013',fontSize:12,lineHeight:1.5}}>
         Situation enregistrée dans le board. La finance doit en traiter les conséquences sur les montants ; elle ne valide pas le changement de situation.
       </div>}
@@ -2811,7 +2836,7 @@ function EtatSection({ row, num, changeEtat, compact = false }) {
             <div style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
               {cfg.pause ? (
                 <>
-                  <DateRow label="Début de pause" value={row.etat_date} onChange={(d) => applyDate({ etat_date: d })} />
+                  <DateRow label="Début de pause" value={row.etat_date} onChange={dateChange((d) => ({ etat_date: d }))} />
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 500, color: TEXT }}>Fin de pause</div>
                     {/* Flip PUREMENT LOCAL : un clic exploratoire ne détruit jamais une date en
@@ -2821,11 +2846,11 @@ function EtatSection({ row, num, changeEtat, compact = false }) {
                       onChange={(v) => setPauseMode(v ? "connue" : "indeterminee")} />
                   </div>
                   {pauseMode === "connue"
-                    ? <DateRow label="Fin de pause" value={row.pause_end_date} onChange={(d) => applyDate({ pause_end_date: d, pause_relance_date: null })} />
-                    : <DateRow label="Relancer le" value={row.pause_relance_date} onChange={(d) => applyDate({ pause_relance_date: d, pause_end_date: null })} />}
+                    ? <DateRow label="Fin de pause" value={row.pause_end_date} onChange={dateChange((d) => ({ pause_end_date: d, pause_relance_date: null }))} />
+                    : <DateRow label="Relancer le" value={row.pause_relance_date} onChange={dateChange((d) => ({ pause_relance_date: d, pause_end_date: null }))} />}
                 </>
               ) : (
-                <DateRow label={cfg.label} value={row.etat_date} onChange={(d) => applyDate({ etat_date: d })} />
+                <DateRow label={cfg.label} value={row.etat_date} onChange={dateChange((d) => ({ etat_date: d }))} />
               )}
             </div>
           </motion.div>
@@ -3013,6 +3038,8 @@ function ClientAgendaModal({ row, num, onClose }) {
 
 export function DetailPanel({ row, onClose, reload, reloadRatings, patch, changeEtat, etatHistVersion, recordMeteo, meteoHistVersion }) {
   const num = row.numero_client;
+  // Rôles en lecture seule (RH) : la fiche se lit, aucun contrôle d'écriture (voir isBoardReadOnly).
+  const readOnly = isBoardReadOnly();
   // Rafraîchit le bloc signature Opti'Lex après un changement d'email (le destinataire du
   // rappel Yousign est re-résolu côté backend) : bumpé par EmailSelect après le patch commité.
   const [sigRefresh, setSigRefresh] = useState(0);
@@ -3030,13 +3057,14 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
   // Antériorité emails : à l'ouverture d'une fiche, on enregistre les emails vus (Owner + Opti'Lex
   // courant par SIREN) dans l'historique -> on garde la trace même quand l'email change ensuite,
   // pour pouvoir revenir à un email antérieur dans le dropdown. Best-effort (silencieux).
+  // Une écriture : jamais pour les rôles en lecture seule (le serveur la refuserait).
   useEffect(() => {
-    if (!num) return;
+    if (!num || readOnly) return;
     const emails = [];
     if (row.email) emails.push({ email: row.email, source: "owner" });
     if (row.email_optilex) emails.push({ email: row.email_optilex, source: "optilex" });
     if (emails.length) apiClient.post("/api/v1/optilex/email-history", { numero_client: num, emails }).catch(() => {});
-  }, [num, row.email, row.email_optilex]);
+  }, [num, row.email, row.email_optilex, readOnly]);
   // Carte compacte d'un contrat, dans les informations client (dev 25/09) :
   // signé ou pas (pastille, même style que la situation du client), envoyé
   // quand, signé quand.
@@ -3143,14 +3171,14 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
                   Recaler le RDV onboarding
                 </motion.button>
               )}
-              <RdvRow label="Rendez-vous Intégration Opti'Lex" date={row.rdv_lancement_date} done={row.rdv_lancement_done} editable={!!num && !isFinanceTeam()} meetLink={row.lancement_meet_link}
+              <RdvRow label="Rendez-vous Intégration Opti'Lex" date={row.rdv_lancement_date} done={row.rdv_lancement_done} editable={!!num && !isFinanceTeam()} readOnly={readOnly} meetLink={row.lancement_meet_link}
                 onToggle={(v) => patch(num, { rdv_lancement_done: v })} />
-              <RdvRow label="Rendez-vous lancement fiscal" date={row.rdv_fiscal_date_manual || row.rdv_fiscal_date} done={row.rdv_fiscal_done} editable={!!num && !isFinanceTeam() && !!(row.rdv_fiscal_date_manual || row.rdv_fiscal_date)}
+              <RdvRow label="Rendez-vous lancement fiscal" date={row.rdv_fiscal_date_manual || row.rdv_fiscal_date} done={row.rdv_fiscal_done} readOnly={readOnly} editable={!!num && !isFinanceTeam() && !!(row.rdv_fiscal_date_manual || row.rdv_fiscal_date)}
                 link={row.fiscal_url || null}
                 onReschedule={num && !isFinanceTeam() && (row.rdv_fiscal_date_manual || row.rdv_fiscal_date) ? () => setReschedOpen("fiscal") : undefined}
                 onCancel={num && !isFinanceTeam() && launchCancellable(row.rdv_fiscal_date_manual || row.rdv_fiscal_date, row.rdv_fiscal_done) ? () => setCancelOpen("fiscal") : undefined}
                 onToggle={(v) => patch(num, { rdv_fiscal_done: v })} />
-              <RdvRow label="Rendez-vous lancement social" date={row.rdv_social_date_manual || row.rdv_social_date} done={row.rdv_social_done} editable={!!num && !isFinanceTeam() && !!(row.rdv_social_date_manual || row.rdv_social_date)}
+              <RdvRow label="Rendez-vous lancement social" date={row.rdv_social_date_manual || row.rdv_social_date} done={row.rdv_social_done} readOnly={readOnly} editable={!!num && !isFinanceTeam() && !!(row.rdv_social_date_manual || row.rdv_social_date)}
                 link={row.social_url || null}
                 onReschedule={num && !isFinanceTeam() && (row.rdv_social_date_manual || row.rdv_social_date) ? () => setReschedOpen("social") : undefined}
                 onCancel={num && !isFinanceTeam() && launchCancellable(row.rdv_social_date_manual || row.rdv_social_date, row.rdv_social_done) ? () => setCancelOpen("social") : undefined}
@@ -3279,11 +3307,12 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
               <SecTitle icon="ambassador">Programme ambassadeur</SecTitle>
               {(() => {
                 const on = !!row.ambassador_eligible;
-                const editable = meteoSettable() && !isFinanceTeam();
+                const editable = meteoSettable() && !isFinanceTeam() && !readOnly;
+                const ro = readOnly ? READ_ONLY_PROPS : {};
                 return (
                   <div style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${BORDER}`, background: "#fafbfc", marginBottom: 22 }}>
                     <motion.button type="button" disabled={!editable} whileTap={editable ? { scale: 0.99 } : undefined}
-                      onClick={() => { if (editable) patch(num, { ambassador_eligible: !on }); }}
+                      onClick={() => { if (editable) patch(num, { ambassador_eligible: !on }); }} {...ro}
                       style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: 0, border: "none", background: "none", cursor: editable ? "pointer" : "default", textAlign: "left", fontFamily: "inherit" }}>
                       <span style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${on ? GREEN : "#cbd2e0"}`, background: on ? GREEN : "transparent", transition: "background .15s ease, border-color .15s ease" }}>
                         {on && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
@@ -3305,11 +3334,12 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
               <SecTitle icon="ambassador">Programme de parrainage</SecTitle>
               {(() => {
                 const on = !!row.parrainage_eligible;
-                const editable = meteoSettable() && !isFinanceTeam();
+                const editable = meteoSettable() && !isFinanceTeam() && !readOnly;
+                const ro = readOnly ? READ_ONLY_PROPS : {};
                 return (
                   <div style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${BORDER}`, background: "#fafbfc", marginBottom: 22 }}>
                     <motion.button type="button" disabled={!editable} whileTap={editable ? { scale: 0.99 } : undefined}
-                      onClick={() => { if (editable) patch(num, { parrainage_eligible: !on }); }}
+                      onClick={() => { if (editable) patch(num, { parrainage_eligible: !on }); }} {...ro}
                       style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: 0, border: "none", background: "none", cursor: editable ? "pointer" : "default", textAlign: "left", fontFamily: "inherit" }}>
                       <span style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${on ? GREEN : "#cbd2e0"}`, background: on ? GREEN : "transparent", transition: "background .15s ease, border-color .15s ease" }}>
                         {on && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
@@ -3343,15 +3373,15 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
           {num ? (
             <>
               <SecTitle icon="facturation">Suivi facturation</SecTitle>
-              <JalonRow label="Statut facturation Owner" editable={!isFinanceTeam()} done={row.facturation_honoraires_done} date={row.facturation_honoraires_date}
+              <JalonRow label="Statut facturation Owner" editable={!isFinanceTeam()} readOnly={readOnly} done={row.facturation_honoraires_done} date={row.facturation_honoraires_date}
                 onToggle={(v) => patch(num, { facturation_honoraires_done: v })} onDate={(d) => patch(num, { facturation_honoraires_date: d })} />
-              <JalonRow label="Statut facturation Opti'Lex" editable={!isFinanceTeam()} done={row.setup_facturation_done} date={row.setup_facturation_date}
+              <JalonRow label="Statut facturation Opti'Lex" editable={!isFinanceTeam()} readOnly={readOnly} done={row.setup_facturation_done} date={row.setup_facturation_date}
                 onToggle={(v) => patch(num, { setup_facturation_done: v })} onDate={(d) => patch(num, { setup_facturation_date: d })} />
               {/* RDV +2 mois : RdvRow avec LIEN de prise de RDV (30 min avec Lisa Gentaire).
                   Date affichée = manuelle (rdv_plus1mois_date, prime) sinon date réservée par
                   le client (rdv_plus2mois_date, via le booking). Lien copiable tant qu'aucune
                   date n'est posée. Toggle À venir/Effectué conservé (planifiable avant). */}
-              <RdvRow label="RDV +2 mois" date={row.rdv_plus1mois_date || row.rdv_plus2mois_date} done={row.rdv_plus1mois_done} editable={!!num && !isFinanceTeam()}
+              <RdvRow label="RDV +2 mois" date={row.rdv_plus1mois_date || row.rdv_plus2mois_date} done={row.rdv_plus1mois_done} editable={!!num && !isFinanceTeam()} readOnly={readOnly}
                 link={row.plus2mois_url || null}
                 onDate={num ? (d) => patch(num, { rdv_plus1mois_date: d }) : undefined}
                 onToggle={(v) => patch(num, { rdv_plus1mois_done: v })} />
@@ -3695,7 +3725,8 @@ function CancelLaunchModal({ row, num, kind, onClose, onDone }) {
 
 // alwaysDate : la date est TOUJOURS saisissable (RDV à planifier), pas seulement une
 // fois "effectué". Sinon (statut fait/pas-fait), la date se révèle au passage à Oui.
-function JalonRow({ label, done, date, onToggle, onDate, alwaysDate = false, toggleLabels, editable = true }) {
+// `readOnly` (rôles en lecture seule) : bascule et date visibles, désactivées.
+function JalonRow({ label, done, date, onToggle, onDate, alwaysDate = false, toggleLabels, editable = true, readOnly = false }) {
   const showDate = alwaysDate || done;
   const dateLabel = alwaysDate ? "Date prévue" : null;
   return (
@@ -3703,7 +3734,7 @@ function JalonRow({ label, done, date, onToggle, onDate, alwaysDate = false, tog
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <div style={{ fontSize: 13.5, fontWeight: 500, color: TEXT }}>{label}</div>
         {editable
-          ? <StatusToggle value={!!done} onChange={onToggle} labels={toggleLabels} />
+          ? <StatusToggle value={!!done} onChange={onToggle} labels={toggleLabels} disabled={readOnly} />
           : <span style={{ fontSize: 12.5, fontWeight: 600, color: done ? GREEN : MUTED }}>{(toggleLabels || ["Non", "Oui"])[done ? 1 : 0]}</span>}
       </div>
       <AnimatePresence initial={false}>
@@ -3716,7 +3747,8 @@ function JalonRow({ label, done, date, onToggle, onDate, alwaysDate = false, tog
               <input key={toDateInput(date)} type="date" defaultValue={toDateInput(date)}
                 onBlur={(e) => { const v = e.target.value || null; if (v !== (toDateInput(date) || null)) onDate(v); }}
                 onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                style={{ ...inputStyle, width: 168, padding: "7px 10px", fontSize: 12.5 }} />
+                style={{ ...inputStyle, width: 168, padding: "7px 10px", fontSize: 12.5 }}
+                {...(readOnly ? READ_ONLY_PROPS : {})} />
             </div>
           </motion.div>
         )}
@@ -3735,6 +3767,7 @@ function MeteoSection({ row, num, recordMeteo, version, onChanged }) {
 
   useEffect(()=>{let alive=true;setError('');apiClient.get(`/api/v1/optilex/meteo-history?numero_client=${encodeURIComponent(num)}`).then(r=>{if(alive){setHist(r.history||[]);setLoaded(true);}}).catch(()=>{if(alive)setError('Impossible de charger les notations.');});return()=>{alive=false;};},[num,version,refresh]);
   const current=loaded?hist[0]:{score:row.meteo_score,weather_context:row.meteo_context,author_name:row.meteo_by,created_at:row.meteo_at};
+  const readOnly=isBoardReadOnly();  // rôles en lecture seule : météo et fil lus, saisies visibles et désactivées
   return <div>
     <div style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}><MeteoBadge score={current?.score} context={current?.weather_context}/>{current?.author_name && <span style={{fontSize:11,color:MUTED}}>Par {current.author_name} · {timeAgo(current.created_at)}</span>}</div>
     <p style={{fontSize:12,color:MUTED,lineHeight:1.5,margin:'0 0 10px'}}>À mettre à jour à chaque échange avec le client, avant ou après l’onboarding.</p>
@@ -3742,12 +3775,12 @@ function MeteoSection({ row, num, recordMeteo, version, onChanged }) {
     <WeatherScaleGuide/>
     {error && <p role="alert">{error} <button onClick={()=>setRefresh(v=>v+1)}>Réessayer</button></p>}
     <SecTitle icon="comments">Échanges et notations</SecTitle>
-    <CommentThread numero={num} onAddWeather={async payload=>{const ok=await recordMeteo(num,payload);if(ok!==false)setRefresh(v=>v+1);return ok;}} ratings={hist} ratingsLoading={!loaded&&!error} onRatingEdited={updated=>{setHist(items=>items.map(item=>item.id===updated.id?updated:item));onChanged();}} onRatingDeleted={()=>{setRefresh(v=>v+1);onChanged();}} onRatingConflict={()=>setRefresh(v=>v+1)}/>
+    <CommentThread numero={num} readOnly={readOnly} onAddWeather={async payload=>{const ok=await recordMeteo(num,payload);if(ok!==false)setRefresh(v=>v+1);return ok;}} ratings={hist} ratingsLoading={!loaded&&!error} onRatingEdited={updated=>{setHist(items=>items.map(item=>item.id===updated.id?updated:item));onChanged();}} onRatingDeleted={()=>{setRefresh(v=>v+1);onChanged();}} onRatingConflict={()=>setRefresh(v=>v+1)}/>
   </div>;
 }
 
 // Editing preserves the score and original chronology. Capabilities come from the API.
-function RatingHistoryActions({ rating, numero, onEdited, onDeleted, onConflict }) {
+function RatingHistoryActions({ rating, numero, onEdited, onDeleted, onConflict, readOnly = false }) {
   const [mode, setMode] = useState(null);
   const [draft, setDraft] = useState("");
   const [expectedNote, setExpectedNote] = useState(null);
@@ -3784,8 +3817,8 @@ function RatingHistoryActions({ rating, numero, onEdited, onDeleted, onConflict 
       Commentaire modifié{rating.note_updated_by_name ? ` par ${rating.note_updated_by_name}` : ""} · {timeAgo(rating.note_updated_at)}
     </div>}
     {!mode && <div style={{ display: "flex", gap: 16 }}>
-      {rating.can_edit_note && <button type="button" style={actionStyle} onClick={() => begin('edit')}>Modifier le commentaire</button>}
-      {rating.can_delete && <button type="button" style={{ ...actionStyle, color: "#b91c1c" }} onClick={() => begin('delete')}>Supprimer la notation</button>}
+      {rating.can_edit_note && <button type="button" style={actionStyle} onClick={() => begin('edit')} {...(readOnly ? READ_ONLY_PROPS : {})}>Modifier le commentaire</button>}
+      {rating.can_delete && <button type="button" style={{ ...actionStyle, color: "#b91c1c" }} onClick={() => begin('delete')} {...(readOnly ? READ_ONLY_PROPS : {})}>Supprimer la notation</button>}
     </div>}
     {mode && <div style={{ marginTop: 8, padding: 12, border: `1px solid ${BORDER}`, borderRadius: 8, background: "#f7f8fa" }}>
       {mode === 'edit' ? <label style={{ display: "block", fontSize: 12 }}>
@@ -3808,7 +3841,9 @@ function RatingHistoryActions({ rating, numero, onEdited, onDeleted, onConflict 
   </div>;
 }
 
-function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = false, onRatingEdited, onRatingDeleted, onRatingConflict }) {
+// `readOnly` (rôles en lecture seule) : fil et notations affichés ; composer, météo, réponse, modification et
+// suppression visibles, désactivés.
+function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = false, onRatingEdited, onRatingDeleted, onRatingConflict, readOnly = false }) {
   const me = useMemo(() => apiClient.getUser() || {}, []);
   const meName = me.name || me.full_name || me.first_name || me.email || "Moi";
   const [comments, setComments] = useState([]);
@@ -3868,6 +3903,7 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
   // finance_team écrit dans l'espace commun depuis le 25/09 (demande dev) ; le backend reste le juge.
   const canEdit = (c) => (((me.email || "").toLowerCase() === (c.author_email || "").toLowerCase())
       || ["admin", "ceo"].includes(me.role));
+  const ro = readOnly ? READ_ONLY_PROPS : {};
   const saveEdit = async () => {
     const body = editDraft.trim();
     if (!body || savingEdit) return;
@@ -3893,7 +3929,7 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
 
   const submit = async () => {
     const body = draft.trim();
-    if (!body || posting || loading) return;
+    if (readOnly || !body || posting || loading) return;
     setPosting(true);
     try {
       const created = await apiClient.post("/api/v1/optilex/comments", { numero_client: numero, body, mentions: mentionedIds(body, people), rating_id: replyTo?.id || null });
@@ -3920,7 +3956,7 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
           (retour dev 25/09). Ouvert à tous les rôles du board, finance_team comprise. */}
       <div style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: "12px 14px", marginBottom: comments.length ? 18 : 4, background: "#fafbfc" }}>
         <div className="wc-comment-heading"><div style={{ fontSize: 12.5, fontWeight: 700, color: TEXT }}>Écrire dans l’espace commun</div>
-          {onAddWeather && <MeteoPicker triggerLabel="Ajouter une météo" onSave={onAddWeather} disabled={!numero}/>}
+          {onAddWeather && <MeteoPicker triggerLabel="Ajouter une météo" onSave={onAddWeather} disabled={!numero} readOnly={readOnly}/>}
         </div>
         <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8, lineHeight: 1.45 }}>Visible par Owner, Opti’Lex et la finance. Tapez @ pour prévenir quelqu’un : il reçoit un e-mail et une notification.</div>
       {replyTo && <div className="wc-reply-context"><span>Réponse à la météo {weatherRatingLabel(replyTo.score,replyTo.weather_context)}</span><button type="button" onClick={()=>setReplyTo(null)}>Annuler</button></div>}
@@ -3930,9 +3966,9 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
           <MentionTextarea value={draft} onChange={setDraft} people={people}
             onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); } }}
             placeholder="Ajouter un commentaire… (@ pour mentionner quelqu’un)" rows={2}
-            style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.45 }} />
+            style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.45 }} {...ro} />
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
-            <button onClick={submit} disabled={!draft.trim() || posting}
+            <button onClick={submit} disabled={!draft.trim() || posting} {...ro}
               style={{ padding: "8px 18px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 600, fontFamily: "inherit",
                 cursor: draft.trim() && !posting ? "pointer" : "default",
                 background: draft.trim() ? NAVY : "#e5e7eb", color: draft.trim() ? "#fff" : MUTED, transition: "background 0.2s" }}>
@@ -3954,8 +3990,8 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
                 <span style={{ color: weatherPresentation(c.score,c.weather_context)?.color, fontWeight: 600 }}>Météo · {weatherRatingLabel(c.score,c.weather_context)}</span>
                 <span title={fmt(c.created_at)} style={{ color: MUTED }}>{timeAgo(c.created_at)}</span>
               </div>
-              <RatingHistoryActions rating={c} numero={numero} onEdited={onRatingEdited} onDeleted={onRatingDeleted} onConflict={onRatingConflict} />
-              <button type="button" className="wc-reply-button" onClick={()=>{setReplyTo(c);rootRef.current?.scrollIntoView({behavior:'smooth',block:'start'});}}>Répondre à cette météo{comments.filter(r=>r.rating_id===c.id).length ? ` (${comments.filter(r=>r.rating_id===c.id).length})` : ''}</button>
+              <RatingHistoryActions rating={c} numero={numero} onEdited={onRatingEdited} onDeleted={onRatingDeleted} onConflict={onRatingConflict} readOnly={readOnly} />
+              <button type="button" className="wc-reply-button" onClick={()=>{setReplyTo(c);rootRef.current?.scrollIntoView({behavior:'smooth',block:'start'});}} {...ro}>Répondre à cette météo{comments.filter(r=>r.rating_id===c.id).length ? ` (${comments.filter(r=>r.rating_id===c.id).length})` : ''}</button>
               {comments.filter(r=>r.rating_id===c.id).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).map(reply=><div className="wc-linked-reply" key={reply.id}><p style={{fontSize:11,color:MUTED}}><strong>{reply.author_name||reply.author_email}</strong> · {timeAgo(reply.created_at)}</p>{editingId===reply.id ? <div><MentionTextarea value={editDraft} onChange={setEditDraft} people={people} rows={2} maxLength={4000}/><button type="button" className="wc-reply-button" disabled={savingEdit||!editDraft.trim()} onClick={saveEdit}>Enregistrer</button><button type="button" className="wc-reply-button" onClick={()=>setEditingId(null)}>Annuler</button></div> : <DetailText text={<MentionedText text={reply.body} mentions={reply.mentions}/>} measureKey={reply.body}/>}{canEdit(reply)&&editingId!==reply.id&&<div><button type="button" className="wc-reply-button" onClick={()=>{setEditingId(reply.id);setEditDraft(reply.body);}}>Modifier</button>{confirmDeleteId===reply.id?<><button type="button" className="wc-reply-button" disabled={!!deletingId} onClick={()=>deleteComment(reply.id)}>Confirmer la suppression</button><button type="button" className="wc-reply-button" onClick={()=>setConfirmDeleteId(null)}>Annuler</button></>:<button type="button" className="wc-reply-button" onClick={()=>setConfirmDeleteId(reply.id)}>Supprimer</button>}</div>}</div>)}
             </div>
           </motion.div>

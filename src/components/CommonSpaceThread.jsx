@@ -12,6 +12,7 @@ import { Users } from 'lucide-react';
 import apiClient from '../services/apiClient';
 import MentionTextarea, { MentionedText } from './MentionTextarea.jsx';
 import { mentionedIds, notifiedSummary } from '../utils/mentions.js';
+import { isReadOnlyViewer, READ_ONLY_PROPS } from '../utils/readOnlyRoles.js';
 
 const C = { text: '#37352f', muted: '#787774', faint: '#9b9a97', border: '#e9e9e7', borderSoft: '#f1f1ef', navy: '#121b35', green: '#3e7d5a', soft: '#e9eef6' };
 const PREVIEW = 2;
@@ -44,6 +45,8 @@ const buttonStyle = (enabled) => ({ display: 'inline-flex', alignItems: 'center'
 
 export default function CommonSpaceThread({ numero, onShowToast, title = "Espace commun Owner / Opti'Lex" }) {
   const me = useMemo(() => apiClient.getUser() || {}, []);
+  // Rôles en lecture seule (RH) : le fil se lit ; saisie, publication et actions visibles, désactivées.
+  const ro = isReadOnlyViewer(me.role) ? READ_ONLY_PROPS : {};
   const [comments, setComments] = useState(null);      // null = chargement
   const [unavailable, setUnavailable] = useState(false); // client hors board ou fil indisponible : bloc masqué
   const [people, setPeople] = useState([]);
@@ -83,7 +86,7 @@ export default function CommonSpaceThread({ numero, onShowToast, title = "Espace
 
   const submit = async () => {
     const body = draft.trim();
-    if (!body || posting) return;
+    if (ro.disabled || !body || posting) return;
     setPosting(true);
     try {
       const created = await apiClient.post('/api/v1/optilex/comments', { numero_client: numero, body, mentions: mentionedIds(body, people) });
@@ -143,10 +146,10 @@ export default function CommonSpaceThread({ numero, onShowToast, title = "Espace
       <div style={{ border: `1px solid ${C.borderSoft}`, borderRadius: 10, padding: '10px 12px', marginBottom: list.length ? 10 : 0 }}>
         <MentionTextarea value={draft} onChange={setDraft} people={people} rows={2}
           onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); submit(); } }}
-          placeholder="Répondre dans l'espace commun… (@ pour mentionner quelqu'un)" style={textareaStyle} />
+          placeholder="Répondre dans l'espace commun… (@ pour mentionner quelqu'un)" style={textareaStyle} {...ro} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 4 }}>
           <span style={{ fontSize: 10.5, color: C.faint }}>⌘ + Entrée pour publier</span>
-          <button type="button" onClick={submit} disabled={!draft.trim() || posting} style={buttonStyle(!!draft.trim() && !posting)}>
+          <button type="button" onClick={submit} disabled={!draft.trim() || posting} style={buttonStyle(!!draft.trim() && !posting)} {...ro}>
             {posting ? 'Envoi…' : 'Publier'}
           </button>
         </div>
@@ -172,13 +175,13 @@ export default function CommonSpaceThread({ numero, onShowToast, title = "Espace
                       <span style={{ fontSize: 11, color: C.faint, whiteSpace: 'nowrap' }}>{timeAgo(c.created_at)}{c.updated_at ? ' · modifié' : ''}</span>
                       {canEdit(c) && editingId !== c.id && (
                         <button type="button" onClick={() => { setEditingId(c.id); setEditDraft(c.body); }}
-                          style={{ border: 'none', background: 'transparent', color: C.faint, cursor: 'pointer', padding: '0 2px', fontSize: 11, fontFamily: 'inherit' }}>
+                          style={{ border: 'none', background: 'transparent', color: C.faint, cursor: 'pointer', padding: '0 2px', fontSize: 11, fontFamily: 'inherit' }} {...ro}>
                           Modifier
                         </button>
                       )}
                       {canEdit(c) && editingId !== c.id && confirmDeleteId !== c.id && (
                         <button type="button" onClick={() => setConfirmDeleteId(c.id)}
-                          style={{ border: 'none', background: 'transparent', color: C.faint, cursor: 'pointer', padding: '0 2px', fontSize: 11, fontFamily: 'inherit' }}>
+                          style={{ border: 'none', background: 'transparent', color: C.faint, cursor: 'pointer', padding: '0 2px', fontSize: 11, fontFamily: 'inherit' }} {...ro}>
                           Supprimer
                         </button>
                       )}

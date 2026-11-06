@@ -3,7 +3,8 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import apiClient from "../services/apiClient";
-import { setNavScope } from "../utils/sidebarPermissions";
+import { getVisibleSections, setNavScope } from "../utils/sidebarPermissions";
+import { isReadOnlyViewer } from "../utils/readOnlyRoles";
 import Sidebar from "../components/shared/Sidebar";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 import SalesTeamGrid from "../components/SalesTeamGrid.jsx";
@@ -208,7 +209,8 @@ export default function CeoDashboard() {
   // ── AUTH CHECK ──────────────────────────────────────────────────────
   useEffect(() => {
     const u = apiClient.getUser();
-    if (!u || (u.role !== 'admin' && u.role !== 'ceo' && u.role !== 'finance_director')) {
+    // Les rôles en lecture seule (RH) consultent le dashboard ; le bouton Objectifs leur reste visible, désactivé.
+    if (!u || (u.role !== 'admin' && u.role !== 'ceo' && u.role !== 'finance_director' && !isReadOnlyViewer(u.role))) {
       navigate('/login');
       return;
     }
@@ -292,6 +294,12 @@ export default function CeoDashboard() {
   const [savingPeriod, setSavingPeriod] = useState(null);
   const [objectiveError, setObjectiveError] = useState(null);
   const canEditObjectives = user?.role === 'ceo' || user?.role === 'admin' || user?.role === 'finance_director';
+  // Barre latérale : les rôles en lecture seule (RH) ont celle de la direction financière, onglets
+  // réservés retirés (sidebarPermissions) ; les autres rôles gardent la barre complète, comme avant.
+  const sidebarSections = useMemo(
+    () => (isReadOnlyViewer(user?.role) ? getVisibleSections(SIDEBAR_SECTIONS, user.role) : SIDEBAR_SECTIONS),
+    [user],
+  );
   const currentMonthKey = useMemo(() => new Date().toISOString().slice(0, 7), []);
   const rollingMonths = useMemo(() => {
     const now = new Date();
@@ -413,7 +421,7 @@ export default function CeoDashboard() {
         width={sideCollapsed ? 56 : 260}
         collapsed={sideCollapsed}
         onToggle={() => setSideCollapsed((v) => !v)}
-        sections={SIDEBAR_SECTIONS}
+        sections={sidebarSections}
         activeTab={activeTab}
         setActiveTab={(tabId) => {
           // La plupart des onglets sont des routes (vues /ceo/* qui enveloppent les
@@ -459,6 +467,7 @@ export default function CeoDashboard() {
                     loading={leaderboardLoading}
                     objective={monthlyObjectives[currentMonthKey]}
                     canEdit={canEditObjectives}
+                    readOnly={isReadOnlyViewer(user.role)}
                     onEditObjectives={() => setObjectivesModalOpen(true)}
                     monthLabel={monthLabel}
                   />
