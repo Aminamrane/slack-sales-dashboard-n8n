@@ -14,8 +14,9 @@ import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
+import { READ_ONLY_DIRECTION_ROLES } from "../utils/readOnlyRoles";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo", "acquisition_director", "head_of_acquisition"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo", "acquisition_director", "head_of_acquisition", ...READ_ONLY_DIRECTION_ROLES]);
 
 export default function CeoAgendaView() {
   const navigate = useNavigate();

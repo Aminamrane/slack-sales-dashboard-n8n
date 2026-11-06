@@ -10,6 +10,7 @@ import {
   CONTACT_FIELDS, canEditContact, contactPatch, contactSaveError, duplicatesById, isClientIn, mergeLeads, nextRdv, parisToday, rdvLabel,
 } from "../utils/leadsManagement.js";
 import "../index.css";
+import { isReadOnlyViewer, readOnlyProps } from "../utils/readOnlyRoles";
 
 const COLORS = {
   primary: "#6366f1",
@@ -68,7 +69,8 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
         setSession({ user: { email: user.email, user_metadata: { name: user.name, avatar_url: user.avatar_url || null } } });
 
         // Check if user has admin or leads_management permission
-        if (user.role === 'admin' || apiClient.hasAccess('leads_management')) {
+        // Les rôles en lecture seule de la direction (RH) ouvrent la page en lecture (dev 06/11/2026).
+        if (user.role === 'admin' || apiClient.hasAccess('leads_management') || isReadOnlyViewer(user.role)) {
           setHasAccess(true);
           setIsAdminUser(user.role === 'admin');
         } else {
@@ -796,8 +798,8 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
                                 const btnRef = (el) => { if (el) el.__leadId = lead.id; };
                                 return (
                                   <>
-                                    <button ref={btnRef} data-assign-btn={lead.id} onClick={(e) => {
-                                        if (assigningLeads.has(lead.id)) return;
+                                    <button ref={btnRef} data-assign-btn={lead.id} {...readOnlyProps(apiClient.getUser()?.role)} onClick={(e) => {
+                                        if (assigningLeads.has(lead.id) || isReadOnlyViewer(apiClient.getUser()?.role)) return;
                                         if (isOpen) { setAssignDropdown(null); return; }
                                         const r = e.currentTarget.getBoundingClientRect();
                                         assignDropdownRef.current = { right: window.innerWidth - r.right, top: r.bottom + 4 };
