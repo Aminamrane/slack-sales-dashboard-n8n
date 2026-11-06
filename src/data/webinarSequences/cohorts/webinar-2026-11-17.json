@@ -1,0 +1,1359 @@
+{
+ "schema": 1,
+ "generatedAt": "2026-11-06",
+ "cohort": {
+  "id": "webinar-2026-11-17",
+  "label": "Webinaire du 17 novembre 2026",
+  "short": "17 nov.",
+  "audience": "TPE/PME",
+  "liveAt": "2026-11-17T11:00:00+01:00",
+  "speakers": [
+   "Paul Faucomprez",
+   "Maître Bouchareb"
+  ],
+  "pages": [
+   "/tpe-pme"
+  ],
+  "notes": [
+   "Séquence fournie par le dev (« Séquence Webinaire Broad du 17 novembre », 06/11) : même structure que le 22 octobre. Ouverte d'abord en mise en ligne minimale (confirmation seule), complétée le 06/11.",
+   "Live à 11h00, heure d'hiver : le mail du jour J part à 6h30, la veille à 18h00.",
+   "Deux SMS (Brevo) accompagnent la séquence : 1 h avant le live et au démarrage. Ils n'apparaissent pas dans cette liste, qui ne montre que les e-mails.",
+   "Le suivi post-webinaire est planifié par la landing APRÈS le live, une fois les présents et les absents connus : ses dates apparaîtront ensuite."
+  ],
+  "codeEra": "sept",
+  "stepCount": 19
+ },
+ "sequences": {
+  "pre": {
+   "label": "Séquence pré-webinaire",
+   "description": "De l'inscription au démarrage du live : confirmation, nurturing, rappels et jour J.",
+   "frequency": "Un e-mail éducatif par jour à 11h00 (J+1 à J+5), rappels J-7, J-3 et J-1 (18h00), puis 4 e-mails le jour du live (6h30, 10h00, 11h00, 11h15).",
+   "count": 13
+  },
+  "post": {
+   "label": "Séquence post-webinaire",
+   "description": "Relances après le live pour amener les inscrits vers un audit.",
+   "frequency": "Planifié après le live : un e-mail par segment (absents / présents), puis 4 e-mails communs à tous les inscrits, un par jour.",
+   "count": 6
+  }
+ },
+ "rules": [
+  "Jamais envoyé à un inscrit désinscrit (lien de désinscription présent dans chaque e-mail)."
+ ],
+ "steps": [
+  {
+   "kind": "email_confirmation",
+   "order": 1,
+   "sequence": "pre",
+   "sequenceIndex": 1,
+   "sequenceCount": 13,
+   "phase": "confirmation",
+   "timing": {
+    "mode": "signup-delay",
+    "minutes": 2,
+    "label": "2 min après l'inscription"
+   },
+   "conditions": [
+    "Un seul par inscrit et par cohorte (une réinscription ne recrée pas de séquence)."
+   ],
+   "subject": "Inscription confirmée ✅",
+   "preheader": "Bloquez le créneau dans votre agenda (pas de replay).",
+   "snippet": "Félicitations {{prénom}} ! Votre inscription au webinaire dédié aux dirigeants est bien confirmée. 🎙 Sujet : Optimiser les charges sociales et fiscales de votre TPE/PME 🗓 Date : Le 17 novembre à 11 h Programme : - Amél",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_confirmation"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "ici",
+     "href": "https://chat.whatsapp.com/CODE_MASQUE?s=cl&p=a&mlu=4&ilr=4",
+     "personal": false,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "iCalendar",
+     "href": "https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Google",
+     "href": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Outlook",
+     "href": "https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Yahoo",
+     "href": "https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Inscription confirmée ✅</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"overflow:hidden;max-height:0;max-width:0;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;\">Bloquez le créneau dans votre agenda (pas de replay).&nbsp;&zwnj;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n\n    <p style=\"margin:0 0 16px;\">Félicitations {{prénom}}&nbsp;!</p>\n    <p style=\"margin:0 0 0px;\">Votre inscription au webinaire dédié aux dirigeants est bien confirmée.</p>\n    <p style=\"margin:18px 0;border-top:2px solid #3e7d5a;font-size:0;line-height:0;\">&nbsp;</p>\n    <p style=\"margin:0 0 4px;\">🎙 <strong>Sujet</strong>&nbsp;: Optimiser les charges sociales et fiscales de votre TPE/PME</p>\n    <p style=\"margin:0 0 0px;\">🗓 <strong>Date</strong>&nbsp;: Le 17 novembre à 11&nbsp;h</p>\n    <p style=\"margin:18px 0;border-top:2px solid #3e7d5a;font-size:0;line-height:0;\">&nbsp;</p>\n    <p style=\"margin:0 0 10px;\">Programme&nbsp;:</p>\n    <ol style=\"margin:0 0 18px;padding-left:22px;\"><li style=\"margin:0 0 6px;\">Amélioration de votre <strong>rémunération</strong></li><li style=\"margin:0 0 6px;\">Réduction des <strong>charges sociales et fiscales</strong></li><li style=\"margin:0 0 6px;\"><strong>Structuration</strong> de votre société</li><li style=\"margin:0 0 6px;\">Identification des <strong>leviers d'optimisation</strong>.</li></ol>\n    <p style=\"margin:0 0 6px;\">🎙 <strong>Paul Faucomprez</strong>&nbsp;: professeur de droit fiscal à l'université de Lille.</p>\n    <p style=\"margin:0 0 22px;\">🎙 <strong>Maître Bouchareb</strong>&nbsp;: avocat au Barreau de Lille et expert en droit fiscal.</p>\n    <p style=\"margin:0 0 22px;\"><strong>Il n'y aura pas de replay&nbsp;:</strong> bloquez le créneau dans votre agenda&nbsp;!</p>\n    <p style=\"margin:0 0 14px;\">À bientôt,</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 8px;\">\n      <tr>\n        <td style=\"vertical-align:middle;padding-right:14px;\">\n          <img src=\"https://d1yei2z3i6k35z.cloudfront.net/14020886/69ef7339b55386.73306775_2.png\" alt=\"Paul Faucomprez\" width=\"56\" height=\"56\" style=\"display:block;border-radius:50%;object-fit:cover;\">\n        </td>\n        <td style=\"vertical-align:middle;\">\n          <p style=\"margin:0;font-weight:bold;\">Paul Faucomprez</p>\n          <p style=\"margin:0;color:#5b6577;font-size:14px;\">Fondateur &amp; CEO, Owner Technology</p>\n        </td>\n      </tr>\n    </table>\n  </div>\n  <div style=\"max-width:640px;margin:0 auto;padding:0 20px 24px;\"><p style=\"margin:0;font-size:14px;color:#555555;\">PS&nbsp;: 🚨 Afin de ne rien louper rejoignez notre groupe WhatsApp en cliquant <a href=\"https://chat.whatsapp.com/CODE_MASQUE?s=cl&p=a&mlu=4&ilr=4\" style=\"color:#3e7d5a;font-weight:bold;text-decoration:underline;\">ici</a>.</p></div>\n  <div style=\"max-width:640px;margin:0 auto;padding:0 20px 24px;\"><div style=\"text-align:center;margin:34px 0 4px;\">\n    <p style=\"margin:0 0 10px;font-size:12px;letter-spacing:1.5px;color:#9aa3b2;text-transform:uppercase;\">Ajouter l'événement au calendrier :</p>\n    <a href=\"https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#111111;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">iCalendar</a><a href=\"https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#4f6ef7;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Google</a><a href=\"https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#2f6fdb;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Outlook</a><a href=\"https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#5f01d1;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Yahoo</a>\n  </div></div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Félicitations {{prénom}} !\n\n    Votre inscription au webinaire dédié aux dirigeants est bien confirmée.\n\n    🎙 Sujet : Optimiser les charges sociales et fiscales de votre TPE/PME\n\n    🗓 Date : Le 17 novembre à 11 h\n\n    Programme :\n\n- Amélioration de votre rémunération\n\n- Réduction des charges sociales et fiscales\n\n- Structuration de votre société\n\n- Identification des leviers d'optimisation.\n\n    🎙 Paul Faucomprez : professeur de droit fiscal à l'université de Lille.\n\n    🎙 Maître Bouchareb : avocat au Barreau de Lille et expert en droit fiscal.\n\n    Il n'y aura pas de replay : bloquez le créneau dans votre agenda !\n\n    À bientôt,\n\n          Paul Faucomprez\n\n          Fondateur & CEO, Owner Technology\n\n  PS : 🚨 Afin de ne rien louper rejoignez notre groupe WhatsApp en cliquant ici : https://chat.whatsapp.com/CODE_MASQUE?s=cl&p=a&mlu=4&ilr=4.\n\n    Ajouter l'événement au calendrier :\n\n    iCalendar : https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_IDGoogle : https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_IDOutlook : https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_IDYahoo : https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n"
+  },
+  {
+   "kind": "email_nov17_remuneration",
+   "order": 2,
+   "sequence": "pre",
+   "sequenceIndex": 2,
+   "sequenceCount": 13,
+   "phase": "nurture",
+   "timing": {
+    "mode": "signup-days",
+    "days": 1,
+    "time": "11:00",
+    "label": "J+1 après l'inscription · 11h00"
+   },
+   "conditions": [
+    "Programmé à l'inscription. Sauté si la date tombe un jour de rappel, le jour du live, ou est déjà passée (1 e-mail par jour maximum avant le live)."
+   ],
+   "subject": "Parlons de votre rémunération.",
+   "preheader": "Votre planning sera chargé. On le sait.",
+   "snippet": "Vous êtes inscrit à notre webinaire pour optimiser les charges sociales et fiscales de votre société. Mais entre l'inscription et le jour J, beaucoup de choses vont arriver. 10 h 40. Un salarié absent. 11 h 10. Un planni",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_nov17_remuneration"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "iCalendar",
+     "href": "https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Google",
+     "href": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Outlook",
+     "href": "https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Yahoo",
+     "href": "https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Parlons de votre rémunération.</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"overflow:hidden;max-height:0;max-width:0;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;\">Votre planning sera chargé. On le sait.&nbsp;&zwnj;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 16px;\">Vous êtes inscrit à notre webinaire pour optimiser les charges sociales et fiscales de votre société.</p>\n    <p style=\"margin:0 0 16px;\"><strong>Mais entre l'inscription et le jour J, beaucoup de choses vont arriver.</strong></p>\n    <p style=\"margin:0 0 4px;\">10&nbsp;h&nbsp;40. Un salarié absent.</p><p style=\"margin:0 0 4px;\">11&nbsp;h&nbsp;10. Un planning à refaire.</p><p style=\"margin:0 0 16px;\">11&nbsp;h&nbsp;30. «&nbsp;Tant pis, je verrai ça la prochaine fois.&nbsp;»</p>\n    <p style=\"margin:0 0 16px;\">C'est le quotidien d'un dirigeant.</p>\n    <p style=\"margin:0 0 16px;\">Nous vous conseillons de <strong>bloquer dès maintenant ce créneau dans votre agenda</strong>.</p>\n    <p style=\"margin:0 0 16px;\">Nous évoquerons tous les sujets importants&nbsp;: charges sociales, fiscalité, rémunération du dirigeant et leviers jamais utilisés.</p>\n    <p style=\"margin:0 0 16px;\">Au milieu des urgences quotidiennes, ce sont ces sujets-là que l'on repousse.</p>\n    <p style=\"margin:0 0 4px;\">🗓 <strong>Le 17 novembre à 11&nbsp;h</strong></p><p style=\"margin:0 0 22px;\">🎥 <strong>Pas de replay</strong></p>\n    <p style=\"margin:0 0 14px;\">À bientôt,</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 8px;\">\n      <tr>\n        <td style=\"vertical-align:middle;padding-right:14px;\">\n          <img src=\"https://d1yei2z3i6k35z.cloudfront.net/14020886/69ef7339b55386.73306775_2.png\" alt=\"Paul Faucomprez\" width=\"56\" height=\"56\" style=\"display:block;border-radius:50%;object-fit:cover;\">\n        </td>\n        <td style=\"vertical-align:middle;\">\n          <p style=\"margin:0;font-weight:bold;\">Paul Faucomprez</p>\n          <p style=\"margin:0;color:#5b6577;font-size:14px;\">Fondateur &amp; CEO, Owner Technology</p>\n        </td>\n      </tr>\n    </table>\n  </div>\n  <div style=\"max-width:640px;margin:0 auto;padding:0 20px 24px;\"><p style=\"margin:0;font-size:14px;color:#555555;\">PS&nbsp;: Ajoutez dès maintenant le rendez-vous à votre agenda. Cela vous évitera qu'une urgence du quotidien vous fasse passer à côté.</p></div>\n  <div style=\"max-width:640px;margin:0 auto;padding:0 20px 24px;\"><div style=\"text-align:center;margin:34px 0 4px;\">\n    <p style=\"margin:0 0 10px;font-size:12px;letter-spacing:1.5px;color:#9aa3b2;text-transform:uppercase;\">Ajouter l'événement au calendrier :</p>\n    <a href=\"https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#111111;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">iCalendar</a><a href=\"https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#4f6ef7;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Google</a><a href=\"https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#2f6fdb;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Outlook</a><a href=\"https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#5f01d1;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Yahoo</a>\n  </div></div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    Vous êtes inscrit à notre webinaire pour optimiser les charges sociales et fiscales de votre société.\n\n    Mais entre l'inscription et le jour J, beaucoup de choses vont arriver.\n\n    10 h 40. Un salarié absent.\n11 h 10. Un planning à refaire.\n11 h 30. « Tant pis, je verrai ça la prochaine fois. »\n\n    C'est le quotidien d'un dirigeant.\n\n    Nous vous conseillons de bloquer dès maintenant ce créneau dans votre agenda.\n\n    Nous évoquerons tous les sujets importants : charges sociales, fiscalité, rémunération du dirigeant et leviers jamais utilisés.\n\n    Au milieu des urgences quotidiennes, ce sont ces sujets-là que l'on repousse.\n\n    🗓 Le 17 novembre à 11 h\n🎥 Pas de replay\n\n    À bientôt,\n\n          Paul Faucomprez\n\n          Fondateur & CEO, Owner Technology\n\n  PS : Ajoutez dès maintenant le rendez-vous à votre agenda. Cela vous évitera qu'une urgence du quotidien vous fasse passer à côté.\n\n    Ajouter l'événement au calendrier :\n\n    iCalendar : https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_IDGoogle : https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_IDOutlook : https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_IDYahoo : https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n"
+  },
+  {
+   "kind": "email_nov17_decouvrir",
+   "order": 3,
+   "sequence": "pre",
+   "sequenceIndex": 3,
+   "sequenceCount": 13,
+   "phase": "nurture",
+   "timing": {
+    "mode": "signup-days",
+    "days": 2,
+    "time": "11:00",
+    "label": "J+2 après l'inscription · 11h00"
+   },
+   "conditions": [
+    "Programmé à l'inscription. Sauté si la date tombe un jour de rappel, le jour du live, ou est déjà passée (1 e-mail par jour maximum avant le live)."
+   ],
+   "subject": "Ce que vous allez découvrir pendant le webinaire",
+   "preheader": "Si vous avez les quatre réponses, ne venez pas.",
+   "snippet": "Quatre questions pour savoir si vous devriez venir à notre webinaire du 17 novembre. Combien coûte votre rémunération à l'entreprise ? Le coût total pour l'entreprise, charges comprises. Le chiffre exact. Quand avez-vous",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_nov17_decouvrir"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "rejoindre le groupe",
+     "href": "https://chat.whatsapp.com/CODE_MASQUE?s=cl&p=a&mlu=4&ilr=4",
+     "personal": false,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "iCalendar",
+     "href": "https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Google",
+     "href": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Outlook",
+     "href": "https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Yahoo",
+     "href": "https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Ce que vous allez découvrir pendant le webinaire</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"overflow:hidden;max-height:0;max-width:0;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;\">Si vous avez les quatre réponses, ne venez pas.&nbsp;&zwnj;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 16px;\">Quatre questions pour savoir si vous devriez venir à notre webinaire du 17 novembre.</p>\n    <p style=\"margin:0 0 16px;\"><strong>Combien coûte votre rémunération à l'entreprise&nbsp;?</strong></p>\n    <p style=\"margin:0 0 16px;\">Le coût total pour l'entreprise, charges comprises. Le chiffre exact.</p>\n    <p style=\"margin:0 0 16px;\"><strong>Quand avez-vous arbitré entre salaire et dividendes pour la dernière fois&nbsp;?</strong></p>\n    <p style=\"margin:0 0 16px;\">Pas augmenté. Arbitré. Avec une date.</p>\n    <p style=\"margin:0 0 16px;\"><strong>Combien de sources de rémunération utilisez-vous&nbsp;?</strong></p>\n    <p style=\"margin:0 0 16px;\">Il y en a sept. La plupart des dirigeants en utilisent une ou deux.</p>\n    <p style=\"margin:0 0 16px;\"><strong>Votre holding sert-elle à quelque chose&nbsp;?</strong></p>\n    <p style=\"margin:0 0 16px;\">Si vous n'en avez pas, en avez-vous besoin&nbsp;? Si vous en avez une, que fait-elle réellement&nbsp;?</p>\n    <p style=\"margin:0 0 16px;\"><strong>Si vous avez les quatre réponses, chiffrées et datées, votre situation est déjà travaillée. Ne venez pas.</strong></p>\n    <p style=\"margin:0 0 16px;\">Sinon, on les traite ensemble le 17 novembre à 11&nbsp;h.</p>\n    <p style=\"margin:0 0 22px;\">Le but&nbsp;: <strong>comprendre où votre société peut perdre de l'argent, et quels leviers utiliser pour le récupérer</strong>.</p>\n    <p style=\"margin:0 0 14px;\">À bientôt,</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 8px;\">\n      <tr>\n        <td style=\"vertical-align:middle;padding-right:14px;\">\n          <img src=\"https://d1yei2z3i6k35z.cloudfront.net/14020886/69ef7339b55386.73306775_2.png\" alt=\"Paul Faucomprez\" width=\"56\" height=\"56\" style=\"display:block;border-radius:50%;object-fit:cover;\">\n        </td>\n        <td style=\"vertical-align:middle;\">\n          <p style=\"margin:0;font-weight:bold;\">Paul Faucomprez</p>\n          <p style=\"margin:0;color:#5b6577;font-size:14px;\">Fondateur &amp; CEO, Owner Technology</p>\n        </td>\n      </tr>\n    </table>\n  </div>\n  <div style=\"max-width:640px;margin:0 auto;padding:0 20px 24px;\"><p style=\"margin:0;font-size:14px;color:#555555;\">PS&nbsp;: On a ouvert un groupe WhatsApp entre dirigeants qui se posent les mêmes questions&nbsp;: <a href=\"https://chat.whatsapp.com/CODE_MASQUE?s=cl&p=a&mlu=4&ilr=4\" style=\"color:#3e7d5a;font-weight:bold;text-decoration:underline;\">rejoindre le groupe</a>.</p></div>\n  <div style=\"max-width:640px;margin:0 auto;padding:0 20px 24px;\"><div style=\"text-align:center;margin:34px 0 4px;\">\n    <p style=\"margin:0 0 10px;font-size:12px;letter-spacing:1.5px;color:#9aa3b2;text-transform:uppercase;\">Ajouter l'événement au calendrier :</p>\n    <a href=\"https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#111111;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">iCalendar</a><a href=\"https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#4f6ef7;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Google</a><a href=\"https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#2f6fdb;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Outlook</a><a href=\"https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#5f01d1;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Yahoo</a>\n  </div></div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    Quatre questions pour savoir si vous devriez venir à notre webinaire du 17 novembre.\n\n    Combien coûte votre rémunération à l'entreprise ?\n\n    Le coût total pour l'entreprise, charges comprises. Le chiffre exact.\n\n    Quand avez-vous arbitré entre salaire et dividendes pour la dernière fois ?\n\n    Pas augmenté. Arbitré. Avec une date.\n\n    Combien de sources de rémunération utilisez-vous ?\n\n    Il y en a sept. La plupart des dirigeants en utilisent une ou deux.\n\n    Votre holding sert-elle à quelque chose ?\n\n    Si vous n'en avez pas, en avez-vous besoin ? Si vous en avez une, que fait-elle réellement ?\n\n    Si vous avez les quatre réponses, chiffrées et datées, votre situation est déjà travaillée. Ne venez pas.\n\n    Sinon, on les traite ensemble le 17 novembre à 11 h.\n\n    Le but : comprendre où votre société peut perdre de l'argent, et quels leviers utiliser pour le récupérer.\n\n    À bientôt,\n\n          Paul Faucomprez\n\n          Fondateur & CEO, Owner Technology\n\n  PS : On a ouvert un groupe WhatsApp entre dirigeants qui se posent les mêmes questions : rejoindre le groupe : https://chat.whatsapp.com/CODE_MASQUE?s=cl&p=a&mlu=4&ilr=4.\n\n    Ajouter l'événement au calendrier :\n\n    iCalendar : https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_IDGoogle : https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_IDOutlook : https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_IDYahoo : https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n"
+  },
+  {
+   "kind": "email_nov17_holding",
+   "order": 4,
+   "sequence": "pre",
+   "sequenceIndex": 4,
+   "sequenceCount": 13,
+   "phase": "nurture",
+   "timing": {
+    "mode": "signup-days",
+    "days": 3,
+    "time": "11:00",
+    "label": "J+3 après l'inscription · 11h00"
+   },
+   "conditions": [
+    "Programmé à l'inscription. Sauté si la date tombe un jour de rappel, le jour du live, ou est déjà passée (1 e-mail par jour maximum avant le live)."
+   ],
+   "subject": "Dirigeants de TPE/PME : une holding peut-elle avoir du sens ?",
+   "preheader": "Elle n'est pas uniquement réservée aux grands groupes.",
+   "snippet": "Beaucoup pensent que holding = plusieurs sociétés. En réalité elle peut être étudiée dans plusieurs situations : - développement d'une seconde activité - achat ou cession d'une société - circulation de trésorerie - acqui",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_nov17_holding"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "en cliquant ici",
+     "href": "https://chat.whatsapp.com/CODE_MASQUE?s=cl&p=a&mlu=4&ilr=4",
+     "personal": false,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "iCalendar",
+     "href": "https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Google",
+     "href": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Outlook",
+     "href": "https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Yahoo",
+     "href": "https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Dirigeants de TPE/PME : une holding peut-elle avoir du sens ?</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"overflow:hidden;max-height:0;max-width:0;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;\">Elle n'est pas uniquement réservée aux grands groupes.&nbsp;&zwnj;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 16px;\">Beaucoup pensent que holding = plusieurs sociétés.</p>\n    <p style=\"margin:0 0 8px;\"><strong>En réalité elle peut être étudiée dans plusieurs situations</strong>&nbsp;:</p>\n    <ul style=\"margin:0 0 18px;padding-left:22px;\"><li style=\"margin:0 0 6px;\">développement d'une seconde activité</li><li style=\"margin:0 0 6px;\">achat ou cession d'une société</li><li style=\"margin:0 0 6px;\">circulation de trésorerie</li><li style=\"margin:0 0 6px;\">acquisition de locaux</li><li style=\"margin:0 0 6px;\">structuration patrimoniale</li><li style=\"margin:0 0 6px;\">préparation d'une transmission</li><li style=\"margin:0 0 6px;\">investissement immobilier.</li></ul>\n    <p style=\"margin:0 0 4px;\">La vraie question n'est pas&nbsp;:</p><p style=\"margin:0 0 16px;\">«&nbsp;Est-ce que j'ai assez de sociétés pour créer une holding&nbsp;?&nbsp;»</p>\n    <p style=\"margin:0 0 4px;\">Mais&nbsp;:</p><p style=\"margin:0 0 16px;\">«&nbsp;Est-ce que ma structure actuelle est adaptée à mes objectifs&nbsp;?&nbsp;»</p>\n    <p style=\"margin:0 0 22px;\"><strong>Notre webinaire du 17 novembre à 11&nbsp;h permet d'y répondre.</strong></p>\n    <p style=\"margin:0 0 14px;\">À bientôt,</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 8px;\">\n      <tr>\n        <td style=\"vertical-align:middle;padding-right:14px;\">\n          <img src=\"https://d1yei2z3i6k35z.cloudfront.net/14020886/69ef7339b55386.73306775_2.png\" alt=\"Paul Faucomprez\" width=\"56\" height=\"56\" style=\"display:block;border-radius:50%;object-fit:cover;\">\n        </td>\n        <td style=\"vertical-align:middle;\">\n          <p style=\"margin:0;font-weight:bold;\">Paul Faucomprez</p>\n          <p style=\"margin:0;color:#5b6577;font-size:14px;\">Fondateur &amp; CEO, Owner Technology</p>\n        </td>\n      </tr>\n    </table>\n  </div>\n  <div style=\"max-width:640px;margin:0 auto;padding:0 20px 24px;\"><p style=\"margin:0;font-size:14px;color:#555555;\">PS&nbsp;: Pour échanger avec d'autres dirigeants qui se posent la même question, rejoignez notre groupe WhatsApp <a href=\"https://chat.whatsapp.com/CODE_MASQUE?s=cl&p=a&mlu=4&ilr=4\" style=\"color:#3e7d5a;font-weight:bold;text-decoration:underline;\">en cliquant ici</a>.</p></div>\n  <div style=\"max-width:640px;margin:0 auto;padding:0 20px 24px;\"><div style=\"text-align:center;margin:34px 0 4px;\">\n    <p style=\"margin:0 0 10px;font-size:12px;letter-spacing:1.5px;color:#9aa3b2;text-transform:uppercase;\">Ajouter l'événement au calendrier :</p>\n    <a href=\"https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#111111;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">iCalendar</a><a href=\"https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#4f6ef7;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Google</a><a href=\"https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#2f6fdb;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Outlook</a><a href=\"https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#5f01d1;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Yahoo</a>\n  </div></div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    Beaucoup pensent que holding = plusieurs sociétés.\n\n    En réalité elle peut être étudiée dans plusieurs situations :\n\n- développement d'une seconde activité\n\n- achat ou cession d'une société\n\n- circulation de trésorerie\n\n- acquisition de locaux\n\n- structuration patrimoniale\n\n- préparation d'une transmission\n\n- investissement immobilier.\n\n    La vraie question n'est pas :\n« Est-ce que j'ai assez de sociétés pour créer une holding ? »\n\n    Mais :\n« Est-ce que ma structure actuelle est adaptée à mes objectifs ? »\n\n    Notre webinaire du 17 novembre à 11 h permet d'y répondre.\n\n    À bientôt,\n\n          Paul Faucomprez\n\n          Fondateur & CEO, Owner Technology\n\n  PS : Pour échanger avec d'autres dirigeants qui se posent la même question, rejoignez notre groupe WhatsApp en cliquant ici : https://chat.whatsapp.com/CODE_MASQUE?s=cl&p=a&mlu=4&ilr=4.\n\n    Ajouter l'événement au calendrier :\n\n    iCalendar : https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_IDGoogle : https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_IDOutlook : https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_IDYahoo : https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n"
+  },
+  {
+   "kind": "email_nov17_simulateur",
+   "order": 5,
+   "sequence": "pre",
+   "sequenceIndex": 5,
+   "sequenceCount": 13,
+   "phase": "nurture",
+   "timing": {
+    "mode": "signup-days",
+    "days": 4,
+    "time": "11:00",
+    "label": "J+4 après l'inscription · 11h00"
+   },
+   "conditions": [
+    "Programmé à l'inscription. Sauté si la date tombe un jour de rappel, le jour du live, ou est déjà passée (1 e-mail par jour maximum avant le live)."
+   ],
+   "subject": "Redevance de marque - Simulateur",
+   "preheader": "Trois conditions. Deux minutes. Un chiffre.",
+   "snippet": "Le 17 novembre, nous aborderons un levier puissant mais sous-exploité par les dirigeants. Votre société paie ses véhicules. Elle paie son local. Ses salaires. Ses logiciels. Mais elle ne paie pas pour la marque qu'elle u",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_nov17_simulateur"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "JE FAIS LE TEST",
+     "href": "https://webinaire.ownertechnology.com/simulateur-redevance-marque.html",
+     "personal": false,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "iCalendar",
+     "href": "https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Google",
+     "href": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Outlook",
+     "href": "https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Yahoo",
+     "href": "https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Redevance de marque - Simulateur</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"overflow:hidden;max-height:0;max-width:0;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;\">Trois conditions. Deux minutes. Un chiffre.&nbsp;&zwnj;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 16px;\">Le 17 novembre, nous aborderons <strong>un levier puissant mais sous-exploité par les dirigeants</strong>.</p>\n    <p style=\"margin:0 0 16px;\">Votre société paie ses véhicules.</p>\n    <p style=\"margin:0 0 16px;\">Elle paie son local. Ses salaires. Ses logiciels.</p>\n    <p style=\"margin:0 0 16px;\">Mais elle ne paie pas pour la marque qu'elle utilise.</p>\n    <p style=\"margin:0 0 16px;\">Une marque, c'est un actif&nbsp;: soit vous en êtes propriétaire, soit vous en êtes locataire.</p>\n    <p style=\"margin:0 0 16px;\"><strong>Ça s'appelle une licence de marque</strong>. Vous détenez le nom. Votre société vous verse une redevance pour l'utiliser.</p>\n    <p style=\"margin:0 0 16px;\">Pour la société, c'est une charge qui sort du résultat.</p>\n    <p style=\"margin:0 0 16px;\">Pour vous, c'est de l'argent qui ne subit pas le traitement d'un salaire.</p>\n    <p style=\"margin:0 0 16px;\">Alors pourquoi tout le monde ne le fait pas&nbsp;?</p>\n    <p style=\"margin:0 0 16px;\"><strong>Parce qu'il y a trois conditions</strong>.</p>\n    <p style=\"margin:0 0 16px;\">La marque doit être déposée à l'INPI à votre nom. Pas à celui de la société.</p>\n    <p style=\"margin:0 0 16px;\">Il faut un contrat écrit, signé avant le premier versement. Pas après.</p>\n    <p style=\"margin:0 0 16px;\">Et le montant doit tenir la route au regard de ce qui se pratique dans votre secteur.</p>\n    <p style=\"margin:0 0 16px;\">Les grands groupes font ça depuis quarante ans.</p>\n    <p style=\"margin:0 0 16px;\"><strong>Nous avons créé un simulateur</strong>.</p>\n    <p style=\"margin:0 0 16px;\">En deux minutes vous obtenez une fourchette de ce que vous pourriez vous verser.</p>\n    <p style=\"margin:0 0 6px;\">Puis l'écart avec ce que la même somme vous coûterait en salaire.</p>\n    <p style=\"margin:26px 0;\"><a href=\"https://webinaire.ownertechnology.com/simulateur-redevance-marque.html\" style=\"display:inline-block;background:#3e7d5a;color:#ffffff;font-weight:bold;font-size:16px;padding:13px 26px;border-radius:8px;text-decoration:none;\">JE FAIS LE TEST</a></p>\n    <p style=\"margin:0 0 14px;\">À bientôt,</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 8px;\">\n      <tr>\n        <td style=\"vertical-align:middle;padding-right:14px;\">\n          <img src=\"https://d1yei2z3i6k35z.cloudfront.net/14020886/69ef7339b55386.73306775_2.png\" alt=\"Paul Faucomprez\" width=\"56\" height=\"56\" style=\"display:block;border-radius:50%;object-fit:cover;\">\n        </td>\n        <td style=\"vertical-align:middle;\">\n          <p style=\"margin:0;font-weight:bold;\">Paul Faucomprez</p>\n          <p style=\"margin:0;color:#5b6577;font-size:14px;\">Fondateur &amp; CEO, Owner Technology</p>\n        </td>\n      </tr>\n    </table>\n  </div>\n  <div style=\"max-width:640px;margin:0 auto;padding:0 20px 24px;\"><p style=\"margin:0;font-size:14px;color:#555555;\">PS&nbsp;: Nous étudierons ce levier en détail lors du webinaire.</p></div>\n  <div style=\"max-width:640px;margin:0 auto;padding:0 20px 24px;\"><div style=\"text-align:center;margin:34px 0 4px;\">\n    <p style=\"margin:0 0 10px;font-size:12px;letter-spacing:1.5px;color:#9aa3b2;text-transform:uppercase;\">Ajouter l'événement au calendrier :</p>\n    <a href=\"https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#111111;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">iCalendar</a><a href=\"https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#4f6ef7;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Google</a><a href=\"https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#2f6fdb;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Outlook</a><a href=\"https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#5f01d1;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Yahoo</a>\n  </div></div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    Le 17 novembre, nous aborderons un levier puissant mais sous-exploité par les dirigeants.\n\n    Votre société paie ses véhicules.\n\n    Elle paie son local. Ses salaires. Ses logiciels.\n\n    Mais elle ne paie pas pour la marque qu'elle utilise.\n\n    Une marque, c'est un actif : soit vous en êtes propriétaire, soit vous en êtes locataire.\n\n    Ça s'appelle une licence de marque. Vous détenez le nom. Votre société vous verse une redevance pour l'utiliser.\n\n    Pour la société, c'est une charge qui sort du résultat.\n\n    Pour vous, c'est de l'argent qui ne subit pas le traitement d'un salaire.\n\n    Alors pourquoi tout le monde ne le fait pas ?\n\n    Parce qu'il y a trois conditions.\n\n    La marque doit être déposée à l'INPI à votre nom. Pas à celui de la société.\n\n    Il faut un contrat écrit, signé avant le premier versement. Pas après.\n\n    Et le montant doit tenir la route au regard de ce qui se pratique dans votre secteur.\n\n    Les grands groupes font ça depuis quarante ans.\n\n    Nous avons créé un simulateur.\n\n    En deux minutes vous obtenez une fourchette de ce que vous pourriez vous verser.\n\n    Puis l'écart avec ce que la même somme vous coûterait en salaire.\n\n    JE FAIS LE TEST : https://webinaire.ownertechnology.com/simulateur-redevance-marque.html\n\n    À bientôt,\n\n          Paul Faucomprez\n\n          Fondateur & CEO, Owner Technology\n\n  PS : Nous étudierons ce levier en détail lors du webinaire.\n\n    Ajouter l'événement au calendrier :\n\n    iCalendar : https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_IDGoogle : https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_IDOutlook : https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_IDYahoo : https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n"
+  },
+  {
+   "kind": "email_nov17_pertes",
+   "order": 6,
+   "sequence": "pre",
+   "sequenceIndex": 6,
+   "sequenceCount": 13,
+   "phase": "nurture",
+   "timing": {
+    "mode": "signup-days",
+    "days": 5,
+    "time": "11:00",
+    "label": "J+5 après l'inscription · 11h00"
+   },
+   "conditions": [
+    "Programmé à l'inscription. Sauté si la date tombe un jour de rappel, le jour du live, ou est déjà passée (1 e-mail par jour maximum avant le live)."
+   ],
+   "subject": "Dirigeants : combien perdez-vous chaque année sans le savoir ?",
+   "preheader": "Charges élevées, rémunération mal structurée...",
+   "snippet": "La question la plus importante que nous allons aborder lors du webinaire est celle-ci : Combien d'argent perdez-vous chaque année sans le savoir ? - charges sociales élevées - rémunération du dirigeant mal structurée - r",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_nov17_pertes"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "iCalendar",
+     "href": "https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Google",
+     "href": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Outlook",
+     "href": "https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Yahoo",
+     "href": "https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Dirigeants : combien perdez-vous chaque année sans le savoir ?</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"overflow:hidden;max-height:0;max-width:0;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;\">Charges élevées, rémunération mal structurée...&nbsp;&zwnj;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 16px;\">La question la plus importante que nous allons aborder lors du webinaire est celle-ci&nbsp;:</p>\n    <p style=\"margin:0 0 8px;\"><strong>Combien d'argent perdez-vous chaque année sans le savoir&nbsp;?</strong></p>\n    <ul style=\"margin:0 0 18px;padding-left:22px;\"><li style=\"margin:0 0 6px;\">charges sociales élevées</li><li style=\"margin:0 0 6px;\">rémunération du dirigeant mal structurée</li><li style=\"margin:0 0 6px;\">redevance de marque inexploitée</li><li style=\"margin:0 0 6px;\">holding inexistante ou mal utilisée</li><li style=\"margin:0 0 6px;\">patrimoine personnel et professionnel mal articulés</li></ul>\n    <p style=\"margin:0 0 16px;\">Ces pertes ne sautent pas aux yeux dans un bilan comptable.</p>\n    <p style=\"margin:0 0 16px;\">Il faut les rechercher activement.</p>\n    <p style=\"margin:0 0 22px;\"><strong>C'est précisément l'objectif de notre webinaire du 17 novembre à 11&nbsp;h.</strong></p>\n    <p style=\"margin:0 0 14px;\">À bientôt,</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 8px;\">\n      <tr>\n        <td style=\"vertical-align:middle;padding-right:14px;\">\n          <img src=\"https://d1yei2z3i6k35z.cloudfront.net/14020886/69ef7339b55386.73306775_2.png\" alt=\"Paul Faucomprez\" width=\"56\" height=\"56\" style=\"display:block;border-radius:50%;object-fit:cover;\">\n        </td>\n        <td style=\"vertical-align:middle;\">\n          <p style=\"margin:0;font-weight:bold;\">Paul Faucomprez</p>\n          <p style=\"margin:0;color:#5b6577;font-size:14px;\">Fondateur &amp; CEO, Owner Technology</p>\n        </td>\n      </tr>\n    </table>\n  </div>\n  <div style=\"max-width:640px;margin:0 auto;padding:0 20px 24px;\"><p style=\"margin:0;font-size:14px;color:#555555;\">PS&nbsp;: Le plus dangereux avec ces pertes, c'est qu'elles finissent par paraître normales.</p></div>\n  <div style=\"max-width:640px;margin:0 auto;padding:0 20px 24px;\"><div style=\"text-align:center;margin:34px 0 4px;\">\n    <p style=\"margin:0 0 10px;font-size:12px;letter-spacing:1.5px;color:#9aa3b2;text-transform:uppercase;\">Ajouter l'événement au calendrier :</p>\n    <a href=\"https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#111111;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">iCalendar</a><a href=\"https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#4f6ef7;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Google</a><a href=\"https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#2f6fdb;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Outlook</a><a href=\"https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#5f01d1;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Yahoo</a>\n  </div></div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    La question la plus importante que nous allons aborder lors du webinaire est celle-ci :\n\n    Combien d'argent perdez-vous chaque année sans le savoir ?\n\n- charges sociales élevées\n\n- rémunération du dirigeant mal structurée\n\n- redevance de marque inexploitée\n\n- holding inexistante ou mal utilisée\n\n- patrimoine personnel et professionnel mal articulés\n\n    Ces pertes ne sautent pas aux yeux dans un bilan comptable.\n\n    Il faut les rechercher activement.\n\n    C'est précisément l'objectif de notre webinaire du 17 novembre à 11 h.\n\n    À bientôt,\n\n          Paul Faucomprez\n\n          Fondateur & CEO, Owner Technology\n\n  PS : Le plus dangereux avec ces pertes, c'est qu'elles finissent par paraître normales.\n\n    Ajouter l'événement au calendrier :\n\n    iCalendar : https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_IDGoogle : https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_IDOutlook : https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_IDYahoo : https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n"
+  },
+  {
+   "kind": "email_nov17_j7",
+   "order": 7,
+   "sequence": "pre",
+   "sequenceIndex": 7,
+   "sequenceCount": 13,
+   "phase": "reminder",
+   "timing": {
+    "mode": "calendar",
+    "at": "2026-11-10T11:00:00+01:00"
+   },
+   "conditions": [
+    "Ancre calendaire commune à toute la cohorte : sauté pour un inscrit arrivé après cette date."
+   ],
+   "subject": "[RAPPEL] - Dernière ligne droite",
+   "preheader": "Rendez-vous dans 7 jours.",
+   "snippet": "Dans 7 jours, je vous montre comment optimiser vos charges sociales et fiscales. Les coûts pèsent sur votre rentabilité : masse salariale, véhicules, loyers… Mais certaines pertes sont invisibles. Elles peuvent venir d'u",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_nov17_j7"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "cliquez ici",
+     "href": "https://webinaire.ownertechnology.com/r/EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "iCalendar",
+     "href": "https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Google",
+     "href": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Outlook",
+     "href": "https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Yahoo",
+     "href": "https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>[RAPPEL] - Dernière ligne droite</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"overflow:hidden;max-height:0;max-width:0;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;\">Rendez-vous dans 7 jours.&nbsp;&zwnj;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 16px;\"><strong>Dans 7 jours, je vous montre comment optimiser vos charges sociales et fiscales.</strong></p>\n    <p style=\"margin:0 0 16px;\">Les coûts pèsent sur votre rentabilité&nbsp;: masse salariale, véhicules, loyers…</p>\n    <p style=\"margin:0 0 16px;\">Mais certaines pertes sont invisibles.</p>\n    <p style=\"margin:0 0 16px;\">Elles peuvent venir d'une rémunération mal structurée, d'une holding inexistante, ou encore de leviers comme le bureau professionnel ou la redevance de marque jamais étudiés.</p>\n    <p style=\"margin:0 0 16px;\">C'est précisément ce que nous allons aborder pendant le webinaire.</p>\n    <p style=\"margin:0 0 4px;\">🗓 <strong>Date</strong>&nbsp;: Le 17 novembre à 11&nbsp;h</p>\n    <p style=\"margin:0 0 22px;\">🔗 <strong>Lien de connexion</strong>&nbsp;: <a href=\"https://webinaire.ownertechnology.com/r/EVENT_ID\" style=\"color:#3e7d5a;font-weight:bold;text-decoration:underline;\">cliquez ici</a></p>\n    <p style=\"margin:0 0 14px;\">À bientôt,</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 8px;\">\n      <tr>\n        <td style=\"vertical-align:middle;padding-right:14px;\">\n          <img src=\"https://d1yei2z3i6k35z.cloudfront.net/14020886/69ef7339b55386.73306775_2.png\" alt=\"Paul Faucomprez\" width=\"56\" height=\"56\" style=\"display:block;border-radius:50%;object-fit:cover;\">\n        </td>\n        <td style=\"vertical-align:middle;\">\n          <p style=\"margin:0;font-weight:bold;\">Paul Faucomprez</p>\n          <p style=\"margin:0;color:#5b6577;font-size:14px;\">Fondateur &amp; CEO, Owner Technology</p>\n        </td>\n      </tr>\n    </table>\n  </div>\n  <div style=\"max-width:640px;margin:0 auto;padding:0 20px 24px;\"><p style=\"margin:0;font-size:14px;color:#555555;\">PS&nbsp;: Il n'y aura pas de replay. Bloquez dès maintenant le créneau dans votre agenda.</p></div>\n  <div style=\"max-width:640px;margin:0 auto;padding:0 20px 24px;\"><div style=\"text-align:center;margin:34px 0 4px;\">\n    <p style=\"margin:0 0 10px;font-size:12px;letter-spacing:1.5px;color:#9aa3b2;text-transform:uppercase;\">Ajouter l'événement au calendrier :</p>\n    <a href=\"https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#111111;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">iCalendar</a><a href=\"https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#4f6ef7;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Google</a><a href=\"https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#2f6fdb;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Outlook</a><a href=\"https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#5f01d1;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Yahoo</a>\n  </div></div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    Dans 7 jours, je vous montre comment optimiser vos charges sociales et fiscales.\n\n    Les coûts pèsent sur votre rentabilité : masse salariale, véhicules, loyers…\n\n    Mais certaines pertes sont invisibles.\n\n    Elles peuvent venir d'une rémunération mal structurée, d'une holding inexistante, ou encore de leviers comme le bureau professionnel ou la redevance de marque jamais étudiés.\n\n    C'est précisément ce que nous allons aborder pendant le webinaire.\n\n    🗓 Date : Le 17 novembre à 11 h\n\n    🔗 Lien de connexion : cliquez ici : https://webinaire.ownertechnology.com/r/EVENT_ID\n\n    À bientôt,\n\n          Paul Faucomprez\n\n          Fondateur & CEO, Owner Technology\n\n  PS : Il n'y aura pas de replay. Bloquez dès maintenant le créneau dans votre agenda.\n\n    Ajouter l'événement au calendrier :\n\n    iCalendar : https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_IDGoogle : https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_IDOutlook : https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_IDYahoo : https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n"
+  },
+  {
+   "kind": "email_nov17_j3",
+   "order": 8,
+   "sequence": "pre",
+   "sequenceIndex": 8,
+   "sequenceCount": 13,
+   "phase": "reminder",
+   "timing": {
+    "mode": "calendar",
+    "at": "2026-11-14T11:00:00+01:00"
+   },
+   "conditions": [
+    "Ancre calendaire commune à toute la cohorte : sauté pour un inscrit arrivé après cette date."
+   ],
+   "subject": "Confirmez votre présence au webinaire.",
+   "preheader": "Découvrez les leviers indispensables pour votre société.",
+   "snippet": "Notre webinaire a lieu dans 3 jours. Programme : N°1 - Optimiser votre rémunération. Pourquoi la rémunération classique est rarement la bonne. N°2 - Comparez l'avant et l'après d'une optimisation fiscale. Avec l'interven",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_nov17_j3"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "JE CONFIRME MA PRÉSENCE",
+     "href": "https://webinaire.ownertechnology.com/inscription-confirmee?eid=EVENT_ID&w=webinar-2026-11-17",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "cliquez ici",
+     "href": "https://webinaire.ownertechnology.com/r/EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "iCalendar",
+     "href": "https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Google",
+     "href": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Outlook",
+     "href": "https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Yahoo",
+     "href": "https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Confirmez votre présence au webinaire.</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"overflow:hidden;max-height:0;max-width:0;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;\">Découvrez les leviers indispensables pour votre société.&nbsp;&zwnj;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 16px;\">Notre webinaire a lieu dans 3 jours.</p>\n    <p style=\"margin:0 0 16px;\">Programme&nbsp;:</p>\n    <p style=\"margin:0 0 16px;\"><strong>N°1 - Optimiser votre rémunération.</strong> Pourquoi la rémunération classique est rarement la bonne.</p>\n    <p style=\"margin:0 0 16px;\"><strong>N°2 - Comparez l'avant et l'après d'une optimisation fiscale.</strong> Avec l'intervention de Maître Bouchareb, expert en droit fiscal.</p>\n    <p style=\"margin:0 0 16px;\"><strong>N°3 - Structurer correctement votre société.</strong> Les erreurs qui coûtent des milliers d'euros.</p>\n    <p style=\"margin:0 0 16px;\">Une dernière chose.</p>\n    <p style=\"margin:0 0 16px;\">Nous avons reçu <strong>plus d'inscriptions que prévu</strong> pour cette session.</p>\n    <p style=\"margin:0 0 6px;\">Afin de pouvoir organiser le direct dans les meilleures conditions, nous demandons aux inscrits de confirmer leur présence.</p>\n    <p style=\"margin:26px 0;\"><a href=\"https://webinaire.ownertechnology.com/inscription-confirmee?eid=EVENT_ID&w=webinar-2026-11-17\" style=\"display:inline-block;background:#3e7d5a;color:#ffffff;font-weight:bold;font-size:16px;padding:13px 26px;border-radius:8px;text-decoration:none;\">JE CONFIRME MA PRÉSENCE</a></p>\n    <p style=\"margin:0 0 4px;\">🗓 <strong>Date</strong>&nbsp;: Le 17 novembre à 11&nbsp;h</p>\n    <p style=\"margin:0 0 22px;\">🔗 <strong>Lien de connexion</strong>&nbsp;: <a href=\"https://webinaire.ownertechnology.com/r/EVENT_ID\" style=\"color:#3e7d5a;font-weight:bold;text-decoration:underline;\">cliquez ici</a></p>\n    <p style=\"margin:0 0 14px;\">À bientôt,</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 8px;\">\n      <tr>\n        <td style=\"vertical-align:middle;padding-right:14px;\">\n          <img src=\"https://d1yei2z3i6k35z.cloudfront.net/14020886/69ef7339b55386.73306775_2.png\" alt=\"Paul Faucomprez\" width=\"56\" height=\"56\" style=\"display:block;border-radius:50%;object-fit:cover;\">\n        </td>\n        <td style=\"vertical-align:middle;\">\n          <p style=\"margin:0;font-weight:bold;\">Paul Faucomprez</p>\n          <p style=\"margin:0;color:#5b6577;font-size:14px;\">Fondateur &amp; CEO, Owner Technology</p>\n        </td>\n      </tr>\n    </table>\n  </div>\n  <div style=\"max-width:640px;margin:0 auto;padding:0 20px 24px;\"><div style=\"text-align:center;margin:34px 0 4px;\">\n    <p style=\"margin:0 0 10px;font-size:12px;letter-spacing:1.5px;color:#9aa3b2;text-transform:uppercase;\">Ajouter l'événement au calendrier :</p>\n    <a href=\"https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#111111;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">iCalendar</a><a href=\"https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#4f6ef7;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Google</a><a href=\"https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#2f6fdb;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Outlook</a><a href=\"https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#5f01d1;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Yahoo</a>\n  </div></div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    Notre webinaire a lieu dans 3 jours.\n\n    Programme :\n\n    N°1 - Optimiser votre rémunération. Pourquoi la rémunération classique est rarement la bonne.\n\n    N°2 - Comparez l'avant et l'après d'une optimisation fiscale. Avec l'intervention de Maître Bouchareb, expert en droit fiscal.\n\n    N°3 - Structurer correctement votre société. Les erreurs qui coûtent des milliers d'euros.\n\n    Une dernière chose.\n\n    Nous avons reçu plus d'inscriptions que prévu pour cette session.\n\n    Afin de pouvoir organiser le direct dans les meilleures conditions, nous demandons aux inscrits de confirmer leur présence.\n\n    JE CONFIRME MA PRÉSENCE : https://webinaire.ownertechnology.com/inscription-confirmee?eid=EVENT_ID&w=webinar-2026-11-17\n\n    🗓 Date : Le 17 novembre à 11 h\n\n    🔗 Lien de connexion : cliquez ici : https://webinaire.ownertechnology.com/r/EVENT_ID\n\n    À bientôt,\n\n          Paul Faucomprez\n\n          Fondateur & CEO, Owner Technology\n\n    Ajouter l'événement au calendrier :\n\n    iCalendar : https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_IDGoogle : https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_IDOutlook : https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_IDYahoo : https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n"
+  },
+  {
+   "kind": "email_nov17_j1",
+   "order": 9,
+   "sequence": "pre",
+   "sequenceIndex": 9,
+   "sequenceCount": 13,
+   "phase": "reminder",
+   "timing": {
+    "mode": "calendar",
+    "at": "2026-11-16T18:00:00+01:00"
+   },
+   "conditions": [
+    "Ancre calendaire commune à toute la cohorte : sauté pour un inscrit arrivé après cette date."
+   ],
+   "subject": "Demain : webinaire spécial dirigeants de TPE/PME",
+   "preheader": "Voici votre lien de connexion",
+   "snippet": "Le webinaire a lieu demain à 11 h. 🔗 Lien de connexion : cliquez ici : https://webinaire.ownertechnology.com/r/EVENT_ID Nous verrons comment arrêter de se faire sur-taxer. Vous créez de la valeur. On vous aide à la gard",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_nov17_j1"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "cliquez ici",
+     "href": "https://webinaire.ownertechnology.com/r/EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "en cliquant ici",
+     "href": "https://chat.whatsapp.com/CODE_MASQUE?s=cl&p=a&mlu=4&ilr=4",
+     "personal": false,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "iCalendar",
+     "href": "https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Google",
+     "href": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Outlook",
+     "href": "https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Yahoo",
+     "href": "https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Demain : webinaire spécial dirigeants de TPE/PME</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"overflow:hidden;max-height:0;max-width:0;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;\">Voici votre lien de connexion&nbsp;&zwnj;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 16px;\">Le webinaire a lieu demain à 11&nbsp;h.</p>\n    <p style=\"margin:0 0 16px;\">🔗 <strong>Lien de connexion</strong>&nbsp;: <a href=\"https://webinaire.ownertechnology.com/r/EVENT_ID\" style=\"color:#3e7d5a;font-weight:bold;text-decoration:underline;\">cliquez ici</a></p>\n    <p style=\"margin:0 0 16px;\">Nous verrons comment arrêter de se faire sur-taxer.</p>\n    <p style=\"margin:0 0 16px;\">Vous créez de la valeur. On vous aide à la garder.</p>\n    <p style=\"margin:0 0 16px;\">Nous parlerons&nbsp;:</p>\n    <p style=\"margin:0 0 8px;\"><strong>N°1 - Optimisation de votre rémunération.</strong></p>\n    <p style=\"margin:0 0 8px;\"><strong>N°2 - Comparaison entre l'avant et l'après optimisation fiscale.</strong></p>\n    <p style=\"margin:0 0 16px;\"><strong>N°3 - Structuration de votre société.</strong></p>\n    <p style=\"margin:0 0 16px;\">🚨 Important&nbsp;:</p>\n    <p style=\"margin:0 0 16px;\">Nous ne diffusons jamais de replay après nos masterclass donc bloquez bien le créneau.</p>\n    <p style=\"margin:0 0 22px;\">Et si ce n'est pas encore fait rejoignez notre groupe WhatsApp <a href=\"https://chat.whatsapp.com/CODE_MASQUE?s=cl&p=a&mlu=4&ilr=4\" style=\"color:#3e7d5a;font-weight:bold;text-decoration:underline;\">en cliquant ici</a>.</p>\n    <p style=\"margin:0 0 14px;\">À demain,</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 8px;\">\n      <tr>\n        <td style=\"vertical-align:middle;padding-right:14px;\">\n          <img src=\"https://d1yei2z3i6k35z.cloudfront.net/14020886/69ef7339b55386.73306775_2.png\" alt=\"Paul Faucomprez\" width=\"56\" height=\"56\" style=\"display:block;border-radius:50%;object-fit:cover;\">\n        </td>\n        <td style=\"vertical-align:middle;\">\n          <p style=\"margin:0;font-weight:bold;\">Paul Faucomprez</p>\n          <p style=\"margin:0;color:#5b6577;font-size:14px;\">Fondateur &amp; CEO, Owner Technology</p>\n        </td>\n      </tr>\n    </table>\n  </div>\n  <div style=\"max-width:640px;margin:0 auto;padding:0 20px 24px;\"><div style=\"text-align:center;margin:34px 0 4px;\">\n    <p style=\"margin:0 0 10px;font-size:12px;letter-spacing:1.5px;color:#9aa3b2;text-transform:uppercase;\">Ajouter l'événement au calendrier :</p>\n    <a href=\"https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#111111;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">iCalendar</a><a href=\"https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#4f6ef7;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Google</a><a href=\"https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#2f6fdb;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Outlook</a><a href=\"https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\" target=\"_blank\" style=\"display:inline-block;margin:4px;padding:11px 18px;border-radius:8px;background:#5f01d1;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;\">Yahoo</a>\n  </div></div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    Le webinaire a lieu demain à 11 h.\n\n    🔗 Lien de connexion : cliquez ici : https://webinaire.ownertechnology.com/r/EVENT_ID\n\n    Nous verrons comment arrêter de se faire sur-taxer.\n\n    Vous créez de la valeur. On vous aide à la garder.\n\n    Nous parlerons :\n\n    N°1 - Optimisation de votre rémunération.\n\n    N°2 - Comparaison entre l'avant et l'après optimisation fiscale.\n\n    N°3 - Structuration de votre société.\n\n    🚨 Important :\n\n    Nous ne diffusons jamais de replay après nos masterclass donc bloquez bien le créneau.\n\n    Et si ce n'est pas encore fait rejoignez notre groupe WhatsApp en cliquant ici : https://chat.whatsapp.com/CODE_MASQUE?s=cl&p=a&mlu=4&ilr=4.\n\n    À demain,\n\n          Paul Faucomprez\n\n          Fondateur & CEO, Owner Technology\n\n    Ajouter l'événement au calendrier :\n\n    iCalendar : https://webinaire.ownertechnology.com/api/calendar?eid=EVENT_IDGoogle : https://calendar.google.com/calendar/render?action=TEMPLATE&text=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&dates=20261117T100000Z/20261117T113000Z&details=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_IDOutlook : https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&startdt=2026-11-17T10:00:00Z&enddt=2026-11-17T11:30:00Z&body=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&location=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_IDYahoo : https://calendar.yahoo.com/?v=60&title=Webinaire%20Owner%20%3A%20Optimisation%20des%20charges%20sociales%20et%20fiscales%20pour%20dirigeants%20de%20TPE%2FPME&st=20261117T100000Z&et=20261117T113000Z&desc=Lien%20de%20connexion%20%3A%20https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID%0A%0APendant%20cette%20session%2C%20nous%20verrons%20comment%20optimiser%20votre%20r%C3%A9mun%C3%A9ration%2C%20diminuer%20le%20co%C3%BBt%20de%20votre%20masse%20salariale%20et%20structurer%20correctement%20votre%20soci%C3%A9t%C3%A9.&in_loc=https%3A%2F%2Fwebinaire.ownertechnology.com%2Fr%2FEVENT_ID\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n"
+  },
+  {
+   "kind": "email_nov17_morning",
+   "order": 10,
+   "sequence": "pre",
+   "sequenceIndex": 10,
+   "sequenceCount": 13,
+   "phase": "liveday",
+   "timing": {
+    "mode": "calendar",
+    "at": "2026-11-17T06:30:00+01:00"
+   },
+   "conditions": [
+    "Ancre calendaire commune à toute la cohorte : sauté pour un inscrit arrivé après cette date."
+   ],
+   "subject": "Votre rendez-vous aujourd'hui à 11 h",
+   "preheader": "Votre lien de connexion est ici.",
+   "snippet": "C'est aujourd'hui à 11 h. Je vous montre comment réduire vos charges sociales et fiscales pour garder un maximum de la valeur créée par votre société. 🔗 Lien de connexion : cliquez ici : https://webinaire.ownertechnolog",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_nov17_morning"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "cliquez ici",
+     "href": "https://webinaire.ownertechnology.com/r/EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Votre rendez-vous aujourd&#39;hui à 11 h</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"overflow:hidden;max-height:0;max-width:0;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;\">Votre lien de connexion est ici.&nbsp;&zwnj;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 16px;\">C'est aujourd'hui à 11&nbsp;h.</p>\n    <p style=\"margin:0 0 16px;\">Je vous montre <strong>comment réduire vos charges sociales et fiscales pour garder un maximum de la valeur créée par votre société.</strong></p>\n    <p style=\"margin:0 0 16px;\">🔗 <strong>Lien de connexion</strong>&nbsp;: <a href=\"https://webinaire.ownertechnology.com/r/EVENT_ID\" style=\"color:#3e7d5a;font-weight:bold;text-decoration:underline;\">cliquez ici</a></p>\n    <p style=\"margin:0 0 16px;\">Les dirigeants qui prennent le temps de comprendre ces sujets prendront une longueur d'avance (la pression fiscale va s'accélérer).</p>\n    <p style=\"margin:0 0 16px;\">🚨 Important&nbsp;:</p>\n    <p style=\"margin:0 0 22px;\">Nous ne diffusons jamais de replay après nos masterclass, bloquez bien le créneau.</p>\n    <p style=\"margin:0 0 14px;\">À tout à l'heure,</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 8px;\">\n      <tr>\n        <td style=\"vertical-align:middle;padding-right:14px;\">\n          <img src=\"https://d1yei2z3i6k35z.cloudfront.net/14020886/69ef7339b55386.73306775_2.png\" alt=\"Paul Faucomprez\" width=\"56\" height=\"56\" style=\"display:block;border-radius:50%;object-fit:cover;\">\n        </td>\n        <td style=\"vertical-align:middle;\">\n          <p style=\"margin:0;font-weight:bold;\">Paul Faucomprez</p>\n          <p style=\"margin:0;color:#5b6577;font-size:14px;\">Fondateur &amp; CEO, Owner Technology</p>\n        </td>\n      </tr>\n    </table>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    C'est aujourd'hui à 11 h.\n\n    Je vous montre comment réduire vos charges sociales et fiscales pour garder un maximum de la valeur créée par votre société.\n\n    🔗 Lien de connexion : cliquez ici : https://webinaire.ownertechnology.com/r/EVENT_ID\n\n    Les dirigeants qui prennent le temps de comprendre ces sujets prendront une longueur d'avance (la pression fiscale va s'accélérer).\n\n    🚨 Important :\n\n    Nous ne diffusons jamais de replay après nos masterclass, bloquez bien le créneau.\n\n    À tout à l'heure,\n\n          Paul Faucomprez\n\n          Fondateur & CEO, Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n"
+  },
+  {
+   "kind": "email_nov17_h1",
+   "order": 11,
+   "sequence": "pre",
+   "sequenceIndex": 11,
+   "sequenceCount": 13,
+   "phase": "liveday",
+   "timing": {
+    "mode": "calendar",
+    "at": "2026-11-17T10:00:00+01:00"
+   },
+   "conditions": [
+    "Ancre calendaire commune à toute la cohorte : sauté pour un inscrit arrivé après cette date."
+   ],
+   "subject": "Le webinaire commence dans 1 heure",
+   "preheader": "Voici votre lien de connexion.",
+   "snippet": "Le webinaire sur la réduction des charges sociales et fiscales des TPE/PME commence dans 1 heure. Nous verrons comment sortir de cette pression fiscale permanente. 🔗 Lien de connexion : cliquez ici : https://webinaire.o",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_nov17_h1"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "cliquez ici",
+     "href": "https://webinaire.ownertechnology.com/r/EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Le webinaire commence dans 1 heure</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"overflow:hidden;max-height:0;max-width:0;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;\">Voici votre lien de connexion.&nbsp;&zwnj;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 16px;\">Le webinaire sur la réduction des charges sociales et fiscales des TPE/PME commence dans 1 heure.</p>\n    <p style=\"margin:0 0 16px;\">Nous verrons comment sortir de cette pression fiscale permanente.</p>\n    <p style=\"margin:0 0 22px;\">🔗 <strong>Lien de connexion</strong>&nbsp;: <a href=\"https://webinaire.ownertechnology.com/r/EVENT_ID\" style=\"color:#3e7d5a;font-weight:bold;text-decoration:underline;\">cliquez ici</a></p>\n    <p style=\"margin:0 0 14px;\">À tout à l'heure,</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 8px;\">\n      <tr>\n        <td style=\"vertical-align:middle;padding-right:14px;\">\n          <img src=\"https://d1yei2z3i6k35z.cloudfront.net/14020886/69ef7339b55386.73306775_2.png\" alt=\"Paul Faucomprez\" width=\"56\" height=\"56\" style=\"display:block;border-radius:50%;object-fit:cover;\">\n        </td>\n        <td style=\"vertical-align:middle;\">\n          <p style=\"margin:0;font-weight:bold;\">Paul Faucomprez</p>\n          <p style=\"margin:0;color:#5b6577;font-size:14px;\">Fondateur &amp; CEO, Owner Technology</p>\n        </td>\n      </tr>\n    </table>\n  </div>\n  <div style=\"max-width:640px;margin:0 auto;padding:0 20px 24px;\"><p style=\"margin:0;font-size:14px;color:#555555;\">PS&nbsp;: 🚨 Il n'y aura pas de replay.</p></div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    Le webinaire sur la réduction des charges sociales et fiscales des TPE/PME commence dans 1 heure.\n\n    Nous verrons comment sortir de cette pression fiscale permanente.\n\n    🔗 Lien de connexion : cliquez ici : https://webinaire.ownertechnology.com/r/EVENT_ID\n\n    À tout à l'heure,\n\n          Paul Faucomprez\n\n          Fondateur & CEO, Owner Technology\n\n  PS : 🚨 Il n'y aura pas de replay.\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n"
+  },
+  {
+   "kind": "email_nov17_live",
+   "order": 12,
+   "sequence": "pre",
+   "sequenceIndex": 12,
+   "sequenceCount": 13,
+   "phase": "liveday",
+   "timing": {
+    "mode": "calendar",
+    "at": "2026-11-17T11:00:00+01:00"
+   },
+   "conditions": [
+    "Ancre calendaire commune à toute la cohorte : sauté pour un inscrit arrivé après cette date."
+   ],
+   "subject": "Nous sommes en live",
+   "preheader": "Nous sommes en live.",
+   "snippet": "Nous sommes en live. Vous pouvez nous rejoindre ici : cliquez ici pour rejoindre le webinaire : https://webinaire.ownertechnology.com/r/EVENT_ID À tout de suite, Paul Faucomprez Fondateur & CEO, Owner Technology Vous rec",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_nov17_live"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "cliquez ici pour rejoindre le webinaire",
+     "href": "https://webinaire.ownertechnology.com/r/EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Nous sommes en live</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"overflow:hidden;max-height:0;max-width:0;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;\">Nous sommes en live.&nbsp;&zwnj;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 16px;\">Nous sommes en live.</p>\n    <p style=\"margin:0 0 4px;\">Vous pouvez nous rejoindre ici&nbsp;:</p>\n    <p style=\"margin:0 0 22px;\"><a href=\"https://webinaire.ownertechnology.com/r/EVENT_ID\" style=\"color:#3e7d5a;font-weight:bold;text-decoration:underline;\">cliquez ici pour rejoindre le webinaire</a></p>\n    <p style=\"margin:0 0 14px;\">À tout de suite,</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 8px;\">\n      <tr>\n        <td style=\"vertical-align:middle;padding-right:14px;\">\n          <img src=\"https://d1yei2z3i6k35z.cloudfront.net/14020886/69ef7339b55386.73306775_2.png\" alt=\"Paul Faucomprez\" width=\"56\" height=\"56\" style=\"display:block;border-radius:50%;object-fit:cover;\">\n        </td>\n        <td style=\"vertical-align:middle;\">\n          <p style=\"margin:0;font-weight:bold;\">Paul Faucomprez</p>\n          <p style=\"margin:0;color:#5b6577;font-size:14px;\">Fondateur &amp; CEO, Owner Technology</p>\n        </td>\n      </tr>\n    </table>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    Nous sommes en live.\n\n    Vous pouvez nous rejoindre ici :\n\n    cliquez ici pour rejoindre le webinaire : https://webinaire.ownertechnology.com/r/EVENT_ID\n\n    À tout de suite,\n\n          Paul Faucomprez\n\n          Fondateur & CEO, Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n"
+  },
+  {
+   "kind": "email_nov17_live15",
+   "order": 13,
+   "sequence": "pre",
+   "sequenceIndex": 13,
+   "sequenceCount": 13,
+   "phase": "liveday",
+   "timing": {
+    "mode": "calendar",
+    "at": "2026-11-17T11:15:00+01:00"
+   },
+   "conditions": [
+    "Ancre calendaire commune à toute la cohorte : sauté pour un inscrit arrivé après cette date."
+   ],
+   "subject": "Vous pouvez encore nous rejoindre",
+   "preheader": "Le webinaire est en cours.",
+   "snippet": "Le webinaire Owner dédié aux dirigeants de TPE/PME est en cours. Dans quelques minutes je vais présenter les leviers qu'il faut absolument mettre en place pour arrêter de se faire écraser fiscalement. Vous pouvez encore ",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_nov17_live15"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "cliquez ici pour rejoindre le webinaire",
+     "href": "https://webinaire.ownertechnology.com/r/EVENT_ID",
+     "personal": true,
+     "unsubscribe": false,
+     "button": false
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Vous pouvez encore nous rejoindre</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"overflow:hidden;max-height:0;max-width:0;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;\">Le webinaire est en cours.&nbsp;&zwnj;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n\n    <p style=\"margin:0 0 16px;\">Bonjour {{prénom}},</p>\n    <p style=\"margin:0 0 16px;\">Le webinaire Owner dédié aux dirigeants de TPE/PME est en cours.</p>\n    <p style=\"margin:0 0 16px;\"><strong>Dans quelques minutes je vais présenter les leviers qu'il faut absolument mettre en place pour arrêter de se faire écraser fiscalement</strong>.</p>\n    <p style=\"margin:0 0 4px;\">Vous pouvez encore nous rejoindre ici&nbsp;:</p>\n    <p style=\"margin:0 0 22px;\"><a href=\"https://webinaire.ownertechnology.com/r/EVENT_ID\" style=\"color:#3e7d5a;font-weight:bold;text-decoration:underline;\">cliquez ici pour rejoindre le webinaire</a></p>\n    <p style=\"margin:0 0 14px;\">À tout de suite,</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 8px;\">\n      <tr>\n        <td style=\"vertical-align:middle;padding-right:14px;\">\n          <img src=\"https://d1yei2z3i6k35z.cloudfront.net/14020886/69ef7339b55386.73306775_2.png\" alt=\"Paul Faucomprez\" width=\"56\" height=\"56\" style=\"display:block;border-radius:50%;object-fit:cover;\">\n        </td>\n        <td style=\"vertical-align:middle;\">\n          <p style=\"margin:0;font-weight:bold;\">Paul Faucomprez</p>\n          <p style=\"margin:0;color:#5b6577;font-size:14px;\">Fondateur &amp; CEO, Owner Technology</p>\n        </td>\n      </tr>\n    </table>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Bonjour {{prénom}},\n\n    Le webinaire Owner dédié aux dirigeants de TPE/PME est en cours.\n\n    Dans quelques minutes je vais présenter les leviers qu'il faut absolument mettre en place pour arrêter de se faire écraser fiscalement.\n\n    Vous pouvez encore nous rejoindre ici :\n\n    cliquez ici pour rejoindre le webinaire : https://webinaire.ownertechnology.com/r/EVENT_ID\n\n    À tout de suite,\n\n          Paul Faucomprez\n\n          Fondateur & CEO, Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n"
+  },
+  {
+   "kind": "email_post17_missed",
+   "order": 14,
+   "sequence": "post",
+   "sequenceIndex": 1,
+   "sequenceCount": 6,
+   "phase": "post",
+   "segment": "missed",
+   "timing": {
+    "mode": "after-live",
+    "label": "Après le live"
+   },
+   "conditions": [
+    "Segment « absents » (sans rendez-vous d'audit). Bascule vers « présents » si l'inscrit clique « Oui, j'étais présent » dans un e-mail post-live."
+   ],
+   "subject": "Vous avez raté quelque chose…",
+   "preheader": "Voici les points clés à retenir.",
+   "snippet": "Vous étiez inscrit à notre webinaire mais vous n'avez pas pu être là. Nous avons vu que pour la plupart des dirigeants, les charges, la masse salariale et la rémunération du dirigeant peuvent vite devenir des sujets lour",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_post17_missed"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "RÉSERVER MON AUDIT",
+     "href": "https://audit.ownertechnology.com/rdv",
+     "personal": false,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Vous avez raté quelque chose…</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"overflow:hidden;max-height:0;max-width:0;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;\">Voici les points clés à retenir.&nbsp;&zwnj;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n\n    <p style=\"margin:0 0 16px;\">Vous étiez inscrit à notre webinaire mais vous n'avez pas pu être là.</p>\n    <p style=\"margin:0 0 16px;\">Nous avons vu que pour la plupart des dirigeants, les charges, la masse salariale et la rémunération du dirigeant peuvent vite devenir des sujets lourds.</p>\n    <p style=\"margin:0 0 16px;\">Nous avons vu les solutions existantes pour éviter cette pression fiscale permanente.</p>\n    <p style=\"margin:0 0 16px;\">Redevance de marque, frais pros, holding, optimisations des charges sociales et fiscales…</p>\n    <p style=\"margin:0 0 16px;\">Pas mal de sujets en deux heures.</p>\n    <p style=\"margin:0 0 6px;\">Le point important à retenir&nbsp;: <strong>si votre structure n'a jamais été auditée sous l'angle fiscal, social et patrimonial, il est probable ces leviers ne soient pas activés</strong>.</p>\n    <p style=\"margin:26px 0;\"><a href=\"https://audit.ownertechnology.com/rdv\" style=\"display:inline-block;background:#3e7d5a;color:#ffffff;font-weight:bold;font-size:16px;padding:13px 26px;border-radius:8px;text-decoration:none;\">RÉSERVER MON AUDIT</a></p>\n    <p style=\"margin:0 0 22px;\">Un expert analyse votre situation et vous donne une estimation des économies réalisables.</p>\n    <p style=\"margin:0 0 14px;\">À bientôt,</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 8px;\">\n      <tr>\n        <td style=\"vertical-align:middle;padding-right:14px;\">\n          <img src=\"https://d1yei2z3i6k35z.cloudfront.net/14020886/69ef7339b55386.73306775_2.png\" alt=\"Paul Faucomprez\" width=\"56\" height=\"56\" style=\"display:block;border-radius:50%;object-fit:cover;\">\n        </td>\n        <td style=\"vertical-align:middle;\">\n          <p style=\"margin:0;font-weight:bold;\">Paul Faucomprez</p>\n          <p style=\"margin:0;color:#5b6577;font-size:14px;\">Fondateur &amp; CEO, Owner Technology</p>\n        </td>\n      </tr>\n    </table>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Vous étiez inscrit à notre webinaire mais vous n'avez pas pu être là.\n\n    Nous avons vu que pour la plupart des dirigeants, les charges, la masse salariale et la rémunération du dirigeant peuvent vite devenir des sujets lourds.\n\n    Nous avons vu les solutions existantes pour éviter cette pression fiscale permanente.\n\n    Redevance de marque, frais pros, holding, optimisations des charges sociales et fiscales…\n\n    Pas mal de sujets en deux heures.\n\n    Le point important à retenir : si votre structure n'a jamais été auditée sous l'angle fiscal, social et patrimonial, il est probable ces leviers ne soient pas activés.\n\n    RÉSERVER MON AUDIT : https://audit.ownertechnology.com/rdv\n\n    Un expert analyse votre situation et vous donne une estimation des économies réalisables.\n\n    À bientôt,\n\n          Paul Faucomprez\n\n          Fondateur & CEO, Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n"
+  },
+  {
+   "kind": "email_post17_attended",
+   "order": 15,
+   "sequence": "post",
+   "sequenceIndex": 2,
+   "sequenceCount": 6,
+   "phase": "post",
+   "segment": "attended",
+   "timing": {
+    "mode": "after-live",
+    "label": "Après le live"
+   },
+   "conditions": [
+    "Segment « présents » (sans rendez-vous d'audit). Bascule vers « absents » si l'inscrit clique « Non, absent » dans un e-mail post-live."
+   ],
+   "subject": "Merci pour votre présence",
+   "preheader": "Optimisez vos charges et votre rémunération.",
+   "snippet": "Merci d'avoir participé à notre webinaire. Nous avons vu que beaucoup de dirigeants ne connaissent pas les leviers à activer pour diminuer la pression fiscale. On vous a donné les grands principes. Pour ceux qui veulent ",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_post17_attended"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "RÉSERVER MON AUDIT",
+     "href": "https://audit.ownertechnology.com/rdv",
+     "personal": false,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Merci pour votre présence</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"overflow:hidden;max-height:0;max-width:0;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;\">Optimisez vos charges et votre rémunération.&nbsp;&zwnj;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n\n    <p style=\"margin:0 0 16px;\">Merci d'avoir participé à notre webinaire.</p>\n    <p style=\"margin:0 0 16px;\">Nous avons vu que <strong>beaucoup de dirigeants ne connaissent pas les leviers à activer pour diminuer la pression fiscale.</strong></p>\n    <p style=\"margin:0 0 16px;\">On vous a donné les grands principes.</p>\n    <p style=\"margin:0 0 8px;\">Pour ceux qui veulent passer à l'étape suivante, nous offrons <strong>un audit pour identifier</strong>&nbsp;:</p>\n    <ul style=\"margin:0 0 18px;padding-left:22px;\"><li style=\"margin:0 0 6px;\">les leviers d'optimisation applicables à votre société&nbsp;;</li><li style=\"margin:0 0 6px;\">les pistes pour mieux structurer votre rémunération&nbsp;;</li><li style=\"margin:0 0 6px;\">les optimisations liées à vos charges sociales et fiscales&nbsp;;</li><li style=\"margin:0 0 6px;\">les sujets liés à la holding ou à votre patrimoine.</li></ul>\n    <p style=\"margin:26px 0;\"><a href=\"https://audit.ownertechnology.com/rdv\" style=\"display:inline-block;background:#3e7d5a;color:#ffffff;font-weight:bold;font-size:16px;padding:13px 26px;border-radius:8px;text-decoration:none;\">RÉSERVER MON AUDIT</a></p>\n    <p style=\"margin:0 0 14px;\">À bientôt,</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 8px;\">\n      <tr>\n        <td style=\"vertical-align:middle;padding-right:14px;\">\n          <img src=\"https://d1yei2z3i6k35z.cloudfront.net/14020886/69ef7339b55386.73306775_2.png\" alt=\"Paul Faucomprez\" width=\"56\" height=\"56\" style=\"display:block;border-radius:50%;object-fit:cover;\">\n        </td>\n        <td style=\"vertical-align:middle;\">\n          <p style=\"margin:0;font-weight:bold;\">Paul Faucomprez</p>\n          <p style=\"margin:0;color:#5b6577;font-size:14px;\">Fondateur &amp; CEO, Owner Technology</p>\n        </td>\n      </tr>\n    </table>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Merci d'avoir participé à notre webinaire.\n\n    Nous avons vu que beaucoup de dirigeants ne connaissent pas les leviers à activer pour diminuer la pression fiscale.\n\n    On vous a donné les grands principes.\n\n    Pour ceux qui veulent passer à l'étape suivante, nous offrons un audit pour identifier :\n\n- les leviers d'optimisation applicables à votre société ;\n\n- les pistes pour mieux structurer votre rémunération ;\n\n- les optimisations liées à vos charges sociales et fiscales ;\n\n- les sujets liés à la holding ou à votre patrimoine.\n\n    RÉSERVER MON AUDIT : https://audit.ownertechnology.com/rdv\n\n    À bientôt,\n\n          Paul Faucomprez\n\n          Fondateur & CEO, Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n"
+  },
+  {
+   "kind": "email_post17_j1",
+   "order": 16,
+   "sequence": "post",
+   "sequenceIndex": 3,
+   "sequenceCount": 6,
+   "phase": "post",
+   "segment": "all",
+   "timing": {
+    "mode": "after-live",
+    "label": "Relance 1 après le live"
+   },
+   "conditions": [
+    "Parcours commun à tous les inscrits (aucune distinction présents / absents)."
+   ],
+   "subject": "Payez-vous trop de charges ? Voici comment le savoir",
+   "preheader": "Une seule question.",
+   "snippet": "Il y a deux types de dirigeants. Ceux dont la structure a été optimisée. Et ceux qui pensent que c'est le cas. Pour savoir où vous situer, posez-vous cette question : « Quel est le dernier levier d'optimisation que j'ai ",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_post17_j1"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "RÉSERVER MON AUDIT",
+     "href": "https://audit.ownertechnology.com/rdv",
+     "personal": false,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Payez-vous trop de charges ? Voici comment le savoir</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"overflow:hidden;max-height:0;max-width:0;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;\">Une seule question.&nbsp;&zwnj;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n\n    <p style=\"margin:0 0 16px;\">Il y a deux types de dirigeants.</p>\n    <p style=\"margin:0 0 16px;\">Ceux dont la structure a été optimisée.</p><p style=\"margin:0 0 16px;\">Et ceux qui pensent que c'est le cas.</p>\n    <p style=\"margin:0 0 16px;\">Pour savoir où vous situer, posez-vous cette question&nbsp;:</p>\n    <p style=\"margin:0 0 16px;\"><strong>«&nbsp;Quel est le dernier levier d'optimisation que j'ai mis en place, et quand&nbsp;?&nbsp;»</strong></p>\n    <p style=\"margin:0 0 16px;\">Si la réponse arrive tout de suite, il y a de grandes chances pour que votre structure soit suivie. Vous n'avez rien à faire. Pas besoin de terminer la lecture de ce mail.</p>\n    <p style=\"margin:0 0 16px;\">Si la réponse est floue&nbsp;: ce n'est pas une faute de votre part.</p>\n    <p style=\"margin:0 0 16px;\">Votre mission est de développer votre activité.</p>\n    <p style=\"margin:0 0 6px;\">Chercher des leviers d'optimisation pour vous aider à le faire, c'est la nôtre.</p>\n    <p style=\"margin:26px 0;\"><a href=\"https://audit.ownertechnology.com/rdv\" style=\"display:inline-block;background:#3e7d5a;color:#ffffff;font-weight:bold;font-size:16px;padding:13px 26px;border-radius:8px;text-decoration:none;\">RÉSERVER MON AUDIT</a></p>\n    <p style=\"margin:0 0 14px;\">À bientôt,</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 8px;\">\n      <tr>\n        <td style=\"vertical-align:middle;padding-right:14px;\">\n          <img src=\"https://d1yei2z3i6k35z.cloudfront.net/14020886/69ef7339b55386.73306775_2.png\" alt=\"Paul Faucomprez\" width=\"56\" height=\"56\" style=\"display:block;border-radius:50%;object-fit:cover;\">\n        </td>\n        <td style=\"vertical-align:middle;\">\n          <p style=\"margin:0;font-weight:bold;\">Paul Faucomprez</p>\n          <p style=\"margin:0;color:#5b6577;font-size:14px;\">Fondateur &amp; CEO, Owner Technology</p>\n        </td>\n      </tr>\n    </table>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Il y a deux types de dirigeants.\n\n    Ceux dont la structure a été optimisée.\nEt ceux qui pensent que c'est le cas.\n\n    Pour savoir où vous situer, posez-vous cette question :\n\n    « Quel est le dernier levier d'optimisation que j'ai mis en place, et quand ? »\n\n    Si la réponse arrive tout de suite, il y a de grandes chances pour que votre structure soit suivie. Vous n'avez rien à faire. Pas besoin de terminer la lecture de ce mail.\n\n    Si la réponse est floue : ce n'est pas une faute de votre part.\n\n    Votre mission est de développer votre activité.\n\n    Chercher des leviers d'optimisation pour vous aider à le faire, c'est la nôtre.\n\n    RÉSERVER MON AUDIT : https://audit.ownertechnology.com/rdv\n\n    À bientôt,\n\n          Paul Faucomprez\n\n          Fondateur & CEO, Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n"
+  },
+  {
+   "kind": "email_post17_j2",
+   "order": 17,
+   "sequence": "post",
+   "sequenceIndex": 4,
+   "sequenceCount": 6,
+   "phase": "post",
+   "segment": "all",
+   "timing": {
+    "mode": "after-live",
+    "label": "Relance 2 après le live"
+   },
+   "conditions": [
+    "Parcours commun à tous les inscrits (aucune distinction présents / absents)."
+   ],
+   "subject": "3 façons de garantir que vous perdez de l'argent",
+   "preheader": "La méthode infaillible pour ne pas optimiser",
+   "snippet": "Trois façons de garantir que votre société paie plus que nécessaire. 1. Ne jamais poser la question Vous validez le bilan. Vous signez. Vous passez au suivant. Personne ne vous a dit qu'il y avait quelque chose à regarde",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_post17_j2"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "RÉSERVER MON AUDIT",
+     "href": "https://audit.ownertechnology.com/rdv",
+     "personal": false,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>3 façons de garantir que vous perdez de l&#39;argent</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"overflow:hidden;max-height:0;max-width:0;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;\">La méthode infaillible pour ne pas optimiser&nbsp;&zwnj;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n\n    <p style=\"margin:0 0 16px;\">Trois façons de garantir que votre société paie plus que nécessaire.</p>\n    <p style=\"margin:0 0 4px;\"><strong>1. Ne jamais poser la question</strong></p>\n    <p style=\"margin:0 0 16px;\">Vous validez le bilan. Vous signez. Vous passez au suivant.</p>\n    <p style=\"margin:0 0 16px;\">Personne ne vous a dit qu'il y avait quelque chose à regarder, donc il n'y a rien à regarder.</p>\n    <p style=\"margin:0 0 4px;\"><strong>2. Attendre le bon moment</strong></p>\n    <p style=\"margin:0 0 16px;\">Après cette période de sur-activité. Après le recrutement…</p>\n    <p style=\"margin:0 0 16px;\">Il n'y a jamais de moment calme. Vous le savez mieux que moi.</p>\n    <p style=\"margin:0 0 4px;\"><strong>3. Supposer que c'est déjà fait</strong></p>\n    <p style=\"margin:0 0 16px;\">C'est le plus efficace des trois.</p>\n    <p style=\"margin:0 0 16px;\">Parce qu'il ne demande aucun effort et qu'il donne l'impression d'une décision.</p>\n    <p style=\"margin:0 0 6px;\">Je préfère faire l'inverse&nbsp;: poser les questions, maintenant, et vérifier au lieu de supposer.</p>\n    <p style=\"margin:26px 0;\"><a href=\"https://audit.ownertechnology.com/rdv\" style=\"display:inline-block;background:#3e7d5a;color:#ffffff;font-weight:bold;font-size:16px;padding:13px 26px;border-radius:8px;text-decoration:none;\">RÉSERVER MON AUDIT</a></p>\n    <p style=\"margin:0 0 14px;\">À bientôt,</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 8px;\">\n      <tr>\n        <td style=\"vertical-align:middle;padding-right:14px;\">\n          <img src=\"https://d1yei2z3i6k35z.cloudfront.net/14020886/69ef7339b55386.73306775_2.png\" alt=\"Paul Faucomprez\" width=\"56\" height=\"56\" style=\"display:block;border-radius:50%;object-fit:cover;\">\n        </td>\n        <td style=\"vertical-align:middle;\">\n          <p style=\"margin:0;font-weight:bold;\">Paul Faucomprez</p>\n          <p style=\"margin:0;color:#5b6577;font-size:14px;\">Fondateur &amp; CEO, Owner Technology</p>\n        </td>\n      </tr>\n    </table>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Trois façons de garantir que votre société paie plus que nécessaire.\n\n    1. Ne jamais poser la question\n\n    Vous validez le bilan. Vous signez. Vous passez au suivant.\n\n    Personne ne vous a dit qu'il y avait quelque chose à regarder, donc il n'y a rien à regarder.\n\n    2. Attendre le bon moment\n\n    Après cette période de sur-activité. Après le recrutement…\n\n    Il n'y a jamais de moment calme. Vous le savez mieux que moi.\n\n    3. Supposer que c'est déjà fait\n\n    C'est le plus efficace des trois.\n\n    Parce qu'il ne demande aucun effort et qu'il donne l'impression d'une décision.\n\n    Je préfère faire l'inverse : poser les questions, maintenant, et vérifier au lieu de supposer.\n\n    RÉSERVER MON AUDIT : https://audit.ownertechnology.com/rdv\n\n    À bientôt,\n\n          Paul Faucomprez\n\n          Fondateur & CEO, Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n"
+  },
+  {
+   "kind": "email_post17_j3",
+   "order": 18,
+   "sequence": "post",
+   "sequenceIndex": 5,
+   "sequenceCount": 6,
+   "phase": "post",
+   "segment": "all",
+   "timing": {
+    "mode": "after-live",
+    "label": "Relance 3 après le live"
+   },
+   "conditions": [
+    "Parcours commun à tous les inscrits (aucune distinction présents / absents)."
+   ],
+   "subject": "Combien votre entreprise sort pour vous payer ?",
+   "preheader": "Même net. Coût entreprise différent.",
+   "snippet": "Reprenons le calcul du webinaire. Un dirigeant se verse 3 000 € net par mois. En SARL, l'entreprise sort 52 500 € par an. En SAS, 64 500 €. Avec une structure optimisée : 44 900 €. Ce calcul est un exemple. Ce n'est pas ",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_post17_j3"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "RÉSERVER MON AUDIT",
+     "href": "https://audit.ownertechnology.com/rdv",
+     "personal": false,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Combien votre entreprise sort pour vous payer ?</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"overflow:hidden;max-height:0;max-width:0;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;\">Même net. Coût entreprise différent.&nbsp;&zwnj;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n\n    <p style=\"margin:0 0 16px;\">Reprenons le calcul du webinaire.</p>\n    <p style=\"margin:0 0 16px;\">Un dirigeant se verse 3&nbsp;000&nbsp;€ net par mois.</p>\n    <p style=\"margin:0 0 16px;\">En SARL, l'entreprise sort <strong>52&nbsp;500&nbsp;€ par an</strong>.</p>\n    <p style=\"margin:0 0 16px;\">En SAS, <strong>64&nbsp;500&nbsp;€</strong>.</p>\n    <p style=\"margin:0 0 16px;\">Avec une structure optimisée&nbsp;: <strong>44&nbsp;900&nbsp;€</strong>.</p>\n    <p style=\"margin:0 0 16px;\">Ce calcul est un exemple. Ce n'est pas votre dossier.</p>\n    <p style=\"margin:0 0 16px;\">Votre écart à vous peut être plus petit. Ou plus grand.</p>\n    <p style=\"margin:0 0 6px;\">Il n'y a qu'une façon de le savoir&nbsp;: le calculer sur vos chiffres.</p>\n    <p style=\"margin:26px 0;\"><a href=\"https://audit.ownertechnology.com/rdv\" style=\"display:inline-block;background:#3e7d5a;color:#ffffff;font-weight:bold;font-size:16px;padding:13px 26px;border-radius:8px;text-decoration:none;\">RÉSERVER MON AUDIT</a></p>\n    <p style=\"margin:0 0 14px;\">À bientôt,</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 8px;\">\n      <tr>\n        <td style=\"vertical-align:middle;padding-right:14px;\">\n          <img src=\"https://d1yei2z3i6k35z.cloudfront.net/14020886/69ef7339b55386.73306775_2.png\" alt=\"Paul Faucomprez\" width=\"56\" height=\"56\" style=\"display:block;border-radius:50%;object-fit:cover;\">\n        </td>\n        <td style=\"vertical-align:middle;\">\n          <p style=\"margin:0;font-weight:bold;\">Paul Faucomprez</p>\n          <p style=\"margin:0;color:#5b6577;font-size:14px;\">Fondateur &amp; CEO, Owner Technology</p>\n        </td>\n      </tr>\n    </table>\n  </div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Reprenons le calcul du webinaire.\n\n    Un dirigeant se verse 3 000 € net par mois.\n\n    En SARL, l'entreprise sort 52 500 € par an.\n\n    En SAS, 64 500 €.\n\n    Avec une structure optimisée : 44 900 €.\n\n    Ce calcul est un exemple. Ce n'est pas votre dossier.\n\n    Votre écart à vous peut être plus petit. Ou plus grand.\n\n    Il n'y a qu'une façon de le savoir : le calculer sur vos chiffres.\n\n    RÉSERVER MON AUDIT : https://audit.ownertechnology.com/rdv\n\n    À bientôt,\n\n          Paul Faucomprez\n\n          Fondateur & CEO, Owner Technology\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n"
+  },
+  {
+   "kind": "email_post17_j4",
+   "order": 19,
+   "sequence": "post",
+   "sequenceIndex": 6,
+   "sequenceCount": 6,
+   "phase": "post",
+   "segment": "all",
+   "timing": {
+    "mode": "after-live",
+    "label": "Relance 4 après le live"
+   },
+   "conditions": [
+    "Parcours commun à tous les inscrits (aucune distinction présents / absents)."
+   ],
+   "subject": "Dernier mail sur le sujet",
+   "preheader": "Repensez aux douze derniers mois.",
+   "snippet": "Le meilleur moment pour vous pencher sur l'optimisation de votre société, c'est maintenant. Il n'y en aura pas de meilleur. Repensez aux douze derniers mois. Y a-t-il eu une seule semaine où vous vous êtes dit « là, c'es",
+   "from": "Owner Technology <info@ownertechnology.com>",
+   "replyTo": "contact@ownertechnology.com",
+   "tags": [
+    {
+     "name": "kind",
+     "value": "email_post17_j4"
+    }
+   ],
+   "headers": [
+    {
+     "name": "List-Unsubscribe",
+     "value": "<https://webinaire.ownertechnology.com/u/EVENT_ID>"
+    },
+    {
+     "name": "List-Unsubscribe-Post",
+     "value": "List-Unsubscribe=One-Click"
+    }
+   ],
+   "attachments": [],
+   "links": [
+    {
+     "label": "RÉSERVER MON AUDIT",
+     "href": "https://audit.ownertechnology.com/rdv",
+     "personal": false,
+     "unsubscribe": false,
+     "button": true
+    },
+    {
+     "label": "Se désinscrire",
+     "href": "https://webinaire.ownertechnology.com/u/EVENT_ID",
+     "personal": true,
+     "unsubscribe": true,
+     "button": false
+    }
+   ],
+   "html": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Dernier mail sur le sujet</title>\n</head>\n<body style=\"margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1a1a1a;font-size:16px;line-height:1.6;\">\n  <div style=\"overflow:hidden;max-height:0;max-width:0;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;\">Repensez aux douze derniers mois.&nbsp;&zwnj;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>\n  <div style=\"max-width:640px;margin:0 auto;padding:24px 20px;\">\n\n    <p style=\"margin:0 0 16px;\">Le meilleur moment pour vous pencher sur l'optimisation de votre société, c'est maintenant.</p>\n    <p style=\"margin:0 0 16px;\">Il n'y en aura pas de meilleur.</p>\n    <p style=\"margin:0 0 16px;\">Repensez aux douze derniers mois.</p>\n    <p style=\"margin:0 0 16px;\">Y a-t-il eu une seule semaine où vous vous êtes dit «&nbsp;là, c'est calme&nbsp;»&nbsp;?</p>\n    <p style=\"margin:0 0 16px;\">Probablement pas.</p>\n    <p style=\"margin:0 0 16px;\">Ce n'est pas près de changer. Les clients, les équipes, les recrutements&nbsp;: ça ne s'arrête jamais.</p>\n    <p style=\"margin:0 0 16px;\">Et pendant ce temps, <strong>chaque mois qui passe avec une structure non optimisée coûte le même montant que le précédent</strong>.</p>\n    <p style=\"margin:0 0 16px;\">Ce n'est pas dramatique. C'est juste répétitif.</p>\n    <p style=\"margin:0 0 16px;\">L'audit prend une heure et vous donne une réponse claire&nbsp;: soit il n'y a rien à faire chez vous, et vous arrêtez d'y penser. Soit il y a des leviers, et vous décidez.</p>\n    <p style=\"margin:0 0 6px;\">Dans les deux cas, vous savez.</p>\n    <p style=\"margin:26px 0;\"><a href=\"https://audit.ownertechnology.com/rdv\" style=\"display:inline-block;background:#3e7d5a;color:#ffffff;font-weight:bold;font-size:16px;padding:13px 26px;border-radius:8px;text-decoration:none;\">RÉSERVER MON AUDIT</a></p>\n    <p style=\"margin:0 0 14px;\">À bientôt,</p>\n    <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 8px;\">\n      <tr>\n        <td style=\"vertical-align:middle;padding-right:14px;\">\n          <img src=\"https://d1yei2z3i6k35z.cloudfront.net/14020886/69ef7339b55386.73306775_2.png\" alt=\"Paul Faucomprez\" width=\"56\" height=\"56\" style=\"display:block;border-radius:50%;object-fit:cover;\">\n        </td>\n        <td style=\"vertical-align:middle;\">\n          <p style=\"margin:0;font-weight:bold;\">Paul Faucomprez</p>\n          <p style=\"margin:0;color:#5b6577;font-size:14px;\">Fondateur &amp; CEO, Owner Technology</p>\n        </td>\n      </tr>\n    </table>\n  </div>\n  <div style=\"max-width:640px;margin:0 auto;padding:0 20px 24px;\"><p style=\"margin:0;font-size:14px;color:#555555;\">PS&nbsp;: C'est le dernier mail que je vous envoie sur ce webinaire. Si le sujet revient dans six mois, vous savez où me trouver.</p></div>\n</body>\n</html><p style=\"margin:32px 0 0;padding-top:16px;border-top:1px solid #eceff4;font-size:12px;line-height:1.5;color:#9aa3b2;text-align:center;\">Vous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.<br/><a href=\"https://webinaire.ownertechnology.com/u/EVENT_ID\" style=\"color:#9aa3b2;text-decoration:underline;\">Se désinscrire</a></p>",
+   "text": "Le meilleur moment pour vous pencher sur l'optimisation de votre société, c'est maintenant.\n\n    Il n'y en aura pas de meilleur.\n\n    Repensez aux douze derniers mois.\n\n    Y a-t-il eu une seule semaine où vous vous êtes dit « là, c'est calme » ?\n\n    Probablement pas.\n\n    Ce n'est pas près de changer. Les clients, les équipes, les recrutements : ça ne s'arrête jamais.\n\n    Et pendant ce temps, chaque mois qui passe avec une structure non optimisée coûte le même montant que le précédent.\n\n    Ce n'est pas dramatique. C'est juste répétitif.\n\n    L'audit prend une heure et vous donne une réponse claire : soit il n'y a rien à faire chez vous, et vous arrêtez d'y penser. Soit il y a des leviers, et vous décidez.\n\n    Dans les deux cas, vous savez.\n\n    RÉSERVER MON AUDIT : https://audit.ownertechnology.com/rdv\n\n    À bientôt,\n\n          Paul Faucomprez\n\n          Fondateur & CEO, Owner Technology\n\n  PS : C'est le dernier mail que je vous envoie sur ce webinaire. Si le sujet revient dans six mois, vous savez où me trouver.\n\nVous recevez cet email car vous êtes inscrit(e) à un webinaire Owner Technology.\nSe désinscrire : https://webinaire.ownertechnology.com/u/EVENT_ID\n"
+  }
+ ]
+}

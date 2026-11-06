@@ -143,5 +143,27 @@
   ],
   "codeEra": "sept",
   "stepCount": 19
+ },
+ {
+  "id": "webinar-2026-11-17",
+  "label": "Webinaire du 17 novembre 2026",
+  "short": "17 nov.",
+  "audience": "TPE/PME",
+  "liveAt": "2026-11-17T11:00:00+01:00",
+  "speakers": [
+   "Paul Faucomprez",
+   "Maître Bouchareb"
+  ],
+  "pages": [
+   "/tpe-pme"
+  ],
+  "notes": [
+   "Séquence fournie par le dev (« Séquence Webinaire Broad du 17 novembre », 06/11) : même structure que le 22 octobre. Ouverte d'abord en mise en ligne minimale (confirmation seule), complétée le 06/11.",
+   "Live à 11h00, heure d'hiver : le mail du jour J part à 6h30, la veille à 18h00.",
+   "Deux SMS (Brevo) accompagnent la séquence : 1 h avant le live et au démarrage. Ils n'apparaissent pas dans cette liste, qui ne montre que les e-mails.",
+   "Le suivi post-webinaire est planifié par la landing APRÈS le live, une fois les présents et les absents connus : ses dates apparaîtront ensuite."
+  ],
+  "codeEra": "sept",
+  "stepCount": 19
  }
 ]

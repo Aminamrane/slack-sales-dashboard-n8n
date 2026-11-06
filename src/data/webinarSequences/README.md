@@ -42,6 +42,24 @@ node scripts/webinar-sequences/build.mjs --landing <copie de la landing> --eras 
 Détails et prérequis dans l'en-tête de `scripts/webinar-sequences/build.mjs`. À refaire quand la
 landing change (nouvelle cohorte, e-mail modifié) : ces fichiers sont un instantané.
 
+### Cohortes courantes (8 oct., 22 oct., 17 nov.)
+
+Elles relèvent de l'ère « sept » (code actuel de la landing) : `--only` en régénère une seule, sans `--eras`.
+
+```
+node scripts/webinar-sequences/build.mjs --landing <copie de la landing> --only webinar-2026-11-17
+```
+
+Le 17 novembre a sa séquence complète depuis le 06/11 (19 e-mails, même structure que le 22 octobre) ; ses dates de suivi
+après le live seront connues une fois le live passé : à régénérer à ce moment-là.
+
+Le code actuel de la landing contient le crochet de « Confirmer les modifications » (`sequence-versions`, appelé juste avant
+l'envoi) : le générateur le remplace par `stubs/sequence-versions.mjs` et restitue donc toujours l'e-mail d'**origine**.
+
+« Confirmer les modifications » (Sub-Tickets) publie la version choisie **à la place** de l'e-mail d'origine,
+et l'éditeur part de ces fichiers : ils doivent donc refléter ce que la landing envoie aujourd'hui.
+Régénérer et comparer avant toute livraison de la landing qui touche `email.ts`.
+
 ## Format
 
 - `catalog.json` : métadonnées de chaque cohorte (id, libellé, public, live, intervenants, pages…).

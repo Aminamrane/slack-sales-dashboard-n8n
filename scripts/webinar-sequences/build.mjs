@@ -38,6 +38,7 @@ import { redactPublic } from './redact.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
 const STUB = path.join(HERE, 'stubs', 'resend.mjs');
+const STUB_VERSIONS = path.join(HERE, 'stubs', 'sequence-versions.mjs');
 
 function parseArgs(argv) {
   const out = {};
@@ -70,6 +71,8 @@ const aliasPlugin = (root) => ({
   name: 'landing-alias',
   setup(b) {
     b.onResolve({ filter: /^resend$/ }, () => ({ path: STUB }));
+    // Crochet « versions publiées » du code actuel de la landing : neutralisé (on restitue l'e-mail d'origine).
+    b.onResolve({ filter: /^@\/lib\/services\/sequence-versions$/ }, () => ({ path: STUB_VERSIONS }));
     b.onResolve({ filter: /^@\// }, (a) => {
       const base = path.join(root, 'src', a.path.slice(2));
       for (const candidate of [`${base}.ts`, `${base}.tsx`, `${base}.js`, path.join(base, 'index.ts')]) {
@@ -129,8 +132,8 @@ async function captureCohort(mod, cohortId, warnings) {
   const byKind = new Map();
   const lead = sampleLead(cohortId);
   for (const [name, fn] of Object.entries(mod)) {
-    // `sendOct08Email(kind, lead, outboxId)` & co prennent un kind en premier argument : traités plus bas.
-    if (!/^send.+Email$/.test(name) || name === 'sendBroadInviteEmail' || /^sendOct\d+Email$/.test(name)) continue;
+    // `sendOct08Email(kind, lead, outboxId)`, `sendNov17Email(...)` & co prennent un kind en premier argument : traités plus bas.
+    if (!/^send.+Email$/.test(name) || name === 'sendBroadInviteEmail' || /^send(?:Oct|Nov)\d+Email$/.test(name)) continue;
     globalThis.__seqCapture = [];
     try {
       await fn(lead, 'preview');
@@ -143,23 +146,26 @@ async function captureCohort(mod, cohortId, warnings) {
       if (kind) byKind.set(kind, payload);
     }
   }
-  // Cohortes d'octobre : un registre `OCT<jj>_EMAILS` (sujet + rendu par kind) et `sendOct<jj>Email(kind, lead, outboxId)`.
-  // Ce sont les mêmes fonctions que celles du worker de la landing ; le faux Resend capture la charge utile.
-  const day = /^webinar-\d{4}-\d{2}-(\d{2})$/.exec(cohortId)?.[1];
-  const registry = day && mod[`OCT${day}_EMAILS`];
-  if (registry && typeof mod[`sendOct${day}Email`] === 'function') {
+  // Cohortes d'octobre et de novembre : un registre `OCT<jj>_EMAILS` / `NOV<jj>_EMAILS` (sujet + rendu par kind) et
+  // `sendOct<jj>Email(kind, lead, outboxId)` / `sendNov<jj>Email(...)`. Ce sont les mêmes fonctions que celles du worker
+  // de la landing ; le faux Resend capture la charge utile.
+  const [, month, day] = /^webinar-\d{4}-(\d{2})-(\d{2})$/.exec(cohortId) ?? [];
+  const prefix = { 10: ['OCT', 'Oct'], 11: ['NOV', 'Nov'] }[Number(month)];
+  const registry = prefix && mod[`${prefix[0]}${day}_EMAILS`];
+  const sender = prefix && `send${prefix[1]}${day}Email`;
+  if (registry && typeof mod[sender] === 'function') {
     for (const kind of Object.keys(registry)) {
       globalThis.__seqCapture = [];
       try {
-        await mod[`sendOct${day}Email`](kind, lead, 'preview');
+        await mod[sender](kind, lead, 'preview');
       } catch (err) {
-        warnings.push(`${cohortId} · sendOct${day}Email(${kind}) : ${err.message}`);
+        warnings.push(`${cohortId} · ${sender}(${kind}) : ${err.message}`);
         continue;
       }
       for (const payload of globalThis.__seqCapture) {
         const k = kindOf(payload);
-        // `email_oct<jj>_confirmation` n'est jamais planifié : la confirmation part sous le kind `email_confirmation`
-        // (capturé plus haut par `sendConfirmationEmail`), qui reste prioritaire.
+        // `email_oct<jj>_confirmation` / `email_nov<jj>_confirmation` ne sont jamais planifiés : la confirmation part sous le kind
+        // `email_confirmation` (capturé plus haut par `sendConfirmationEmail`), qui reste prioritaire.
         if (k && !byKind.has(k)) byKind.set(k, payload);
       }
     }

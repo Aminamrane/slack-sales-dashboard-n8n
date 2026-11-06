@@ -486,6 +486,50 @@ export const COHORTS = [
       ...postOctober('post22', POST22_PLAN),
     ],
   },
+
+  // ═══ 17 novembre 2026 — TPE/PME, mardi 11h00 (séquence du 06/11, ticket Bot IA #64) ═══
+  {
+    id: 'webinar-2026-11-17',
+    label: 'Webinaire du 17 novembre 2026',
+    short: '17 nov.',
+    audience: 'TPE/PME',
+    liveAt: '2026-11-17T11:00:00+01:00',
+    speakers: ['Paul Faucomprez', 'Maître Bouchareb'],
+    pages: ['/tpe-pme'],
+    era: 'sept',
+    notes: [
+      "Séquence fournie par le dev (« Séquence Webinaire Broad du 17 novembre », 06/11) : même structure que le 22 octobre. Ouverte d'abord en mise en ligne minimale (confirmation seule), complétée le 06/11.",
+      "Live à 11h00, heure d'hiver : le mail du jour J part à 6h30, la veille à 18h00.",
+      "Deux SMS (Brevo) accompagnent la séquence : 1 h avant le live et au démarrage. Ils n'apparaissent pas dans cette liste, qui ne montre que les e-mails.",
+      "Le suivi post-webinaire est planifié par la landing APRÈS le live, une fois les présents et les absents connus : ses dates apparaîtront ensuite.",
+    ],
+    sequences: {
+      pre: {
+        ...SEQ_PRE,
+        frequency:
+          "Un e-mail éducatif par jour à 11h00 (J+1 à J+5), rappels J-7, J-3 et J-1 (18h00), puis 4 e-mails le jour du live (6h30, 10h00, 11h00, 11h15).",
+      },
+      post: {
+        ...SEQ_POST,
+        frequency:
+          "Planifié après le live : un e-mail par segment (absents / présents), puis 4 e-mails communs à tous les inscrits, un par jour.",
+      },
+    },
+    steps: [
+      pre('email_confirmation', 'confirmation', signupDelay(2), { conditions: [RULE_CONFIRM] }),
+      ...['email_nov17_remuneration', 'email_nov17_decouvrir', 'email_nov17_holding', 'email_nov17_simulateur', 'email_nov17_pertes'].map(
+        (kind, i) => pre(kind, 'nurture', signupDays(i + 1), { conditions: [RULE_EDU] })
+      ),
+      pre('email_nov17_j7', 'reminder', cal('2026-11-10T11:00:00+01:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_nov17_j3', 'reminder', cal('2026-11-14T11:00:00+01:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_nov17_j1', 'reminder', cal('2026-11-16T18:00:00+01:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_nov17_morning', 'liveday', cal('2026-11-17T06:30:00+01:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_nov17_h1', 'liveday', cal('2026-11-17T10:00:00+01:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_nov17_live', 'liveday', cal('2026-11-17T11:00:00+01:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_nov17_live15', 'liveday', cal('2026-11-17T11:15:00+01:00'), { conditions: [RULE_ANCHOR] }),
+      ...postOctober('post17'),
+    ],
+  },
 ];
 
 /** @brief Ères du code de la landing : quelle version de `email.ts` a produit les envois de quelles cohortes. */
