@@ -324,7 +324,7 @@ function App() {
         <Route
           path="/ceo/leads-management"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'ceo', 'head_of_acquisition']}>
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'head_of_acquisition', ...READ_ONLY_DIRECTION_ROLES]}>
               <CeoLeadsManagementView />
             </ProtectedRoute>
           }
@@ -380,7 +380,7 @@ function App() {
         <Route
           path="/ceo/leads-moins-100k"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'ceo']}>
+            <ProtectedRoute allowedRoles={['admin', 'ceo', ...READ_ONLY_DIRECTION_ROLES]}>
               <CeoSmallLeadsView />
             </ProtectedRoute>
           }
@@ -388,7 +388,7 @@ function App() {
         <Route
           path="/ceo/setters"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'ceo', 'acquisition_director']}>
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'acquisition_director', ...READ_ONLY_DIRECTION_ROLES]}>
               <CeoSettersView />
             </ProtectedRoute>
           }
@@ -396,7 +396,7 @@ function App() {
         <Route
           path="/ceo/agenda"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'ceo', 'acquisition_director', 'head_of_acquisition']}>
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'acquisition_director', 'head_of_acquisition', ...READ_ONLY_DIRECTION_ROLES]}>
               <CeoAgendaView />
             </ProtectedRoute>
           }

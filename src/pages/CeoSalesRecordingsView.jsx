@@ -19,8 +19,9 @@ import SalesRecordingsGrid from "../components/SalesRecordingsGrid.jsx";
 import SalesRecordingsDetail from "../components/SalesRecordingsDetail.jsx";
 import { monthRange } from "../utils/callsPeriod.js";
 import TeamReportView from "../components/TeamReportView.jsx";
+import { READ_ONLY_DIRECTION_ROLES } from "../utils/readOnlyRoles";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo", "acquisition_director", "head_of_acquisition", "head_of_sales_manager", "head_of_sales"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo", "acquisition_director", "head_of_acquisition", "head_of_sales_manager", "head_of_sales", ...READ_ONLY_DIRECTION_ROLES]);
 
 // "2026-W31" -> "Semaine 31 · 2026"
 const fmtPeriod = (p) => {

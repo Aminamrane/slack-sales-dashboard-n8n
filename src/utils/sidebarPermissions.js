@@ -13,6 +13,8 @@
 // Gaylord (acquisition_director), Ismahane (finance_director), Mohamed (hr),
 // Vincent (customer_success_manager) et les admins. Aucune adresse ici : le
 // dépôt est public, la liste nominative vit dans le backend.
+import { READ_ONLY_DIRECTION_ROLES } from "./readOnlyRoles.js";
+
 export const SUB_TICKETS_ROLES = new Set(["admin", "ceo", "head_of_acquisition", "acquisition_director", "finance_director", "hr", "customer_success_manager"]);
 
 const ROLE_SECTIONS = {
@@ -41,19 +43,21 @@ const ROLE_ITEMS = {
 // Gate par ONGLET (id -> rôles autorisés). Un item listé ici n'apparaît QUE
 // pour ces rôles, même pour un rôle qui voit par ailleurs toute la section.
 // Additif : un id absent d'ici garde le comportement précédent.
+// Les rôles en lecture seule de la direction (RH) voient aussi ces onglets, en lecture (dev 06/11/2026 : « il y a des
+// pages qui lui manquent », comme sur le tableau de bord de la direction financière).
 const ITEM_ROLE_GATE = {
-  sales_recordings: new Set(["ceo", "admin", "acquisition_director", "head_of_acquisition", "head_of_sales_manager", "head_of_sales"]),
+  sales_recordings: new Set(["ceo", "admin", "acquisition_director", "head_of_acquisition", "head_of_sales_manager", "head_of_sales", ...READ_ONLY_DIRECTION_ROLES]),
   // « Gestion des leads » dans le dashboard acquisition : réservé à head_of_acquisition
   // (Timothy) + admin/ceo. acquisition_director (Gaylord) ne le voit PAS.
-  leads_management: new Set(["ceo", "admin", "head_of_acquisition"]),
+  leads_management: new Set(["ceo", "admin", "head_of_acquisition", ...READ_ONLY_DIRECTION_ROLES]),
   // « Leads < 100 k€ » : Paul (ceo) et les admins (données de contact de leads non affectés).
-  small_leads: new Set(["ceo", "admin"]),
+  small_leads: new Set(["ceo", "admin", ...READ_ONLY_DIRECTION_ROLES]),
   // « Setters » : RDV posés par les setters et clients amenés (05/10), Paul (ceo), les admins et Gaylord
   // (acquisition_director, 06/10).
-  setters_stats: new Set(["ceo", "admin", "acquisition_director"]),
+  setters_stats: new Set(["ceo", "admin", "acquisition_director", ...READ_ONLY_DIRECTION_ROLES]),
   // « Agenda des RDV » : Paul (ceo), Gaylord (acquisition_director), Timothy (head_of_acquisition), admins.
   // Même liste que l'API (calendar_internal.DIRECTOR_ROLES).
-  acquisition_agenda: new Set(["ceo", "admin", "acquisition_director", "head_of_acquisition"]),
+  acquisition_agenda: new Set(["ceo", "admin", "acquisition_director", "head_of_acquisition", ...READ_ONLY_DIRECTION_ROLES]),
   // Meta Ads : Paul (ceo), Timothy (head_of_acquisition), Gaylord
   // (acquisition_director), Ismahane (finance_director), les RH (hr, 26/10).
   // Même liste que l'API (META_ADS_ALLOWED_ROLES).

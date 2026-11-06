@@ -65,8 +65,9 @@ const SECTIONS = [
 const visible = (role) => withNavScope(null, () => getVisibleSections(SECTIONS, role))
   .map((s) => ({ key: s.key, items: s.items.map((it) => it.id) }));
 
-test('hr a exactement la barre latérale de finance_director', () => {
-  assert.deepEqual(visible('hr'), visible('finance_director'));
+test('hr a la barre latérale de finance_director, plus les onglets de la direction', () => {
+  const hr = visible('hr').flatMap((s) => s.items);
+  for (const id of visible('finance_director').flatMap((s) => s.items)) assert.ok(hr.includes(id), id);
 });
 
 test('hr gagne la Finance, les Campagnes, le Board et garde Heures de travail', () => {
@@ -76,11 +77,12 @@ test('hr gagne la Finance, les Campagnes, le Board et garde Heures de travail', 
   }
 });
 
-test('les onglets réservés restent cachés à hr (ITEM_ROLE_GATE intact)', () => {
+test('hr voit aussi les onglets de la direction (Perf Setters, agenda, enregistrements, leads), pas Ma Tracking Sheet', () => {
   const ids = visible('hr').flatMap((s) => s.items);
-  for (const id of ['my_tracking_sheet', 'sales_recordings', 'leads_management', 'small_leads', 'setters_stats', 'acquisition_agenda']) {
-    assert.equal(ids.includes(id), false, id);
+  for (const id of ['sales_recordings', 'leads_management', 'small_leads', 'setters_stats', 'acquisition_agenda']) {
+    assert.ok(ids.includes(id), id);
   }
+  assert.equal(ids.includes('my_tracking_sheet'), false);
 });
 
 test('le contexte RH (navScope hr) suit la même barre, y compris pour un admin', () => {

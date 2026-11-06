@@ -13,8 +13,9 @@ import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
+import { READ_ONLY_DIRECTION_ROLES } from "../utils/readOnlyRoles";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo"]);
+const ALLOWED_ROLES = new Set(["admin", "ceo", ...READ_ONLY_DIRECTION_ROLES]);
 
 export default function CeoSmallLeadsView() {
   const navigate = useNavigate();
