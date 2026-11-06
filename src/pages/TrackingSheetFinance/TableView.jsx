@@ -80,6 +80,9 @@ import {
   scopedOverdueCurrent,
   scopedOverdueCum,
   scopedOpeningDebt,
+  scopedPaidForMonth,
+  advanceNote,
+  surplusNote,
   formatEUR,
   formatDateFR,
   splitClientIdentity,
@@ -768,6 +771,11 @@ const RowRenderer = React.memo(function RowRenderer({
   // montant baisse dès qu'un paiement est enregistré.
   const overdueToDate    = scopedOverdueCurrent(row, scope) + scopedOverdueCum(row, scope);
   const recoveredOverdue = sumOrField('received_overdue_owner', 'received_overdue_optilex_ttc', fields?.receivedOverdue);
+  // Trop-perçus imputés par le serveur (dev 2026-11-06) : ce que le mois a
+  // reçu pour lui-même, l'avance qui le paie déjà, où part son surplus.
+  const paidForMonth     = scopedPaidForMonth(row, scope);
+  const advance          = advanceNote(row, scope);
+  const surplus          = surplusNote(row, scope);
 
   // Brief dev 2026-08-24 : le tableau ne porte plus qu'UN signal couleur — le
   // client qui traîne des créances antérieures, en rouge sur ses deux cellules
@@ -891,7 +899,9 @@ const RowRenderer = React.memo(function RowRenderer({
       {keys.includes('expected') && C('expected', (
         <RemainingAmount
           expected={expected}
-          received={received}
+          paid={paidForMonth}
+          advance={advance}
+          surplus={surplus}
           onboardingPending={Boolean(row.onboarding_pending)}
           onboardingDate={row.client?.rdv_onboarding}
           upcoming={upcomingExpectedHint(row, scope,
@@ -901,9 +911,15 @@ const RowRenderer = React.memo(function RowRenderer({
 
       {/* Montant Récupéré (vert + pill verte si surplus). Vision entité =
           éditable (écrit le champ de l'entité active) ; Globale = somme
-          lecture seule. */}
+          lecture seule. Le surplus dit où il part, l'avance d'où elle vient :
+          la cellule garde l'encaissement saisi, jamais l'avance (dev
+          2026-11-06). */}
       {keys.includes('received') && C('received', (
-        <AmountWithDelta delta={Math.max(0, received - expected)}>
+        <AmountWithDelta
+          delta={surplus?.amount || 0}
+          note={surplus || advance}
+          ghost={!received && advance && !(multiStructure && !isGlobal) ? advance.amount : null}
+        >
           {isGlobal ? (
             <RecoveredAmount value={received} />
           ) : multiStructure ? (
@@ -915,6 +931,7 @@ const RowRenderer = React.memo(function RowRenderer({
               entity={scope}
               value={received}
               expected={expected}
+              advance={advance?.amount || 0}
               canEdit={!!fields && amountsEditable}
               // Le serveur a déjà écrit le total (sync_received) ; ce PATCH
               // ne sert qu'au rafraîchissement optimiste de la ligne. Il est
@@ -933,8 +950,9 @@ const RowRenderer = React.memo(function RowRenderer({
               valueBold
               // La cellule porte le TOTAL reçu du mois : proposer l'attendu
               // vaut aussi bien pour un règlement complet que pour le solde
-              // d'un paiement partiel (demande dev 2026-08-26).
-              suggestion={expected}
+              // d'un paiement partiel (demande dev 2026-08-26). Une avance
+              // déjà imputée n'est plus à encaisser.
+              suggestion={Math.max(expected - (advance?.amount || 0), 0)}
               suggestionTitle="Attendu du mois — cliquer pour l'inscrire"
             />
 
@@ -1250,9 +1268,13 @@ function ReadOnlyAmount({ value }) {
 // facturation y démarre, servi par le serveur à partir de la veille ouvrée
 // de l'onboarding (cf. upcomingExpected.js). Indication en gris, jamais
 // comptée dans le mois affiché.
-function RemainingAmount({ expected, received, onboardingPending = false, onboardingDate = null, upcoming = null }) {
+//
+// `paid` (dev 2026-11-06) : ce que le mois a reçu pour lui-même, avance d'un
+// trop-perçu antérieur comprise. L'attendu ne bouge pas, il est déjà réglé en
+// partie ou en totalité.
+function RemainingAmount({ expected, paid, advance = null, surplus = null, onboardingPending = false, onboardingDate = null, upcoming = null }) {
   const exp = Number(expected || 0);
-  const remaining = Math.max(exp - Number(received || 0), 0);
+  const remaining = Math.max(exp - Number(paid || 0), 0);
   const upcomingLine = upcoming && (
     <span title={upcoming.title}
       style={{ fontSize: 11, color: N.textMuted, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
@@ -1285,11 +1307,13 @@ function RemainingAmount({ expected, received, onboardingPending = false, onboar
     ? ` Onboarding${onboardingDate ? ` le ${formatDateFR(onboardingDate)}` : ' à venir'} : pas encore exigible.`
     : '';
   return (
-    <span title={`Attendu du mois : ${formatEUR(exp)}. Reste avant imputation des avances : ${formatEUR(remaining)}.${upcomingTitle}`}
+    <span title={[`Attendu du mois : ${formatEUR(exp)}. Reste : ${formatEUR(remaining)}.`,
+      advance?.title, surplus?.title].filter(Boolean).join(' ') + upcomingTitle}
       style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
       <span style={{ fontSize: CELL_FONT_SIZE, color: N.text, fontVariantNumeric: 'tabular-nums' }}>{formatEUR(exp)}</span>
-      {Number(received || 0) > 0 && <span style={{ fontSize: 10, color: remaining ? '#a4581d' : '#0f7b6c' }}>
-        {remaining ? `Reste ${formatEUR(remaining)}` : 'Réglé'}
+      {Number(paid || 0) > 0 && <span style={{ fontSize: 10, color: remaining ? '#a4581d' : '#0f7b6c', whiteSpace: 'nowrap' }}>
+        {/* Au-delà de 10 000 €, le symbole ne tient plus dans la colonne. */}
+        {remaining ? `Reste ${formatEUR(remaining, { withSymbol: remaining < 10000 })}` : 'Réglé'}
       </span>}
       {onboardingPending && <span style={{ fontSize: 10, color: N.textFaint, fontStyle: 'italic', whiteSpace: 'nowrap' }}>
         {onboardingDate ? `onboarding le ${formatDateFR(onboardingDate)}` : 'onboarding à venir'}
@@ -1377,12 +1401,19 @@ function DeltaPill({ delta }) {
 // AmountWithDelta — wrapper inline-flex qui pose l'EditableNumber à gauche
 // et la DeltaPill à droite. Aligné à droite (justifyContent: flex-end) pour
 // matcher le align="right" des cells `amount`.
-function AmountWithDelta({ children, delta }) {
+function AmountWithDelta({ children, delta, note = null, ghost = null }) {
   // Brief dev 2026-05-12 : le children (EditableNumber) doit recevoir le click
   // n'importe où dans la cell pour entrer en édition. Donc on l'étend à 100%
   // de la zone via position:relative + wrapper fullsize. La pill est
   // superposée en position absolute à droite (non bloquante : pointerEvents
   // none déjà sur DeltaPill).
+  //
+  // Trop-perçus (dev 2026-11-06) : `note` dit sous le montant où part le
+  // surplus (« [+231,00 €] → novembre », la pastille descend avec lui : sur
+  // une ligne de 150 px elle masquait le montant) ou d'où vient l'avance
+  // (« avance d’octobre ») ; `ghost` montre l'avance quand rien n'est encaissé
+  // sur le mois. Tout laisse passer le clic : la saisie reste l'encaissement.
+  const lift = note ? 'calc(50% - 7px)' : '50%';
   return (
     <span style={{
       position: 'relative',
@@ -1392,12 +1423,33 @@ function AmountWithDelta({ children, delta }) {
       width: '100%',
       height: '100%',
     }}>
-      {children}
-      {delta !== 0 && (
+      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', paddingBottom: note ? 14 : 0, boxSizing: 'border-box' }}>
+        {children}
+      </span>
+      {ghost !== null && (
+        <span style={{
+          position: 'absolute', left: 0, right: 0, top: lift, transform: 'translateY(-50%)',
+          textAlign: 'center', pointerEvents: 'none',
+          fontSize: CELL_FONT_SIZE, fontWeight: 600, color: '#0f7b6c', fontVariantNumeric: 'tabular-nums',
+        }}>
+          {formatEUR(ghost)}
+        </span>
+      )}
+      {note && (
+        <span style={{
+          position: 'absolute', left: 2, right: 2, bottom: 2,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, pointerEvents: 'none',
+          fontSize: 10, color: '#0f7b6c', whiteSpace: 'nowrap', overflow: 'hidden',
+        }}>
+          {delta > 0 && <DeltaPill delta={delta} />}
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{note.text}</span>
+        </span>
+      )}
+      {delta !== 0 && !note && (
         <span style={{
           position: 'absolute',
           right: 6,
-          top: '50%',
+          top: lift,
           transform: 'translateY(-50%)',
           pointerEvents: 'none',
         }}>

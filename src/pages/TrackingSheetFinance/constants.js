@@ -372,6 +372,93 @@ export const scopedOpeningDebt = (r, scope) => scopedPosition(r, scope, 'opening
 export const entityCredit = (r, entity) => entityPosition(r, entity).credit;
 export const scopedCredit = (r, scope) => scopedPosition(r, scope, 'credit');
 
+// ── Trop-perçus imputés (règle dev 2026-11-06, n°736) ───────────────────────
+//
+// « Tout le trop-perçu ne reste pas sur le mois en cours. Il va soit aller
+// payer un retard, soit aller payer la prochaine mensualité. » Le mois payé
+// garde son attendu, déjà réglé en partie ou en totalité. Le serveur fait le
+// calcul ; ces helpers ne font que le lire, dans la vision active.
+//
+// Bloc `imputation_*` du serveur, calculé sur les saisies actuelles comme les
+// montants reçus de la ligne. Sans lui (API d'avant le 06/11), le mois garde
+// son reçu et son surplus se lit comme avant, sans destination.
+const entityImputation = (r, entity) => {
+  const imputation = r?.[`imputation_${entity}`];
+  if (imputation) return imputation;
+  const a = scopedPeriodAmounts(r, entity);
+  return { paid_for_month: Math.min(a.received, a.expected), surplus_to_next: Math.max(a.received - a.expected, 0) };
+};
+const scopedImputation = (r, scope, key) =>
+  (scope === 'optilex' ? 0 : toNumber(entityImputation(r, 'owner')[key]) || 0) +
+  (scope === 'owner' ? 0 : toNumber(entityImputation(r, 'optilex')[key]) || 0);
+
+// Ce que le mois a reçu pour lui-même : ses encaissements, plus les avances
+// des mois précédents, moins son trop-perçu parti ailleurs. Chaque euro compte
+// une fois, dans le mois qu'il paie.
+export const scopedPaidForMonth = (r, scope) => scopedImputation(r, scope, 'paid_for_month');
+// Part du mois payée d'avance par un trop-perçu antérieur.
+export const scopedAdvance = (r, scope) => scopedImputation(r, scope, 'advance_applied');
+// Trop-perçu du mois : ce qui solde un retard, ce qui part sur les mois suivants.
+export const scopedSurplus = (r, scope) => ({
+  toPrior: scopedImputation(r, scope, 'surplus_to_prior'),
+  toNext: scopedImputation(r, scope, 'surplus_to_next'),
+});
+
+// Mois reliés par le serveur, par entité puis additionnés dans la vision :
+// `from` = d'où vient l'avance qui paie ce mois, `to` = mois payés par son
+// trop-perçu (`month` null : pas encore imputé, ou crédit sans mois d'origine).
+export const advanceLinks = (r, scope, side) => {
+  const byMonth = new Map();
+  for (const entity of ['owner', 'optilex']) {
+    if (scope !== 'global' && scope !== entity) continue;
+    for (const link of entityImputation(r, entity)[side === 'from' ? 'advance_from' : 'surplus_to'] || []) {
+      const amount = toNumber(link.amount) || 0;
+      if (amount > 0) byMonth.set(link.period ?? null, (byMonth.get(link.period ?? null) || 0) + amount);
+    }
+  }
+  return [...byMonth].map(([month, amount]) => ({ month, amount }))
+    .sort((a, b) => String(a.month ?? '9999').localeCompare(String(b.month ?? '9999')));
+};
+
+const deMonth = (label) => (/^[aeiouyàâéèêëîïôöùû]/.test(label) ? `d’${label}` : `de ${label}`);
+
+// « avance d’octobre » : ce qui paie déjà le mois, et d'où ça vient.
+export const advanceNote = (r, scope) => {
+  const amount = scopedAdvance(r, scope);
+  if (!(amount > 0)) return null;
+  const links = advanceLinks(r, scope, 'from');
+  const months = links.map((l) => l.month).filter(Boolean);
+  // Un seul mois d'origine se nomme ; plusieurs sources (mois de plusieurs
+  // années, crédit sans mois) se disent « antérieures », détail au survol.
+  const text = !months.length ? 'payé d’avance'
+    : months.length === 1 && links.length === 1 ? `avance ${deMonth(monthsLabel(months))}` : 'avances antérieures';
+  const detail = links.map((l) => `${formatEUR(l.amount)} ${l.month ? `payés en ${formatMonthLabel(l.month).toLowerCase()}` : 'de crédit'}`);
+  return { amount, text, title: `Déjà payé d’avance : ${detail.join(', ')}.` };
+};
+
+// « → novembre », « → retard, déc. » : où part le trop-perçu du mois.
+export const surplusNote = (r, scope) => {
+  const { toPrior, toNext } = scopedSurplus(r, scope);
+  const amount = toPrior + toNext;
+  if (!(amount > 0)) return null;
+  const links = advanceLinks(r, scope, 'to');
+  const months = links.map((l) => l.month).filter(Boolean);
+  const parts = [];
+  const detail = [];
+  if (toPrior > 0) {
+    parts.push('retard');
+    detail.push(`${formatEUR(toPrior)} soldent le retard`);
+  }
+  // Abrégé : la ligne porte aussi la pastille du montant.
+  if (months.length) parts.push(monthsLabel(months, { short: true }));
+  for (const l of links) {
+    detail.push(l.month ? `${formatEUR(l.amount)} paient ${formatMonthLabel(l.month).toLowerCase()}` : `${formatEUR(l.amount)} restent en crédit`);
+  }
+  if (links.some((l) => !l.month)) parts.push('crédit');
+  if (toNext > 0 && !links.length) parts.push('mois suivant');
+  return { amount, text: `→ ${parts.join(', ')}`, title: `Trop-perçu de ${formatEUR(amount)} : ${detail.join(', ') || 'mois suivant'}.` };
+};
+
 // Ancienneté de la créance, en mois, dans la vision active.
 //
 // Le serveur donne le premier mois d'une dette JAMAIS soldée depuis
@@ -415,10 +502,15 @@ const round2 = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
 export const computeKpis = (visibleRows, scope, allCount = null) => {
   let expected = 0, received = 0, overdue = 0, overdueCum = 0;
   let openingDebt = 0, recoveredPrior = 0, notDue = 0, credit = 0;
+  let cash = 0, advances = 0;
   (visibleRows || []).forEach((r) => {
     const a = scopedPeriodAmounts(r, scope);
     expected += a.expected;
-    received += a.received;
+    // Reçu affecté au mois : un trop-perçu compte dans le mois qu'il paie,
+    // pas deux fois (dev 2026-11-06). L'encaissé brut reste à part.
+    received += scopedPaidForMonth(r, scope);
+    cash += a.received;
+    advances += scopedAdvance(r, scope);
     overdue += scopedOverdueCurrent(r, scope);
     overdueCum += scopedOverdueCum(r, scope);
     openingDebt += scopedOpeningDebt(r, scope);
@@ -434,6 +526,7 @@ export const computeKpis = (visibleRows, scope, allCount = null) => {
     overdueTotal: round2(overdue), overdueTotalWithCum: round2(overdue + overdueCum),
     overdueCumTotal: round2(overdueCum), openingDebt: round2(openingDebt),
     recoveredPrior: round2(recoveredPrior), notDue: round2(notDue), credit: round2(credit),
+    cashTotal: round2(cash), advanceTotal: round2(advances),
     receivedPct: formatPercent(received, expected),
     overdueRecoveredPct: formatPercent(recoveredPrior, openingDebt),
   };
@@ -988,6 +1081,15 @@ export const formatMonthLabel = (period) => {
   const [y, m] = period.split('-').map(Number);
   if (!y || !m) return period;
   return `${MONTH_LABELS[m - 1]} ${y}`;
+};
+
+// « novembre », ou « nov., déc. » pour plusieurs mois : les mois reliés à un
+// trop-perçu, sans l'année, pour tenir dans une cellule.
+const MONTH_SHORT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+export const monthsLabel = (periods, { short = false } = {}) => {
+  const months = (periods || []).map((p) => Number(String(p).slice(5, 7))).filter((m) => m >= 1 && m <= 12);
+  if (months.length === 1 && !short) return MONTH_LABELS[months[0] - 1].toLowerCase();
+  return months.map((m) => MONTH_SHORT[m - 1]).join(', ');
 };
 
 // « d’août 2026 », « de septembre 2026 » : le mois précédé de sa préposition.
