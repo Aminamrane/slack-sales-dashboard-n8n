@@ -98,6 +98,7 @@ import { ContractPendingIcon } from './components/FinanceIcons.jsx';
 import { displayEtat, MeteoIcon, METEO_BANDS, meteoBandOf } from '../OptilexBoard.jsx';
 import CommentPopup from './CommentPopup.jsx';
 import apiClient from '../../services/apiClient.js';
+import { isReadOnlyViewer, readOnlyProps } from '../../utils/readOnlyRoles.js';
 
 // ── Notion palette (kept in sync with index.jsx N constant) ─────────────
 const N = {
@@ -880,6 +881,7 @@ const RowRenderer = React.memo(function RowRenderer({
           autoDebit={row.auto_debit}
           onCommitSpec={patch('payment_specificity')}
           onCommitAutoDebit={patch('auto_debit')}
+          disabled={!cols.modalites.editable}
         />
       ))}
 
@@ -996,6 +998,7 @@ const RowRenderer = React.memo(function RowRenderer({
         <EditableSelect
           value={row[fields.psp]}
           options={PSP_OPTIONS}
+          disabled={!cols.psp.editable}
           onCommit={patch(fields.psp)}
           pillColors={PSP_COLORS}
           pillFallback={PSP_FALLBACK}
@@ -1769,8 +1772,9 @@ export default function TableView({
           />
         )}
 
-        {/* "+ Nouvelle ligne" footer (Notion-style) */}
+        {/* "+ Nouvelle ligne" footer (Notion-style) ; marqué « Lecture seule » pour ces rôles. */}
         <button
+          {...readOnlyProps(currentUser?.role)}
           style={{
             display: 'flex', alignItems: 'center', gap: 6,
             width: '100%',
@@ -1796,6 +1800,7 @@ export default function TableView({
         Affiché au-dessus de la table, ancré au bouton bulle de la cell. */}
     <CommentPopup
       open={!!commentPopup}
+      readOnly={isReadOnlyViewer(currentUser?.role)}
       periodRowId={commentPopup?.rowId || null}
       fieldName={commentPopup ? (SCOPED_COMMENT_FIELDS[scope]?.[commentPopup.colKey] || null) : null}
       anchorRect={commentPopup?.anchorRect || null}

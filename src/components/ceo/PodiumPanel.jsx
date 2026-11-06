@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Target } from 'lucide-react';
 import apiClient from '../../services/apiClient';
+import { READ_ONLY_PROPS } from '../../utils/readOnlyRoles.js';
 import ceo6 from '../../assets/ceo6.svg';
 import firstPlace from '../../assets/1st-place.png';
 import secondPlace from '../../assets/2st-place.png';
@@ -54,7 +55,8 @@ function useHonours(enabled) {
 
 // Classement du mois : les quatre premiers commerciaux, leurs ventes, leurs distinctions,
 // et l'objectif mensuel (ventes cibles) que le CEO, l'admin ou la direction financière éditent.
-export default function PodiumPanel({ leaderboard, loading, objective, canEdit, onEditObjectives, monthLabel }) {
+// `readOnly` (rôles en lecture seule) : le bouton Objectifs reste visible, désactivé.
+export default function PodiumPanel({ leaderboard, loading, objective, canEdit, onEditObjectives, monthLabel, readOnly = false }) {
   const { reduce, item } = useMotionPrefs();
   const sellers = (leaderboard?.all_sellers || []).slice(0, 4);
   const max = Math.max(1, ...sellers.map((s) => s.sales || 0));
@@ -123,7 +125,7 @@ export default function PodiumPanel({ leaderboard, loading, objective, canEdit, 
             {objective != null && monthSales != null && <> · {intFr(monthSales)} vente{monthSales > 1 ? 's' : ''} déclarée{monthSales > 1 ? 's' : ''}</>}
           </span>
         </div>
-        {canEdit && <button type="button" className="an-objective-edit" onClick={onEditObjectives}>Objectifs</button>}
+        {(canEdit || readOnly) && <button type="button" className="an-objective-edit" onClick={onEditObjectives} {...(readOnly ? READ_ONLY_PROPS : {})}>Objectifs</button>}
       </div>
       {objective != null && monthSales != null && objective > 0 && (
         <Share part={Math.min(monthSales, objective)} total={objective} label="de l’objectif atteint" tone={monthSales >= objective ? 'good' : 'watch'} />

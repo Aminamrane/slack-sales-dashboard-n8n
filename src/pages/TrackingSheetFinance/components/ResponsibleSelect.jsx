@@ -16,6 +16,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { UserCheck } from 'lucide-react';
 
 import apiClient from '../../../services/apiClient.js';
+import { READ_ONLY_PROPS } from '../../../utils/readOnlyRoles.js';
 
 const N = {
   text: '#37352f',
@@ -36,7 +37,8 @@ const loadTeam = () => {
   return teamPromise;
 };
 
-export default function ResponsibleSelect({ clientId, value, canEdit, onChanged, onShowToast, label = true }) {
+// `readOnly` (rôles en lecture seule) : la liste reste affichée, désactivée.
+export default function ResponsibleSelect({ clientId, value, canEdit, onChanged, onShowToast, label = true, readOnly = false }) {
   const [team, setTeam] = useState(null);
   const [unavailable, setUnavailable] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -56,7 +58,7 @@ export default function ResponsibleSelect({ clientId, value, canEdit, onChanged,
   const meInTeam = !!(meId && team?.some((m) => m.id === meId));
 
   const assign = useCallback(async (userId) => {
-    if (!clientId || saving) return;
+    if (readOnly || !clientId || saving) return;
     setSaving(true);
     try {
       const r = await apiClient.put(
@@ -73,9 +75,9 @@ export default function ResponsibleSelect({ clientId, value, canEdit, onChanged,
     } finally {
       setSaving(false);
     }
-  }, [clientId, saving, onChanged, onShowToast]);
+  }, [clientId, saving, onChanged, onShowToast, readOnly]);
 
-  const editable = canEdit && !unavailable && !!team;
+  const editable = (canEdit || readOnly) && !unavailable && !!team;
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 24, flexWrap: 'wrap' }}>
@@ -101,6 +103,7 @@ export default function ResponsibleSelect({ clientId, value, canEdit, onChanged,
             fontWeight: currentId ? 600 : 500, outline: 'none',
             cursor: saving ? 'wait' : 'pointer',
           }}
+          {...(readOnly ? READ_ONLY_PROPS : {})}
         >
           <option value="">Personne</option>
           {team.map((m) => (

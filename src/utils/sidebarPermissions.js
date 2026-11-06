@@ -19,7 +19,8 @@ const ROLE_SECTIONS = {
   acquisition_director: new Set(["recent", "acquisition"]),
   // Timothy remplit la page Campagnes : section Finance limitée à cet onglet.
   head_of_acquisition: new Set(["recent", "acquisition", "finance"]),
-  hr: new Set(["recent", "human", "acquisition"]),  // RH : coin Humain (Congés + Variables) + tout l'Acquisition
+  // RH (hr) : aucune entrée depuis le 06/11/2026. Comme finance_director, ils voient toutes les
+  // sections, onglets réservés retirés par ITEM_ROLE_GATE, en lecture seule (utils/readOnlyRoles.js).
   // CSM (Vincent) : Leaderboard (page d'arrivée) + Funnel Leads + Board Owner/Opti'Lex.
   customer_success_manager: new Set(["acquisition", "produit"]),
 };

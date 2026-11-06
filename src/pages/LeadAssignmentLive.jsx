@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
+import { isReadOnlyViewer } from "../utils/readOnlyRoles";
 import { ReassignPanel, stopBadge } from "../components/AutoAssignControls.jsx";
 import AutoAssignFlow from "../components/AutoAssignFlow.jsx";
 import SalesDrawer from "../components/SalesDrawer.jsx";
@@ -40,7 +41,9 @@ export default function LeadAssignmentLive({ embed = false }) {
     if (!token || !user) { navigate("/login"); return; }
     setSession({ user: { email: user.email, user_metadata: { name: user.name, avatar_url: user.avatar_url || null } } });
     setIsAdmin(user.role === "admin");
-    if (["admin", "head_of_sales", "head_of_sales_manager", "ceo", "acquisition_director", "head_of_acquisition", "finance_director"].includes(user.role)) setOk(true);
+    // Rôles en lecture seule (RH) : la page sans ses actions, réservées à l'admin (isAdmin).
+    if (["admin", "head_of_sales", "head_of_sales_manager", "ceo", "acquisition_director", "head_of_acquisition", "finance_director"].includes(user.role)
+      || isReadOnlyViewer(user.role)) setOk(true);
     else if (!embed) navigate("/");  // en embed, l'acces est garanti par le parent (CRM)
   }, [navigate]);
 

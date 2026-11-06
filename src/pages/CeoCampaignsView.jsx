@@ -19,8 +19,10 @@ import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import SharedNavbar from "../components/SharedNavbar.jsx";
+import { READ_ONLY_DIRECTION_ROLES } from "../utils/readOnlyRoles";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo", "marketing", "finance_director", "head_of_acquisition"]);
+// Les rôles en lecture seule (RH) consultent les campagnes sans rien y écrire (Campaigns readOnly).
+const ALLOWED_ROLES = new Set(["admin", "ceo", "marketing", "finance_director", "head_of_acquisition", ...READ_ONLY_DIRECTION_ROLES]);
 
 export default function CeoCampaignsView() {
   const navigate = useNavigate();

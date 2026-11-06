@@ -164,6 +164,7 @@ export default function ModalitesCell({
   autoDebit,
   onCommitSpec,       // (value|null) → PATCH payment_specificity
   onCommitAutoDebit,  // (value|null) → PATCH auto_debit
+  disabled = false,   // lecture seule (RH) : pastilles affichées, aucun menu d'édition
 }) {
   const [specOpen, setSpecOpen] = useState(false);
   const [debitOpen, setDebitOpen] = useState(false);
@@ -247,12 +248,12 @@ export default function ModalitesCell({
         ref={specRef}
         type="button"
         title={chipTitle}
-        onClick={(e) => { e.stopPropagation(); setSpecOpen((v) => !v); }}
-        onMouseEnter={() => setChipHover(true)}
-        onMouseLeave={() => setChipHover(false)}
+        onClick={disabled ? undefined : (e) => { e.stopPropagation(); setSpecOpen((v) => !v); }}
+        onMouseEnter={disabled ? undefined : () => setChipHover(true)}
+        onMouseLeave={disabled ? undefined : () => setChipHover(false)}
         style={{
           border: 'none', background: 'transparent', padding: 0,
-          cursor: 'pointer', fontFamily: 'inherit',
+          cursor: disabled ? 'default' : 'pointer', fontFamily: 'inherit',
           display: 'inline-flex', alignItems: 'center',
         }}
       >
@@ -323,10 +324,10 @@ export default function ModalitesCell({
         ref={debitRef}
         type="button"
         title={debitTitle}
-        onClick={(e) => { e.stopPropagation(); setDebitOpen((v) => !v); }}
+        onClick={disabled ? undefined : (e) => { e.stopPropagation(); setDebitOpen((v) => !v); }}
         style={{
           border: 'none', background: 'transparent', padding: 0,
-          cursor: 'pointer', fontFamily: 'inherit',
+          cursor: disabled ? 'default' : 'pointer', fontFamily: 'inherit',
           display: 'inline-flex', alignItems: 'center', gap: 4,
         }}
       >

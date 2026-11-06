@@ -1,4 +1,5 @@
 import { parisWallTime } from '../../utils/boardIntegration.js';
+import { READ_ONLY_DIRECTION_ROLES } from '../../utils/readOnlyRoles.js';
 
 // constants.js — single source of truth for the Tracking Finance page.
 //
@@ -9,7 +10,16 @@ import { parisWallTime } from '../../utils/boardIntegration.js';
 // ── Roles allowed on this page ───────────────────────────────────────────
 // Le CEO a les accès de la direction financière depuis le 2026-09-30 (dev :
 // « tous les accès à Paul comme à Isma »).
-export const ALLOWED_ROLES = ['admin', 'ceo', 'finance_director', 'finance_team'];
+// Rôles qui écrivent sur la page (inchangé).
+const FINANCE_WRITE_ROLES = ['admin', 'ceo', 'finance_director', 'finance_team'];
+// Accès à la page : ces rôles, plus les rôles en lecture seule de la direction
+// (RH, 2026-11-06), qui consultent tout et n'écrivent rien.
+export const ALLOWED_ROLES = [...FINANCE_WRITE_ROLES, ...READ_ONLY_DIRECTION_ROLES];
+
+// Toute écriture de la page, au-delà des montants et de la fiche : commentaires,
+// filtres enregistrés, pièces de l'historique, fil de l'espace commun, statut et
+// recalage de l'onboarding. Faux pour les rôles en lecture seule.
+export const canWriteFinance = (role) => FINANCE_WRITE_ROLES.includes(role);
 
 // ── Qui peut écrire quoi (décision dev 2026-08-27) ───────────────────────
 //
@@ -27,7 +37,7 @@ const AMOUNT_EDIT_ROLES = ['admin', 'ceo', 'finance_director'];
 export const canEditAmounts = (role) => AMOUNT_EDIT_ROLES.includes(role);
 
 // Modalités, sociétés, associés, contacts.
-export const canEditContract = (role) => ALLOWED_ROLES.includes(role);
+export const canEditContract = (role) => canWriteFinance(role);
 
 // Équipe finance (Lény, Aurélie, Ingrid) : mêmes leviers que la direction
 // dans « Gérer les attendus », mais chaque geste part en DEMANDE à valider

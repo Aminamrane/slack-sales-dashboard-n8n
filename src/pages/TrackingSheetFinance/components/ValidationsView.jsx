@@ -16,6 +16,7 @@ import { motion } from 'framer-motion';
 import { Check, X, RefreshCw, TriangleAlert, ExternalLink } from 'lucide-react';
 
 import apiClient from '../../../services/apiClient.js';
+import { READ_ONLY_PROPS } from '../../../utils/readOnlyRoles.js';
 import { formatEUR, formatMonthLabel } from '../constants.js';
 
 const N = {
@@ -79,7 +80,8 @@ function monthChanges(req) {
   return rows;
 }
 
-export default function ValidationsView({ onOpenClient, onChanged, showToast }) {
+// `readOnly` (rôles en lecture seule) : les demandes se lisent, Valider / Refuser visibles et désactivés.
+export default function ValidationsView({ onOpenClient, onChanged, showToast, readOnly = false }) {
   const [tab, setTab] = useState('pending');            // 'pending' | 'done'
   const [items, setItems] = useState(null);
   const [error, setError] = useState(null);
@@ -127,7 +129,7 @@ export default function ValidationsView({ onOpenClient, onChanged, showToast }) 
   }, [load]);
 
   const act = useCallback(async (req, kind) => {
-    if (acting) return;
+    if (readOnly || acting) return;
     const note = (notes[req.id] || '').trim();
     if (kind === 'reject' && !note) {
       showToast?.('Un motif de refus est attendu : l’auteur doit comprendre.', 'error');
@@ -149,7 +151,7 @@ export default function ValidationsView({ onOpenClient, onChanged, showToast }) 
     } finally {
       setActing(null);
     }
-  }, [acting, notes, load, onChanged, showToast]);
+  }, [acting, notes, load, onChanged, showToast, readOnly]);
 
   const pendingCount = useMemo(() => (items || []).filter((r) => r.status === 'pending').length, [items]);
 
@@ -204,6 +206,7 @@ export default function ValidationsView({ onOpenClient, onChanged, showToast }) 
             onNote={(v) => setNotes((n) => ({ ...n, [req.id]: v }))}
             onAct={(kind) => act(req, kind)}
             onOpenClient={onOpenClient}
+            readOnly={readOnly}
           />
         ))}
       </div>
@@ -211,7 +214,7 @@ export default function ValidationsView({ onOpenClient, onChanged, showToast }) 
   );
 }
 
-function RequestCard({ req, index, busy, confirm, onConfirm, note, onNote, onAct, onOpenClient }) {
+function RequestCard({ req, index, busy, confirm, onConfirm, note, onNote, onAct, onOpenClient, readOnly = false }) {
   const st = STATUS[req.status] || STATUS.pending;
   const months = useMemo(() => monthChanges(req), [req]);
   const pending = req.status === 'pending';
@@ -314,10 +317,10 @@ function RequestCard({ req, index, busy, confirm, onConfirm, note, onNote, onAct
             </>
           ) : (
             <>
-              <button type="button" disabled={busy || !!req.drift} onClick={() => onConfirm('approve')} title={req.drift ? 'Les chiffres ont bougé : à revoir avec l’auteur' : 'Rejouer le geste, tracé « demande de …, validée »'} style={btnStyle('primary', busy || !!req.drift)}>
+              <button type="button" disabled={busy || !!req.drift} onClick={() => onConfirm('approve')} title={req.drift ? 'Les chiffres ont bougé : à revoir avec l’auteur' : 'Rejouer le geste, tracé « demande de …, validée »'} style={btnStyle('primary', busy || !!req.drift)} {...(readOnly ? READ_ONLY_PROPS : {})}>
                 <Check size={13} /> Valider
               </button>
-              <button type="button" disabled={busy} onClick={() => onConfirm('reject')} style={btnStyle('solid')}>
+              <button type="button" disabled={busy} onClick={() => onConfirm('reject')} style={btnStyle('solid')} {...(readOnly ? READ_ONLY_PROPS : {})}>
                 <X size={13} /> Refuser
               </button>
             </>

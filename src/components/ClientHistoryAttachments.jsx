@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Paperclip, Phone, Mail, Download, X } from 'lucide-react';
 import apiClient from '../services/apiClient.js';
+import { isReadOnlyViewer, READ_ONLY_MARK, READ_ONLY_PROPS } from '../utils/readOnlyRoles.js';
 import './ClientHistoryAttachments.css';
 
 const roles = ['admin', 'ceo', 'finance_director', 'finance_team', 'customer_success_manager'];
@@ -17,11 +18,14 @@ async function binary(path, options = {}) {
 
 export default function ClientHistoryAttachments({ clientId: providedId, numero }) {
   const role = apiClient.getUser()?.role;
-  if (!roles.includes(role)) return null;
-  return <History key={providedId || numero} providedId={providedId} numero={numero}/>;
+  // Rôles en lecture seule (RH) : pièces consultées et téléchargées ; ajout, partage et retrait visibles, désactivés.
+  const readOnly = isReadOnlyViewer(role);
+  if (!roles.includes(role) && !readOnly) return null;
+  return <History key={providedId || numero} providedId={providedId} numero={numero} readOnly={readOnly}/>;
 }
 
-function History({ providedId, numero }) {
+function History({ providedId, numero, readOnly = false }) {
+  const ro = readOnly ? READ_ONLY_PROPS : {};
   const [clientId, setClientId] = useState(providedId);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -116,12 +120,12 @@ function History({ providedId, numero }) {
     <h3><Paperclip size={17}/> Documents et appels partagés</h3>
     <p className="history-hint">Consultables par l’équipe CSM et la Finance Owner. Ajoutez une copie d’email EML ou HTML pour conserver sa présentation.</p>
     {error && <p role="alert" className="history-error">{error} <button type="button" disabled={busy} onClick={() => setVersion(v => v + 1)}>Actualiser</button></p>}
-    <textarea aria-label="Contexte de la pièce jointe" placeholder="Un contexte pour l’équipe CSM… (facultatif)" maxLength={2000} rows={2} value={note} disabled={busy} onChange={e => setNote(e.target.value)}/>
+    <textarea aria-label="Contexte de la pièce jointe" placeholder="Un contexte pour l’équipe CSM… (facultatif)" maxLength={2000} rows={2} value={note} disabled={busy} onChange={e => setNote(e.target.value)} {...ro}/>
     <div className="history-actions">
-      <label className={`history-button ${busy || !base || loading ? 'is-disabled' : ''}`}><Paperclip size={15}/> Joindre un document ou un email
-        <input type="file" aria-label="Joindre un document ou un email" accept=".pdf,.png,.jpg,.jpeg,.eml,.html,.htm,.mp3,.wav,.m4a" disabled={busy || !base || loading}
+      <label className={`history-button ${busy || !base || loading || readOnly ? 'is-disabled' : ''}`} {...(readOnly ? READ_ONLY_MARK : {})}><Paperclip size={15}/> Joindre un document ou un email
+        <input type="file" aria-label="Joindre un document ou un email" accept=".pdf,.png,.jpg,.jpeg,.eml,.html,.htm,.mp3,.wav,.m4a" disabled={busy || !base || loading || readOnly}
           onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) run(() => upload(file)); }}/></label>
-      {canBrowseCalls && <button type="button" disabled={busy || !base || loading} onClick={() => run(() => listCalls())}><Phone size={15}/> Joindre un appel</button>}
+      {canBrowseCalls && <button type="button" disabled={busy || !base || loading} onClick={() => run(() => listCalls())} {...ro}><Phone size={15}/> Joindre un appel</button>}
     </div>
     <small>PDF, images, email EML/HTML ou audio · 20 Mo maximum. Aucun email n’est envoyé.</small>
     {calls && <div className="history-call-picker"><div className="history-actions"><strong>Choisir un appel du client</strong><button type="button" onClick={() => setCalls(null)} aria-label="Fermer le choix d’appel"><X size={15}/></button></div>
@@ -140,7 +144,7 @@ function History({ providedId, numero }) {
       <p className="history-hint">{item.author_name} · {dateLabel(item.created_at)}</p>
       {item.note && <p className="history-note">{item.note}</p>}
       <div className="history-actions">{item.kind !== 'call' && <button type="button" disabled={busy} onClick={() => run(() => open(item, true))}><Download size={13}/> Télécharger l’original</button>}
-        {item.can_remove && (removeId === item.id ? <><button type="button" disabled={busy} onClick={() => run(async () => { await apiClient.delete(`${base}/${item.id}`); if (alive.current) { setRemoveId(null); setVersion(v => v + 1); } })}>Confirmer le retrait</button><button type="button" onClick={() => setRemoveId(null)}>Annuler</button></> : <button type="button" disabled={busy} onClick={() => setRemoveId(item.id)}>Retirer</button>)}
+        {item.can_remove && (removeId === item.id ? <><button type="button" disabled={busy} onClick={() => run(async () => { await apiClient.delete(`${base}/${item.id}`); if (alive.current) { setRemoveId(null); setVersion(v => v + 1); } })}>Confirmer le retrait</button><button type="button" onClick={() => setRemoveId(null)}>Annuler</button></> : <button type="button" disabled={busy} onClick={() => setRemoveId(item.id)} {...ro}>Retirer</button>)}
       </div></li>)}</ul>
     {preview && createPortal(<div ref={dialog} className="history-preview client-history" role="dialog" aria-modal="true" aria-label="Consulter la pièce jointe">
       <div className="history-preview-card"><div className="history-actions"><strong>{preview.item.file_name}</strong><button type="button" aria-label="Fermer la pièce jointe" onClick={() => setPreview(null)}><X size={20}/></button></div>

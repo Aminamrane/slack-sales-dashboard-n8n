@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import apiClient from "../services/apiClient";
 import { makeCharte } from "../styles/charte.js";
 import SequenceTestPanel from "../components/SequenceTestPanel";
+import { isReadOnlyViewer } from "../utils/readOnlyRoles";
 import { EmailActivity, SmsActivity } from "../components/SequenceActivity";
 
 const FONT = 'Inter, -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif';
@@ -47,6 +48,7 @@ export default function SequencesMonitor({ embed }) {
     return () => clearInterval(t);
   }, []);
   const C = useMemo(() => makeCharte(darkMode), [darkMode]);
+  const readOnly = isReadOnlyViewer(apiClient.getUser()?.role);
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -217,8 +219,9 @@ export default function SequencesMonitor({ embed }) {
           </div>
         )}
 
-        {/* Envoi de test de l'onglet actif (tout de suite, sans délais, rien n'est compté) */}
-        <SequenceTestPanel active={active} C={C}
+        {/* Envoi de test de l'onglet actif (tout de suite, sans délais, rien n'est compté).
+            Rôles en lecture seule (RH) : visible, désactivé (un envoi de test est une écriture). */}
+        <SequenceTestPanel active={active} C={C} readOnly={readOnly}
           label={isConf ? "Mail de confirmation" : isNoshow ? "Relance no-show" : isSms ? "SMS prospects" : (data.sequences.find((x) => x.key === active)?.label || active)} />
 
         {isSms ? (

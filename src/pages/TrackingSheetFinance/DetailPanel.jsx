@@ -61,6 +61,7 @@ import {
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
+import { isReadOnlyViewer, READ_ONLY_PROPS } from '../../utils/readOnlyRoles.js';
 import {
   formatEUR, formatDateFR, formatMonthLabel, periodFromDate, splitClientIdentity, ndaPersonLabel, distinctCrmName,
   ETAT_COLORS, ETAT_FALLBACK, TERMINATED_BOARD_ETATS,
@@ -210,6 +211,10 @@ export default function DetailPanel({
   // Équipe finance : le même poste de pilotage, mais chaque geste part en
   // demande à valider par la direction (dev 2026-09-23).
   const canProposeMoney = canProposeAmounts(role);
+  // Rôles en lecture seule (RH) : la fiche de la direction financière, chaque
+  // contrôle d'écriture visible et désactivé (aucun dialogue ne s'ouvre).
+  const readOnly = isReadOnlyViewer(role);
+  const ro = readOnly ? READ_ONLY_PROPS : {};
 
   // Reset on close
   useEffect(() => {
@@ -764,7 +769,7 @@ export default function DetailPanel({
             {/* Nom du client et actions. */}
             <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12}}>
               <ClientHeader client={client} />
-              {(canEdit || canEditMoney || canProposeMoney) && <button type="button" ref={actionsAnchor} aria-expanded={actionsOpen} onClick={() => setActionsOpen(v => !v)} style={{display:'flex',alignItems:'center',gap:6,border:'1px solid #e3e2e0',borderRadius:7,padding:'7px 10px',background:'#fff',font:'inherit',fontSize:12,cursor:'pointer'}}><SlidersHorizontal size={14}/> Actions <ChevronDown size={12}/></button>}
+              {(canEdit || canEditMoney || canProposeMoney || readOnly) && <button type="button" ref={actionsAnchor} aria-expanded={actionsOpen} onClick={() => setActionsOpen(v => !v)} style={{display:'flex',alignItems:'center',gap:6,border:'1px solid #e3e2e0',borderRadius:7,padding:'7px 10px',background:'#fff',font:'inherit',fontSize:12,cursor:'pointer'}} {...ro}><SlidersHorizontal size={14}/> Actions <ChevronDown size={12}/></button>}
             </div>
             <PortalDropdown open={actionsOpen} anchorRef={actionsAnchor} onClose={() => setActionsOpen(false)} align="right" minWidth={260}>
               <div style={{padding:10}}>
@@ -814,6 +819,7 @@ export default function DetailPanel({
               // Le responsable, lui, est une organisation de travail : toute
               // l'équipe finance peut se désigner ou reprendre un dossier.
               canEditTeam={canEdit}
+              readOnly={readOnly}
               onResponsibleChanged={onResponsibleChanged}
               onShowToast={onShowToast}
             />
@@ -827,7 +833,8 @@ export default function DetailPanel({
                 loss={profile?.loss || null}
                 promise={!!focusedRow?.client?.payment_promise}
                 billingLastMonth={profile?.billing_last_month || null}
-                onEditBilling={canEditMoney ? () => setBillingOpen(true) : null}
+                onEditBilling={(canEditMoney || readOnly) ? () => setBillingOpen(true) : null}
+                readOnly={readOnly}
               />
 
               {/* 4 tuiles KPI contrat (scope-aware, dérivées de la timeline).
@@ -841,7 +848,8 @@ export default function DetailPanel({
                 overdueCum={focusedRow ? scopedOverdueCum(focusedRow, scope) : 0}
                 credit={focusedRow ? scopedCredit(focusedRow, scope) : 0}
                 loading={loadingTimeline}
-                onRefund={canEditMoney ? openRefund : null}
+                onRefund={(canEditMoney || readOnly) ? openRefund : null}
+                readOnly={readOnly}
               />
 
               {/* Remboursement d'un trop-perçu — l'encaissement reste intact,
@@ -869,11 +877,12 @@ export default function DetailPanel({
                 <Section
                   title="Identité, contacts et contrat"
                   delay={0.08}
-                  action={canEdit ? (
+                  action={(canEdit || readOnly) ? (
                     <button
                       type="button"
                       onClick={() => setContractEditing((v) => !v)}
                       title={contractEditing ? 'Terminer l’édition' : 'Modifier la fiche'}
+                      {...ro}
                       style={{
                         display: 'inline-flex', alignItems: 'center', gap: 5,
                         border: 'none', cursor: 'pointer',
@@ -898,6 +907,7 @@ export default function DetailPanel({
 
                     canEdit={canEdit}
                     canEditMoney={canEditMoney}
+                    readOnly={readOnly}
                     editing={contractEditing}
                     clientId={clientId}
                     onProfileChanged={refreshProfileAndRows}
@@ -916,7 +926,7 @@ export default function DetailPanel({
               <div className="fd-cols" data-wide={fullscreen ? 'true' : undefined}>
                 {/* 2 · Paiements et suivi */}
                 <Chapter title="Paiements et suivi" className="fd-chapter--payments">
-                  <StateReview clientId={clientId} version={profile} canProcess={canEditMoney} onReview={setStateReview} onChanged={reloadAfterExit}/>
+                  <StateReview clientId={clientId} version={profile} canProcess={canEditMoney} readOnly={readOnly} onReview={setStateReview} onChanged={reloadAfterExit}/>
                   {/* Error state */}
                   {error && (
                     <div style={{
@@ -952,16 +962,16 @@ export default function DetailPanel({
                       focusedRowId={rowId}
                       onSelectRow={onSelectRow}
                     />
-                    {canEdit && focusedRow?.id && String(profile?.client_id) === String(clientId) &&
+                    {(canEdit || readOnly) && focusedRow?.id && String(profile?.client_id) === String(clientId) &&
                       <div className="fd-followup">
                         <InstallmentFollowup key={`${clientId}-${focusedRow.id}-${scope}`} clientId={clientId} period={focusedRow}
-                          scope={scope} reviews={profile.installment_followups || []} onChanged={reviews => {
+                          scope={scope} readOnly={readOnly} reviews={profile.installment_followups || []} onChanged={reviews => {
                             setProfile(previous => ({ ...previous, installment_followups: reviews })); reloadAfterExit();
                           }}/>
                       </div>
                     }
                   </Section>
-                  <ClientComments key={`comments-${clientId}`} clientId={clientId} onShowToast={onShowToast} variant="block" role={role} />
+                  <ClientComments key={`comments-${clientId}`} clientId={clientId} onShowToast={onShowToast} variant="block" role={role} readOnly={readOnly} />
                 </Chapter>
 
                 {/* 3 · Contrats et facturation */}
@@ -974,7 +984,7 @@ export default function DetailPanel({
                     />
                   </Section>
                   <Section variant="block" title="Sociétés de facturation" delay={0.1}>
-                    <BillingCompanies key={`billing-${clientId}`} clientId={clientId} canEdit={canEdit} reloadKey={profile?.companies?.length || 0} />
+                    <BillingCompanies key={`billing-${clientId}`} clientId={clientId} canEdit={canEdit} readOnly={readOnly} reloadKey={profile?.companies?.length || 0} />
                   </Section>
                   <DetailDisclosure key={`billing-${clientId}`} title="Ventilation des règlements" description="Répartir les encaissements entre les sociétés, mois par mois">
 
@@ -985,6 +995,7 @@ export default function DetailPanel({
                       scope={scope}
                       canEdit={canEdit}
                       canEditMoney={canEditMoney}
+                      readOnly={readOnly}
                       onShowToast={onShowToast}
                       reloadKey={profile?.companies?.length || 0}
                       onReceiptsChanged={reloadAfterExit}
@@ -1011,7 +1022,7 @@ export default function DetailPanel({
                       {/* Validation FACTURATION du RDV d'onboarding + recalage (finance).
                           Statut propre à la finance, indépendant de celui de Vincent ;
                           le recalage, lui, déplace le RDV partagé (agendas liés). */}
-                      <OnboardingFacturation numeroClient={numeroClient} boardRow={boardRow} />
+                      <OnboardingFacturation numeroClient={numeroClient} boardRow={boardRow} readOnly={readOnly} />
                     </Section>
                   ) : <p style={{fontSize:12,color:N.textMuted}}>Aucun rendez-vous renseigné pour ce dossier.</p>}
 
@@ -1282,7 +1293,7 @@ function ClientHeader({ client }) {
 // client. Le retard à date a sa tuile plus bas, il n'est pas répété ici.
 function StatusStrip({
   boardRow, client, inheritedEtat, canEditEtat, onBoardEtatChange, onActedEtat,
-  clientId, profile, canEditTeam, onResponsibleChanged, onShowToast,
+  clientId, profile, canEditTeam, onResponsibleChanged, onShowToast, readOnly = false,
 }) {
   const etatFallback = inheritedEtat || client?.etat || null;
   const etatMeta = etatFallback ? (ETAT_COLORS[etatFallback] || ETAT_FALLBACK) : null;
@@ -1331,6 +1342,7 @@ function StatusStrip({
           clientId={clientId}
           value={profile}
           canEdit={canEditTeam}
+          readOnly={readOnly}
           onChanged={onResponsibleChanged}
           onShowToast={onShowToast}
           label={false}
@@ -1447,7 +1459,8 @@ function StatementMenu({ scope, structures = [], busy = null, onDownload }) {
 //   « Retard à date » = ce qui est en retard AUJOURD'HUI, soit le retard du
 //                      mois courant + les créances antérieures.
 // `overdueCurrent` / `overdueCum` arrivent scope-aware du parent.
-function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loading, onRefund }) {
+// `readOnly` (rôles en lecture seule) : le lien de remboursement reste visible, désactivé.
+function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loading, onRefund, readOnly = false }) {
   const surplus = kpis.restant < 0 ? -kpis.restant : 0;
   const overdueToDate = overdueCurrent + overdueCum;
   // Trop-perçu reporté (backend `credit_*`) : un solde créditeur n'est pas
@@ -1557,6 +1570,7 @@ function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loadin
                   type="button"
                   onClick={note.action}
                   title="Enregistrer le remboursement et solder le trop-perçu"
+                  {...(readOnly ? READ_ONLY_PROPS : {})}
                   style={{
                     alignSelf: 'flex-start', border: 'none', background: 'transparent',
                     padding: 0, cursor: 'pointer', fontFamily: 'inherit',
@@ -1682,7 +1696,7 @@ const CONTRACT_GROUPS = [
 const IDENTITY_ROW_LABELS = new Set(['Client n°', 'Société', 'Nom du client', 'Personnes du NDA', 'Sales']);
 
 function ContractInfoList({
-  client, profile, focusedRow, boardRow, canEdit, canEditMoney, onCopied,
+  client, profile, focusedRow, boardRow, canEdit, canEditMoney, onCopied, readOnly = false,
   editing = false, clientId, onProfileChanged, onContractChanged, onShowToast, periods = [],
   formulaCheck = null, onContractSaved,
   wide = false,   // fiche en plein écran : la carte se répartit en colonnes (présentation seulement)
@@ -1894,7 +1908,7 @@ function ContractInfoList({
         <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 10 }}>
           <span>{formatDateLongFR(profile?.rdv_onboarding) || <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }}>Vide</span>}</span>
           <OnboardingRescheduleButton numeroClient={client?.numero_client || profile?.numero_client} boardRow={boardRow}
-            onDone={() => { onProfileChanged?.(); onContractChanged?.(); }} />
+            readOnly={readOnly} onDone={() => { onProfileChanged?.(); onContractChanged?.(); }} />
         </span>
       ),
     },
@@ -1963,6 +1977,7 @@ function ContractInfoList({
           }))}
           labelOf={employeeRangeLabel}
           canEdit={canEdit}
+          readOnly={readOnly}
           onCancel={(id) => cancelContractChange('formula', id)}
           notice={formulaCheck ? formulaCheckNotice(formulaCheck) : null}
         >
@@ -1995,6 +2010,7 @@ function ContractInfoList({
         <ModeWithTimeline
           timeline={modeSchedule?.entities?.owner?.timeline}
           canEdit={canEdit}
+          readOnly={readOnly}
           onCancel={(id) => cancelContractChange('mode', id)}
         >
           <EditableSelect
@@ -2020,6 +2036,7 @@ function ContractInfoList({
           // changements sont ceux d'Owner, affichés (et annulables) une fois.
           timeline={modeSchedule?.follows_owner ? null : modeSchedule?.entities?.optilex?.timeline}
           canEdit={canEdit}
+          readOnly={readOnly}
           onCancel={(id) => cancelContractChange('mode', id)}
         >
           <EditableSelect
@@ -3011,7 +3028,8 @@ function RelatedEntityList({ items, kind, clientId, editing, onChanged, onShowTo
 // Modalité + ses changements datés : « Annuel · Mensuel dès mars 2027 ».
 // Seuls les changements à venir ou passés datés s'affichent ; le rythme
 // d'origine est déjà le libellé du sélecteur.
-function ModeWithTimeline({ timeline, canEdit, onCancel, children, labelOf = paymentModeLabel, notice = null }) {
+// `readOnly` (rôles en lecture seule) : le « × » d'annulation reste visible, désactivé.
+function ModeWithTimeline({ timeline, canEdit, onCancel, children, labelOf = paymentModeLabel, notice = null, readOnly = false }) {
   const dated = (timeline || []).filter((t) => t.effective_from);
   if (!dated.length && !notice) return children;
   const now = currentPeriod();
@@ -3045,7 +3063,7 @@ function ModeWithTimeline({ timeline, canEdit, onCancel, children, labelOf = pay
             }}
           >
             {labelOf(t.mode)} dès {formatMonthLabel(month).toLowerCase()}
-            {canEdit && t.id != null ? (
+            {(canEdit || readOnly) && t.id != null ? (
               <button
                 type="button"
                 onClick={() => onCancel?.(t.id)}
@@ -3055,6 +3073,7 @@ function ModeWithTimeline({ timeline, canEdit, onCancel, children, labelOf = pay
                   border: 'none', background: 'transparent', cursor: 'pointer',
                   color: 'inherit', padding: '0 4px', fontSize: 13, lineHeight: 1,
                 }}
+                {...(readOnly ? READ_ONLY_PROPS : {})}
               >
                 ×
               </button>
@@ -3279,7 +3298,8 @@ const isoDay = (s) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-function FactsRow({ stateReview, profile, boardRow, loss = null, promise = false, billingLastMonth = null, onEditBilling = null }) {
+// `readOnly` (rôles en lecture seule) : la pastille « Facturé jusqu'à » reste un bouton, désactivé.
+function FactsRow({ stateReview, profile, boardRow, loss = null, promise = false, billingLastMonth = null, onEditBilling = null, readOnly = false }) {
   const items = [];
 
   // Sortie de contrat posée au board : elle prime sur le renouvellement —
@@ -3366,7 +3386,8 @@ function FactsRow({ stateReview, profile, boardRow, loss = null, promise = false
         return (
         <Tag key={idx} type={it.onClick ? 'button' : undefined} onClick={it.onClick || undefined}
           className={it.onClick ? 'tsf-icon-btn' : undefined}
-          title={it.onClick ? `${it.title || ''} · cliquer pour modifier` : (it.title || undefined)} style={{
+          title={it.onClick ? `${it.title || ''} · cliquer pour modifier` : (it.title || undefined)}
+          {...(it.onClick && readOnly ? READ_ONLY_PROPS : {})} style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
           padding: '4px 10px',
           borderRadius: 4,
@@ -3568,7 +3589,8 @@ const sortComments = (list) => [...list].sort((a, b) => {
   return String(b.created_at || '').localeCompare(String(a.created_at || ''));
 });
 
-export function ClientComments({ clientId, onShowToast, variant = 'section', role = apiClient.getUser()?.role }) {
+// `readOnly` (rôles en lecture seule) : composer et actions visibles, désactivés ; le fil se lit.
+export function ClientComments({ clientId, onShowToast, variant = 'section', role = apiClient.getUser()?.role, readOnly = false }) {
   const [comments, setComments] = useState(null);   // null = en cours / indispo
   // Au-delà de quatre commentaires le fil noyait le reste de la fiche : on
   // n'affiche que les plus récents, le reste se déplie (demande dev
@@ -3628,7 +3650,7 @@ export function ClientComments({ clientId, onShowToast, variant = 'section', rol
 
   const submit = useCallback(async () => {
     const body = draft.trim();
-    if (!body || posting || !base || comments === null || !available) return;
+    if (readOnly || !body || posting || !base || comments === null || !available) return;
     setPosting(true);
     try {
       const created = await apiClient.post(base, { body });
@@ -3641,7 +3663,7 @@ export function ClientComments({ clientId, onShowToast, variant = 'section', rol
     } finally {
       setPosting(false);
     }
-  }, [draft, posting, base, onShowToast, comments, available]);
+  }, [draft, posting, base, onShowToast, comments, available, readOnly]);
 
   const togglePin = useCallback(async (comment) => {
     if (!base) return;
@@ -3692,6 +3714,7 @@ export function ClientComments({ clientId, onShowToast, variant = 'section', rol
           value={draft}
           disabled={posting}
           onChange={(e) => { setDraft(e.currentTarget.value); autoGrow(); }}
+          {...(readOnly ? READ_ONLY_PROPS : {})}
           onKeyDown={(e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); submit(); }
           }}
@@ -3725,6 +3748,7 @@ export function ClientComments({ clientId, onShowToast, variant = 'section', rol
               cursor: draft.trim() && !posting ? 'pointer' : 'default',
               transition: 'background 0.15s, color 0.15s',
             }}
+            {...(readOnly ? READ_ONLY_PROPS : {})}
           >
             <MessageSquarePlus size={12} strokeWidth={2} />
             {posting ? 'Envoi…' : 'Commenter'}
@@ -3770,7 +3794,8 @@ export function ClientComments({ clientId, onShowToast, variant = 'section', rol
                   onCancelDelete={() => setConfirmDelete(null)}
                   onConfirmDelete={() => remove(c)}
                   onTogglePin={() => togglePin(c)}
-                  canPin={canPin}
+                  canPin={canPin || readOnly}
+                  readOnly={readOnly}
                   onSaveBody={body => saveBody(c, body)}
                 />
               ))}
@@ -3804,7 +3829,7 @@ const COMMENT_AMBER = '#b45309';
 
 function CommentRow({
   comment, index, confirming,
-  onAskDelete, onCancelDelete, onConfirmDelete, onTogglePin, canPin, onSaveBody,
+  onAskDelete, onCancelDelete, onConfirmDelete, onTogglePin, canPin, onSaveBody, readOnly = false,
 }) {
   const [hover, setHover] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -3821,6 +3846,7 @@ function CommentRow({
   const av = avatarMeta(comment.author_name || comment.author_email || '?');
   const edited = comment.updated_at && comment.updated_at !== comment.created_at;
   const showActions = comment.can_moderate && !comment._pending && !editing;
+  const ro = readOnly ? READ_ONLY_PROPS : {};
 
   return (
     // Pas d'animation de mise en page (`layout`) ni de sortie en hauteur
@@ -3934,7 +3960,7 @@ function CommentRow({
           ) : (
             <>
               <button type="button" title="Modifier le commentaire" aria-label="Modifier le commentaire" style={commentActionStyle}
-                onClick={() => { setDraft(comment.body); setError(''); setEditing(true); }}><Pencil size={12}/></button>
+                onClick={() => { setDraft(comment.body); setError(''); setEditing(true); }} {...ro}><Pencil size={12}/></button>
               {canPin && <button
                 type="button"
                 title={comment.pinned ? 'Désépingler' : 'Épingler en tête'}
@@ -3942,6 +3968,7 @@ function CommentRow({
                 style={{ ...commentActionStyle, color: comment.pinned ? COMMENT_AMBER : N.textFaint }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = N.sideBg; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                {...ro}
               >
                 <Pin size={12} strokeWidth={2} />
               </button>}
@@ -3952,6 +3979,7 @@ function CommentRow({
                 style={{ ...commentActionStyle, color: N.textFaint }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = '#fdecec'; e.currentTarget.style.color = '#b42318'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = N.textFaint; }}
+                {...ro}
               >
                 <Trash2 size={12} strokeWidth={2} />
               </button>

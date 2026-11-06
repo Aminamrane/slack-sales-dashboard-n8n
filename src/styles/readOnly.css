@@ -1,0 +1,8 @@
+/* Contrôles d'écriture désactivés pour les rôles en lecture seule (utils/readOnlyRoles.js) :
+   visibles, curseur interdit, « Lecture seule » au survol. L'attribut n'est posé que pour ces
+   rôles ; !important l'emporte sur les styles en ligne des contrôles sans les modifier. */
+[data-read-only="true"], [data-read-only="true"] * { cursor: not-allowed !important; }
+/* Boutons et zones d'action : grisés. */
+button[data-read-only="true"], label[data-read-only="true"], div[data-read-only="true"] { opacity: 0.45 !important; }
+/* Champs : un peu estompés, leur valeur reste lisible. */
+input[data-read-only="true"], select[data-read-only="true"], textarea[data-read-only="true"] { opacity: 0.7 !important; }

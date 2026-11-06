@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
+import { isReadOnlyViewer, READ_ONLY_PROPS, readOnlyProps } from '../../utils/readOnlyRoles.js';
 import PortalDropdown from './components/PortalDropdown.jsx';
 import FilterBuilder from './components/FilterBuilder.jsx';
 import { matchesSavedFilter, describeFilter } from './savedFilters.js';
@@ -468,21 +469,25 @@ export default function TrackingSheetFinance() {
   // valider par la direction. Onglet réservé à admin / finance_director / ceo ; le
   // compteur se rafraîchit toutes les 30 s et au retour sur l'onglet.
   const canValidate = ['admin', 'ceo', 'finance_director'].includes(pageRole);
+  // Rôles en lecture seule (RH) : la page de la direction financière, onglet Validations
+  // compris ; ses actions, la création et la suppression de filtres sont désactivées.
+  const readOnly = isReadOnlyViewer(apiClient.getUser()?.role);
+  const showValidations = canValidate || readOnly;
   const [pendingValidations, setPendingValidations] = useState(0);
   const refreshPendingValidations = useCallback(() => {
-    if (!canValidate) return;
+    if (!showValidations) return;
     apiClient.get('/api/v1/finance-periods/client/requests/pending-count')
       .then((d) => setPendingValidations(Number(d?.pending) || 0))
       .catch(() => {});
-  }, [canValidate]);
+  }, [showValidations]);
   useEffect(() => {
-    if (!authChecked || !canValidate) return;
+    if (!authChecked || !showValidations) return;
     refreshPendingValidations();
     const id = setInterval(() => { if (document.visibilityState !== 'hidden') refreshPendingValidations(); }, 30000);
     const onFocus = () => refreshPendingValidations();
     window.addEventListener('focus', onFocus);
     return () => { clearInterval(id); window.removeEventListener('focus', onFocus); };
-  }, [authChecked, canValidate, refreshPendingValidations]);
+  }, [authChecked, showValidations, refreshPendingValidations]);
   useEffect(() => {
     const token = apiClient.getToken();
     const user = apiClient.getUser();
@@ -1285,7 +1290,7 @@ export default function TrackingSheetFinance() {
           { id: 'sequences', label: 'Suivi des séquences', Icon: MailCheck, active: activeTab === 'sequences', action: () => setActiveTab('sequences') },
           ...(canViewCalls ? [{ id: 'calls', label: 'Tracking des appels', Icon: Phone, active: activeTab === 'calls', action: () => setActiveTab('calls') }] : []),
           { id: 'state-reviews', label: 'États à traiter', Icon: CheckCircle2, count: pendingStateReviews || undefined, active: activeTab === 'state-reviews', action: () => setActiveTab('state-reviews') },
-          ...(canValidate ? [{ id: 'validations', label: 'Validations', Icon: CheckCircle2, active: activeTab === 'validations', action: () => setActiveTab('validations'), count: pendingValidations || undefined }] : []),
+          ...(showValidations ? [{ id: 'validations', label: 'Validations', Icon: CheckCircle2, active: activeTab === 'validations', action: () => setActiveTab('validations'), count: pendingValidations || undefined }] : []),
         ],
       },
       {
@@ -1309,7 +1314,7 @@ export default function TrackingSheetFinance() {
         ],
       },
     ];
-  }, [activeTab, viewFilter, viewCounts, exportToExcel, exportedRows.length, canViewCalls, canValidate, pendingValidations, pendingStateReviews, promiseRows.length]);
+  }, [activeTab, viewFilter, viewCounts, exportToExcel, exportedRows.length, canViewCalls, showValidations, pendingValidations, pendingStateReviews, promiseRows.length]);
 
   if (!authChecked) {
     return null;
@@ -1391,7 +1396,7 @@ export default function TrackingSheetFinance() {
             activeTab={activeTab}
             setActiveTab={setActiveTab}
             canViewCalls={canViewCalls}
-            canValidate={canValidate}
+            canValidate={showValidations}
             pendingValidations={pendingValidations}
             pendingStateReviews={pendingStateReviews}
             promiseCount={promiseRows.length}
@@ -1410,6 +1415,7 @@ export default function TrackingSheetFinance() {
             savedFilters={savedFilters}
             onCreateSavedFilter={createSavedFilter}
             onRemoveSavedFilter={removeSavedFilter}
+            readOnly={readOnly}
             responsibleOptions={responsibleFilterOptions}
             meteoOptions={meteoFilterOptions}
             hiddenColsInfo={hiddenColsInfo}
@@ -1488,8 +1494,9 @@ export default function TrackingSheetFinance() {
             >
               {activeTab === 'calls' && canViewCalls ? (
                 <CallsView operators={callsOperators} clients={rows} board={boardRows} />
-              ) : activeTab === 'state-reviews' ? (<StateReviewQueue onOpenClient={openClientById}/>) : activeTab === 'validations' && canValidate ? (
+              ) : activeTab === 'state-reviews' ? (<StateReviewQueue onOpenClient={openClientById}/>) : activeTab === 'validations' && showValidations ? (
                 <ValidationsView
+                  readOnly={readOnly}
                   onOpenClient={openClientById}
                   onChanged={() => { refreshPendingValidations(); onRefresh?.(); }}
                   showToast={showToast}
@@ -2774,6 +2781,7 @@ const FILTER_OPTIONS = [
 function FilterDropdown({
   values, onToggle, etatOptions = [], responsibleOptions = [], meteoOptions = [],
   savedFilters = [], onCreateSavedFilter, onRemoveSavedFilter,
+  readOnly = false,   // rôles en lecture seule : créer / supprimer un filtre visibles, désactivés
 }) {
   const [building, setBuilding] = useState(false);
   const [open, setOpen] = useState(false);
@@ -3057,6 +3065,7 @@ function FilterDropdown({
                         color: N.textFaint, padding: '0 12px 0 4px',
                         display: 'inline-flex', alignItems: 'center',
                       }}
+                      {...(readOnly ? READ_ONLY_PROPS : {})}
                     >
                       <XCircle size={14} />
                     </button>
@@ -3074,7 +3083,7 @@ function FilterDropdown({
             borderTop: `1px solid ${N.borderSoft}`,
             flexShrink: 0,
           }}>
-            {building ? (
+            {building && !readOnly ? (
               <FilterBuilder
                 etatValues={etatOptions.map((o) => String(o.value).replace(/^etat:/, ''))}
                 onCancel={() => setBuilding(false)}
@@ -3087,6 +3096,7 @@ function FilterDropdown({
               <button
                 type="button"
                 onClick={() => setBuilding(true)}
+                {...(readOnly ? READ_ONLY_PROPS : {})}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 12,
                   width: '100%', padding: '10px 14px',
@@ -3204,7 +3214,7 @@ function TabRow({
   onRefresh, refreshing, onExport, exportCount = 0,
   hiddenColsInfo = { count: 0, keys: [] }, onShowAllCols, onShowCol,
   tableFilters, onToggleFilter, etatFilterOptions = [],
-  savedFilters = [], onCreateSavedFilter, onRemoveSavedFilter,
+  savedFilters = [], onCreateSavedFilter, onRemoveSavedFilter, readOnly = false,
   responsibleOptions = [],
   meteoOptions = [],
   scope, setScope, canGlobalScope,
@@ -3333,6 +3343,7 @@ function TabRow({
           savedFilters={savedFilters}
           onCreateSavedFilter={onCreateSavedFilter}
           onRemoveSavedFilter={onRemoveSavedFilter}
+          readOnly={readOnly}
         />
         <button
           className="tsf-icon-btn"
@@ -3377,8 +3388,9 @@ function TabRow({
           <Settings size={14} />
         </button>
 
-        {/* Primary CTA — Notion blue */}
+        {/* Primary CTA — Notion blue ; marqué « Lecture seule » pour ces rôles. */}
         <button
+          {...readOnlyProps(apiClient.getUser()?.role)}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 4,
             background: N.accent, color: '#fff',

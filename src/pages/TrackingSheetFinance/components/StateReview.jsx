@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ClipboardCheck, Clock3, Link2, RefreshCw, ArrowRight } from 'lucide-react';
 import apiClient from '../../../services/apiClient.js';
+import { READ_ONLY_PROPS } from '../../../utils/readOnlyRoles.js';
 import { formatEUR, formatDateFR } from '../constants.js';
 
 const box = { border: '1px solid #e6d7b2', background: '#fffcf4', borderRadius: 10, padding: 16, marginTop: 18, fontSize: 13, lineHeight: 1.55 };
@@ -23,7 +24,8 @@ export function StateReviewQueue({ onOpenClient }) {
   </section>;
 }
 
-export default function StateReview({ clientId, version, canProcess, onChanged, onReview }) {
+// `readOnly` (rôles en lecture seule) : le formulaire de traitement reste visible, désactivé.
+export default function StateReview({ clientId, version, canProcess, onChanged, onReview, readOnly = false }) {
   const [review,setReview] = useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
   const [action,setAction]=useState(''),[month,setMonth]=useState(''),[link,setLink]=useState(false),[confirmed,setConfirmed]=useState(false);
   const load = useCallback(async()=>{
@@ -32,7 +34,9 @@ export default function StateReview({ clientId, version, canProcess, onChanged, 
   },[clientId,onReview]);
   useEffect(()=>{setReview(null);load();},[load,version]);
   useEffect(()=>{setAction('');setMonth('');setLink(false);setConfirmed(false);},[review?.revision,clientId]);
+  const ro = readOnly ? READ_ONLY_PROPS : {};
   const process = async()=>{
+    if (readOnly) return;
     setBusy(true);setError('');
     try { const d=await apiClient.post(`/api/v1/finance-periods/client/${clientId}/state-review`,{revision:review.revision,action,last_month:/^(0[1-9]|1[0-2])\/\d{4}$/.test(month) ? `${month.slice(3)}-${month.slice(0,2)}` : null,link_loss_id:link ? review.active_loss?.id : null});setReview(d);setConfirmed(false);onChanged?.(); }
     catch(e){setError(e?.data?.detail || 'Traitement non enregistré. Actualisez et réessayez.');}
@@ -57,8 +61,8 @@ export default function StateReview({ clientId, version, canProcess, onChanged, 
       <div>Motif : {loss.reason || 'Non renseigné'}</div>
       {loss.snapshot?.periods?.length>0 && <details><summary style={{cursor:'pointer'}}>Voir les échéances concernées</summary>{loss.snapshot.periods.map(p=><div key={p.period}>{formatDateFR(p.period)} · Owner {formatEUR(p.expected_owner)} → {formatEUR(p.new_expected_owner)} · Opti’Lex {formatEUR(p.expected_optilex_ttc)} → {formatEUR(p.new_expected_optilex_ttc)}</div>)}</details>}
     </div>}
-    {pending && canProcess && <div style={{display:'grid',gap:10}}>
-      <label>Traitement financier<select aria-label="Traitement financier" value={action} onChange={e=>{setAction(e.target.value);setConfirmed(false);}} style={{...button,display:'block',width:'100%',marginTop:5}}>
+    {pending && (canProcess || readOnly) && <div style={{display:'grid',gap:10}}>
+      <label>Traitement financier<select aria-label="Traitement financier" value={action} onChange={e=>{setAction(e.target.value);setConfirmed(false);}} style={{...button,display:'block',width:'100%',marginTop:5}} {...ro}>
         <option value="">Choisir le traitement…</option>
         {state==='Rétractation' && <option value="withdrawal">Appliquer les conséquences financières de la rétractation</option>}
         {terminal.has(state) && <option value="billing-stop">Fixer le dernier mois facturé</option>}
@@ -71,9 +75,9 @@ export default function StateReview({ clientId, version, canProcess, onChanged, 
       {action==='resume' && <p>Le calendrier sera recalculé selon le contrat ; les montants fixés manuellement et les encaissements seront conservés.</p>}
       {action==='keep' && <p>Le suivi financier sera marqué comme traité, sans modifier les montants ni la situation actée dans le board.</p>}
       {action && <label style={{display:'flex',gap:8}}><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>Je confirme ce traitement des montants. La situation du client reste inchangée.</label>}
-      <button style={{...button,justifyContent:'center',background:'#292b31',color:'#fff',opacity:(!confirmed || busy) ? 0.5 : 1}} disabled={!confirmed || busy || (action==='withdrawal' && loss && !link) || (action==='billing-stop' && !/^(0[1-9]|1[0-2])\/\d{4}$/.test(month))} onClick={process}>{busy?'Enregistrement…':'Enregistrer le traitement financier'}</button>
+      <button style={{...button,justifyContent:'center',background:'#292b31',color:'#fff',opacity:(!confirmed || busy) ? 0.5 : 1}} disabled={!confirmed || busy || (action==='withdrawal' && loss && !link) || (action==='billing-stop' && !/^(0[1-9]|1[0-2])\/\d{4}$/.test(month))} onClick={process} {...ro}>{busy?'Enregistrement…':'Enregistrer le traitement financier'}</button>
     </div>}
-    {pending && !canProcess && <p>La direction financière peut traiter cet état depuis cette fiche.</p>}
+    {pending && !canProcess && !readOnly && <p>La direction financière peut traiter cet état depuis cette fiche.</p>}
     {error && <p role="alert" style={{color:'#b42318'}}>{error}</p>}
   </Wrapper>;
 }

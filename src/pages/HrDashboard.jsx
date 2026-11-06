@@ -8,8 +8,9 @@
 // dashboard EST le leaderboard. Calque de CeoLeaderboardView, avec
 // activeTab="dashboard" et le gate RH.
 //
-// - Le rôle `hr` ne voit que {recent, human, acquisition} (sidebarPermissions)
-//   -> coin RH (Congés + Variables Sales) + tout l'Acquisition.
+// - Le rôle `hr` voit la barre de la direction financière, onglets réservés
+//   retirés (sidebarPermissions), en lecture seule (utils/readOnlyRoles.js).
+//   Depuis le 06/11/2026 il arrive sur /ceo ; cette page reste ouverte.
 // - Leaderboard lit ?embed=true (injecté ici via replaceState) pour masquer
 //   sa SharedNavbar interne et son paddingTop dédié.
 //
@@ -29,8 +30,8 @@ const ALLOWED_ROLES = ["admin", "ceo", "hr"];
 
 export default function HrDashboard() {
   const navigate = useNavigate();
-  // Contexte de navigation RH : la sidebar reste scopée RH (pas de Finance/Marketing)
-  // même dans les sous-vues /ceo/* partagées, y compris pour un admin/ceo qui consulte.
+  // Contexte de navigation RH : la sidebar reste scopée RH même dans les sous-vues
+  // /ceo/* partagées, y compris pour un admin/ceo qui consulte.
   setNavScope("hr");
 
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");

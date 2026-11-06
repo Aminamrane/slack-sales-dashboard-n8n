@@ -1,6 +1,7 @@
 // src/main.jsx
 
 import "./index.css";
+import "./styles/readOnly.css";
 import React, { lazy, Suspense, useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
@@ -68,6 +69,7 @@ const ReactivityMonitor = lazy(() => import("./pages/ReactivityMonitor.jsx"));
 const OnboardingTest = lazy(() => import("./pages/OnboardingTest.jsx"));
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
+import { READ_ONLY_DIRECTION_ROLES } from "./utils/readOnlyRoles.js";
 import MouseDot from "./components/MouseDot.jsx";
 import CancelReasonPrompt from "./components/CancelReasonPrompt.jsx";
 
@@ -224,7 +226,7 @@ function App() {
         <Route
           path="/ceo/campaigns"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'ceo', 'marketing', 'finance_director', 'head_of_acquisition']}>
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'marketing', 'finance_director', 'head_of_acquisition', ...READ_ONLY_DIRECTION_ROLES]}>
               <CeoCampaignsView />
             </ProtectedRoute>
           }
@@ -241,7 +243,7 @@ function App() {
         <Route
           path="/ceo/optilex-board"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'ceo', 'customer_success_manager', 'finance_director']}>
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'customer_success_manager', 'finance_director', ...READ_ONLY_DIRECTION_ROLES]}>
               <CeoOptilexBoardView />
             </ProtectedRoute>
           }

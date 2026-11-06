@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
+import { isReadOnlyViewer, READ_ONLY_MARK, READ_ONLY_PROPS } from "../utils/readOnlyRoles";
 import SharedNavbar from "../components/SharedNavbar.jsx";
 
 // ── ORIGINS (niches) ─────────────────────────────────────────────────────────
@@ -90,6 +91,10 @@ export default function Campaigns({ embed = false }) {
   // ── AUTH ────────────────────────────────────────────────────────────────
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Rôles en lecture seule (RH, via /ceo/campaigns) : la page de la direction, création, modification,
+  // upload et suppression visibles et désactivés ; les fiches s'ouvrent en consultation.
+  const [readOnly] = useState(() => isReadOnlyViewer(apiClient.getUser()?.role));
+  const ro = readOnly ? READ_ONLY_PROPS : {};
 
   // ── DATA (legacy: campagnes manuelles, conservées pour onglets paused/cancelled) ──
   const [campaigns, setCampaigns] = useState([]);
@@ -381,7 +386,7 @@ export default function Campaigns({ embed = false }) {
                   </p>
                 </div>
                 {!isAdsTab && (
-                  <button onClick={() => { resetForm(); setShowCreateModal(true); }} style={{
+                  <button onClick={() => { resetForm(); setShowCreateModal(true); }} {...ro} style={{
                     padding: '10px 20px', borderRadius: 10, border: 'none',
                     background: darkMode ? '#fff' : '#1e2330', color: darkMode ? '#1e2330' : '#fff',
                     fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
@@ -550,6 +555,7 @@ export default function Campaigns({ embed = false }) {
           darkMode={darkMode}
           inputStyle={inputStyle}
           labelStyle={labelStyle}
+          readOnly={readOnly}
           onClose={() => setSelectedAd(null)}
           onSaved={async () => {
             await fetchActiveAds();
@@ -676,17 +682,17 @@ export default function Campaigns({ embed = false }) {
             {/* Content */}
             <div style={{ padding: '24px', flex: 1 }}>
               <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-                <button onClick={() => openEdit(selectedCampaign)} style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.text, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <button onClick={() => openEdit(selectedCampaign)} {...ro} style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.text, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                   Modifier
                 </button>
                 {selectedCampaign.status === 'active' && (
-                  <button onClick={() => handleStatusChange(selectedCampaign.id, 'paused')} style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid #fb923c40`, background: '#fb923c12', color: '#fb923c', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Mettre en pause</button>
+                  <button onClick={() => handleStatusChange(selectedCampaign.id, 'paused')} {...ro} style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid #fb923c40`, background: '#fb923c12', color: '#fb923c', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Mettre en pause</button>
                 )}
                 {selectedCampaign.status === 'paused' && (
-                  <button onClick={() => handleStatusChange(selectedCampaign.id, 'active')} style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid #10b98140`, background: '#10b98112', color: '#10b981', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Reprendre</button>
+                  <button onClick={() => handleStatusChange(selectedCampaign.id, 'active')} {...ro} style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid #10b98140`, background: '#10b98112', color: '#10b981', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Reprendre</button>
                 )}
-                <button onClick={() => handleDelete(selectedCampaign.id)} style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid #ef444440`, background: 'transparent', color: '#ef4444', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', marginLeft: 'auto' }}>Supprimer</button>
+                <button onClick={() => handleDelete(selectedCampaign.id)} {...ro} style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid #ef444440`, background: 'transparent', color: '#ef4444', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', marginLeft: 'auto' }}>Supprimer</button>
               </div>
 
               {selectedCampaign.description && (
@@ -700,7 +706,7 @@ export default function Campaigns({ embed = false }) {
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Créas ({(selectedCampaign.creatives || []).length})</div>
-                <button onClick={() => { resetCreativeForm(); setShowCreativeForm(true); }} style={{
+                <button onClick={() => { resetCreativeForm(); setShowCreativeForm(true); }} {...ro} style={{
                   padding: '6px 14px', borderRadius: 8, border: 'none',
                   background: C.accent, color: '#fff', fontSize: 12, fontWeight: 600,
                   cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4,
@@ -764,11 +770,11 @@ export default function Campaigns({ embed = false }) {
                     </div>
                     <StatusBadge status={crea.status} small />
                     {crea.video_url && <span style={{ fontSize: 10, color: C.accent, fontWeight: 600 }}>vid</span>}
-                    <button onClick={(e) => { e.stopPropagation(); setCreativeForm({ title: crea.title || '', description: crea.description || '', image_url: crea.image_url || '', video_url: crea.video_url || '', status: crea.status || 'active' }); setEditingCreative(crea); setShowCreativeForm(true); }}
+                    <button onClick={(e) => { e.stopPropagation(); setCreativeForm({ title: crea.title || '', description: crea.description || '', image_url: crea.image_url || '', video_url: crea.video_url || '', status: crea.status || 'active' }); setEditingCreative(crea); setShowCreativeForm(true); }} {...ro}
                       style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); handleCreativeDelete(crea.id); }}
+                    <button onClick={(e) => { e.stopPropagation(); handleCreativeDelete(crea.id); }} {...ro}
                       style={{ width: 28, height: 28, borderRadius: 6, border: `1px solid #ef444430`, background: 'transparent', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                     </button>
@@ -882,7 +888,8 @@ function AdCard({ ad, index, C, darkMode, onClick }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // AdEnrichModal — modal d'enrichissement d'une pub par ad_name
 // ═══════════════════════════════════════════════════════════════════════════════
-function AdEnrichModal({ ad, C, darkMode, inputStyle, labelStyle, onClose, onSaved }) {
+// `readOnly` (rôles en lecture seule) : la pub se consulte ; texte, médias et enregistrement visibles, désactivés.
+function AdEnrichModal({ ad, C, darkMode, inputStyle, labelStyle, onClose, onSaved, readOnly = false }) {
   const existing = ad.campaign?.creative || null;
   const isEdit = !!ad.campaign;
 
@@ -964,6 +971,7 @@ function AdEnrichModal({ ad, C, darkMode, inputStyle, labelStyle, onClose, onSav
   const removeVideo = () => { setVideoData(null); setVideoError(''); };
 
   const handleSave = async () => {
+    if (readOnly) return;
     setSaveError('');
     if (!description.trim()) {
       setSaveError('La description est requise.');
@@ -1057,6 +1065,8 @@ function AdEnrichModal({ ad, C, darkMode, inputStyle, labelStyle, onClose, onSav
               style={{ ...inputStyle, resize: 'vertical', minHeight: 90, lineHeight: 1.5 }}
               onFocus={(e) => e.target.style.borderColor = C.accent}
               onBlur={(e) => e.target.style.borderColor = C.border}
+              readOnly={readOnly}
+              {...(readOnly ? READ_ONLY_PROPS : {})}
             />
           </div>
 
@@ -1074,6 +1084,7 @@ function AdEnrichModal({ ad, C, darkMode, inputStyle, labelStyle, onClose, onSav
               error={imageError}
               onPick={onPickImage}
               onRemove={removeImage}
+              readOnly={readOnly}
             />
 
             {/* VIDEO */}
@@ -1087,6 +1098,7 @@ function AdEnrichModal({ ad, C, darkMode, inputStyle, labelStyle, onClose, onSav
               error={videoError}
               onPick={onPickVideo}
               onRemove={removeVideo}
+              readOnly={readOnly}
             />
 
           </div>
@@ -1124,6 +1136,7 @@ function AdEnrichModal({ ad, C, darkMode, inputStyle, labelStyle, onClose, onSav
             <button
               onClick={handleSave}
               disabled={saving || !description.trim() || uploadingImage || uploadingVideo}
+              {...(readOnly ? READ_ONLY_PROPS : {})}
               style={{
                 padding: '10px 22px', borderRadius: 10, border: 'none',
                 background: (saving || !description.trim() || uploadingImage || uploadingVideo)
@@ -1157,8 +1170,10 @@ function AdEnrichModal({ ad, C, darkMode, inputStyle, labelStyle, onClose, onSav
 // ═══════════════════════════════════════════════════════════════════════════════
 // MediaUploadCard — sous-composant upload (image OU vidéo) avec preview
 // ═══════════════════════════════════════════════════════════════════════════════
-function MediaUploadCard({ C, darkMode, labelStyle, kind, data, uploading, error, onPick, onRemove }) {
+// `readOnly` (rôles en lecture seule) : aperçu affiché ; ajout, remplacement et retrait visibles, désactivés.
+function MediaUploadCard({ C, darkMode, labelStyle, kind, data, uploading, error, onPick, onRemove, readOnly = false }) {
   const isVideo = kind === 'video';
+  const pickable = !readOnly && !uploading && !data;
   const label = isVideo ? 'Vidéo (optionnel)' : 'Image';
   const previewUrl = data?.thumbnail_url ? mediaUrl(data.thumbnail_url) : null;
 
@@ -1166,18 +1181,19 @@ function MediaUploadCard({ C, darkMode, labelStyle, kind, data, uploading, error
     <div>
       <label style={labelStyle}>{label}</label>
       <div
-        onClick={!uploading && !data ? onPick : undefined}
+        onClick={pickable ? onPick : undefined}
+        {...(readOnly && !data ? READ_ONLY_MARK : {})}
         style={{
           position: 'relative', borderRadius: 12,
           border: `2px dashed ${error ? '#ef4444' : C.border}`,
           background: darkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
           height: 180, overflow: 'hidden',
-          cursor: !uploading && !data ? 'pointer' : 'default',
+          cursor: pickable ? 'pointer' : 'default',
           transition: 'border-color 0.15s',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}
-        onMouseEnter={(e) => { if (!data && !uploading) e.currentTarget.style.borderColor = C.accent; }}
-        onMouseLeave={(e) => { if (!data && !uploading) e.currentTarget.style.borderColor = error ? '#ef4444' : C.border; }}
+        onMouseEnter={(e) => { if (pickable) e.currentTarget.style.borderColor = C.accent; }}
+        onMouseLeave={(e) => { if (pickable) e.currentTarget.style.borderColor = error ? '#ef4444' : C.border; }}
       >
         {uploading ? (
           <div style={{ textAlign: 'center', padding: 12 }}>
@@ -1219,6 +1235,7 @@ function MediaUploadCard({ C, darkMode, labelStyle, kind, data, uploading, error
               <button
                 onClick={(e) => { e.stopPropagation(); onPick(); }}
                 title="Remplacer"
+                {...(readOnly ? READ_ONLY_PROPS : {})}
                 style={{
                   width: 28, height: 28, borderRadius: 8,
                   background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
@@ -1234,6 +1251,7 @@ function MediaUploadCard({ C, darkMode, labelStyle, kind, data, uploading, error
               <button
                 onClick={(e) => { e.stopPropagation(); onRemove(); }}
                 title="Retirer"
+                {...(readOnly ? READ_ONLY_PROPS : {})}
                 style={{
                   width: 28, height: 28, borderRadius: 8,
                   background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
