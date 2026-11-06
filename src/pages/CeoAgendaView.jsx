@@ -147,7 +147,9 @@ export default function CeoAgendaView() {
 
       <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingTop: 64, height: '100vh', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
         <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '20px 28px' }}>
+        {/* isolation : les z-index internes du calendrier (en-têtes 60, règle des heures 45, pastille « maintenant » 46)
+            restent dans ce bloc ; sans cela ils passent au-dessus du menu de gauche (z-index 40) quand il s'ouvre en surimpression. */}
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '20px 28px', isolation: 'isolate' }}>
           <InternalCalendar view="director" C={C} darkMode={darkMode} />
         </div>
       </div>
