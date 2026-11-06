@@ -2067,7 +2067,9 @@ function kpiTiles(kpis, loading, view, pendingCount = 0) {
       // Taux de récupération du classeur finance : reçu ÷ attendu.
       sub: loading ? null : kpis.receivedPct,
       subColor: N.green,
-      subTitle: 'Reçu affecté au mois ÷ attendu du mois. Les règlements des anciennes créances sont suivis séparément.',
+      // Un trop-perçu compte dans le mois qu'il paie : il solde d'abord un
+      // retard, puis paie les mensualités suivantes (dev 2026-11-06).
+      subTitle: `Reçu affecté au mois ÷ attendu du mois, avances des mois précédents comprises (${formatEUR(kpis.advanceTotal || 0)}). Encaissé sur le mois : ${formatEUR(kpis.cashTotal || 0)} ; un trop-perçu solde d’abord un retard, puis paie les mensualités suivantes. Les règlements des anciennes créances sont suivis séparément.`,
     },
     {
       // Retard du MOIS seul : la part de l'attendu du mois dont la date de

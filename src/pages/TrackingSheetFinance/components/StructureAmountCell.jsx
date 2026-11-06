@@ -36,6 +36,9 @@ const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 export default function StructureAmountCell({
   row, entity, value, expected, canEdit, onSaved, onShowToast,
+  // Mois déjà payé d'avance par un trop-perçu antérieur (dev 2026-11-06) :
+  // montré à la place du tiret tant que rien n'est encaissé sur le mois.
+  advance = 0,
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
@@ -127,12 +130,12 @@ export default function StructureAmountCell({
           border: 'none', background: 'transparent', padding: 0, width: '100%',
           font: 'inherit', cursor: 'pointer', display: 'inline-flex',
           alignItems: 'center', justifyContent: 'center', gap: 5,
-          color: value > 0 ? N.green : N.textFaint,
-          fontWeight: value > 0 ? 700 : 400,
+          color: value > 0 || advance > 0 ? N.green : N.textFaint,
+          fontWeight: value > 0 ? 700 : advance > 0 ? 600 : 400,
           fontVariantNumeric: 'tabular-nums',
         }}
       >
-        {value > 0 ? formatEUR(value) : '—'}
+        {value > 0 ? formatEUR(value) : advance > 0 ? formatEUR(advance) : '—'}
         <Building2 size={11} style={{ opacity: 0.5, flexShrink: 0 }} />
       </button>
 

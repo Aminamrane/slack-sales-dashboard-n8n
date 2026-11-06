@@ -641,3 +641,98 @@ test('pause : venue du Sheet ou sans aucune date, les dates sont « non définie
     assert.equal(pauseRange(r).text, 'dates non définies', JSON.stringify(r));
   }
 });
+
+// ── Trop-perçu imputé au mois suivant (dev 2026-11-06, n°736) ──────────────
+// 231 €/mois, 462 € saisis le 22/10 : « tout le trop-perçu ne reste pas sur
+// le mois en cours. Il va soit aller payer un retard, soit aller payer la
+// prochaine mensualité. » Novembre garde ses 231 € d'attendu, déjà payés.
+import {
+  scopedPaidForMonth, scopedAdvance, advanceNote, surplusNote, advanceLinks, monthsLabel, formatPercent,
+} from './constants.js';
+
+const imp = (o = {}) => ({
+  paid_for_month: 0, advance_applied: 0, surplus_to_prior: 0, surplus_to_next: 0,
+  advance_from: [], surplus_to: [], ...o,
+});
+
+test('trop-perçu : octobre compte 231, son surplus part sur novembre', () => {
+  const october = row({
+    expected_owner: '231.00', received_owner: '462.00',
+    imputation_owner: imp({ paid_for_month: '231.00', surplus_to_next: '231.00', surplus_to: [{ period: '2026-11', amount: '231.00' }] }),
+  });
+  assert.equal(scopedPaidForMonth(october, 'owner'), 231);
+  assert.equal(surplusNote(october, 'owner').text, '→ nov.');
+  assert.equal(surplusNote(october, 'owner').amount, 231);
+  assert.equal(advanceNote(october, 'owner'), null);
+});
+
+test('trop-perçu : novembre est payé par l’avance d’octobre, sans encaissement', () => {
+  const november = row({
+    expected_owner: '231.00', received_owner: null,
+    imputation_owner: imp({ advance_applied: '231.00', paid_for_month: '231.00', advance_from: [{ period: '2026-10', amount: '231.00' }] }),
+  });
+  assert.equal(scopedAdvance(november, 'owner'), 231);
+  assert.equal(scopedPaidForMonth(november, 'owner'), 231);
+  assert.equal(advanceNote(november, 'owner').text, 'avance d’octobre');
+  const k = computeKpis([november], 'owner');
+  assert.equal(k.receivedTotal, 231);
+  assert.equal(k.cashTotal, 0);
+  assert.equal(k.advanceTotal, 231);
+  assert.equal(k.receivedPct, formatPercent(231, 231));
+});
+
+test('trop-perçu : chaque euro compte une fois sur les deux mois', () => {
+  const october = row({ expected_owner: 231, received_owner: 462, imputation_owner: imp({ paid_for_month: 231, surplus_to_next: 231 }) });
+  const november = row({ expected_owner: 231, imputation_owner: imp({ advance_applied: 231, paid_for_month: 231 }) });
+  assert.equal(computeKpis([october], 'owner').receivedTotal, 231);
+  assert.equal(computeKpis([october], 'owner').cashTotal, 462);
+  assert.equal(computeKpis([october], 'owner').receivedTotal + computeKpis([november], 'owner').receivedTotal, 462);
+});
+
+test('trop-perçu : un retard passe avant le mois suivant, plusieurs mois se lisent', () => {
+  const arrears = row({ imputation_owner: imp({ surplus_to_prior: 231 }) });
+  assert.equal(surplusNote(arrears, 'owner').text, '→ retard');
+  const three = row({
+    imputation_owner: imp({ surplus_to_next: 462, surplus_to: [{ period: '2026-12', amount: 231 }, { period: '2026-11', amount: 231 }] }),
+  });
+  assert.equal(surplusNote(three, 'owner').text, '→ nov., déc.');
+  assert.equal(monthsLabel(['2026-08']), 'août');
+  const unplaced = row({ imputation_owner: imp({ surplus_to_next: 100, surplus_to: [{ period: null, amount: 100 }] }) });
+  assert.equal(surplusNote(unplaced, 'owner').text, '→ crédit');
+});
+
+test('trop-perçu : plusieurs sources d’avance se disent « antérieures »', () => {
+  const mixed = row({ imputation_owner: imp({ advance_applied: 616, advance_from: [{ period: '2026-07', amount: 0.01 }, { period: null, amount: 615.99 }] }) });
+  assert.equal(advanceNote(mixed, 'owner').text, 'avances antérieures');
+  assert.match(advanceNote(mixed, 'owner').title, /juillet 2026/);
+  const credit = row({ imputation_owner: imp({ advance_applied: 300, advance_from: [{ period: null, amount: 300 }] }) });
+  assert.equal(advanceNote(credit, 'owner').text, 'payé d’avance');
+});
+
+test('trop-perçu : la vision Globale additionne les deux entités par mois', () => {
+  const november = row({
+    imputation_owner: imp({ advance_applied: 231, paid_for_month: 231, advance_from: [{ period: '2026-10', amount: 231 }] }),
+    imputation_optilex: imp({ advance_applied: 108, paid_for_month: 108, advance_from: [{ period: '2026-10', amount: 108 }] }),
+  });
+  assert.deepEqual(advanceLinks(november, 'global', 'from'), [{ month: '2026-10', amount: 339 }]);
+  assert.equal(advanceLinks(november, 'owner', 'from')[0].amount, 231);
+  assert.equal(scopedAdvance(november, 'global'), 339);
+});
+
+test('trop-perçu : une API sans le bloc imputation garde le reçu et le surplus du mois', () => {
+  const old = row({ expected_owner: 231, received_owner: 462 });
+  assert.equal(scopedPaidForMonth(old, 'owner'), 231);
+  assert.equal(scopedAdvance(old, 'owner'), 0);
+  assert.equal(surplusNote(old, 'owner').text, '→ mois suivant');
+});
+
+test('échéancier : un mois payé d’avance ne prétend pas avoir été prélevé', () => {
+  const advance = { amount: 231, text: 'avance d’octobre' };
+  const nov = installmentSubline({ month: '2026-11', status: 'paid', payDate: '2026-11-06', received: 0, advance });
+  assert.match(nov, /Novembre 2026/);
+  assert.match(nov, /avance d’octobre/);
+  assert.ok(!nov.includes('Prélevée'));
+  const oct = installmentSubline({ month: '2026-10', status: 'paid', payDate: '2026-10-22', received: 462, surplus: { amount: 231, text: '→ nov.' } });
+  assert.match(oct, /Prélevée le 22 octobre 2026/);
+  assert.match(oct, /\+231,00 € → nov\./);
+});

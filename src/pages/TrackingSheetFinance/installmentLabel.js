@@ -14,6 +14,12 @@ export function installmentSubline(inst) {
     + (inst.reportedFrom?.length
       ? ` · dont ${inst.reportedFrom.map((r) => `${formatEUR(r.amount)} reportés ${deMonthLabel(r.month)}`).join(', ')}`
       : '');
+  // Trop-perçus (dev 2026-11-06) : d'où vient l'avance qui paie le mois, où
+  // part le surplus du mois.
+  const avance = (inst.advance ? ` · ${formatEUR(inst.advance.amount)} ${inst.advance.text}` : '')
+    + (inst.surplus ? ` · +${formatEUR(inst.surplus.amount)} ${inst.surplus.text}` : '');
+  // Payé d'avance sans encaissement ce mois-ci : aucune date de prélèvement.
+  const paidOn = date && !(inst.advance && !(inst.received > 0)) ? ` · Prélevée le ${date}` : '';
   switch (inst.status) {
     case 'regularized':
       return `${monthLabel} · régularisation confirmée`;
@@ -24,9 +30,9 @@ export function installmentSubline(inst) {
     case 'paused':
       return `${monthLabel} · en pause${inst.pauseUntil ? ` jusqu'au ${formatDateFR(inst.pauseUntil)}` : ', reprise à décider'}${manuel}`;
     case 'paid':
-      return `${monthLabel}${date ? ` · Prélevée le ${date}` : ''}${manuel}`;
+      return `${monthLabel}${paidOn}${avance}${manuel}`;
     case 'partial':
-      return `${monthLabel} · ${formatEUR(inst.received)} / ${formatEUR(inst.expected)}${date ? ` · Prélevée le ${date}` : ''}`;
+      return `${monthLabel} · ${formatEUR(inst.settled ?? inst.received)} / ${formatEUR(inst.expected)}${paidOn}${avance}`;
     case 'upcoming':
       return `${monthLabel}${date ? ` · Prévue le ${date}` : ''}${manuel}${report}`;
     default: // late

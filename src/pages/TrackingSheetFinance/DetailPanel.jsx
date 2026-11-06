@@ -88,6 +88,9 @@ import {
   entityCredit,
   scopedOverdueCum,
   scopedPeriodAmounts,
+  scopedAdvance,
+  advanceNote,
+  surplusNote,
   isExitCandidate,
   deferralsByMonth,
   reportsByMonth,
@@ -499,10 +502,13 @@ export default function DetailPanel({
       const reportedFrom = reported[month]?.from || [];
       if (a.expected <= 0 && a.received <= 0 && deferredIn <= 0 && !p.expected_pause_active && !reportedTo.length) continue;
       const due = a.expected + deferredIn - deferredOut;
+      // Un trop-perçu antérieur paie déjà le mois, en partie ou en totalité
+      // (dev 2026-11-06) : l'échéance est réglée sans encaissement ce mois-ci.
+      const settled = a.received + scopedAdvance(p, scope);
       let status;
       if (reportedTo.length && a.expected <= 0 && a.received <= 0) status = 'deferred';
-      else if (a.received >= due && a.received > 0) status = 'paid';
-      else if (a.received > 0) status = 'partial';
+      else if (settled >= due && settled > 0) status = 'paid';
+      else if (settled > 0) status = 'partial';
       else if (deferredOut > 0 && due <= 0) status = 'deferred';
       // Mois en pause : compté, pas exigible — ni « en retard » ni « à venir ».
       else if (p.expected_pause_active) status = 'paused';
@@ -516,6 +522,7 @@ export default function DetailPanel({
       if (reviewedInstallment(p, scope, profile?.installment_followups, extraDue)) status = 'regularized';
       list.push({
         id: p.id, n: list.length + 1, month, status, ...a,
+        settled, advance: advanceNote(p, scope), surplus: surplusNote(p, scope),
         deferredOut, deferredIn,
         reportedTo, reportedFrom,
         manual: !!p.expected_manual,
