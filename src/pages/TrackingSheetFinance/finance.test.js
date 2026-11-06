@@ -533,7 +533,7 @@ test('month remains explicit for partial, future, paused and deferred installmen
 
 // L'accès nominatif aux dates n'ouvre jamais la saisie des montants.
 import { canEditAmounts } from './constants.js';
-import { canEditPaymentDates, loadPaymentDateAccess, paymentDateIdentity } from './paymentDateAccess.js';
+import { canEditPaymentDates, financeRole, loadPaymentDateAccess, paymentDateIdentity } from './paymentDateAccess.js';
 
 test('dates de paiement : refus par défaut, autorisation serveur stricte et propre au compte', () => {
   const user = { id: 'finance-one', role: 'finance_team' };
@@ -588,6 +588,27 @@ test('dates de paiement : une réponse arrivée après un changement de compte e
   user = null;
   client.request = () => { throw new Error('Aucune requête sans compte'); };
   assert.equal(await loadPaymentDateAccess(client), null);
+});
+
+test('direction financière nominative : le rôle de la page vient du serveur, lié au compte', async () => {
+  const user = { id: 'finance-one', role: 'finance_team' };
+  const client = { getUser: () => user, request: async () => ({ can_edit_payment_dates: true, finance_role: 'finance_director' }) };
+  const access = await loadPaymentDateAccess(client);
+  assert.equal(financeRole(user, access), 'finance_director');
+  assert.equal(canEditAmounts(financeRole(user, access)), true);
+  assert.equal(canEditPaymentDates(user, access), true);
+  // Sans réponse, réponse d'un autre compte, rôle inconnu ou autre rôle de compte : rien ne s'élargit.
+  for (const other of [null, {}, { identity: 'finance-two:finance_team', role: 'finance_director' },
+    { identity: paymentDateIdentity(user), role: 'admin' }, { identity: paymentDateIdentity(user), role: 'finance_team' }]) {
+    assert.equal(financeRole(user, other), 'finance_team');
+  }
+  for (const role of ['sales', 'customer_success_manager', 'setter']) {
+    const account = { id: user.id, role };
+    assert.equal(financeRole(account, { identity: paymentDateIdentity(account), role: 'finance_director' }), role);
+  }
+  assert.equal(financeRole({ id: 'boss', role: 'ceo' }, null), 'ceo');
+  const failing = { getUser: () => user, request: async () => { throw new Error('403'); } };
+  assert.equal(financeRole(user, await loadPaymentDateAccess(failing)), 'finance_team');
 });
 
 test('pause : la fiche affiche début et fin quand les deux sont connus', () => {

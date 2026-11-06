@@ -69,7 +69,7 @@ import companyLogo from '../../assets/my_image.png';
 import '../../index.css';
 
 import TableView from './TableView.jsx';
-import { canEditPaymentDates, loadPaymentDateAccess, paymentDateIdentity } from './paymentDateAccess.js';
+import { canEditPaymentDates, financeRole, loadPaymentDateAccess, paymentDateIdentity } from './paymentDateAccess.js';
 import DetailPanel from './DetailPanel.jsx';
 // `displayEtat` : l'état affiché sur le board Owner/Opti'Lex, calculé par le
 // back (`etat_affiche`) — la même valeur que le board, jamais recalculée ici.
@@ -409,6 +409,9 @@ export default function TrackingSheetFinance() {
   const paymentDateAccount = paymentDateIdentity(currentUser);
   const [paymentDateAccess, setPaymentDateAccess] = useState(null);
   const paymentDatesEditable = canEditPaymentDates(currentUser, paymentDateAccess);
+  // Rôle tel que la page le juge : le serveur peut donner la direction
+  // financière à un compte sur cette page seulement (GET /access).
+  const pageRole = financeRole(currentUser, paymentDateAccess);
   useEffect(() => {
     if (!authChecked) return undefined;
     let live = true;
@@ -464,7 +467,7 @@ export default function TrackingSheetFinance() {
   // ── Validations (dev 2026-09-23) : les demandes de l'équipe finance, à
   // valider par la direction. Onglet réservé à admin / finance_director / ceo ; le
   // compteur se rafraîchit toutes les 30 s et au retour sur l'onglet.
-  const canValidate = ['admin', 'ceo', 'finance_director'].includes(apiClient.getUser()?.role);
+  const canValidate = ['admin', 'ceo', 'finance_director'].includes(pageRole);
   const [pendingValidations, setPendingValidations] = useState(0);
   const refreshPendingValidations = useCallback(() => {
     if (!canValidate) return;
@@ -1061,7 +1064,7 @@ export default function TrackingSheetFinance() {
   // seule la réponse de la dernière pose sur ce client fait foi.
   const [etatRequests] = useState(createLatestRequestTracker);
   const onBoardEtatChange = useCallback(async (numero, payload) => {
-    if (requiresExitDecision(apiClient.getUser()?.role, payload.etat)) {
+    if (requiresExitDecision(pageRole, payload.etat)) {
       payload = await confirmBoardFinanceExit(numero, payload);
       if (!payload) return { cancelled: true };
     }
@@ -1106,7 +1109,7 @@ export default function TrackingSheetFinance() {
       showToast(typeof msg === 'string' ? msg : "Erreur lors du changement d'état", 'error');
       return { error: typeof msg === 'string' ? msg : "Erreur lors du changement d’état" };
     }
-  }, [showToast, etatRequests]);
+  }, [showToast, etatRequests, pageRole]);
 
   // ── Patch a row (optimistic + reconcile) ─────────────────────────────
   const onPatchRow = useCallback(async (rowId, patch) => {
@@ -1508,6 +1511,7 @@ export default function TrackingSheetFinance() {
                 rows={filteredRows}
                 onPatchRow={onPatchRow}
                 paymentDatesEditable={paymentDatesEditable}
+                financeRole={pageRole}
                 boardMap={boardMap}
                 onOpenRow={onOpenRow}
                 activeRowId={panelOpen ? panelRowId : null}
@@ -1535,6 +1539,7 @@ export default function TrackingSheetFinance() {
         onSelectRow={onSelectPanelRow}
         boardMap={boardMap}
         onBoardEtatChange={onBoardEtatChange}
+        financeRole={pageRole}
         onShowToast={showToast}
         rows={rows}
         scope={scope}
