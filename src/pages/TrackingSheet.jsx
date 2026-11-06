@@ -1289,7 +1289,7 @@ export default function TrackingSheet() {
           billing_structures: saleForm.billingStructures || null,
           structures_count: saleForm.billingStructures === 'plusieurs' ? (saleForm.structuresCount || null) : null,
           discount: saleForm.discount === true ? ((saleForm.discountValue || '').trim() || 'Oui') : (saleForm.discount === false ? 'Non' : null),
-          // Aucune pièce : société en création ou trop récente (case de l'étape documents).
+          // Aucune pièce : motif choisi dans le bloc « Déclarer la vente sans documents » de l'étape documents (J-4 ou moins).
           ...(documentsWaiver ? { documents_waiver: documentsWaiver } : {}),
           ...(documentsWaiverNote ? { documents_waiver_note: documentsWaiverNote } : {}),
         });

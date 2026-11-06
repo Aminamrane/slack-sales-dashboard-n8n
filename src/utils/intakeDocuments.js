@@ -21,8 +21,9 @@ export function hasRequiredSaleDocuments(files) {
   return Array.isArray(files) && files.some(file => ['waiting', 'sending', 'sent'].includes(file.status));
 }
 
-// Société en cours de création ou trop récente : pas encore de pièce. Case à cocher de l'étape
-// « Pièces du dossier » ; la vente se déclare sans document et la dispense est tracée côté serveur.
+// Société en cours de création ou trop récente : pas encore de pièce. N'est plus proposée à l'écran (case de l'étape
+// « Pièces du dossier » retirée le 2026-11-06 : la déclaration sans document passe par le bloc J-4) ; l'API accepte
+// toujours ces valeurs et les dispenses déjà enregistrées restent tracées et affichées.
 export const DOCUMENT_WAIVERS = [
   ['company_in_creation', 'Société en cours de création'],
   ['company_too_recent', 'Société trop récente, pas encore de documents'],

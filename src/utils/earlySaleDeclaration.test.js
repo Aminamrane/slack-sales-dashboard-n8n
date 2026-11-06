@@ -40,12 +40,15 @@ test('un onboarding déjà passé reste ouvert, une date absente ou illisible ne
   }
 });
 
-test('les trois motifs sont ceux de la demande et seuls eux sont des motifs de déclaration anticipée', () => {
+test('les deux motifs proposés sont ceux de la demande et seuls eux sont des motifs de déclaration anticipée', () => {
   assert.deepEqual(EARLY_DOCUMENT_REASONS, [
     ['client_no_documents', 'Le client n’a pas communiqué les documents.'],
-    ['client_documents_late', 'Le client a transmis les documents trop tard.'],
     ['other', 'Autre motif'],
   ]);
+  // « transmis trop tard » n'est plus offert : ni dans la liste, ni comme motif qui peut partir (l'API, elle, l'accepte toujours)
+  assert.equal(EARLY_DOCUMENT_REASONS.some(([value, label]) => value === 'client_documents_late' || /trop tard/i.test(label)), false);
+  assert.equal(isEarlyReason('client_documents_late'), false);
+  assert.equal(canSubmitEarlyReason('client_documents_late', undefined), false);
   assert.equal(EARLY_OTHER_REASON, 'other');
   assert.equal(EARLY_NOTE_MAX, 200);
   for (const [value] of EARLY_DOCUMENT_REASONS) assert.equal(isEarlyReason(value), true);
@@ -61,7 +64,6 @@ test('les trois motifs sont ceux de la demande et seuls eux sont des motifs de d
 test('« Autre motif » ne part qu’avec une note, de 200 caractères au plus', () => {
   const noted = 'Le client attend la signature de son expert-comptable.';
   assert.equal(canSubmitEarlyReason('client_no_documents', ''), true);
-  assert.equal(canSubmitEarlyReason('client_documents_late', undefined), true);
   assert.equal(canSubmitEarlyReason('', noted), false);
   assert.equal(canSubmitEarlyReason('company_in_creation', noted), false);
   assert.equal(canSubmitEarlyReason('other', noted), true);

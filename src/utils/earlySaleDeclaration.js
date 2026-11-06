@@ -11,9 +11,10 @@ export const EARLY_OTHER_REASON = 'other';
 export const EARLY_NOTE_MAX = 200;
 
 // Les valeurs sont celles que l'API accepte (`documents_waiver`) ; le libellé est celui de la fiche d'intégration.
+// Seuls ces motifs sont proposés. « Le client a transmis les documents trop tard » (`client_documents_late`) n'est plus offert
+// (retiré le 2026-11-06) : l'API l'accepte toujours et les déclarations déjà enregistrées s'affichent comme avant (libellé du serveur).
 export const EARLY_DOCUMENT_REASONS = [
   ['client_no_documents', 'Le client n’a pas communiqué les documents.'],
-  ['client_documents_late', 'Le client a transmis les documents trop tard.'],
   [EARLY_OTHER_REASON, 'Autre motif'],
 ];
 
