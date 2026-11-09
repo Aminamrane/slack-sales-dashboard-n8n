@@ -91,7 +91,9 @@ export default function Sidebar({ width, collapsed, onToggle, sections: pageSect
   // pour les comptes « tableau de bord seul », à qui la navbar ne la montrait pas. Un clic sur une page y mène.
   const sections = useMemo(() => {
     if (pageSections.some((s) => s.key === "pages") || usesDashboardOnlyNavbar(apiClient.getUser())) return pageSections;
-    const pages = myPages();
+    // Une page déjà présente comme onglet du menu (même écran) n'est pas répétée dans « Mes pages ».
+    const tabIds = new Set(pageSections.flatMap((s) => s.items.map((it) => it.id)));
+    const pages = myPages().filter((p) => !p.tab || !tabIds.has(p.tab));
     return pages.length ? [...pageSections, { key: "pages", label: "Mes pages", items: pages.map((p) => ({ id: p.id, label: p.label, icon: p.icon })) }] : pageSections;
   }, [pageSections]);
   const addedPages = sections !== pageSections;
