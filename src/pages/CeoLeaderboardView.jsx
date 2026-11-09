@@ -21,7 +21,6 @@ import Leaderboard from "./Leaderboard.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
-import SharedNavbar from "../components/SharedNavbar.jsx";
 
 // Rôles autorisés à embedder ce Leaderboard dans le wrapper sidebar.
 // admin / ceo en ont toujours eu accès ; on ajoute acquisition_director
@@ -180,6 +179,7 @@ export default function CeoLeaderboardView() {
           setActiveTab={handleSidebarTabClick}
           C={C}
           darkMode={darkMode}
+          setDarkMode={setDarkMode}
         />
       </div>
 
@@ -188,7 +188,6 @@ export default function CeoLeaderboardView() {
           (dynamic-island) pour que le CEO / Acquisition Director gardent
           l'accès aux notifications et raccourcis comme sur /ceo. */}
       <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
-        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
         <Leaderboard />
       </div>
     </div>

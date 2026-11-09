@@ -18,7 +18,6 @@ import FunnelLeads from "./FunnelLeads/index.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
-import SharedNavbar from "../components/SharedNavbar.jsx";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "acquisition_director", "head_of_acquisition", "customer_success_manager", "finance_director", "head_of_sales_manager"]);
 
@@ -157,14 +156,14 @@ export default function CeoFunnelLeadsView() {
           setActiveTab={handleSidebarTabClick}
           C={C}
           darkMode={darkMode}
+          setDarkMode={setDarkMode}
         />
       </div>
 
       {/* Funnel Leads embarqué — `?embed=true` masque sa SharedNavbar
           interne et réduit son padding-top. On rend ici la dynamic-island
           pour cohérence avec /ceo. `paddingTop: 64` pour passer dessous. */}
-      <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingTop: 64 }}>
-        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
+      <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingTop: 16 }}>
         <FunnelLeads />
       </div>
     </div>

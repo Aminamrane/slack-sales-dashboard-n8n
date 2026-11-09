@@ -43,7 +43,6 @@ import { navigateBackToDashboard } from "../utils/dashboardNavigation";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections, SUB_TICKETS_ROLES } from "../utils/sidebarPermissions";
-import SharedNavbar from "../components/SharedNavbar.jsx";
 import companyLogo from "../assets/my_image.png";
 // Mini client e-mail (cohortes → e-mails → onglets → fenêtres flottantes), fenêtre réutilisable
 // (accrochage sur une moitié d'écran, déplacement, redimensionnement), fenêtre « Schéma de
@@ -962,12 +961,12 @@ export default function CeoBotIaView() {
           setActiveTab={handleSidebarTabClick}
           C={C}
           darkMode={darkMode}
+          setDarkMode={setDarkMode}
         />
       </div>
 
       {/* ═══ ZONE PRINCIPALE ═══ */}
-      <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 64, display: "flex", flexDirection: "column" }}>
-        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
+      <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 16, display: "flex", flexDirection: "column" }}>
 
         {/* ═══ FIL + COMPOSER ═══ */}
         {/* Vide : tout est centré verticalement (écran d'accueil). Dès le

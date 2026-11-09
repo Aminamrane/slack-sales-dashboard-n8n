@@ -15,7 +15,6 @@ import SequencesMonitor from "./SequencesMonitor.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
-import SharedNavbar from "../components/SharedNavbar.jsx";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "acquisition_director", "head_of_acquisition", "finance_director"]);
 
@@ -139,11 +138,11 @@ export default function CeoSequencesView() {
           setActiveTab={handleSidebarTabClick}
           C={C}
           darkMode={darkMode}
+          setDarkMode={setDarkMode}
         />
       </div>
 
-      <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 64 }}>
-        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
+      <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 16 }}>
         <SequencesMonitor embed />
       </div>
     </div>

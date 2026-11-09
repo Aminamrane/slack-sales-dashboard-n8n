@@ -2,7 +2,7 @@ import AbsencePanel from "../components/absences/AbsencePanel";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
-import SharedNavbar from "../components/SharedNavbar";
+import PageWithSidebar from "../components/shared/Sidebar/PageWithSidebar.jsx";
 
 const DAY_LABELS = [
   { key: 1, short: "Lun", long: "Lundi" },
@@ -602,16 +602,17 @@ export default function Profile() {
   );
 
   return (
+    // Menu de gauche à la place de la navbar (09/11/2026).
+    <PageWithSidebar darkMode={darkMode} setDarkMode={setDarkMode}>
     <div
       style={{
         minHeight: "100vh",
         background: C.surface,
         fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
         color: C.text,
-        paddingTop: "80px",
+        paddingTop: "16px",
       }}
     >
-      <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />
 
       <div style={{ maxWidth: 1040, margin: "28px auto 64px", padding: "0 20px" }}>
         {/* ─── Identité ─── */}
@@ -739,5 +740,6 @@ export default function Profile() {
         }
       `}</style>
     </div>
+    </PageWithSidebar>
   );
 }

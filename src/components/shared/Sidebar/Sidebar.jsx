@@ -1,6 +1,8 @@
 // src/components/shared/Sidebar/Sidebar.jsx
 //
-// Sidebar Notion-style partagée par les 5 pages de l'écosystème CEO :
+// Sidebar Notion-style partagée par les pages de l'écosystème CEO. Depuis le 09/11/2026 elle remplace aussi la
+// navbar : notifications en haut (ligne rouge tant qu'il reste à lire, liste ouverte dans le menu), profil, mode
+// sombre et déconnexion en bas. Historique : partagée d'abord par 5 pages :
 //   CeoDashboard, CeoSheetView, CeoDispatchView, CeoLeaderboardView,
 //   AcquisitionDirectorDashboard.
 //
@@ -22,7 +24,8 @@
 // `.ceo-icon-btn` sont conservées telles quelles (déjà injectées dans le
 // `<style>` de chaque page hôte).
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, Home, MessageSquare, Mail, Search, Sparkles, PanelLeft } from "lucide-react";
@@ -31,6 +34,15 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from 
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import apiClient from "../../../services/apiClient";
+import useGlobalNotifications from "./useGlobalNotifications.js";
+import { NotificationsPanel, NotificationsRow } from "./SidebarNotifications.jsx";
+import SidebarProfile from "./SidebarProfile.jsx";
+import SidebarAvailability from "./SidebarAvailability.jsx";
+import { usesDashboardOnlyNavbar } from "../../../utils/dashboardAudience.js";
+import { isTypingTarget } from "../../../utils/typingTarget.js";
+import { homeRouteFor } from "../../../navigation/home.js";
+import { myPages } from "../../../navigation/myPages.js";
+import "./Sidebar.css";
 
 // État de survol PERSISTANT entre les navigations. Sur les dashboards CEO/Acquisition, chaque
 // onglet est une ROUTE distincte : cliquer un onglet remonte toute la page (donc la Sidebar).
@@ -46,6 +58,7 @@ let railHovered = false;
 const OPEN_T = { duration: 0.06, ease: [0.16, 1, 0.3, 1] };
 const CLOSE_T = { duration: 0.08, ease: [0.16, 1, 0.3, 1] };
 const EXPANDED_W = 260;   // largeur de la barre dépliée au survol
+const NOTIF_W = 360;      // largeur le temps de lire les notifications
 
 // ── Layout perso de la sidebar (ordre sections + items), fusionné avec le défaut ──
 // Les sections/items absents du layout sauvegardé sont AJOUTÉS à la fin -> rien perdu
@@ -73,14 +86,73 @@ function buildLayout(sections) {
   };
 }
 
-export default function Sidebar({ width, collapsed, onToggle, sections, activeTab, setActiveTab, C, darkMode }) {
+export default function Sidebar({ width, collapsed, onToggle, sections: pageSections, activeTab, setActiveTab: onPageTab, C, darkMode, setDarkMode, headerExtra }) {
+  // « Mes pages » (liens de l'ancienne navbar) : ajoutée aux menus qui ne l'ont pas déjà (tableaux de bord), sauf
+  // pour les comptes « tableau de bord seul », à qui la navbar ne la montrait pas. Un clic sur une page y mène.
+  const sections = useMemo(() => {
+    if (pageSections.some((s) => s.key === "pages") || usesDashboardOnlyNavbar(apiClient.getUser())) return pageSections;
+    const pages = myPages();
+    return pages.length ? [...pageSections, { key: "pages", label: "Mes pages", items: pages.map((p) => ({ id: p.id, label: p.label, icon: p.icon })) }] : pageSections;
+  }, [pageSections]);
+  const addedPages = sections !== pageSections;
   // Survol = dépliage automatique (réactif) : si la barre est repliée, la survoler
   // l'ouvre (largeur étendue + labels) ; en sortir la referme. Le bouton de pin
   // (onToggle/collapsed) reste prioritaire : barre épinglée ouverte = toujours ouverte.
   const [hovered, setHovered] = useState(() => railHovered);
   const setHover = (v) => { railHovered = v; setHovered(v); };
-  const effCollapsed = collapsed && !hovered;
-  const effWidth = (collapsed && hovered) ? EXPANDED_W : width;
+  // Notifications : la liste s'ouvre dans le menu, qui reste déplié et s'élargit le temps de la lecture.
+  const navigate = useNavigate();
+  const setActiveTab = (id) => {
+    if (addedPages && typeof id === "string" && id.startsWith("page:")) {
+      const page = myPages().find((p) => p.id === id);
+      if (page) navigate(page.path);
+      return;
+    }
+    onPageTab(id);
+  };
+  const notifs = useGlobalNotifications();
+  const [notifOpen, setNotifOpen] = useState(false);
+  const asideRef = useRef(null);
+  const effCollapsed = collapsed && !hovered && !notifOpen;
+  const effWidth = notifOpen ? NOTIF_W : (collapsed && hovered) ? EXPANDED_W : width;
+  useEffect(() => {
+    if (!notifOpen) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") setNotifOpen(false); };
+    const onDown = (e) => { if (asideRef.current && !asideRef.current.contains(e.target)) setNotifOpen(false); };
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown);
+    return () => { window.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onDown); };
+  }, [notifOpen]);
+  // Raccourci Shift+S → Tracking Sheet, repris de la navbar (jamais pendant une saisie, seulement si l'accès existe).
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.shiftKey && e.key === "S" && !isTypingTarget(document.activeElement) && apiClient.hasAccess("tracking_sheet")
+        && window.location.pathname !== "/tracking-sheet") {
+        e.preventDefault();
+        navigate("/tracking-sheet");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navigate]);
+  // En-tête sous le logo : celui de la page (la sheet y met la dispo du sales qu'elle affiche) ; à défaut, la dispo
+  // de la personne connectée, comme la navbar la montrait sur chaque page (le back décide qui la voit), sauf pour
+  // les comptes « tableau de bord seul » (dashboardAudience.js), à qui la navbar ne la montrait pas.
+  const header = headerExtra
+    || (usesDashboardOnlyNavbar(apiClient.getUser()) ? null : (c) => <SidebarAvailability C={C} darkMode={darkMode} collapsed={c} />);
+  const openNotification = (n, target) => {
+    if (!n.read) notifs.markRead([n.id]);
+    if (target) { setNotifOpen(false); navigate(target); }
+  };
+  // Mode sombre : l'état de la page (setDarkMode) et la préférence partagée (localStorage + classe dark-mode,
+  // que les pages relisent).
+  const toggleDark = () => {
+    const next = !darkMode;
+    if (setDarkMode) setDarkMode(next);
+    try { localStorage.setItem("darkMode", String(next)); } catch { /* stockage indisponible */ }
+    document.body.classList.toggle("dark-mode", next);
+    document.documentElement.classList.toggle("dark-mode", next);
+  };
   // Le LAYOUT (labels + centrage icônes) suit un état RETARDÉ : à la fermeture, les labels restent
   // rendus pendant que le panneau rétrécit (l'overflow:hidden les rogne -> le panneau "avale" le
   // texte, cohérent), puis on bascule en mode replié à la fin de l'animation. À l'ouverture, direct.
@@ -97,13 +169,14 @@ export default function Sidebar({ width, collapsed, onToggle, sections, activeTa
   useEffect(() => {
     if (!collapsed) return undefined;
     const onMove = (e) => {
+      if (notifOpen) return; // liste ouverte : le menu reste déplié
       const inside = e.clientX <= (railHovered ? EXPANDED_W : width);
       if (inside !== railHovered) setHover(inside);
     };
     window.addEventListener("mousemove", onMove, { passive: true });
     return () => window.removeEventListener("mousemove", onMove);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collapsed, width]);
+  }, [collapsed, width, notifOpen]);
 
   // ── Layout réordonnable (drag-and-drop) persistant PAR COMPTE ──
   // Layout perso mis en CACHE localStorage -> appliqué SYNCHRONE au montage : à chaque navigation
@@ -168,7 +241,8 @@ export default function Sidebar({ width, collapsed, onToggle, sections, activeTa
       <div style={{ width, flexShrink: 0, alignSelf: 'stretch' }} aria-hidden />
       {createPortal(
       <motion.aside
-        className="ceo-side"
+        ref={asideRef}
+        className={`ceo-side${darkMode ? " is-dark" : ""}`}
         animate={{ width: effWidth }}
         initial={false}
         transition={effCollapsed ? CLOSE_T : OPEN_T}
@@ -183,6 +257,8 @@ export default function Sidebar({ width, collapsed, onToggle, sections, activeTa
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
           background: C.bg,
           borderRight: `1px solid ${C.border}`,
+          '--sb-bg': C.bg, '--sb-text': C.text, '--sb-muted': C.muted, '--sb-border': C.border,
+          '--sb-subtle': C.subtle, '--sb-secondary': C.secondary, '--sb-accent': C.accent,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -197,9 +273,16 @@ export default function Sidebar({ width, collapsed, onToggle, sections, activeTa
       `}</style>
       <div style={{ flexShrink: 0 }}>
         <WorkspaceHeader collapsed={renderCollapsed} C={C} />
-        <IconRow collapsed={renderCollapsed} C={C} />
+        {/* Contenu propre à la page sous l'en-tête (ex. disponibilité des sales), rendu selon l'état replié. */}
+        {header && <div className="sb-header-extra">{header(renderCollapsed)}</div>}
+        <IconRow collapsed={renderCollapsed} C={C} onHome={() => navigate(homeRouteFor(apiClient.getUser()?.role))} />
+        <NotificationsRow collapsed={renderCollapsed} unread={notifs.unreadCount} open={notifOpen} onToggle={() => setNotifOpen((o) => !o)} />
       </div>
 
+      {notifOpen ? (
+        <NotificationsPanel items={notifs.items} unreadCount={notifs.unreadCount} onOpen={openNotification}
+          onReadAll={notifs.markAllRead} onClose={() => setNotifOpen(false)} />
+      ) : (
       <nav style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 0' }} className="ceo-side-scroll">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={ordered.map((s) => 'sec:' + s.key)} strategy={verticalListSortingStrategy}>
@@ -218,8 +301,10 @@ export default function Sidebar({ width, collapsed, onToggle, sections, activeTa
           </SortableContext>
         </DndContext>
       </nav>
+      )}
 
       <div style={{ flexShrink: 0 }}>
+        <SidebarProfile collapsed={renderCollapsed} darkMode={darkMode} onToggleDark={toggleDark} />
         <SidebarFooter collapsed={renderCollapsed} onToggle={onToggle} C={C} />
       </div>
       </motion.aside>,
@@ -275,9 +360,9 @@ function WorkspaceHeader({ collapsed, C }) {
   );
 }
 
-function IconRow({ collapsed, C }) {
+function IconRow({ collapsed, C, onHome }) {
   const items = [
-    { key: 'home',   icon: <Home size={16} />,          label: 'Accueil' },
+    { key: 'home',   icon: <Home size={16} />,          label: 'Accueil', onClick: onHome },
     { key: 'inbox',  icon: <MessageSquare size={16} />, label: 'Discussions' },
     { key: 'mail',   icon: <Mail size={16} />,          label: 'Boîte de réception' },
     { key: 'search', icon: <Search size={16} />,        label: 'Recherche' },
@@ -293,8 +378,11 @@ function IconRow({ collapsed, C }) {
       {items.map((it) => (
         <button
           key={it.key}
+          type="button"
           className="ceo-icon-btn"
           title={it.label}
+          aria-label={it.label}
+          onClick={it.onClick}
           style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             gap: 8,
@@ -386,6 +474,7 @@ function SidebarItem({ item, collapsed, active, onClick, C, darkMode }) {
     <button
       className="ceo-side-item"
       title={collapsed ? item.label : undefined}
+      aria-current={active ? "page" : undefined}
       onClick={onClick}
       style={{
         display: 'flex', alignItems: 'center', gap: 8,
@@ -401,6 +490,7 @@ function SidebarItem({ item, collapsed, active, onClick, C, darkMode }) {
         textAlign: 'left',
         width: '100%',
         minWidth: 0,
+        position: 'relative',
       }}
     >
       <span style={{
@@ -419,6 +509,11 @@ function SidebarItem({ item, collapsed, active, onClick, C, darkMode }) {
         }}>
           {item.label}
         </span>
+      )}
+      {item.badge != null && item.badge.value > 0 && (
+        collapsed
+          ? <span className={`sb-item-dot is-${item.badge.tone || "muted"}`} aria-hidden="true" />
+          : <span className={`sb-item-badge is-${item.badge.tone || "muted"}${item.badge.flash ? " is-flash" : ""}`}>{item.badge.value}</span>
       )}
     </button>
   );

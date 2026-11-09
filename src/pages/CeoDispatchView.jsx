@@ -19,7 +19,6 @@ import TrackingSheetFinance from "./TrackingSheetFinance/index.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
-import SharedNavbar from "../components/SharedNavbar.jsx";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "acquisition_director", "head_of_acquisition", "finance_director"]);
 
@@ -158,13 +157,13 @@ export default function CeoDispatchView() {
         setActiveTab={handleSidebarTabClick}
         C={C}
         darkMode={darkMode}
+          setDarkMode={setDarkMode}
       />
 
       {/* Embedded TrackingSheetFinance — `?embed=true` est déjà dans la query
           via replaceState (lecture sync au mount). On rend la SharedNavbar
           (dynamic-island) au-dessus pour cohérence avec /ceo. */}
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", position: 'relative' }}>
-        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
         <TrackingSheetFinance />
       </div>
     </div>

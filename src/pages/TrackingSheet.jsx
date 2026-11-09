@@ -38,6 +38,8 @@ import { leadAvatar } from "../utils/leadAvatar";
 import { originDisplay } from "../utils/sectors";
 import { supabase } from "../lib/supabaseClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
+import SheetSidebar from "../components/shared/Sidebar/SheetSidebar.jsx";
+import SidebarAvailability from "../components/shared/Sidebar/SidebarAvailability.jsx";
 import LeadsManagement from "./LeadsManagement.jsx";
 import PerfSalesTable from "../components/PerfSalesTable.jsx";
 import CommonVoicemailPool from "../components/CommonVoicemailPool.jsx";
@@ -67,10 +69,8 @@ import iconPrioLow from "../assets/low.svg";
 import iconCampaigns from "../assets/tar.png";
 import iconKpis from "../assets/finance.png";
 import iconCalendrier from "../assets/calendrier.png";
-import iconNotif from "../assets/icon2.png";
 import iconSheets from "../assets/files.png";
 import iconBuilding from "../assets/building.svg";
-import companyLogo from "../assets/my_image.png";
 import campaignImg1 from "../assets/audit-document.jpg";
 import campaignImg2 from "../assets/charges-fatales-2.png";
 import rabbitIcon from "../assets/lapin.png";
@@ -410,73 +410,6 @@ const DEFAULT_ORIGIN = { bg: "rgba(107,114,128,0.12)", text: "#6b7280" };
 // ══════════════════════════════════════════════════════════════════════════════
 // COMPONENT
 // ══════════════════════════════════════════════════════════════════════════════
-// ── Statut disponible / indisponible du sales (chantier réactivité) ─────────
-// Affiché EN PERMANENCE dans la barre latérale : le sales voit son état et le
-// bascule d'un clic. Passer en indisponible coupe l'auto-affectation (aucun
-// nouveau lead) ; le retour en disponible est toujours manuel.
-function SidebarAvailability({ C, darkMode, collapsed, targetEmail }) {
-  const [st, setSt] = useState(null);
-  const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    const fetchSt = async () => {
-      try {
-        if (!apiClient.getToken()) return;
-        const qs = targetEmail ? `?email=${encodeURIComponent(targetEmail)}` : '';
-        const d = await apiClient.get(`/api/v1/tracking/availability/me${qs}`);
-        if (alive && d && typeof d.show !== 'undefined') setSt(d);
-      } catch {}
-    };
-    fetchSt();
-    const t = setInterval(fetchSt, 30000);
-    return () => { alive = false; clearInterval(t); };
-  }, [targetEmail]);
-  const toggle = async () => {
-    if (!st || busy) return;
-    const next = !st.available;
-    if (!next && !window.confirm("Passer en indisponible ? Vous ne recevrez plus de nouveaux leads tant que vous ne serez pas repassé en disponible.")) return;
-    setBusy(true);
-    try {
-      await apiClient.post('/api/v1/tracking/availability', targetEmail ? { available: next, email: targetEmail } : { available: next });
-      setSt((s) => ({ ...s, available: next }));
-    } catch {}
-    setBusy(false);
-  };
-  if (!st || !st.show) return null;
-  const on = !!st.available;
-  const green = '#22c55e', red = '#ef4444';
-  return (
-    <button type="button" onClick={toggle} disabled={busy}
-      title={on ? "Vous recevez les nouveaux leads — cliquer pour passer indisponible" : "Auto-affectation coupée : vous ne recevez aucun lead — cliquer pour redevenir disponible"}
-      style={{
-        display: 'flex', alignItems: 'center', gap: collapsed ? 0 : 9,
-        justifyContent: collapsed ? 'center' : 'flex-start',
-        width: '100%', padding: collapsed ? '10px 0' : '10px 12px', marginTop: 8,
-        borderRadius: 12, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
-        border: `1px solid ${on ? (darkMode ? 'rgba(34,197,94,0.35)' : '#bfe7cd') : (darkMode ? 'rgba(239,68,68,0.4)' : '#f6c9c5')}`,
-        background: on ? (darkMode ? 'rgba(34,197,94,0.12)' : '#eefaf1') : (darkMode ? 'rgba(239,68,68,0.14)' : '#fdecea'),
-        transition: 'background 0.15s, border-color 0.15s',
-      }}>
-      <span style={{ position: 'relative', width: 9, height: 9, flexShrink: 0 }}>
-        <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: on ? green : red }} />
-        {on && <span style={{ position: 'absolute', inset: -3, borderRadius: '50%', border: `1.5px solid ${green}`, opacity: 0.5, animation: 'availPulseTS 2.2s ease-out infinite' }} />}
-      </span>
-      {!collapsed && (
-        <span style={{ textAlign: 'left', minWidth: 0 }}>
-          <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: on ? '#1d7a44' : '#b42318', whiteSpace: 'nowrap' }}>
-            {on ? 'Disponible' : 'Indisponible'}
-          </span>
-          <span style={{ display: 'block', fontSize: 10, color: C.muted, whiteSpace: 'nowrap' }}>
-            {st.self === false ? (on ? 'reçoit les leads' : 'ne reçoit aucun lead')
-              : (on ? 'je reçois les leads' : 'aucun lead ne m\'est envoyé')}
-          </span>
-        </span>
-      )}
-      <style>{`@keyframes availPulseTS{0%{transform:scale(0.7);opacity:0.6}80%{transform:scale(1.5);opacity:0}100%{opacity:0}}`}</style>
-    </button>
-  );
-}
-
 // Signal « traité » : tout geste sur un lead (ouvrir sa fiche, copier son
 // numéro ou son e-mail) vaut traitement. On réessaie, car un envoi perdu en
 // silence coûte au sales le lead qu'il est justement en train de travailler
@@ -1378,8 +1311,6 @@ export default function TrackingSheet() {
   // par défaut, séparé de la liste "à traiter". Additif, pur affichage.
   const [givenLeadsOpen, setGivenLeadsOpen] = useState(false);
   const [sidebarView, setSidebarView] = useState(initialView || 'leads');
-  const [sidebarHover, setSidebarHover] = useState(false);
-  const sidebarCollapsed = !sidebarHover; // repliee par defaut, s'ouvre au survol (overlay)
 
   // ── TRACKING SHEETS MANAGEMENT (admin, HoS only) ──────────────────────────
   const [allSheets, setAllSheets] = useState([]); // [{ email, full_name, lead_count, status, team_id, avatar_url }]
@@ -1397,7 +1328,6 @@ export default function TrackingSheet() {
   const [inviteModal, setInviteModal] = useState(null); // { sheetEmail } or null
   const [inviteSearch, setInviteSearch] = useState('');
   const [myInvitations, setMyInvitations] = useState([]); // invitations received by current user
-  const [invitationsSeen, setInvitationsSeen] = useState(false); // true after visiting notifications tab
   // Wait for backend fix — finalized invitations should not be returned by GET /tracking/invitations
 
   const fetchMyInvitations = useCallback(async () => {
@@ -1411,12 +1341,12 @@ export default function TrackingSheet() {
 
   // Fetch invitations on mount + when switching to notifications tab
   useEffect(() => { fetchMyInvitations(); }, []);
-  useEffect(() => { if (sidebarView === 'notifications') { fetchMyInvitations(); setInvitationsSeen(true); } }, [sidebarView]);
+  useEffect(() => { if (sidebarView === 'notifications') fetchMyInvitations(); }, [sidebarView]);
 
   // Refresh invitations when a sheet_invitation notification arrives via WebSocket
   useEffect(() => {
     const handler = (e) => {
-      if (e.detail?.type === 'sheet_invitation') { fetchMyInvitations(); setInvitationsSeen(false); }
+      if (e.detail?.type === 'sheet_invitation') fetchMyInvitations();
     };
     window.addEventListener('global_notification', handler);
     return () => window.removeEventListener('global_notification', handler);
@@ -1614,7 +1544,6 @@ export default function TrackingSheet() {
   const [openFilterSections, setOpenFilterSections] = useState(new Set()); // which sidebar filter sections are open
   const [dismissedNotifs, setDismissedNotifs] = useState([]); // loaded from backend GET /notifications/dismissed
   const [backendPerfAlerts, setBackendPerfAlerts] = useState(null); // from GET /notifications/performance
-  const [notifBadgeFlash, setNotifBadgeFlash] = useState(false); // pulse when new notifs arrive
   // SMS notifications (live via WebSocket sms_notification events)
   // SMS popover (live via WebSocket sms_notification events) — ephemeral, anchored to navbar notif item
   const [smsNotifPopover, setSmsNotifPopover] = useState(null); // current { id, status, lead_id, lead_name, lead_phone, sms_type, sms_text, segments, error, sent_at }
@@ -1624,7 +1553,6 @@ export default function TrackingSheet() {
     setSmsNotifClosing(true);
     setTimeout(() => { setSmsNotifPopover(null); setSmsNotifClosing(false); }, 450);
   };
-  const prevNotifKeysRef = useRef(null); // track notif keys across polls
   const [activeWorkflow, setActiveWorkflow] = useState(null); // { leadId, contactResult, appointmentResult, r1Result, r1FollowUp, r2Result, newDate }
 
   // ── INLINE EDIT STATE ──────────────────────────────────────────────────
@@ -1915,25 +1843,6 @@ export default function TrackingSheet() {
     }
     return alerts;
   }, [leads, backendPerfAlerts]);
-
-  // Detect new notifications arriving (polling) → flash sidebar badge
-  useEffect(() => {
-    const meetingKeys = leads
-      .filter(l => (l.status === 'r1' && toDateOnly(l.r1) === TODAY) || (l.status === 'r2' && toDateOnly(l.r2) === TODAY))
-      .map(l => l.status === 'r1' ? `r1-${l.id}-${TODAY}` : `r2-${l.id}-${TODAY}`);
-    const allUnread = [...meetingKeys, ...perfAlerts.map(a => a.key)].filter(k => !dismissedNotifs.includes(k));
-    const currentKeySet = new Set(allUnread);
-
-    if (prevNotifKeysRef.current !== null) {
-      // Check if any key is new compared to last poll
-      const hasNewNotif = allUnread.some(k => !prevNotifKeysRef.current.has(k));
-      if (hasNewNotif) {
-        setNotifBadgeFlash(true);
-        setTimeout(() => setNotifBadgeFlash(false), 1200);
-      }
-    }
-    prevNotifKeysRef.current = currentKeySet;
-  }, [leads, perfAlerts, dismissedNotifs]);
 
   // Auto-dismiss all notifications when user visits the Notifications view
   useEffect(() => {
@@ -3020,7 +2929,8 @@ export default function TrackingSheet() {
         }
       `}</style>
 
-      {!embedMode && <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} notification={navNotif} centerShift={78} />}
+      {/* La barre du haut n'existe plus (menu de gauche) : seules les bulles d'action restent, aussi dans la vue CEO. */}
+      <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} notification={navNotif} centerShift={embedMode ? 0 : 28} toastOnly />
 
       {/* ── FLYING CARD CLONE (Genie effect transition) ───────────────────── */}
       {flyingCard && (
@@ -3099,51 +3009,11 @@ export default function TrackingSheet() {
         <div style={{ display: 'flex', alignItems: 'stretch', minHeight: '100vh' }}>
 
           {/* ── LEFT SIDEBAR (full height) — hidden in CEO embed mode ──────── */}
-          {!embedMode && <div style={{ width: 64, minWidth: 64, flexShrink: 0 }} />}
-          {!embedMode && createPortal((
-          <div
-            onMouseEnter={() => setSidebarHover(true)}
-            onMouseLeave={() => setSidebarHover(false)}
-            style={{
-            position: 'fixed', top: 0, left: 0, height: '100vh', zIndex: 60,
-            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
-            width: sidebarCollapsed ? 64 : 220,
-            borderRight: `1px solid ${C.border}`,
-            display: 'flex',
-            flexDirection: 'column',
-            background: darkMode ? C.subtle : '#eceef2',
-            animation: 'sidebarReveal 0.4s ease both',
-            transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)',
-            // Menu défilant : sur un petit écran les derniers onglets (Tracking Sheets…) restaient
-            // hors de vue, sans moyen d'y accéder (dev 2026-10-02).
-            overflowX: 'hidden', overflowY: 'auto', scrollbarWidth: 'thin',
-            boxShadow: sidebarCollapsed ? 'none' : (darkMode ? '6px 0 28px rgba(0,0,0,0.45)' : '6px 0 28px rgba(0,0,0,0.12)'),
-          }}>
-            {/* Sidebar header — company logo like Quno */}
-            <div style={{ padding: sidebarCollapsed ? '14px 8px' : '18px 16px 14px', borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: sidebarCollapsed ? '6px' : '6px 8px',
-                borderRadius: 10,
-                border: `1px solid ${C.border}`,
-                background: darkMode ? 'rgba(255,255,255,0.04)' : '#fff',
-                justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-              }}>
-                <div style={{
-                  width: 32, height: 32, borderRadius: 8,
-                  background: darkMode ? '#fff' : '#1e2330',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  flexShrink: 0,
-                }}>
-                  <img src={companyLogo} alt="" style={{ width: 20, height: 20, objectFit: 'contain', filter: darkMode ? 'none' : 'brightness(0) invert(1)' }} />
-                </div>
-                {!sidebarCollapsed && <div style={{ fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>Owner</div>}
-              </div>
-              <SidebarAvailability C={C} darkMode={darkMode} collapsed={sidebarCollapsed} targetEmail={viewingSheetId || undefined} />
-            </div>
-
-            {/* Nav items */}
-            {[
+          {/* Menu de gauche partagé (09/11/2026) : les vues de la sheet, « Mes pages », notifications et profil.
+              Les vues et leurs règles sont celles d'avant, à l'identique ; seul l'habillage change. */}
+          {!embedMode && (
+            <SheetSidebar
+              views={[
               { key: 'leads', label: 'Mes leads', iconSrc: iconMyLead, accent: C.accent, keepColor: true },
               { key: 'common_pool', label: 'Barrage répondeur', accent: '#06b6d4', iconNode: (active) => (
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
@@ -3158,14 +3028,6 @@ export default function TrackingSheet() {
                   <ListChecks size={19} strokeWidth={2} color={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} />
                 ) },
               ]),
-              { key: 'notifications', label: 'Notifications', iconSrc: iconNotif, accent: '#ef4444', iconSize: 55, badgeCount: (() => {
-                const meetingKeys = [
-                  ...leads.filter(l => l.status === 'r1' && toDateOnly(l.r1) === TODAY).map(l => `r1-${l.id}-${TODAY}`),
-                  ...leads.filter(l => l.status === 'r2' && toDateOnly(l.r2) === TODAY).map(l => `r2-${l.id}-${TODAY}`),
-                ];
-                const allKeys = [...meetingKeys, ...perfAlerts.map(a => a.key)];
-                return allKeys.filter(k => !dismissedNotifs.includes(k)).length + (invitationsSeen ? 0 : myInvitations.length);
-              })() },
               { key: 'email', label: 'Relance', iconSrc: iconEmail, accent: C.accent },
               { key: 'ai_bilan', label: 'Bilan IA', accent: '#E8A317', iconNode: (active) => (
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.9 4.9L18.8 9.8 13.9 11.7 12 16.6 10.1 11.7 5.2 9.8 10.1 7.9z"/><path d="M18.5 14.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>
@@ -3191,98 +3053,23 @@ export default function TrackingSheet() {
               ) }] : []),
               ...(canManageLeads ? [{ key: 'leads_management', label: 'Gestion des leads', iconSrc: iconFuse, accent: '#6366f1', keepColor: true, iconSize: 19 }] : []),
               ...(canManageSheets ? [{ key: 'sheets', label: 'Tracking Sheets', iconSrc: iconSheets, accent: '#8b5cf6' }] : []),
-            ].map(item => {
-              const isActive = sidebarView === item.key;
-              return (
-                <div
-                  key={item.key}
-                  onClick={() => { setSidebarView(item.key); if (item.key !== 'leads') setSelectedLead(null); }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-                    padding: item.iconSize ? '2px 12px' : '9px 12px', margin: '1px 12px', cursor: 'pointer',
-                    borderRadius: 10,
-                    background: isActive ? (darkMode ? '#fff' : '#1e2330') : 'transparent',
-                    boxShadow: 'none',
-                    border: '1px solid transparent',
-                    color: isActive ? (darkMode ? '#1e2330' : '#fff') : C.muted,
-                    transition: 'all 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'; }}
-                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
-                >
-                  {item.iconNode ? (
-                    <div style={{ width: 28, height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {item.iconNode(isActive)}
-                    </div>
-                  ) : item.iconSrc && item.keepColor ? (
-                    <div style={{ width: 28, height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <img src={item.iconSrc} alt="" style={{ width: item.iconSize || 25, height: item.iconSize || 25, opacity: isActive ? 1 : 0.5, transition: 'all 0.15s', filter: isActive ? (darkMode ? 'none' : 'brightness(0) invert(1)') : 'none' }} />
-                    </div>
-                  ) : item.iconSrc ? (
-                    <div style={{
-                      width: item.iconSize || 28, height: item.iconSize || 28, flexShrink: 0, marginRight: item.iconSize ? -((item.iconSize - 28) / 2) : 0, marginLeft: item.iconSize ? -((item.iconSize - 28) / 2) : 0, marginTop: item.iconSize ? -((item.iconSize - 28) / 2) : 0, marginBottom: item.iconSize ? -((item.iconSize - 28) / 2) : 0,
-                      backgroundColor: isActive ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)'),
-                      WebkitMaskImage: `url(${item.iconSrc})`,
-                      WebkitMaskSize: 'contain',
-                      WebkitMaskRepeat: 'no-repeat',
-                      WebkitMaskPosition: 'center',
-                      maskImage: `url(${item.iconSrc})`,
-                      maskSize: 'contain',
-                      maskRepeat: 'no-repeat',
-                      maskPosition: 'center',
-                      transition: 'all 0.15s',
-                    }} />
-                  ) : (
-                    <span style={{
-                      fontSize: 14, fontWeight: 700, width: 28, textAlign: 'center',
-                      color: isActive ? (darkMode ? '#1e2330' : '#fff') : C.muted, transition: 'color 0.15s',
-                    }}>
-                      {item.icon}
-                    </span>
-                  )}
-                  {!sidebarCollapsed && (
-                  <span style={{
-                    fontSize: 13, fontWeight: isActive ? 600 : 500,
-                    color: isActive ? (darkMode ? '#1e2330' : '#fff') : C.muted, transition: 'color 0.15s',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {item.label}
-                  </span>
-                  )}
-                  {!sidebarCollapsed && item.key === 'leads' && (
-                    <span style={{
-                      marginLeft: 'auto', fontSize: 10, fontWeight: 600,
-                      padding: '2px 6px', borderRadius: 4,
-                      background: isActive ? (darkMode ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.25)') : C.subtle,
-                      color: isActive ? (darkMode ? '#1e2330' : '#fff') : C.muted,
-                    }}>
-                      {leads.length}
-                    </span>
-                  )}
-                  {!sidebarCollapsed && item.badgeCount > 0 && (
-                    <span style={{
-                      marginLeft: 'auto', fontSize: 10, fontWeight: 700,
-                      padding: '2px 7px', borderRadius: 50,
-                      background: '#ef4444', color: '#fff',
-                      animation: notifBadgeFlash ? 'notifBadgeFlash 1.2s ease both' : 'notifPulse 2s ease-in-out infinite',
-                    }}>
-                      {item.badgeCount}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-
-            {/* Spacer */}
-            <div style={{ flex: 1 }} />
-          </div>
-          ), document.body)}
+            ].map(v => ({
+                ...v,
+                // « Rappels et alertes » ne figure plus au menu (dev 09/11/2026) : les notifications passent par la ligne
+                // Notifications du menu ; la vue reste ouverte par lien (?view=notifications, invitation à une sheet).
+                badge: v.key === 'leads' ? { value: leads.length, tone: 'muted' } : v.badgeCount > 0 ? { value: v.badgeCount, tone: 'alert' } : undefined,
+              }))}
+              activeView={sidebarView}
+              onView={(key) => { setSidebarView(key); if (key !== 'leads') setSelectedLead(null); }}
+              headerExtra={(collapsed) => <SidebarAvailability C={C} darkMode={darkMode} collapsed={collapsed} targetEmail={viewingSheetId || undefined} />}
+              C={C} darkMode={darkMode} setDarkMode={setDarkMode}
+            />
+          )}
 
         {/* ── RIGHT COLUMN (single top card + content row) ─────────────────── */}
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: embedMode ? '8px 8px 8px 8px' : '8px 8px 8px 0', gap: 12 }}>
 
-          {/* ── KPI HEADER CARD (3 left + gap for navbar + 3 right) ────────── */}
+          {/* ── KPI HEADER CARD : les 7 indicateurs répartis sur toute la largeur (09/11/2026, plus de navbar au milieu) ── */}
           <div style={{ height: 76, background: darkMode ? C.bg : '#f6f7f9', borderRadius: 8, flexShrink: 0, border: `1px solid ${isAdminView ? '#8b5cf640' : C.border}`, marginLeft: 8, display: 'flex', alignItems: 'center', padding: '0 24px' }}>
             {isAdminView && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 'auto' }}>
@@ -3321,17 +3108,14 @@ export default function TrackingSheet() {
                 const valStr = String(kpi.value);
                 const fs = valStr.length > 8 ? 15 : valStr.length > 5 ? 17 : 20;
                 return (
-                <div key={kpi.label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, borderRight: i < arr.length - 1 ? `1px solid ${C.border}` : 'none', padding: '0 36px', whiteSpace: 'nowrap' }}>
+                <div key={kpi.label} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, borderRight: i < arr.length - 1 ? `1px solid ${C.border}` : 'none', padding: '0 12px', whiteSpace: 'nowrap' }}>
                   <span style={{ fontSize: fs, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>{kpi.value}</span>
                   <span style={{ fontSize: 11.5, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{kpi.label}</span>
                 </div>
                 );
               };
-              return <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>{left.map(renderKpi)}</div>
-                <div style={{ flex: 1 }} />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginRight: 16 }}>{right.map(renderKpi)}</div>
-              </>;
+              const all = [...left, ...right];
+              return <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>{all.map(renderKpi)}</div>;
             })()}
           </div>
 
@@ -3855,7 +3639,7 @@ export default function TrackingSheet() {
           return (
             <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
               <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
-                Notifications
+                Rappels et alertes
               </h2>
               <p style={{ fontSize: 13, color: C.muted, margin: '0 0 24px' }}>Rendez-vous du jour et alertes performance</p>
 

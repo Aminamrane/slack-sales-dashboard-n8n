@@ -13,7 +13,6 @@ import PerfSetter from "../components/perfSetter/PerfSetter.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
-import SharedNavbar from "../components/SharedNavbar.jsx";
 import { READ_ONLY_DIRECTION_ROLES } from "../utils/readOnlyRoles";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo", "acquisition_director", ...READ_ONLY_DIRECTION_ROLES]);
@@ -142,11 +141,11 @@ export default function CeoSettersView() {
           setActiveTab={handleSidebarTabClick}
           C={C}
           darkMode={darkMode}
+          setDarkMode={setDarkMode}
         />
       </div>
 
-      <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingTop: 64 }}>
-        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
+      <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingTop: 16 }}>
         <PerfSetter darkMode={darkMode} />
       </div>
     </div>

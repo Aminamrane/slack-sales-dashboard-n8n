@@ -1,7 +1,7 @@
 // src/pages/CeoFinancialAnalysisView.jsx
 //
 // « Analyse financière » dans le dashboard (section Finance), même gabarit que
-// CeoSmallLeadsView : sidebar CEO filtrée par rôle + navbar. Page VIDE pour
+// CeoSmallLeadsView : sidebar CEO filtrée par rôle (menu de gauche, sans navbar). Page VIDE pour
 // l'instant (09/11/2026) : le contenu viendra plus tard.
 // Accès : CEO et admin (onglet + route).
 
@@ -12,7 +12,6 @@ import { navigateBackToDashboard } from "../utils/dashboardNavigation";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
-import SharedNavbar from "../components/SharedNavbar.jsx";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo"]);
 const TAB_ID = "financial_analysis";
@@ -29,7 +28,7 @@ const TAB_ROUTES = {
 export default function CeoFinancialAnalysisView() {
   const navigate = useNavigate();
 
-  // ── DARK MODE (piloté par la SharedNavbar de ce wrapper) ──
+  // ── DARK MODE (piloté par le menu de gauche de ce wrapper) ──
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
   useEffect(() => {
     const onStorage = (e) => {
@@ -133,11 +132,11 @@ export default function CeoFinancialAnalysisView() {
           setActiveTab={handleSidebarTabClick}
           C={C}
           darkMode={darkMode}
+          setDarkMode={setDarkMode}
         />
       </div>
 
-      <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 64 }}>
-        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
+      <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 16 }}>
         {/* Page vide : le contenu de l'analyse financière viendra ici. */}
         <main aria-label="Analyse financière" />
       </div>

@@ -14,7 +14,6 @@ import MetaAds from "./MetaAds/index.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
-import SharedNavbar from "../components/SharedNavbar.jsx";
 import { getTheme } from "./MetaAds/theme.js";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo", "finance_director", "acquisition_director", "head_of_acquisition", "marketing", "hr"]);
@@ -143,11 +142,11 @@ export default function CeoMetaAdsView() {
           setActiveTab={handleSidebarTabClick}
           C={C}
           darkMode={darkMode}
+          setDarkMode={setDarkMode}
         />
       </div>
 
-      <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingTop: 64 }}>
-        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
+      <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingTop: 16 }}>
         <MetaAds embedded darkMode={darkMode} />
       </div>
     </div>

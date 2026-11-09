@@ -20,7 +20,6 @@ import { navigateBackToDashboard } from "../utils/dashboardNavigation";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
-import SharedNavbar from "../components/SharedNavbar.jsx";
 import SalesTeamGrid from "../components/SalesTeamGrid.jsx";
 import SettersGrid from "../components/SettersGrid.jsx";
 import SalesSettersToggle from "../components/SalesSettersToggle.jsx";
@@ -224,14 +223,14 @@ export default function CeoSalesTeamView() {
           setActiveTab={handleSidebarTabClick}
           C={C}
           darkMode={darkMode}
+          setDarkMode={setDarkMode}
         />
       </div>
 
       {/* Workspace — SharedNavbar (dynamic-island) au-dessus, puis la
           grille Équipe Sales. paddingTop pour passer sous la navbar
           flottante. */}
-      <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingTop: 64 }}>
-        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
+      <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingTop: 16 }}>
 
         <div style={{ padding: '32px 56px 64px' }}>
           <div style={{ animation: 'ceoFadeIn 0.35s ease both' }}>

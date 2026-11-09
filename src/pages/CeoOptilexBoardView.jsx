@@ -14,7 +14,6 @@ import OptilexBoard from "./OptilexBoard.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
-import SharedNavbar from "../components/SharedNavbar.jsx";
 import { READ_ONLY_DIRECTION_ROLES } from "../utils/readOnlyRoles";
 
 // Les rôles en lecture seule (RH) consultent le board sans rien y écrire (OptilexBoard isBoardReadOnly).
@@ -139,11 +138,11 @@ export default function CeoOptilexBoardView() {
           setActiveTab={handleSidebarTabClick}
           C={C}
           darkMode={darkMode}
+          setDarkMode={setDarkMode}
         />
       </div>
 
-      <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 64 }}>
-        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
+      <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 16 }}>
         <OptilexBoard embed />
       </div>
     </div>
