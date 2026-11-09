@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { phoneKey, phoneDisplay, sharedEmailOptions } from './boardContacts.js';
+import { contactEntries, phoneKey, rankLabel, sharedEmailOptions } from './boardContacts.js';
 
 test('french numbers compare whatever their format', () => {
   assert.equal(phoneKey('+33 6 75 82 86 69'), '0675828669');
@@ -8,15 +8,19 @@ test('french numbers compare whatever their format', () => {
   assert.equal(phoneKey('06.75.82.86.69'), '0675828669');
 });
 
-test('a phone added by finance appears after the board phones, without duplicates', () => {
-  const board = '+33298048429 - 0675828669';
-  const shared = [{ value: '+33675828669' }, { value: '0611223344' }, { value: '0611223344' }];
-  assert.equal(phoneDisplay(board, shared), '+33298048429 - 0675828669 · 0611223344');
+test('the board field may hold several numbers: each one counts, finance numbers follow without duplicates', () => {
+  const shared = [{ id: 1, value: '+33675828669' }, { id: 2, value: '0611223344' }, { id: 3, value: '0611223344' }];
+  assert.deepEqual(contactEntries('phone', '+33298048429 - 0675828669', shared).map((e) => e.value), ['+33298048429', '0675828669', '0611223344']);
+  assert.deepEqual(contactEntries('phone', null, [{ id: 4, value: '0611223344' }]).map((e) => e.value), ['0611223344']);
 });
 
-test('no board phone: finance phones are shown', () => {
-  assert.equal(phoneDisplay('', [{ value: '0611223344' }]), '0611223344');
-  assert.equal(phoneDisplay(null, []), '');
+test('ranks: the board value is primary by default, a flagged primary goes first', () => {
+  assert.deepEqual([0, 1, 2, 3].map(rankLabel), ['Primaire', 'Secondaire', 'Tertiaire', '4e']);
+  const none = contactEntries('phone', '0675828669', [{ id: 1, value: '+33675828669' }, { id: 2, value: '0611223344' }]);
+  assert.deepEqual(none.map((e) => [e.value, e.rank, e.id]), [['0675828669', 'Primaire', 1], ['0611223344', 'Secondaire', 2]]);
+  const flagged = contactEntries('email', 'a@b.fr', [{ id: 3, value: 'c@d.fr', is_primary: true }, { id: 4, value: 'e@f.fr' }]);
+  assert.deepEqual(flagged.map((e) => [e.value, e.rank]), [['c@d.fr', 'Primaire'], ['a@b.fr', 'Secondaire'], ['e@f.fr', 'Tertiaire']]);
+  assert.deepEqual(contactEntries('phone', '', []), []);
 });
 
 test('finance emails are labelled for the email menu', () => {

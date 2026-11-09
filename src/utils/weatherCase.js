@@ -1,9 +1,11 @@
+// tile / ink : tuile pastel et encre de la fenêtre « Faire le point sur le client » (palette du dev, 29/10/2026 :
+// sauge, citron, pêche, corail, mauve).
 export const WEATHER = {
-  5: { label: 'Satisfait', description: 'Client satisfait, aucun signal d’alerte.', color: '#16824a', bg: '#eaf7ef' },
-  4: { label: 'À surveiller', description: 'Pas de mécontentement exprimé, mais présence de signaux faibles : manque de visibilité, délais, incompréhension du service ou faible perception de la valeur.', color: '#956500', bg: '#fff7df' },
-  3: { label: 'Mécontent', description: 'Insatisfaction exprimée ou expérience dégradée.', color: '#bd5912', bg: '#fff0e4' },
-  2: { label: 'Critique', description: 'Forte insatisfaction, perte de confiance ou risque de résiliation.', color: '#c33434', bg: '#fff0f0' },
-  1: { label: 'Résiliation', description: 'Lettre reçue : rétention, puis sortie si la résiliation est confirmée.', color: '#85334e', bg: '#f9edf3' },
+  5: { label: 'Satisfait', description: 'Client satisfait, aucun signal d’alerte.', color: '#16824a', bg: '#eaf7ef', tile: '#d6ead4', ink: '#3f7f4b' },
+  4: { label: 'À surveiller', description: 'Pas de mécontentement exprimé, mais présence de signaux faibles : manque de visibilité, délais, incompréhension du service ou faible perception de la valeur.', color: '#956500', bg: '#fff7df', tile: '#fef3b0', ink: '#8f6f00' },
+  3: { label: 'Mécontent', description: 'Insatisfaction exprimée ou expérience dégradée.', color: '#bd5912', bg: '#fff0e4', tile: '#ffd6a5', ink: '#b45d14' },
+  2: { label: 'Critique', description: 'Forte insatisfaction, perte de confiance ou risque de résiliation.', color: '#c33434', bg: '#fff0f0', tile: '#ffc1b6', ink: '#bf4436' },
+  1: { label: 'Résiliation', description: 'Lettre reçue : rétention, puis sortie si la résiliation est confirmée.', color: '#85334e', bg: '#f9edf3', tile: '#e6d6e7', ink: '#86497e' },
 };
 export const QUALIFICATION_FIELDS = [
   ['reason', 'Motif', 'Quel est le problème ?'],

@@ -1,0 +1,26 @@
+/* E-mails et téléphones par rang (BoardContactLine.jsx, dev 29/10/2026) : étiquette « Primaire » (vert Owner pâle),
+   « Secondaire », « Tertiaire »… (gris), étoile pour passer en primaire, petite fenêtre aux coins ronds. */
+.bcl-tag { display:inline-flex; align-items:center; flex-shrink:0; height:20px; padding:0 7px; border-radius:6px; background:#eef0f4; font-size:11px; font-weight:700; letter-spacing:.01em; color:#5b6472; }
+.bcl-tag.is-primary { background:#e3f0e1; color:#3f7f4b; }
+.bcl-anchor { position:relative; display:inline-flex; }
+.bcl-more { display:inline-grid; place-items:center; min-width:22px; height:22px; padding:0 6px; border:1px solid #e3e7ee; border-radius:7px; background:#fff; font:inherit; font-size:11.5px; font-weight:700; color:#5b6472; cursor:pointer; transition:border-color .15s, color .15s; }
+.bcl-more:hover, .bcl-more[aria-expanded="true"] { border-color:#c9d1dd; color:#1e2330; }
+.bcl-more svg { transition:transform .3s cubic-bezier(.34,1.56,.64,1); }
+.bcl-more:hover svg { transform:rotate(90deg); }
+.bcl-pop { position:absolute; top:calc(100% + 8px); right:0; z-index:40; width:320px; padding:14px; border:1px solid #e9ebf0; border-radius:20px; background:#fff; box-shadow:0 14px 36px rgba(18,27,53,.16), 0 2px 6px rgba(18,27,53,.06); transform-origin:top right; font-weight:500; }
+.bcl-pop-title { margin:0 2px 8px; font-size:12px; font-weight:650; color:#8a93a4; }
+.bcl-list { display:flex; flex-direction:column; gap:6px; margin:0; padding:0; list-style:none; }
+.bcl-list li { display:flex; align-items:center; gap:8px; min-height:38px; padding:0 8px 0 11px; border:1px solid #ebedf1; border-radius:11px; background:#fbfbfc; }
+.bcl-val { flex:1; min-width:0; font-size:13px; font-weight:600; color:#1e2330; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bcl-first { font-size:11px; color:#a3abba; }
+.bcl-none { font-size:12.5px; color:#8a93a4; }
+.bcl-add { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.bcl-add input { flex:1; box-sizing:border-box; height:34px; padding:0 11px; border:1px solid #e3e7ee; border-radius:10px; font:inherit; font-size:12.5px; color:#1e2330; outline:0; }
+.bcl-add input:focus { border-color:#9db7e3; box-shadow:0 0 0 3px rgba(37,99,235,.1); }
+.bcl-go { height:34px; padding:0 13px; border:0; border-radius:9px; background:#1e2330; font:inherit; font-size:12.5px; font-weight:650; color:#fff; cursor:pointer; }
+.bcl-go:disabled { opacity:.45; cursor:default; }
+.bcl-error { margin:8px 0 0; font-size:12px; color:#b42318; }
+.bcl-star { display:grid; place-items:center; flex-shrink:0; width:26px; height:26px; border:0; border-radius:8px; background:transparent; color:#a3abba; cursor:pointer; transition:color .15s, background .15s; }
+.bcl-star svg { transition:transform .35s cubic-bezier(.34,1.56,.64,1); }
+.bcl-star:hover:not(:disabled) { color:#b8860b; background:#fff8e1; }
+.bcl-star:hover:not(:disabled) svg { transform:rotate(72deg) scale(1.15); }
