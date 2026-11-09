@@ -83,6 +83,25 @@ function stripEditorTraces(root) {
   });
 }
 
+/**
+ * Attributs que le serveur accepte sur <html> et <body> : sa liste blanche (`sequence_email_versions.py` : `GLOBAL_ATTRS`, dont `lang` et `dir`
+ * pour <html>). Tout autre attribut y est étranger à l'e-mail : les extensions du navigateur (bloqueurs de publicités, correcteurs, traducteurs…)
+ * en posent sur le <html> et le <body> de CHAQUE iframe, celle de l'éditeur comprise. Gardés, ils feraient refuser tout l'enregistrement
+ * (« Contenu refusé : attribut … interdit dans <html> ») et rendraient le HTML de l'éditeur différent de `normalizeEmailHtml` de l'original
+ * (la comparaison qui détecte une vraie modification). À garder en phase avec le serveur.
+ */
+const ROOT_ATTRS = new Set(['style', 'class', 'id', 'lang', 'dir', 'title', 'role', 'align', 'valign', 'width', 'height', 'bgcolor']);
+
+/** @brief Retire de <html> et de <body> d'un arbre cloné les attributs que le serveur refuserait : ils viennent du navigateur, pas de l'e-mail. */
+export function stripForeignRootAttributes(root) {
+  for (const el of [root, root.querySelector('body')]) {
+    if (!el) continue;
+    for (const { name } of [...el.attributes]) {
+      if (!ROOT_ATTRS.has(name.toLowerCase())) el.removeAttribute(name);
+    }
+  }
+}
+
 /** @brief Remplace chaque élément `from` par un élément `to` de même contenu et mêmes attributs. */
 function renameTag(root, from, to) {
   for (const el of root.querySelectorAll(from)) {
@@ -108,11 +127,13 @@ function unwrapComputedStyleSpans(root) {
  * @brief HTML de l'e-mail tel qu'il est dans l'éditeur, sans trace de celui-ci.
  * @note `<b>`/`<i>` deviennent `<strong>`/`<em>`, comme dans le reste des e-mails. Un document intact
  * redonne exactement `normalizeEmailHtml` de son HTML d'origine : c'est ce qui permet de savoir s'il
- * a vraiment été modifié.
+ * a vraiment été modifié. Les attributs que des extensions du navigateur posent sur `<html>` et `<body>`
+ * sont retirés (`stripForeignRootAttributes`) : sinon le serveur refuse l'e-mail et la comparaison avec l'original ne tombe plus juste.
  */
 export function serializeEditorDocument(doc) {
   const root = doc.documentElement.cloneNode(true);
   stripEditorTraces(root);
+  stripForeignRootAttributes(root);
   renameTag(root, 'b', 'strong');
   renameTag(root, 'i', 'em');
   unwrapComputedStyleSpans(root);
