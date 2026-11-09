@@ -117,6 +117,10 @@ const SIDEBAR_TABS = [
   { key: 'campaigns', label: 'Campagnes', icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 11 18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
   )},
+  // Analyse financière : page vide pour l'instant (09/11). Icône : caisse enregistreuse.
+  { key: 'financial_analysis', label: 'Analyse financière', icon: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="3" width="12" height="6" rx="1"/><path d="M12 9v4"/><rect x="3" y="13" width="18" height="8" rx="2"/><path d="M7 17h.01"/><path d="M12 17h.01"/><path d="M17 17h.01"/></svg>
+  )},
   { section: 'PRODUIT' },
   { key: 'optilex_board', label: "Board Owner/Opti'Lex", icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg>
@@ -151,7 +155,7 @@ const ROUTE_TABS = {
   setters_stats: '/ceo/setters', acquisition_agenda: '/ceo/agenda', autoassign: '/ceo/auto-affectation', sequences: '/ceo/sequences',
   variables: '/ceo/variables', conges: '/ceo/conges', work_hours: '/ceo/work-hours', campaigns: '/ceo/campaigns',
   my_tracking_sheet: '/tracking-sheet', optilex_board: '/ceo/optilex-board', sales_recordings: '/ceo/sales-recordings',
-  meta_ads: '/ceo/meta-ads', bot_ia: '/ceo/Sub-Tickets',
+  meta_ads: '/ceo/meta-ads', bot_ia: '/ceo/Sub-Tickets', financial_analysis: '/ceo/analyse-financiere',
 };
 
 // Rafraîchissements : le board et le classement bougent dans la journée (60 s, en

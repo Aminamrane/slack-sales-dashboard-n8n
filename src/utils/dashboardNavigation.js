@@ -42,6 +42,7 @@ export function getDashboardRoute(role) {
 export const CEO_TAB_ROUTES = {
   meta_ads: "/ceo/meta-ads", bot_ia: "/ceo/Sub-Tickets", small_leads: "/ceo/leads-moins-100k", setters_stats: "/ceo/setters", acquisition_agenda: "/ceo/agenda",
   work_hours: "/ceo/work-hours", sequences: "/ceo/sequences", optilex_board: "/ceo/optilex-board",
+  financial_analysis: "/ceo/analyse-financiere",
 };
 
 export function navigateBackToDashboard(navigate, role, ceoTabId = null) {

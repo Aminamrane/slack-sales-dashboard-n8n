@@ -54,6 +54,7 @@ const OptilexBoard = lazy(() => import("./pages/OptilexBoard.jsx"));
 const MetaAds = lazy(() => import("./pages/MetaAds/index.jsx"));
 const CeoMetaAdsView = lazy(() => import("./pages/CeoMetaAdsView.jsx"));
 const CeoSmallLeadsView = lazy(() => import("./pages/CeoSmallLeadsView.jsx"));
+const CeoFinancialAnalysisView = lazy(() => import("./pages/CeoFinancialAnalysisView.jsx"));
 const CeoSettersView = lazy(() => import("./pages/CeoSettersView.jsx"));
 const CeoAgendaView = lazy(() => import("./pages/CeoAgendaView.jsx"));
 const CeoBotIaView = lazy(() => import("./pages/CeoBotIaView.jsx"));
@@ -374,6 +375,14 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['ceo', 'finance_director', 'acquisition_director', 'head_of_acquisition', 'marketing', 'hr']}>
               <CeoMetaAdsView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ceo/analyse-financiere"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'ceo']}>
+              <CeoFinancialAnalysisView />
             </ProtectedRoute>
           }
         />
