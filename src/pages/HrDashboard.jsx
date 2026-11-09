@@ -24,7 +24,6 @@ import { CEO_TAB_ROUTES } from "../utils/dashboardNavigation";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections, setNavScope } from "../utils/sidebarPermissions";
-import SharedNavbar from "../components/SharedNavbar.jsx";
 
 const ALLOWED_ROLES = ["admin", "ceo", "hr"];
 
@@ -167,12 +166,12 @@ export default function HrDashboard() {
           setActiveTab={handleSidebarTabClick}
           C={C}
           darkMode={darkMode}
+          setDarkMode={setDarkMode}
         />
       </div>
 
       {/* Dashboard RH = Leaderboard embarqué (?embed=true déjà injecté). */}
       <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
-        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
         <Leaderboard />
       </div>
     </div>

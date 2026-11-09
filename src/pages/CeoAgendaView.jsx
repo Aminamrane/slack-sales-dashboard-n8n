@@ -13,7 +13,6 @@ import InternalCalendar from "../components/calendar/InternalCalendar";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
-import SharedNavbar from "../components/SharedNavbar.jsx";
 import { READ_ONLY_DIRECTION_ROLES } from "../utils/readOnlyRoles";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo", "acquisition_director", "head_of_acquisition", ...READ_ONLY_DIRECTION_ROLES]);
@@ -143,11 +142,11 @@ export default function CeoAgendaView() {
           setActiveTab={handleSidebarTabClick}
           C={C}
           darkMode={darkMode}
+          setDarkMode={setDarkMode}
         />
       </div>
 
-      <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingTop: 64, height: '100vh', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
-        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
+      <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingTop: 16, height: '100vh', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
         {/* isolation : les z-index internes du calendrier (en-têtes 60, règle des heures 45, pastille « maintenant » 46)
             restent dans ce bloc ; sans cela ils passent au-dessus du menu de gauche (z-index 40) quand il s'ouvre en surimpression. */}
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '20px 28px', isolation: 'isolate' }}>

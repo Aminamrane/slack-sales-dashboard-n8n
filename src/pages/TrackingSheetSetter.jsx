@@ -9,6 +9,7 @@ import apiClient from "../services/apiClient";
 import LeadSmsActions from "../components/LeadSmsActions";
 import { supabase } from "../lib/supabaseClient";
 import SharedNavbar from "../components/SharedNavbar.jsx";
+import SheetSidebar from "../components/shared/Sidebar/SheetSidebar.jsx";
 import { leadAvatar } from "../utils/leadAvatar";
 import { originDisplay } from "../utils/sectors";
 import LeadsManagement from "./LeadsManagement.jsx";
@@ -56,7 +57,6 @@ import iconCalendrier from "../assets/calendrier.png";
 import iconNotif from "../assets/icon2.png";
 import iconSheets from "../assets/files.png";
 import iconBuilding from "../assets/building.svg";
-import companyLogo from "../assets/my_image.png";
 import campaignImg1 from "../assets/audit-document.jpg";
 import campaignImg2 from "../assets/charges-fatales-2.png";
 import rabbitIcon from "../assets/lapin.png";
@@ -972,8 +972,6 @@ export default function TrackingSheetSetter() {
   // Prospection : liste ouverte dans « Mes listes » (null = vue d'ensemble).
   const [prospectListId, setProspectListId] = useState(null);
   // Sidebar repliable (hover) — overlay comme la vue sales
-  const [sidebarHover, setSidebarHover] = useState(false);
-  const sidebarCollapsed = !sidebarHover;
 
   // ── TRACKING SHEETS MANAGEMENT (admin, HoS only) ──────────────────────────
   const [allSheets, setAllSheets] = useState([]); // [{ email, full_name, lead_count, status, team_id, avatar_url }]
@@ -2412,7 +2410,7 @@ export default function TrackingSheetSetter() {
         }
       `}</style>
 
-      {!embedMode && <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} notification={navNotif} centerShift={78} />}
+      {!embedMode && <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} notification={navNotif} centerShift={0} toastOnly />}
 
       {/* ── FLYING CARD CLONE (Genie effect transition) ───────────────────── */}
       {flyingCard && (
@@ -2493,52 +2491,12 @@ export default function TrackingSheetSetter() {
           {/* ── LEFT SIDEBAR — repliable (hover), overlay comme la vue sales ── */}
           {/* Spacer : réserve la gouttière 64px pour que le contenu ne bouge jamais.
               En embed (shell CEO ghost) : spacer + sidebar propres masqués. */}
-          {!embedMode && <div style={{ width: 64, minWidth: 64, flexShrink: 0 }} />}
-          {!embedMode && createPortal((
-          <div
-            onMouseEnter={() => setSidebarHover(true)}
-            onMouseLeave={() => setSidebarHover(false)}
-            style={{
-            position: 'fixed', top: 0, left: 0, height: '100vh', zIndex: 60,
-            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
-            width: sidebarCollapsed ? 64 : 220,
-            borderRight: `1px solid ${C.border}`,
-            display: 'flex',
-            flexDirection: 'column',
-            background: darkMode ? C.subtle : '#eceef2',
-            animation: 'sidebarReveal 0.4s ease both',
-            transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)',
-            // Menu défilant : sur un petit écran les derniers onglets (Tracking Sheets…) restaient
-            // hors de vue, sans moyen d'y accéder (dev 2026-10-02).
-            overflowX: 'hidden', overflowY: 'auto', scrollbarWidth: 'thin',
-            boxShadow: sidebarCollapsed ? 'none' : (darkMode ? '6px 0 28px rgba(0,0,0,0.45)' : '6px 0 28px rgba(0,0,0,0.12)'),
-          }}>
-            {/* Sidebar header — company logo like Quno */}
-            <div style={{ padding: sidebarCollapsed ? '14px 8px' : '18px 16px 14px', borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-                padding: sidebarCollapsed ? '6px' : '6px 8px',
-                borderRadius: 10,
-                border: `1px solid ${C.border}`,
-                background: darkMode ? 'rgba(255,255,255,0.04)' : '#fff',
-              }}>
-                <div style={{
-                  width: 32, height: 32, borderRadius: 8,
-                  background: darkMode ? '#fff' : '#1e2330',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  flexShrink: 0,
-                }}>
-                  <img src={companyLogo} alt="" style={{ width: 20, height: 20, objectFit: 'contain', filter: darkMode ? 'none' : 'brightness(0) invert(1)' }} />
-                </div>
-                {!sidebarCollapsed && <div style={{ fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>Owner</div>}
-              </div>
-            </div>
-
-            {/* Nav items — Setter version : pas le Calendrier des sales (leurs RDV
-                sont gérés par eux) ; l'Agenda montre les RDV que le setter a posés.
-                Le reste (Notifications, Relance, Campagnes, KPIs) reste accessible. */}
-            {[
+          {/* Menu de gauche partagé (09/11/2026, dev : « les setters aussi, qu'ils ne perdent rien, tout bascule dans le menu
+              à gauche ») : les vues de la sheet à l'identique, « Mes pages », notifications et profil. */}
+          {!embedMode && (
+            <SheetSidebar
+              title="Ma Tracking Setter"
+              views={[
               { key: 'leads', label: 'Mes leads', iconSrc: iconMyLead, accent: C.accent, keepColor: true },
               // Pas de barrage répondeur commun : réservé aux commerciaux depuis le 06/10/2026.
               // Agenda (05/10/2026) : les RDV posés chez les commerciaux (no-show visible) et les rappels.
@@ -2549,7 +2507,7 @@ export default function TrackingSheetSetter() {
               // Prospection : recherche d'entreprises (API Leads) et listes réservées.
               { key: 'prospect_search', label: 'Trouver des contacts', icon: <UserSearch size={20} strokeWidth={1.8} style={{ display: 'block', margin: '0 auto' }} />, accent: C.accent },
               { key: 'prospect_lists', label: 'Mes listes', icon: <ListChecks size={20} strokeWidth={1.8} style={{ display: 'block', margin: '0 auto' }} />, accent: C.accent },
-              { key: 'notifications', label: 'Notifications', iconSrc: iconNotif, accent: '#ef4444', iconSize: 55, badgeCount: (() => {
+              { key: 'notifications', label: 'Rappels et alertes', iconSrc: iconNotif, accent: '#ef4444', iconSize: 55, badgeCount: (() => {
                 const meetingKeys = [
                   ...leads.filter(l => l.status === 'r1' && toDateOnly(l.r1) === TODAY).map(l => `r1-${l.id}-${TODAY}`),
                   ...leads.filter(l => l.status === 'r2' && toDateOnly(l.r2) === TODAY).map(l => `r2-${l.id}-${TODAY}`),
@@ -2563,94 +2521,22 @@ export default function TrackingSheetSetter() {
               ...(canSeeTeamPerf ? [{ key: 'team_perf', label: 'Pilotage setting', icon: <UsersRound size={20} strokeWidth={1.8} style={{ display: 'block', margin: '0 auto' }} />, accent: C.accent }] : []),
               ...(canManageLeads ? [{ key: 'leads_management', label: 'Gestion des leads', iconSrc: iconFuse, accent: '#6366f1', keepColor: true, iconSize: 19 }] : []),
               ...(canManageSheets ? [{ key: 'sheets', label: 'Tracking Sheets', iconSrc: iconSheets, accent: '#8b5cf6' }] : []),
-            ].map(item => {
-              const isActive = sidebarView === item.key;
-              return (
-                <div
-                  key={item.key}
-                  onClick={() => { setSidebarView(item.key); if (item.key !== 'leads') setSelectedLead(null); }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-                    padding: item.iconSize ? '2px 12px' : '9px 12px', margin: '1px 12px', cursor: 'pointer',
-                    borderRadius: 10,
-                    background: isActive ? (darkMode ? '#fff' : '#1e2330') : 'transparent',
-                    boxShadow: 'none',
-                    border: '1px solid transparent',
-                    color: isActive ? (darkMode ? '#1e2330' : '#fff') : C.muted,
-                    transition: 'all 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'; }}
-                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
-                >
-                  {item.iconSrc && item.keepColor ? (
-                    <div style={{ width: 28, height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <img src={item.iconSrc} alt="" style={{ width: item.iconSize || 25, height: item.iconSize || 25, opacity: isActive ? 1 : 0.5, transition: 'all 0.15s', filter: isActive ? (darkMode ? 'none' : 'brightness(0) invert(1)') : 'none' }} />
-                    </div>
-                  ) : item.iconSrc ? (
-                    <div style={{
-                      width: item.iconSize || 28, height: item.iconSize || 28, flexShrink: 0, marginRight: item.iconSize ? -((item.iconSize - 28) / 2) : 0, marginLeft: item.iconSize ? -((item.iconSize - 28) / 2) : 0, marginTop: item.iconSize ? -((item.iconSize - 28) / 2) : 0, marginBottom: item.iconSize ? -((item.iconSize - 28) / 2) : 0,
-                      backgroundColor: isActive ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)'),
-                      WebkitMaskImage: `url(${item.iconSrc})`,
-                      WebkitMaskSize: 'contain',
-                      WebkitMaskRepeat: 'no-repeat',
-                      WebkitMaskPosition: 'center',
-                      maskImage: `url(${item.iconSrc})`,
-                      maskSize: 'contain',
-                      maskRepeat: 'no-repeat',
-                      maskPosition: 'center',
-                      transition: 'all 0.15s',
-                    }} />
-                  ) : (
-                    <span style={{
-                      fontSize: 14, fontWeight: 700, width: 28, textAlign: 'center',
-                      color: isActive ? (darkMode ? '#1e2330' : '#fff') : C.muted, transition: 'color 0.15s',
-                    }}>
-                      {item.icon}
-                    </span>
-                  )}
-                  {!sidebarCollapsed && (
-                  <span style={{
-                    fontSize: 13, fontWeight: isActive ? 600 : 500,
-                    color: isActive ? (darkMode ? '#1e2330' : '#fff') : C.muted, transition: 'color 0.15s',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {item.label}
-                  </span>
-                  )}
-                  {!sidebarCollapsed && item.key === 'leads' && (
-                    <span style={{
-                      marginLeft: 'auto', fontSize: 10, fontWeight: 600,
-                      padding: '2px 6px', borderRadius: 4,
-                      background: isActive ? (darkMode ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.25)') : C.subtle,
-                      color: isActive ? (darkMode ? '#1e2330' : '#fff') : C.muted,
-                    }}>
-                      {leads.length}
-                    </span>
-                  )}
-                  {!sidebarCollapsed && item.badgeCount > 0 && (
-                    <span style={{
-                      marginLeft: 'auto', fontSize: 10, fontWeight: 700,
-                      padding: '2px 7px', borderRadius: 50,
-                      background: '#ef4444', color: '#fff',
-                      animation: notifBadgeFlash ? 'notifBadgeFlash 1.2s ease both' : 'notifPulse 2s ease-in-out infinite',
-                    }}>
-                      {item.badgeCount}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-
-            {/* Spacer */}
-            <div style={{ flex: 1 }} />
-          </div>
-          ), document.body)}
+            ].map(v => ({
+                ...v,
+                badge: v.key === 'leads' ? { value: leads.length, tone: 'muted' } : v.badgeCount > 0 ? { value: v.badgeCount, tone: 'alert', flash: notifBadgeFlash } : undefined,
+              }))}
+              activeView={sidebarView}
+              onView={(key) => { setSidebarView(key); if (key !== 'leads') setSelectedLead(null); }}
+              C={C} darkMode={darkMode} setDarkMode={setDarkMode}
+            />
+          )}
 
         {/* ── RIGHT COLUMN (single top card + content row) ─────────────────── */}
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: embedMode ? '8px 8px 8px 8px' : '8px 8px 8px 0', gap: 12 }}>
 
           {/* ── KPI HEADER CARD (3 left + gap for navbar + 3 right) ────────── */}
+          {/* Sans la navbar (09/11/2026), la carte vide d'un setter disparaît : elle ne portait que la navbar. */}
+          {(isAdminView || !isSetter) && (
           <div style={{ height: 76, background: darkMode ? C.bg : '#f6f7f9', borderRadius: 8, flexShrink: 0, border: `1px solid ${isAdminView ? '#8b5cf640' : C.border}`, marginLeft: 8, display: 'flex', alignItems: 'center', padding: '0 24px' }}>
             {isAdminView && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 'auto' }}>
@@ -2731,6 +2617,7 @@ export default function TrackingSheetSetter() {
               </>;
             })()}
           </div>
+          )}
 
           {/* ── CONTENT ROW (board + detail panel side by side) ──────────────── */}
           <div style={{ flex: 1, display: 'flex', minHeight: 0, marginLeft: 8 }}>

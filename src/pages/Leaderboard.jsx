@@ -40,7 +40,7 @@ import airBg from "../assets/Air.png";
 import airportFont from "../assets/Airport.otf";
 import shipIcon from "../assets/ship.png";
 import flameIcon from "../assets/flame.png";
-import SharedNavbar from "../components/SharedNavbar.jsx";
+import PageWithSidebar from "../components/shared/Sidebar/PageWithSidebar.jsx";
 import ChannelBreakdown from "../components/leaderboard/ChannelBreakdown.jsx";
 import RevenuePace from "../components/leaderboard/RevenuePace.jsx";
 import PacePanel from "../components/leaderboard/PacePanel.jsx";
@@ -2218,16 +2218,16 @@ export default function Leaderboard() {
   };
 
   return (
-
+    // Menu de gauche à la place de la navbar (09/11/2026) ; intégré dans un tableau de bord, la page s'affiche seule.
+    <PageWithSidebar enabled={!embedMode} darkMode={darkMode} setDarkMode={setDarkMode}>
     <div style={{
       padding: 0,
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
       background: CARD.surface,
       minHeight: "100vh",
-      paddingTop: embedMode ? 0 : '64px',
+      paddingTop: embedMode ? 0 : '16px',
       color: CARD.text,
     }}>
-      {!embedMode && <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />}
 
       {/* ═══════════════════════════════════════════════════════════════════
           OUTER WRAPPER — soft card-behind-card
@@ -3343,7 +3343,7 @@ export default function Leaderboard() {
       `}</style>
 
     </div>
-
+    </PageWithSidebar>
   );
 
 }

@@ -18,7 +18,6 @@ import Campaigns from "./Campaigns.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
-import SharedNavbar from "../components/SharedNavbar.jsx";
 import { READ_ONLY_DIRECTION_ROLES } from "../utils/readOnlyRoles";
 
 // Les rôles en lecture seule (RH) consultent les campagnes sans rien y écrire (Campaigns readOnly).
@@ -144,11 +143,11 @@ export default function CeoCampaignsView() {
           setActiveTab={handleSidebarTabClick}
           C={C}
           darkMode={darkMode}
+          setDarkMode={setDarkMode}
         />
       </div>
 
-      <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 64 }}>
-        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
+      <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 16 }}>
         <Campaigns embed />
       </div>
     </div>

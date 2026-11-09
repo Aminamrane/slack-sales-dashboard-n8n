@@ -22,7 +22,6 @@ import { CEO_TAB_ROUTES } from "../utils/dashboardNavigation";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections, setNavScope } from "../utils/sidebarPermissions";
-import SharedNavbar from "../components/SharedNavbar.jsx";
 
 const ALLOWED_ROLES = ["admin", "ceo", "head_of_acquisition", "acquisition_director", "marketing"];
 
@@ -170,12 +169,12 @@ export default function AcquisitionDirectorDashboard() {
           setActiveTab={handleSidebarTabClick}
           C={C}
           darkMode={darkMode}
+          setDarkMode={setDarkMode}
         />
       </div>
 
       {/* Dashboard Acquisition Director = Leaderboard embarqué (?embed=true injecté). */}
       <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
-        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
         <Leaderboard />
       </div>
     </div>

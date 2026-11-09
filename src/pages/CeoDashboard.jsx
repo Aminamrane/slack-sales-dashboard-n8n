@@ -6,7 +6,6 @@ import apiClient from "../services/apiClient";
 import { getVisibleSections, setNavScope } from "../utils/sidebarPermissions";
 import { isReadOnlyViewer } from "../utils/readOnlyRoles";
 import Sidebar from "../components/shared/Sidebar";
-import SharedNavbar from "../components/SharedNavbar.jsx";
 import SalesTeamGrid from "../components/SalesTeamGrid.jsx";
 import SettersGrid from "../components/SettersGrid.jsx";
 import SalesSettersToggle from "../components/SalesSettersToggle.jsx";
@@ -24,17 +23,8 @@ import "../index.css";
 
 // ── DESIGN SYSTEM (same C object as all pages) ────────────────────────────
 // Exporté pour réutilisation par les vues /ceo/* (mêmes palettes dark/light).
-export const getColors = (dark) => ({
-  bg: dark ? '#1e1f28' : '#ffffff',
-  surface: dark ? '#13141b' : '#f6f7f9',
-  border: dark ? '#2a2b36' : '#d5dae5',
-  text: dark ? '#eef0f6' : '#1e2330',
-  muted: dark ? '#5e6273' : '#9ca3af',
-  subtle: dark ? '#252636' : '#f4f6fb',
-  secondary: dark ? '#8b8fa0' : '#6b7280',
-  accent: dark ? '#7c8adb' : '#5b6abf',
-  shadow: dark ? '0 1px 3px rgba(0,0,0,0.2), 0 4px 16px rgba(0,0,0,0.15)' : '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03)',
-});
+import { getColors } from '../utils/ceoColors.js';
+export { getColors };
 
 // ── SIDEBAR TABS ──────────────────────────────────────────────────────────
 const SIDEBAR_TABS = [
@@ -435,11 +425,11 @@ export default function CeoDashboard() {
         }}
         C={C}
         darkMode={darkMode}
+          setDarkMode={setDarkMode}
       />
 
       {/* ═══ MAIN AREA ═══ */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
 
         <div className={`ceo-scroll an-page ceo-antique${darkMode ? ' is-dark' : ''}`} style={{ flex: 1, overflowY: 'auto', padding: '0 32px 28px' }}>
 
@@ -483,7 +473,7 @@ export default function CeoDashboard() {
 
           {/* ═══ SALES TEAM TAB (CEO → Tracking Sheets individuels) ═══════════ */}
           {activeTab === 'sales_team' && (
-            <div style={{ animation: 'ceoFadeIn 0.35s ease both', paddingTop: 96 }}>
+            <div style={{ animation: 'ceoFadeIn 0.35s ease both', paddingTop: 32 }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 28 }}>
                 <div>
                   <h1 style={{ fontSize: 24, fontWeight: 700, color: C.text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>

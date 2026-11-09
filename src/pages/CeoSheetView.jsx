@@ -21,7 +21,6 @@ import TrackingSheet from "./TrackingSheet.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
-import SharedNavbar from "../components/SharedNavbar.jsx";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "acquisition_director", "head_of_acquisition", "finance_director"]);
 
@@ -177,12 +176,12 @@ export default function CeoSheetView() {
         setActiveTab={handleSidebarTabClick}
         C={C}
         darkMode={darkMode}
+          setDarkMode={setDarkMode}
       />
 
       {/* Embedded TrackingSheet — params are already in window.location.search via replaceState.
           On rend la SharedNavbar (dynamic-island) au-dessus pour cohérence avec /ceo. */}
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", position: 'relative' }}>
-        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
         <TrackingSheet key={email} />
       </div>
     </div>

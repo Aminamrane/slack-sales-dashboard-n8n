@@ -176,7 +176,10 @@ function AvailabilityControl({ darkMode }) {
   );
 }
 
-export default function SharedNavbar({ session, darkMode, setDarkMode, notification, hideDarkToggle, centerShift = 0 }) {
+// `toastOnly` (09/11/2026, la navbar quitte les pages au profit du menu de gauche) : seules les bulles d'action
+// (envoi en cours, envoyé, lead déplacé, RDV créé) restent, posées en haut de l'écran le temps de l'annonce ;
+// ni barre, ni notifications globales (elles vivent dans le menu de gauche).
+export default function SharedNavbar({ session, darkMode, setDarkMode, notification, hideDarkToggle, centerShift = 0, toastOnly = false }) {
   const navigate = useNavigate();
   const dashboardOnly = usesDashboardOnlyNavbar(apiClient.getUser());
 
@@ -355,6 +358,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
 
   // Fetch global notifications on mount + poll every 30s
   useEffect(() => {
+    if (toastOnly) return undefined;
     const fetchNotifs = async () => {
       try {
         const token = apiClient.getToken();
@@ -498,6 +502,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
     return () => window.removeEventListener('keydown',close);
   }, [notifIslandOpen,globalPreview]);
 
+  if (toastOnly && !isNotifActive && !isClosing) return null;
   return (
     <div className="owner-shared-navbar" style={{
       position: 'fixed',

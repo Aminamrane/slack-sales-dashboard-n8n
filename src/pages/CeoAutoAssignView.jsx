@@ -16,7 +16,6 @@ import SetterAutoAssignMonitor from "../components/SetterAutoAssignMonitor.jsx";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
-import SharedNavbar from "../components/SharedNavbar.jsx";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "acquisition_director", "head_of_acquisition", "finance_director"]);
 
@@ -143,11 +142,11 @@ export default function CeoAutoAssignView() {
           setActiveTab={handleSidebarTabClick}
           C={C}
           darkMode={darkMode}
+          setDarkMode={setDarkMode}
         />
       </div>
 
-      <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 64 }}>
-        <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />
+      <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 16 }}>
         <div style={{ padding: "18px 6px 0 6px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: C.text, letterSpacing: "-0.02em", margin: 0 }}>Auto-affectation</h1>
           <div role="tablist" aria-label="Monitoring" style={{ display: "inline-flex", padding: 3, gap: 3, borderRadius: 10, background: darkMode ? "rgba(255,255,255,0.05)" : "#eceef2" }}>

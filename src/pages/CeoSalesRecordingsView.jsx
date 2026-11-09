@@ -14,7 +14,6 @@ import { navigateBackToDashboard } from "../utils/dashboardNavigation";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
-import SharedNavbar from "../components/SharedNavbar.jsx";
 import SalesRecordingsGrid from "../components/SalesRecordingsGrid.jsx";
 import SalesRecordingsDetail from "../components/SalesRecordingsDetail.jsx";
 import { monthRange } from "../utils/callsPeriod.js";
@@ -268,12 +267,12 @@ export default function CeoSalesRecordingsView({ embed = false }) {
             setActiveTab={handleSidebarTabClick}
             C={C}
             darkMode={darkMode}
+          setDarkMode={setDarkMode}
           />
         </div>
       )}
 
-      <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: embed ? 0 : 64 }}>
-        {!embed && <SharedNavbar darkMode={darkMode} setDarkMode={setDarkMode} />}
+      <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: embed ? 0 : 16 }}>
         <div style={{ padding: embed ? "4px 4px 40px" : "32px clamp(16px, 4vw, 56px) 64px" }}>
           <div style={{ animation: "ceoFadeIn 0.35s ease both" }}>
             {selectedEmail ? (

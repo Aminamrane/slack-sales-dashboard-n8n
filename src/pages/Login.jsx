@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { homeRouteFor } from "../navigation/home.js";
 import { useNavigate, Link } from 'react-router-dom';
 import apiClient from '../services/apiClient';
 import myLogoDark from '../assets/my_image2.png';
@@ -30,17 +31,8 @@ export default function Login() {
         throw new Error("Login OK mais token/user non stockés (apiClient incohérent).");
       }
 
-      // Dashboard par défaut selon le rôle.
-      const dashboardByRole = {
-        ceo: '/ceo',
-        finance_director: '/ceo',
-        acquisition_director: '/acquisition-director',
-        head_of_acquisition: '/acquisition-director',
-        head_of_acquisition: '/acquisition-director',
-        hr: '/ceo',  // RH : les pages de la direction financière, en lecture seule (06/11/2026)
-        customer_success_manager: '/ceo/leaderboard',
-      };
-      navigate(dashboardByRole[user.role] || '/');
+      // Page d'arrivée selon le rôle (même règle que le bouton « Accueil » du menu de gauche).
+      navigate(homeRouteFor(user.role));
     } catch (err) {
       setError(err.message || 'Email ou mot de passe incorrect');
     } finally {

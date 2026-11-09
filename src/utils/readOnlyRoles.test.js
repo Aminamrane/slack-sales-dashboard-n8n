@@ -123,10 +123,14 @@ test('les onglets-route sans gestion propre dans une vue ne retombent plus sur u
   assert.equal(CEO_TAB_ROUTES.optilex_board, '/ceo/optilex-board');
 });
 
-test('Login envoie hr sur /ceo, comme finance_director', () => {
+// La page d'arrivée de chaque rôle vit dans navigation/home.js depuis le 09/11/2026 (connexion et bouton « Accueil »).
+test('Login envoie hr sur /ceo, comme finance_director', async () => {
   const login = readFileSync(new URL('../pages/Login.jsx', import.meta.url), 'utf8');
-  assert.match(login, /\bhr: '\/ceo'/);
-  assert.match(login, /finance_director: '\/ceo'/);
+  assert.match(login, /navigate\(homeRouteFor\(user\.role\)\)/);
+  const { homeRouteFor } = await import('../navigation/home.js');
+  assert.equal(homeRouteFor('hr'), '/ceo');
+  assert.equal(homeRouteFor('finance_director'), '/ceo');
+  assert.equal(homeRouteFor('sales'), '/');
 });
 
 // Board : les trois écritures centrales (jalons, état, météo) et l'historique
