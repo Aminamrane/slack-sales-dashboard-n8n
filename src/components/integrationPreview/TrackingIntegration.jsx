@@ -443,6 +443,7 @@ export function IntegrationDialog({ context: initialContext, onClose, onSaved, c
         <IntegrationPreviewStudio
           phase="contract"
           accessLocked={!!portalState?.operations?.find(o => o.stage === "prospect")}
+          engagedEmails={(portalState?.operations?.find(o => o.stage === "prospect")?.accesses || []).map(a => a.email)}
           continueLabel={portalState?.operations?.length || !sourceDraft.directors.some(d => d.provisional_access) ? "Continuer vers le contrat" : "Activer les accès et continuer"}
           key={sourceReset}
           embedded

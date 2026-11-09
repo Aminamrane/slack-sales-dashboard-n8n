@@ -35,6 +35,7 @@ import {
 } from "./model";
 import "./integrationPreview.css";
 import { uniqueCompanies, applyCompanyLookup, companySiren } from './companies';
+import { carryEngagedAccess } from './handoffAccess';
 
 const STORAGE = "owner-integration-preview-v1";
 const STEPS = ["Périmètre", "Transmission", "Météo client", "Synthèse"];
@@ -235,10 +236,12 @@ export default function IntegrationPreviewStudio({
   scopeNotice = "",
   phase = "full",
   accessLocked = false,
+  engagedEmails = [],
   continueLabel,
 }) {
   const stepIds = phase === "contract" ? [0, 3] : [0, 1, 2, 3];
-  const requireSoleAccess = value => phase === "contract" && !accessLocked ? selectSoleDirectorAccess(value) : value;
+  const requireSoleAccess = value => phase !== "contract" ? value
+    : accessLocked ? carryEngagedAccess(value, engagedEmails) : selectSoleDirectorAccess(value);
   const [draft, setDraft] = useState(() => requireSoleAccess(uniqueCompanies(initialDraft || readDraft()))),
     [step, setStep] = useState(0),
     [future, setFuture] = useState(false),

@@ -30,3 +30,18 @@ test('emails absents, invalides et partagés bloqués avant sauvegarde', () => {
 test('un dossier dont les accès sont établis ne change pas de sélection', () => {
   const d=draft();assert.equal(prepareHandoffAccess(d,false),d);
 });
+
+test('un accès déjà engagé suit la fiche reconstruite (NDA corrigé, cas du 09/11)', async () => {
+  const {carryEngagedAccess} = await import('./handoffAccess.js');
+  const nda = (email) => ({companies:[{id:'nda-main',selected:true}], directors:[
+    {id:'nda-person-new',name:'VOSSE Mélissa',companies:['nda-main'],email,provisional_access:false}]});
+  const pick = d => d.directors.filter(p => p.provisional_access).map(p => [p.id, p.email]);
+  assert.deepEqual(pick(carryEngagedAccess(nda(' Cliente@Example.com '), ['cliente@example.com'])), [['nda-person-new','cliente@example.com']]);
+  assert.deepEqual(pick(carryEngagedAccess(nda(''), ['cliente@example.com'])), [['nda-person-new','cliente@example.com']]);
+  const already = {...nda('autre@example.com')}; already.directors[0].provisional_access = true;
+  assert.equal(carryEngagedAccess(already, ['cliente@example.com']), already);
+  const none = nda(''); assert.equal(carryEngagedAccess(none, []), none);
+  assert.equal(carryEngagedAccess(none, ['a@example.com','b@example.com']), none);
+  const two = draft(); assert.equal(carryEngagedAccess(two, ['inconnu@example.com']), two);
+  assert.deepEqual(pick(carryEngagedAccess(two, ['alex@example.com'])).filter(([id]) => id !== 'x'), [['b','alex@example.com']]);
+});
