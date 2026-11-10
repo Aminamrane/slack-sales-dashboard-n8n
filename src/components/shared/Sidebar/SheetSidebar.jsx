@@ -7,7 +7,7 @@
 import { createElement, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  BellRing, CalendarDays, ChartColumn, ChartNoAxesCombined, Funnel, ListChecks, Megaphone, PhoneOff, RotateCcw, Send, Sheet,
+  BellRing, CalendarDays, ChartColumn, ChartNoAxesCombined, Funnel, Gauge, ListChecks, Megaphone, PhoneOff, RotateCcw, Send, Sheet,
   Shuffle, SlidersHorizontal, Sparkles, UserSearch, UsersRound, Video,
 } from "lucide-react";
 import Sidebar from "./Sidebar.jsx";
@@ -20,6 +20,8 @@ const VIEW_ICONS = {
   notifications: BellRing, email: Send, ai_bilan: Sparkles, kpis: ChartColumn, sales_prefs: SlidersHorizontal,
   my_prefs: SlidersHorizontal, funnel_leads: Funnel, perf_sales: ChartNoAxesCombined, recordings: Video,
   leads_management: Shuffle, sheets: Sheet,
+  // Monitoring Sales
+  lead_quality: Gauge,
   // Tracking Setter
   agenda: CalendarDays, second_chance: RotateCcw, webinar_rdv: Video, campaigns: Megaphone, team_perf: UsersRound,
 };
