@@ -184,7 +184,7 @@ test('board absent = null, jamais des zéros', () => {
 
 test('onboarding et dirigeants sur le parc produit courant', () => {
   const o = computeOnboarding(ROWS);
-  assert.deepEqual(o, { done: 1, remaining: 3 });   // n°1, n°6, n°8 à réaliser ; sorties exclues
+  assert.deepEqual(o, { done: 1, remaining: 2 });   // n°1, n°8 à réaliser ; sorties et n°6 (en cours de résiliation) exclus
   const d = computeDirectors(ROWS, { clients: { 'n°1': { directors: 2, directors_documented: true }, 'n°2': { directors: 1, directors_documented: true } } });
   assert.deepEqual(d, { count: 3, missing: 2 });     // n°6 et n°8 sans dirigeant documenté
 });

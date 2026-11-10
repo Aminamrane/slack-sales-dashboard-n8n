@@ -3,9 +3,9 @@
 // Fonctions pures, sans React : les chiffres des cartes sont testables tels quels.
 // Les règles sont celles du board (prédicats importés, jamais recopiés) : chaque
 // chiffre est vérifiable en un clic dans l'onglet correspondant du board.
-import { displayEtat, matchesSignedClient, isCurrentProductClient, EXITED_ETATS } from './boardClientState.js';
+import { displayEtat, matchesSignedClient, isCurrentProductClient, isOutOfOnboarding, EXITED_ETATS } from './boardClientState.js';
 import { isActiveOnboardingUpcoming, isActiveOnboardingOverdue } from './boardPredicates.js';
-import { parisWallTime } from './boardIntegration.js';
+import { isOnboardingRemaining, onboardingSituation, parisWallTime } from './boardIntegration.js';
 import { meteoBandOf } from './meteoBands.js';
 import { lossArr } from './lossArr.js';
 
@@ -330,13 +330,16 @@ export function monthsAndDays(totalDays) {
   return { months, days };
 }
 
-// Onboarding Owner (bloc Produit) : effectués / à réaliser sur le parc produit courant.
-export function computeOnboarding(boardRows) {
+// Onboarding Owner (bloc Produit) : effectués / à réaliser, la même règle que le menu Onboarding du board et
+// son compteur « Onboardings restants » (dev 10/11/2026 : les chiffres doivent concorder partout). Clients partis
+// ou en cours de départ exclus ; « à confirmer » compte dans ce qui reste à réaliser.
+export function computeOnboarding(boardRows, today = parisWallTime().slice(0, 10)) {
   if (!Array.isArray(boardRows)) return null;
-  const clients = boardRows.filter((r) => !r.is_pending_contract);
+  const situations = boardRows.filter((r) => !r.is_pending_contract)
+    .map((r) => onboardingSituation(r, today, { exited: isOutOfOnboarding(displayEtat(r)) }));
   return {
-    done: clients.filter((r) => r.rdv_onboarding_done).length,
-    remaining: clients.filter((r) => isCurrentProductClient(r, displayEtat(r)) && !r.rdv_onboarding_done).length,
+    done: situations.filter((s) => s === 'done').length,
+    remaining: situations.filter(isOnboardingRemaining).length,
   };
 }
 

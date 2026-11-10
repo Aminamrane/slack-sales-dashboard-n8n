@@ -27,11 +27,18 @@ const NO_SHOW_SINCE = '2026-09-01';
 // = ni réalisé, ni planifié, ni no show. Un client sorti n'entre dans aucune case, sauf si son état est demandé.
 export function onboardingSituation(row, today, { exited = false, includeExited = false } = {}) {
     if (!row.numero_client || (exited && !includeExited)) return null;
+    // « À confirmer, en attente de qualification » (dev 10/11/2026) : ni réalisé ni à faire tant que le Client
+    // Success n'a pas tranché ; le back efface le marqueur dès qu'il le fait (réalisé à une date, ou pas fait).
+    if (row.onboarding_to_confirm) return 'confirm';
     if (row.rdv_onboarding_done) return 'done';
     if (matchesUpcomingOnboarding(row, today)) return 'venir';
     const date = row.rdv_onboarding_date_manual || row.rdv_onboarding_date;
     return date && String(date).slice(0, 10) >= NO_SHOW_SINCE && row.csm_rated === false ? 'noshow' : 'todo';
 }
+
+// Cases qui restent à réaliser : les « onboardings restants » du board et du dashboard CEO, une seule règle.
+export const REMAINING_SITUATIONS = ['venir', 'confirm', 'todo', 'noshow'];
+export const isOnboardingRemaining = (situation) => REMAINING_SITUATIONS.includes(situation);
 
 // « À recaler » (posé par le CSM au parcours guidé) : sous-ensemble des onboardings passés non réalisés,
 // qu'ils soient « à faire » ou no show.
