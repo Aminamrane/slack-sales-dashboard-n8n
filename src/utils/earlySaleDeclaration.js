@@ -1,10 +1,8 @@
 // Déclaration anticipée d'une vente, sans documents (dev 2026-11-05).
-// Quand le client n'a toujours rien transmis et que l'onboarding approche (J-4 ou moins, jour J compris, heure de Paris),
-// le commercial peut déclarer la vente sans document, en indiquant pourquoi. Le serveur revérifie la règle à chaque
-// déclaration : ce fichier ne décide que de l'AFFICHAGE du bouton.
+// Quand le client n'a toujours rien transmis, le commercial peut déclarer la vente sans document, en indiquant pourquoi, À TOUT
+// MOMENT une fois l'onboarding réservé : plus aucune limite de délai (la règle « à J-4 ou moins » du 2026-11-06 est retirée depuis
+// le 2026-11-10). Le serveur exige la date d'onboarding à chaque déclaration : ce fichier ne décide que de l'AFFICHAGE du bouton.
 import {parisToday} from './parisDates.js';
-
-export const EARLY_DECLARATION_DAYS = 4;
 
 // « Autre motif » ne vaut qu'avec une note libre du commercial (200 caractères au plus), enregistrée avec la déclaration.
 export const EARLY_OTHER_REASON = 'other';
@@ -47,9 +45,10 @@ export function daysUntilOnboarding(slot, now = new Date()) {
   return Number.isFinite(target) ? Math.round((target - today) / 86400000) : null;
 }
 
+// Proposée dès que la date de l'onboarding est connue et lisible, quelle que soit l'échéance (onboarding passé compris) ; sans date,
+// le serveur refuserait la déclaration (« Choisissez le rendez-vous d'onboarding… »), donc le bloc n'est pas proposé.
 export function canDeclareWithoutDocuments(slot, now = new Date()) {
-  const days = daysUntilOnboarding(slot, now);
-  return days !== null && days <= EARLY_DECLARATION_DAYS;
+  return daysUntilOnboarding(slot, now) !== null;
 }
 
 export function onboardingCountdown(days) {

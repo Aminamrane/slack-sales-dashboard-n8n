@@ -6,15 +6,15 @@ import { EARLY_DOCUMENT_REASONS, EARLY_NOTE_MAX, EARLY_OTHER_REASON, canDeclareW
 
 // `standalone` : dépôt hors de la déclaration (fiche du lead), avant la signature comme après la
 // déclaration. Même circuit et mêmes règles ; seuls « Déclarer la vente » et la déclaration sans documents disparaissent.
-// `onboardingAt` : date du rendez-vous d'onboarding réservé (heure de Paris). À J-4 ou moins, sans aucun document, le
-// bloc « Déclarer la vente sans documents » apparaît ; le serveur revérifie la règle à la déclaration.
+// `onboardingAt` : date du rendez-vous d'onboarding réservé (heure de Paris). Sans aucun document, le bloc « Déclarer la
+// vente sans documents » apparaît dès que cette date est connue, à toute échéance ; le serveur exige la date à la déclaration.
 export default function SaleDocuments({ leadId, draft, onBack, onContinue, continueLabel = "Continuer vers la facturation", submitting = false, standalone = false, onClose, onboardingAt = '' }) {
   const [files, setFiles] = useState([]), [platform, setPlatform] = useState(null);
   const [account, setAccount] = useState(null), [scope, setScope] = useState(null);
   const uploading = useRef(false);
   const [busy, setBusy] = useState(''), [loading, setLoading] = useState(true), [error, setError] = useState('');
   const [otherType, setOtherType] = useState('other'), [otherCompany, setOtherCompany] = useState('');
-  // Client qui n'a pas transmis ses documents, onboarding à J-4 ou moins : motif obligatoire (choix du sales) ; « Autre motif »
+  // Client qui n'a pas transmis ses documents : motif obligatoire (choix du sales) ; « Autre motif »
   // demande en plus une note libre (200 caractères au plus).
   const [earlyReason, setEarlyReason] = useState(''), [earlyNote, setEarlyNote] = useState('');
   const earlyNoteField = useRef(null);
@@ -70,7 +70,7 @@ export default function SaleDocuments({ leadId, draft, onBack, onContinue, conti
     finally {setBusy('');}
   }
   // « Déclarer la vente sans documents » : les documents sont relus juste avant (un dépôt arrivé entre-temps prime : la
-  // vente se déclare alors normalement, sans mention). Sinon elle part avec le motif choisi, que le serveur revérifie (J-4).
+  // vente se déclare alors normalement, sans mention). Sinon elle part avec le motif choisi, que le serveur enregistre avec la déclaration.
   async function declareWithoutDocuments() {
     if (busy || loading || submitting || !earlyAllowed || !earlyReady) return;
     setBusy('Vérification des documents'); setError('');
@@ -121,7 +121,7 @@ export default function SaleDocuments({ leadId, draft, onBack, onContinue, conti
       </div>}
       <div className="si-early-action"><button type="button" className="ip-primary" disabled={!!busy || submitting || loading || !earlyReady} title={earlyReady ? undefined : earlyReason ? 'Précisez le motif' : 'Choisissez d’abord le motif'} onClick={declareWithoutDocuments}>{submitting ? 'Déclaration…' : 'Déclarer la vente sans documents'}<ArrowRight size={17}/></button></div>
     </section>}
-    {!standalone && !loading && !hasDocuments && <p role="status">{`Un document doit être enregistré avant de continuer. Les dépôts refusés doivent être corrigés.${earlyAllowed ? ' L’onboarding approche : vous pouvez aussi déclarer la vente sans documents (ci-dessus).' : ''}`}</p>}
+    {!standalone && !loading && !hasDocuments && <p role="status">{`Un document doit être enregistré avant de continuer. Les dépôts refusés doivent être corrigés.${earlyAllowed ? ' Vous pouvez aussi déclarer la vente sans documents (ci-dessus).' : ''}`}</p>}
     {error && <div className="si-error" role="alert">{error}</div>}
     {standalone ? <footer className="si-actions"><span/><button className="ip-primary" disabled={!!busy} onClick={onClose}>Terminé<Check size={17}/></button></footer>
     : <footer className="si-actions"><button className="ip-secondary" disabled={!!busy || submitting} onClick={onBack}><ArrowLeft size={16}/> Fiche</button><button className="ip-primary" disabled={!!busy || submitting || loading || !hasDocuments} onClick={continueToBilling}>{submitting ? "Déclaration…" : continueLabel}<ArrowRight size={17}/></button></footer>}

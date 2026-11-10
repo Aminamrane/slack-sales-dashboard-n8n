@@ -1439,7 +1439,7 @@
 .si-waiver-reasons button:hover {border-color:#9aa6c2;}
 .si-waiver-reasons button.is-selected {background:#1e2330;border-color:#1e2330;color:#fff;}
 @media(max-width:600px) {.si-waiver-reasons {margin-left:0;}}
-/* Déclaration anticipée sans documents (onboarding à J-4 ou moins) : même famille que .si-waiver, teinte ambre douce (ni erreur ni alerte). */
+/* Déclaration anticipée sans documents (à toute échéance) : même famille que .si-waiver, teinte ambre douce (ni erreur ni alerte). */
 .si-early {border-color:#e6d3a8;background:#fffaf0;}
 .si-early-head {display:flex;align-items:flex-start;gap:12px;}
 .si-early-head>svg {flex-shrink:0;color:#a8741a;margin-top:1px;}

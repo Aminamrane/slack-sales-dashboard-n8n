@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {EARLY_DECLARATION_DAYS, EARLY_DOCUMENT_REASONS, EARLY_NOTE_MAX, EARLY_OTHER_REASON, isEarlyReason, cleanEarlyNote, canSubmitEarlyReason, daysUntilOnboarding, canDeclareWithoutDocuments, onboardingCountdown} from './earlySaleDeclaration.js';
+import {EARLY_DOCUMENT_REASONS, EARLY_NOTE_MAX, EARLY_OTHER_REASON, isEarlyReason, cleanEarlyNote, canSubmitEarlyReason, daysUntilOnboarding, canDeclareWithoutDocuments, onboardingCountdown} from './earlySaleDeclaration.js';
 import {canDeclareSale, DOCUMENT_WAIVERS} from './intakeDocuments.js';
 import {canRescheduleAfterSale, onboardingDateOf, onboardingAwaitingConfirmation} from './saleRescheduling.js';
 
@@ -11,25 +11,24 @@ const slot = (days, time = '10:00') => {
   return `${d.toISOString().slice(0, 10)}T${time}:00+01:00`;
 };
 
-test('la déclaration sans documents n’est ouverte qu’à quatre jours calendaires ou moins (jour J compris)', () => {
-  const expected = {10: false, 7: false, 6: false, 5: false, 4: true, 3: true, 2: true, 1: true, 0: true};
-  for (const [days, allowed] of Object.entries(expected)) {
-    assert.equal(canDeclareWithoutDocuments(slot(Number(days)), NOW), allowed, `J-${days}`);
-    assert.equal(daysUntilOnboarding(slot(Number(days)), NOW), Number(days));
+test('la déclaration sans documents n’a plus de limite de délai : ouverte à toute échéance, de J-60 au jour J', () => {
+  for (const days of [60, 30, 10, 7, 6, 5, 4, 3, 2, 1, 0]) {
+    assert.equal(canDeclareWithoutDocuments(slot(days), NOW), true, `J-${days}`);
+    assert.equal(daysUntilOnboarding(slot(days), NOW), days);
   }
-  assert.equal(EARLY_DECLARATION_DAYS, 4);
 });
 
-test('la limite suit le jour de Paris, pas l’heure du rendez-vous ni celle de l’appareil', () => {
+test('le décompte affiché suit le jour de Paris, pas l’heure du rendez-vous ni celle de l’appareil', () => {
   for (const time of ['00:00', '08:30', '17:30', '23:59']) {
-    assert.equal(canDeclareWithoutDocuments(slot(4, time), NOW), true, `J-4 à ${time}`);
-    assert.equal(canDeclareWithoutDocuments(slot(5, time), NOW), false, `J-5 à ${time}`);
+    assert.equal(daysUntilOnboarding(slot(4, time), NOW), 4, `J-4 à ${time}`);
+    assert.equal(daysUntilOnboarding(slot(5, time), NOW), 5, `J-5 à ${time}`);
+    assert.equal(canDeclareWithoutDocuments(slot(5, time), NOW), true, `J-5 à ${time} : ouvert aussi`);
   }
   // 23 h 30 UTC le 10/11 = 00 h 30 à Paris le 11/11 : le compte part du 11
   const lateNight = new Date('2026-11-10T23:30:00Z');
   assert.equal(daysUntilOnboarding(slot(4), lateNight), 3);
-  assert.equal(canDeclareWithoutDocuments(slot(5), lateNight), true);
-  assert.equal(canDeclareWithoutDocuments(slot(6), lateNight), false);
+  assert.equal(daysUntilOnboarding(slot(6), lateNight), 5);
+  assert.equal(canDeclareWithoutDocuments(slot(6), lateNight), true);
 });
 
 test('un onboarding déjà passé reste ouvert, une date absente ou illisible ne l’est jamais', () => {
@@ -85,6 +84,7 @@ test('la note est nettoyée comme le fait le serveur', () => {
 
 test('décompte lisible', () => {
   assert.equal(onboardingCountdown(4), 'Onboarding dans 4 jours');
+  assert.equal(onboardingCountdown(30), 'Onboarding dans 30 jours');
   assert.equal(onboardingCountdown(1), 'Onboarding demain');
   assert.equal(onboardingCountdown(0), 'Onboarding aujourd’hui');
   assert.equal(onboardingCountdown(-2), 'L’onboarding est passé');

@@ -2,7 +2,7 @@ import { FileX2 } from 'lucide-react';
 import { frenchDate, parisInstantLabel } from '../utils/parisDates';
 import { EARLY_OTHER_REASON } from '../utils/earlySaleDeclaration';
 
-// Vente déclarée sans documents (onboarding à J-4 ou moins) : dit à l'équipe d'intégration pourquoi le dossier est incomplet.
+// Vente déclarée sans documents (à toute échéance avant l'onboarding) : dit à l'équipe d'intégration pourquoi le dossier est incomplet.
 // Le commercial n'est pas en faute : c'est le client qui n'a pas transmis ses pièces, ou trop tard.
 // (Des <div>, pas des <p> : en mode sombre `body.dark-mode p` impose un texte presque blanc, illisible sur ce fond clair.)
 export default function EarlyDeclarationNote({ documents, compact = false, margin }) {

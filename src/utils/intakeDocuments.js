@@ -22,7 +22,7 @@ export function hasRequiredSaleDocuments(files) {
 }
 
 // Société en cours de création ou trop récente : pas encore de pièce. N'est plus proposée à l'écran (case de l'étape
-// « Pièces du dossier » retirée le 2026-11-06 : la déclaration sans document passe par le bloc J-4) ; l'API accepte
+// « Pièces du dossier » retirée le 2026-11-06 : la déclaration sans document passe par le bloc « sans documents » de l'étape) ; l'API accepte
 // toujours ces valeurs et les dispenses déjà enregistrées restent tracées et affichées.
 export const DOCUMENT_WAIVERS = [
   ['company_in_creation', 'Société en cours de création'],
