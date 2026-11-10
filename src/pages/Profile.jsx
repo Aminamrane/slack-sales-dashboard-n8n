@@ -310,7 +310,7 @@ export default function Profile() {
   };
 
   const isCloser = ['sales', 'head_of_sales', 'head_of_sales_manager', 'admin'].includes(session?.role);
-  const roleLabel = ROLE_LABELS[session?.role] || session?.role || "";
+  const roleLabel = (session?.job_title || "").trim() || ROLE_LABELS[session?.role] || session?.role || "";
   const displayName = session?.name || session?.full_name || (session?.email || "").split("@")[0];
 
   // ── Cartes (réutilisées dans la grille 2 colonnes) ──

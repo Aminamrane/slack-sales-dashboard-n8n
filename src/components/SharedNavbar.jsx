@@ -288,6 +288,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
   // ── USER STATE ──────────────────────────────────────────────────────────────
   const [displayName, setDisplayName] = useState('Utilisateur');
   const [userRole, setUserRole] = useState(null);
+  const [jobTitle, setJobTitle] = useState('');
   const [avatarUrl, setAvatarUrl] = useState(null);
 
   useEffect(() => {
@@ -315,6 +316,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
 
       setDisplayName(name);
       setUserRole(user?.role);
+      setJobTitle((user?.job_title || '').trim());
       const resolvedAvatar = user?.avatar_url || session?.user?.avatar_url || session?.user?.user_metadata?.avatar_url || null;
       console.log('SharedNavbar: avatar_url resolved to:', resolvedAvatar);
       setAvatarUrl(resolvedAvatar);
@@ -734,7 +736,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                   color: darkMode ? '#8b8d93' : '#86868b',
                   lineHeight: 1.2
                 }}>
-                  {ROLE_LABELS[userRole] || userRole || 'Membre'}
+                  {jobTitle || ROLE_LABELS[userRole] || userRole || 'Membre'}
                 </span>
               </div>
             </div>
