@@ -67,6 +67,8 @@ const ITEM_ROLE_GATE = {
   bot_ia: SUB_TICKETS_ROLES,
   // « Analyse financière » : page en construction, Paul (ceo) et les admins.
   financial_analysis: new Set(["ceo", "admin"]),
+  // « Automatisation des missions » (suivi des process d'Opti'Lex) : le CEO et les admins, comme l'API.
+  optilex_automation: new Set(["ceo", "admin"]),
   // « Ma Tracking Sheet » : la page n'ouvre sans permission qu'aux rôles ceo et admin.
   my_tracking_sheet: new Set(["ceo", "admin"]),
 };
