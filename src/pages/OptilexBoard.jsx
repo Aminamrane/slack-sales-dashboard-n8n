@@ -3193,6 +3193,7 @@ const PROP_ICONS = {
   programmes: <><circle cx="12" cy="8" r="6" /><path d="M15.48 12.89 17 22l-5-3-5 3 1.52-9.11" /></>,
   creances: <><ellipse cx="9" cy="6.5" rx="6" ry="2.5" /><path d="M3 6.5v4c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-4" /><path d="M9 13v4.5c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V13" /><ellipse cx="15" cy="13" rx="6" ry="2.5" /></>,
   missions: <><rect x="4" y="5" width="16" height="16" rx="3" /><path d="M9 5V3h6v2M8 11l2 2 5-5M8 17h8" /></>,
+  ville: <><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></>,
   periodicite: <><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8" /><path d="M4 3.5V8h4.5" /><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16" /><path d="M20 20.5V16h-4.5" /></>,
 };
 // `top` : la valeur peut grandir (dates d'effet, alertes) ; le libellé reste en face de sa première ligne,
@@ -3402,7 +3403,17 @@ function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContac
           {/* Coordonnées : à copier d'un clic (bouton au survol de la ligne) */}
           <div className="ob-props-group">
             {/* Infos de base (dev 29/10/2026 : « on n'a plus le nom et tout ») : nom, société, numéro, copiables. */}
-            <PropRow icon="contact" label="Nom du client" copy={name} copyLabel="le nom du client">{name ? <span className="ob-pv-text" title={name}>{name}</span> : <span className="ob-pv-none">Non renseigné</span>}</PropRow>
+            {/* Nom, prénom et ville du client (dev 10/11/2026) : ceux du NDA, jamais devinés. Sans prénom et nom séparés
+                dans le NDA, le nom connu reste affiché, signalé « à séparer » ; prénom et ville « à compléter » (ensemble). */}
+            {row.client_last_name ? (
+              <PropRow icon="contact" label="Nom du client" copy={row.client_last_name} copyLabel="le nom du client"><span className="ob-pv-text" title={row.client_last_name}>{row.client_last_name}</span></PropRow>
+            ) : (
+              <PropRow icon="contact" label="Nom du client" copy={name} copyLabel="le nom du client">{name
+                ? <span className="ob-pv-text" title={`${name} : nom complet, prénom et nom à séparer`}>{name} <span className="ob-pv-none">· à séparer</span></span>
+                : <span className="ob-pv-none">À compléter</span>}</PropRow>
+            )}
+            <PropRow icon="contact" label="Prénom du client" copy={row.client_first_name} copyLabel="le prénom du client">{row.client_first_name ? <span className="ob-pv-text" title={row.client_first_name}>{row.client_first_name}</span> : <span className="ob-pv-none">À compléter</span>}</PropRow>
+            <PropRow icon="ville" label="Ville" copy={row.client_city} copyLabel="la ville">{row.client_city ? <span className="ob-pv-text" title={row.client_city}>{row.client_city}</span> : <span className="ob-pv-none">À compléter</span>}</PropRow>
             <PropRow icon="societe" label="Société" copy={companyName(row)} copyLabel="la société">{companyName(row) ? <span className="ob-pv-text" title={companyName(row)}>{companyName(row)}</span> : <span className="ob-pv-none">—</span>}</PropRow>
             <PropRow icon="numero" label="N° client" copy={num} copyLabel="le numéro client">{num || <span className="ob-pv-none">Contrat en cours d'envoi</span>}</PropRow>
             <PropRow icon="siren" label="SIREN" copy={sirenDigits(ov(row, "siren_ovr", "siren"))} copyLabel="le SIREN">{fmtSiren(ov(row, "siren_ovr", "siren")) || <span className="ob-pv-none">—</span>}</PropRow>
