@@ -1063,6 +1063,10 @@ export default function DetailPanel({
             deferrals={profile?.deferrals || []}
             outstanding={profile?.outstanding_corrections || []}
             reports={profile?.reports || []}
+            billingStart={profile?.billing_start || null}
+            billingLastMonth={profile?.billing_last_month || null}
+            loss={profile?.loss || null}
+            statement={timeline?.statement || null}
             scope={scope}
             onDone={reloadAfterExit}
             onShowToast={onShowToast}
