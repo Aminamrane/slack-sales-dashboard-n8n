@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LogOut, Moon, Sun } from "lucide-react";
 import apiClient from "../../../services/apiClient";
-import { roleLabel } from "../../../utils/roleLabels.js";
+import { userTitle } from "../../../utils/roleLabels.js";
 
 const firstNameOf = (u) => u?.first_name || u?.full_name?.split(" ")[0] || u?.name?.split(" ")[0] || "Mon profil";
 const initialsOf = (u) => {
@@ -33,7 +33,7 @@ export default function SidebarProfile({ collapsed, darkMode, onToggleDark }) {
         {!collapsed && (
           <span className="sb-profile-id">
             <strong>{firstNameOf(user)}</strong>
-            <small>{roleLabel(user?.role)}</small>
+            <small>{userTitle(user)}</small>
           </span>
         )}
       </button>

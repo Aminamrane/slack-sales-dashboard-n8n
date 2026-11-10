@@ -18,3 +18,6 @@ export const ROLE_LABELS = {
 };
 
 export const roleLabel = (role) => ROLE_LABELS[role] || role || "Membre";
+
+// Sous le nom : le poste de la personne quand il est renseigné, sinon le libellé de son rôle. Le rôle garde les accès.
+export const userTitle = (user) => (user?.job_title || "").trim() || roleLabel(user?.role);
