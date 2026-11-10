@@ -115,6 +115,9 @@ const SIDEBAR_TABS = [
   { key: 'optilex_board', label: "Board Owner/Opti'Lex", icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg>
   )},
+  { key: 'optilex_automation', label: 'Automatisation des missions', icon: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg>
+  )},
 ];
 
 // ── Mapping SIDEBAR_TABS → sections (format Notion-style Sidebar) ─────────
@@ -146,6 +149,7 @@ const ROUTE_TABS = {
   variables: '/ceo/variables', conges: '/ceo/conges', work_hours: '/ceo/work-hours', campaigns: '/ceo/campaigns',
   my_tracking_sheet: '/tracking-sheet', optilex_board: '/ceo/optilex-board', sales_recordings: '/ceo/sales-recordings',
   meta_ads: '/ceo/meta-ads', bot_ia: '/ceo/Sub-Tickets', financial_analysis: '/ceo/analyse-financiere',
+  optilex_automation: '/ceo/automatisation-missions',
 };
 
 // Rafraîchissements : le board et le classement bougent dans la journée (60 s, en
