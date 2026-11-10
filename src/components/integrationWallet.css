@@ -1,0 +1,51 @@
+/* Fiche d'intégration en portefeuille (BoardIntegrationSheet compact, dev 29/10/2026, réf. de portefeuille à cartes).
+   Cartes pastel de la palette du dev, poche marine Owner. Gestes : les cartes glissent dans la poche à l'ouverture,
+   remontent au survol ; la jauge et l'horloge tournent une fois ; l'œil du PDF cligne au survol. */
+.iw { margin:0 0 6px; }
+.iw-stack { position:relative; height:242px; }
+.iw-card { position:absolute; left:12px; right:12px; top:calc(var(--iw-i) * 46px); height:72px; display:flex; align-items:flex-start; gap:11px; padding:10px 14px; border:0; border-radius:16px; background:var(--iw-tile); color:var(--iw-ink); font:inherit; text-align:left;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6), 0 -6px 14px -8px rgba(18,27,53,.2); animation:iwIn .6s cubic-bezier(.34,1.3,.64,1) backwards; animation-delay:calc(.05s + var(--iw-i) * .07s); transition:transform .35s cubic-bezier(.34,1.56,.64,1); }
+@keyframes iwIn { from { opacity:0; transform:translateY(-14px); } to { opacity:1; transform:none; } }
+.iw:hover .iw-card.is-c1 { transform:translateY(-5px); }
+.iw:hover .iw-card.is-c2 { transform:translateY(-3px); }
+.iw:hover .iw-card.is-c3 { transform:translateY(-1px); }
+.iw-card.is-click { cursor:pointer; }
+.iw .iw-card.is-click:hover, .iw.is-open .iw-card.is-c2 { transform:translateY(-9px); }
+.iw-card:focus-visible { outline:2px solid #9db7e3; outline-offset:2px; }
+.iw-ic { display:grid; place-items:center; flex-shrink:0; width:28px; height:28px; border-radius:9px; background:rgba(255,255,255,.55); }
+.iw-ic svg { overflow:visible; transition:transform .35s cubic-bezier(.34,1.56,.64,1); }
+.iw-card:hover .iw-ic svg { transform:rotate(-8deg) scale(1.1); }
+.iw-needle { transform-box:view-box; transform-origin:12px 17px; animation:iwNeedle .9s cubic-bezier(.34,1.56,.64,1) .45s backwards; }
+@keyframes iwNeedle { from { transform:rotate(-100deg); } to { transform:none; } }
+.iw-hand { transform-box:view-box; transform-origin:12px 12px; animation:iwTurn 1.1s cubic-bezier(.34,1.56,.64,1) .5s backwards; }
+@keyframes iwTurn { from { transform:rotate(-360deg); } to { transform:none; } }
+.iw-tx { display:flex; flex-direction:column; gap:1px; flex:1; min-width:0; }
+.iw-tx strong { font-size:13px; font-weight:700; color:var(--iw-ink); }
+.iw-tx small { font-size:11.5px; color:color-mix(in srgb, var(--iw-ink) 72%, #fff); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.iw-badge, .iw-done { display:inline-flex; align-items:center; gap:4px; flex-shrink:0; margin-top:3px; padding:3px 9px; border-radius:999px; background:rgba(255,255,255,.62); font-size:11.5px; font-weight:700; color:var(--iw-ink); white-space:nowrap; }
+.iw-pocket { position:absolute; left:0; right:0; top:138px; height:104px; }
+.iw-pocket-svg { position:absolute; left:0; top:0; overflow:visible; }
+.iw-pocket-in { position:absolute; left:0; right:0; top:18px; bottom:0; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:0 24px 4px; }
+.iw-pocket-tx { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.iw-pocket-tx span { font-size:10.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.5); }
+.iw-pocket-tx strong { font-size:17px; font-weight:750; color:#fff; }
+.iw-pocket-tx small { font-size:12px; color:rgba(255,255,255,.62); }
+.iw-eye { display:flex; flex-direction:column; align-items:center; gap:5px; border:0; background:transparent; padding:0; font:inherit; color:#ffd6a5; cursor:pointer; }
+.iw-eye svg { box-sizing:content-box; padding:10px; border-radius:50%; box-shadow:inset 0 0 0 1.5px rgba(255,214,165,.5); transition:box-shadow .2s, background .2s; }
+.iw-eye span { font-size:11px; font-weight:650; color:rgba(255,255,255,.66); }
+.iw-eye:hover:not(:disabled) svg { background:rgba(255,214,165,.12); box-shadow:inset 0 0 0 1.5px #ffd6a5; }
+.iw-eye:disabled { cursor:progress; }
+.iw-lid { transform-box:fill-box; transform-origin:center; }
+.iw-eye:hover:not(:disabled) .iw-lid { animation:iwBlink .45s ease-in-out; }
+@keyframes iwBlink { 0%, 100% { transform:scaleY(1); } 50% { transform:scaleY(.1); } }
+.iw-spin { animation:iwSpin .9s linear infinite; }
+@keyframes iwSpin { to { transform:rotate(360deg); } }
+.iw-detail { margin-top:14px; }
+.iw-detail .sales-entry { margin:0; }
+.iw-link { display:inline-block; margin-top:8px; font-size:11.5px; color:#5b6472; }
+.iw-error { margin:8px 0 0; font-size:12px; color:#b42318; }
+.iw.is-empty { display:flex; flex-direction:column; gap:3px; padding:14px 16px; border-radius:16px; background:#f6f7f9; font-size:12.5px; color:#6b7385; }
+.iw.is-empty strong { font-size:13.5px; color:#1e2330; }
+.iw-skel { height:242px; border-radius:18px; background:linear-gradient(90deg, #f1f2f4 25%, #e8eaee 37%, #f1f2f4 63%); background-size:400% 100%; animation:iwShimmer 1.3s ease infinite; }
+@keyframes iwShimmer { 0% { background-position:100% 50%; } 100% { background-position:0 50%; } }
+@media (prefers-reduced-motion:reduce) { .iw * { animation:none!important; transition:none!important; } }

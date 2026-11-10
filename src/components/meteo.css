@@ -1,0 +1,18 @@
+/* Icônes météo (meteo.jsx, dev 29/10/2026) : un geste par note au survol de leur bouton, de leur puce ou de leur
+   ligne. Rien ne bouge au repos ; tout s'arrête si l'utilisateur réduit les animations. */
+.mi .mi-rays, .mi .mi-sun, .mi .mi-drift, .mi .mi-back, .mi .mi-shake, .mi .mi-bolt, .mi .mi-drop {
+  transform-box:fill-box; transform-origin:center; transition:transform .5s cubic-bezier(.34,1.56,.64,1), opacity .3s;
+}
+:is(button, a, [role="button"], .ob-row, .ob-chip):hover .mi .mi-rays { transform:rotate(45deg) scale(1.1); }
+:is(button, a, [role="button"], .ob-row, .ob-chip):hover .mi .mi-sun { transform:translate(.8px, -1.6px) scale(1.06); }
+:is(button, a, [role="button"], .ob-row, .ob-chip):hover .mi .mi-drift { transform:translateX(-1.2px); }
+:is(button, a, [role="button"], .ob-row, .ob-chip):hover .mi .mi-back { transform:translateX(1.4px); }
+@keyframes miDrop { 0% { transform:translateY(-2px); opacity:0; } 25% { opacity:1; } 100% { transform:translateY(3.2px); opacity:0; } }
+:is(button, a, [role="button"], .ob-row, .ob-chip):hover .mi .mi-drop { animation:miDrop .85s cubic-bezier(.5,0,.75,.5) infinite; }
+:is(button, a, [role="button"], .ob-row, .ob-chip):hover .mi .mi-drop-1 { animation-delay:.28s; }
+:is(button, a, [role="button"], .ob-row, .ob-chip):hover .mi .mi-drop-2 { animation-delay:.56s; }
+@keyframes miFlash { 0%, 100% { opacity:1; transform:none; } 18% { opacity:.2; transform:translateY(.6px); } 32% { opacity:1; transform:scale(1.12); } 48% { opacity:.45; } 62% { opacity:1; } }
+@keyframes miShake { 0%, 100% { transform:none; } 25% { transform:translateX(-.7px); } 50% { transform:translateX(.7px); } 75% { transform:translateX(-.4px); } }
+:is(button, a, [role="button"], .ob-row, .ob-chip):hover .mi .mi-bolt { animation:miFlash .75s ease-in-out; }
+:is(button, a, [role="button"], .ob-row, .ob-chip):hover .mi .mi-shake { animation:miShake .45s ease-in-out; }
+@media (prefers-reduced-motion:reduce) { .mi * { animation:none!important; transition:none!important; } }

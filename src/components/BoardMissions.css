@@ -1,0 +1,72 @@
+/* Missions du cabinet partenaire (BoardMissions.jsx, dev 30/10/2026) : une pastille par état sur la ligne de la fiche,
+   fenêtre de détail aux coins ronds dans le style des fenêtres « Créances » et « Faire l'onboarding ». */
+.is-sky { --ms-tile:#e5ecf9; --ms-ink:#2b4a7a; }
+.is-sand { --ms-tile:#fbefd5; --ms-ink:#8a5a14; }
+.is-lilac { --ms-tile:#ece8fb; --ms-ink:#5a4fa8; }
+.is-mist { --ms-tile:#eceef3; --ms-ink:#5b6472; }
+.is-sage { --ms-tile:#e3f0e1; --ms-ink:#3f7f4b; }
+.is-wine { --ms-tile:#f1e2ea; --ms-ink:#85334e; }
+.ms-line { display:inline-flex; flex-wrap:wrap; align-items:center; gap:6px; padding:0; border:0; background:transparent; font:inherit; text-align:left; cursor:pointer; }
+.ms-pill { display:inline-flex; align-items:center; gap:5px; height:26px; padding:0 10px 0 8px; border-radius:999px; background:var(--ms-tile); color:var(--ms-ink); font-size:12.5px; font-weight:650; white-space:nowrap;
+  animation:msPop .4s cubic-bezier(.34,1.56,.64,1) backwards; animation-delay:calc(.08s + var(--ms-i, 0) * .05s); transition:transform .25s cubic-bezier(.34,1.56,.64,1); }
+.ms-pill svg { flex-shrink:0; overflow:visible; }
+.ms-line:hover .ms-pill { transform:translateY(-1px); }
+.ms-line:hover .ms-pill:nth-child(2) { transition-delay:.03s; }
+.ms-line:hover .ms-pill:nth-child(3) { transition-delay:.06s; }
+.ms-spin { transform-box:view-box; transform-origin:12px 12px; }
+.ms-line:hover .ms-spin, .ms-item:hover .ms-spin { animation:msSpin .9s cubic-bezier(.45,0,.2,1); }
+@keyframes msSpin { from { transform:rotate(0); } to { transform:rotate(360deg); } }
+.ms-tick { stroke-dasharray:22; animation:msTick .5s ease .3s backwards; }
+@keyframes msTick { from { stroke-dashoffset:22; } to { stroke-dashoffset:0; } }
+@keyframes msPop { from { opacity:0; transform:scale(.7); } to { opacity:1; transform:none; } }
+.ms-chev { display:grid; place-items:center; width:22px; height:22px; color:#a3abba; transition:transform .3s cubic-bezier(.34,1.56,.64,1), color .15s; }
+.ms-line:hover .ms-chev { transform:translateX(3px); color:#1e2330; }
+.ms-line:focus-visible { outline:2px solid #6269cd; outline-offset:3px; border-radius:999px; }
+.ms-none { font-size:12.5px; font-weight:500; color:#a3abba; }
+.ms-retry { margin-left:6px; padding:0; border:0; background:transparent; font:inherit; font-weight:650; color:#5b6472; cursor:pointer; }
+.ms-retry:hover { color:#1e2330; }
+.ms-skel { display:inline-block; width:150px; height:24px; border-radius:999px; background:linear-gradient(90deg, #f1f2f4 25%, #e8eaee 37%, #f1f2f4 63%); background-size:400% 100%; animation:msShimmer 1.3s ease infinite; }
+@keyframes msShimmer { 0% { background-position:100% 50%; } 100% { background-position:0 50%; } }
+
+/* Fenêtre de détail : en-tête blanc, corps gris clair aux cartes blanches (briques DashParts). */
+.ms-overlay { position:fixed; inset:0; z-index:10055; display:grid; place-items:center; padding:16px; background:rgba(18,27,53,.34); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
+  font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; color:#1e2330; }
+.ms-modal { display:flex; flex-direction:column; width:min(640px, 100%); max-height:90vh; overflow:hidden; border-radius:28px; background:#fff; box-shadow:0 24px 70px rgba(18,27,53,.22), 0 2px 6px rgba(18,27,53,.06); }
+.ms-head { display:flex; align-items:center; gap:13px; padding:20px 22px 16px; border-bottom:1px solid #eef0f3; }
+.ms-head > div { min-width:0; }
+.ms-head h3 { margin:0; font-size:17px; font-weight:750; letter-spacing:-.01em; }
+.ms-head p { margin:2px 0 0; font-size:12.5px; color:#8a93a4; }
+.ms-head p.is-stale { color:#986219; }
+.ms-tile { display:grid; place-items:center; flex-shrink:0; width:44px; height:44px; border-radius:13px; background:#ece8fb; color:#5a4fa8; }
+.ms-refresh, .ms-close { display:grid; place-items:center; flex-shrink:0; width:30px; height:30px; padding:0; border:0; border-radius:9px; background:transparent; color:#8a93a4; cursor:pointer; transition:color .15s, background .15s; }
+.ms-refresh { margin-left:auto; }
+.ms-refresh:hover:not(:disabled), .ms-close:hover { color:#1e2330; background:#f3f4f6; }
+.ms-refresh svg, .ms-close svg { transition:transform .3s cubic-bezier(.34,1.56,.64,1); }
+.ms-refresh:hover:not(:disabled) svg { transform:rotate(-40deg); }
+.ms-refresh.is-busy svg { animation:msSpin .8s linear infinite; }
+.ms-refresh:disabled { cursor:progress; }
+.ms-close:hover svg { transform:rotate(90deg); }
+.ms-body { overflow-y:auto; padding:16px 18px 18px; background:#f6f7f9; }
+/* Filtres par état : segment au fond qui glisse d'un état à l'autre. */
+.ms-filters { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:2px; padding:3px; border-radius:11px; background:#f3f4f6; }
+.ms-filters button { position:relative; display:inline-flex; align-items:center; gap:5px; height:26px; padding:0 9px; border:0; border-radius:8px; background:transparent; font:inherit; font-size:12px; font-weight:600; color:#6b7385; cursor:pointer; }
+.ms-filters button > span, .ms-filters button > b { position:relative; z-index:1; }
+.ms-filters button > b { font-weight:650; color:#a3abba; font-variant-numeric:tabular-nums; }
+.ms-filters button[aria-pressed="true"] { color:#1e2330; }
+.ms-filters button[aria-pressed="true"] > b { color:#5b6472; }
+.ms-filter-bg { position:absolute; inset:0; border-radius:8px; background:#fff; box-shadow:0 1px 3px rgba(18,27,53,.1); }
+/* Missions : une carte chacune, pictogramme de l'état sur sa tuile, titre, société et date, étiquette du cabinet. */
+.ms-list { display:flex; flex-direction:column; gap:6px; margin:0; padding:0; list-style:none; }
+.ms-item { display:flex; align-items:center; gap:11px; min-height:52px; padding:8px 12px 8px 9px; border:1px solid #ebedf1; border-radius:13px; background:#fbfbfc;
+  animation:msRise .4s cubic-bezier(.16,1,.3,1) backwards; animation-delay:calc(.15s + var(--ms-i, 0) * .045s); transition:border-color .15s, background .15s; }
+.ms-item:hover { border-color:#dfe3ea; background:#fff; }
+.ms-glyph { display:grid; place-items:center; flex-shrink:0; width:34px; height:34px; border-radius:10px; background:var(--ms-tile); color:var(--ms-ink); transition:transform .3s cubic-bezier(.34,1.56,.64,1); }
+.ms-glyph svg { overflow:visible; }
+.ms-item:hover .ms-glyph { transform:rotate(-6deg) scale(1.06); }
+.ms-item-tx { display:flex; flex-direction:column; gap:2px; flex:1; min-width:0; }
+.ms-item-tx strong { font-size:13px; font-weight:650; line-height:1.35; color:#1e2330; overflow-wrap:anywhere; }
+.ms-item-tx small { font-size:11.5px; color:#8a93a4; overflow-wrap:anywhere; }
+.ms-item .ofd-tag { max-width:46%; overflow:hidden; text-overflow:ellipsis; }
+@keyframes msRise { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+@media (max-width:560px) { .ms-item { flex-wrap:wrap; } .ms-item .ofd-tag { max-width:100%; margin-left:45px; } }
+@media (prefers-reduced-motion:reduce) { .ms-line *, .ms-modal * { animation:none!important; transition:none!important; } }
